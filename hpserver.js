@@ -2140,7 +2140,7 @@ function getFooter() {
 }
 
 // renders the main page
-function mainPage() {
+function mainPage(proto, hostname) {
     var $tc = "";
 
     var thingoptions = GLB.options["things"];
@@ -2213,19 +2213,29 @@ function mainPage() {
     // end drag region enclosing catalog and main things
     $tc += "</div>";
 
-    // temp hack
-    var serverName = "localhost";
+    // set the websock servername as same as hosted page but different port
+    var webSocketUrl = "";
+    if ( GLB.config.webSocketServerPort && !isNaN(parseInt(GLB.config.webSocketServerPort)) ) {
+        var icolon = hostname.indexOf(":");
+        if ( icolon >= 0 ) {
+            webSocketUrl = "ws://" + hostname.substr(0, icolon);
+        } else {
+            webSocketUrl = "ws://" + hostname;
+        }
+        webSocketUrl = webSocketUrl + ":" + GLB.config.webSocketServerPort;
+    }
     
     // include form with useful data for js operation
     $tc += "<form id='kioskform'>";
     $tc += hidden("pagename", "main");
 
     // save the socket address for use on js side
-    var webSocketUrl = GLB.config.webSocketServerPort ? ("ws://" + serverName + ":" + GLB.config.webSocketServerPort) : "";
+    // var webSocketUrl = GLB.config.webSocketServerPort ? ("ws://" + serverName + ":" + GLB.config.webSocketServerPort) : "";
     $tc += hidden("webSocketUrl", webSocketUrl);
 
     // save Node.js address for use on the js side
-    var nodejsUrl = GLB.config.port ? ( is_ssl() + serverName + ":" + GLB.config.port ) : "";
+    // var nodejsUrl = GLB.config.port ? ( is_ssl() + serverName + ":" + GLB.config.port ) : "";
+    var nodejsUrl = proto + "://" + hostname
     $tc += hidden("returnURL", nodejsUrl);
 
     // console.log("page = ", $tc);
@@ -2290,7 +2300,7 @@ try {
     app.use(express.static(dir));
 
     // list on the port
-    app.listen(port, function (req, res) {
+    app.listen(port, function () {
         console.log((new Date()) + " HousePanel Server is running on port: ", port);
     });
     applistening = true;
@@ -2302,7 +2312,7 @@ try {
 }
 
 // create the HTTP server for handling sockets
-server = http.createServer(function(request, response) {
+server = http.createServer(function(req, res) {
 });
 
 
@@ -2337,9 +2347,10 @@ if ( app && applistening ) {
     };
 
     app.get('*', function (req, res) {
-        console.log((new Date()) + " req: ", req.path);
         if ( req.path==="/") {
-            var $tc = mainPage();
+            var hostname = req.protocol + "://" + req.headers.host;
+            console.log((new Date()) + " serving pages at: ", hostname);
+            var $tc = mainPage(req.protocol, req.headers.host);
             // console.log(GLB.options);
             res.send($tc);
             res.end();
@@ -2348,6 +2359,7 @@ if ( app && applistening ) {
             if (file.indexOf(dir + path.sep) !== 0) {
                 return res.status(403).end('Forbidden');
             }
+            console.log((new Date()) + " loading module: ", req.path, " as: ", file);
             var type = mime[path.extname(file).slice(1)] || 'text/plain';
             var s = fs.createReadStream(file);
             s.on('open', function () {
