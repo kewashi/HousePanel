@@ -2389,7 +2389,7 @@ if ( app && applistening ) {
             getAllThings(true);
         
         // handle api calls from the hubs here
-        } else if ( req.body['msgtype'] == "update" && allthings && allthings.length ) {
+        } else if ( req.body['msgtype'] == "update" ) {
             console.log((new Date()) + "Received update msg from hub.");
 
             // loop through all things for this hub
@@ -2403,21 +2403,12 @@ if ( app && applistening ) {
                     entry['value'][req.body['change_attribute']] != req.body['change_value'] )
                 {
                     cnt = cnt + 1;
-                    // console.log(entry['value']);
                     entry['value'][req.body['change_attribute']] = req.body['change_value'];
                     if ( entry['value']['trackData'] ) { delete entry['value']['trackData']; }
                     console.log((new Date()) + 'updating tile #',entry['id'],' from trigger:',
                                 req.body['change_attribute'],' to ', clients.length,' hosts. value= ', JSON.stringify(entry['value']) );
 
                     pushClient(entry.id, entry.type, req.body['change_attribute'], entry['value'])
-                    // send the updated element to all clients
-                    // this is processed by the webSockets client in housepanel.js
-                    // for (var i=0; i < clients.length; i++) {
-                    //     entry["client"] = i+1;
-                    //     entry["clientcount"] = clients.length;
-                    //     entry["trigger"] = req.body['change_attribute'];
-                    //     clients[i].sendUTF(JSON.stringify(entry));
-                    // }
                 }
             }
             res.json('pushed new status info to ' + cnt + ' tiles');
@@ -2497,7 +2488,7 @@ if ( app && applistening ) {
 // This callback function handles new connections and closed connections
 if ( wsServer && serverlistening ) {
     wsServer.on('request', function(request) {
-        console.log((new Date()) + ' Connection from origin ' + request.origin + '.');
+        console.log((new Date()) + ' Connecting websocket to: ', request.origin);
 
         // accept connection - you should check 'request.origin' to make sure that
         // client is connecting from your website
