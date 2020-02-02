@@ -1889,7 +1889,14 @@ function pushClient(swid, swtype, subid, body) {
     entry["type"] = swtype;
     entry["clientcount"] = clients.length;
     entry["trigger"] = subid;
-    entry["value"] = JSON.parse(body);
+    if ( typeof body === "string") {
+        entry["value"] = JSON.parse(body);
+    } else if ( typeof body === "object") {
+        entry["value"] = body;
+    } else {
+        console.log("Warning - unrecognized body in hub push update: ", body);
+        return;
+    }
     var thevalue = entry["value"];
 
     if ( thevalue["password"] ) { delete thevalue["password"]; }
@@ -2406,9 +2413,7 @@ if ( app && applistening ) {
                     cnt = cnt + 1;
                     entry['value'][req.body['change_attribute']] = req.body['change_value'];
                     if ( entry['value']['trackData'] ) { delete entry['value']['trackData']; }
-                    console.log((new Date()) + 'updating tile #',entry['id'],' from trigger:',
-                                req.body['change_attribute'],' to ', clients.length,' hosts. value= ', JSON.stringify(entry['value']) );
-
+                    console.log('Updating tile #',entry['id'],' from trigger:', req.body['change_attribute'] );
                     pushClient(entry.id, entry.type, req.body['change_attribute'], entry['value'])
                 }
             }
