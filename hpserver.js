@@ -2390,14 +2390,15 @@ if ( app && applistening ) {
         
         // handle api calls from the hubs here
         } else if ( req.body['msgtype'] == "update" ) {
-            console.log((new Date()) + "Received update msg from hub.");
+            console.log("Received update msg from hub. ", req.body["hubid"], " body: ", req.body);
 
             // loop through all things for this hub
             // remove music trackData field that we don't know how to handle
             var cnt = 0;
-            for (var num= 0; num< allthings.length; num++) {
+            // for (var num= 0; num< allthings.length; num++) {
+            for (var idx in allthings) {
 
-                var entry = allthings[num];
+                var entry = allthings[idx];
                 if ( entry.id == req.body['change_device'].toString() &&
                     req.body['change_attribute']!='trackData' &&
                     entry['value'][req.body['change_attribute']] != req.body['change_value'] )
@@ -2411,6 +2412,7 @@ if ( app && applistening ) {
                     pushClient(entry.id, entry.type, req.body['change_attribute'], entry['value'])
                 }
             }
+            console.log('pushed new status info to ' + cnt + ' tiles');
             res.json('pushed new status info to ' + cnt + ' tiles');
 
         // handle all api calls upon the server from js client here
