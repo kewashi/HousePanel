@@ -1783,6 +1783,7 @@ div.bold {
 
 div.audio-thing div.groupRole,
 div.audio-thing div.groupPrimaryDeviceId,
-div.audio-thing div.groupId {
+div.audio-thing div.groupId,
+div.isy.name {
     display: none;
 }

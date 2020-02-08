@@ -85,7 +85,7 @@ div.temperature, div.overlay div.themode, div.shm, div.hsm {
 div.switch, div.bulb, div.light, div.switchlevel, div.momentary, div.motion, div.lock, 
 div.contact, div.presence, div.piston, div.valve, div.overlay div.door,
 div.overlay div.themode, 
-div.temperature-thing, div.thingname.temperature {
+div.temperature-thing, div.thingname.temperature, div.isy {
     width: 120px;
 }
 
@@ -124,7 +124,8 @@ div.switch.flash, div.light.flash,
 div.presence.present, div.presence.absent,
 div.valve.open, div.valve.closed, div.momentary.on, div.momentary.off,
 div.lock.locked, div.lock.unlocked, div.lock.unknown, div.motion.active, div.motion.inactive,
-div.contact.open, div.contact.closed, div.water.wet, div.water.dry {
+div.contact.open, div.contact.closed, div.water.wet, div.water.dry,
+div.isy.DON, div.isy.DOF {
     height: 112px;
 }
 
@@ -300,11 +301,11 @@ div.thing.lock-thing {
 /* switch styling */
 
 div.switch.on, div.switch.light.on, div.bulb.on, div.light.on,
-div.switch.flash, div.switch.light.flash, div.bulb.flash, div.light.flash {
+div.switch.flash, div.switch.light.flash, div.bulb.flash, div.light.flash, div.isy.DON {
     background-image: url('icons/bulbon.png');
     color: rgba(255, 255, 255, 0.01);
 }
-div.switch.off, div.switch.light.off, div.bulb.off, div.light.off {
+div.switch.off, div.switch.light.off, div.bulb.off, div.light.off, div.isy.DOF {
     background-image: url('icons/bulboff.png');
     color: rgba(255, 255, 255, 0.01);
 }
@@ -937,6 +938,7 @@ div.switchlevel.screen.switch, div.switchlevel.screen.on, div.switchlevel.screen
 div.switchlevel.screen.power, div.switchlevel.screen.energy {
     display:none;
 }
+
 
 /* these settings are for my Stereo and TV both controled via KuKuHarmony  */
 /* They are installed in HP using an Other tile */

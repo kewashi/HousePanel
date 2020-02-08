@@ -30,7 +30,6 @@ var wsinterval = null;
 var nodejsUrl = null;
 var reordered = false;
 
-
 // set this global variable to true to disable actions
 // I use this for testing the look and feel on a public hosting location
 // this way the app can be installed but won't control my home
@@ -84,6 +83,23 @@ function is_object(obj) {
     } else {
         return false;
     }
+}
+
+function formToObject(id) {
+    var myform = document.getElementById(id);
+    var formData = new FormData(myform);
+    var obj = {};
+    for ( var fv of formData.entries() ) {
+        if ( typeof obj[fv[0]] === "undefined" ) {
+            obj[fv[0]] = fv[1];
+        } else if ( typeof obj[fv[0]] === "object" ) {
+            obj[fv[0]].push(fv[1]);
+        } else {
+            obj[fv[0]] = [obj[fv[0]]];
+            obj[fv[0]].push(fv[1]);
+        }
+    }
+    return obj;
 }
 
 function getAllthings(modalwindow, reload) {
@@ -165,8 +181,12 @@ $(document).ready(function() {
     // set the global return URL value
     try {
         cm_Globals.returnURL = $("input[name='returnURL']").val();
+        if ( !cm_Globals.returnURL ) {
+            throw "Return URL not defined by host page. Using default.";
+        }
     } catch(e) {
-        cm_Globals.returnURL = 3080;
+        console.log("***Warning*** ", e);
+        cm_Globals.returnURL = "http://localhost:3080";
     }
     
     try {
@@ -377,6 +397,17 @@ function setupWebsocket()
         try {
             var presult = JSON.parse(evt.data);
             var pvalue = presult.value;
+            var bid = presult.id;
+            var thetype = presult.type;
+            var client = presult.client;
+            var clientcount = presult.clientcount;
+
+            // reload page if signalled from server
+            if ( bid==="reload" && thetype==="reload" ) {
+                window.location.href = cm_Globals.returnURL;
+                // console.log("reload request");
+                return;
+            }
 
             // grab name and trigger for console log
             var pname = pvalue["name"] ? pvalue["name"] : "";
@@ -389,10 +420,6 @@ function setupWebsocket()
                 }
             });
             
-            var bid = presult.id;
-            var thetype = presult.type;
-            var client = presult.client;
-            var clientcount = presult.clientcount;
             if ( LOGWEBSOCKET ) {
                 console.log("webSocket message from: ", webSocketUrl," bid= ",bid," name:",pname," client:",client," of:",clientcount," type= ",thetype," trigger= ",trigger," value= ",pvalue);
             }
@@ -1363,23 +1390,24 @@ function setupDraggable() {
     });
 }
 
-function dynoPost(ajaxcall, content, idval, typeval, attr) {
-    idval = idval ? idval : 0;
-    typeval = typeval ? typeval : "dynoform";
-    content = content ? content : "";
-    attr = attr ? attr : "none";
-    $.post(cm_Globals.returnURL, 
-        {useajax: ajaxcall, id: idval, type: typeval, attr: attr, value: content},
+function dynoPost(ajaxcall, body) {
+    if ( typeof body === "undefined" ) { 
+        body = {api: ajaxcall, id: "0", type: "none", attr: "none"};
+    } else {
+        body["api"] = ajaxcall;
+    }
+    $.post(cm_Globals.returnURL, body,
         function (presult, pstatus) {
             console.log("dyno status: ", pstatus, " result: ", presult);
         }
     );
 }
 
-function dynoForm(ajaxcall, content, idval, typeval) {
+function dynoForm(ajaxcall, idval, typeval, attr, content) {
     idval = idval ? idval : 0;
     typeval = typeval ? typeval : "dynoform";
     content = content ? content : "";
+    attr = attr ? attr : "";
     
     var controlForm = $('<form>', {'name': 'controlpanel', 'action': cm_Globals.returnURL, 'target': '_top', 'method': 'POST'});
     controlForm.appendTo("body");
@@ -1391,7 +1419,9 @@ function dynoForm(ajaxcall, content, idval, typeval) {
                   $('<input>', {'name': 'id', 'value': idval, 'type': 'hidden'})
         ).append(
                   $('<input>', {'name': 'type', 'value': typeval, 'type': 'hidden'})
-        );
+        ).append(
+                  $('<input>', {'name': 'attr', 'value': attr, 'type': 'hidden'})
+          );
     if ( content ) {
         // controlForm.append( $('<input>', {'name': 'value', 'value': content, 'type':'hidden'} ));
         controlForm.append(content);
@@ -1467,10 +1497,11 @@ function execButton(buttonid) {
         console.log("snap mode: ",snap);
     } else if ( buttonid==="refresh" || buttonid==="reset" ) {
         dynoPost(buttonid);
-        window.location.href = cm_Globals.returnURL;
+        // window.location.href = cm_Globals.returnURL;
     } else {
-        var newForm = dynoForm(buttonid);
-        newForm.submit();
+        window.location.href = cm_Globals.returnURL + "/" + buttonid;
+        // var newForm = dynoForm(buttonid);
+        // newForm.submit();
     }
 }
 
@@ -1586,9 +1617,8 @@ function setupButtons() {
                 }
             });
         });
-    }
-    
-    if ( pagename==="info" ) {
+
+    } else if ( pagename==="info" ) {
         
         $("button.showhistory").on('click', function() {
             if ( $("#devhistory").hasClass("hidden") ) {
@@ -1603,9 +1633,36 @@ function setupButtons() {
         $("button.infobutton").on('click', function() {
             window.location.href = cm_Globals.returnURL;
         });
-    }
 
-    if ( pagename==="auth" ) {
+    } else if ( pagename==="options" ) {
+
+        $("div.formbutton").on('click', function() {
+            var buttonid = $(this).attr("id");
+
+            if ( buttonid==="optSave") {
+                // first save our filters - this is done in a blocking way
+                var fobj = formToObject("filteroptions");
+                dynoPost("filteroptions", fobj);
+
+                // next save our form - this is done asynchronously
+                // when done the server will push a signal to clients to reload
+                var obj = formToObject("optionspage");
+                dynoPost("saveoptions", obj);
+                window.location.href = cm_Globals.returnURL;
+
+            } else if ( buttonid==="optCancel" ) {
+                // do nothing but reload the main page
+                window.location.href = cm_Globals.returnURL;
+
+            } else if ( buttonid==="optReset" ) {
+                // reset the forms on the options page to their starting values
+                $("#optionspage")[0].reset();
+                $("#filteroptions")[0].reset();
+            }
+        });
+
+
+    } else if ( pagename==="auth" ) {
 
         $("#pickhub").on('change',function(evt) {
             var hubId = $(this).val();
@@ -2947,22 +3004,14 @@ function processClick(that, thingname) {
         $(targetid).addClass("clicked");
         setTimeout( function(){ $(targetid).removeClass("clicked"); }, 750 );
 
-        // pass the call to main routine in php
+        // pass the call to main routine
+        // if an object is returned then show it in a popup dialog
+        // values returned from actions are pushed in another place now
         $.post(cm_Globals.returnURL, 
                {useajax: ajaxcall, id: bid, type: thetype, value: thevalue, 
                 attr: theattr, subid: subid, hubid: hubnum, command: command, linkval: linkval},
                function (presult, pstatus) {
                     if (pstatus==="success" && typeof presult==="object" ) {
-                        // show status window for types that don't have actions
-                        // TODO - add an option to disable this
-                        // console.log("popup results", presult, "command= ",command);
-                        if ( ajaxcall==="doaction" && cm_Globals.allthings && command==="" &&
-                             (thetype==="contact" || thetype==="motion" || 
-                              thetype==="presence" || thetype==="clock" ||
-                              subid==="time" || subid==="date" || subid==="battery" || subid.startsWith("event_") ||
-                              thetype==="weather" || thetype==="temperature")
-                            ) 
-                        {
                             var showstr = "";
                             $.each(presult, function(s, v) {
                                 if ( s && v && s!=="password" && !s.startsWith("user_") ) {
@@ -2978,79 +3027,10 @@ function processClick(that, thingname) {
                             // console.log("popup pos: ", pos, " winwidth: ", winwidth);
                             createModal("modalpopup", showstr, "body", false, pos, function(ui) {
                             });
-                        } else if ( ajaxcall==="doaction" && cm_Globals.allthings && 
-                                    command==="LINK" && presult["LINK"] && 
-                                     (linktype==="contact" || linktype==="motion" || 
-                                      linktype==="presence" || linktype==="clock" ||
-                                      linktype==="weather" || linktype==="temperature")
-                                   ) {
-                            var showstr = "";
-                            var linkresult = presult["LINK"]["linked_val"];
-                            $.each(linkresult, function(s, v) {
-                                if ( s && v && s!=="password" && !s.startsWith("user_") ) {
-                                    showstr = showstr + s + ": " + v.toString() + "<br>";
-                                }
-                            });
-                            var winwidth = $("#dragregion").innerWidth();
-                            var leftpos = $(tile).position().left + 5;
-                            if ( leftpos + 220 > winwidth ) {
-                                leftpos = winwidth - 220;
-                            }
-                            var pos = {top: $(tile).position().top + 80, left: leftpos};
-                            // console.log("popup pos: ", pos, " winwidth: ", winwidth);
-                            createModal("modalpopup", showstr, "body", false, pos, function(ui) {
-                            });
-                            
-                        }
-                        
-                        try {
-                            var keys = Object.keys(presult);
-                            if ( keys && keys.length) {
-                                console.log( ajaxcall + ": POST returned:", presult );
-
-                                // update the linked item
-                                // note - the events of any linked item will replace the events of master tile
-                                if ( command==="LINK" && presult["LINK"] ) {
-                                    var linkaid = $("div.p_"+linkval).attr("id");
-                                    var linkhub = $("div.p_"+linkval).attr("hub");
-                                    var realsubid = presult["LINK"]["realsubid"];
-                                    // alert("aid= " + aid + " linktype= " + linktype + " linkval= " + linkval + " linkaid = " + linkaid + " realsubid= " + realsubid + " linkhub= "+linkhub);
-                                    if ( linkaid && linkhub && realsubid ) {
-                                        linkaid = linkaid.substring(2);
-                                        var linkbid = presult["LINK"]["linked_swid"];
-                                        var linkvalue = presult["LINK"]["linked_val"];
-                                        if ( linkvalue["name"] ) { delete linkvalue["name"]; }
-                                        if ( linkvalue["password"] ) { delete linkvalue["password"]; }
-                                        updateTile(aid, linkvalue);
-                                        updAll(realsubid, linkaid, linkbid, linktype, linkhub, linkvalue);
-                                    }
-                                }
-                                // we remove name and password fields since they don't need updating for security reasons
-                                else if ( command !== "RULE" ) {
-                                    if ( presult["name"] ) { delete presult["name"]; }
-                                    if ( presult["password"] ) { delete presult["password"]; }
-                        
-                                    // fix up new Sonos fields
-                                    if ( presult["audioTrackData"] ) {
-                                        var audiodata = JSON.parse(presult["audioTrackData"]);
-                                        presult["trackDescription"] = audiodata["title"];
-                                        presult["currentArtist"] = audiodata["artist"];
-                                        presult["currentAlbum"] = audiodata["album"];
-                                        presult["trackImage"] = audiodata["albumArtUrl"];
-                                        presult["mediaSource"] = audiodata["mediaSource"];
-                                    }
-                        
-                                    updAll(subid,aid,bid,thetype,hubnum,presult);
-                                }
-
-                            } else {
-                                console.log( ajaxcall + " POST returned nothing to update (" + presult+"}");
-                            }
-                        } catch (e) { 
-                            console.log(e);
-                        }
+                    } else if ( pstatus==="success" && presult==="success" ) {
+                        console.log("Success: result will be pushed later. status: ", pstatus, " result: ", presult)
                     } else {
-                        console.log("Unknown ajax result. ", pstatus, presult);
+                        console.log("Error: making ajax POST call. status: ", pstatus, " result: ", presult);
                     }
                }, "json"
         );

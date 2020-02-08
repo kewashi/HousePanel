@@ -4,8 +4,8 @@ process.title = 'hpserver';
 // debug options
 var DEBUG1 = false;
 var DEBUG2 = false;
-var DEBUG3 = false;
-var DEBUG4 = false;
+var DEBUG3 = true;
+var DEBUG4 = true;
 var DEBUG5 = false;
 var DEBUG6 = true;
 
@@ -19,7 +19,8 @@ var bodyParser = require('body-parser');
 // var parseString = require('xml2js').parseString;
 var parser = require('fast-xml-parser');
 
-var port = 3080;
+// load supporting modules
+var utils = require("./utils");
 
 // global variables are all part of GLB object plus clients and allthings
 var GLB = {};
@@ -32,360 +33,14 @@ var allthings = {};
 var server;
 var wsServer;
 var app;
-var hpServer;
 var applistening = false;
 var serverlistening = false;
 
-const devhistory = ` 
-2.118      Fix bug that prevented user from changing custom tile count
-2.117      Load jquery locally and include files in the distro
-2.116      Tweaks to enable floor plan skins and bug fixes
-2.115      Finalize audio track refresh feature and remove bugs
-             - handle music tiles properly and remove test bug
-2.114      Allow track to update on hub refresh for audio devices
-             - updated modern skin to work with new Sonos DH
-2.113      Remove bogus line in groovy code
-2.112      Added audioNotification capability for new Sonos DH (draft)
-             - fixed up login again and added feature to disable pws
-2.111      Minor bugfixes to 2.110 hub auth separation
-2.110      Major rewrite of auth flow to move options to options page
-             - username and password are now on the options page
-             - bug fixes in timer refresh logic
-             - bug fix to tile width to include slider for bulbs and switches
-             - add hub filter to options and tile catalog drag pages
-2.109      Add options parameter to enable or disable rules since it can be slow
-2.108      Modify Rule to enable multiple actions and require 'if: ' to flag if
-2.107      New Rule feature that allows non-visual triggers to be added to any tile
-2.106      Macro feature tested and fine tuned to return results in console log
-             - tile editor name update fixed to prevent spurious page reloads
-             - returns name on switches now for viewing with API; GUI still ignores
-             - protect from returning password and name in the GUI everywhere
-2.105      Minor bugfix for leak sensors that dont support wet & dry commands
-2.104      Bug Fixes and API improvements
-             - enable auto search for correct hub if omitted in API calls
-             - fix spurious hub creation when reauthorization performed
-             - enable blink properly when waiting for authorization
-             - fix tile editor list and tile customizer for weather tiles
-2.103      link tile query fix and media art fine tune
-             - add default icons for water sensors and enable water actions
-2.100      User specific skin support
-             - add custom tiles to user account
-             - now save user account files in true json format
-             - fix query to linked items
-             - improve album art search and support tunein items
-2.092      Major update to documentation on housepanel.net
-             - tweak info window when inspected near right edge
-             - enable album art upon first change in song
-2.091      Fix LINK for custom tile actions; bugfix album art for grouped speakers
-2.090      Add curl call to gather usage statistics on central server
-2.087      Minor formatting cleanup in show info routine
-2.086      Update install script to support user skins and updates easily
-            - remove hubtype from main array to save load time as it wasn't used
-2.085      Clean up handling of custom names
-2.084      Bugfix auth code to handle PHP installs without builtin functions
-            - change minimum username length to 3 and look for admin name
-            - drag drop name fix
-2.083      Properly load things and options for use in GUI and other bug fixes
-2.082      Fixed snarky bug in auth that reset hubpush ports and other things
-            - did more cleanup and robusting of auth flow
-2.081      Security lock down - no longer accept blanks to make new bogus user
-            - reauth request via api if not logged in will return to login page
-            - default user name not set to admin rather set to blank now
-            - reauth page still available if options file is missing
-            - reset code will also launch to auth page all the time if enabled
-2.080      Remove blank customtile.css files to avoid overwriting user version
-            - LINK customizer bugfix
-            - minor bug fix of weather tile name
-            - custom field image default CSS fix, misc code cleanup
-            - show status when click on tiles that typically have no actions
-            - speed up initial load after refresh page
-2.078      Bugfixes to 2.076 and 2.077 - skin missing from tileeditor
-            - fix long standing bug of duplicate Node.js clients
-            - properly close sockets upon disconnect and remove dups
-2.077      Remove http requirement for URL entries to enable intent links
-2.076      Various password updates and fixes
-            - add password support for tiles using the custom field feature
-            - change main password from simple hash to strong algorithm
-            - fix bug in the action buttons and links in clock tiles
-            - remove reserved fields from hub push results
-            - enabled return and cancel keys in popup dialog boxes
-2.075      js Time bugfixes
-            - finish implementing the sorting feature for user fields
-            - speedup by avoiding reading options on each tile make
-2.073      Major speedup in Tile Customizer (customize.js)
-            - prep work for sorting feature - not yet implemented
-            - minor bug fixes
-2.072      Honor time format in js updates every second
-            - merge in README clean up pull request
-            - enable multiple things in a query request
-            - minor bugfix for auto of non-groovy tiles
-            - update hpapi.py demo to work with current version
-2.071      Bypass cache for updated frames and other special tiles
-            - minor bug fix to tile editor for tile name setting
-            - fix bug where special tile count was not being saved
-            - fix bug that screwed up max number of custom tiles
-            - fix bug for page changes not sticking
-2.070      Bugfixes to beta 2.065, code cleanup, ignore DeviceWatch-Enroll
-            - includes error checking for bogus hub calls
-            - also fixed hidden check in tile editor for fields that match type
-            - handled obscure cases for refreshing special tiles properly
-2.065      Migrate image and blank tiles over to php server side
-            - provide user way to select city in AccuWeather
-            - but user must find the Location Code first
-2.064      Fix music control siblings and improve Album Art reliability
-2.063      Implement music icons for native Echo Speaks and Generic music
-2.062      Retain edit and custom names upon refresh; minor bug fixes
-2.061      Custom frame and video tile name bugfix
-2.060      Auto detect and grab artist, album title, and album art image
-2.057      Minor cleanup including proper detection of hidden status in editor
-2.056      Groovy file update only to specify event date format
-2.055      Update version number in Groovy file and more error checking
-2.054      Clean up groovy file; add direct mode action buttons
-2.053      Misc bug fixes: LINK on/off; tile editor tweaks
-           - new feature in Tile Editor to pick inline/blcok & absolute/relative
-2.052      Really fixed clobber this time (in hubpush). Added portrait CSS support
-2.051      Another run at fixing name clobber; update modern skin for flash
-2.050      Fix cloberred custom names; fix Hubitat event reporting; add timezone
-2.049      Time zone fix for real time javascript digital clock
-           - add version number to main screen
-2.048      Visual cue for clicking on any tile for 3/4 of a second
-2.047      Clean up SHM and HSM to deliver similar display fields and bug fixes
-2.046      Avoid fatal error if prefix not given, fix Routine bug in groovy, etc
-2.045      Merge groovy files into one with conditional hub detector
-2.042      Minor tweak to CSS default for showing history only on some things
-           - add dev history to show info and auto create version info from this
-           - add on and off toggle icons from modern to the default skin
-           - doc images update
-2.040      Four event fields added to most tiles for reporting (ST only for now)
-2.031      Use custom name for head title and name field
-2.030      Fix HSM and SHM bugs and piston styling for modern skin
-2.020      Macro rule graduate from beta to tested feature - still no gui
-2.010      Grid snap feature and fix catalog for modern skin
-2.000      Release of rule feature as non beta. Fixed level and other tweaks
-1.998      Macro rules implemented as beta feature. No easy GUI provided yet
-1.997      Improve crude rule feature to only do push from last client
-           minor performance and aesthetic improvements in push Node code
-1.996      Fix hubId bug in push file
-           implement crude rule capability triggered by custom tile use
-           - if a motion sensor is added to a light it will trigger it on
-           - if a contact is added to a light, open will turn on, close off
-           - if another switch is added to a light, it will trigger it too
-1.995      Update install script to properly implement push service setup
-           remove .service file because install script makes this
-           clean up hubid usage to use the real id for each hub consistently
-           refresh screen automatically after user reorders tiles
-1.992      Bugfix for swapping skins to enable new skin's customtiles
-           this also changes the custom tiles comments to avoid dups
-           minor tweaks to the modern skin and controller look
-1.991      New modern skin and include door in classes from tile names
-1.990      Final cleanup before public release of hubpush bugfixes
-           move housepanel-push to subfolder beneath main files
-           update housepanel-push to include more robust error checking
-           Fixed bug in housepanel-push service causing it to crash
-           Corrected and cleaned up install.sh script to work with hubpush
-1.989      Continued bug fixing hubpush and auth flow stuff
-1.988      Major bugfix to auth flow for new users without a cfg file
-1.987      Bugfix for broken hubpush after implementing hubId indexing
-           publish updated housepanel-push.js Node.js program
-1.986      Minor fix to use proper hub name and type in info tables
-1.985      Finish implementing hub removal feature
-           - added messages to inform user during long hub processes in auth
-           - position delete confirm box near the tile
-           - minor bug fixes
-1.983      2019-02-14
-             bugfix in auth page where default hub was messed up
-1.982      2019-02-14
-             change hubnum to use hubId so we can remove hubs without damage
-1.981      Upgrade to install.sh script and enable hub removal
-1.980      Update tiles using direct push from hub using Node.js middleman
-1.972      Add ability to tailor fast polling to include any tile
-           by adding a refresh user field with name fast, slow, or never
-           - also added built-in second refresh for clock tiles
-           - two new floor lamp icons added to main skin
-           - fix bug so that hidden items in editor now indicate hidden initially
-1.971      Fix clicking on linked tiles so it updates the linked to tile
-           - also fixes an obscure bug with user linked query tiles
-1.970      Tidy up customizer dialog to give existing info
-1.966      Enable duplicate LINK items and add power meter things
-1.965      Restored weather icons using new mapping info
-1.964      Updated documentation and tweak CSS for Edge browser
-1.963      Improved user guidance for Hubitat installations
-1.962      Bring Hubitat and SmartThigns groovy files into sync with each other
-           and in the process found a few minor bugs and fixed them
-1.961      Important bug fixes to groovy code for switches, locks, valves
-1.960      New username feature and change how auth dialog box works
-           - fixed error in door controller
-1.953      Fix room delete bug - thanks to @hefman for flagging this
-1.952      Finalize GUI for tile customization (wicked cool)
-           - fix bug in Music player for controls
-           - revert to old light treatment in Hubitat
-1.951      Bug fixes while testing major 1.950 update
-           - fix bug that made kiosk mode setting not work in the Options page
-           - fix bug that broke skin media in tile edit while in kiosk mode
-           - use the user config date formats before setting up clock in a refresh
-1.950      Major new update with general customizations for any tile
-           - this is a major new feature that gives any tile the ability to
-             add any element from any other tile or any user provided text
-             so basically all tiles now behave like custom tiles in addition
-             to their native behavior. You can even replace existing elements
-             For example, the analog clock skin can be changed now by user
-             User provided URL links and web service POST calls also supported
-             Any URL link provided when clicked will open in a new tab/window
-           - fix weird bug in processing names for class types
-           - added ability to customize time formats leveraging custom feature
-           - now refresh frames so their content stays current
-           - include blanks, clocks, and custom tiles in fast non-hub refresh
-           - enable frame html file names to be specified as name in TileEdit
-           - lots of other cleanups and bug fixes
-1.941      Added config tile for performing various options from a tile
-           - also fixed a bug in cache file reload for customtiles
-1.940      Fix bug in Tile Editor for rotating icon setting and slower timers
-1.930      Fix thermostat and video tag obscure bugs and more
-           - chnage video to inherit size
-           - change tile editor to append instead of prepend to avoid overlaps
-           - increase default polling speed
-           - first release of install script install.sh
-1.928      Disallow hidden whole tiles and code cleanup
-1.927      Added flourescent graphic to default skin, fix edit of active tile
-1.926      Doc update to describe video tiles and minor tweaks, added help button
-1.925      Various patches and hub tweaks
-           - Hub name retrieval from hub
-           - Show user auth activation data
-           - Hack to address Hubitat bug for Zwave generic dimmers
-           - Added border styling to TileEditor
-1.924      Update custom tile status to match linked tiles
-           Added option to select number of custom tiles to use (beta)
-1.923      TileEditor updates
-           - new option to align icons left, center or right
-           - added images of Sonos speakers to media library
-           - fixed bug where header invert option was always clicked
-           - renamed Text Width/Height to Item Width/Height
-1.922      Updated default skin to make custom reflect originals in more places
-1.921      Hybrid custom tile support using hmoptions user provided input
-1.920      CSS cleanup and multiple new features
-           - enable skin editing on the main page
-           - connect customtiles to each skin to each one has its own
-             this means all customizations are saved in the skin directory too
-           - migrated fixed portions of skin to tileedit.css
-           - fix plain skin to use as skin swapping demo
-           - various bug fixes and performance improvements
-1.910      Clean up CSS files to prepare for new skin creation
-1.900      Refresh when done auth and update documentation to ccurrent version
-1.809      Fix disappearing things in Hubitat bug - really this time...
-1.808      Clean up page tile editing and thermostat bug fix
-1.807      Fix brain fart mistake with 1.806 update
-1.806      Multi-tile editing and major upgrade to page editing
-1.805      Updates to tile editor and change outside image; other bug fixes
-1.804      Fix invert icon in TileEditor, update plain skin to work
-1.803      Fix http missing bug on hubHost, add custom POST, and other cleanup
-1.802      Password option implemented - leave blank to bypass
-1.801      Squashed a bug when tile instead of id was used to invoke the API
-1.80       Merged multihub with master that included multi-tile api calls
-1.793      Cleaned up auth page GUI, bug fixes, added hub num & type to tiles 
-1.792      Updated but still beta update to multiple ST and HE hub support
-1.791      Multiple ST hub support and Analog Clock
-1.79       More bug fixes
-           - fix icon setting on some servers by removing backslashes
-           - added separate option for timers and action disable
-1.78       Activate multiple things for API calls using comma separated lists
-           to use this you mugit stst have useajax=doaction or useajax=dohubitat
-           and list all the things to control in the API call with commas separating
-1.77       More bug fixes
-            - fix accidental delete of icons in hubitat version
-            - incorporate initial width and height values in tile editor
-1.76       Misc cleanup for first production release
-            - fixed piston graphic in tileeditor
-            - fix music tile status to include stop state in tileeditor
-            - added ?v=hash to js and css files to force reload upon change
-            - removed old comments and dead code
-
-1.75       Page name editing, addition, and removal function and reorder bug fixes
-1.74       Add 8 custom tiles, zindex bugfix, and more tile editor updates
-1.73       Updated tile editor to include whole tile backgrounds, custom names, and more
-1.72       Timezone bug fix and merge into master
-1.71       Bug fixes and draft page edit commented out until fixed
-1.7        New authentication approach for easier setup and major code cleanup
-1.622      Updated info dump to include json dump of variables
-1.621      ***IMPT**bugfix to prior 1.62 update resolving corrupt config files
-1.62       New ability to use only a Hubitat hubg
-1.61       Bugfixes to TileEditor
-1.60       Major rewrite of TileEditor
-1.53       Drag and drop tile addition and removal and bug fixes
-1.52       Bugfix for disappearing rooms, add Cancel in options, SmartHomeMonitor add
-1.51       Integrate skin-material from @vervallsweg to v1.0.0 to work with sliders
-1.50       Enable Hubitat devices when on same local network as HP
-1.49       sliderhue branch to implement slider and draft color picker
-1.48       Integrate @nitwitgit (Nick) TileEdit V3.2
-1.47       Integrate Nick's color picker and custom dialog
-1.46       Free form drag and drop of tiles
-1.45       Merge in custom tile editing from Nick ngredient-master branch
-1.44       Tab row hide/show capabilty in kiosk and regular modes
-           Added 4 generally customizable tiles to each page for styling
-           Fix 1 for bugs in hue lights based on testing thanks to @cwwilson08
-1.43       Added colorTemperature, hue, and saturation support - not fully tested
-           Fixed bug in thermostat that caused fan and mode to fail
-           Squashed more bugs
-1.42       Clean up CSS file to show presence and other things correctly
-           Change blank and image logic to read from Groovy code
-           Keep session updated for similar things when they change
-             -- this was done in the js file by calling refreshTile
-           Fix default size for switch tiles with power meter and level
-             -- by default will be larger but power can be disabled in CSS
-1.41       Added filters on the Options page
-           Numerous bug fixes including default Kiosk set to false
-           Automatically add newly identified things to rooms per base logic
-           Fix tablet alignment of room tabs
-           Add hack to force background to show on near empty pages
-1.4        Official merge with Open-Dash
-           Misc bug fixes in CSS and javascript files
-           Added kiosk mode flag to options file for hiding options button
-1.32       Added routines capabilities and cleaned up default icons
-1.31       Minor bug fixes - fixed switchlevel to include switch class
-1.3        Intelligent class filters and force feature
-           user can add any class to a thing using <<custom>>
-           or <<!custom>> the only difference being ! signals
-           to avoid putting custom in the name of the tile
-           Note - it will still look really ugly in the ST app
-           Also adds first three words of the thing name to class
-           this is the preferred customizing approach
-1.2        Cleaned up the Groovy file and streamlined a few things
-           Added smoke, illuminance, and doors (for Garages)
-           Reorganized categories to be more logical when selecting things
-1.1 beta   Added cool piston graph for Webcore tiles 
-           Added png icons for browser and Apple products
-           Show all fields supported - some hidden via CSS
-           Battery display on battery powered sensors
-           Support Valves - only tested with Rachio sprinklers
-           Weather tile changed to show actual and feels like side by side
-           Power and Energy show up now in metered plugs
-           Fix name of web page in title
-           Changed backgrounds to jpg to make them smaller and load faster
-           Motion sensor with temperature readings now show temperature too
-0.8 beta   Many fixes based on alpha user feedback - first beta release
-           Includes webCoRE integration, Modes, and Weather tile reformatting
-           Also includes a large time tile in the default skin file
-           Squashed a few bugs including a typo in file usage
-0.7-alpha  Enable a skinning feature by moving all CSS and graphics into a 
-           directory. Added parameter for API calls to support EU
-0.6-alpha  Minor tweaks to above - this is the actual first public version
-0.5-alpha  First public test version
-0.2        Cleanup including fixing unsafe GET and POST calls
-           Removed history call and moved to javascript side
-           put reading and writing of options into function calls
-           replaced main page bracket from table to div
-0.1        Implement new architecture for files to support sortable jQuery
-0.0        Initial release
-`;
-
-var version = devhistory.substr(1,10).trim();
-var HPVERSION = version;
-var APPNAME = 'HousePanel V' + HPVERSION;
 var CRYPTSALT ='HP$by%KW';
 var BYPASSPW = false;
 
 function getUserName() {
-    if ( !GLB.uname ) { GLB.uname = "default"; }
-    return GLB.uname;
+    return "default";
 }
 
 // get the active user and skin
@@ -511,15 +166,15 @@ function readOptions(reset) {
             if ( reset || !fs.existsSync(customfname) ) {
                 // this format is now in real json format and includes user_ tiles
                 // add a signature key to flag this format
-                var customopt = [];
-                customopt["::CUSTOM::"] = [uname, HPVERSION, timeval];
+                var customopt = {};
+                customopt["::CUSTOM::"] = [uname, utils.HPVERSION, timeval];
                 for (key in options) {
                     if ( key==="rooms" || key==="things" || key.substr(0,5)==="user_" ) {
                         customopt[key] = options[key];
                     }
                 }
-                var str_customopt = JSON.stringify(customopt);
-                fs.writeFileSync(customfname, cleanupStr(str_customopt));
+                var str_customopt = JSON.stringify(customopt, null, 1);
+                fs.writeFileSync(customfname, str_customopt);
             } else {
 
                 // read this assuming new method only
@@ -546,7 +201,7 @@ function readOptions(reset) {
                 // protect against having a custom name and an empty custom user name
                 if ( opt_rooms && opt_things ) {
                     GLB.options["rooms"] = opt_rooms;
-                    GLB.options["things"] = [];
+                    GLB.options["things"] = {};
                     for (var room in opt_rooms) {
                         if ( array_key_exists(room, opt_things) ) {
                             GLB.options["things"][room] = opt_things[room];
@@ -560,20 +215,19 @@ function readOptions(reset) {
 }
 
 function writeOptions(options) {
-    return;
     
     if ( !options ) {
         return;
     }
 
-    GLB.options = options;
+    GLB.options = clone(options);
     var d = new Date();
     var timeval = d.getTime();
-    options["time"] = HPVERSION + " @ " + timeval;
+    options["time"] = utils.HPVERSION + " @ " + timeval;
     
     // write the main options file
-    var str =  JSON.stringify(options);
-    fs.writeFileSync("hmoptions.cfg", cleanupStr(str));
+    var stropt =  JSON.stringify(options, null, 1);
+    fs.writeFileSync("hmoptions.cfg", stropt, {encoding: "utf8", flag:"w"});
     
     // write the user specific options file
     var uname = getUserName();
@@ -583,23 +237,15 @@ function writeOptions(options) {
         // this format is now in real json format and includes user_ tiles
         // add a signature key to flag this format
         var customopt = {};
-        customopt["::CUSTOM::"] = [uname, HPVERSION, timeval];
+        customopt["::CUSTOM::"] = [uname, utils.HPVERSION, timeval];
         for (var key in GLB.options) {
             if ( key==="rooms" || key==="things" || key.substr(0,5)==="user_" ) {
                 customopt[key] = GLB.options[key];
             }
         }
-        var str_customopt = JSON.stringify(customopt);
-        fs.writeFileSync(customfname, cleanupStr(str_customopt));
+        var str_customopt = JSON.stringify(customopt, null, 1);
+        fs.writeFileSync(customfname, str_customopt, {encoding: "utf8", flag:"w"});
     }
-}
-
-// make the string easier to look at
-function cleanupStr(str) {
-    // var str1 = str.replace(/,\\"/g,",\r\n\"");
-    // var str2 = str1.replace(/:{\\"/g,":{\r\n\"");
-    // str3 = str2.replace("\"],","\"],\r\n");
-    return str;
 }
 
 function curl_call(host, headertype, nvpstr, formdata, calltype, callback) {
@@ -640,14 +286,14 @@ function getDevices(hubnum, hubAccess, hubEndpt, clientId, clientSecret, hubName
         var base64 = buff.toString('base64');
         stheader = {"Authorization": "Basic " + base64};
         // console.log(stheader);
-        curl_call(hubEndpt + "/nodes", stheader, false, false, "GET", getNodes);
+        curl_call(hubEndpt + "/nodes", stheader, false, false, "GET", getAllNodes);
         
     } else {
         console.log("Error: attempt to read an unknown hub type= ", hubType);
         return;
     }
     
-    function getNodes(err, res, body) {
+    function getAllNodes(err, res, body) {
         var id;
         if ( err ) {
             console.log("Error retrieving ISY nodes: ", err);
@@ -664,7 +310,7 @@ function getDevices(hubnum, hubAccess, hubEndpt, clientId, clientSecret, hubName
                 var idx = thetype + "|" + id;
                 var hint = node["type"].toString();
                 var name = node["name"];
-                var thevalue = "DOF";   // JSON.stringify(node);
+                var thevalue = {"name": name, "switch": "DOF"};
                 if (DEBUG5) {
                     console.log("idx= ", idx," hint= ", hint, " thing= ", thevalue);
                 }
@@ -676,11 +322,11 @@ function getDevices(hubnum, hubAccess, hubEndpt, clientId, clientSecret, hubName
                     "refresh": "normal",
                     "value": thevalue
                 };
-                if (DEBUG4) {
+                if (DEBUG5) {
                     console.log("ISY thing: ", allthings[idx]);
                 }
             }
-            // updateOptions();
+            updateOptions();
         }
     }
     
@@ -714,20 +360,20 @@ function getDevices(hubnum, hubAccess, hubEndpt, clientId, clientSecret, hubName
                     };
                 });
             }
-            // updateOptions();
+            updateOptions();
         }
     }
 }
 
-// returns the maximum index from the options
-function getMaxIndex() {
-    var maxindex = 0;
-    for ( var key in GLB.options["index"] ) {
-        var value = parseInt(GLB.options["index"][key]);
-        maxindex = ( value > maxindex ) ? value : maxindex;
-    }
-    return maxindex;
-}
+// // returns the maximum index from the options
+// function getMaxIndex() {
+//     var maxindex = 0;
+//     for ( var key in GLB.options["index"] ) {
+//         var value = parseInt(GLB.options["index"][key]);
+//         maxindex = ( value > maxindex ) ? value : maxindex;
+//     }
+//     return maxindex;
+// }
 
 // updates the global options array with new things found on hub
 function updateOptions() {
@@ -736,31 +382,13 @@ function updateOptions() {
         return;
     }
    
-    // get list of supported types
-    var thingtypes = getTypes();
-    
     // make all the user options visible by default
     if ( !array_key_exists("useroptions", GLB.options )) {
-        GLB.options["useroptions"] = thingtypes;
+        GLB.options["useroptions"] = utils.getTypes();
     }
 
     // find the largest index number for a sensor in our index
-    // and undo the old flawed absolute positioning
-    var cnt = getMaxIndex() + 1;
-
-    // set zindex and custom names if not there
-    // for (var roomname in GLB.options["things"]) {
-    //     var thinglist = GLB.options["things"][roomname];
-    //     thinglist.forEach(function(idxarray, n) {
-    //         if ( !is_array(idxarray) ) {
-    //             idxarray = [idxarray, 0, 0, 1, ""];
-    //         } else if ( is_array(idxarray) && idxarray.length===3 ) {
-    //             idxarray = [idxarray[0], idxarray[1], idxarray[2], 1, ""];
-    //         }
-    //         thinglist[n] = idxarray;
-    //     });
-    //     GLB.options["things"][roomname] = thinglist;
-    // }
+    var cnt = utils.getMaxIndex(GLB.options["index"]) + 1;
 
     // update the index with latest sensor information
     for (var thingid in allthings) {
@@ -773,22 +401,25 @@ function updateOptions() {
     }
     
     // make exactly the right number of special tiles
-    var specialtiles = getSpecials();
+    var specialtiles = utils.getSpecials();
     // $oldindex = $options["index"];
     for (var stype in specialtiles) {
         var sid = specialtiles[stype];
         var customcnt = getCustomCount(stype);
-        createSpecialIndex(customcnt, stype, sid[0]);
+        GLB.options = createSpecialIndex(customcnt, stype, sid[0]);
     }
 
     // save the options file
     writeOptions(GLB.options);
+    // console.log("Updated options, rooms: ", GLB.options.rooms, " things: ", GLB.options.things);
 
+    // signal clients to reload
+    pushClient("reload", "reload");
 }
 
 function createSpecialIndex(customcnt, stype, spid) {
     var oldindex = GLB.options["index"];
-    var maxindex = getMaxIndex();
+    var maxindex = utils.getMaxIndex(oldindex);
 
     if ( !array_key_exists("specialtiles", GLB.options["config"]) ) {
         GLB.options["config"]["specialtiles"] = {};
@@ -820,25 +451,27 @@ function createSpecialIndex(customcnt, stype, spid) {
         }
         GLB.options["index"][sidnum] = theindex;
     }
+
+    return GLB.options;
 }
 
-function hidden(pname, pvalue, id) {
-    var inpstr = "<input type='hidden' name='" + pname + "'  value='" + pvalue + "'";
-    if (id) { inpstr += " id='" + id + "'"; }
-    inpstr += " />";
-    return inpstr;
-}
+// function hidden(pname, pvalue, id) {
+//     var inpstr = "<input type='hidden' name='" + pname + "'  value='" + pvalue + "'";
+//     if (id) { inpstr += " id='" + id + "'"; }
+//     inpstr += " />";
+//     return inpstr;
+// }
 
-function getTypes() {
-    var thingtypes = [
-        "routine","switch", "light", "switchlevel", "bulb", "momentary","contact",
-        "motion", "lock", "thermostat", "temperature", "music", "audio", "valve",
-        "door", "illuminance", "smoke", "water",
-        "weather", "presence", "mode", "shm", "hsm", "piston", "other",
-        "clock", "blank", "image", "frame", "video", "custom", "control", "power"
-    ];
-    return thingtypes;
-}
+// function getTypes() {
+//     var thingtypes = [
+//         "routine","switch", "light", "switchlevel", "bulb", "momentary","contact",
+//         "motion", "lock", "thermostat", "temperature", "music", "audio", "valve",
+//         "door", "illuminance", "smoke", "water",
+//         "weather", "presence", "mode", "shm", "hsm", "piston", "other",
+//         "clock", "blank", "image", "frame", "video", "custom", "control", "power"
+//     ];
+//     return thingtypes;
+// }
 
 // routine that renumbers all the things in your options file from 1
 function refactorOptions() {
@@ -848,9 +481,9 @@ function refactorOptions() {
     var cnt = 0;
     var options = readOptions(true);
     var oldoptions = options;
-    options["useroptions"] = getTypes();
-    options["things"] = [];
-    options["index"] = [];
+    options["useroptions"] = utils.getTypes();
+    options["things"] = {};
+    options["index"] = {};
     skin = getSkin();
     customcss = readCustomCss(skin);
 
@@ -997,6 +630,18 @@ function array_search(needle, arr) {
     return key;
 }
 
+function in_array(needle, arr) {
+    if ( !is_object(arr) ) {
+        return false;
+    } else {
+        for (var i in arr) {
+            var item = arr[i];
+            if ( needle===item) return true;
+        }
+        return false;
+    }
+}
+
 function is_array(obj) {
     if ( typeof obj === "object" ) {
         return Array.isArray(obj);
@@ -1006,250 +651,32 @@ function is_array(obj) {
 }
 
 function is_object(obj) {
-    if ( typeof obj === "object" && !is_array(obj) ) {
+    if ( typeof obj === "object" ) {
         return true;
     } else {
         return false;
     }
 }
 
-// create page to display in a submit form to set options
-//function getOptionsPage() {
-//    var returl = GLB.returnURL;
-//    $thingtypes = getTypes();
-//    $specialtiles = getSpecials();
-//    sort($thingtypes);
-//    $roomoptions = $options["rooms"];
-//    $thingoptions = $options["things"];
-//    $indexoptions = $options["index"];
-//    $useroptions = $options["useroptions"];
-//    $configoptions = $options["config"];
-//    $hubs = $configoptions["hubs"];
-//    $uname = getUserName();
-//    $skin = getSkin($options, $uname);
-//    if ( !array_key_exists("port", $configoptions) ) {
-//        $configoptions = setDefaultOptions($configoptions);
-//    }
-//    $port = $configoptions["port"];
-//    $webSocketServerPort = $configoptions["webSocketServerPort"];
-//    $fast_timer = $configoptions["fast_timer"];
-//    $slow_timer = $configoptions["slow_timer"];
-//    $kioskoptions = $configoptions["kiosk"];
-//    $ruleoptions = $configoptions["rules"];
-//    $timezone = $configoptions["timezone"];
-//    
-//    $tc = "";
-//    $tc.= "<h3>" + APPNAME + " Options</h3>";
-//    $tc.= "<div class=\"formbutton formauto\"><a href=\"" + GLB.returnURL + "\">Cancel and Return to HousePanel</a></div>";
-//    
-//    $tc.= "<div id=\"optionstable\" class=\"optionstable\">";
-//    $tc.= "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + GLB.returnURL +"\"  method=\"POST\">";
-//    $tc.= hidden("pagename", "options");
-//    $tc.= hidden("useajax", "saveoptions");
-//    $tc.= hidden("id", "none");
-//    $tc.= hidden("type", "none");
-//    
-//    // $tc.= "<div class=\"filteroption\">Skin directory name: <input id=\"skinid\" width=\"240\" type=\"text\" name=\"skin\"  value=\"$skin\"/>";
-//    $tc.= "<div class=\"filteroption\">";
-//    $tc.= tsk($timezone, $skin, $uname, $port, $webSocketServerPort, $fast_timer, $slow_timer);
-//    $tc.= "</div>";
-//    
-//    $tc.= "<div class=\"filteroption\">";
-//    $tc.= "<label for=\"kioskid\" class=\"kioskoption\">Kiosk Mode: </label>";    
-//    $kstr = ($kioskoptions===true || $kioskoptions==="true" || $kioskoptions==="1" || $kioskoptions==="yes") ? "checked" : "";
-//    $tc.= "<input id=\"kioskid\" width=\"24\" type=\"checkbox\" name=\"kiosk\"  value=\"$kioskoptions\" $kstr/>";
-//    
-//    $tc.= "<label for=\"ruleid\" class=\"kioskoption\">Enable Rules? </label>";
-//    $rstr = ($ruleoptions===true || $ruleoptions==="true" || $ruleoptions==="1" || $ruleoptions==="yes") ? "checked" : "";
-//    $tc.= "<input id=\"ruleid\" width=\"24\" type=\"checkbox\" name=\"rules\"  value=\"$ruleoptions\" $rstr/>";
-//    $tc.= "</div>";
-//
-//    $accucity = $configoptions["accucity"];
-//    $accuregion = $configoptions["accuregion"];
-//    $accucode = $configoptions["accucode"];      // ann-arbor-mi code is 329380
-//    $tc.= "<div class=\"filteroption\"><label for=\"accucityid\" class=\"kioskoption\">Accuweather City: <input id=\"accucityid\" width=\"180\" ";
-//    $tc.= "type=\"text\" name=\"accucity\"  value=\"$accucity\" />";
-//    $tc.= "<label for=\"accuregionid\" class=\"kioskoption\">Region: <input id=\"accuregionid\" width=\"6\" type=\"text\" name=\"accuregion\"  value=\"$accuregion\"/>";
-//    $tc.= "<label for=\"accucodeid\" class=\"kioskoption\">Code: <input id=\"accucodeid\" width=\"40\" type=\"text\" name=\"accucode\"  value=\"$accucode\"/>";
-//    // $tc.= "<br><span class='typeopt'>(You must find your city and code to use this feature.)</span>";
-//    $tc.= "</div>";
-//    
-//    $tc.= "<div class=\"filteroption\">";
-//    foreach ($specialtiles as $stype => $sid) {
-//        $customcnt = getCustomCount($stype, $options);
-//        $stypeid = "cnt_" . $stype;
-//        $tc.= "<br /><label for=\"$stypeid\" class=\"kioskoption\">Number of $stype tiles: </label>";
-//        $tc.= "<input class=\"specialtile\" id=\"$stypeid\" name=\"$stypeid\" width=\"10\" type=\"number\"  min='0' max='99' step='1' value=\"$customcnt\" />";
-//    }
-//    $tc.= "</div>";
-//    
-//    // if more than one hub then let user pick which one to show
-//    if ( count($hubs) > 1 ) {
-//        $tc.= "<div class=\"filteroption\">Hub Filters: ";
-//        $hid = "hopt_all";
-//        $tc.= "<div class='radiobutton'><input id='$hid' type='radio' name='huboptpick' value='all' checked='1'><label for='$hid'>All Hubs</label></div>";
-//        $hid = "hopt_none";
-//        $tc.= "<div class='radiobutton'><input id='$hid' type='radio' name='huboptpick' value='none'><label for='$hid'>No Hub</label></div>";
-//        $hubcount = 0;
-//        foreach ($hubs as $hub) {
-//            $hubName = $hub["hubName"];
-//            $hubType = $hub["hubType"];
-//            $hubId = $hub["hubId"];
-//            $hid = "hopt_" . $hubcount;
-//            $tc.= "<div class='radiobutton'><input id='$hid' type='radio' name='huboptpick' value='$hubId'><label for='$hid'>$hubName ($hubType)</label></div>";
-//            $hubcount++;
-//        }
-//        $tc.= "</div>";
-//    }
-//    
-//    
-//    $tc.= "<br /><div class=\"filteroption\">Thing Filters: ";
-//    $tc.= "<div id=\"allid\" class=\"smallbutton\">All</div>";
-//    $tc.= "<div id=\"noneid\" class=\"smallbutton\">None</div>";
-//    $tc.= "</div>";
-//    
-//    $tc.= "<div class='filteroption'>Select Things to Display</div>";
-//    $tc.= "<table class=\"useroptions\"><tr>";
-//    $i= 0;
-//    foreach ($thingtypes as $opt) {
-//        $i++;
-//        if ( in_array($opt,$useroptions ) ) {
-//            $tc.= "<td><input id=\"cbx_$i\" type=\"checkbox\" name=\"useroptions[]\" value=\"" . $opt . "\" checked=\"1\">";
-//        } else {
-//            $tc.= "<td><input id=\"cbx_$i\" type=\"checkbox\" name=\"useroptions[]\" value=\"" . $opt . "\">";
-//        }
-//        $tc.= "<label for=\"cbx_$i\" class=\"optname\">$opt</label></td>";
-//        if ( $i % 5 == 0 && $i < count($thingtypes) ) {
-//            $tc.= "</tr><tr>";
-//        }
-//    }
-//    $tc.= "</tr></table>";
-//    
-//    $tc.= "<br /><br />";
-//    $tc.= "<table class=\"headoptions\"><thead>";
-//    $tc.= "<tr><th class=\"thingname\">" . "Thing Name (type)" . "</th>";
-//    $tc.= "<th class=\"hubname\">Hub</th>";
-//   
-//    // list the room names in the proper order
-//    // for ($k=0; $k < count($roomoptions); $k++) {
-//    foreach ($roomoptions as $roomname => $k) {
-//        // search for a room name index for this column
-//        // $roomname = array_search($k, $roomoptions);
-//        if ( $roomname ) {
-//            $tc.= "<th class=\"roomname\">$roomname";
-//            $tc.= "</th>";
-//        }
-//    }
-//    $tc.= "</tr></thead>";
-//    $tc.= "</table>";
-//    $tc.= "<div class='scrollvtable'>";
-//    $tc.= "<table class=\"roomoptions\">";
-//    $tc.= "<tbody>";
-//
-//    // sort the things
-//    uasort($allthings, "mysortfunc");
-//    
-//    // now print our options matrix
-//    // $rowcnt = 0;
-//    $evenodd = true;
-//    foreach ($allthings as $thingid => $thesensor) {
-//        // if this sensor type and id mix is gone, skip this row
-//        
-//        $thingname = $thesensor["name"];
-//        $thetype = $thesensor["type"];
-//        $hubnum = $thesensor["hubnum"];
-//        $hub = $hubs[findHub($hubnum, $hubs)];
-//        if ( $hubnum === -1 || $hubnum==="-1" ) {
-//            $hubType = "None";
-//            $hubStr = "None";
-//            $hubId = "none";
-//        } else {
-//            $hubType = $hub["hubType"];
-//            $hubStr = $hub["hubName"];
-//            $hubId = $hub["hubId"];
-//        }
-//
-//        // get the tile index number
-//        $arr = $indexoptions[$thingid];
-//        if ( is_array($arr) ) {
-//            $thingindex = $arr[0];
-//        } else {
-//            $thingindex = $arr;
-//        }
-//        
-//        // write the table row
-//        if ( array_key_exists($thetype, $specialtiles) ) {
-//            $special = " special";
-//        } else {
-//            $special = "";
-//        }
-//        if (in_array($thetype, $useroptions)) {
-//            $evenodd = !$evenodd;
-//            $evenodd ? $odd = " odd" : $odd = "";
-//            $tc.= "<tr type=\"$thetype\" tile=\"$thingindex\" class=\"showrow" . $odd . $special . "\">";
-//        } else {
-//            $tc.= "<tr type=\"$thetype\" tile=\"$thingindex\" class=\"hiderow" . $special . "\">";
-//        }
-//        
-//        $tc.= "<td class=\"thingname\">";
-//        $tc.= $thingname . "<span class=\"typeopt\"> (" . $thetype . ")</span>";
-//        $tc.= "</td>";
-//        
-//        $tc.="<td class=\"hubname\" hubId=\"$hubId\">";
-//        $tc.= $hubStr . " ($hubType)";
-//        $tc.= "</td>";
-//
-//        // loop through all the rooms
-//        // this addresses room bug
-//        // for ($k=0; $k < count($roomoptions); $k++) {
-//        foreach ($roomoptions as $roomname => $k) {
-//            
-//            // get the name of this room for this oclumn
-//            // $roomname = array_search($k, $roomoptions);
-//            // $roomlist = array_keys($roomoptions, $k);
-//            // $roomname = $roomlist[0];
-//            if ( array_key_exists($roomname, $thingoptions) ) {
-//                $things = $thingoptions[$roomname];
-//                                
-//                // now check for whether this thing is in this room
-//                $tc.= "<td>";
-//                
-//                $ischecked = false;
-//                foreach( $things as $arr ) {
-//                    if ( is_array($arr) ) {
-//                        $idx = $arr[0];
-//                    } else {
-//                        $idx = $arr;
-//                    }
-//                    if ( $idx == $thingindex ) {
-//                        $ischecked = true;
-//                        break;
-//                    }
-//                }
-//                
-//                if ( $ischecked ) {
-//                    $tc.= "<input type=\"checkbox\" name=\"" . $roomname . "[]\" value=\"" . $thingindex . "\" checked=\"1\" >";
-//                } else {
-//                    $tc.= "<input type=\"checkbox\" name=\"" . $roomname . "[]\" value=\"" . $thingindex . "\" >";
-//                }
-//                $tc.= "</td>";
-//            }
-//        }
-//        $tc.= "</tr>";
-//    }
-//
-//    $tc.= "</tbody></table>";
-//    $tc.= "</div>";   // vertical scroll
-//    $tc.= "<div id='optionspanel' class=\"processoptions\">";
-//    $tc.= "<input id=\"submitoptions\" class=\"submitbutton\" value=\"Save\" name=\"submitoption\" type=\"button\" />";
-//    $tc.= "<div class=\"formbutton resetbutton\"><a href=\"$retpage\">Cancel</a></div>";
-//    $tc.= "<input class=\"resetbutton\" value=\"Reset\" name=\"canceloption\" type=\"reset\" />";
-//    $tc.= "</div>";
-//    $tc.= "</form>";
-//    $tc.= "</div>";
-//
-//    return $tc;
-//}
+function array_key_exists(key, arr) {
+    return ( typeof arr[key] !== "undefined" );
+}
+
+
+// returns true if the index is in the room things list passed
+function inroom($idx, $things) {
+    var $found = false;
+    var $idxint = parseInt($idx);
+    for (var i in $things) {
+        var $arr = $things[i];
+        var $thingindex = is_array($arr) ? $arr[0] : parseInt($arr);
+        if ( $idxint === $thingindex ) {
+            $found = true;
+            break;
+        }
+    }
+    return $found;
+}
 
 // this is the main page rendering function
 // each HousePanel tab is generated by this function call
@@ -1308,11 +735,6 @@ function getNewPage(cnt, roomtitle, kroom, things, kioskmode) {
     $tc +="</div>";
     return {tc: $tc, cnt: cnt};
 }
-
-function array_key_exists(key, arr) {
-    return ( typeof arr[key] !== "undefined" );
-}
-
 
 // function to search for triggers in the name to include as classes to style
 function processName(thingname, thingtype) {
@@ -1413,7 +835,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     // now we use custom name in both places
     thingname = thingvalue["name"];
     var thingpr = thingname;
-    if ( !customname && thingname.length > 132 && !array_key_exists(thingtype, GLB.specialtiles) ) {
+    if ( !customname && thingname && thingname.length > 132 && !array_key_exists(thingtype, utils.getSpecials()) ) {
         thingpr = thingname.substring(0,132) + " ...";
     }
     
@@ -1731,21 +1153,21 @@ function is_ssl() {
     return "http://";
 }
 
-function setSpecials() {
-    GLB.specialtiles = 
-        {
-            "video":  ["vid",480,240], 
-            "frame":  ["frame",480,212],
-            "image":  ["img",480,240],
-            "blank":  ["blank",120,150],
-            "custom": ["custom_",120,150]
-        };
-    return GLB.specialtiles;
-}
+// function setSpecials() {
+//     GLB.specialtiles = 
+//         {
+//             "video":  ["vid",480,240], 
+//             "frame":  ["frame",480,212],
+//             "image":  ["img",480,240],
+//             "blank":  ["blank",120,150],
+//             "custom": ["custom_",120,150]
+//         };
+//     return GLB.specialtiles;
+// }
 
-function getSpecials() {
-    return GLB.specialtiles;
-}
+// function getSpecials() {
+//     return GLB.specialtiles;
+// }
 
 function getCustomCount(stype) {
     var customcnt = 0;
@@ -1818,7 +1240,7 @@ function addSpecials() {
     // putting this here allows them to be handled just like other modifiable tiles
     // these tiles all refresh fast except first 4 frames that are reserved for weather
     // renamed accuweather to forecast2 for simplicity sake and to make sorting work
-    var specialtiles = getSpecials();
+    var specialtiles = utils.getSpecials();
     for (var stype in specialtiles) {
         var sid = specialtiles[stype];
         var speed = (stype==="frame") ? "slow" : "normal";
@@ -1876,28 +1298,29 @@ function getAllThings(reset) {
 
     // add the special tiles
     addSpecials();
-
-    // now update the options to match our things
-    // updateOptions();
-    // console.log(allthings);
+    updateOptions();
 }
 
 function pushClient(swid, swtype, subid, body) {
     // send the new results to all clients
     var entry = {};
+    if ( typeof subid === "undefined" ) { subid= ""; }
     entry["id"] = swid;
     entry["type"] = swtype;
     entry["clientcount"] = clients.length;
     entry["trigger"] = subid;
-    if ( typeof body === "string") {
-        entry["value"] = JSON.parse(body);
+    var thevalue;
+
+    if ( typeof body === "undefined" || body==="" || !body ) {
+        thevalue = {};
+    } else if ( typeof body === "string") {
+        thevalue = JSON.parse(body);
     } else if ( typeof body === "object") {
-        entry["value"] = body;
+        thevalue = body;
     } else {
         console.log("Warning - unrecognized body in hub push update: ", body);
         return;
     }
-    var thevalue = entry["value"];
 
     if ( thevalue["password"] ) { delete thevalue["password"]; }
     if ( swtype==="music" ) {
@@ -1908,9 +1331,13 @@ function pushClient(swid, swtype, subid, body) {
     }
     entry["value"] = thevalue;
 
+    // update the main array with changed push values
+    var idx = swtype + "|" + swid;
+    for (var thekey in thevalue) {
+        allthings[idx]["value"][thekey] = thevalue[thekey];
+    }
 
     for (var i=0; i < clients.length; i++) {
-        // clients[i].sendUTF(JSON.stringify(elements));
         entry["client"] = i+1;
         clients[i].sendUTF(JSON.stringify(entry));
     }
@@ -1918,9 +1345,9 @@ function pushClient(swid, swtype, subid, body) {
 }
 
 function callHub(hub, swid, swtype, swval, swattr, subid) {
+    var access_token = hub["hubAccess"];
+    var endpt = hub["hubEndpt"];
     if ( hub["hubType"]==="SmartThings" || hub["hubType"]==="Hubitat" ) {
-        var access_token = hub["hubAccess"];
-        var endpt = hub["hubEndpt"];
         var host = endpt + "/doaction";
         var header = {"Authorization": "Bearer " + access_token};
         var nvpreq = {"swid": swid,  
@@ -1928,31 +1355,28 @@ function callHub(hub, swid, swtype, swval, swattr, subid) {
                     "swvalue": swval, 
                     "swtype": swtype};
         if ( subid ) { nvpreq["subid"] = subid; }
-        curl_call(host, header, nvpreq, false, "POST", getActionResponse);
+        curl_call(host, header, nvpreq, false, "POST", getHubResponse);
     } else if ( hub["hubType"]==="ISY" ) {
-        var hubAccess = hub["hubAccess"];
-        var buff = Buffer.from(hubAccess);
+        var buff = Buffer.from(access_token);
         var base64 = buff.toString('base64');
-        stheader = {"Authorization": "Basic " + base64};
+        var isyheader = {"Authorization": "Basic " + base64};
         var cmd;
         if ( subid==="level" ) {
             cmd = "/nodes/" + swid + "/cmd/DON/" + swval;
         } else {
             cmd = "/nodes/" + swid + "/cmd/" + swval;
-            if ( subid ) {
-                cmd = cmd + "/" + subid;
-            }
         }
-        curl_call(hubEndpt + cmd, stheader, false, false, "GET", getNodeResponse);
+        console.log("sent cmd: ", cmd);
+        curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
 
     }
     
-    function getActionResponse(err, res, body) {
+    function getHubResponse(err, res, body) {
         // var response = body;
         if ( err ) {
             console.log("Error calling hub: ", err);
         } else {
-            console.log("doAction: ", body);
+            console.log("doAction: ", swid, swtype, subid, body);
             pushClient(swid, swtype, subid, body);
         }
     }
@@ -1961,34 +1385,34 @@ function callHub(hub, swid, swtype, swval, swattr, subid) {
         if ( err ) {
             console.log("Error calling ISY node: ", err);
         } else {
-            var result = parser.parse(body);
-            console.log("ISY action: ", result);
+            queryHub(hub, swid, swtype);
+            // var result = parser.parse(body);
+            // console.log("ISY action: ", result);
+            // pushClient(swid, swtype, subid, result);
         }
-
     }
 
 }
 
 function queryHub(hub, swid, swtype) {
-    if ( hub["hubType"]==="SmartThings" || hub["hubType"]==="Hubitat" ) {
-        var access_token = hub["hubAccess"];
-        var endpt = hub["hubEndpt"];
+    var access_token = hub["hubAccess"];
+    var endpt = hub["hubEndpt"];
+if ( hub["hubType"]==="SmartThings" || hub["hubType"]==="Hubitat" ) {
         var host = endpt + "/doquery";
         var header = {"Authorization": "Bearer " + access_token};
         var nvpreq = {"swid": swid, "swtype": swtype};
         curl_call(host, header, nvpreq, false, "POST", getQueryResponse);
     } else if ( hub["hubType"]==="ISY" ) {
-        var hubAccess = hub["hubAccess"];
-        var buff = Buffer.from(hubAccess);
+        var buff = Buffer.from(access_token);
         var base64 = buff.toString('base64');
-        stheader = {"Authorization": "Basic " + base64};
+        var header = {"Authorization": "Basic " + base64};
         var cmd = "/nodes/" + swid;
-        curl_call(hubEndpt + cmd, stheader, false, false, "GET", getNodeQueryResponse);
+        curl_call(endpt + cmd, header, false, false, "GET", getNodeQueryResponse);
     }
     
     function getQueryResponse(err, res, body) {
         if ( err ) {
-            console.log("Error requesting hub query: ", err);
+            console.log("Error requesting hub node properties: ", err);
         } else {
             console.log("doQuery: ", body);
             pushClient(swid, swtype, "none", body);
@@ -2000,30 +1424,43 @@ function queryHub(hub, swid, swtype) {
             console.log("Error requesting ISY node query: ", err);
         } else {
             var result = parser.parse(body);
-            console.log("ISY query: ", result);
+            var properties = result.nodeInfo.properties;
+            console.log("ISY query: ", result," properties: ", properties);
+            // pushClient(swid, swtype, subid, result);
         }
 
     }
 
 }
 
-function doAction(hubid, swid, swtype, swval, swattr, subid, command, content, macro) {
-
-    // get the hub being acted upon
-    var response = "";
+function findHub(hubid) {
     var hub = hubs[0];
     for (var h in hubs) {
         var ahub = hubs[h];
         if ( ahub["hubId"]===hubid ) { hub = ahub; }
     }
+    return hub;
+}
+
+function doAction(hubid, swid, swtype, swval, swattr, subid, command, content, macro) {
+
+    // get the hub being acted upon
+    var response = "";
+    var hub = findHub(hubid);
+    var idx = swtype + "|" + swid;
     // console.log(hubid, hub);
 
-
     // handle clocks
-    if ( command==="" && swid==="clockdigital") {
+    if ( (typeof command==="undefined" || command==="") && swid==="clockdigital") {
         response = getClock("Digital Clock", "clockdigital", "", "M d, Y", "h:i:s A");
-    } else if ( command==="" && swid==="clockanalog" ) {
+    } else if ( (typeof command==="undefined" || command==="") && swid==="clockanalog" ) {
         response = getClock("Analog Clock", "clockanalog", "CoolClock:swissRail:72", "M d, Y", "h:i:s A");
+    
+    // handle types that just return the current status
+    } else if (  (typeof command==="undefined" || command==="") && 
+                 (swtype==="contact" || swtype==="presence" || swtype==="motion" || swtype==="thermostat" ||
+                  swtype==="weather" || swtype==="temperature" || swtype==="blank") ) {
+        response = allthings[idx]["value"];
         
     // this logic is complex so let me explain. First we get the value if available
     // then we get any provided custom name from tile editor
@@ -2031,15 +1468,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, command, content, m
     // next we check customizer to see if name and width and height changed
     // finally, we send name, width, height to returnFile routine to get the html tag
     } else if ( command==="" && array_key_exists(swtype, specialtiles) ) {
-        var idx = swtype + "|" + swid;
-        var thingvalue;
-        if ( allthings ) {
-            thingvalue = allthings[idx]["value"];
-        } else {
-            var fw = specialtiles[swtype][1];
-            var fh = specialtiles[swtype][2];
-            thingvalue = {"name": swtype + "1", "id": swid, "width": fw, "height": fh, "type": swtype};
-        }
+        var thingvalue = allthings[idx]["value"];
         
         // thingvalue["name"] = getCustomName(thingvalue["name"], idx);
         // thingvalue = getCustomTile(thingvalue, swtype, swid);
@@ -2081,69 +1510,366 @@ function doQuery(hubid, swid, swtype) {
     return result;
 }
 
-function getHeader(skin) {
-    
-    var $tc = '<!DOCTYPE html>';
-    $tc += '<html><head><title>House Panel</title>';
-    $tc += '<meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">';
-    
-    // specify icon and color for windows machines
-    $tc += '<meta name="msapplication-TileColor" content="#2b5797">';
-    $tc += '<meta name="msapplication-TileImage" content="media/mstile-144x144.png">';
-    
-    // specify icons for browsers and apple
-    $tc += '<link rel="icon" type="image/png" href="media/favicon-16x16.png" sizes="16x16"> ';
-    $tc += '<link rel="icon" type="image/png" href="media/favicon-32x32.png" sizes="32x32"> ';
-    $tc += '<link rel="icon" type="image/png" href="media/favicon-96x96.png" sizes="96x96"> ';
-    $tc += '<link rel="apple-touch-icon" href="media/apple-touch-icon.png">';
-    $tc += '<link rel="shortcut icon" href="media/favicon.ico">';
-    
-    // load jQuery and themes
-    $tc += '<link rel="stylesheet" type="text/css" href="jquery-ui.css">';
-    $tc += '<script src="jquery-1.12.4.min.js"></script>';
-    $tc += '<script src="jquery-ui.min.js"></script>';
+function getInfoPage(returnURL) {
 
-    // include hack from touchpunch.furf.com to enable touch punch through for tablets
-    $tc += '<script src="jquery.ui.touch-punch.min.js"></script>';
+    var configoptions = GLB.options["config"];
+    var skin = configoptions["skin"];
+    var hubs = configoptions["hubs"];
+    var specialtiles = utils.getSpecials();
     
-    // minicolors library
-    $tc += '<script src="jquery.minicolors.min.js"></script>';
-    $tc += '<link rel="stylesheet" href="jquery.minicolors.css">';
+    var $tc = "";
+    $tc += utils.getHeader("skin-housepanel");
+    $tc += "<h3>" + utils.APPNAME + " Information Display</h3>";
 
-    // analog clock support
-    $tc += '<!--[if IE]><script type="text/javascript" src="excanvas.js"></script><![endif]-->';
-    $tc += '<script type="text/javascript" src="coolclock.js"></script>';
+    $tc += "<form>";
+    $tc += utils.hidden("returnURL", returnURL);
+    $tc += utils.hidden("pagename", "info");
+    $tc += "</form>";
+    $tc += "<div class=\"infopage\">";
+    $tc += "<div class='bold'>Site url = " + returnURL + "</div>";
+    $tc += "<div class='bold'>Skin folder = " + skin + "</div>";
+    $tc += "<div class='bold'>" + hubs.length + " Hubs active</div>";
+    $tc += "<hr />";
     
-    // load main script file
-    $tc += '<script type="text/javascript" src="housepanel.js"></script>';  
+    var num = 0;
+    hubs.forEach (function(hub) {
+        // putStats(hub);
+        var hubType = hub["hubType"];
+        var hubName = hub["hubName"];
+        var hubHost = hub["hubHost"];
+        var hubId = hub["hubId"];
+        var clientId = hub["clientId"];
+        var clientSecret = hub["clientSecret"];
+        var access_token = hub["hubAccess"];
+        var endpt = hub["hubEndpt"];
+        $tc += "<div class='bold'>Hub #" + num + "</div>";
+        $tc += "<div class='bold'>Hub Name = " + hubName + "</div>";
+        $tc += "<div>Type = " + hubType + "</div>";
+        $tc += "<div>Hub ID = " + hubId + "</div>";
+        $tc += "<div>Hub Host URL = " + hubHost + "</div>";
+        $tc += "<div>Client ID = " + clientId + "</div>";
+        $tc += "<div>Client Secret = " + clientSecret + "</div>";
+        $tc += "<div>AccessToken = " + access_token + "</div>";
+        $tc += "<div>Endpoint = " + endpt + "</div>";
+        if ( (num + 1) < hubs.length ) {
+            $tc += "<hr />";
+        }
+        num++;
+    });
+
+    $tc += "</div>";
     
-    // check for valid skin folder
-    if (!skin) {
-        skin = "skin-housepanel";
+    $tc += "<button class=\"showhistory\">Show Dev Log</button>";
+    $tc += "<div id=\"devhistory\" class=\"infopage hidden\">";
+    $tc += "<pre>" + utils.DEV + "</pre>";
+    $tc += "</div>";
+    
+    $tc += "<br><br><h3>List of Authorized Things</h3>";
+    $tc += "<table class=\"showid\">";
+    $tc += "<thead><tr><th class=\"thingname\">Name</th><th class=\"thingarr\">Value Array" + 
+        "</th><th class=\"infotype\">Type" + 
+        "</th><th class=\"infoid\">Thing id" +
+        "</th><th class=\"hubid\">Hub" +
+        "</th><th class=\"infonum\">Tile Num</th></tr></thead>";
+
+    for (var bid in allthings) { // as $bid => $thing) {
+        var thing = allthings[bid];
+        var value = "";
+        if ( is_object(thing["value"]) ) {
+            for (var key in thing["value"] ) {
+                var val = thing["value"][key];
+                if ( array_key_exists(key, specialtiles) ) {
+                    value += key + "= <strong>embedded " + key + "</strong><br/>";
+                } else if ( thing["type"]==="custom" && typeof val==="object" ) { 
+                    value += "Custom Array... "; 
+                } else if ( typeof val==="object" ) {
+                    value += key + "=" + JSON.stringify(val);
+                } else if ( typeof val === "string" && val.length > 128 ) {
+                    val = val.substr(0,124) + " ...";
+                    value += key + "=" + val + "<br/>";
+                } else if ( typeof val==="string" ) {
+                    value += key + "=" + val;
+                } else {
+                    value += key + "=" + val.toString();
+                }
+            }
+        } else {
+            value = thing["value"];
+            if ( value.length > 128 ) {
+                value = value.substr(0,124) + " ...";
+            }
+        }
+        // limit size of the field shown
+        
+        var hubnum = thing["hubnum"];
+        if ( hubnum === -1 || hubnum === "-1" ) {
+            var hubstr = "None<br><span class=\"typeopt\"> (" + hubnum + ": None)</span>";
+        } else {
+            var hub = findHub(hubnum);
+            var hubType = hub["hubType"];
+            var hubName = hub["hubName"];
+            var hubstr = hubName + "<br><span class=\"typeopt\"> (" + hubnum + ": " + hubType + ")</span>";
+        }
+        
+        $tc += "<tr><td class=\"thingname\">" + thing["name"] +
+            "</td><td class=\"thingarr\">" + value +
+            "</td><td class=\"infotype\">" + thing["type"] +
+            "</td><td class=\"infoid\">" + thing["id"] +
+            "</td><td class=\"hubid\">" + hubstr + 
+            "</td><td class=\"infonum\">" + GLB.options["index"][bid] + "</td></tr>";
     }
-    
-    // load tile editor fixed css file with cutomization helpers
-    $tc += "<script type='text/javascript' src='tileeditor.js'></script>";
-    $tc += "<link id='tileeditor' rel='stylesheet' type='text/css' href='tileeditor.css'>";	
+    $tc += "</table>";
+    $tc += "<button class=\"infobutton fixbottom\">Return to HousePanel</button>";
 
-    // load tile customizer
-    $tc += '<script type="text/javascript" src="customize.js"></script>';
-
-    // load the main css file
-    $tc += "<link rel=\"stylesheet\" type=\"text/css\" href=\"" + skin + "/housepanel.css\">";
-
-    // load the custom tile sheet if it exists
-    // replaced logic to make customizations skin specific
-    $tc += "<link id=\"customtiles\" rel=\"stylesheet\" type=\"text/css\" href=\"" + skin + "/customtiles.css\">";
-    
-    // begin creating the main page
-    $tc += '</head><body>';
-    $tc += '<div class="maintable">';
+    $tc += utils.getFooter();
     return $tc;
 }
 
-function getFooter() {
-    return "</div></body></html>";
+function getOptionsPage(retpage) {
+    var $thingtypes = utils.getTypes();
+    var $specialtiles = utils.getSpecials();
+    // sort($thingtypes);
+
+    var $options = GLB.options;
+    var $roomoptions = $options["rooms"];
+    var $thingoptions = $options["things"];
+    var $indexoptions = $options["index"];
+    var $useroptions = $options["useroptions"];
+    var $configoptions = $options["config"];
+    var $hubs = $configoptions["hubs"];
+    var $skin = getSkin();
+    var $port = $configoptions["port"];
+    var $webSocketServerPort = $configoptions["webSocketServerPort"];
+    var $fast_timer = $configoptions["fast_timer"];
+    var $slow_timer = $configoptions["slow_timer"];
+    var $kioskoptions = $configoptions["kiosk"];
+    var $ruleoptions = $configoptions["rules"];
+    var $timezone = $configoptions["timezone"];
+    
+    var $tc = "";
+    $tc += utils.getHeader($skin);
+    $tc+= "<h3>" + utils.APPNAME + " Options</h3>";
+    $tc+= "<div class=\"formbutton formauto\"><a href=\"" + retpage + "\">Cancel and Return to HousePanel</a></div>";
+    $tc+= "<div id=\"optionstable\" class=\"optionstable\">";
+
+    $tc+= "<form name=\"pageoptions\" action=\"#\"  method=\"POST\">";
+    $tc+= utils.hidden("returnURL", retpage);
+    $tc+= utils.hidden("pagename", "options");
+    $tc+= "</form>";
+
+    $tc+= "<form id=\"filteroptions\" class=\"options\" name=\"filteroptions\" action=\"" + retpage + "\"  method=\"POST\">";
+    
+    // if more than one hub then let user pick which one to show
+    var hubpick = "all";
+    if ( $configoptions["hubpick"] ) {
+        hubpick = $configoptions["hubpick"];
+    }
+    if ( utils.count($hubs) > 1 ) {
+        $tc+= "<div class=\"filteroption\">Hub Filters: ";
+        var $hid = "hopt_all";
+        var checked = (hubpick==="all") ? " checked='1'" : "";
+        $tc+= "<div class='radiobutton'><input id='" + $hid + "' type='radio' name='huboptpick' value='all'"  + checked + "><label for='" + $hid + "'>All Hubs</label></div>";
+        $hid = "hopt_none";
+        checked = (hubpick==="none") ? " checked='1'" : "";
+        $tc+= "<div class='radiobutton'><input id='" + $hid + "' type='radio' name='huboptpick' value='none'" + checked + "><label for='" + $hid + "'>No Hub</label></div>";
+        var $hubcount = 0;
+        $hubs.forEach(function($hub) {
+            var $hubName = $hub["hubName"];
+            var $hubType = $hub["hubType"];
+            var $hubId = $hub["hubId"];
+            $hid = "hopt_" + $hubcount;
+            checked = (hubpick===$hubId) ? " checked='1'" : "";
+            $tc+= "<div class='radiobutton'><input id='" + $hid + "' type='radio' name='huboptpick' value='" + $hubId + "'" + checked + "><label for='" + $hid + "'>" + $hubName + " (" + $hubType + ")</label></div>";
+            $hubcount++;
+        });
+        $tc+= "</div>";
+    }
+
+    // buttons for all or no filters
+    $tc+= "<br /><div class=\"filteroption\">Thing Filters: ";
+    $tc+= "<div id=\"allid\" class=\"smallbutton\">All</div>";
+    $tc+= "<div id=\"noneid\" class=\"smallbutton\">None</div>";
+    $tc+= "</div>";
+
+    $tc+= "<div class='filteroption'>Select Things to Display: <br/>";
+    $tc+= "<table class=\"useroptions\"><tr>";
+    var $i= 0;
+    for (var $iopt in $thingtypes) {
+        var $opt = $thingtypes[$iopt];
+        $i++;
+        if ( in_array($opt, $useroptions ) ) {
+            $tc+= "<td><input id=\"cbx_" + $i + "\" type=\"checkbox\" name=\"useroptions[]\" value=\"" + $opt + "\" checked=\"1\">";
+        } else {
+            $tc+= "<td><input id=\"cbx_" + $i + "\" type=\"checkbox\" name=\"useroptions[]\" value=\"" + $opt + "\">";
+        }
+        $tc+= "<label for=\"cbx_" + $i + "\" class=\"optname\">" + $opt + "</label></td>";
+        if ( $i % 5 == 0 && $i < utils.count($thingtypes) ) {
+            $tc+= "</tr><tr>";
+        }
+    }
+    $tc+= "</tr></table>";
+    $tc+= "</div><hr>";
+    $tc+= "</form>";
+
+    $tc+= "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + retpage + "\"  method=\"POST\">";
+
+    // $tc+= "<div class=\"filteroption\">";
+    // $tc+= tsk($timezone, $skin, $uname, $port, $webSocketServerPort, $fast_timer, $slow_timer);
+    // $tc+= "</div>";
+
+    $tc+= "<div class=\"filteroption\">Specify number of special tiles: ";
+    // foreach ($specialtiles as $stype => $sid) {
+    for (var $stype in $specialtiles) {
+        var $customcnt = getCustomCount($stype);
+        var $stypeid = "cnt_" + $stype;
+        $tc+= "<br /><label for=\"$stypeid\" class=\"kioskoption\"> " + $stype +  " tiles: </label>";
+        $tc+= "<input class=\"specialtile\" id=\"" + $stypeid + "\" name=\"" + $stypeid + "\" width=\"10\" type=\"number\"  min='0' max='99' step='1' value=\"" + $customcnt + "\" />";
+    }
+    $tc+= "</div>";
+
+    $tc+= "<div class=\"filteroption\">Other options: <br/>";
+    $tc+= "<label for=\"kioskid\" class=\"kioskoption\">Kiosk Mode: </label>";    
+    var $kstr = ($kioskoptions===true || $kioskoptions==="true" || $kioskoptions==="1" || $kioskoptions==="yes") ? "checked" : "";
+    $tc+= "<input id=\"kioskid\" width=\"24\" type=\"checkbox\" name=\"kiosk\"  value=\"" + $kioskoptions + "\" " + $kstr + "/>";
+    
+    $tc+= "<label for=\"ruleid\" class=\"kioskoption\">Enable Rules? </label>";
+    var $rstr = ($ruleoptions===true || $ruleoptions==="true" || $ruleoptions==="1" || $ruleoptions==="yes") ? "checked" : "";
+    $tc+= "<input id=\"ruleid\" width=\"24\" type=\"checkbox\" name=\"rules\"  value=\"" + $ruleoptions + "\" " + $rstr + "/>";
+    $tc+= "</div>";
+
+    var $accucity = $configoptions["accucity"];
+    var $accuregion = $configoptions["accuregion"];
+    var $accucode = $configoptions["accucode"];      // ann-arbor-mi code is 329380
+    $tc+= "<div class=\"filteroption\"><label for=\"accucityid\" class=\"kioskoption\">Accuweather City: <input id=\"accucityid\" width=\"180\" ";
+    $tc+= "type=\"text\" name=\"accucity\"  value=\"" + $accucity + "\" />";
+    $tc+= "<label for=\"accuregionid\" class=\"kioskoption\">Region: <input id=\"accuregionid\" width=\"6\" type=\"text\" name=\"accuregion\"  value=\"" + $accuregion + "\"/>";
+    $tc+= "<label for=\"accucodeid\" class=\"kioskoption\">Code: <input id=\"accucodeid\" width=\"40\" type=\"text\" name=\"accucode\"  value=\"" + $accucode + "\"/>";
+    $tc+= "</div>";
+    
+    $tc+= "<br /><br />";
+    $tc+= "<table class=\"headoptions\"><thead>";
+    $tc+= "<tr><th class=\"thingname\">Thing Name (type)</th>";
+    $tc+= "<th class=\"hubname\">Hub</th>";
+   
+    // list the room names in the proper order
+    // for ($k=0; $k < count($roomoptions); $k++) {
+    for (var $roomname in $roomoptions) {
+        $tc+= "<th class=\"roomname\">" + $roomname;
+        $tc+= "</th>";
+    }
+    $tc+= "</tr></thead>";
+    $tc+= "</table>";
+    $tc+= "<div class='scrollvtable'>";
+    $tc+= "<table class=\"roomoptions\">";
+    $tc+= "<tbody>";
+
+    // sort the things
+    // uasort($allthings, "mysortfunc");
+    
+    // now print our options matrix
+    // $rowcnt = 0;
+    var $evenodd = true;
+    var $hub;
+    for (var $thingid in allthings) {
+        var $thesensor = allthings[$thingid];
+        // if this sensor type and id mix is gone, skip this row
+        
+        var $thingname = $thesensor["name"];
+        var $thetype = $thesensor["type"];
+        var $hubnum = $thesensor["hubnum"];
+        if ( $hubnum === -1 || $hubnum==="-1" ) {
+            $hub = null;
+            var $hubType = "None";
+            var $hubStr = "None";
+            var $hubId = "none";
+        } else {
+            $hub = findHub($hubnum);
+            $hubType = $hub["hubType"];
+            $hubStr = $hub["hubName"];
+            $hubId = $hub["hubId"];
+        }
+
+        // get the tile index number
+        var $thingindex = $indexoptions[$thingid].toString();
+        
+        // write the table row
+        if ( array_key_exists($thetype, $specialtiles) ) {
+            var $special = " special";
+        } else {
+            $special = "";
+        }
+        var $odd = $evenodd = false;
+        if (in_array($thetype, $useroptions)) {
+            $evenodd = !$evenodd;
+            $evenodd ? $odd = " odd" : $odd = "";
+            $tc+= "<tr type=\"" + $thetype + "\" tile=\"" + $thingindex + "\" class=\"showrow" + $odd + $special + "\">";
+        } else {
+            $tc+= "<tr type=\"" + $thetype + "\" tile=\"" + $thingindex + "\" class=\"hiderow" + $special + "\">";
+        }
+        
+        $tc+= "<td class=\"thingname\">";
+        $tc+= $thingname + "<span class=\"typeopt\"> (" + $thetype + ")</span>";
+        $tc+= "</td>";
+        
+        $tc+= "<td class=\"hubname\" hubId=\"" + $hubId + "\">";
+        $tc+= $hubStr + " (" + $hubType + ")";
+        $tc+= "</td>";
+
+        // loop through all the rooms
+        // this addresses room bug
+        // for ($k=0; $k < count($roomoptions); $k++) {
+        // foreach ($roomoptions as $roomname => $k) {
+        for ( var $roomname in $roomoptions ) {
+            
+            // get the name of this room for this column
+            // $roomname = array_search($k, $roomoptions);
+            // $roomlist = array_keys($roomoptions, $k);
+            // $roomname = $roomlist[0];
+            if ( array_key_exists($roomname, $thingoptions) ) {
+                var $things = $thingoptions[$roomname];
+                                
+                // now check for whether this thing is in this room
+                $tc+= "<td>";
+                
+                var $ischecked = false;
+                var $idx;
+                for (var i in $things) {
+                    var $arr = $things[i];
+                    if ( is_array($arr) ) {
+                        $idx = $arr[0].toString();
+                    } else {
+                        $idx = $arr.toString();
+                    }
+                    if ( $idx === $thingindex ) {
+                        $ischecked = true;
+                        break;
+                    }
+                }
+                
+                if ( $ischecked ) {
+                    $tc+= "<input type=\"checkbox\" name=\"" + $roomname + "[]\" value=\"" + $thingindex + "\" checked=\"1\" >";
+                } else {
+                    $tc+= "<input type=\"checkbox\" name=\"" + $roomname + "[]\" value=\"" + $thingindex + "\" >";
+                }
+                $tc+= "</td>";
+            }
+        }
+        $tc+= "</tr>";
+    }
+
+    $tc+= "</tbody></table>";
+    $tc+= "</div>";
+    $tc+= "<div id='optionspanel' class=\"processoptions\">";
+    $tc +='<div id="optSave" class="formbutton">Save</div>';
+    $tc +='<div id="optReset" class="formbutton">Reset</div>';
+    $tc +='<div id="optCancel" class="formbutton">Cancel</div><br>';
+    $tc+= "</div>";
+    $tc+= "</form>";
+    $tc+= "</div>";
+
+    $tc += utils.getFooter();
+
+    return $tc;
 }
 
 // renders the main page
@@ -2160,9 +1886,9 @@ function mainPage(proto, hostname) {
     } else {
         kioskmode = false;
     }
-    GLB.returnURL = "hpserver.js";
+    GLB.returnURL = proto + "://" + hostname
 
-    $tc += getHeader("skin-housepanel");
+    $tc += utils.getHeader("skin-housepanel");
 
     if ( DEBUG2 ) {
         console.log(GLB.options);
@@ -2188,9 +1914,6 @@ function mainPage(proto, hostname) {
         if ( thingoptions[room] ) {
             var adder= "<li roomnum=\"" + k + "\" class=\"tab-" + room + "\"><a href=\"#" + room + "-tab\">" + room + "</a></li>";
             $tc += adder;
-            if ( DEBUG3 ) {
-                console.log("added: ", adder, "\r\n\r\n");
-            }
         }
     }
     $tc += '</ul>';
@@ -2209,8 +1932,9 @@ function mainPage(proto, hostname) {
     }
 
     // include doc button and username that is logged in
+    var uname = getUserName();
     $tc += '<div id="showversion" class="showversion">';
-    // $tc += '<span id="infoname">' + uname + "</span><span> - V" + HPVERSION + '</span>';
+    $tc += '<span id="infoname">' + uname + "</span><span> - V" + utils.HPVERSION + '</span>';
     $tc += '<div id="showdocs"><a href="http://www.housepanel.net" target="_blank">?</a></div>';
     $tc += "</div>";
 
@@ -2234,24 +1958,15 @@ function mainPage(proto, hostname) {
     
     // include form with useful data for js operation
     $tc += "<form id='kioskform'>";
-    $tc += hidden("pagename", "main");
+    $tc += utils.hidden("pagename", "main");
 
     // save the socket address for use on js side
     // var webSocketUrl = GLB.config.webSocketServerPort ? ("ws://" + serverName + ":" + GLB.config.webSocketServerPort) : "";
-    $tc += hidden("webSocketUrl", webSocketUrl);
+    $tc += utils.hidden("webSocketUrl", webSocketUrl);
 
     // save Node.js address for use on the js side
-    // var nodejsUrl = GLB.config.port ? ( is_ssl() + serverName + ":" + GLB.config.port ) : "";
     var nodejsUrl = proto + "://" + hostname
-    $tc += hidden("returnURL", nodejsUrl);
-
-    // console.log("page = ", $tc);
-
-//        var datetimezone = new DateTimeZone($timezone);
-//        var datetime = new DateTime("now", $datetimezone);
-//        var tzoffset = timezone_offset_get($datetimezone, $datetime);
-//        $tc += hidden("tzoffset", $tzoffset);
-//        $tc += hidden("skin", $skin, "skinid");
+    $tc += utils.hidden("returnURL", nodejsUrl);
 
     // show user buttons if we are not in kiosk mode
     if ( !kioskmode ) {
@@ -2274,25 +1989,328 @@ function mainPage(proto, hostname) {
     }
     $tc += "</form>";
 
-    $tc += getFooter();
+    $tc += utils.getFooter();
         
     return $tc;
+}
+
+function clone(obj) {
+    return JSON.parse(JSON.stringify(obj));
+}
+
+// process user options page
+function processOptions($optarray) {
+
+    if (DEBUG3) {
+        console.log($optarray);
+        // console.log(GLB.options["config"]);
+    }
+    
+    // default location
+    var $specialtiles = utils.getSpecials();
+    var $city = "ann-arbor-mi";
+    var $region = "us";
+    var $code = "329380";
+    // $expiry = time()+3650*24*3600;
+    // $expirz = time()-3650*24*3600;
+    
+    var $options = clone(GLB.options);;
+    $options["things"] = {};
+
+    // var $oldoptions = clone(GLB.options);
+    var $configoptions = clone($options["config"]);
+    var $roomnames = Object.keys($options["rooms"]);
+
+    if ( !is_object($configoptions["specialtiles"]) ) {
+        console.log("Config = ", $configoptions);
+        $configoptions["specialtiles"] = {};
+    }
+
+    // // use clock instead of blank for default only tile
+    var $onlytile = GLB.options["index"]["clock|clockdigital"];
+
+    // // checkbox items simply will not be there if not selected
+    $configoptions["kiosk"] = "false";
+    $configoptions["rules"] = "false";
+
+    // // get logged in user or set default if not logged in
+    var $uname = getUserName();
+    var $olduname = $uname;
+    var $skin = $configoptions["skin"];
+    
+    
+    // // get default pw and its skin
+    // if (array_key_exists("pword", $configoptions)) {
+    //     $pwords = $configoptions["pword"];
+    //     if ( array_key_exists($uname, $pwords) ) {
+    //         if ( is_array($pwords[$uname]) ) {
+    //             $hash = $pwords[$uname][0];
+    //             $skin = $pwords[$uname][1];
+    //         } else {
+    //             $hash = $pwords[$uname];
+    //             $pwords[$uname] = array($hash, $skin);
+    //             $configoptions["pword"] = $pwords;
+    //         }
+    //     } else {
+    //         $pwords = array();
+    //         $pwords[$uname] = array($hash, $skin);
+    //         $configoptions["pword"] = $pwords;
+    //     }
+    // } else {
+    //     $pwords = array();
+    //     $hash = "";
+    //     $pwords[$uname] = array($hash, $skin);
+    //     $configoptions["pword"] = $pwords;
+    // }
+    // $defskin = $skin;
+    // $oldhash = $hash;
+    // $hash = "";
+    
+    // // fix long-standing bug by putting a clock in any empty room
+    // // to force the form to return each room defined in options file
+    var onlyarr = [$onlytile,0,0,1,""];
+    for( var $room in GLB.options["rooms"]) {
+        $options["things"][$room] = [];
+    }
+
+    // // get all the rooms checkboxes and reconstruct list of active things
+    // // note that the list of checkboxes can come in any random order
+    // foreach($optarray as $key => $val) {
+    for (var $key in $optarray) {
+        var $val = $optarray[$key];
+
+        //skip the returns from the submit button and the flag
+        if ($key==="options" || $key==="api" || $key==="useajax" ) {
+            continue;
+        } else if ($key==="skin") {
+            $skin = $val;
+        } else if ( $key==="kiosk") {
+            $configoptions["kiosk"] = "true";
+        } else if ( $key==="rules") {
+            $configoptions["rules"] = "true";
+        } else if ( $key==="timezone" ) {
+            $timezone = $val;
+        } else if ( $key==="port" ) {
+            $configoptions["port"] = parseInt($val);
+        } else if ( $key==="webSocketServerPort" ) {
+            $configoptions["webSocketServerPort"] = intval($val);
+        } else if ( $key==="fast_timer" ) {
+            $configoptions["fast_timer"] = intval($val);
+        } else if ( $key==="slow_timer" ) {
+            $configoptions["slow_timer"] = intval($val);
+
+        // else if ( $key==="uname" && $val ) {
+        //     $uname = checkuser($val);
+        // }
+        // else if ( $key==="pword" && $val ) {
+        //     $pword = trim($val);
+        //     $hash = pw_hash($pword);
+        //     $oldhash = $hash;
+        //     // setcookie("pwcrypt", "", $expirz, "/");
+        // }
+        } else if ( $key==="accucity" && $val ) {
+            $city = $val.trim();
+        } else if ( $key==="accuregion" && $val ) {
+            $region = $val.trim();
+        } else if ( $key==="accucode" && $val ) {
+            $code = $val.trim();
+        
+        // handle user selected special tile count
+        } else if ( $key.substr(0,4)==="cnt_" ) {
+            var $stype = $key.substr(4);
+            if ( array_key_exists($stype, $specialtiles) ) {
+                var $spid = $specialtiles[$stype][0];
+                var $customcnt = parseInt($val);
+                createSpecialIndex($customcnt, $stype, $spid);
+                $configoptions["specialtiles"] = GLB.options["config"]["specialtiles"];
+                
+            }
+        
+        // handle the option to limit view
+        } else if ( $key==="useroptions" && is_array($val) ) {
+            $options["useroptions"] = $val;
+        
+        // made this more robust by checking room name being valid
+        } else if ( in_array($key, $roomnames) && is_array($val) ) {
+            var $roomname = $key;
+            $options["things"][$roomname] = [];
+            
+            // first save the existing order of tiles if still there
+            // this will preserve user drag and drop positions
+            // but if a tile is removed then all tiles after it will be
+            // shown shifted as a result
+            var $lasttop = 0;
+            var $lastleft = 0;
+            var $lastz = 1;
+
+            // $oldthings = $oldoptions["things"][$roomname];
+            // foreach ($oldthings as $arr) {
+            for (var $arr in GLB.options["things"][$roomname]) {
+                if ( is_array($arr) ) {
+                    var $tilenum = parseInt($arr[0]);
+                    var $postop = $arr[1];
+                    var $posleft = $arr[2];
+                    var $zindex = $arr[3];
+                    var $customname = $arr[4];
+                } else {
+                    $tilenum = parseInt($arr);
+                    $postop = 0;
+                    $posleft = 0;
+                    $zindex = 1;
+                    $customname = "";
+                }
+                if ( inroom($tilenum, $val) ) {
+                    var newtile = [$tilenum,$postop,$posleft,$zindex,$customname];
+                    $options["things"][$roomname].push(newtile);
+                    $lasttop = $postop;
+                    $lastleft = $posleft;
+                    $lastz = $zindex;
+                }
+            }
+            
+            // add any new ones that were not there before
+            // set position to next to last one unless it is moved a lot
+            // the 400 distance is subjective but works in most cases
+            var $newthings = $options["things"][$roomname];
+            if ( $lasttop < -400 || $lasttop > 400 || $lastleft < -400 || $lastleft > 400 ) {
+                $lasttop = 0;
+                $lastleft = 0; 
+            }
+
+            $val.forEach(function($tilestr) {
+                var $tilenum = parseInt($tilestr);
+                if ( ! inroom($tilenum, $newthings) ) {
+                    var newtile = [$tilenum,$lasttop,$lastleft, $lastz, ""];
+                    $options["things"][$roomname].push(newtile);
+                }
+            });
+            
+            // put a clock in a room if it is empty
+            if ( $options["things"][$roomname].length === 0  ) {
+                $options["things"][$roomname].push(onlyarr);
+            }
+        }
+    }
+    
+    // // everything from this point on is after processing the options table
+    // // start by handling the weather
+    // if ( $city && $region && $code ) {
+    //     getAccuWeather($city, $region, $code);
+    //     $configoptions["accucity"] = $city;
+    //     $configoptions["accuregion"] = $region;
+    //     $configoptions["accucode"] = $code;
+    // }
+    
+    // // now process things that used to be in auth page
+    // // includes timezone, fast_timer, slow_timer, skin, port, and webSocketPort
+    // // wrap the timzeone in a try block to avoid breaking app
+    // try {
+    //     date_default_timezone_set($timezone);
+    // } catch (Exception $e) {
+    //     $timezone = date_default_timezone_get();
+    //     date_default_timezone_set($timezone);
+    // }
+    // $configoptions["timezone"] = $timezone;
+
+    // // set the skin if it is a good one or use default from above
+    // if ( $skin && file_exists($skin . "/housepanel.css") ) {
+    //     if ( !file_exists($skin . "/customtiles.css") ) {
+    //         writeCustomCss($skin, "");
+    //     }
+    //     $configoptions["skin"] = $skin;
+    // } else {
+    //     $skin = $defskin;
+    // }
+    
+    // // process username and password settings and save in skin specific loc
+    // // includes logic to bundle the skin with this user so that
+    // // now each user can use their own skin if they want
+    // if ( $uname === $olduname ) {
+    //     $hash = $oldhash;
+    // }
+    // $pwords[$uname] = array($hash, $skin);
+    
+    // // now set all the parameters with complex logic
+    // $configoptions["pword"] = $pwords;
+    // $configoptions["timezone"] = $timezone;
+    // $configoptions["specialtiles"] = $specialcounts;
+    
+    // save the configuration parameters in the main options array
+    $options["config"] = clone($configoptions);
+    
+    // // set the user cookie
+    // // and log this user in
+    // setcookie("uname", $uname, $expiry, "/");
+    // setcookie("pwcrypt", $uname, $expiry, "/");
+    
+    if (DEBUG4) {
+        console.log("Debug Print for New Options Created - After Processing");
+        console.log("index: ", JSON.stringify($options["index"]));
+        console.log("config: ", $options["config"]);
+        console.log("rooms: ", $options["rooms"]);
+        console.log("things: ", $options["things"]);
+    }
+
+    // write options to file
+    writeOptions($options);
+
+    // refresh the main array
+    // getAllThings(true);
+}
+
+function saveFilters(body) {
+    console.log(body);
+    var rewrite = false;
+
+    if ( body.useroptions ) {
+        GLB.options["useroptions"] = body.useroptions;
+        rewrite = true;
+    }
+
+    var skin = getSkin();
+    if ( typeof body.skin !== "undefined" ) {
+        skin = body.skin;
+    }
+
+    if ( typeof body.huboptpick !== "undefined" ) {
+        GLB.options["config"]["hubpick"] = body.huboptpick;
+        rewrite = true;
+    }
+
+    // set the skin and replace the custom file with that skin's version
+    if ( skin && fs.existsSync(skin + "/housepanel.css") ) {
+
+        // save the skin in my user specific setting
+        var $uname = getUserName();
+        var $pwords = GLB.options["config"]["pword"];
+        if ( $uname && array_key_exists($uname, $pwords) ) {
+            $pwords[$uname][1] = skin;
+            GLB.options["config"]["pword"] = $pwords;
+        }
+        
+        // make sure our default skin has a custom file
+        if ( !fs.existsSync(skin + "/customtiles.css") ) {
+            writeCustomCss(skin, "");
+        }
+            
+        // set default skin to this skin - although it shouldn't be used ever
+        GLB.options["config"]["skin"] = skin;
+        rewrite = true;
+    }
+
+    if ( rewrite ) {
+        writeOptions(GLB.options);
+    }
 }
 
 // ***************************************************
 // beginning of main routine
 // ***************************************************
-GLB.uname = 'default';
 
-// read the config file
-setSpecials();
+// read the config file and get array of hubs
 readOptions();
-getAllThings(true);
-
-// get array of hubs
 var hubs = GLB.options["config"]["hubs"];
-
-port = GLB.config.port;
+var port = GLB.config.port;
 if ( !port ) {
     port = 3080;
 }
@@ -2317,6 +2335,10 @@ try {
     app = null;
     applistening = false;
 }
+
+// retrieve all nodes/things
+// client pages are refreshed when each hub is done reading
+getAllThings(true);
 
 // create the HTTP server for handling sockets
 server = http.createServer(function(req, res) {
@@ -2354,13 +2376,28 @@ if ( app && applistening ) {
     };
 
     app.get('*', function (req, res) {
+        
+        var hostname = req.protocol + "://" + req.headers.host;
+        console.log((new Date()) + " serving page at: ", hostname);
+
         if ( req.path==="/") {
-            var hostname = req.protocol + "://" + req.headers.host;
-            console.log((new Date()) + " serving pages at: ", hostname);
+            // set the global variable so other functions can return here
+            GLB.returnURL = hostname;
+
             var $tc = mainPage(req.protocol, req.headers.host);
-            // console.log(GLB.options);
             res.send($tc);
             res.end();
+
+        } else if ( req.path==="/showid") {
+            var $tc = getInfoPage(GLB.returnURL);
+            res.send($tc);
+            res.end();
+
+        } else if ( req.path==="/showoptions") {
+            var $tc = getOptionsPage(GLB.returnURL);
+            res.send($tc);
+            res.end();
+
         } else {
             var file = path.join(dir, req.path.replace(/\/$/, '/index.html'));
             if (file.indexOf(dir + path.sep) !== 0) {
@@ -2462,6 +2499,13 @@ if ( app && applistening ) {
                     }
                     res.json(GLB.options);
                     break;
+
+                case "showid":
+                case "showoptions":
+                        console.log("Warning: " + api + " API call is no longer supported.");
+                    res.json("success");
+                    break;
+
                     
                 case "refresh":
                     getAllThings(true);
@@ -2472,11 +2516,23 @@ if ( app && applistening ) {
                     console.log("savetileedit... TODO...");
                     res.json("success");
                     break;
-        
+
+                case "saveoptions":
+                    processOptions(req.body);
+                    res.json("success");
+                    break;
+
+                case "filteroptions":
+                    saveFilters(req.body);
+                    res.json("success");
+                    break;
+                
                 case "refactor":
                     // this user selectable option will renumber the index
-                    $allthings = getAllThings(true);
-                    refactorOptions();
+                    // $allthings = getAllThings(true);
+                    // refactorOptions();
+                    pushClient("reload", "reload", "", "");
+                    res.json("success");
                     break;
                     
                 default:
