@@ -298,10 +298,13 @@ function initDialogBinds(str_type, thingindex) {
         var target1 = getCssRuleTarget(str_type, "head", thingindex);
         var target2 = getCssRuleTarget(str_type, "name", thingindex);
         var newname = $("#editName").val();
+        var oldname = $(target1).html();
         $(target1).html(newname);
         $(target2).html(newname);
-        saveTileEdit(str_type, thingindex, newname);
-        // cm_Globals.reload = true;
+        updateNames(str_type, thingindex, oldname, newname);
+        if ( ( typeof modalWindows["modalcustom"]==="undefined"  || modalWindows["modalcustom"] === 0 ) ) {
+            cm_Globals.reload = true;
+        }
         event.stopPropagation;
     });
 
@@ -908,7 +911,8 @@ function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, htmlconten
                     var target2 = getCssRuleTarget(str_type, "name", thingindex);
                     $(target1).html(newname);
                     $(target2).html(newname);
-                    saveTileEdit(str_type, thingindex, newname);
+                    var oldname = $(target1).html();
+                    saveTileEdit(str_type, thingindex, oldname, newname);
                 } else if ( clk==="cancel" ) {
                     cancelTileEdit(str_type, thingindex);
                 }
@@ -1152,8 +1156,23 @@ function setsubid(str_type) {
     return subid;
 }
 
-function saveTileEdit(str_type, thingindex, newname) {
+function updateNames(str_type, thingindex, oldname, newname) {
+    $.post(returnURL, 
+        {useajax: "updatenames", id: 0, type: str_type, value: oldname, attr: newname, tile: thingindex},
+        function (presult, pstatus) {
+            if (pstatus==="success" ) {
+                console.log(presult);
+            }
+        }
+    );
+
+}
+
+function saveTileEdit(str_type, thingindex, oldname, newname) {
     var returnURL = cm_Globals.returnURL;
+
+    // first update the names
+    updateNames(str_type, thingindex, oldname, newname);
 
     // get all custom CSS text
     var sheet = document.getElementById('customtiles').sheet;
@@ -1165,13 +1184,12 @@ function saveTileEdit(str_type, thingindex, newname) {
     var regex = /[{;}]/g;
     var subst = "$&\n";
     
-    // TODO... divide into multiple parts if big
-    
     sheetContents = sheetContents.replace(regex, subst);
     var results = "";
     
     // post changes to save them in a custom css file
     // the new name of this tile is passed in the attr variable
+    // we have to divide this into chunks if large to avoid Node limit
     var n1 = 0;
     var n2 = sheetContents.length;
     if ( sheetContents.length > 60000 ) {
@@ -1180,7 +1198,7 @@ function saveTileEdit(str_type, thingindex, newname) {
     } else {
         nparts = 1;
     }
-    for (var n=0; n < nparts; n++) {
+    for (var n=1; n <= nparts; n++) {
         
         var subcontent= sheetContents.substring(n1, n2-1);
         
@@ -1188,6 +1206,7 @@ function saveTileEdit(str_type, thingindex, newname) {
             {useajax: "savetileedit", id: n, type: str_type, value: subcontent, attr: newname, tile: thingindex},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
+                    console.log(presult);
                     if ( cm_Globals.reload && ( typeof modalWindows["modalcustom"]==="undefined"  || modalWindows["modalcustom"] === 0 ) ) {
                         cm_Globals.reload = true;
                     }
@@ -1991,17 +2010,17 @@ function getIcons(str_type, thingindex) {
     getIconCategories();
     var iCategory = $("#iconSrc").val();
     var skindir = $("#skinid").val();
-    var localPath = 'icons';
     
     // change to use php to gather icons in an ajax post call
     // this replaces the old method that fails on GoDaddy
     if ( !iCategory ) { iCategory = 'Local_Storage'; }
     if( iCategory === 'Local_Storage' || iCategory==='Local_Media') {
+        var localPath = 'icons';
         if ( iCategory === 'Local_Media') {
             localPath = 'media';
         }
-        $.post("getdir.php", 
-            {useajax: "geticons", skin: skindir, path: localPath},
+        $.post(returnURL, 
+            {useajax: "geticons", id: 0, type: "none", value: localPath, attr: iCategory},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     console.log("reading icons from skin= " + skindir + " and path= "+localPath);
