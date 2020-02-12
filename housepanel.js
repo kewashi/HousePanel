@@ -226,11 +226,6 @@ $(document).ready(function() {
     // this is caused by json_encode hanging in main routine
     if ( pagename==="main" || pagename==="options" ) {
         getAllthings(false, false);
-//        setTimeout(function() {
-//            if ( !cm_Globals.allthings ) {
-//                getAllthings(false, true);
-//            }
-//        }, 3000);
     }
     
     // disable return key
@@ -1899,7 +1894,7 @@ function addEditLink() {
                     {useajax: "dragdelete", id: bid, type: str_type, value: panel, attr: tile},
                     function (presult, pstatus) {
                         if (pstatus==="success" && !presult.startsWith("error")) {
-                            console.log( "Removed tile: "+ $(thing).html() );
+                            // console.log( "Removed tile: "+ $(thing).html() );
                             // remove it visually
                             $(thing).remove();
                         } else {

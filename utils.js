@@ -458,6 +458,6 @@ exports.count = function(obj) {
     if ( typeof obj === "object" )  {
         return Object.keys(obj).length;
     } else {
-        return 1;
+        return 0;
     }
 }

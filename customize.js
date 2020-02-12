@@ -114,7 +114,7 @@ function customizeTile(thingindex, aid, bid, str_type, hubnum) {
                 if ( !cm_Globals.allthings || !cm_Globals.options ) {
                     var pos = {top: 5, left: 5, zindex: 9999, background: "red", color: "white"};
                     createModal("waitbox", "Loading data. Please wait...", "div.modalbuttons", false, pos);
-                    getAllthings("waitbox", true);
+                    getAllthings("waitbox", false);
                 } else {
                     try {
                         getDefaultSubids();
@@ -387,7 +387,8 @@ function actionButtons() {
 // returns an options list of available fields of a given tile
 function loadLinkItem(idx, allowuser, sortval, sortup) {
     var thing = cm_Globals.allthings[idx];
-    var thevalue = thing.value;
+    var thevalue = thing["value"];
+    // console.log("idx= ", idx, " thing= ", thing, " loadLinkItem - thevalue= ", thevalue);
     var subids = Object.keys(thevalue);
     
     var numthings = 0;
@@ -630,6 +631,9 @@ function initCustomActions() {
 function loadExistingFields(idx, sortval, sortup) {
     // show the existing fields
     var results = loadLinkItem(idx, true, sortval, sortup);
+
+    // console.log("load fields: ", results);
+
     $("#cm_builtinfields").html(results.fields);
     var subid = results.firstitem;
     cm_Globals.defaultclick = subid;
@@ -905,6 +909,11 @@ function applyCustomField(action) {
                 if (pstatus==="success") {
                     console.log (action + " performed successfully. presult: ", presult);
                     cm_Globals.reload = true;
+
+                    // we get new data from server since it is much faster that way
+                    var pvalue = presult.value;
+                    cm_Globals.options = presult.options;
+                    cm_Globals.allthings = presult.things;
                     
                     // update content since pw could have changed it
                     if ( subid==="password" && customtype!=="LINK" ) {
@@ -913,33 +922,6 @@ function applyCustomField(action) {
                         cm_Globals.usertext = content;
                     }
                     
-                    // update options
-                    var cid = "user_" + id;
-                    var userfields = options[cid];
-                    var n = userfields.length + 1;
-                    var newitem = [customtype, content, subid, n];
-                    var newfields = [];
-                    var isdone = false;
-                    $.each(userfields, function(index, val) {
-                        if ( val[2]===subid ) {
-                            if ( !isdone && action==="addcustom" ) {
-                                newfields.push(newitem);
-                                isdone = true;
-                            }
-                        } else {
-                            newfields.push(val);
-                        }
-                    });
-                    if ( !isdone && action==="addcustom" ) {
-                        newfields.push(newitem);
-                    }
-                    options[cid] = newfields;
-                    cm_Globals.options = options;
-
-                    // we returned the updated thing so skip getting all again
-                    // this and the options update above give us huge speedups
-                    cm_Globals.allthings[idx].value = presult;
-
                     // update the visual boxes on screen
                     if ( action==="addcustom" ) {
                         loadExistingFields(idx, subid, false);

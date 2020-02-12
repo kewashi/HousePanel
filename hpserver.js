@@ -18,6 +18,7 @@ var express = require('express');
 var bodyParser = require('body-parser');
 // var parseString = require('xml2js').parseString;
 var parser = require('fast-xml-parser');
+var crypto = require('crypto');
 
 // load supporting modules
 var utils = require("./utils");
@@ -211,8 +212,8 @@ function readOptions(reset) {
                     }
                 }
                     
-                // protect against having a custom name and an empty custom user name
-                if ( opt_rooms && opt_things ) {
+                // protect against having a custom name and an empty custom user info
+                if ( opt_rooms && opt_things && utils.count(opt_rooms) > 0 && utils.count(opt_things) > 0 ) {
                     GLB.options["rooms"] = opt_rooms;
                     GLB.options["things"] = {};
                     for (var room in opt_rooms) {
@@ -224,6 +225,8 @@ function readOptions(reset) {
             }
         }
     }
+    // console.log(GLB.options["things"]);
+    
     return GLB.options;
 }
 
@@ -351,6 +354,7 @@ function getDevices(hubnum, hubAccess, hubEndpt, clientId, clientSecret, hubName
                 var jsonbody = JSON.parse(body);
             } catch (e) {
                 console.log("Error translating devices: ", e);
+                jsonbody = {};
                 return;
             }
             if (DEBUG6) {
@@ -621,10 +625,11 @@ function refactorOptions() {
 // emulates the PHP function for javascript objects or arrays
 function array_search(needle, arr) {
     var key = false;
+    needle = needle.toString();
     if ( is_object(arr) ) {
         try {
             for (var t in arr) {
-                if ( arr[t] === needle ) {
+                if ( arr[t]===needle || arr[t].toString() === needle ) {
                     return t;
                 }
             } 
@@ -635,12 +640,15 @@ function array_search(needle, arr) {
 }
 
 function in_array(needle, arr) {
+    needle = needle.toString();
     if ( !is_object(arr) ) {
         return false;
     } else {
         for (var i in arr) {
             var item = arr[i];
-            if ( needle===item) return true;
+            if ( item===needle || item.toString()===needle ) {
+                return true;
+            }
         }
         return false;
     }
@@ -830,8 +838,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     }
 
     // update fields with custom settings
-    // TODO...
-    // $thingvalue = getCustomTile($thingvalue, $thingtype, $bid, $options, $allthings);
+    thingvalue = getCustomTile(thingvalue, thingtype, bid);
 
     // set the custom name
     // limit to 132 visual columns but show all for special tiles and custom names
@@ -861,10 +868,10 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
         if ( customname ) {
             weathername = customname;
         } else {
+            if ( typeof thingpr==="undefined" ) { thingpr = "Weather"; }
             weathername = thingpr + "<br>" + thingvalue["city"];
         }
         $tc += "<div aid=\""+ cnt +"\" class=\"thingname " + thingtype + " t_" + kindex + "\" id=\"s-" + cnt + "\">";
-        // $tc += "<span class=\"original n_kindex\">" . $weathername . "</span>";
         $tc += weathername;
         $tc += "</div>";
         $tc += putElement(kindex, cnt, 0, thingtype, thingvalue["name"], "name");
@@ -951,7 +958,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
             }
             
             // create on screen element for each key
-            // this includes a check for helper items created by getCustomTile
+            // this includes a check for helper items created in tile customizer
             // foreach($thingvalue as $tkey => $tval) {
             for ( var tkey in thingvalue ) {
                 var tval = thingvalue[tkey];
@@ -988,8 +995,8 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                         var linkval;
                         if ( jpos===-1 ) { 
                             linktype = thingtype;
-                            command = substr(helperval, 2, ipos-2);
-                            linkval = substr(linktypeval,2);
+                            command = helperval.substring(2, ipos-2);
+                            linkval = linktypeval.substring(2);
 
                         // case with tval = ::type::LINK::val &  linktypeval = ::LINK::val
                         } else {
@@ -1151,27 +1158,6 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
     return $tc;
 }
 
-// temp for now
-function is_ssl() {
-    return "http://";
-}
-
-// function setSpecials() {
-//     GLB.specialtiles = 
-//         {
-//             "video":  ["vid",480,240], 
-//             "frame":  ["frame",480,212],
-//             "image":  ["img",480,240],
-//             "blank":  ["blank",120,150],
-//             "custom": ["custom_",120,150]
-//         };
-//     return GLB.specialtiles;
-// }
-
-// function getSpecials() {
-//     return GLB.specialtiles;
-// }
-
 function getCustomCount(stype) {
     var customcnt = 0;
     if ( array_key_exists("specialtiles", GLB.config) ) {
@@ -1215,7 +1201,7 @@ function getClock(clockname, clockid, clockskin, fmtdate, fmttime) {
     var dclock = {"name": clockname, "skin": clockskin, "weekday": weekday,
         "date": dateofmonth, "time": timeofday, "tzone": timezone,
         "fmt_date": fmtdate, "fmt_time": fmttime};
-    // $dclock = getCustomTile($dclock, "clock", $clockid, $options, $allthings);
+    dclock = getCustomTile(dclock, "clock", clockid);
     return dclock;
 }
 
@@ -1285,8 +1271,13 @@ function addSpecials() {
 function getAllThings(reset) {
     
     if ( reset ) {
-        // get all things from all configured servers
         allthings = {};
+
+        // add the special tiles
+        addSpecials();
+        updateOptions();
+
+        // get all things from all configured servers
         GLB.hubs.forEach(function(hub) {
             var hubnum = hub["hubId"];
             var accesstoken  = hub["hubAccess"];
@@ -1297,11 +1288,175 @@ function getAllThings(reset) {
             var hubType = hub["hubType"];
             getDevices(hubnum, accesstoken, hubEndpt, clientId, clientSecret, hubName, hubType);
         });
+
+    }
+}
+
+// create addon subid's for any tile
+// this enables a unique customization effect
+// the last parameter is only needed for LINK customizations
+function getCustomTile(custom_val, customtype, customid) {
+    
+    var reserved = ["index","rooms","things","config","control","useroptions"];
+    var idx = customtype + "|" + customid;
+    var rooms = GLB.options["rooms"];
+    var index = GLB.options["index"];
+    var thingoptions = GLB.options["things"];
+    var tileid = parseInt(GLB.options["index"][idx]);
+    
+    // get custom tile name if it was defined in tile editor and stored
+    // in the room array
+    var customname= "";
+    // foreach (rooms as room => ridx) {
+    for (var room in rooms) {
+        if ( array_key_exists(room, thingoptions) ) {
+            var things = thingoptions[room];
+            // foreach (things as kindexarr) {
+            for (var kindexarr in things) {
+                // only do this if we have custom names defined in rooms
+                if ( is_array(kindexarr) && kindexarr.length > 3 ) {
+                    var kindex = kindexarr[0];
+
+                    // if our tile matches and there is a custom name, use it
+                    if ( kindex===tileid && kindexarr[4]!=="" ) {
+                        customname = kindexarr[4];
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    
+    if ( customname!=="" ) {
+        custom_val["name"] = customname;
+    }
+    
+    // see if a section for this id is in options file
+    var lines = false;
+    if (array_key_exists("user_" + customid, GLB.options) ) {
+        lines = GLB.options["user_" + customid];
+    } else if ( !in_array (customid, reserved) && array_key_exists(customid, GLB.options) ) {
+        lines = GLB.options[customid];
     }
 
-    // add the special tiles
-    addSpecials();
-    updateOptions();
+    // ignores = [" ","'","*","<",">","!","{","}","-",".",",",":","+","&","%"];
+    if ( lines && is_array(lines) ) {
+        
+        // allow user to skip wrapping single entry in an array
+        // the GUI will never do this but a user might in a manual edit
+        if ( !is_array(lines[0]) ) {
+            lines = [lines];
+        }
+        
+        // first remove existing ones so we can readd them in the proper order
+        // foreach (lines as msgs) {
+        lines.forEach(function(msgs) {
+            var subidraw = msgs[2].trim();
+            var subid = subidraw.replace(/[\"\*\<\>\!\{\}\.\,\:\+\&\%]/g,""); //  str_replace(ignores, "", subidraw);
+            var companion = "user_" + subid;
+            delete custom_val[subid];
+            delete custom_val[companion];
+        });
+        
+        // sort the lines and add them back in the requested order
+        // replacements of default items will occur in default place
+        // usort(lines, sortlinefunc);
+        
+        // loop through each item and add to tile
+        // foreach (lines as msgs) {
+        lines.forEach(function(msgs) {
+
+           
+            // check to make sure we have an array of three long
+            // this strict rule is followed to enforce discipline use
+            if ( is_array(msgs) && msgs.length >= 3 ) {
+            
+                var calltype = msgs[0].toUpperCase().trim();
+                var content = msgs[1].trim();
+                var posturl = encodeURIComponent(content);
+                var subidraw = msgs[2].trim();
+                var subid = subidraw.replace(/[\"\*\<\>\!\{\}\.\,\:\+\&\%]/g,""); //  str_replace(ignores, "", subidraw);
+                var companion = "user_" + subid;
+    
+                // process web calls made in custom tiles
+                // this adds a new field for the URL or LINK information
+                // in a tag called user_subid where subid is the requested field
+                // web call results and linked values are stored in the subid field
+                if ( content && content.toLowerCase().substr(0,4) === "http" &&
+                     (calltype==="PUT" || calltype==="GET" || calltype==="POST")  )
+                {
+                    custom_val[companion] = "::" + calltype + "::" + posturl;
+                    custom_val[subid] = calltype + ": " + subid;
+               
+                } else if ( calltype==="LINK" ) {
+                    // code for enabling mix and match subid's into custom tiles
+                    // this stores the tile number so we can quickly grab it upon actions
+                    // this also allows me to find the hub number of the linked tile easily
+                    // and finally, the linked tile is displayable at user's discretion
+                    // for this to work the link info is stored in a new element that is hidden
+                    var idx = array_search(content, index);
+                    if ( allthings && idx!== false && array_key_exists(idx, allthings) ) {
+                        var thesensor = allthings[idx];
+                        var thevalue = thesensor["value"];
+                        var thetype = thesensor["type"];
+                
+                        // if the subid exists in our linked tile add it
+                        // this can replace existing fields with linked value
+                        // if an error exists show text of intended link
+                        // first case is if link is valid and not an existing field
+                        if ( array_key_exists(subid, thevalue) ) {
+                            custom_val[companion] = "::" + thetype + "::" + calltype + "::" + content;
+                            custom_val[subid]= thevalue[subid];
+                            
+                        // final two cases are if link tile wasn't found
+                        // first sub-case is if subid begins with the text of a valid key
+                        } else {
+                            // handle user provided names that start with a valid link subid
+                            // and there is more beyond the start than numbers
+                            var realsubid = false;
+                            // foreach (custom_val as key => val) {
+                            for (var key in custom_val) {
+                                if ( key.indexOf(subid) === 0 ) {   // strpos(subid, key) === 0 ) {
+                                    realsubid = key;
+                                    break;
+                                }
+                            }
+                            if ( realsubid ) {
+                                custom_val[companion] = "::" + thetype + "::" + calltype + "::" + content;
+                                custom_val[subid]= thevalue[realsubid];
+                            } else {
+                                custom_val[companion] = "::" + thetype + "::" + calltype + "::" + content;
+                                custom_val[subid] = "Invalid link to tile #" + content + " with subid= " + subid;
+                            }
+                        }
+                    } else {
+                        custom_val[companion] = "::" + thetype + "::" + calltype + "::" + content;
+                        custom_val[subid] = "Links unavailable to link #" + content + " with subid= " + subid + " idx= " + idx;
+                        console.log("Links unavailable to link #" + content + " with subid= " + subid + " idx= " + idx);
+                    }
+
+                } else if ( calltype==="URL" ) {
+                    custom_val[companion] = "::" + calltype + "::" + posturl;
+                    custom_val[subid] = content;
+               
+                } else if ( calltype==="RULE" ) {
+                    custom_val[companion] = "::" + calltype + "::" + content;
+                    custom_val[subid] = "RULE::subid";
+
+                } else {
+                    // code for any user provided text string
+                    // we could skip this but including it bypasses the hub call
+                    // which is more efficient and safe in case user provides
+                    // a subid that the hub might recognize - this way it is
+                    // guaranteed to just pass the text on the browser
+                    calltype = "TEXT";
+                    custom_val[companion] = "::" + calltype + "::" + content;
+                    custom_val[subid] = content;
+                }
+            }
+        });
+    }
+    return custom_val;
 }
 
 function pushClient(swid, swtype, subid, body) {
@@ -1499,7 +1654,6 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, command, content, m
 function doQuery(hubid, swid, swtype) {
     var result;
     if ( swid==="all" && swtype==="all" && allthings ) {
-        // getAllThings(true);
         result = {};
         for (var idx in allthings) {
             var res = allthings[idx];
@@ -1511,6 +1665,152 @@ function doQuery(hubid, swid, swtype) {
         result = allthings[idx]["value"];
     }
     return result;
+}
+
+function setOrder(swid, swtype, swval, swattr) {
+    var updated = false;
+    var result = "error";
+    var options = clone(GLB.options);
+
+    // if the options file doesn't exist here something went wrong so skip
+    if (options) {
+        // now update either the page or the tiles based on type
+        switch(swtype) {
+            case "rooms":
+                // $options["rooms"] = $swval;
+                options["rooms"] = {};
+                for (var roomname in swval) {
+                    var roomid = parseInt(swval[roomname]);
+                    options["rooms"][roomname] = roomid;
+                }
+                updated = true;
+                break;
+
+            case "things":
+                if (array_key_exists(swattr, options["rooms"])) {
+                    options["things"][swattr] = [];
+                    // foreach( $swval as $valarr) {
+                    swval.forEach(function(valarr) {
+                        var val = parseInt(valarr[0]);
+                        var vname = valarr[1];
+                        var newthing = [val,0,0,1,vname];
+                        options["things"][swattr].push(newthing);
+                    });
+                    updated = true;
+                }
+                break;
+                
+            default:
+                $result = "error";
+                break;
+        }
+
+        if (updated) {
+            writeOptions(options);
+            result = "success";
+        }
+    }
+    
+    return result;
+}
+
+function setPosition(swid, swtype, swval, swattr) {
+    
+    var updated = false;
+    var options = GLB.options;
+    var panel = swval["panel"];
+    var tile = parseInt(swval["tile"]);
+    
+    // first find which index this tile is
+    // note that this code will not work if a tile is duplicated on a page
+    // such duplication is not allowed by the UI anyway but in the
+    // event that a user edits hmoptions.cfg to have duplicates
+    // the code will get confused here and in other places
+    // $i = array_search($tile, $options["things"][$panel]);
+    var moved = false;
+    var idx;
+    // foreach ($options["things"][$panel] as $i => $arr) {
+    for ( var i in options["things"][panel]) {
+        var arr = options["things"][panel][i];
+        if ( is_array(arr) ) {
+            idx = parseInt(arr[0]);
+        } else {
+            idx = parseInt(arr);
+        }
+        if ( tile === idx) {
+            moved = i;
+            updated = true;
+            break;
+        }
+    }
+
+    if ( updated && moved!==false ) {
+        // change the room index to an array of tile, top, left
+        // now we also save zindex and a tile custom name
+        var top = parseInt(swattr["top"]);
+        var left = parseInt(swattr["left"]);
+        var zindex = parseInt(swval["zindex"]);
+        var customname = "";
+        if ( array_key_exists("custom", swval) ) {
+            customname = swval["custom"];
+        }
+        var newtile = [tile, top, left, zindex, customname];
+        options["things"][panel][moved] = newtile;
+        writeOptions(options);
+        var result = "success";
+        console.log("new tile position for tile: ", tile," to: (", top, ",", left, ")");
+    } else {
+        result = "error";
+        console.log("position for tile: ", tile," was not found to change");
+    }
+    return result;
+    
+}
+
+function delThing(bid, thingtype, panel, tile) {
+    
+    var idx = thingtype + "|" + bid;
+    var retcode = "error";
+    
+    if ( panel && array_key_exists(panel, GLB.options["things"]) &&
+                   array_key_exists(idx, GLB.options["index"]) ) {
+
+        var optionthings = GLB.options["things"][panel];
+
+        // as a double check the options file tile should match
+        // if it doesn't then something weird triggered drag drop
+        // note - if there are duplicates the first one will be deleted
+        var tilenum = parseInt(GLB.options["index"][idx]);
+        if ( parseInt(tile) === tilenum ) {
+
+            // remove tile from this room
+            for (var key in optionthings) {
+                var thing = optionthings[key];
+                if ( (is_array(thing) && parseInt(thing[0]) === tilenum) ||
+                     (!is_array(thing) && parseInt(thing) === tilenum) ) {
+
+                    delete optionthings[key];
+                    retcode = "success";
+                    break;
+                }
+            }   
+
+            if ( retcode === "success" ) {
+                // options.things[panel] = array_values(options["things"][panel]);
+                GLB.options["things"][panel] = [];
+                optionthings.forEach(function(orderthing) {
+                    GLB.options["things"][panel].push(orderthing);
+                })
+                console.log("success - deleted tile: ", tile, " with id: ", bid, " from room: ", panel);
+                console.log("new tiles: ", GLB.options["things"][panel]);
+                // writeOptions(GLB.options);
+            } else {
+                console.log("error - could not safely delete tile: ", tile, " with id: ", bid, " from room: ", panel);
+                console.log("things: ", optionthings);
+            }
+        }
+    }
+    return retcode;
 }
 
 function getInfoPage(returnURL) {
@@ -1584,7 +1884,7 @@ function getInfoPage(returnURL) {
                 if ( array_key_exists(key, specialtiles) ) {
                     value += key + "= <strong>embedded " + key + "</strong><br/>";
                 } else if ( thing["type"]==="custom" && typeof val==="object" ) { 
-                    value += "Custom Array... "; 
+                    value += "Custom Array..."; 
                 } else if ( typeof val==="object" ) {
                     value += key + "=" + JSON.stringify(val);
                 } else if ( typeof val === "string" && val.length > 128 ) {
@@ -1628,6 +1928,44 @@ function getInfoPage(returnURL) {
     return $tc;
 }
 
+// function getCatalog($hubpick) {
+
+//     var $tc = "";
+//     $tc += hubFilters();
+
+//     var $i= 0;
+//     foreach($allthings as $thesensor) {
+//         $bid = $thesensor["id"];
+//         $thingtype = $thesensor["type"];
+//         $thingname = $thesensor["name"];
+//         $hubId = strval($thesensor["hubnum"]);
+//         if ( $hubId==="-1" ) {
+//             $hubId = "none";
+//         }
+
+//         if (strlen($thingname) > 23 ) {
+//             $thingpr = substr($thingname,0,23) . " ...";
+//         } else {
+//             $thingpr = $thingname;
+//         }
+        
+//         if (in_array($thingtype, $useroptions) && ($hubpick===$hubId || $hubpick==="all")) {
+//             $hide = "";
+//         } else {
+//             $hide = "hidden ";
+//         }
+
+//         $tc.= "<div id=\"cat-$i\" bid=\"$bid\" type=\"$thingtype\" hubid=\"$hubId\" ";
+//         $tc.= "panel=\"catalog\" class=\"thing " . $hide . "catalog-thing\">"; 
+//         $tc.= "<div class=\"thingname\">$thingpr</div>";
+//         $tc.= "<div class=\"thingtype\">$thingtype</div>";
+//         $tc.="</div>";
+//         $i++;
+//     }
+//     $tc.= "</div>";
+//     return $tc;
+// }
+
 function getOptionsPage(retpage) {
     var $thingtypes = utils.getTypes();
     var $specialtiles = utils.getSpecials();
@@ -1659,6 +1997,8 @@ function getOptionsPage(retpage) {
     $tc+= utils.hidden("returnURL", retpage);
     $tc+= utils.hidden("pagename", "options");
     $tc+= "</form>";
+
+    // ---------------------------- end of filters -----------------------------------
 
     $tc+= "<form id=\"filteroptions\" class=\"options\" name=\"filteroptions\" action=\"" + retpage + "\"  method=\"POST\">";
     
@@ -1713,6 +2053,8 @@ function getOptionsPage(retpage) {
     $tc+= "</tr></table>";
     $tc+= "</div><hr>";
     $tc+= "</form>";
+
+    // ---------------------------- end of filters -----------------------------------
 
     $tc+= "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + retpage + "\"  method=\"POST\">";
 
@@ -1891,7 +2233,7 @@ function mainPage(proto, hostname) {
     }
     GLB.returnURL = proto + "://" + hostname
 
-    $tc += utils.getHeader("skin-housepanel");
+    $tc += utils.getHeader(skin);
 
     if ( DEBUG2 ) {
         console.log(GLB.options);
@@ -1970,6 +2312,7 @@ function mainPage(proto, hostname) {
     // save Node.js address for use on the js side
     var nodejsUrl = proto + "://" + hostname
     $tc += utils.hidden("returnURL", nodejsUrl);
+    $tc += utils.hidden("skinid", skin, "skinid");
 
     // show user buttons if we are not in kiosk mode
     if ( !kioskmode ) {
@@ -2368,7 +2711,7 @@ function getIcons(icondir, category) {
     var skin = getSkin();
 
     // change over to where our icons are located
-    var activedir = skin + "/" + icondir + "/";
+    var activedir = path.join(__dirname, skin, icondir);
 
     // TODO - get function to return a directory listing
     // $dirlist = scandir($activedir);
@@ -2377,19 +2720,152 @@ function getIcons(icondir, category) {
     var $tc = "";
 
     // foreach ($dirlist as $filename) {
-    for (var fnum in dirlist) {
-        var filename = dirlist[fnum];
-
+    dirlist.forEach( function(filename) {
         var froot = path.basename(filename);
         var ext = path.extname(filename).slice(1);
+        var filedir = path.join(skin, icondir, froot);
 
         if ( in_array(ext, allowed) ) {
             $tc += '<div class="cat ' + category + '">';
-            $tc += '<img src="' + filename +'" class="icon" title="' + froot + '" />';
+            $tc += '<img src="' + filedir +'" class="icon" title="' + froot + '" />';
             $tc += '</div>';
         }
-    }
+    });
     return $tc;
+}
+
+function pw_hash(pword) {
+
+    var hash;
+    if ( typeof pword !== "string"  || !pword ) {
+        hash = "";
+    } else {
+        thehash = crypto.createHash(swattr);
+        thehash.update(swattr);
+        hash = thehash.digest('hex');
+    }
+    return hash;
+}
+
+function pw_verify(pword, hash) {
+    return (pw_hash(pword) === hash);
+}
+
+function addCustom(swid, swtype, swval, swattr, subid) {
+    var reserved = ["index","rooms","things","config","control","time","useroptions"];
+    var options = GLB.options;
+    var userid = "user_" + swid;
+
+    // legacy custom types
+    if ( array_key_exists(swid, options) && 
+            !in_array (swid, reserved) && 
+            !array_key_exists(userid, options) ) {
+        userid = swid;
+    }
+
+    var oldcustoms;
+    if ( array_key_exists(userid, options) ) {
+        oldcustoms = clone(options[userid]);
+    } else {
+        oldcustoms = [];
+    }
+
+    // handle encryption
+    swattr = swattr.toString();
+    subid = subid.toString();
+    if ( subid==="password" ) {
+        swattr = pw_hash(swattr);
+    }
+    
+    var newitem = [swval, swattr, subid];
+    var newoptitem = [];
+    var doneit = false;
+
+    // foreach( options[userid] as val ) {
+    oldcustoms.forEach( function(val) {
+        if ( val[2].toString() === subid ) {
+            if ( !doneit ) {
+                newoptitem.push(newitem);
+                doneit = true;
+            }
+        } else {
+            newoptitem.push(val);
+        }
+    });
+
+    if ( !doneit ) {
+        newoptitem.push(newitem);
+    }
+
+    options[userid] = newoptitem;
+    writeOptions(options);
+    var idx = swtype + "|" + swid;
+    
+    // make the new custom field using the updated options above
+    var thingval = getCustomTile(allthings[idx]["value"], swtype, swid);
+
+    // save it in the main array - no need for sessions in Node
+    allthings[idx]["value"] = thingval;
+
+    return thingval;
+}
+
+function delCustom(swid, swtype, swval, swattr, subid) {
+    var reserved = ["index","rooms","things","config","control","useroptions"];
+    var userid = "user_" + swid;
+
+    swattr = swattr.toString();
+    subid = subid.toString();
+
+    // legacy custom types
+    if ( array_key_exists(swid, GLB.options) && 
+            !in_array (swid, reserved) && 
+            !array_key_exists(userid, GLB.options) ) {
+        userid = swid;
+    }
+
+    if ( array_key_exists(userid, GLB.options) ) {
+
+        var oldlines = clone(GLB.options[userid]);
+        if ( ! is_array(oldlines[0]) ) {
+            oldlines = [oldlines];
+        }
+
+        // make new list of customs without the deleted item
+        var lines = [];
+        oldlines.forEach( function(newitem) {
+            if ( newitem[2].toString() !== subid ) {
+                lines.push(newitem);
+            }
+        });
+
+        // either remove or update the main options array
+        if ( lines.length === 0 ) {
+            delete GLB.options[userid];
+        } else {
+            GLB.options[userid] = lines;
+        }
+
+        writeOptions(GLB.options);
+    }
+    
+    var idx = swtype + "|" + swid;
+    var companion = "user_" + subid;
+    var thingval = allthings[idx]["value"];
+    
+    // remove this field and any companion if it exists
+    delete thingval[subid];
+    if ( array_key_exists(companion, thingval) ) {
+        delete thingval[companion];
+    }
+    allthings[idx]["value"] = thingval;
+
+    // make the new custom field using the updated options above
+    thingval = getCustomTile(thingval, swtype, swid);
+   
+    // save it in the main array - no need for sessions in Node
+    allthings[idx]["value"] = thingval;
+    return thingval;
 }
 
 // ***************************************************
@@ -2490,9 +2966,9 @@ if ( app && applistening ) {
         } else {
             var file = path.join(dir, req.path.replace(/\/$/, '/index.html'));
             if (file.indexOf(dir + path.sep) !== 0) {
-                return res.status(403).end('Forbidden');
+                res.status(403).end('Forbidden');
             }
-            console.log((new Date()) + " loading module: ", req.path, " as: ", file);
+            console.log("Loading module: ", req.path, " as: ", file);
             var type = mime[path.extname(file).slice(1)] || 'text/plain';
             var s = fs.createReadStream(file);
             s.on('open', function () {
@@ -2507,6 +2983,11 @@ if ( app && applistening ) {
         }
     });
     
+    // app.put('*', function(req, res) {
+    //     console.log("requesting put: ", req.path);
+    //     res.end();
+    // });
+
 // ***************************************************
 // these are server treatments for processing jQuery
 // ***************************************************
@@ -2584,8 +3065,8 @@ if ( app && applistening ) {
                 case "wysiwyg2":
                     // if we sorted the user fields in the customizer, save them
                     if ( is_array(swattr) ) {
-                        GLB_options["user_" + swid] = swattr;
-                        writeOptions(GLB_options);
+                        GLB.options["user_" + swid] = swattr;
+                        writeOptions(GLB.options);
                     }
 
                 case "wysiwyg":
@@ -2630,6 +3111,23 @@ if ( app && applistening ) {
                     res.json(result);
                     break;
 
+                case "pageorder":
+                    var result = setOrder(swid, swtype, swval, swattr);
+                    res.json(result);
+                    break;
+
+                case "dragdrop":
+                    var result = setPosition(swid, swtype, swval, swattr);
+                    res.json(result);
+                    break;
+
+                // remove tile from drag / drop
+                case "dragdelete":
+                    var result = delThing(swid, swtype, swval, swattr);
+                    res.json(result);
+                    break;
+            
+
                 case "updatenames":
                     var result = updateNames(swid, tileid, swval, swattr);
                     res.json(result);
@@ -2647,9 +3145,8 @@ if ( app && applistening ) {
                 
                 case "refactor":
                     // this user selectable option will renumber the index
-                    // $allthings = getAllThings(true);
                     refactorOptions();
-                    pushClient("reload", "reload", "", "");
+                    pushClient("reload", "reload");
                     res.json("success");
                     break;
                     
@@ -2659,6 +3156,22 @@ if ( app && applistening ) {
                     res.json(icons);
                     break;
 
+                case "addcustom":
+                    var result = {}
+                    result.value = addCustom(swid, swtype, swval, swattr, subid);
+                    result.options = GLB.options;
+                    result.things = allthings;
+                    res.json(result);
+                    break;
+
+                case "delcustom":
+                    var result = {}
+                    result.value = delCustom(swid, swtype, swval, swattr, subid);
+                    result.options = GLB.options;
+                    result.things = allthings;
+                    res.json(result);
+                    break;
+    
                 default:
                     res.json(req.body);
                     break;

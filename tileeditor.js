@@ -269,7 +269,7 @@ function setupIcons(category, old_str_type, old_thingindex) {
         var subid = $("#subidTarget").html();
         var strIconTarget = getCssRuleTarget(str_type, subid, thingindex);
         console.log("Clicked on img= "+img+" Category= "+category+" strIconTarget= "+strIconTarget+" type= "+str_type+" subid= "+subid+" index= "+thingindex);
-        iconSelected(category, strIconTarget, img, str_type, subid, thingindex);
+        iconSelected(category, strIconTarget, img, str_type, thingindex);
     });
 }
 
@@ -814,12 +814,13 @@ function colorpicker(str_type, thingindex) {
 
 // popup dialog box now uses createModal
 function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, htmlcontent) {  
-    var returnURL;
-    try {
-        returnURL = $("input[name='returnURL']").val();
-    } catch(e) {
-        returnURL = "housepanel.php";
-    }
+    // var returnURL;
+    // try {
+    //     returnURL = $("input[name='returnURL']").val();
+    // } catch(e) {
+    //     returnURL = "housepanel.php";
+    // }
+    var returnURL = cm_Globals.returnURL;
     
     et_Globals.aid = aid;
     et_Globals.id = bid;
@@ -1157,6 +1158,7 @@ function setsubid(str_type) {
 }
 
 function updateNames(str_type, thingindex, oldname, newname) {
+    var returnURL = cm_Globals.returnURL;
     $.post(returnURL, 
         {useajax: "updatenames", id: 0, type: str_type, value: oldname, attr: newname, tile: thingindex},
         function (presult, pstatus) {
@@ -2007,6 +2009,7 @@ function getIconCategories() {
 }
 
 function getIcons(str_type, thingindex) {
+    var returnURL = cm_Globals.returnURL;
     getIconCategories();
     var iCategory = $("#iconSrc").val();
     var skindir = $("#skinid").val();
@@ -2091,16 +2094,24 @@ function getBgEffect(effect) {
 }
 
 // main routine that sets the icon of things
-function iconSelected(category, cssRuleTarget, imagePath, str_type, subid, thingindex) {
+function iconSelected(category, cssRuleTarget, imagePath, str_type, thingindex) {
+    var returnURL = cm_Globals.returnURL;
     $("#noIcon").prop('checked', false);
-    var strEffect = getBgEffect();
+    var strEffect =  getBgEffect();
     
+    // if the separator is back slash change to forward slash required by css
+    if ( category==="Local_Storage" || category==="Local_Media" ) {
+        // imagePath = returnURL + "/" + imagePath;
+        imagePath = imagePath.replace(/\\/g,"/");
+    }
+
     // remove skin directory reference because css is now located in the skin directory
     var skindir = $("#skinid").val() + "/";
     if ( imagePath.startsWith(skindir) ) {
         var n = skindir.length;
-        imagePath = imagePath.substring(n);
+        imagePath = imagePath.substr(n);
     }
+
     var imgurl = 'background-image: url("' + imagePath + '")';
     console.log("Setting icon: category= " + category + " target= " + cssRuleTarget + " icon= " + imagePath + " type= " + str_type + " index= " + thingindex + " rule= " + imgurl);
     addCSSRule(cssRuleTarget, imgurl + strEffect + ";");
