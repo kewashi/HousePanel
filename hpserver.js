@@ -2740,8 +2740,8 @@ function pw_hash(pword) {
     if ( typeof pword !== "string"  || !pword ) {
         hash = "";
     } else {
-        thehash = crypto.createHash(swattr);
-        thehash.update(swattr);
+        var thehash = crypto.createHash("sha256");
+        thehash.update(pword);
         hash = thehash.digest('hex');
     }
     return hash;
@@ -3156,6 +3156,22 @@ if ( app && applistening ) {
                     res.json(icons);
                     break;
 
+                case "pwhash":
+                    var presult;
+                    if ( swtype==="hash" ) {
+                        presult = pw_hash(swval);
+                    } else if ( swtype==="verify" ) {
+                        if ( pw_verify(swval, swattr) ) {
+                            presult = "success";
+                        } else {
+                            presult = "error";
+                        }
+                    } else {
+                        presult = "error";
+                    }
+                    res.json(presult);
+                    break;
+        
                 case "addcustom":
                     var result = {}
                     result.value = addCustom(swid, swtype, swval, swattr, subid);
