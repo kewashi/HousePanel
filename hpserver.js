@@ -574,7 +574,6 @@ function refactorOptions() {
     }
     
     // now adjust all custom configurations
-    // foreach ($oldoptions as $key => $lines) {
     for (var key in oldoptions) {
         
         var lines = oldoptions[key];
@@ -959,7 +958,6 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
             
             // create on screen element for each key
             // this includes a check for helper items created in tile customizer
-            // foreach($thingvalue as $tkey => $tval) {
             for ( var tkey in thingvalue ) {
                 var tval = thingvalue[tkey];
                 
@@ -1307,11 +1305,9 @@ function getCustomTile(custom_val, customtype, customid) {
     // get custom tile name if it was defined in tile editor and stored
     // in the room array
     var customname= "";
-    // foreach (rooms as room => ridx) {
     for (var room in rooms) {
         if ( array_key_exists(room, thingoptions) ) {
             var things = thingoptions[room];
-            // foreach (things as kindexarr) {
             for (var kindexarr in things) {
                 // only do this if we have custom names defined in rooms
                 if ( is_array(kindexarr) && kindexarr.length > 3 ) {
@@ -1349,7 +1345,6 @@ function getCustomTile(custom_val, customtype, customid) {
         }
         
         // first remove existing ones so we can readd them in the proper order
-        // foreach (lines as msgs) {
         lines.forEach(function(msgs) {
             var subidraw = msgs[2].trim();
             var subid = subidraw.replace(/[\"\*\<\>\!\{\}\.\,\:\+\&\%]/g,""); //  str_replace(ignores, "", subidraw);
@@ -1363,7 +1358,6 @@ function getCustomTile(custom_val, customtype, customid) {
         // usort(lines, sortlinefunc);
         
         // loop through each item and add to tile
-        // foreach (lines as msgs) {
         lines.forEach(function(msgs) {
 
            
@@ -1414,7 +1408,6 @@ function getCustomTile(custom_val, customtype, customid) {
                             // handle user provided names that start with a valid link subid
                             // and there is more beyond the start than numbers
                             var realsubid = false;
-                            // foreach (custom_val as key => val) {
                             for (var key in custom_val) {
                                 if ( key.indexOf(subid) === 0 ) {   // strpos(subid, key) === 0 ) {
                                     realsubid = key;
@@ -1616,7 +1609,8 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, command, content, m
     
     // handle types that just return the current status
     } else if (  (typeof command==="undefined" || command==="") && 
-                 (swtype==="contact" || swtype==="presence" || swtype==="motion" || swtype==="thermostat" ||
+                 (swtype==="contact" || swtype==="presence" || swtype==="motion" || 
+                  (swtype==="thermostat" && subid==="temperature") ||
                   swtype==="weather" || swtype==="temperature" || swtype==="blank") ) {
         response = allthings[idx]["value"];
         
@@ -1689,7 +1683,6 @@ function setOrder(swid, swtype, swval, swattr) {
             case "things":
                 if (array_key_exists(swattr, options["rooms"])) {
                     options["things"][swattr] = [];
-                    // foreach( $swval as $valarr) {
                     swval.forEach(function(valarr) {
                         var val = parseInt(valarr[0]);
                         var vname = valarr[1];
@@ -1729,7 +1722,6 @@ function setPosition(swid, swtype, swval, swattr) {
     // $i = array_search($tile, $options["things"][$panel]);
     var moved = false;
     var idx;
-    // foreach ($options["things"][$panel] as $i => $arr) {
     for ( var i in options["things"][panel]) {
         var arr = options["things"][panel][i];
         if ( is_array(arr) ) {
@@ -1767,6 +1759,48 @@ function setPosition(swid, swtype, swval, swattr) {
     
 }
 
+function addThing(bid, thingtype, panel, cnt) {
+    
+    var idx = thingtype + "|" + bid;
+    var options = GLB.options;
+    var tilenum = parseInt(options["index"][idx]);
+    var thesensor = allthings[idx];
+    var tilename = thesensor["name"];
+    
+    // get the count number from the t- field
+    try {
+        cnt = parseInt(cnt);
+    } catch(e) {
+        console.log("error - cnt value is invalid: ", cnt);
+        return "error";
+    }
+
+    var lastid = options["things"][panel].length - 1;
+    var lastitem = options["things"][panel][lastid];
+
+    var ypos = parseInt(lastitem[1]);
+    var xpos = parseInt(lastitem[2]);
+    var zindex = 1;
+    if ( lastitem.length > 3 ) {
+        zindex = parseInt(lastitem[3]);
+    }
+
+    // protect against off screen values
+    if ( xpos < -400 || xpos > 400 || ypos < -400 || ypos > 400 ) {
+        xpos = 0;
+        ypos = 0;
+    }
+    
+    // add it to our system in the requested room/panel
+    options["things"][panel].push([tilenum, ypos, xpos, zindex, tilename]);
+    writeOptions(options);
+    
+    // make a new tile based on the dragged information
+    var thing = makeThing(cnt, tilenum, thesensor, panel, ypos, xpos, zindex, "", "");
+    
+    return thing;
+}
+
 function delThing(bid, thingtype, panel, tile) {
     
     var idx = thingtype + "|" + bid;
@@ -1802,18 +1836,66 @@ function delThing(bid, thingtype, panel, tile) {
                     GLB.options["things"][panel].push(orderthing);
                 })
                 console.log("success - deleted tile: ", tile, " with id: ", bid, " from room: ", panel);
-                console.log("new tiles: ", GLB.options["things"][panel]);
+                // console.log("new tiles: ", GLB.options["things"][panel]);
                 // writeOptions(GLB.options);
             } else {
                 console.log("error - could not safely delete tile: ", tile, " with id: ", bid, " from room: ", panel);
-                console.log("things: ", optionthings);
             }
         }
     }
     return retcode;
 }
 
-function getInfoPage(returnURL) {
+function delPage(pagename) {
+    
+    var options = GLB.options;
+    var retcode;
+
+    // check if room exists - ignore number matches
+    if ( utils.count(options["rooms"]) <= 1 ) {
+        retcode = "error - page= " + pagename + " is the only page remaining. Cannot delete the last page.";
+    } else if ( array_key_exists(pagename, options["rooms"]) &&
+                array_key_exists(pagename, options["things"]) ) {
+        delete options["rooms"][pagename];
+        delete options["things"][pagename];
+        writeOptions(options);
+        retcode = "success";
+    } else {
+        retcode = "error - cannot find page= " + pagename + " to delete.";
+    }
+    return retcode;
+}
+
+function addPage() {
+    var pagenum = 0;
+    var options = GLB.options;
+    
+    // get the largest room number
+    for ( var roomname in options["rooms"] ) {
+        var roomnum = parseInt(options["rooms"][roomname]);
+        pagenum = roomnum > pagenum ? roomnum : pagenum;
+    }
+    pagenum++;
+
+    // get new room default name in sequential order
+    var newname = "Newroom1";
+    var num = 1;
+    while ( array_key_exists(newname, options["rooms"]) ) {
+        $num++;
+        $newname = "Newroom" + num.toString();
+    }
+    options["rooms"][newname] = pagenum;
+    
+    // put a digital clock in all new rooms so they are not empty
+    var clockid = options["index"]["clock|clockdigital"];
+    var clock = [clockid, 0, 0, 1, ""];
+    options["things"][newname] = [clock];
+
+    writeOptions(options);
+    return newname;
+}
+
+function getInfoPage(returnURL, pathname) {
 
     var configoptions = GLB.options["config"];
     var skin = configoptions["skin"];
@@ -1826,6 +1908,7 @@ function getInfoPage(returnURL) {
 
     $tc += "<form>";
     $tc += utils.hidden("returnURL", returnURL);
+    $tc += utils.hidden("pathname", pathname);
     $tc += utils.hidden("pagename", "info");
     $tc += "</form>";
     $tc += "<div class=\"infopage\">";
@@ -1928,78 +2011,15 @@ function getInfoPage(returnURL) {
     return $tc;
 }
 
-// function getCatalog($hubpick) {
-
-//     var $tc = "";
-//     $tc += hubFilters();
-
-//     var $i= 0;
-//     foreach($allthings as $thesensor) {
-//         $bid = $thesensor["id"];
-//         $thingtype = $thesensor["type"];
-//         $thingname = $thesensor["name"];
-//         $hubId = strval($thesensor["hubnum"]);
-//         if ( $hubId==="-1" ) {
-//             $hubId = "none";
-//         }
-
-//         if (strlen($thingname) > 23 ) {
-//             $thingpr = substr($thingname,0,23) . " ...";
-//         } else {
-//             $thingpr = $thingname;
-//         }
-        
-//         if (in_array($thingtype, $useroptions) && ($hubpick===$hubId || $hubpick==="all")) {
-//             $hide = "";
-//         } else {
-//             $hide = "hidden ";
-//         }
-
-//         $tc.= "<div id=\"cat-$i\" bid=\"$bid\" type=\"$thingtype\" hubid=\"$hubId\" ";
-//         $tc.= "panel=\"catalog\" class=\"thing " . $hide . "catalog-thing\">"; 
-//         $tc.= "<div class=\"thingname\">$thingpr</div>";
-//         $tc.= "<div class=\"thingtype\">$thingtype</div>";
-//         $tc.="</div>";
-//         $i++;
-//     }
-//     $tc.= "</div>";
-//     return $tc;
-// }
-
-function getOptionsPage(retpage) {
-    var $thingtypes = utils.getTypes();
-    var $specialtiles = utils.getSpecials();
-    // sort($thingtypes);
-
+function hubFilters(hubpick, ncols) {
     var $options = GLB.options;
-    var $roomoptions = $options["rooms"];
-    var $thingoptions = $options["things"];
-    var $indexoptions = $options["index"];
     var $useroptions = $options["useroptions"];
     var $configoptions = $options["config"];
     var $hubs = $configoptions["hubs"];
-    var $skin = getSkin();
-    var $port = $configoptions["port"];
-    var $webSocketServerPort = $configoptions["webSocketServerPort"];
-    var $fast_timer = $configoptions["fast_timer"];
-    var $slow_timer = $configoptions["slow_timer"];
-    var $kioskoptions = $configoptions["kiosk"];
-    var $ruleoptions = $configoptions["rules"];
-    var $timezone = $configoptions["timezone"];
-    
+    var $thingtypes = utils.getTypes();
+
+    var retpage = GLB.returnURL;
     var $tc = "";
-    $tc += utils.getHeader($skin);
-    $tc+= "<h3>" + utils.APPNAME + " Options</h3>";
-    $tc+= "<div class=\"formbutton formauto\"><a href=\"" + retpage + "\">Cancel and Return to HousePanel</a></div>";
-    $tc+= "<div id=\"optionstable\" class=\"optionstable\">";
-
-    $tc+= "<form name=\"pageoptions\" action=\"#\"  method=\"POST\">";
-    $tc+= utils.hidden("returnURL", retpage);
-    $tc+= utils.hidden("pagename", "options");
-    $tc+= "</form>";
-
-    // ---------------------------- end of filters -----------------------------------
-
     $tc+= "<form id=\"filteroptions\" class=\"options\" name=\"filteroptions\" action=\"" + retpage + "\"  method=\"POST\">";
     
     // if more than one hub then let user pick which one to show
@@ -2046,13 +2066,151 @@ function getOptionsPage(retpage) {
             $tc+= "<td><input id=\"cbx_" + $i + "\" type=\"checkbox\" name=\"useroptions[]\" value=\"" + $opt + "\">";
         }
         $tc+= "<label for=\"cbx_" + $i + "\" class=\"optname\">" + $opt + "</label></td>";
-        if ( $i % 5 == 0 && $i < utils.count($thingtypes) ) {
+        if ( $i % ncols == 0 && $i < utils.count($thingtypes) ) {
             $tc+= "</tr><tr>";
         }
     }
     $tc+= "</tr></table>";
     $tc+= "</div><hr>";
     $tc+= "</form>";
+
+    return $tc;
+}
+
+function getCatalog(hubpick) {
+
+    var $tc = "";
+    var useroptions = GLB.options["useroptions"];
+    $tc += "<div id=\"catalog\">";
+    $tc += hubFilters(hubpick, 2);
+    var i= 0;
+
+    for(var idx in allthings) {
+        var thesensor = allthings[idx];
+        var bid = thesensor["id"];
+        var thingtype = thesensor["type"];
+        var thingname = thesensor["name"];
+        var hubId = thesensor["hubnum"].toString();
+        var cat = "cat-" + i.toString();
+        if ( hubId==="-1" ) {
+            hubId = "none";
+        }
+
+        if ( thingname.length > 23 ) {
+            var thingpr = thingname.substr(0,23) + " ...";
+        } else {
+            thingpr = thingname;
+        }
+        
+        if (in_array(thingtype, useroptions) && (hubpick===hubId || hubpick==="all")) {
+            var hide = "";
+        } else {
+            hide = "hidden ";
+        }
+
+        $tc += "<div id=\"" + cat + "\" bid=\"" + bid + "\" type=\"" + thingtype + "\" hubid=\"" + hubId + "\" ";
+        $tc += "panel=\"catalog\" class=\"thing " + hide + "catalog-thing\">"; 
+        $tc += "<div class=\"thingname\">" + thingpr + "</div>";
+        $tc += "<div class=\"thingtype\">" + thingtype + "</div>";
+        $tc +="</div>";
+        i++;
+    }
+    $tc += "</div>";
+    return $tc;
+}
+
+function getOptionsPage(pathname) {
+    var retpage = GLB.returnURL;
+    var $thingtypes = utils.getTypes();
+    var $specialtiles = utils.getSpecials();
+    // sort($thingtypes);
+
+    var $options = GLB.options;
+    var $roomoptions = $options["rooms"];
+    var $thingoptions = $options["things"];
+    var $indexoptions = $options["index"];
+    var $useroptions = $options["useroptions"];
+    var $configoptions = $options["config"];
+    var $hubs = $configoptions["hubs"];
+    var $skin = getSkin();
+    var $port = $configoptions["port"];
+    var $webSocketServerPort = $configoptions["webSocketServerPort"];
+    var $fast_timer = $configoptions["fast_timer"];
+    var $slow_timer = $configoptions["slow_timer"];
+    var $kioskoptions = $configoptions["kiosk"];
+    var $ruleoptions = $configoptions["rules"];
+    var $timezone = $configoptions["timezone"];
+
+    var hubpick = "all";
+    if ( $configoptions["hubpick"] ) {
+        hubpick = $configoptions["hubpick"];
+    }
+    
+    var $tc = "";
+    $tc += utils.getHeader($skin);
+    $tc += "<h3>" + utils.APPNAME + " Options</h3>";
+    $tc += "<div class=\"formbutton formauto\"><a href=\"" + retpage + "\">Cancel and Return to HousePanel</a></div>";
+    $tc += "<div id=\"optionstable\" class=\"optionstable\">";
+
+    $tc += "<form name=\"pageoptions\" action=\"#\"  method=\"POST\">";
+    $tc += utils.hidden("returnURL", retpage);
+    $tc += utils.hidden("pathname", pathname);
+    $tc += utils.hidden("pagename", "options");
+    $tc += "</form>";
+
+    $tc += hubFilters(hubpick, 7);
+
+    // ---------------------------- start of filters -----------------------------------
+
+    // $tc+= "<form id=\"filteroptions\" class=\"options\" name=\"filteroptions\" action=\"" + retpage + "\"  method=\"POST\">";
+    
+    // // if more than one hub then let user pick which one to show
+    // if ( utils.count($hubs) > 1 ) {
+    //     $tc+= "<div class=\"filteroption\">Hub Filters: ";
+    //     var $hid = "hopt_all";
+    //     var checked = (hubpick==="all") ? " checked='1'" : "";
+    //     $tc+= "<div class='radiobutton'><input id='" + $hid + "' type='radio' name='huboptpick' value='all'"  + checked + "><label for='" + $hid + "'>All Hubs</label></div>";
+    //     $hid = "hopt_none";
+    //     checked = (hubpick==="none") ? " checked='1'" : "";
+    //     $tc+= "<div class='radiobutton'><input id='" + $hid + "' type='radio' name='huboptpick' value='none'" + checked + "><label for='" + $hid + "'>No Hub</label></div>";
+    //     var $hubcount = 0;
+    //     $hubs.forEach(function($hub) {
+    //         var $hubName = $hub["hubName"];
+    //         var $hubType = $hub["hubType"];
+    //         var $hubId = $hub["hubId"];
+    //         $hid = "hopt_" + $hubcount;
+    //         checked = (hubpick===$hubId) ? " checked='1'" : "";
+    //         $tc+= "<div class='radiobutton'><input id='" + $hid + "' type='radio' name='huboptpick' value='" + $hubId + "'" + checked + "><label for='" + $hid + "'>" + $hubName + " (" + $hubType + ")</label></div>";
+    //         $hubcount++;
+    //     });
+    //     $tc+= "</div>";
+    // }
+
+    // // buttons for all or no filters
+    // $tc+= "<br /><div class=\"filteroption\">Thing Filters: ";
+    // $tc+= "<div id=\"allid\" class=\"smallbutton\">All</div>";
+    // $tc+= "<div id=\"noneid\" class=\"smallbutton\">None</div>";
+    // $tc+= "</div>";
+
+    // $tc+= "<div class='filteroption'>Select Things to Display: <br/>";
+    // $tc+= "<table class=\"useroptions\"><tr>";
+    // var $i= 0;
+    // for (var $iopt in $thingtypes) {
+    //     var $opt = $thingtypes[$iopt];
+    //     $i++;
+    //     if ( in_array($opt, $useroptions ) ) {
+    //         $tc+= "<td><input id=\"cbx_" + $i + "\" type=\"checkbox\" name=\"useroptions[]\" value=\"" + $opt + "\" checked=\"1\">";
+    //     } else {
+    //         $tc+= "<td><input id=\"cbx_" + $i + "\" type=\"checkbox\" name=\"useroptions[]\" value=\"" + $opt + "\">";
+    //     }
+    //     $tc+= "<label for=\"cbx_" + $i + "\" class=\"optname\">" + $opt + "</label></td>";
+    //     if ( $i % 5 == 0 && $i < utils.count($thingtypes) ) {
+    //         $tc+= "</tr><tr>";
+    //     }
+    // }
+    // $tc+= "</tr></table>";
+    // $tc+= "</div><hr>";
+    // $tc+= "</form>";
 
     // ---------------------------- end of filters -----------------------------------
 
@@ -2063,7 +2221,6 @@ function getOptionsPage(retpage) {
     // $tc+= "</div>";
 
     $tc+= "<div class=\"filteroption\">Specify number of special tiles: ";
-    // foreach ($specialtiles as $stype => $sid) {
     for (var $stype in $specialtiles) {
         var $customcnt = getCustomCount($stype);
         var $stypeid = "cnt_" + $stype;
@@ -2162,8 +2319,6 @@ function getOptionsPage(retpage) {
 
         // loop through all the rooms
         // this addresses room bug
-        // for ($k=0; $k < count($roomoptions); $k++) {
-        // foreach ($roomoptions as $roomname => $k) {
         for ( var $roomname in $roomoptions ) {
             
             // get the name of this room for this column
@@ -2218,12 +2373,11 @@ function getOptionsPage(retpage) {
 }
 
 // renders the main page
-function mainPage(proto, hostname) {
+function mainPage(proto, hostname, pathname) {
     var $tc = "";
 
     var thingoptions = GLB.options["things"];
     var roomoptions = GLB.options["rooms"];
-    var indexoptions = GLB.options["index"];
     var skin = getSkin();
     var kioskmode = GLB.config["kiosk"];
     if ( kioskmode === "true" || kioskmode===1 || kioskmode==="yes" ) {
@@ -2243,17 +2397,11 @@ function mainPage(proto, hostname) {
         writeCustomCss(1, skin, "");
     }
     
-    // create our user options file
-    // writeOptions(GLB.options);
-
-    // console.log("in mainpage -- roomoptions = ", roomoptions);
-
     // new wrapper around catalog and things but excluding buttons
     $tc += '<div id="dragregion">';
     $tc += '<div id="tabs"><ul id="roomtabs">';
 
     // show all room with whatever index number assuming unique
-    // foreach (roomoptions as $room => $k) {
     for (var room in roomoptions) {
         var k = roomoptions[room];
         if ( thingoptions[room] ) {
@@ -2310,8 +2458,8 @@ function mainPage(proto, hostname) {
     $tc += utils.hidden("webSocketUrl", webSocketUrl);
 
     // save Node.js address for use on the js side
-    var nodejsUrl = proto + "://" + hostname
-    $tc += utils.hidden("returnURL", nodejsUrl);
+    $tc += utils.hidden("returnURL", GLB.returnURL);
+    $tc += utils.hidden("pathname", pathname);
     $tc += utils.hidden("skinid", skin, "skinid");
 
     // show user buttons if we are not in kiosk mode
@@ -2421,7 +2569,6 @@ function processOptions($optarray) {
 
     // // get all the rooms checkboxes and reconstruct list of active things
     // // note that the list of checkboxes can come in any random order
-    // foreach($optarray as $key => $val) {
     for (var $key in $optarray) {
         var $val = $optarray[$key];
 
@@ -2490,7 +2637,6 @@ function processOptions($optarray) {
             var $lastz = 1;
 
             // $oldthings = $oldoptions["things"][$roomname];
-            // foreach ($oldthings as $arr) {
             for (var $arr in GLB.options["things"][$roomname]) {
                 if ( is_array($arr) ) {
                     var $tilenum = parseInt($arr[0]);
@@ -2719,7 +2865,6 @@ function getIcons(icondir, category) {
     var allowed = ["png","jpg","jpeg","gif"];
     var $tc = "";
 
-    // foreach ($dirlist as $filename) {
     dirlist.forEach( function(filename) {
         var froot = path.basename(filename);
         var ext = path.extname(filename).slice(1);
@@ -2781,7 +2926,6 @@ function addCustom(swid, swtype, swval, swattr, subid) {
     var newoptitem = [];
     var doneit = false;
 
-    // foreach( options[userid] as val ) {
     oldcustoms.forEach( function(val) {
         if ( val[2].toString() === subid ) {
             if ( !doneit ) {
@@ -2945,21 +3089,19 @@ if ( app && applistening ) {
         var hostname = req.protocol + "://" + req.headers.host;
         console.log((new Date()) + " serving page at: ", hostname);
 
-        if ( req.path==="/") {
+        if ( req.path==="/" || typeof req.path==="undefined" || req.path==="/undefined" || req.path==="undefined" ) {
             // set the global variable so other functions can return here
-            GLB.returnURL = hostname;
-
-            var $tc = mainPage(req.protocol, req.headers.host);
+            var $tc = mainPage(req.protocol, req.headers.host, req.path);
             res.send($tc);
             res.end();
 
         } else if ( req.path==="/showid") {
-            var $tc = getInfoPage(GLB.returnURL);
+            var $tc = getInfoPage(GLB.returnURL, req.path);
             res.send($tc);
             res.end();
 
         } else if ( req.path==="/showoptions") {
-            var $tc = getOptionsPage(GLB.returnURL);
+            var $tc = getOptionsPage(req.path);
             res.send($tc);
             res.end();
 
@@ -3052,7 +3194,7 @@ if ( app && applistening ) {
                     break;
                     
                 case "doquery":
-                    result = doQuery(hubid, swid, swtype, swval, swattr, subid);
+                    result = doQuery(hubid, swid, swtype);
                     res.json(result);
                     break;
                     
@@ -3116,11 +3258,32 @@ if ( app && applistening ) {
                     res.json(result);
                     break;
 
+                case "pageadd":
+                    var result = addPage();
+                    res.json(result);
+                    break;
+        
+                case "pagedelete":
+                    var result = delPage(swval);
+                    res.json(result);
+                    break;
+            
+                case "getcatalog":
+                    var result = getCatalog(swattr);
+                    res.json(result);
+                    break;
+        
                 case "dragdrop":
                     var result = setPosition(swid, swtype, swval, swattr);
                     res.json(result);
                     break;
 
+                // make new tile from drag / drop
+                case "dragmake":
+                    var result = addThing(swid, swtype, swval, swattr);
+                    res.json(result);
+                    break;
+            
                 // remove tile from drag / drop
                 case "dragdelete":
                     var result = delThing(swid, swtype, swval, swattr);
@@ -3144,7 +3307,6 @@ if ( app && applistening ) {
                     break;
                 
                 case "refactor":
-                    // this user selectable option will renumber the index
                     refactorOptions();
                     pushClient("reload", "reload");
                     res.json("success");

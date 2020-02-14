@@ -97,7 +97,7 @@ function getCssRuleTarget(str_type, subid, thingindex, useall) {
     
     var target = "";
 
-    if ( str_type==="page" || str_type==="panel" ) {
+    if ( str_type==="page" ) {
         
         if ( subid==="tab" ) {
             target = "li.ui-tabs-tab.ui-state-default";
@@ -108,17 +108,16 @@ function getCssRuleTarget(str_type, subid, thingindex, useall) {
             if ( useall===0 ) { target+= '.tab-'+thingindex; }
             // target+= ",.tab-" +thingindex + ">a.ui-tabs-anchor";
         } else if ( subid==="head" ) {
-            target = "div.thingname.page";
-            if ( useall < 2 ) { 
-                target+= '.t_'+thingindex;
-            }
+            target = "#dragregion div.panel";
+            target+= '.panel-'+ thingindex;
+
         } else {
             target = "div.panel";
             if ( useall < 1 ) { target+= '.panel-'+thingindex; }
         }
         
     // if a tile isn't specified we default to changing all things
-    } else if ( thingindex===null || thingindex===undefined || thingindex==="all" ) {
+    } else if ( thingindex===null || typeof thingindex==="undefined " || thingindex==="all" ) {
         target = "div.thing";
         if ( str_type && useall < 2 ) {
             target+= "." + str_type + "-thing";
@@ -295,12 +294,14 @@ function initDialogBinds(str_type, thingindex) {
         
     // new button to process the name change
     $("#processName").on("click", function (event) {
-        var target1 = getCssRuleTarget(str_type, "head", thingindex);
-        var target2 = getCssRuleTarget(str_type, "name", thingindex);
         var newname = $("#editName").val();
+        var target1 = getCssRuleTarget(str_type, "head", thingindex);
         var oldname = $(target1).html();
         $(target1).html(newname);
-        $(target2).html(newname);
+        if ( str_type!=="page" ) {
+            var target2 = getCssRuleTarget(str_type, "name", thingindex);
+            $(target2).html(newname);
+        }
         updateNames(str_type, thingindex, oldname, newname);
         if ( ( typeof modalWindows["modalcustom"]==="undefined"  || modalWindows["modalcustom"] === 0 ) ) {
             cm_Globals.reload = true;
@@ -316,9 +317,13 @@ function initDialogBinds(str_type, thingindex) {
 
     // set the header name
     // var target1 = "span.n_"+thingindex;
-    var target1 = getCssRuleTarget(str_type, "head", thingindex);
-    var newname = $(target1).html();
-    $("#editName").val(newname);
+    // if ( str_type==="page" ) {
+    //     var newname = thingindex;
+    // } else {
+    //     var target1 = getCssRuleTarget(str_type, "head", thingindex);
+    //     var newname = $(target1).html();
+    // }
+    // $("#editName").val(newname);
     
     // set the scope dropdown list
     // var newscope = getScope(str_type, false);
@@ -672,14 +677,15 @@ function getScope(str_type, ftime) {
 
 function effectspicker(str_type, thingindex) {
     var dh = "";
-    var target = getCssRuleTarget(str_type, "head", thingindex);
-    var name = $(target).html();
+    var name;
     var labelname;
     if ( str_type==="page" ) {
         labelname = "Page Name:";
+        name = thingindex;
     } else {
         labelname = "Tile Name:";
-        
+        var target = getCssRuleTarget(str_type, "head", thingindex);
+        name =  $(target).html();
     }
     // alert("Name = " + name);
 
@@ -908,11 +914,17 @@ function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, htmlconten
                 var clk = $(ui).attr("name");
                 if ( clk==="okay" ) {
                     var newname = $("#editName").val();
-                    var target1 = getCssRuleTarget(str_type, "head", thingindex);
-                    var target2 = getCssRuleTarget(str_type, "name", thingindex);
+                    if ( str_type==="page") {
+                        var oldname = thingindex;
+                        alert(oldname);
+                        var target1 = getCssRuleTarget(str_type, "head", thingindex);
+                    } else {
+                        var target1 = getCssRuleTarget(str_type, "head", thingindex);
+                        var target2 = getCssRuleTarget(str_type, "name", thingindex);
+                        var oldname = $(target1).html();
+                        $(target2).html(newname);
+                    }
                     $(target1).html(newname);
-                    $(target2).html(newname);
-                    var oldname = $(target1).html();
                     saveTileEdit(str_type, thingindex, oldname, newname);
                 } else if ( clk==="cancel" ) {
                     cancelTileEdit(str_type, thingindex);

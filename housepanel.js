@@ -4,6 +4,7 @@
  * Designed for use only with HousePanel for Hubitat and SmartThings
  * (c) Ken Washington 2017 - 2020
  * 
+ * 02/12/2020 - mods to work with Node.js server version
  * 01/02/2020 - updated to fix z-index bug so things show up on top properly
  * 
  */
@@ -194,6 +195,18 @@ $(document).ready(function() {
     } catch(e) {
         pagename = "main";
     }
+    
+    try {
+        var pathname = $("input[name='pathname']").val();
+    } catch(e) {
+        pathname = "/";
+    }
+
+    // reroute to main page if undefined asked for
+    if ( pathname==="/undefined" ) {
+        window.location.href = cm_Globals.returnURL;
+    }
+    // alert(pathname + " returnURL= " + cm_Globals.returnURL);
 
     // show tabs and hide skin
     if ( pagename==="main" ) {
@@ -841,7 +854,10 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
 }
 
 function closeModal(modalid) {
-    $("#"+modalid).remove();
+    try {
+        $("#"+modalid).remove();
+    } catch(e) {}
+
     modalWindows[modalid] = 0;
     modalStatus = modalStatus - 1;
     if ( modalStatus < 0 ) { modalStatus = 0; }
@@ -874,7 +890,6 @@ function setupColors() {
                 var tile = '#t-'+aid;
                 var bid = $(tile).attr("bid");
                 var hubnum = $(tile).attr("hub");
-                var bidupd = bid;
                 var thetype = $(tile).attr("type");
                 var ajaxcall = "doaction";
                 console.log(ajaxcall + ": id= "+bid+" type= "+ thetype+ " color= "+ hslstr);
@@ -886,7 +901,6 @@ function setupColors() {
                                 if ( presult["name"] ) { delete presult["name"]; }
                                 if ( presult["password"] ) { delete presult["password"]; }
                                 updateTile(aid, presult);
-                                // updAll("color",aid,bidupd,thetype,hubnum,presult);
                             }
                        }, "json"
                 );
@@ -932,36 +946,24 @@ function setupSliders() {
             console.log(ajaxcall + ": id= "+bid+" type= "+linktype+ " value= " + thevalue + " subid= " + subid + " command= " + command + " linkval: ", linkval);
             
             // handle music volume different than lights
-            if ( thetype != "music") {
-                $.post(cm_Globals.returnURL, 
-                       {useajax: ajaxcall, id: bid, type: linktype, value: thevalue, attr: "level", subid: subid, hubid: hubnum, command: command, linkval: linkval},
-                       function (presult, pstatus) {
-                            if (pstatus==="success" && typeof presult === "object") {
-                                console.log( ajaxcall + ": POST returned: ", presult );
-                                if ( presult["name"] ) { delete presult["name"]; }
-                                if ( presult["password"] ) { delete presult["password"]; }
-                                updateTile(aid, presult);
-                                // updAll(subid,aid,bidupd,thetype,hubnum,presult);
-                            }
-                       }, "json"
-                );
-            // for music volume we pause briefly then update
-            } else {
-                $.post(cm_Globals.returnURL, 
-                       {useajax: ajaxcall, id: bid, type: linktype, value: thevalue, attr: "level", subid: subid, hubid: hubnum, command: command, linkval: linkval},
-                       function (presult, pstatus) {
-                            if (pstatus==="success" && typeof presult==="object" ) {
-                                console.log( ajaxcall + ": POST returned: ", presult );
-                                if ( presult["name"] ) { delete presult["name"]; }
-                                if ( presult["password"] ) { delete presult["password"]; }
-                                setTimeout(function() {
-                                    updateTile(aid, presult);
-                                }, 1000);
-                            }
-                       }, "json"
-                );
-                
+            var updwait = 100;
+            if ( thetype === "music") {
+                updwait = 1000;
             }
+
+            $.post(cm_Globals.returnURL, 
+                {useajax: ajaxcall, id: bid, type: linktype, value: thevalue, attr: "level", subid: subid, hubid: hubnum, command: command, linkval: linkval},
+                function (presult, pstatus) {
+                    if (pstatus==="success" && typeof presult==="object" ) {
+                        console.log( ajaxcall + ": POST returned: ", presult );
+                        if ( presult["name"] ) { delete presult["name"]; }
+                        if ( presult["password"] ) { delete presult["password"]; }
+                        setTimeout(function() {
+                            updateTile(aid, presult);
+                        }, updwait);
+                    }
+                }, "json"
+            );
         }
     });
 
@@ -995,6 +997,7 @@ function setupSliders() {
             var command = "";
             var linktype = thetype;
             var linkval = "";
+            var updwait = 200;
             if ( usertile ) {
                 command = $(usertile).attr("command");    // command type
                 if ( !thevalue ) {
@@ -1007,15 +1010,17 @@ function setupSliders() {
             console.log(ajaxcall + ": command= " + command + " id= "+bid+" type= "+linktype+ " value= " + thevalue + " subid= " + subid + " command= " + command + " linkval: ", linkval);
             
             $.post(cm_Globals.returnURL, 
-                   {useajax: ajaxcall, id: bid, type: thetype, value: parseInt(ui.value), attr: "colorTemperature", hubid: hubnum, command: command, linkval: linkval },
-                   function (presult, pstatus) {
-                        if (pstatus==="success" && typeof presult==="object" ) {
-                            console.log( ajaxcall + ": POST returned: ", presult );
-                            if ( presult["name"] ) { delete presult["name"]; }
-                            if ( presult["password"] ) { delete presult["password"]; }
-                            updAll(subid,aid,bidupd,thetype,hubnum,presult);
-                        }
-                   }, "json"
+                {useajax: ajaxcall, id: bid, type: thetype, value: parseInt(ui.value), attr: "colorTemperature", hubid: hubnum, command: command, linkval: linkval },
+                function (presult, pstatus) {
+                    if (pstatus==="success" && typeof presult==="object" ) {
+                        console.log( ajaxcall + ": POST returned: ", presult );
+                        if ( presult["name"] ) { delete presult["name"]; }
+                        if ( presult["password"] ) { delete presult["password"]; }
+                        setTimeout(function() {
+                            updateTile(aid, presult);
+                        }, updwait);
+                    }
+                }, "json"
             );
         }
     });
@@ -1197,6 +1202,9 @@ function setupDraggable() {
         function (presult, pstatus) {
             if (pstatus==="success") {
                 $("#tabs").after(presult);
+                // console.log("catalog debug: ", presult);
+            } else {
+                console.log("error - ", pstatus);
             }
         }
     );
@@ -1263,7 +1271,7 @@ function setupDraggable() {
                                         {useajax: "dragmake", id: bid, type: thingtype, value: panel, attr: cnt},
                                         function (presult, pstatus) {
                                             if (pstatus==="success" && !presult.startsWith("error")) {
-                                                console.log( "Added " + thingname + " of type " + thingtype + " and bid= " + bid + " to room " + panel + " thing: ", presult );
+                                                console.log( "Added " + thingname + " of type " + thingtype + " and bid= " + bid + " to room " + panel);
                                                 lastthing.after(presult);
                                                 var newthing = lastthing.next();
                                                 var zmax = getMaxZindex(panel) + 1;
@@ -1464,6 +1472,7 @@ function execButton(buttonid) {
         }
         // $("div.skinoption").show();
         setupDraggable();
+        setupPagemove();
         addEditLink();
         $("#mode_Edit").prop("checked",true);
         priorOpmode = "DragDrop";
@@ -2233,10 +2242,10 @@ function updateTile(aid, presult) {
     // do something for each tile item returned by ajax call
     var isclock = false;
     var nativeimg = false;
+    var oldvalue = "";
     
     // handle audio devices
     if ( presult["audioTrackData"] ) {
-        var oldvalue = "";
         if ( $("#a-"+aid+"-trackDescription") ) {
             oldvalue = $("#a-"+aid+"-trackDescription").html();
         }
@@ -2335,7 +2344,7 @@ function updateTile(aid, presult) {
                 if ( forceit || (value!==oldvalue) ) {
                     value = value.trim();
                     
-                    console.log("music track changed from: [" + oldvalue + "] to: ["+value+"]");
+                    console.log("music track changed from: [" + oldvalue + "] to: [" + value + "]");
                     $.post(cm_Globals.returnURL, 
                            {useajax: "trackupdate", id: 1, type: "music", value: value},
                            function (presult, pstatus) {
@@ -2578,97 +2587,6 @@ function updateMode() {
     });
 }
 
-// find all the things with "bid" and update the value clicked on somewhere
-// this routine is called every time we click on something to update its value
-// but we also update similar things that are impacted by this click
-// that way we don't need to wait for the timers to kick in to update
-// the visual items that people will expect to see right away
-function updAll(trigger, aid, bid, thetype, hubnum, pvalue) {
-
-    // update trigger tile first
-    // alert("trigger= "+trigger+" aid= "+aid+" bid= "+bid+" type= "+thetype+" pvalue= "+strObject(pvalue));
-    if ( trigger !== "slider") {
-        if ( thetype==="lock" || thetype==="door" ) {
-            setTimeout(function() {
-                updateTile(aid, pvalue);
-            }, 1000);
-        } else {
-            updateTile(aid, pvalue);
-        }
-    }
-    
-    // for doors wait before refresh to give garage time to open or close
-    if (thetype==="door") {
-        setTimeout(function() {
-            refreshTile(aid, bid, thetype, hubnum);
-        }, 15000);
-    }
-        
-    // go through all the tiles this bid and type (easy ones)
-    // this will include the trigger tile so we skip it
-    if (thetype!=="switch" && thetype!=="switchlevel" && thetype!=="bulb" && thetype!=="light" && thetype!=="music") {
-        $('div.thing[bid="'+bid+'"][type="'+thetype+'"]').each(function() {
-            var otheraid = $(this).attr("id").substring(2);
-            if (otheraid !== aid) { updateTile(otheraid, pvalue); }
-        });
-    }
-    
-    // if this is a switch on/off trigger go through and set all light types
-    // but only if the triggering tile is a light type
-    if (trigger==="switch" && (thetype==="switch" || thetype==="switchlevel" || thetype==="bulb" || thetype==="light") ) {
-        // updateMode();
-        $('div.thing[bid="'+bid+'"][type="switch"]').each(function() {
-            var otheraid = $(this).attr("id").substring(2);
-            if (otheraid !== aid) { updateTile(otheraid, pvalue); }
-        });
-        $('div.thing[bid="'+bid+'"][type="switchlevel"]').each(function() {
-            var otheraid = $(this).attr("id").substring(2);
-            if (otheraid !== aid) { updateTile(otheraid, pvalue); }
-        });
-        $('div.thing[bid="'+bid+'"][type="bulb"]').each(function() {
-            var otheraid = $(this).attr("id").substring(2);
-            if (otheraid !== aid) { updateTile(otheraid, pvalue); }
-        });
-        $('div.thing[bid="'+bid+'"][type="light"]').each(function() {
-            var otheraid = $(this).attr("id").substring(2);
-            if (otheraid !== aid) { updateTile(otheraid, pvalue); }
-        });
-    }
-    
-    // if this is a routine action then update the modes immediately
-    // also do this update for piston or momentary refreshes
-    // use the same delay technique used for music tiles noted above
-    if (thetype==="routine") {
-        updateMode();
-    }
-    
-    // if this is a switchlevel go through and set all switches
-    if ( (trigger==="level-up" || trigger==="level-dn" || trigger==="slider" ||
-          trigger==="hue-up" || trigger==="hue-dn" ||
-          trigger==="saturation-up" || trigger==="saturation-dn" ||
-          trigger==="colorTemperature-up" || trigger==="colorTemperature-dn" )
-        && (thetype==="switch" || thetype==="switchlevel" || thetype==="bulb" || thetype==="light") ) {
-//        alert("level trigger: bid= "+bid+" pvalue= "+strObject(pvalue));
-        $('div.thing[bid="'+bid+'"][type="switch"]').each(function() {
-            var otheraid = $(this).attr("id").substring(2);
-            if (otheraid !== aid) { updateTile(otheraid, pvalue); }
-        });
-        $('div.thing[bid="'+bid+'"][type="switchlevel"]').each(function() {
-            var otheraid = $(this).attr("id").substring(2);
-            if (otheraid !== aid) { updateTile(otheraid, pvalue); }
-        });
-        $('div.thing[bid="'+bid+'"][type="bulb"]').each(function() {
-            var otheraid = $(this).attr("id").substring(2);
-            if (otheraid !== aid) { updateTile(otheraid, pvalue); }
-        });
-        $('div.thing[bid="'+bid+'"][type="light"]').each(function() {
-            var otheraid = $(this).attr("id").substring(2);
-            if (otheraid !== aid) { updateTile(otheraid, pvalue); }
-        });
-    }
-    
-}
-
 // setup trigger for clicking on the action portion of this thing
 // this used to be done by page but now it is done by sensor type
 function setupPage() {
@@ -2829,6 +2747,7 @@ function processClick(that, thingname) {
     if ( !thevalue && thetype=="thermostat" &&
          ( subid.endsWith("-up") || subid.endsWith("-dn") ) ) {
         thevalue = $("#a-"+aid+"-temperature").html();
+        alert(thevalue);
     }
 
     // handle music commands (which need to get subid command) and
@@ -3020,8 +2939,8 @@ function processClick(that, thingname) {
                             }
                             var pos = {top: $(tile).position().top + 80, left: leftpos};
                             // console.log("popup pos: ", pos, " winwidth: ", winwidth);
-                            createModal("modalpopup", showstr, "body", false, pos, function(ui) {
-                            });
+                            closeModal("modalpopup");
+                            createModal("modalpopup", showstr, "body", false, pos, function(ui) {} );
                     } else if ( pstatus==="success" && presult==="success" ) {
                         console.log("Success: result will be pushed later. status: ", pstatus, " result: ", presult)
                     } else {
