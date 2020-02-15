@@ -5,7 +5,7 @@ process.title = 'hpserver';
 var DEBUG1 = false;
 var DEBUG2 = false;
 var DEBUG3 = true;
-var DEBUG4 = true;
+var DEBUG4 = false;
 var DEBUG5 = false;
 var DEBUG6 = true;
 
@@ -71,7 +71,7 @@ function getSkin() {
 // read in customtiles ignoring the comments
 // updated this to properly treat /*   */ comment blocks
 function readCustomCss(skin) {
-    var fname = "skin/customtiles.css";
+    var fname = skin + "/customtiles.css";
     var contents = fs.readFileSync(fname, 'utf8');
     return contents;
 }
@@ -409,7 +409,7 @@ function updateOptions() {
 
     // update the index with latest sensor information
     for (var thingid in allthings) {
-        var thesensor = allthings[thingid];
+        // var thesensor = allthings[thingid];
         if ( !array_key_exists(thingid, GLB.options["index"]) ||
              parseInt(GLB.options["index"][thingid])===0 ) {
             GLB.options["index"][thingid] = cnt;
@@ -472,39 +472,21 @@ function createSpecialIndex(customcnt, stype, spid) {
     return GLB.options;
 }
 
-// function hidden(pname, pvalue, id) {
-//     var inpstr = "<input type='hidden' name='" + pname + "'  value='" + pvalue + "'";
-//     if (id) { inpstr += " id='" + id + "'"; }
-//     inpstr += " />";
-//     return inpstr;
-// }
-
-// function getTypes() {
-//     var thingtypes = [
-//         "routine","switch", "light", "switchlevel", "bulb", "momentary","contact",
-//         "motion", "lock", "thermostat", "temperature", "music", "audio", "valve",
-//         "door", "illuminance", "smoke", "water",
-//         "weather", "presence", "mode", "shm", "hsm", "piston", "other",
-//         "clock", "blank", "image", "frame", "video", "custom", "control", "power"
-//     ];
-//     return thingtypes;
-// }
-
 // routine that renumbers all the things in your options file from 1
 function refactorOptions() {
 
     // load in custom css strings
     var updatecss = false;
     var cnt = 0;
-    var options = readOptions(true);
-    var oldoptions = options;
-    options["useroptions"] = utils.getTypes();
+    var options = GLB.options;
+    var oldoptions = clone(GLB.options);
     options["things"] = {};
     options["index"] = {};
     var skin = getSkin();
     var customcss = readCustomCss(skin);
 
-    // foreach ($oldoptions["index"] as $thingid => $idxarr) {
+    var cflags = [ ["\.p\_","\."], ["\.p\_"," "], ["\.v\_","\."], ["\.v\_"," "], ["\.t\_","\."], ["\.t\_"," "], ["\.n\_","\."], ["\.n\_"," "] ];
+
     for (var thingid in oldoptions["index"]) {
         var idxarr = oldoptions["index"][thingid];
         
@@ -513,21 +495,16 @@ function refactorOptions() {
         
             // removed the old system check since this is a new day for HP
             cnt++;
-            var idx = idxarr.toString().trim();
+            var idx = parseInt(idxarr);
 
             // replace all instances of the old "idx" with the new "cnt" in customtiles
             if ( customcss && idx!==cnt ) {
-                $customcss = customcss.replace(".p_" + idx + ".", ".p_" + cnt + ".");
-                $customcss = customcss.replace(".p_" + idx + " ", ".p_" + cnt + " ");
 
-                $customcss = customcss.replace(".v_" + idx + ".", ".v_" + cnt + ".");
-                $customcss = customcss.replace(".v_" + idx + " ", ".v_" + cnt + " ");
-
-                $customcss = customcss.replace(".t_" + idx + ".", ".t_" + cnt + ".");
-                $customcss = customcss.replace(".t_" + idx + " ", ".t_" + cnt + " ");
-
-                $customcss = customcss.replace(".n_" + idx + ".", ".n_" + cnt + ".");
-                $customcss = customcss.replace(".n_" + idx + " ", ".n_" + cnt + " ");
+                cflags.forEach(function(arr) {
+                    var re = new RegExp(arr[0] + idx.toString() + arr[1], "g");
+                    var newval = arr[0] + cnt.toString() + arr[1];
+                    customcss = customcss.replace(re, newval);
+                });
 
                 updatecss = true;
             }
@@ -543,7 +520,8 @@ function refactorOptions() {
     for (var room in oldoptions["things"]) {
         options["things"][room] = [];
         var thinglist = oldoptions["things"][room];
-        thinglist.forEach( function(pidpos, key) {    
+        for ( var thingroom in thinglist ) {
+            var pidpos = thinglist[thingroom];
             var pid;
             var postop = 0;
             var posleft = 0;
@@ -564,13 +542,13 @@ function refactorOptions() {
             var thingid = array_search(pid, oldoptions["index"]);
             
             if ( thingid!==false && array_key_exists(thingid, options["index"]) ) {
-                var newid = $options["index"][thingid];
+                var newid = options["index"][thingid];
                 // use the commented code below if you want to preserve any user movement
                 // otherwise a refactor call resets all tiles to their baseeline position  
                 // options["things"][room].push([newid,postop,posleft,zindex,customname]);
                 options["things"][room].push([newid,0,0,1,customname]);
             }
-        });
+        };
     }
     
     // now adjust all custom configurations
@@ -581,44 +559,44 @@ function refactorOptions() {
         var calltype;
     
         if ( ( key.substr(0,5)==="user_" || key.substr(0,7)==="custom_" ) && is_array(lines) ) {
-            
+
             // allow user to skip wrapping single entry in an array
-            if ( !is_array(lines[0] ) ) {
-                msgs = lines;
+            if ( !is_array(lines[0]) ) {
+                lines = [lines];
+            }
+            console.log("lines= ", lines);
+
+            newlines = [];
+            for (var k in lines) {
+                var msgs = lines[k];
                 calltype = msgs[0].toUpperCase().trim();
+
+                // switch to new index for links
+                // otherwise we just copy the info over to options
                 if ( calltype==="LINK" ) {
-                    var linkid = parseInt(msgs[1].trim());
+                    var linkid = msgs[1].toString().trim();
                     var thingid = array_search(linkid, oldoptions["index"]);
                     if ( thingid!==false && array_key_exists(thingid, options["index"]) ) {
-                        msgs[1] = options["index"][thingid];
+                        msgs[1] = options["index"][thingid].toString();
                     }
                 }
-                newlines = msgs;
-            } else {
-                newlines = [];
-                for (msgs in lines) {
-                    calltype = msgs[0].toUpperCase().trim();
-
-                    // switch to new index for links
-                    // otherwise we just copy the info over to options
-                    if ( calltype==="LINK" ) {
-                        var linkid = parseInt(msgs[1].trim());
-                        var thingid = array_search(linkid, oldoptions["index"]);
-                        if ( thingid!==false && array_key_exists(thingid, options["index"]) ) {
-                            msgs[1] = options["index"][thingid];
-                        }
-                    }
-                    newlines.push(msgs);
-                }
+                newlines.push(msgs);
             }
-            options[key] = newlines;
+            console.log("newlines= ", newlines);
+            if ( newlines.length ) {
+                options[key] = newlines;
+            }
         }
     }
     
+    // TODO... not yet working so don't save
+
     // save our updated options and our custom style sheet file
-    writeOptions(options);
-    writeCustomCss(1, skin, customcss);
-    
+    // writeOptions(options);
+
+    // if ( updatecss ) {
+    //     writeCustomCss(1, skin, customcss);
+    // }
 }
 
 // emulates the PHP function for javascript objects or arrays
@@ -710,7 +688,7 @@ function getNewPage(cnt, roomtitle, kroom, things, kioskmode) {
         things.forEach(function(kindexarr) {
             
             // get the offsets and the tile id
-            var kindex = kindexarr[0];
+            var kindex = parseInt(kindexarr[0]);
             var postop = kindexarr[1];
             var posleft = kindexarr[2];
             var zindex = 1;
@@ -1199,6 +1177,7 @@ function getClock(clockname, clockid, clockskin, fmtdate, fmttime) {
     var dclock = {"name": clockname, "skin": clockskin, "weekday": weekday,
         "date": dateofmonth, "time": timeofday, "tzone": timezone,
         "fmt_date": fmtdate, "fmt_time": fmttime};
+    // console.log(dclock);
     dclock = getCustomTile(dclock, "clock", clockid);
     return dclock;
 }
@@ -1343,6 +1322,7 @@ function getCustomTile(custom_val, customtype, customid) {
         if ( !is_array(lines[0]) ) {
             lines = [lines];
         }
+        // console.log("lines= ", lines);
         
         // first remove existing ones so we can readd them in the proper order
         lines.forEach(function(msgs) {
@@ -1483,9 +1463,11 @@ function pushClient(swid, swtype, subid, body) {
     entry["value"] = thevalue;
 
     // update the main array with changed push values
-    var idx = swtype + "|" + swid;
-    for (var thekey in thevalue) {
-        allthings[idx]["value"][thekey] = thevalue[thekey];
+    if ( swid!=="reload" ) {
+        var idx = swtype + "|" + swid;
+        for (var thekey in thevalue) {
+            allthings[idx]["value"][thekey] = thevalue[thekey];
+        }
     }
 
     for (var i=0; i < clients.length; i++) {
@@ -2737,7 +2719,7 @@ function processOptions($optarray) {
     
     if (DEBUG4) {
         console.log("Debug Print for New Options Created - After Processing");
-        console.log("index: ", JSON.stringify($options["index"]));
+        console.log("index: ", $options["index"]);
         console.log("config: ", $options["config"]);
         console.log("rooms: ", $options["rooms"]);
         console.log("things: ", $options["things"]);
@@ -3308,7 +3290,7 @@ if ( app && applistening ) {
                 
                 case "refactor":
                     refactorOptions();
-                    pushClient("reload", "reload");
+                    getAllThings(true);
                     res.json("success");
                     break;
                     

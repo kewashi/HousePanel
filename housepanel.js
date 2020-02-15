@@ -1393,44 +1393,36 @@ function setupDraggable() {
     });
 }
 
-function dynoPost(ajaxcall, body) {
-    if ( typeof body === "undefined" ) { 
-        body = {api: ajaxcall, id: "0", type: "none", attr: "none"};
+// make the post call back to main server
+function dynoPost(ajaxcall, body, id, type, value, attr, reload) {
+    var isreload;
+
+    // if body is not given or is not an object then use all other values
+    // to set the object to pass to post call with last one being a reload flag
+    if ( typeof body !== "object" ) { 
+        id = typeof id!=="undefined" ? id : "0";
+        type = typeof type!=="undefined" ? type : "none";
+        value = typeof value!=="undefined" ? value : "none";
+        attr = typeof attr!=="undefined" ? attr : "none";
+        isreload = typeof reload!=="undefined" ? reload : false;
+        body = {api: ajaxcall, id: id, type: type, value: value, attr: attr};
+
+    // if a body object is given then next parameter is treated as a reload flag
+    // and everything after that is ignored
     } else {
+        isreload = typeof id!=="undefined" ? id : false;
         body["api"] = ajaxcall;
     }
+
     $.post(cm_Globals.returnURL, body,
         function (presult, pstatus) {
-            console.log("dyno status: ", pstatus, " result: ", presult);
+            if ( isreload ) {
+                window.location.href = cm_Globals.returnURL;
+            } else {
+                console.log("dyno POST: ", pstatus, " body: ", body, " result: ", presult);
+            }
         }
     );
-}
-
-function dynoForm(ajaxcall, idval, typeval, attr, content) {
-    idval = idval ? idval : 0;
-    typeval = typeval ? typeval : "dynoform";
-    content = content ? content : "";
-    attr = attr ? attr : "";
-    
-    var controlForm = $('<form>', {'name': 'controlpanel', 'action': cm_Globals.returnURL, 'target': '_top', 'method': 'POST'});
-    controlForm.appendTo("body");
-    // alert("Posting form for ajaxcall= " + ajaxcall + " to: " + retval);
-    // lets now add the hidden fields we need to post our form
-    controlForm.append(
-                  $('<input>', {'name': 'useajax', 'value': ajaxcall, 'type': 'hidden'})
-        ).append(
-                  $('<input>', {'name': 'id', 'value': idval, 'type': 'hidden'})
-        ).append(
-                  $('<input>', {'name': 'type', 'value': typeval, 'type': 'hidden'})
-        ).append(
-                  $('<input>', {'name': 'attr', 'value': attr, 'type': 'hidden'})
-          );
-    if ( content ) {
-        // controlForm.append( $('<input>', {'name': 'value', 'value': content, 'type':'hidden'} ));
-        controlForm.append(content);
-        $("#dynocontent").hide();
-    }
-    return controlForm;
 }
 
 function execButton(buttonid) {
@@ -1448,7 +1440,7 @@ function execButton(buttonid) {
 
         // clicking anywhere will restore the window to normal
         $("#blankme").on("click", function(evt) {
-           $("#blankme").remove(); 
+            $("#blankme").remove(); 
             priorOpmode = "Operate";
             evt.stopPropagation();
         });
@@ -1465,12 +1457,10 @@ function execButton(buttonid) {
         $("#mode_Reorder").prop("checked",true);
         priorOpmode = "Reorder";
     } else if ( buttonid === "edit" ) {
-        // show the skin for swapping on main screen
         if ( priorOpmode === "Reorder" ) {
             cancelSortable();
             cancelPagemove();
         }
-        // $("div.skinoption").show();
         setupDraggable();
         setupPagemove();
         addEditLink();
@@ -1479,8 +1469,8 @@ function execButton(buttonid) {
     } else if ( buttonid==="showdoc" ) {
         window.open("http://www.housepanel.net",'_blank');
         return;
-    } else if ( buttonid==="name" ) {
-        return;
+    // } else if ( buttonid==="name" ) {
+    //     return;
     } else if ( buttonid==="operate" ) {
         if ( priorOpmode === "Reorder" ) {
             cancelSortable();
@@ -1499,27 +1489,31 @@ function execButton(buttonid) {
     } else if ( buttonid==="snap" ) {
         var snap = $("#mode_Snap").prop("checked");
         console.log("snap mode: ",snap);
-    } else if ( buttonid==="refresh" || buttonid==="reset" ) {
+
+    } else if ( buttonid==="refresh" || buttonid==="refactor" ) {
         dynoPost(buttonid);
-        // window.location.href = cm_Globals.returnURL;
+
+    // default is to call main node app with the id as a path
     } else {
         window.location.href = cm_Globals.returnURL + "/" + buttonid;
-        // var newForm = dynoForm(buttonid);
-        // newForm.submit();
     }
 }
 
 function updateFilters() {
-    var filters = [];
-    $('input[name="useroptions[]"').each(function(){
-        if ( $(this).prop("checked") ) {
-            filters.push($(this).attr("value")); 
-        }
-    });
-    var newskin = $("#skinid").val();
-    $.post(cm_Globals.returnURL, 
-        {useajax: "savefilters", id: 0, type: "none", value: filters, attr: newskin}
-    );
+
+    var fobj = formToObject("filteroptions");
+    dynoPost("filteroptions", fobj);
+
+    // var filters = [];
+    // $('input[name="useroptions[]"').each(function(){
+    //     if ( $(this).prop("checked") ) {
+    //         filters.push($(this).attr("value")); 
+    //     }
+    // });
+    // var newskin = $("#skinid").val();
+    // $.post(cm_Globals.returnURL, 
+    //     {useajax: "savefilters", id: 0, type: "none", value: filters, attr: newskin}
+    // );
 }
 
 function checkInputs(port, webSocketServerPort, fast_timer, slow_timer, uname, pword) {
@@ -1644,15 +1638,15 @@ function setupButtons() {
             var buttonid = $(this).attr("id");
 
             if ( buttonid==="optSave") {
-                // first save our filters - this is done in a blocking way
+                // first save our filters
                 var fobj = formToObject("filteroptions");
                 dynoPost("filteroptions", fobj);
 
                 // next save our form - this is done asynchronously
                 // when done the server will push a signal to clients to reload
                 var obj = formToObject("optionspage");
-                dynoPost("saveoptions", obj);
-                window.location.href = cm_Globals.returnURL;
+                dynoPost("saveoptions", obj, true);
+                // window.location.href = cm_Globals.returnURL;
 
             } else if ( buttonid==="optCancel" ) {
                 // do nothing but reload the main page
