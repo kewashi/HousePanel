@@ -1008,7 +1008,7 @@ div.switchlevel.event_1, div.bulb.event_1 {
     background-color: rgba(90,90,90,1);
     font-style: italic;
 }
-div.thing div.thingname {
+div.thingname {
     background-color: rgba(0, 50, 100,1);
     font-size: 11pt;
     text-align: center;
@@ -1018,7 +1018,7 @@ div.thing div.thingname {
     cursor: default;
     display: block;
 }
-div.thing div.thingname:hover {
+div.thingname:hover {
     background-color: #5050a0; 
     color: #cccccc;
 }

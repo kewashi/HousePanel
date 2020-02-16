@@ -135,39 +135,82 @@ function writeCustomCss(partnum, skin, str) {
     return results;
 }
 
-function readOptions(reset) {
+function readOptions(reset, fname) {
 
-    // read options file here since it could have changed
-    var fname = "hmoptions.cfg";
+    var rewrite = false;
+    if ( typeof reset!=="undefined" && reset ) {
+        GLB.options = {};
+        GLB.config = {};
+        rewrite = true;
+    }
+
+    if ( typeof fname==="undefined" || !fname ) {
+        fname = "hmoptions.cfg";
+    }
+
     try {
         if ( !fs.existsSync(fname) ) {
-            console.log((new Date()) + ' hmoptions.cfg file not found. HousePanel will not function properly.');
-            return null;
+            throw ' hmoptions.cfg file not found. HousePanel will operate without any hubs until one is authorized.';
         }
         GLB.options = JSON.parse(fs.readFileSync(fname, 'utf8'));
-        GLB.config = GLB.options.config;
-        GLB.hubs = GLB.config.hubs;
+        if ( GLB.options && array_key_exists("config",GLB.options) ) {
+            GLB.config = GLB.options["config"];
+        } else {
+            throw ' configuration settings were not found in ' + fname + ' configuration file.';
+        }
+
     } catch(e) {
-        console.log((new Date()) + ' hmoptions.cfg file found but could not be processed.');
-        GLB.options = null;
-        GLB.config = null;
-        GLB.hubs = null;
+        console.log((new Date()), e); 
+        GLB.options = {};
+        GLB.config = {};
+        GLB.options["config"] = {};
+        GLB.options["rooms"] = {};
+        GLB.options["things"] = {};
+        GLB.options["index"] = {};
+        GLB.options["useroptions"] = utils.getTypes();
+        rewrite = true;
     }
 
     if ( GLB.options ) {
         var options = GLB.options;
-        var timeval = GLB.options["time"];
-        var info = timeval.split(" @ ");
-        var version = info[0];
 
-        console.log((new Date()) + ' Config file found from HP Version ', version);
-        if ( GLB.hubs && GLB.hubs.length > 0 ) {
-            console.log((new Date()) + ' Loaded ', GLB.hubs.length,' hubs.');
+        if ( array_key_exists("time", GLB.options) ) {
+            var timeval = GLB.options["time"];
+            var info = timeval.split(" @ ");
+            var version = info[0];
+        } else {
+            var d = new Date();
+            timeval = d.getTime();
+            version = utils.HPVERSION;
+            GLB.options["time"] = version + " @ " + timeval;
+            rewrite = true;
+        }
+
+        if ( !array_key_exists("rooms"), GLB.options ) {
+            GLB.options["rooms"]= {};
+        }
+        if ( !array_key_exists("things"), GLB.options ) {
+            GLB.options["things"]= {};
+        }
+        if ( !array_key_exists("index"), GLB.options ) {
+            GLB.options["index"]= {};
+        }
+        if ( !array_key_exists("useroptions"), GLB.options ) {
+            GLB.options["useroptions"]= utils.getTypes();
+        }
+
+        console.log((new Date()) + ' Config file for HP Version ', version);
+
+        var hubs = GLB.config.hubs;
+        if ( is_array(hubs) && hubs.length > 0 ) {
+            console.log((new Date()) + ' Loading ', hubs.length,' hubs.');
             if ( DEBUG5 ) {
-                console.log(GLB.hubs);
+                console.log(hubs);
             }
         } else {
             console.log((new Date()) + ' No hubs found. HousePanel will only show special and custom tiles.');
+            hubs = [];
+            GLB.config.hubs = hubs;
         }
         
         // make the room config file to support custom users
@@ -177,14 +220,14 @@ function readOptions(reset) {
             // $uname = trim($_COOKIE["uname"]);
             var customfname = "hm_" + uname + ".cfg";
             var key;
-            if ( reset || !fs.existsSync(customfname) ) {
+            if ( reset || rewrite || !fs.existsSync(customfname) ) {
                 // this format is now in real json format and includes user_ tiles
                 // add a signature key to flag this format
                 var customopt = {};
                 customopt["::CUSTOM::"] = [uname, utils.HPVERSION, timeval];
-                for (key in options) {
+                for (key in GLB.options) {
                     if ( key==="rooms" || key==="things" || key.substr(0,5)==="user_" ) {
-                        customopt[key] = options[key];
+                        customopt[key] = GLB.options[key];
                     }
                 }
                 var str_customopt = JSON.stringify(customopt, null, 1);
@@ -225,9 +268,10 @@ function readOptions(reset) {
             }
         }
     }
+    if ( rewrite ) {
+        writeOptions(GLB.options);
+    }
     // console.log(GLB.options["things"]);
-    
-    return GLB.options;
 }
 
 function writeOptions(options) {
@@ -422,8 +466,8 @@ function updateOptions() {
     // $oldindex = $options["index"];
     for (var stype in specialtiles) {
         var sid = specialtiles[stype];
-        var customcnt = getCustomCount(stype);
-        GLB.options = createSpecialIndex(customcnt, stype, sid[0]);
+        var customcnt = getCustomCount(stype, sid[3]);
+        createSpecialIndex(customcnt, stype, sid[0]);
     }
 
     // save the options file
@@ -434,16 +478,66 @@ function updateOptions() {
     pushClient("reload", "reload");
 }
 
+function setDefaults() {
+
+    // generic room setup
+    var defaultrooms = {
+        "Kitchen": "clock|kitchen|sink|pantry|dinette" ,
+        "Family": "clock|family|mud|fireplace|casual|thermostat",
+        "Living": "clock|living|dining|entry|front door|foyer",
+        "Office": "clock|office|computer|desk|work",
+        "Bedrooms": "clock|bedroom|kid|kids|bathroom|closet|master|guest",
+        "Outside": "clock|garage|yard|outside|porch|patio|driveway|weather",
+        "Music": "clock|sonos|music|tv|television|alexa|echo|stereo|bose|samsung|pioneer"
+    };
+    
+    // make a default options array based on the old logic
+    // protocol for the options array is an array of room names
+    // where each item is an array with the first element being the order number
+    // second element is an optional alternate name defaulted to room name
+    // each subsequent item is then a tuple of ST id and ST type
+    // encoded as ST-id|ST-type to enable an easy quick text search
+    GLB.options["rooms"] = {};
+    GLB.options["things"] = {};
+    var k = 0;
+    // foreach(array_keys($defaultrooms) as $room) {
+    for (var room in defaultrooms) {
+        GLB.options["rooms"][room] = k;
+        GLB.options["things"][room] = [];
+        k++;
+    }
+
+    for (var thingid in allthings) {
+        var thesensor = allthings[thingid];
+        var thename= thesensor["name"].toLowerCase();
+        var k = GLB.options["index"][thingid];
+        if ( k ) {
+            for (var room in defaultrooms) {
+                var checkarr = defaultrooms[room].split("|");
+                checkarr.forEach(function(keyword) {
+                    var islocated = thename.indexOf(keyword);
+                    // console.log("debug: ", thename, " ", keyword, " ", islocated);
+                    if ( islocated !== -1 ) {
+                        var tile = [k,0,0,1,""];
+                        GLB.options["things"][room].push(tile);
+                    }
+                });
+            }
+        }
+    }
+    writeOptions(GLB.options);
+}
+
 function createSpecialIndex(customcnt, stype, spid) {
-    var oldindex = GLB.options["index"];
-    var maxindex = utils.getMaxIndex(oldindex);
+    var oldindex = clone(GLB.options["index"]);
+    var maxindex = utils.getMaxIndex(GLB.options["index"]);
 
     if ( !array_key_exists("specialtiles", GLB.options["config"]) ) {
         GLB.options["config"]["specialtiles"] = {};
     }
     GLB.options["config"]["specialtiles"][stype] = customcnt;
 
-    // remove all special types of this type
+    // remove special types of this type
     var n = stype.length + 1;
     for (var idx in oldindex) {
         if ( idx.substr(0,n) === stype + "|" ) {
@@ -451,14 +545,14 @@ function createSpecialIndex(customcnt, stype, spid) {
         }
     }
 
-    // add back in the requested number
+    // add back in the right number
     var theindex;
     for ( var i=0; i<customcnt; i++) {
         var k = (i + 1).toString();
         var fid = spid + k;
         var sidnum = stype + "|" + fid;
         if ( array_key_exists(sidnum, oldindex) ) {
-            theindex = parseInt(GLB.options["index"][sidnum]);
+            theindex = parseInt(oldindex[sidnum]);
             if ( theindex > maxindex ) {
                 maxindex= theindex;
             }
@@ -468,8 +562,6 @@ function createSpecialIndex(customcnt, stype, spid) {
         }
         GLB.options["index"][sidnum] = theindex;
     }
-
-    return GLB.options;
 }
 
 // routine that renumbers all the things in your options file from 1
@@ -670,7 +762,7 @@ function inroom($idx, $things) {
 // each HousePanel tab is generated by this function call
 // each page is contained within its own form and tab division
 // notice the call of $cnt by reference to keep running count
-function getNewPage(cnt, roomtitle, kroom, things, kioskmode) {
+function getNewPage(cnt, roomtitle, kroom, things) {
     var $tc = "";
     var roomname = roomtitle;
     $tc += "<div id=\"" + roomname + "-tab\">";
@@ -755,6 +847,131 @@ function processName(thingname, thingtype) {
     }
     
     return [thingname, subtype];
+}
+
+// returns proper html to display an image, video, or frame
+// if some other type is requested it returns a div of requested size and skips search
+// searches in main folder and media subfolder for file name
+function returnFile(thingvalue, thingtype) {
+
+    // do nothing if this isn't a special tile
+    var specialtiles = utils.getSpecials();
+    if ( !array_key_exists(thingtype, specialtiles) ) {
+        return thingvalue;
+    }
+
+    // get the name, width, height to create
+    if ( array_key_exists("name", thingvalue) ) {
+        var fn = thingvalue["name"];
+    } else {
+        fn = specialtiles[thingtype][0];
+        thingvalue["name"] = fn;
+    }
+    if ( array_key_exists("width", thingvalue) ) {
+        var fw = thingvalue["width"];
+    } else {
+        fw = specialtiles[thingtype][1];
+        thingvalue["width"] = fw;
+    }
+    if ( array_key_exists("height", thingvalue) ) {
+        var fh = thingvalue["height"];
+    } else {
+        fh = specialtiles[thingtype][2];
+        thingvalue["height"] = fh;
+    }
+
+    var $grtypes;
+    switch (thingtype) {
+        case "image":
+            $grtypes = ["",".jpg",".png",".gif"];
+            break;
+        case "video":
+            $grtypes = ["",".mp4",".ogg"];
+            break;
+        case "frame":
+            $grtypes = ["",".html",".htm",".php"];
+            break;
+        case "custom":
+            $grtypes = ["",".jpg",".png",".gif",".mp4",".ogg",".html",".htm",".php"];
+            break;
+        default:
+            $grtypes = null;
+            break;
+    }
+    
+    var $vn = "";
+    var $fext = "";
+    if ( fn && $grtypes ) {
+        $grtypes.forEach(function($ext) {
+            if ( $fext==="" && file_exists(fn + $ext) ) {
+                $vn = fn + $ext;
+                $fext = $ext;
+            } else if ( $fext==="" && file_exists("media/" + fn + $ext) ) {
+                $vn = "media/" + fn + $ext;
+                $fext = $ext;
+            }
+        });
+    } else if ( fn ) {
+        if (file_exists(fn)) {
+            $vn = fn;
+        } else if (file_exists("media/"+ fn)) {
+            $vn = "media/" + fn;
+        } else {
+            $vn = "";
+        }
+    }
+    
+    var $v = "";
+
+    // process things if file was found
+    if ( $vn ) {
+
+        // if file has an extension then remove the dot
+        if ( $fext.length && $fext.substr(0,1)==="." ) {
+            $fext = $fext.substr(1);
+        }
+
+        switch ($fext) {
+            // image files
+            case "jpg":
+            case "png":
+            case "gif":
+                $v= "<img width=\"" + fw + "\" height=\"" + fh + "\" src=\"" + $vn + "\">";
+                break;
+
+            // video files
+            case "mp4":
+            case "ogg":
+                $v= "<video width=\"" + fw + "\" height=\"" + fh + "\" autoplay>";
+                $v+= "<source src=\"" + $vn + "\" type=\"video/" + $ve + "\">";
+                $v+= "Video Not Supported</video>";
+                break;
+                
+            // render web pages in a web iframe
+            case "html":
+            case "htm":
+            case "php":
+                $v = "<iframe width=\"" + fw + "\" height=\"" + fh + "\" src=\"" + $vn + "\" frameborder=\"0\"></iframe>";
+                break;
+
+            // otherwise just show the contents of the file
+            default:
+                try {
+                    var $contents = fs.readFileSync($vn);
+                } catch(e) {
+                    $contents = "";
+                }
+                $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\">" + $contents + "</div>";
+                break;
+        }
+    
+    // if file wasn't found just make an empty block of the requested size
+    } else {
+        $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\"></div>";
+    }
+
+    thingvalue[thingtype] = $v;
+    return thingvalue;
 }
 
 function getWeatherIcon(num) {
@@ -890,22 +1107,10 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     } else {
 
         // handle special tiles
-        // TODO...
-//        if ( array_key_exists(thingtype, specialtiles) ) 
-//        {
-//            $fn = $thingvalue["name"];
-//            if ( array_key_exists("width", $thingvalue) ) {
-//                $fw = $thingvalue["width"];
-//            } else {
-//                $fw = $specialtiles[$thingtype][1];
-//            }
-//            if ( array_key_exists("height", $thingvalue) ) {
-//                $fh = $thingvalue["height"];
-//            } else {
-//                $fh = $specialtiles[$thingtype][2];
-//            }
-//            $thingvalue[$thingtype] = returnFile($fn, $fw, $fh, $thingtype );
-//        }
+        thingvalue = returnFile(thingvalue, thingtype);
+
+// unfortunately, this no longer works because Google changed how they return image searches
+// 
 //        if ( $thingtype==="music" ) {
 //            $thingvalue = getMusicArt($thingvalue);
 //        }
@@ -1134,14 +1339,14 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
     return $tc;
 }
 
-function getCustomCount(stype) {
-    var customcnt = 0;
+function getCustomCount(stype, defcount) {
+    var customcnt = defcount;
     if ( array_key_exists("specialtiles", GLB.config) ) {
         var specialarr = GLB.config["specialtiles"];
         if ( array_key_exists(stype, specialarr) ) {
             customcnt = parseInt(specialarr[stype]);
             if ( isNaN(customcnt) || customcnt < 1 ) { 
-                customcnt = 0; 
+                customcnt = defcount; 
             }
         }
     }
@@ -1210,26 +1415,17 @@ function addSpecials() {
     for (var stype in specialtiles) {
         var sid = specialtiles[stype];
         var speed = (stype==="frame") ? "slow" : "normal";
-        var fcnt = getCustomCount(stype);
+        var fcnt = getCustomCount(stype, sid[3]);
         for (var i=0; i<fcnt; i++) {
 
-            var k = i + 1;
-            k = k.toString();
+            var k = (i + 1).toString();
             var fid = sid[0] + k;
-
-            // the forecasts now must be in files frame1.html through frame4.html
-            // or you can just change the name in the editor to a valid file
-            var fw = sid[1];
-            var fh = sid[2];
             var idx = stype + "|" + fid;
             var fn = getCustomName(stype + k, idx);
-            var fval = fn;  // TODO... returnFile(fn, fw, fh, stype);
             var ftile = {"name": fn};
-            ftile[stype] = fval;
-            ftile["width"] = fw;
-            ftile["height"] = fh;
+            ftile = returnFile(ftile, stype);
             allthings[idx] = {"id":  fid, "name":  ftile["name"], "hubnum":  hubnum, 
-                "type":stype, "refresh": speed, "value":  ftile};
+                "type": stype, "refresh": speed, "value":  ftile};
         }
     }
     
@@ -1255,16 +1451,19 @@ function getAllThings(reset) {
         updateOptions();
 
         // get all things from all configured servers
-        GLB.hubs.forEach(function(hub) {
-            var hubnum = hub["hubId"];
-            var accesstoken  = hub["hubAccess"];
-            var hubEndpt = hub["hubEndpt"];
-            var clientId = hub["clientId"];
-            var clientSecret = hub["clientSecret"];
-            var hubName = hub["hubName"];
-            var hubType = hub["hubType"];
-            getDevices(hubnum, accesstoken, hubEndpt, clientId, clientSecret, hubName, hubType);
-        });
+        var hubs = GLB.options["hubs"];
+        if ( hubs && utils.count(hubs) > 0 ) {
+            hubs.forEach(function(hub) {
+                var hubnum = hub["hubId"];
+                var accesstoken  = hub["hubAccess"];
+                var hubEndpt = hub["hubEndpt"];
+                var clientId = hub["clientId"];
+                var clientSecret = hub["clientSecret"];
+                var hubName = hub["hubName"];
+                var hubType = hub["hubType"];
+                getDevices(hubnum, accesstoken, hubEndpt, clientId, clientSecret, hubName, hubType);
+            });
+        }
 
     }
 }
@@ -1606,17 +1805,18 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, command, content, m
         
         // thingvalue["name"] = getCustomName(thingvalue["name"], idx);
         // thingvalue = getCustomTile(thingvalue, swtype, swid);
-        if ( array_key_exists("width", thingvalue) ) {
-            fw = thingvalue["width"];
-        } else {
-            fw = specialtiles[swtype][1];
-        }
-        if ( array_key_exists("height", thingvalue) ) {
-            fh = thingvalue["height"];
-        } else {
-            fh = specialtiles[swtype][2];
-        }
-        thingvalue[swtype] = returnFile(thingvalue["name"], fw, fh, swtype );
+        // if ( array_key_exists("width", thingvalue) ) {
+        //     fw = thingvalue["width"];
+        // } else {
+        //     fw = specialtiles[swtype][1];
+        // }
+        // if ( array_key_exists("height", thingvalue) ) {
+        //     fh = thingvalue["height"];
+        // } else {
+        //     fh = specialtiles[swtype][2];
+        // }
+        // thingvalue[swtype] = returnFile(thingvalue["name"], fw, fh, swtype );
+        thingvalue = returnFile(thingvalue, swtype);
         response = thingvalue;
     } else {
         callHub(hub, swid, swtype, swval, swattr, subid);
@@ -2204,7 +2404,8 @@ function getOptionsPage(pathname) {
 
     $tc+= "<div class=\"filteroption\">Specify number of special tiles: ";
     for (var $stype in $specialtiles) {
-        var $customcnt = getCustomCount($stype);
+        var sid = $specialtiles[$stype];
+        var $customcnt = getCustomCount($stype, sid[3]);
         var $stypeid = "cnt_" + $stype;
         $tc+= "<br /><label for=\"$stypeid\" class=\"kioskoption\"> " + $stype +  " tiles: </label>";
         $tc+= "<input class=\"specialtile\" id=\"" + $stypeid + "\" name=\"" + $stypeid + "\" width=\"10\" type=\"number\"  min='0' max='99' step='1' value=\"" + $customcnt + "\" />";
@@ -2400,7 +2601,7 @@ function mainPage(proto, hostname, pathname) {
         var k = roomoptions[room];
         if ( thingoptions[room] ) {
             var things = thingoptions[room];
-            var pgobj = getNewPage(cnt, room, k, things, kioskmode);
+            var pgobj = getNewPage(cnt, room, k, things);
             $tc += pgobj.tc;
             cnt = pgobj.cnt;
         }
@@ -3000,6 +3201,7 @@ function delCustom(swid, swtype, swval, swattr, subid) {
 
 // read the config file and get array of hubs
 readOptions();
+
 var hubs = GLB.options["config"]["hubs"];
 var port = GLB.config.port;
 if ( !port ) {
@@ -3030,6 +3232,24 @@ try {
 // retrieve all nodes/things
 // client pages are refreshed when each hub is done reading
 getAllThings(true);
+
+var maxroom = 0;
+if ( array_key_exists("things", GLB.options) && 
+     array_key_exists("rooms", GLB.options) ) {
+    var thingoptions = GLB.options["things"];
+    // foreach ($thingoptions as $roomname => $thinglist) {
+    for (var roomname in thingoptions) {
+        var thinglist = thingoptions[roomname];
+        if ( thinglist.length > maxroom ) {
+            maxroom = thinglist.length;
+        }
+    }
+}
+
+// setup default rooms if no rooms exist
+if ( utils.count(GLB.rooms) === 0 || maxroom < 2 ) {
+    setDefaults();
+}
 
 // create the HTTP server for handling sockets
 server = http.createServer(function(req, res) {
@@ -3122,13 +3342,13 @@ if ( app && applistening ) {
         // the first initialize type tells Node.js to update elements
         if ( req.body['msgtype'] == "initialize" ) {
             res.json('hub info updated');
-            console.log((new Date()) + "New hub authorized; updating things in hpserver.");
+            console.log((new Date()) + " New hub authorized; updating things in hpserver.");
             readOptions();
             getAllThings(true);
         
         // handle api calls from the hubs here
         } else if ( req.body['msgtype'] == "update" ) {
-            console.log("Received update msg from hub. ", req.body["hubid"], " body: ", req.body);
+            console.log((new Date()) + " Received update msg from hub. ", req.body["hubid"], " body: ", req.body);
 
             // loop through all things for this hub
             // remove music trackData field that we don't know how to handle
@@ -3144,11 +3364,11 @@ if ( app && applistening ) {
                     cnt = cnt + 1;
                     entry['value'][req.body['change_attribute']] = req.body['change_value'];
                     if ( entry['value']['trackData'] ) { delete entry['value']['trackData']; }
-                    console.log('Updating tile #',entry['id'],' from trigger:', req.body['change_attribute'] );
+                    console.log((new Date()) + ' Updating tile #',entry['id'],' from trigger:', req.body['change_attribute'] );
                     pushClient(entry.id, entry.type, req.body['change_attribute'], entry['value'])
                 }
             }
-            console.log('pushed new status info to ' + cnt + ' tiles');
+            console.log((new Date()) + ' pushed new status info to ' + cnt + ' tiles');
             res.json('pushed new status info to ' + cnt + ' tiles');
 
         // handle all api calls upon the server from js client here
@@ -3165,7 +3385,13 @@ if ( app && applistening ) {
             var swattr = req.body["attr"] || "none";
             var subid = req.body["subid"] || "";
             var tileid = req.body["tile"] || "";
-            var hubid = req.body["hubid"] || hubs[0]["hubId"];
+
+            if ( hubs && hubs.length ) {
+                var defhub = hubs[0]["hubId"];
+            } else {
+                defhub = "-1";
+            }
+            var hubid = req.body["hubid"] || defhub;
             var result;
             
             switch(api) {
@@ -3222,8 +3448,8 @@ if ( app && applistening ) {
                     res.json("success");
                     break;
 
-                    
                 case "refresh":
+                    console.log("refreshing tiles");
                     getAllThings(true);
                     res.json("success");
                     break;
@@ -3296,7 +3522,6 @@ if ( app && applistening ) {
                     
                 case "geticons":
                     var icons = getIcons(swval, swattr);
-                    // TODO - confirm res.json will write html text back
                     res.json(icons);
                     break;
 

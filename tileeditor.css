@@ -29,10 +29,12 @@ body {
 }
 @media (orientation: landscape) {
     body {
-        width: 1200px;
+        /* width: 1200px; */
+        width: 100%;
+        height: 100%;
     }
     #dragregion, #dragregion div.panel {
-        min-height: 700px;
+        min-height: 600px;
     }
     .ui-tabs .ui-tabs-nav .ui-tabs-anchor {
         font-size: 11pt;
@@ -40,7 +42,9 @@ body {
 }
 @media (orientation: portrait) {
     body {
-        width: 750px;
+        /* width: 750px; */
+        width: 100%;
+        height: 100%;
     }
     #dragregion, #dragregion div.panel {
         min-height: 1000px;
@@ -210,26 +214,16 @@ select.startupinp {
 }
 
 div#catalog {
-    width: 395px;
+    width: 390px;
     display: block;
     position: absolute;
     top: 0px;
-    left: 1200px;
+    right: 2px;
     border: 2px solid rgb(128, 128, 128);
     background-color: rgba(255, 255, 255, 1);
     
     /* set z-index above all tiles but below dragged tiles set to 999 */
     z-index: 500;
-}
-@media (orientation: landscape) {
-    div#catalog {
-        left: 1200px;
-    }
-}
-@media (orientation: portrait) {
-    div#catalog {
-        left: 750px;
-    }
 }
 
 .ui-widget.ui-widget-content{
@@ -1353,8 +1347,8 @@ div.switch.colorTemperature, div.lock.checkInterval,
 div.lock.codeChanged, div.lock.lockCodes, div.lock.scanCodes,
 div.lock.codeReport, div.lock.maxCodes, div.lock.maxCodeLength,
 div.lock.minCodeLength, div.lock.codeLength,
-div.thingname.blank, div.thingname.clock, div.thingname.video,
-div.thingname.image, div.thingname.routine, div.overlay.healthStatus,
+div.thing div.thingname.blank, div.thing div.thingname.clock, div.thing div.thingname.video,
+div.thing div.thingname.image, div.thing div.thingname.routine, div.thing div.overlay.healthStatus,
 div.thing.frame-thing div.overlay.status,
 div.valve.switch, div.valve.contact, div.valve.stopWatering, div.valve.log,
 div.clock.tzone, div.thingname.mode, div.bulb.colorMode, div.light.colorMode,
@@ -1371,8 +1365,7 @@ div.clock-thing.analog div.overlay {
 }
 div.clock-thing div.clock.time,
 div.clock-thing div.clock.weekday,
-div.clock-thing div.clock.date,
-div.clock-thing div.clock.tzone {
+div.clock-thing div.clock.date {
     display: block;
     position: relative;
 }
@@ -1389,7 +1382,8 @@ div.clock-thing.analog div.overlay.skin {
     left: -4px;
     border: none;
 }
-div.clock-thing div.overlay.fmt_date, div.clock-thing div.overlay.fmt_time {
+div.clock-thing div.overlay.fmt_date, div.clock-thing div.overlay.fmt_time,
+div.clock-thing div.overlay.tzone {
     display: none;
 }
 
