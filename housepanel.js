@@ -1500,20 +1500,8 @@ function execButton(buttonid) {
 }
 
 function updateFilters() {
-
     var fobj = formToObject("filteroptions");
     dynoPost("filteroptions", fobj);
-
-    // var filters = [];
-    // $('input[name="useroptions[]"').each(function(){
-    //     if ( $(this).prop("checked") ) {
-    //         filters.push($(this).attr("value")); 
-    //     }
-    // });
-    // var newskin = $("#skinid").val();
-    // $.post(cm_Globals.returnURL, 
-    //     {useajax: "savefilters", id: 0, type: "none", value: filters, attr: newskin}
-    // );
 }
 
 function checkInputs(port, webSocketServerPort, fast_timer, slow_timer, uname, pword) {
