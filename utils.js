@@ -419,14 +419,18 @@ exports.getFooter = function getFooter() {
     return "</div></body></html>";
 }
 
+// define the default setup of custom tiles
+// first element is the id name
+// next two are the default sizes for making the tile
+// the last parameter is the default number of tiles
 exports.getSpecials = function getSpecials() {
     var obj =
         {
-            "video":  ["vid",480,240], 
-            "frame":  ["frame",480,212],
-            "image":  ["img",480,240],
-            "blank":  ["blank",120,150],
-            "custom": ["custom_",120,150]
+            "video":  ["vid",480,240, 4], 
+            "frame":  ["frame",480,212, 4],
+            "image":  ["img",480,240, 4],
+            "blank":  ["blank",120,150, 2],
+            "custom": ["custom_",120,150, 8]
         };
     return obj;
 }
