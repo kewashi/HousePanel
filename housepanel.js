@@ -136,7 +136,8 @@ function getAllthings(modalwindow, reload) {
                     
                     // try again but this time forcing a reload
                     if ( modalwindow===false && reload===false ) {
-                        getAllthings(false, true);
+                        alert("Server not ready... reload page in a few moments.");
+                        // getAllthings(false, true);
                     }
                     
                     if ( modalwindow ) {
@@ -328,7 +329,8 @@ function setupUserOpts() {
     }
 
     // this can be disabled by setting anything less than 1000
-        if ( fast_timer && fast_timer >= 1000 ) {
+    // dont need slow and fast timers for Node since it has state
+    if ( fast_timer && fast_timer >= 1000 ) {
         setupTimer(fast_timer, "fast", -1);
     }
         if ( slow_timer && slow_timer >= 1000 ) {
@@ -415,6 +417,29 @@ function setupWebsocket()
                 window.location.href = cm_Globals.returnURL;
                 // console.log("reload request");
                 return;
+            }
+            
+            // handle popups returned from a query
+            // this currently is not used but could be later
+            if ( presult.popup ) {
+                var showstr = "";
+                $.each(pvalue, function(s, v) {
+                    if ( s!=="password" && !s.startsWith("user_") ) {
+                        var txt = v.toString();
+                        txt = txt.replace(/<.*?>/g,'');
+                        showstr = showstr + s + ": " + txt + "<br>";
+                    }
+                });
+                var winwidth = $("#dragregion").innerWidth();
+                var tile = $('div.thing[bid="'+bid+'"][type="'+thetype+'"]');
+                var leftpos = $(tile).position().left + 5;
+                if ( leftpos + 220 > winwidth ) {
+                    leftpos = leftpos - 110;
+                }
+                var pos = {top: $(tile).position().top + 80, left: leftpos};
+                // console.log("popup pos: ", pos, " winwidth: ", winwidth);
+                createModal("modalpopup", showstr, "body", false, pos, function(ui) {
+                });
             }
 
             // grab name and trigger for console log
@@ -2232,13 +2257,13 @@ function updateTile(aid, presult) {
             oldvalue = $("#a-"+aid+"-trackDescription").html();
         }
         var audiodata = JSON.parse(presult["audioTrackData"]);
-        console.log("audio track changed from: ["+oldvalue+"] to: ["+audiodata["title"]+"]");
-        presult["trackDescription"] = audiodata["title"];
+        presult["trackDescription"] = audiodata["title"] || "None";
         presult["currentArtist"] = audiodata["artist"];
         presult["currentAlbum"] = audiodata["album"];
         presult["trackImage"] = audiodata["albumArtUrl"];
         presult["mediaSource"] = audiodata["mediaSource"];
         delete presult["audioTrackData"];
+        console.log("audio track changed from: ["+oldvalue+"] to: ["+ presult["trackDescription"] +"]");
     }
     
     // handle native track images - including audio devices above
@@ -2491,6 +2516,8 @@ function setupTimer(timerval, timertype, hubnum) {
                     if ( LOGWEBSOCKET ) {
                         console.log("pstatus = " + pstatus + " presult= ", presult);
                     }
+
+                    // skip all this stuff if we dont return an object
                     if (pstatus==="success" && typeof presult==="object" ) {
 
                         // go through all tiles and update
@@ -2872,12 +2899,10 @@ function processClick(that, thingname) {
             var winwidth = $("#dragregion").innerWidth();
             var leftpos = $(tile).position().left + 5;
             if ( leftpos + 220 > winwidth ) {
-                leftpos = winwidth - 220;
+                leftpos = leftpos - 110;
             }
             var pos = {top: $(tile).position().top + 80, left: leftpos};
-            // console.log("popup pos: ", pos, " winwidth: ", winwidth);
             createModal("modalpopup", showstr, "body", false, pos, function(ui) {
-                // console.log("Finished inspecting status of a " + thetype);
             });
         }
 
@@ -2917,7 +2942,7 @@ function processClick(that, thingname) {
                             var winwidth = $("#dragregion").innerWidth();
                             var leftpos = $(tile).position().left + 5;
                             if ( leftpos + 220 > winwidth ) {
-                                leftpos = winwidth - 220;
+                                leftpos = leftpos - 110;
                             }
                             var pos = {top: $(tile).position().top + 80, left: leftpos};
                             // console.log("popup pos: ", pos, " winwidth: ", winwidth);

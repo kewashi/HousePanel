@@ -1,6 +1,7 @@
 'use strict';
 
 var devhistory =  ` 
+2.201      First nearly fully functional Node.js version
 2.200      Initial Node.js version release
 2.118      Fix bug that prevented user from changing custom tile count
 2.117      Load jquery locally and include files in the distro
@@ -443,6 +444,7 @@ exports.getTypes = function getTypes() {
         "weather", "presence", "mode", "shm", "hsm", "piston", "other",
         "clock", "blank", "image", "frame", "video", "custom", "control", "power"
     ];
+    thingtypes.sort();
     return thingtypes;
 }
 

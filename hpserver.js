@@ -2,12 +2,12 @@
 process.title = 'hpserver';
 
 // debug options
-var DEBUG1 = false;
+var DEBUG1 = true;
 var DEBUG2 = false;
-var DEBUG3 = true;
+var DEBUG3 = false;
 var DEBUG4 = false;
 var DEBUG5 = false;
-var DEBUG6 = true;
+var DEBUG6 = false;
 
 // websocket and http servers
 var webSocketServer = require('websocket').server;
@@ -135,44 +135,27 @@ function writeCustomCss(partnum, skin, str) {
     return results;
 }
 
-function readOptions(reset, fname) {
+function readOptions() {
 
     var rewrite = false;
-    if ( typeof reset!=="undefined" && reset ) {
-        GLB.options = {};
-        GLB.config = {};
-        rewrite = true;
-    }
-
-    if ( typeof fname==="undefined" || !fname ) {
-        fname = "hmoptions.cfg";
-    }
+    var fname = "hmoptions.cfg";
 
     try {
         if ( !fs.existsSync(fname) ) {
             throw ' hmoptions.cfg file not found. HousePanel will operate without any hubs until one is authorized.';
         }
         GLB.options = JSON.parse(fs.readFileSync(fname, 'utf8'));
-        if ( GLB.options && array_key_exists("config",GLB.options) ) {
-            GLB.config = GLB.options["config"];
-        } else {
-            throw ' configuration settings were not found in ' + fname + ' configuration file.';
+        if ( ! array_key_exists("config",GLB.options) ) {
+            console.log(' configuration settings were not found in ' + fname + ' configuration file.');
+            GLB.options["config"] = {};
+            return;
         }
-
     } catch(e) {
         console.log((new Date()), e); 
-        GLB.options = {};
-        GLB.config = {};
-        GLB.options["config"] = {};
-        GLB.options["rooms"] = {};
-        GLB.options["things"] = {};
-        GLB.options["index"] = {};
-        GLB.options["useroptions"] = utils.getTypes();
-        rewrite = true;
+        return;
     }
 
     if ( GLB.options ) {
-        var options = GLB.options;
 
         if ( array_key_exists("time", GLB.options) ) {
             var timeval = GLB.options["time"];
@@ -186,31 +169,35 @@ function readOptions(reset, fname) {
             rewrite = true;
         }
 
-        if ( !array_key_exists("rooms"), GLB.options ) {
+        if ( !array_key_exists("rooms", GLB.options) ) {
             GLB.options["rooms"]= {};
         }
-        if ( !array_key_exists("things"), GLB.options ) {
+        if ( !array_key_exists("things", GLB.options) ) {
             GLB.options["things"]= {};
         }
-        if ( !array_key_exists("index"), GLB.options ) {
+        if ( !array_key_exists("index", GLB.options) ) {
             GLB.options["index"]= {};
         }
-        if ( !array_key_exists("useroptions"), GLB.options ) {
+        if ( !array_key_exists("useroptions", GLB.options) ) {
             GLB.options["useroptions"]= utils.getTypes();
         }
 
-        console.log((new Date()) + ' Config file for HP Version ', version);
+        if ( DEBUG1 ) {
+            console.log((new Date()) + ' Config file for HP Version: ', version);
+        }
 
-        var hubs = GLB.config.hubs;
+        var hubs = GLB.options.config["hubs"];
         if ( is_array(hubs) && hubs.length > 0 ) {
-            console.log((new Date()) + ' Loading ', hubs.length,' hubs.');
-            if ( DEBUG5 ) {
+            if ( DEBUG1 ) {
+                console.log((new Date()) + ' Loading ', hubs.length,' hubs.');
+            }
+            if ( DEBUG2 ) {
                 console.log(hubs);
             }
         } else {
             console.log((new Date()) + ' No hubs found. HousePanel will only show special and custom tiles.');
             hubs = [];
-            GLB.config.hubs = hubs;
+            GLB.options.config["hubs"] = [];
         }
         
         // make the room config file to support custom users
@@ -220,7 +207,7 @@ function readOptions(reset, fname) {
             // $uname = trim($_COOKIE["uname"]);
             var customfname = "hm_" + uname + ".cfg";
             var key;
-            if ( reset || rewrite || !fs.existsSync(customfname) ) {
+            if ( !fs.existsSync(customfname) ) {
                 // this format is now in real json format and includes user_ tiles
                 // add a signature key to flag this format
                 var customopt = {};
@@ -271,7 +258,6 @@ function readOptions(reset, fname) {
     if ( rewrite ) {
         writeOptions(GLB.options);
     }
-    // console.log(GLB.options["things"]);
 }
 
 function writeOptions(options) {
@@ -360,7 +346,7 @@ function getDevices(hubnum, hubAccess, hubEndpt, clientId, clientSecret, hubName
         } else {
             var result = parser.parse(body);
             var thenodes = result.nodes["node"];
-            if (DEBUG6) {
+            if (DEBUG1) {
                 console.log((new Date()) + " Retrieved ", thenodes.length, " things from hub: ", hubName);
             }    
             for ( var obj in thenodes ) {
@@ -401,7 +387,7 @@ function getDevices(hubnum, hubAccess, hubEndpt, clientId, clientSecret, hubName
                 jsonbody = {};
                 return;
             }
-            if (DEBUG6) {
+            if (DEBUG1) {
                 console.log((new Date()) + " Retrieved ", jsonbody.length, " things from hub: ", hubName);
             }    
 
@@ -426,22 +412,13 @@ function getDevices(hubnum, hubAccess, hubEndpt, clientId, clientSecret, hubName
     }
 }
 
-// // returns the maximum index from the options
-// function getMaxIndex() {
-//     var maxindex = 0;
-//     for ( var key in GLB.options["index"] ) {
-//         var value = parseInt(GLB.options["index"][key]);
-//         maxindex = ( value > maxindex ) ? value : maxindex;
-//     }
-//     return maxindex;
-// }
-
 // updates the global options array with new things found on hub
 function updateOptions() {
 
     if ( ! GLB.options ) {
         return;
     }
+    // console.log("Initial index: ", GLB.options.index);
    
     // make all the user options visible by default
     if ( !array_key_exists("useroptions", GLB.options )) {
@@ -457,6 +434,9 @@ function updateOptions() {
         if ( !array_key_exists(thingid, GLB.options["index"]) ||
              parseInt(GLB.options["index"][thingid])===0 ) {
             GLB.options["index"][thingid] = cnt;
+
+            // console.log("found new thing: idx= ", thingid, " cnt= ", cnt);
+
             cnt++;
         }
     }
@@ -472,7 +452,7 @@ function updateOptions() {
 
     // save the options file
     writeOptions(GLB.options);
-    // console.log("Updated options, rooms: ", GLB.options.rooms, " things: ", GLB.options.things);
+    // console.log("Updated options, rooms: ", GLB.options.rooms, " things: ", GLB.options.things, " index: ", GLB.options.index);
 
     // signal clients to reload
     pushClient("reload", "reload");
@@ -656,7 +636,7 @@ function refactorOptions() {
             if ( !is_array(lines[0]) ) {
                 lines = [lines];
             }
-            console.log("lines= ", lines);
+            // console.log("lines= ", lines);
 
             newlines = [];
             for (var k in lines) {
@@ -674,7 +654,7 @@ function refactorOptions() {
                 }
                 newlines.push(msgs);
             }
-            console.log("newlines= ", newlines);
+            // console.log("newlines= ", newlines);
             if ( newlines.length ) {
                 options[key] = newlines;
             }
@@ -1341,8 +1321,8 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
 
 function getCustomCount(stype, defcount) {
     var customcnt = defcount;
-    if ( array_key_exists("specialtiles", GLB.config) ) {
-        var specialarr = GLB.config["specialtiles"];
+    if ( array_key_exists("specialtiles", GLB.options.config) ) {
+        var specialarr = GLB.options.config["specialtiles"];
         if ( array_key_exists(stype, specialarr) ) {
             customcnt = parseInt(specialarr[stype]);
             if ( isNaN(customcnt) || customcnt < 1 ) { 
@@ -1411,21 +1391,24 @@ function addSpecials() {
     // putting this here allows them to be handled just like other modifiable tiles
     // these tiles all refresh fast except first 4 frames that are reserved for weather
     // renamed accuweather to forecast2 for simplicity sake and to make sorting work
+    var config = GLB.options.config;
     var specialtiles = utils.getSpecials();
     for (var stype in specialtiles) {
         var sid = specialtiles[stype];
         var speed = (stype==="frame") ? "slow" : "normal";
         var fcnt = getCustomCount(stype, sid[3]);
-        for (var i=0; i<fcnt; i++) {
+        if ( fcnt ) {
+            for (var i=0; i<fcnt; i++) {
 
-            var k = (i + 1).toString();
-            var fid = sid[0] + k;
-            var idx = stype + "|" + fid;
-            var fn = getCustomName(stype + k, idx);
-            var ftile = {"name": fn};
-            ftile = returnFile(ftile, stype);
-            allthings[idx] = {"id":  fid, "name":  ftile["name"], "hubnum":  hubnum, 
-                "type": stype, "refresh": speed, "value":  ftile};
+                var k = (i + 1).toString();
+                var fid = sid[0] + k;
+                var idx = stype + "|" + fid;
+                var fn = getCustomName(stype + k, idx);
+                var ftile = {"name": fn};
+                ftile = returnFile(ftile, stype);
+                allthings[idx] = {"id":  fid, "name":  ftile["name"], "hubnum":  hubnum, 
+                    "type": stype, "refresh": speed, "value":  ftile};
+            }
         }
     }
     
@@ -1441,30 +1424,32 @@ function addSpecials() {
                 "type":  "control", "refresh": "never", "value":  controlval};
 }
 
-function getAllThings(reset) {
+function getAllThings() {
     
-    if ( reset ) {
-        allthings = {};
+    allthings = {};
 
-        // add the special tiles
-        addSpecials();
-        updateOptions();
+    // add the special tiles
+    addSpecials();
+    updateOptions();
 
-        // get all things from all configured servers
-        var hubs = GLB.options["hubs"];
-        if ( hubs && utils.count(hubs) > 0 ) {
-            hubs.forEach(function(hub) {
-                var hubnum = hub["hubId"];
-                var accesstoken  = hub["hubAccess"];
-                var hubEndpt = hub["hubEndpt"];
-                var clientId = hub["clientId"];
-                var clientSecret = hub["clientSecret"];
-                var hubName = hub["hubName"];
-                var hubType = hub["hubType"];
-                getDevices(hubnum, accesstoken, hubEndpt, clientId, clientSecret, hubName, hubType);
-            });
-        }
+    // get all things from all configured servers
+    var hubs = GLB.options.config["hubs"];
+    if ( hubs && utils.count(hubs) > 0 ) {
+        hubs.forEach(function(hub) {
+            var hubnum = hub["hubId"];
+            var accesstoken  = hub["hubAccess"];
+            var hubEndpt = hub["hubEndpt"];
+            var clientId = hub["clientId"];
+            var clientSecret = hub["clientSecret"];
+            var hubName = hub["hubName"];
+            var hubType = hub["hubType"];
+            getDevices(hubnum, accesstoken, hubEndpt, clientId, clientSecret, hubName, hubType);
+        });
 
+    // if no hubs, force a reload to update any special tiles added above
+    // otherwise we don't need to do that because a hub reload will catch that
+    } else {
+        pushClient("reload", "reload");
     }
 }
 
@@ -1472,7 +1457,7 @@ function getAllThings(reset) {
 // this enables a unique customization effect
 // the last parameter is only needed for LINK customizations
 function getCustomTile(custom_val, customtype, customid) {
-    
+
     var reserved = ["index","rooms","things","config","control","useroptions"];
     var idx = customtype + "|" + customid;
     var rooms = GLB.options["rooms"];
@@ -1544,8 +1529,8 @@ function getCustomTile(custom_val, customtype, customid) {
             // this strict rule is followed to enforce discipline use
             if ( is_array(msgs) && msgs.length >= 3 ) {
             
-                var calltype = msgs[0].toUpperCase().trim();
-                var content = msgs[1].trim();
+                var calltype = msgs[0].toString().toUpperCase().trim();
+                var content = msgs[1].toString().trim();
                 var posturl = encodeURIComponent(content);
                 var subidraw = msgs[2].trim();
                 var subid = subidraw.replace(/[\"\*\<\>\!\{\}\.\,\:\+\&\%]/g,""); //  str_replace(ignores, "", subidraw);
@@ -1603,8 +1588,10 @@ function getCustomTile(custom_val, customtype, customid) {
                         }
                     } else {
                         custom_val[companion] = "::" + thetype + "::" + calltype + "::" + content;
-                        custom_val[subid] = "Links unavailable to link #" + content + " with subid= " + subid + " idx= " + idx;
-                        console.log("Links unavailable to link #" + content + " with subid= " + subid + " idx= " + idx);
+                        custom_val[subid] = "Link #" + content + " subid=" + subid + " idx=" + idx + " invalid";
+                        if ( DEBUG2 ) {
+                            console.log("Links unavailable to link #" + content + " with subid= " + subid + " idx= " + idx);
+                        }
                     }
 
                 } else if ( calltype==="URL" ) {
@@ -1631,7 +1618,7 @@ function getCustomTile(custom_val, customtype, customid) {
     return custom_val;
 }
 
-function pushClient(swid, swtype, subid, body) {
+function pushClient(swid, swtype, subid, body, popup) {
     // send the new results to all clients
     var entry = {};
     if ( typeof subid === "undefined" ) { subid= ""; }
@@ -1639,6 +1626,11 @@ function pushClient(swid, swtype, subid, body) {
     entry["type"] = swtype;
     entry["clientcount"] = clients.length;
     entry["trigger"] = subid;
+    if ( typeof popup!=="undefined" ) {
+        entry["popup"] = popup;
+    } else {
+        entry["popup"] = "";
+    }
     var thevalue;
 
     if ( typeof body === "undefined" || body==="" || !body ) {
@@ -1662,10 +1654,12 @@ function pushClient(swid, swtype, subid, body) {
     entry["value"] = thevalue;
 
     // update the main array with changed push values
-    if ( swid!=="reload" ) {
+    if ( swid!=="reload" && swid!=="popup" ) {
         var idx = swtype + "|" + swid;
-        for (var thekey in thevalue) {
-            allthings[idx]["value"][thekey] = thevalue[thekey];
+        if ( array_key_exists(idx, allthings) ) {
+            for (var thekey in thevalue) {
+                allthings[idx]["value"][thekey] = thevalue[thekey];
+            }
         }
     }
 
@@ -1698,7 +1692,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid) {
         } else {
             cmd = "/nodes/" + swid + "/cmd/" + swval;
         }
-        console.log("sent cmd: ", cmd);
+        // console.log("sent cmd: ", cmd);
         curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
 
     }
@@ -1708,7 +1702,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid) {
         if ( err ) {
             console.log("Error calling hub: ", err);
         } else {
-            console.log("doAction: ", swid, swtype, subid, body);
+            console.log("doAction: ", swid, " type: ", swtype, " subid: ", subid, " value: ", body);
             pushClient(swid, swtype, subid, body);
         }
     }
@@ -1717,10 +1711,10 @@ function callHub(hub, swid, swtype, swval, swattr, subid) {
         if ( err ) {
             console.log("Error calling ISY node: ", err);
         } else {
-            queryHub(hub, swid, swtype);
-            // var result = parser.parse(body);
-            // console.log("ISY action: ", result);
-            // pushClient(swid, swtype, subid, result);
+            // queryHub(hub, swid, swtype);
+            var result = parser.parse(body);
+            console.log("ISY action: ", result);
+            pushClient(swid, swtype, subid, result);
         }
     }
 
@@ -1729,7 +1723,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid) {
 function queryHub(hub, swid, swtype) {
     var access_token = hub["hubAccess"];
     var endpt = hub["hubEndpt"];
-if ( hub["hubType"]==="SmartThings" || hub["hubType"]==="Hubitat" ) {
+    if ( hub["hubType"]==="SmartThings" || hub["hubType"]==="Hubitat" ) {
         var host = endpt + "/doquery";
         var header = {"Authorization": "Bearer " + access_token};
         var nvpreq = {"swid": swid, "swtype": swtype};
@@ -1758,7 +1752,7 @@ if ( hub["hubType"]==="SmartThings" || hub["hubType"]==="Hubitat" ) {
             var result = parser.parse(body);
             var properties = result.nodeInfo.properties;
             console.log("ISY query: ", result," properties: ", properties);
-            // pushClient(swid, swtype, subid, result);
+            pushClient(swid, swtype, subid, result);
         }
 
     }
@@ -1795,27 +1789,9 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, command, content, m
                   swtype==="weather" || swtype==="temperature" || swtype==="blank") ) {
         response = allthings[idx]["value"];
         
-    // this logic is complex so let me explain. First we get the value if available
-    // then we get any provided custom name from tile editor
-    // then we process all tile customizer settings which can also change the name
-    // next we check customizer to see if name and width and height changed
-    // finally, we send name, width, height to returnFile routine to get the html tag
+    // send name, width, height to returnFile routine to get the html tag
     } else if ( command==="" && array_key_exists(swtype, specialtiles) ) {
         var thingvalue = allthings[idx]["value"];
-        
-        // thingvalue["name"] = getCustomName(thingvalue["name"], idx);
-        // thingvalue = getCustomTile(thingvalue, swtype, swid);
-        // if ( array_key_exists("width", thingvalue) ) {
-        //     fw = thingvalue["width"];
-        // } else {
-        //     fw = specialtiles[swtype][1];
-        // }
-        // if ( array_key_exists("height", thingvalue) ) {
-        //     fh = thingvalue["height"];
-        // } else {
-        //     fh = specialtiles[swtype][2];
-        // }
-        // thingvalue[swtype] = returnFile(thingvalue["name"], fw, fh, swtype );
         thingvalue = returnFile(thingvalue, swtype);
         response = thingvalue;
     } else {
@@ -1829,16 +1805,23 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, command, content, m
 
 function doQuery(hubid, swid, swtype) {
     var result;
-    if ( swid==="all" && swtype==="all" && allthings ) {
+    if ( (swid==="all" && swtype==="all") || (swid==="fast"  && swtype==="fast") || (swid==="slow" && swtype==="slow") ) {
         result = {};
-        for (var idx in allthings) {
+        for (var idx in (allthings || {}) ) {
             var res = allthings[idx];
             var tileid = GLB.options["index"][idx];
             result[tileid] = res;
         }
     } else {
         var idx = swtype + "|" + swid;
-        result = allthings[idx]["value"];
+        if ( allthings && array_key_exists(idx, allthings) && array_key_exists("value", allthings[idx]) ) {
+            // result = allthings[idx]["value"];
+            // could use this to pop up results on window
+            queryHub(hubid, swid, swtype);
+            result = "success";
+        } else {
+            result = "error";
+        }
     }
     return result;
 }
@@ -2342,60 +2325,6 @@ function getOptionsPage(pathname) {
 
     $tc += hubFilters(hubpick, 7);
 
-    // ---------------------------- start of filters -----------------------------------
-
-    // $tc+= "<form id=\"filteroptions\" class=\"options\" name=\"filteroptions\" action=\"" + retpage + "\"  method=\"POST\">";
-    
-    // // if more than one hub then let user pick which one to show
-    // if ( utils.count($hubs) > 1 ) {
-    //     $tc+= "<div class=\"filteroption\">Hub Filters: ";
-    //     var $hid = "hopt_all";
-    //     var checked = (hubpick==="all") ? " checked='1'" : "";
-    //     $tc+= "<div class='radiobutton'><input id='" + $hid + "' type='radio' name='huboptpick' value='all'"  + checked + "><label for='" + $hid + "'>All Hubs</label></div>";
-    //     $hid = "hopt_none";
-    //     checked = (hubpick==="none") ? " checked='1'" : "";
-    //     $tc+= "<div class='radiobutton'><input id='" + $hid + "' type='radio' name='huboptpick' value='none'" + checked + "><label for='" + $hid + "'>No Hub</label></div>";
-    //     var $hubcount = 0;
-    //     $hubs.forEach(function($hub) {
-    //         var $hubName = $hub["hubName"];
-    //         var $hubType = $hub["hubType"];
-    //         var $hubId = $hub["hubId"];
-    //         $hid = "hopt_" + $hubcount;
-    //         checked = (hubpick===$hubId) ? " checked='1'" : "";
-    //         $tc+= "<div class='radiobutton'><input id='" + $hid + "' type='radio' name='huboptpick' value='" + $hubId + "'" + checked + "><label for='" + $hid + "'>" + $hubName + " (" + $hubType + ")</label></div>";
-    //         $hubcount++;
-    //     });
-    //     $tc+= "</div>";
-    // }
-
-    // // buttons for all or no filters
-    // $tc+= "<br /><div class=\"filteroption\">Thing Filters: ";
-    // $tc+= "<div id=\"allid\" class=\"smallbutton\">All</div>";
-    // $tc+= "<div id=\"noneid\" class=\"smallbutton\">None</div>";
-    // $tc+= "</div>";
-
-    // $tc+= "<div class='filteroption'>Select Things to Display: <br/>";
-    // $tc+= "<table class=\"useroptions\"><tr>";
-    // var $i= 0;
-    // for (var $iopt in $thingtypes) {
-    //     var $opt = $thingtypes[$iopt];
-    //     $i++;
-    //     if ( in_array($opt, $useroptions ) ) {
-    //         $tc+= "<td><input id=\"cbx_" + $i + "\" type=\"checkbox\" name=\"useroptions[]\" value=\"" + $opt + "\" checked=\"1\">";
-    //     } else {
-    //         $tc+= "<td><input id=\"cbx_" + $i + "\" type=\"checkbox\" name=\"useroptions[]\" value=\"" + $opt + "\">";
-    //     }
-    //     $tc+= "<label for=\"cbx_" + $i + "\" class=\"optname\">" + $opt + "</label></td>";
-    //     if ( $i % 5 == 0 && $i < utils.count($thingtypes) ) {
-    //         $tc+= "</tr><tr>";
-    //     }
-    // }
-    // $tc+= "</tr></table>";
-    // $tc+= "</div><hr>";
-    // $tc+= "</form>";
-
-    // ---------------------------- end of filters -----------------------------------
-
     $tc+= "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + retpage + "\"  method=\"POST\">";
 
     // $tc+= "<div class=\"filteroption\">";
@@ -2561,8 +2490,9 @@ function mainPage(proto, hostname, pathname) {
 
     var thingoptions = GLB.options["things"];
     var roomoptions = GLB.options["rooms"];
+    var config = GLB.options.config;
     var skin = getSkin();
-    var kioskmode = GLB.config["kiosk"];
+    var kioskmode = GLB.options.config["kiosk"];
     if ( kioskmode === "true" || kioskmode===1 || kioskmode==="yes" ) {
         kioskmode = true;
     } else {
@@ -2572,7 +2502,7 @@ function mainPage(proto, hostname, pathname) {
 
     $tc += utils.getHeader(skin);
 
-    if ( DEBUG2 ) {
+    if ( DEBUG3 ) {
         console.log(GLB.options);
     }
     // make sure our active skin has a custom file
@@ -2622,14 +2552,14 @@ function mainPage(proto, hostname, pathname) {
 
     // set the websock servername as same as hosted page but different port
     var webSocketUrl = "";
-    if ( GLB.config.webSocketServerPort && !isNaN(parseInt(GLB.config.webSocketServerPort)) ) {
+    if ( config.webSocketServerPort && !isNaN(parseInt(config.webSocketServerPort)) ) {
         var icolon = hostname.indexOf(":");
         if ( icolon >= 0 ) {
             webSocketUrl = "ws://" + hostname.substr(0, icolon);
         } else {
             webSocketUrl = "ws://" + hostname;
         }
-        webSocketUrl = webSocketUrl + ":" + GLB.config.webSocketServerPort;
+        webSocketUrl = webSocketUrl + ":" + config.webSocketServerPort;
     }
     
     // include form with useful data for js operation
@@ -2637,7 +2567,7 @@ function mainPage(proto, hostname, pathname) {
     $tc += utils.hidden("pagename", "main");
 
     // save the socket address for use on js side
-    // var webSocketUrl = GLB.config.webSocketServerPort ? ("ws://" + serverName + ":" + GLB.config.webSocketServerPort) : "";
+    // var webSocketUrl = config.webSocketServerPort ? ("ws://" + serverName + ":" + config.webSocketServerPort) : "";
     $tc += utils.hidden("webSocketUrl", webSocketUrl);
 
     // save Node.js address for use on the js side
@@ -2678,9 +2608,9 @@ function clone(obj) {
 // process user options page
 function processOptions($optarray) {
 
-    if (DEBUG3) {
+    if (DEBUG6) {
         console.log($optarray);
-        // console.log(GLB.options["config"]);
+        console.log(GLB.options["config"]);
     }
     
     // default location
@@ -2928,13 +2858,12 @@ function processOptions($optarray) {
 
     // write options to file
     writeOptions($options);
-
-    // refresh the main array
-    // getAllThings(true);
 }
 
 function saveFilters(body) {
-    console.log(body);
+    if ( DEBUG3 ) {
+        console.log(body);
+    }
     var rewrite = false;
 
     if ( body.useroptions ) {
@@ -3201,9 +3130,13 @@ function delCustom(swid, swtype, swval, swattr, subid) {
 
 // read the config file and get array of hubs
 readOptions();
+if ( DEBUG6 ) {
+    console.log("Index: ", GLB.options.index);
+}
 
-var hubs = GLB.options["config"]["hubs"];
-var port = GLB.config.port;
+var config = GLB.options.config;
+var hubs = config["hubs"];
+var port = config["port"];
 if ( !port ) {
     port = 3080;
 }
@@ -3231,7 +3164,7 @@ try {
 
 // retrieve all nodes/things
 // client pages are refreshed when each hub is done reading
-getAllThings(true);
+getAllThings();
 
 var maxroom = 0;
 if ( array_key_exists("things", GLB.options) && 
@@ -3247,27 +3180,27 @@ if ( array_key_exists("things", GLB.options) &&
 }
 
 // setup default rooms if no rooms exist
-if ( utils.count(GLB.rooms) === 0 || maxroom < 2 ) {
-    setDefaults();
-}
+// if ( utils.count(GLB.rooms) === 0 || maxroom < 2 ) {
+//     setDefaults();
+// }
 
 // create the HTTP server for handling sockets
 server = http.createServer(function(req, res) {
 });
 
 
-if ( server && GLB.config.webSocketServerPort ) {
+if ( server && config.webSocketServerPort ) {
     // create the webSocket server
     wsServer = new webSocketServer({
         httpServer: server
     });
-    server.listen(GLB.config.webSocketServerPort, function() {
-        console.log((new Date()) + " webSocket Server is listening on port: ", GLB.config.webSocketServerPort);
+    server.listen(config.webSocketServerPort, function() {
+        console.log((new Date()) + " webSocket Server is listening on port: ", config.webSocketServerPort);
     });
     serverlistening = true;
 } else {
     serverlistening = false;
-    console.log((new Date()) + " webSocket port not valid. webSocketServerPort= ", GLB.config.webSocketServerPort);
+    console.log((new Date()) + " webSocket port not valid. webSocketServerPort= ", config.webSocketServerPort);
 }
     
 // handler functions for HousePanel
@@ -3312,7 +3245,9 @@ if ( app && applistening ) {
             if (file.indexOf(dir + path.sep) !== 0) {
                 res.status(403).end('Forbidden');
             }
-            console.log("Loading module: ", req.path, " as: ", file);
+            if ( DEBUG6 ) {
+                console.log("Loading module: ", req.path, " as: ", file);
+            }
             var type = mime[path.extname(file).slice(1)] || 'text/plain';
             var s = fs.createReadStream(file);
             s.on('open', function () {
@@ -3344,7 +3279,7 @@ if ( app && applistening ) {
             res.json('hub info updated');
             console.log((new Date()) + " New hub authorized; updating things in hpserver.");
             readOptions();
-            getAllThings(true);
+            getAllThings();
         
         // handle api calls from the hubs here
         } else if ( req.body['msgtype'] == "update" ) {
@@ -3368,7 +3303,7 @@ if ( app && applistening ) {
                     pushClient(entry.id, entry.type, req.body['change_attribute'], entry['value'])
                 }
             }
-            console.log((new Date()) + ' pushed new status info to ' + cnt + ' tiles');
+            // console.log((new Date()) + ' pushed new status info to ' + cnt + ' tiles');
             res.json('pushed new status info to ' + cnt + ' tiles');
 
         // handle all api calls upon the server from js client here
@@ -3408,7 +3343,9 @@ if ( app && applistening ) {
                     
                 case "getthings" :
                     var reload = ( req.body['swattr']==="reload" );
-                    getAllThings(reload);
+                    if ( reload ) {
+                        getAllThings();
+                    }
                     res.json(allthings);
                     break;
 
@@ -3450,7 +3387,7 @@ if ( app && applistening ) {
 
                 case "refresh":
                     console.log("refreshing tiles");
-                    getAllThings(true);
+                    getAllThings();
                     res.json("success");
                     break;
                     
@@ -3516,7 +3453,7 @@ if ( app && applistening ) {
                 
                 case "refactor":
                     refactorOptions();
-                    getAllThings(true);
+                    getAllThings();
                     res.json("success");
                     break;
                     
