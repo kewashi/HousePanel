@@ -45,7 +45,7 @@ function file_exists(fname) {
 }
 
 function getUserName() {
-    return "default";
+    return "modern";
 }
 
 // get the active user and skin
@@ -53,10 +53,10 @@ function getSkin() {
     var uname = getUserName();
     var pwords = GLB.options["config"]["pword"];
     var skin;
-    if ( !pwords || !is_array(pwords) || count(pwords)===0 ) {
+    if ( !pwords || utils.count(pwords)===0 ) {
         skin = "skin-housepanel";
     } else if ( uname && array_key_exists(uname, pwords) ) {
-        pword = pwords[uname];
+        var pword = pwords[uname];
         if ( is_array(pword) ) {
             skin = pword[1];
         } else {
@@ -220,6 +220,8 @@ function readOptions() {
                 var str_customopt = JSON.stringify(customopt, null, 1);
                 fs.writeFileSync(customfname, str_customopt);
             } else {
+
+                console.log("Customizing room setup for user: ", uname);
 
                 // read this assuming new method only
                 var str = fs.readFileSync(customfname, 'utf8');
@@ -506,6 +508,29 @@ function setDefaults() {
         }
     }
     writeOptions(GLB.options);
+}
+
+function getLoginPage() {
+    var $tc = "";
+    $tc += "<h2>" + APPNAME + "</h2>";
+    $tc += "<br /><br />";
+    $tc += "<form name=\"login\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
+    $tc += utils.hidden("returnURL", GLB.returnURL);
+    $tc += utils.hidden("pagename", "login");
+    $tc += utils.hidden("useajax", "dologin");
+    $tc += utils.hidden("id", "none");
+    $tc += utils. hidden("type", "none");
+    $tc += "<div>";
+    $tc += "<label for=\"uname\" class=\"startupinp\">Username: </label>";
+    $tc += "<input id=\"uname\" name=\"uname\" width=\"20\" type=\"text\" value=\"\"/>"; 
+    $tc += "<br /><br />";
+    $tc += "<label for=\"pword\" class=\"startupinp\">Password: </label>";
+    $tc += "<input id=\"pword\" name=\"pword\" width=\"40\" type=\"password\" value=\"\"/>"; 
+    $tc += "<br /><br />";
+    $tc += "<input class=\"submitbutton\" value=\"Login\" name=\"submit\" type=\"submit\" />";
+    $tc += "</div>";
+    $tc += "</form>";
+    return $tc;
 }
 
 function createSpecialIndex(customcnt, stype, spid) {
@@ -1144,11 +1169,11 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                     
                     var helperkey = "user_" + tkey;
                     var helperval = thingvalue[helperkey];
+                    var kpos = 0;;
                     if ( helperval && helperval.substr(0,2)==="::" ) {
                     
                         var ipos = helperval.indexOf("::",2);
-                        var linktypeval = helperval.substring(0, ipos);
-                        var jpos = linktypeval.indexOf("::",2);
+                        var jpos = helperval.indexOf("::",ipos+2);
 
                         // case with helperval = ::TEXT::val  &  linktypeval = ::val
                         var linktype;
@@ -1156,18 +1181,22 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                         var linkval;
                         if ( jpos===-1 ) { 
                             linktype = thingtype;
-                            command = helperval.substring(2, ipos-2);
-                            linkval = linktypeval.substring(2);
+                            command = helperval.substring(2, ipos);
+                            linkval = helperval.substring(ipos+2);
+                            // linkval = linktypeval.substr(2);
 
                         // case with tval = ::type::LINK::val &  linktypeval = ::LINK::val
                         } else {
-                            linktype = helperval.substring(2, ipos-2);
-                            command = linktypeval.substring(2, jpos-2);
-                            linkval = linktypeval.substring(jpos+2);
+                            linktype = helperval.substring(2, ipos);
+                            command = helperval.substring(ipos+2, jpos);
+                            linkval = helperval.substr(jpos+2);
                         }
                         // use the original type here so we have it for later
                         // but in the actual target we use the linktype
                         sibling= "<div linktype=\""+linktype+"\" value=\""+tval+"\" linkval=\""+linkval+"\" command=\""+command+"\" subid=\""+tkey+"\" class=\"user_hidden\"></div>";
+                        // console.log("helperval: ", helperval);
+                        // console.log(ipos, jpos, "sibling: ", sibling);
+
                     } else {
                         linktype = thingtype;
                         sibling = "";
@@ -1768,12 +1797,13 @@ function findHub(hubid) {
     return hub;
 }
 
-function doAction(hubid, swid, swtype, swval, swattr, subid, command, content, macro) {
+function doAction(hubid, swid, swtype, swval, swattr, subid, command) {
 
     // get the hub being acted upon
     var response = "";
     var hub = findHub(hubid);
     var idx = swtype + "|" + swid;
+    var specialtiles = utils.getSpecials();
     // console.log(hubid, hub);
 
     // handle clocks
@@ -1783,14 +1813,16 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, command, content, m
         response = getClock("Analog Clock", "clockanalog", "CoolClock:swissRail:72", "M d, Y", "h:i:s A");
     
     // handle types that just return the current status
-    } else if (  (typeof command==="undefined" || command==="") && 
-                 (swtype==="contact" || swtype==="presence" || swtype==="motion" || 
-                  (swtype==="thermostat" && subid==="temperature") ||
-                  swtype==="weather" || swtype==="temperature" || swtype==="blank") ) {
+    } else if   (   (   (typeof command==="undefined" || command==="") && 
+                          (swtype==="contact" || swtype==="presence" || swtype==="motion" || subid==="temperature" ||
+                           swtype==="weather" || swtype==="temperature" || swtype==="blank") 
+                    ) ||
+                    (command==="LINK" && (subid==="contact" || subid==="presence" || subid==="motion") ) 
+                ) {
         response = allthings[idx]["value"];
         
     // send name, width, height to returnFile routine to get the html tag
-    } else if ( command==="" && array_key_exists(swtype, specialtiles) ) {
+    } else if ( (typeof command==="undefined" || command==="") && array_key_exists(swtype, specialtiles) ) {
         var thingvalue = allthings[idx]["value"];
         thingvalue = returnFile(thingvalue, swtype);
         response = thingvalue;
@@ -1843,6 +1875,7 @@ function setOrder(swid, swtype, swval, swattr) {
                     options["rooms"][roomname] = roomid;
                 }
                 updated = true;
+                result = "success"; // options["rooms"];
                 break;
 
             case "things":
@@ -1855,17 +1888,17 @@ function setOrder(swid, swtype, swval, swattr) {
                         options["things"][swattr].push(newthing);
                     });
                     updated = true;
+                    result = "success"; // options["things"][swattr];
                 }
                 break;
                 
             default:
-                $result = "error";
+                result = "error";
                 break;
         }
 
         if (updated) {
             writeOptions(options);
-            result = "success";
         }
     }
     
@@ -3240,6 +3273,11 @@ if ( app && applistening ) {
             res.send($tc);
             res.end();
 
+        } else if ( req.path==="/dologin") {
+            var $tc = getLoginPage();
+            res.send($tc);
+            res.end();
+
         } else {
             var file = path.join(dir, req.path.replace(/\/$/, '/index.html'));
             if (file.indexOf(dir + path.sep) !== 0) {
@@ -3320,6 +3358,7 @@ if ( app && applistening ) {
             var swattr = req.body["attr"] || "none";
             var subid = req.body["subid"] || "";
             var tileid = req.body["tile"] || "";
+            var command = req.body["command"] || "";
 
             if ( hubs && hubs.length ) {
                 var defhub = hubs[0]["hubId"];
@@ -3332,7 +3371,7 @@ if ( app && applistening ) {
             switch(api) {
                 
                 case "doaction":
-                    result = doAction(hubid, swid, swtype, swval, swattr, subid);
+                    result = doAction(hubid, swid, swtype, swval, swattr, subid, command);
                     res.json(result);
                     break;
                     

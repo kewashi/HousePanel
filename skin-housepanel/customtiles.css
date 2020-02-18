@@ -5,6 +5,16 @@
 /* ****** EDITS MADE MAY BE REPLACED      ****** */
 /* ****** WHENEVER TILE EDITOR IS USED    ****** */
 /* ********************************************* */
+div.thing.image-thing.p_590 div.overlay.name.v_590 div.name.p_590 {
+ display: none;
+ }
+div.overlay.name.v_590 {
+ display: none;
+ }
+div.thing.image-thing.p_591 {
+ width: auto;
+ height: auto;
+ }
 div.thing.switchlevel-thing.p_503 div.overlay.switch.v_503 div.switch.p_503.flash {
  background-image: url("icons/lampon.png");
  background-size: 50px;
@@ -2025,12 +2035,12 @@ div.thing.switch-thing.p_21 div.overlay.switch.v_21 div.switch.p_21.on {
  padding-left: 20px;
  filter: invert(0);
  background-size: 80px;
- background-repeat: no-repeat;
+ backgroundrepeat: no-repeat;
  }
 div.thing.thermostat-thing.p_57 div.overlay.battery.v_57 div.battery.p_57 {
  display: none;
  }
-div.overlay.battery.v_57 {
+div.overlay.bttery.v_57 {
  display: none;
  }
 div.thing.momentry-thing.p_4 div.overlay.momentary.v_43 div.momentary.p_43.on {
