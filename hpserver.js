@@ -45,7 +45,15 @@ function file_exists(fname) {
 }
 
 function getUserName() {
-    return "modern";
+    var uname;
+    if ( array_key_exists("uname", GLB.options["config"]) ) {
+        uname = GLB.options["config"]["uname"];
+        if ( !uname ) { uname = "default"; }
+    } else {
+        uname = "default";
+        GLB.options["config"]["uname"] = uname;
+    }
+    return uname;
 }
 
 // get the active user and skin
@@ -145,7 +153,7 @@ function readOptions() {
             throw ' hmoptions.cfg file not found. HousePanel will operate without any hubs until one is authorized.';
         }
         GLB.options = JSON.parse(fs.readFileSync(fname, 'utf8'));
-        if ( ! array_key_exists("config",GLB.options) ) {
+        if ( !GLB.options || ! array_key_exists("config",GLB.options) ) {
             console.log(' configuration settings were not found in ' + fname + ' configuration file.');
             GLB.options["config"] = {};
             return;
@@ -155,114 +163,129 @@ function readOptions() {
         return;
     }
 
-    if ( GLB.options ) {
+    // handle time settings
+    if ( array_key_exists("time", GLB.options) ) {
+        var timeval = GLB.options["time"];
+        var info = timeval.split(" @ ");
+        var version = info[0];
+    } else {
+        var d = new Date();
+        timeval = d.getTime();
+        version = utils.HPVERSION;
+        GLB.options["time"] = version + " @ " + timeval;
+        rewrite = true;
+    }
 
-        if ( array_key_exists("time", GLB.options) ) {
-            var timeval = GLB.options["time"];
-            var info = timeval.split(" @ ");
-            var version = info[0];
-        } else {
-            var d = new Date();
-            timeval = d.getTime();
-            version = utils.HPVERSION;
-            GLB.options["time"] = version + " @ " + timeval;
-            rewrite = true;
-        }
+    // check for empty rooms, things, and index
+    if ( !array_key_exists("rooms", GLB.options) ) {
+        GLB.options["rooms"]= {};
+        rewrite = true;
+    }
+    if ( !array_key_exists("things", GLB.options) ) {
+        GLB.options["things"]= {};
+        rewrite = true;
+    }
+    if ( !array_key_exists("index", GLB.options) ) {
+        GLB.options["index"]= {};
+        rewrite = true;
+    }
+    if ( !array_key_exists("useroptions", GLB.options) ) {
+        GLB.options["useroptions"]= utils.getTypes();
+        rewrite = true;
+    }
 
-        if ( !array_key_exists("rooms", GLB.options) ) {
-            GLB.options["rooms"]= {};
+    // get the last user that logged in
+    // and if not there use the default user
+    if ( array_key_exists("uname", GLB.options["config"]) ) {
+        var uname = GLB.options["config"]["uname"];
+    } else {
+        var uname = "default";
+        GLB.options["config"]["uname"] = uname;
+        rewrite = true;
+    }
+
+    if ( DEBUG1 ) {
+        console.log((new Date()) + ' Config file for HP Version: ', version, " username: ", uname);
+    }
+
+    // read the hubs
+    var hubs = GLB.options.config["hubs"];
+    if ( is_array(hubs) && hubs.length > 0 ) {
+        if ( DEBUG1 ) {
+            console.log((new Date()) + ' Loading ', hubs.length,' hubs.');
         }
-        if ( !array_key_exists("things", GLB.options) ) {
-            GLB.options["things"]= {};
+        if ( DEBUG2 ) {
+            console.log(hubs);
         }
-        if ( !array_key_exists("index", GLB.options) ) {
-            GLB.options["index"]= {};
+    } else {
+        console.log((new Date()) + ' No hubs found. HousePanel will only show special and custom tiles.');
+        hubs = [];
+        GLB.options.config["hubs"] = [];
+        rewrite = true;
+    }
+
+    // update the options file if we added default info
+    // we must do this before customizing the room to avoid messing up baseline
+    // also include flag to skip the writing of the user section
+    if ( rewrite ) {
+        writeOptions(GLB.options, true);
+    }
+    
+    // get custom settings for this user
+    var customfname = "hm_" + uname + ".cfg";
+    if ( !fs.existsSync(customfname) ) {
+        // this format is now in real json format and includes user_ tiles
+        // add a signature key to flag this format
+        var customopt = {};
+        customopt["::CUSTOM::"] = [uname, utils.HPVERSION, timeval];
+        for (var key in GLB.options) {
+            if ( key==="rooms" || key==="things" || key.substr(0,5)==="user_" ) {
+                customopt[key] = GLB.options[key];
+            }
         }
-        if ( !array_key_exists("useroptions", GLB.options) ) {
-            GLB.options["useroptions"]= utils.getTypes();
-        }
+        var str_customopt = JSON.stringify(customopt, null, 1);
+        fs.writeFileSync(customfname, str_customopt);
+    } else {
 
         if ( DEBUG1 ) {
-            console.log((new Date()) + ' Config file for HP Version: ', version);
+            console.log("Customizing room setup for user: ", uname);
         }
 
-        var hubs = GLB.options.config["hubs"];
-        if ( is_array(hubs) && hubs.length > 0 ) {
-            if ( DEBUG1 ) {
-                console.log((new Date()) + ' Loading ', hubs.length,' hubs.');
-            }
-            if ( DEBUG2 ) {
-                console.log(hubs);
-            }
-        } else {
-            console.log((new Date()) + ' No hubs found. HousePanel will only show special and custom tiles.');
-            hubs = [];
-            GLB.options.config["hubs"] = [];
+        // read this assuming new method only
+        var str = fs.readFileSync(customfname, 'utf8');
+        var str1 = str.replace("\r","");
+        var str2 = str1.replace("\n","");
+        var str3 = str2.replace("\t","");
+        var opts = JSON.parse(str3);
+
+        var opt_rooms = null;
+        var opt_things = null;
+        if ( opts["rooms"] ) {
+            opt_rooms = opts["rooms"];
         }
-        
-        // make the room config file to support custom users
-        var uname = getUserName();
-        if ( uname ) {
+        if ( opts["things"] ) {
+            opt_things = opts["things"];
+        }
+        for (var key in opts) {
+            if ( key.substr(0,5)==="user_" ) {
+                GLB.options[key] = opts[key];
+            }
+        }
             
-            // $uname = trim($_COOKIE["uname"]);
-            var customfname = "hm_" + uname + ".cfg";
-            var key;
-            if ( !fs.existsSync(customfname) ) {
-                // this format is now in real json format and includes user_ tiles
-                // add a signature key to flag this format
-                var customopt = {};
-                customopt["::CUSTOM::"] = [uname, utils.HPVERSION, timeval];
-                for (key in GLB.options) {
-                    if ( key==="rooms" || key==="things" || key.substr(0,5)==="user_" ) {
-                        customopt[key] = GLB.options[key];
-                    }
-                }
-                var str_customopt = JSON.stringify(customopt, null, 1);
-                fs.writeFileSync(customfname, str_customopt);
-            } else {
-
-                console.log("Customizing room setup for user: ", uname);
-
-                // read this assuming new method only
-                var str = fs.readFileSync(customfname, 'utf8');
-                var str1 = str.replace("\r","");
-                var str2 = str1.replace("\n","");
-                var str3 = str2.replace("\t","");
-                var opts = JSON.parse(str3);
-
-                var opt_rooms = null;
-                var opt_things = null;
-                if ( opts["rooms"] ) {
-                    opt_rooms = opts["rooms"];
-                }
-                if ( opts["things"] ) {
-                    opt_things = opts["things"];
-                }
-                for (key in opts) {
-                    if ( key.substr(0,5)==="user_" ) {
-                        GLB.options[key] = opts[key];
-                    }
-                }
-                    
-                // protect against having a custom name and an empty custom user info
-                if ( opt_rooms && opt_things && utils.count(opt_rooms) > 0 && utils.count(opt_things) > 0 ) {
-                    GLB.options["rooms"] = opt_rooms;
-                    GLB.options["things"] = {};
-                    for (var room in opt_rooms) {
-                        if ( array_key_exists(room, opt_things) ) {
-                            GLB.options["things"][room] = opt_things[room];
-                        }
-                    }
+        // protect against having a custom name and an empty custom user info
+        if ( opt_rooms && opt_things && utils.count(opt_rooms) > 0 && utils.count(opt_things) > 0 ) {
+            GLB.options["rooms"] = opt_rooms;
+            GLB.options["things"] = {};
+            for (var room in opt_rooms) {
+                if ( array_key_exists(room, opt_things) ) {
+                    GLB.options["things"][room] = opt_things[room];
                 }
             }
         }
-    }
-    if ( rewrite ) {
-        writeOptions(GLB.options);
     }
 }
 
-function writeOptions(options) {
+function writeOptions(options, skipuser) {
     
     if ( !options ) {
         return;
@@ -276,23 +299,26 @@ function writeOptions(options) {
     // write the main options file
     var stropt =  JSON.stringify(options, null, 1);
     fs.writeFileSync("hmoptions.cfg", stropt, {encoding: "utf8", flag:"w"});
-    
-    // write the user specific options file
-    var uname = getUserName();
-    if ( uname ) {
-        var userfname = "hm_" + uname + ".cfg";
 
-        // this format is now in real json format and includes user_ tiles
-        // add a signature key to flag this format
-        var customopt = {};
-        customopt["::CUSTOM::"] = [uname, utils.HPVERSION, timeval];
-        for (var key in GLB.options) {
-            if ( key==="rooms" || key==="things" || key.substr(0,5)==="user_" ) {
-                customopt[key] = GLB.options[key];
+    // write the user specific options file
+    // unless skipuser given to skip this
+    if ( typeof skipuser==="undefined" || !skipuser ) {
+        var uname = getUserName();
+        if ( uname ) {
+            var userfname = "hm_" + uname + ".cfg";
+
+            // this format is now in real json format and includes user_ tiles
+            // add a signature key to flag this format
+            var customopt = {};
+            customopt["::CUSTOM::"] = [uname, utils.HPVERSION, timeval];
+            for (var key in GLB.options) {
+                if ( key==="rooms" || key==="things" || key.substr(0,5)==="user_" ) {
+                    customopt[key] = GLB.options[key];
+                }
             }
+            var str_customopt = JSON.stringify(customopt, null, 1);
+            fs.writeFileSync(userfname, str_customopt, {encoding: "utf8", flag:"w"});
         }
-        var str_customopt = JSON.stringify(customopt, null, 1);
-        fs.writeFileSync(userfname, str_customopt, {encoding: "utf8", flag:"w"});
     }
 }
 
@@ -498,7 +524,6 @@ function setDefaults() {
                 var checkarr = defaultrooms[room].split("|");
                 checkarr.forEach(function(keyword) {
                     var islocated = thename.indexOf(keyword);
-                    // console.log("debug: ", thename, " ", keyword, " ", islocated);
                     if ( islocated !== -1 ) {
                         var tile = [k,0,0,1,""];
                         GLB.options["things"][room].push(tile);
@@ -512,12 +537,14 @@ function setDefaults() {
 
 function getLoginPage() {
     var $tc = "";
-    $tc += "<h2>" + APPNAME + "</h2>";
+    var skin = getSkin();
+    $tc += utils.getHeader(skin);
+    $tc += "<h2>" + utils.APPNAME + "</h2>";
     $tc += "<br /><br />";
-    $tc += "<form name=\"login\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
+    $tc += "<form id=\"loginform\" name=\"login\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
     $tc += utils.hidden("returnURL", GLB.returnURL);
     $tc += utils.hidden("pagename", "login");
-    $tc += utils.hidden("useajax", "dologin");
+    $tc += utils.hidden("api", "dologin");
     $tc += utils.hidden("id", "none");
     $tc += utils. hidden("type", "none");
     $tc += "<div>";
@@ -527,9 +554,24 @@ function getLoginPage() {
     $tc += "<label for=\"pword\" class=\"startupinp\">Password: </label>";
     $tc += "<input id=\"pword\" name=\"pword\" width=\"40\" type=\"password\" value=\"\"/>"; 
     $tc += "<br /><br />";
-    $tc += "<input class=\"submitbutton\" value=\"Login\" name=\"submit\" type=\"submit\" />";
+    // $tc += "<input class=\"submitbutton\" value=\"Login\" name=\"submit\" type=\"submit\" />";
+    $tc += '<div id="dologin" class="formbutton">Login</div>';
     $tc += "</div>";
     $tc += "</form>";
+    $tc += utils.getFooter();
+    return $tc;
+}
+
+function getAuthPage() {
+    var $tc = "";
+    var skin = getSkin();
+    $tc += utils.getHeader(skin);
+    $tc += "<h2>" + utils.APPNAME + " Hub Authorization</h2>";
+    $tc += "<br /><br />";
+
+    $tc += "<button class=\"infobutton\">Return to HousePanel</button>";
+
+    $tc += utils.getFooter();
     return $tc;
 }
 
@@ -771,50 +813,49 @@ function getNewPage(cnt, roomtitle, kroom, things) {
     var $tc = "";
     var roomname = roomtitle;
     $tc += "<div id=\"" + roomname + "-tab\">";
-        $tc += "<form title=\"" + roomtitle + "\" action=\"#\">";
+    $tc += "<form title=\"" + roomtitle + "\" action=\"#\">";
+    
+    // add room index to the id so can be style by number and names can duplicate
+    // no longer use room number for id since it can change around
+    // switched this to name - not used anyway other than manual custom user styling
+    // if one really wants to style by room number use the class which includes it
+    $tc += "<div id=\"panel-" + roomname + "\" title=\"" + roomtitle + "\" class=\"panel panel-" + kroom + " panel-" + roomname + "\">";
+
+    // the things list can be integers or arrays depending on drag/drop
+    var idxkeys = Object.keys(GLB.options["index"]);
+    var idxvals = Object.values(GLB.options["index"]);
+    things.forEach(function(kindexarr) {
         
-        // add room index to the id so can be style by number and names can duplicate
-        // no longer use room number for id since it can change around
-        // switched this to name - not used anyway other than manual custom user styling
-        // if one really wants to style by room number use the class which includes it
-        $tc += "<div id=\"panel-" + roomname + "\" title=\"" + roomtitle + "\" class=\"panel panel-" + kroom + " panel-" + roomname + "\">";
+        // get the offsets and the tile id
+        var kindex = parseInt(kindexarr[0]);
+        var postop = kindexarr[1];
+        var posleft = kindexarr[2];
+        var zindex = 1;
+        var customname = "";
 
-        // the things list can be integers or arrays depending on drag/drop
-        var idxkeys = Object.keys(GLB.options["index"]);
-        var idxvals = Object.values(GLB.options["index"]);
-        things.forEach(function(kindexarr) {
-            
-            // get the offsets and the tile id
-            var kindex = parseInt(kindexarr[0]);
-            var postop = kindexarr[1];
-            var posleft = kindexarr[2];
-            var zindex = 1;
-            var customname = "";
+        if ( kindexarr.length > 3 ) {
+            zindex = kindexarr[3];
+            customname = kindexarr[4];
+        }
+        
+        // get the index into the main things list
+        
+        // thingid = array_search(kindex, GLB.options["index"]);
+        var i = idxvals.findIndex(idx => idx === kindex);
+        var thingid = idxkeys[i];
+        
+        // if our thing is still in the master list, show it
+        if (thingid && allthings[thingid]) {
+            var thesensor = allthings[thingid];
 
-            if ( kindexarr.length > 3 ) {
-                zindex = kindexarr[3];
-                customname = kindexarr[4];
-            }
-            
-            // get the index into the main things list
-            
-            // thingid = array_search(kindex, GLB.indexoptions);
-            var idx;
-            var i = idxvals.findIndex(idx => idx === kindex);
-            var thingid = idxkeys[i];
-            
-            // if our thing is still in the master list, show it
-            if (thingid && allthings[thingid]) {
-                var thesensor = allthings[thingid];
+            // keep running count of things to use in javascript logic
+            cnt++;
+            $tc += makeThing(cnt, kindex, thesensor, roomtitle, postop, posleft, zindex, customname, false);
+        }
+    });
 
-                // keep running count of things to use in javascript logic
-                cnt++;
-                $tc += makeThing(cnt, kindex, thesensor, roomtitle, postop, posleft, zindex, customname, false);
-            }
-        });
-
-        // end the form and this panel
-        $tc += "</div></form>";
+    // end the form and this panel
+    $tc += "</div></form>";
 
     // end this tab which is a different type of panel
     $tc +="</div>";
@@ -1017,12 +1058,6 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     var pnames = processName(thesensor["name"], thingtype);
     var thingname = pnames[0];
     var subtype = pnames[1];
-//    if ( thingtype==="presence" ) {
-//        console.log("name debug: ", thingname, " subtype= ", subtype, pnames);
-//    }
-    
-    // if ( $thingtype==="control" ) { $subtype= " " . thesensor["name"]; }
-    
     postop= parseInt(postop);
     posleft = parseInt(posleft);
     zindex = parseInt(zindex);;
@@ -1169,7 +1204,6 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                     
                     var helperkey = "user_" + tkey;
                     var helperval = thingvalue[helperkey];
-                    var kpos = 0;;
                     if ( helperval && helperval.substr(0,2)==="::" ) {
                     
                         var ipos = helperval.indexOf("::",2);
@@ -1179,21 +1213,27 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                         var linktype;
                         var command;
                         var linkval;
+                        var realsubid = tkey;
                         if ( jpos===-1 ) { 
                             linktype = thingtype;
                             command = helperval.substring(2, ipos);
                             linkval = helperval.substring(ipos+2);
-                            // linkval = linktypeval.substr(2);
 
                         // case with tval = ::type::LINK::val &  linktypeval = ::LINK::val
                         } else {
                             linktype = helperval.substring(2, ipos);
                             command = helperval.substring(ipos+2, jpos);
-                            linkval = helperval.substr(jpos+2);
+                            var kpos = helperval.indexOf("::",jpos+2);
+                            if ( kpos>=0 ) {
+                                linkval = helperval.substring(jpos+2, kpos);
+                                realsubid = helperval.substring(kpos+2);
+                            } else {
+                                linkval = helperval.substr(jpos+2);
+                            }
                         }
                         // use the original type here so we have it for later
                         // but in the actual target we use the linktype
-                        sibling= "<div linktype=\""+linktype+"\" value=\""+tval+"\" linkval=\""+linkval+"\" command=\""+command+"\" subid=\""+tkey+"\" class=\"user_hidden\"></div>";
+                        sibling= "<div linktype=\""+linktype+"\" value=\""+tval+"\" linkval=\""+linkval+"\" command=\""+command+"\" subid=\""+realsubid+"\" class=\"user_hidden\"></div>";
                         // console.log("helperval: ", helperval);
                         // console.log(ipos, jpos, "sibling: ", sibling);
 
@@ -1202,7 +1242,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                         sibling = "";
                     }
 
-                    $tc += putElement(kindex, cnt, j, linktype, tval, tkey, subtype, bgcolor, sibling);
+                    $tc += putElement(kindex, cnt, j, linktype, tval, tkey, subtype, bgcolor, sibling, realsubid);
                     j++;
                 }
             }
@@ -1225,7 +1265,7 @@ function fixTrack(tval) {
     return tval;
 }
 
-function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibling) {
+function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibling, realsubid) {
     var $tc = "";
     var aitkey = "a-" + i + "-" + tkey;
     var pkindex = " p_" + kindex;
@@ -1326,7 +1366,12 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         } else {
             tkeyshow = " " + tkey;
         }
-        // include class for main thing type, the subtype, a sub-key, and a state (extra)
+
+        // add real sub for linked tiles
+        if ( realsubid && realsubid!==tkey ) {
+            tkeyshow = tkeyshow + " " + realsubid;
+        }
+         // include class for main thing type, the subtype, a sub-key, and a state (extra)
         // also include a special hack for other tiles that return number_ to remove that
         // this allows KuKu Harmony to show actual numbers in the tiles
         // finally, adjust for level sliders that can't have values in the content
@@ -1602,13 +1647,13 @@ function getCustomTile(custom_val, customtype, customid) {
                             // and there is more beyond the start than numbers
                             var realsubid = false;
                             for (var key in custom_val) {
-                                if ( key.indexOf(subid) === 0 ) {   // strpos(subid, key) === 0 ) {
+                                if ( subid.indexOf(key) === 0 ) {   // strpos(subid, key) === 0 ) {
                                     realsubid = key;
                                     break;
                                 }
                             }
                             if ( realsubid ) {
-                                custom_val[companion] = "::" + thetype + "::" + calltype + "::" + content;
+                                custom_val[companion] = "::" + thetype + "::" + calltype + "::" + content + "::" + realsubid;
                                 custom_val[subid]= thevalue[realsubid];
                             } else {
                                 custom_val[companion] = "::" + thetype + "::" + calltype + "::" + content;
@@ -1629,7 +1674,7 @@ function getCustomTile(custom_val, customtype, customid) {
                
                 } else if ( calltype==="RULE" ) {
                     custom_val[companion] = "::" + calltype + "::" + content;
-                    custom_val[subid] = "RULE::subid";
+                    custom_val[subid] = "RULE::" + subid;
 
                 } else {
                     // code for any user provided text string
@@ -1647,7 +1692,7 @@ function getCustomTile(custom_val, customtype, customid) {
     return custom_val;
 }
 
-function pushClient(swid, swtype, subid, body, popup) {
+function pushClient(swid, swtype, subid, body, linkinfo, popup) {
     // send the new results to all clients
     var entry = {};
     if ( typeof subid === "undefined" ) { subid= ""; }
@@ -1655,11 +1700,12 @@ function pushClient(swid, swtype, subid, body, popup) {
     entry["type"] = swtype;
     entry["clientcount"] = clients.length;
     entry["trigger"] = subid;
-    if ( typeof popup!=="undefined" ) {
-        entry["popup"] = popup;
+    if ( typeof popup!=="undefined" && popup===true ) {
+        entry["popup"] = "popup";
     } else {
         entry["popup"] = "";
     }
+    // console.log(entry);
     var thevalue;
 
     if ( typeof body === "undefined" || body==="" || !body ) {
@@ -1674,20 +1720,34 @@ function pushClient(swid, swtype, subid, body, popup) {
     }
 
     if ( thevalue["password"] ) { delete thevalue["password"]; }
-    if ( swtype==="music" ) {
-        if ( thevalue["trackDescription"] ) { delete thevalue["trackDescription"]; }
-        if ( thevalue["trackImage"] ) { delete thevalue["trackImage"]; }
-        if ( thevalue["currentArtist"] ) { delete thevalue["currentArtist"]; }
-        if ( thevalue["currentAlbum"] ) { delete thevalue["currentAlbum"]; }
-    }
+
+    // save the result to push to all clients
     entry["value"] = thevalue;
+    console.log("pushClient: ", thevalue, " linkinfo: ", linkinfo);
 
     // update the main array with changed push values
     if ( swid!=="reload" && swid!=="popup" ) {
         var idx = swtype + "|" + swid;
+        var lidx = "";
+        var lsubid = "";
+        var lreal = "";
+        if ( linkinfo && is_array(linkinfo) ) {
+            lidx = linkinfo[1] + "|" + linkinfo[0];
+            lsubid = linkinfo[2];
+            lreal = linkinfo[3];
+            // entry["LINK"] = linkinfo;
+        }
+
         if ( array_key_exists(idx, allthings) ) {
             for (var thekey in thevalue) {
                 allthings[idx]["value"][thekey] = thevalue[thekey];
+
+                // update the link that triggered if this was a link
+                // we do something similar on the client side to change
+                // all linked things that match this
+                if ( lidx && lsubid && lreal && lreal===thekey ) {
+                    allthings[lidx]["value"][lsubid] = thevalue[thekey];
+                }
             }
         }
     }
@@ -1699,7 +1759,7 @@ function pushClient(swid, swtype, subid, body, popup) {
 
 }
 
-function callHub(hub, swid, swtype, swval, swattr, subid) {
+function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
     var access_token = hub["hubAccess"];
     var endpt = hub["hubEndpt"];
     if ( hub["hubType"]==="SmartThings" || hub["hubType"]==="Hubitat" ) {
@@ -1709,7 +1769,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid) {
                     "swattr": swattr,
                     "swvalue": swval, 
                     "swtype": swtype};
-        if ( subid ) { nvpreq["subid"] = subid; }
+        if ( subid && subid!=="none" ) { nvpreq["subid"] = subid; }
         curl_call(host, header, nvpreq, false, "POST", getHubResponse);
     } else if ( hub["hubType"]==="ISY" ) {
         var buff = Buffer.from(access_token);
@@ -1723,7 +1783,6 @@ function callHub(hub, swid, swtype, swval, swattr, subid) {
         }
         // console.log("sent cmd: ", cmd);
         curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
-
     }
     
     function getHubResponse(err, res, body) {
@@ -1732,7 +1791,9 @@ function callHub(hub, swid, swtype, swval, swattr, subid) {
             console.log("Error calling hub: ", err);
         } else {
             console.log("doAction: ", swid, " type: ", swtype, " subid: ", subid, " value: ", body);
-            pushClient(swid, swtype, subid, body);
+            if ( body ) {
+                pushClient(swid, swtype, subid, body, linkinfo, popup);
+            }
         }
     }
 
@@ -1740,16 +1801,15 @@ function callHub(hub, swid, swtype, swval, swattr, subid) {
         if ( err ) {
             console.log("Error calling ISY node: ", err);
         } else {
-            // queryHub(hub, swid, swtype);
             var result = parser.parse(body);
             console.log("ISY action: ", result);
-            pushClient(swid, swtype, subid, result);
+            pushClient(swid, swtype, subid, result, linkinfo, popup);
         }
     }
 
 }
 
-function queryHub(hub, swid, swtype) {
+function queryHub(hub, swid, swtype, popup) {
     var access_token = hub["hubAccess"];
     var endpt = hub["hubEndpt"];
     if ( hub["hubType"]==="SmartThings" || hub["hubType"]==="Hubitat" ) {
@@ -1769,8 +1829,10 @@ function queryHub(hub, swid, swtype) {
         if ( err ) {
             console.log("Error requesting hub node properties: ", err);
         } else {
-            console.log("doQuery: ", body);
-            pushClient(swid, swtype, "none", body);
+            console.log("doQuery: ", swid, " type: ", swtype, " value: ", body);
+            if ( body ) {
+                pushClient(swid, swtype, "none", body, null, popup);
+            }
         }
     }
 
@@ -1781,11 +1843,12 @@ function queryHub(hub, swid, swtype) {
             var result = parser.parse(body);
             var properties = result.nodeInfo.properties;
             console.log("ISY query: ", result," properties: ", properties);
-            pushClient(swid, swtype, subid, result);
+            if ( result ) {
+                pushClient(swid, swtype, subid, result, null, popup);
+            }
         }
 
     }
-
 }
 
 function findHub(hubid) {
@@ -1797,14 +1860,24 @@ function findHub(hubid) {
     return hub;
 }
 
-function doAction(hubid, swid, swtype, swval, swattr, subid, command) {
+function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, linkval, protocol) {
 
     // get the hub being acted upon
-    var response = "";
-    var hub = findHub(hubid);
-    var idx = swtype + "|" + swid;
+    var response = {};
+    var idx;
+
+    if ( (swid==="none" || swtype==="none" || swtype==="" || swid==="" || swid==="0") && tileid )  {
+        idx = array_search(tileid, GLB.options["index"]);
+        if ( idx===false || idx.indexOf("|")===-1 ) {
+            return "error - invalid tile: " + tileid;
+        }
+        var items = idx.split("|");
+        swtype = items[0];
+        swid = items[1];
+    } else {
+        idx = swtype + "|" + swid;
+    }
     var specialtiles = utils.getSpecials();
-    // console.log(hubid, hub);
 
     // handle clocks
     if ( (typeof command==="undefined" || command==="") && swid==="clockdigital") {
@@ -1827,32 +1900,178 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, command) {
         thingvalue = returnFile(thingvalue, swtype);
         response = thingvalue;
     } else {
-        callHub(hub, swid, swtype, swval, swattr, subid);
-        response = "success";
+
+        // get the hub to call
+        if ( hubid==="auto" ) {
+            hubid = allthings[idx]["hubnum"];
+        }
+        var hub = findHub(hubid);
+
+        // first check if this subid has a companion link or post element
+        // and if so, handle differently using the linked info or making a web service call
+        // this requires alloptions to be loaded which is true if an active session
+        // which is fine because linked tiles don't make sense for API calls anyway
+        // use command to signal this - HUB is usual case which makes hub call
+        if ( command==="" || !command ) {
+            linkval = "";
+            command = "HUB";
+        }
+    
+        switch(command) {
+
+            case "POST":
+            case "PUT":
+            case "GET":
+                var posturl = decodeURIComponent(linkval);
+                curl_call(posturl, false, false, false, command, urlCallback);
+                break;
+            
+            case "TEXT":
+                response[subid] = linkval;
+                break;
+
+            case "LINK":
+                var lidx = array_search(linkval, GLB.options["index"]);
+
+                if ( lidx ) {
+                    var $linked_hubnum = allthings[lidx]["hubnum"];
+                    var $linked_swtype = allthings[lidx]["type"];
+                    var $linked_swid = allthings[lidx]["id"];
+                    var $linked_val = allthings[lidx]["value"];
+
+                    // make hub call if requested and if the linked tile has one
+                    var $lhub = findHub($linked_hubnum);
+
+                    // if the link subid is in the linked tile then it is the real subid
+                    // otherwise it is a duplicate with info after subid so lets find the real one
+                    // this is what allows us to have the same subid referenced to different tiles
+                    if ( array_key_exists(subid, $linked_val) ) {
+                        var $realsubid = subid;
+                    } else {
+                        $realsubid = false;
+                        for (var key in $linked_val) {
+                            if ( subid.indexOf(key) === 0 ) {   //  strpos($subid, $key) === 0 ) {
+                                $realsubid = key;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // make the action call on the linked thing
+                    // the hub callback now handles the linked resposnes properly
+                    if ( $realsubid ) {
+                        var linkinfo = [swid, swtype, subid, $realsubid];
+                        callHub($lhub, $linked_swid, $linked_swtype, swval, swattr, $realsubid, linkinfo, false);
+                    }
+                }
+                break;
+
+            case "RULE":
+                var rulecommands = linkval.split(",");
+                rulecommands.forEach(function(rule) {
+
+                    rule = rule.trim();
+                    var rulepair = rule.split("=");
+                    var tileid = parseInt(rulepair[0]);
+                    
+                    // only process rules here that are tile id based simple actions
+                    if ( rulepair.length===3 && !isNaN(tileid) ) {
+                                                
+                        subid = rulepair[1].toString().trim();
+                        swval = rulepair[2].toString().trim();
+                        idx = array_search(tileid, GLB.options["index"]);
+                        items = idx.split("|");
+                        swtype = items[0];
+                        swid = items[1];
+                        if ( subid==="level" || subid==="colorTemperature" ) {
+                            swattr=level;
+                        } else if ( subid==="switch") {
+                            swattr="";
+                        } else {
+                            swattr= swtype + " p_" + tileid + " " + swval;
+                        }
+                        hubid = allthings[idx]["hubnum"];
+                        var hub = findHub(hubid);
+                        console.log(tileid, swid, swtype, swval, swattr, subid);
+                        callHub(hub, swid, swtype, swval, swattr, subid, false, false);
+                    }
+                });
+                response = "success";
+                console.log("RULE: ", rulecommands);
+                break;
+
+            case "HUB":
+                callHub(hub, swid, swtype, swval, swattr, subid, false, false);
+                response = "success";
+                break;
+
+            default:
+                response = "error";
+        }
+
+
+    }
+
+    function urlCallback(err, res, body) {
+        var webresponse = {};
+        if ( err ) {
+            webresposne[subid] = command + ": error";
+        } else if ( typeof body === "object" ) {
+            webresponse[subid] = JSON.stringify(body);
+        } else {
+            webresponse[subid] = body;
+        }
+        // push the response to the clients
+        pushClient(swid, swtype, subid, webresponse);
     }
 
     // while (!finished) { }
     return response;
 }
 
-function doQuery(hubid, swid, swtype) {
+function doQuery(hubid, swid, swtype, tileid, protocol) {
     var result;
-    if ( (swid==="all" && swtype==="all") || (swid==="fast"  && swtype==="fast") || (swid==="slow" && swtype==="slow") ) {
+    if ( (swid==="all") || (swid==="fast"  && swtype==="fast") || (swid==="slow" && swtype==="slow") ) {
         result = {};
         for (var idx in (allthings || {}) ) {
             var res = allthings[idx];
-            var tileid = GLB.options["index"][idx];
-            result[tileid] = res;
+            var item = GLB.options["index"][idx];
+            result[item] = res;
         }
     } else {
-        var idx = swtype + "|" + swid;
-        if ( allthings && array_key_exists(idx, allthings) && array_key_exists("value", allthings[idx]) ) {
-            // result = allthings[idx]["value"];
-            // could use this to pop up results on window
-            queryHub(hubid, swid, swtype);
-            result = "success";
+        if ( (swid==="none" || swtype==="none" || swtype==="" || swid==="" || swid==="0") && tileid )  {
+            idx = array_search(tileid, GLB.options["index"]);
+            if ( idx===false || idx.indexOf("|")===-1 ) {
+                return "error - invalid tile: " + tileid;
+            }
+            var items = idx.split("|");
+            swtype = items[0];
+            swid = items[1];
         } else {
-            result = "error";
+            idx = swtype + "|" + swid;
+        }
+
+        if ( allthings && array_key_exists(idx, allthings) && array_key_exists("value", allthings[idx]) ) {
+            // return current value and send updated value after hub call to clients and popup window
+            if ( hubid==="auto" ) {
+                hubid = allthings[idx]["hubnum"];
+            }
+            var hub = findHub(hubid);
+            result = allthings[idx]["value"];
+            if ( result["password"] ) {
+                delete result["password"];
+            }
+
+            // only query the hub which pushes update to GUI if we queried using POST
+            // which normally is only from GUI but user could use POST so beware
+            // that if you use the HP api in POST mode that all clients will be updated
+            // whenever you query a tile. To avoid this use the GET method to query a tile
+            // note that actions will always update clients to keep them in sync
+            if ( protocol==="POST" ) {
+                queryHub(hub, swid, swtype, false);
+            }
+        } else {
+            result = "error - invalid api request. hubid= " + hubid + " id= " + swid + " type= " + swtype + " tile= " + tileid;
         }
     }
     return result;
@@ -2101,7 +2320,8 @@ function getInfoPage(returnURL, pathname) {
     var specialtiles = utils.getSpecials();
     
     var $tc = "";
-    $tc += utils.getHeader("skin-housepanel");
+    var skin = getSkin();
+    $tc += utils.getHeader(skin);
     $tc += "<h3>" + utils.APPNAME + " Information Display</h3>";
 
     $tc += "<form>";
@@ -2321,7 +2541,6 @@ function getOptionsPage(pathname) {
     var retpage = GLB.returnURL;
     var $thingtypes = utils.getTypes();
     var $specialtiles = utils.getSpecials();
-    // sort($thingtypes);
 
     var $options = GLB.options;
     var $roomoptions = $options["rooms"];
@@ -2330,7 +2549,7 @@ function getOptionsPage(pathname) {
     var $useroptions = $options["useroptions"];
     var $configoptions = $options["config"];
     var $hubs = $configoptions["hubs"];
-    var $skin = getSkin();
+    var skin = getSkin();
     var $port = $configoptions["port"];
     var $webSocketServerPort = $configoptions["webSocketServerPort"];
     var $fast_timer = $configoptions["fast_timer"];
@@ -2345,7 +2564,7 @@ function getOptionsPage(pathname) {
     }
     
     var $tc = "";
-    $tc += utils.getHeader($skin);
+    $tc += utils.getHeader(skin);
     $tc += "<h3>" + utils.APPNAME + " Options</h3>";
     $tc += "<div class=\"formbutton formauto\"><a href=\"" + retpage + "\">Cancel and Return to HousePanel</a></div>";
     $tc += "<div id=\"optionstable\" class=\"optionstable\">";
@@ -2361,7 +2580,7 @@ function getOptionsPage(pathname) {
     $tc+= "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + retpage + "\"  method=\"POST\">";
 
     // $tc+= "<div class=\"filteroption\">";
-    // $tc+= tsk($timezone, $skin, $uname, $port, $webSocketServerPort, $fast_timer, $slow_timer);
+    // $tc+= tsk($timezone, skin, $uname, $port, $webSocketServerPort, $fast_timer, $slow_timer);
     // $tc+= "</div>";
 
     $tc+= "<div class=\"filteroption\">Specify number of special tiles: ";
@@ -2411,7 +2630,7 @@ function getOptionsPage(pathname) {
     $tc+= "<tbody>";
 
     // sort the things
-    // uasort($allthings, "mysortfunc");
+    // uasort(allthings, "mysortfunc");
     
     // now print our options matrix
     // $rowcnt = 0;
@@ -2520,6 +2739,8 @@ function getOptionsPage(pathname) {
 // renders the main page
 function mainPage(proto, hostname, pathname) {
     var $tc = "";
+
+    console.log("Displaying main HousePanel web page");
 
     var thingoptions = GLB.options["things"];
     var roomoptions = GLB.options["rooms"];
@@ -2676,7 +2897,7 @@ function processOptions($optarray) {
     // // get logged in user or set default if not logged in
     var $uname = getUserName();
     var $olduname = $uname;
-    var $skin = $configoptions["skin"];
+    var skin = $configoptions["skin"];
     
     
     // // get default pw and its skin
@@ -2685,24 +2906,24 @@ function processOptions($optarray) {
     //     if ( array_key_exists($uname, $pwords) ) {
     //         if ( is_array($pwords[$uname]) ) {
     //             $hash = $pwords[$uname][0];
-    //             $skin = $pwords[$uname][1];
+    //             skin = $pwords[$uname][1];
     //         } else {
     //             $hash = $pwords[$uname];
-    //             $pwords[$uname] = array($hash, $skin);
+    //             $pwords[$uname] = array($hash, skin);
     //             $configoptions["pword"] = $pwords;
     //         }
     //     } else {
     //         $pwords = array();
-    //         $pwords[$uname] = array($hash, $skin);
+    //         $pwords[$uname] = array($hash, skin);
     //         $configoptions["pword"] = $pwords;
     //     }
     // } else {
     //     $pwords = array();
     //     $hash = "";
-    //     $pwords[$uname] = array($hash, $skin);
+    //     $pwords[$uname] = array($hash, skin);
     //     $configoptions["pword"] = $pwords;
     // }
-    // $defskin = $skin;
+    // $defskin = skin;
     // $oldhash = $hash;
     // $hash = "";
     
@@ -2722,7 +2943,7 @@ function processOptions($optarray) {
         if ($key==="options" || $key==="api" || $key==="useajax" ) {
             continue;
         } else if ($key==="skin") {
-            $skin = $val;
+            skin = $val;
         } else if ( $key==="kiosk") {
             $configoptions["kiosk"] = "true";
         } else if ( $key==="rules") {
@@ -2851,13 +3072,13 @@ function processOptions($optarray) {
     // $configoptions["timezone"] = $timezone;
 
     // // set the skin if it is a good one or use default from above
-    // if ( $skin && file_exists($skin . "/housepanel.css") ) {
-    //     if ( !file_exists($skin . "/customtiles.css") ) {
-    //         writeCustomCss($skin, "");
+    // if ( skin && file_exists(skin . "/housepanel.css") ) {
+    //     if ( !file_exists(skin . "/customtiles.css") ) {
+    //         writeCustomCss(skin, "");
     //     }
-    //     $configoptions["skin"] = $skin;
+    //     $configoptions["skin"] = skin;
     // } else {
-    //     $skin = $defskin;
+    //     skin = $defskin;
     // }
     
     // // process username and password settings and save in skin specific loc
@@ -2866,7 +3087,7 @@ function processOptions($optarray) {
     // if ( $uname === $olduname ) {
     //     $hash = $oldhash;
     // }
-    // $pwords[$uname] = array($hash, $skin);
+    // $pwords[$uname] = array($hash, skin);
     
     // // now set all the parameters with complex logic
     // $configoptions["pword"] = $pwords;
@@ -2904,18 +3125,14 @@ function saveFilters(body) {
         rewrite = true;
     }
 
-    var skin = getSkin();
-    if ( typeof body.skin !== "undefined" ) {
-        skin = body.skin;
-    }
-
     if ( typeof body.huboptpick !== "undefined" ) {
         GLB.options["config"]["hubpick"] = body.huboptpick;
         rewrite = true;
     }
 
     // set the skin and replace the custom file with that skin's version
-    if ( skin && fs.existsSync(skin + "/housepanel.css") ) {
+    if ( typeof body.skin !== "undefined" && body.skin && fs.existsSync(body.skin + "/housepanel.css") ) {
+        var skin = body.skin;
 
         // save the skin in my user specific setting
         var $uname = getUserName();
@@ -3157,6 +3374,258 @@ function delCustom(swid, swtype, swval, swattr, subid) {
     return thingval;
 }
 
+function apiCall(body, protocol) {
+    var config = GLB.options.config;
+    var hubs = config["hubs"];
+
+    if ( body['useajax'] ) {
+        var api = body['useajax'];
+    } else {
+        api = body['api'] || "";
+    }
+    var swid = body["id"] || "none";
+    var swtype = body["type"] || "none";
+    var swval = body["value"] || "";
+    var swattr = body["attr"] || "";
+    var subid = body["subid"] || "";
+    var tileid = body["tile"] || "";
+    var command = body["command"] || "";
+    var linkval = body["linkval"] || "";
+
+    if ( hubs && hubs.length ) {
+        var defhub = hubs[0]["hubId"];
+    } else {
+        defhub = "-1";
+    }
+    var hubid = body["hubid"] || "auto";
+    if ( body["hubnum"] ) {
+        var hubnum = parseInt(body["hubnum"]);
+        if ( !isNaN(hubnum) && hubnum >=0 && hubnum < hubs.length ) {
+            hubid = hubs[hubnum]["hubId"];
+        } else {
+            hubid = defhub;
+        }
+    }
+
+    // handle multiple api calls but only for tiles since nobody would ever give a list of long id's
+    if ( tileid && tileid.indexOf(",") !== -1 ) {
+        var multicall = true;
+        var tilearray = tileid.split(",");
+    } else {
+        multicall = false;
+    }
+
+    var result;
+    switch (api) {
+        
+        case "doaction":
+            if ( multicall ) {
+                result = [];
+                tilearray.forEach(function(atile) {
+                    var aresult = doAction("auto", "", "", swval, swattr, subid, atile, "", "", protocol);
+                    result.push(aresult);
+                });
+            } else {
+                result = doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, linkval, protocol);
+            }
+            break;
+            
+        case "doquery":
+            if ( multicall ) {
+                result = [];
+                tilearray.forEach(function(atile) {
+                    var aresult = doQuery("auto", "", "", atile, protocol);
+                    result.push(aresult);
+                });
+            } else {
+                result = doQuery(hubid, swid, swtype, tileid, protocol);
+            }
+            break;
+            
+        case "getthings" :
+            var reload = ( body['swattr']==="reload" );
+            if ( reload && protocol==="POST" ) {
+                getAllThings();
+            }
+            result = clone(allthings);
+            break;
+
+        case "wysiwyg2":
+            // if we sorted the user fields in the customizer, save them
+            if ( is_array(swattr) ) {
+                GLB.options["user_" + swid] = swattr;
+                writeOptions(GLB.options);
+            }
+
+        case "wysiwyg":
+            if ( swtype==="page" && api==="wysiwyg" ) {
+                // make the fake tile for the room for editing purposes
+                var faketile = {"panel": "Panel", "tab": "Tab Inactive", "tabon": "Tab Selected"};
+                var thing = { "id": "r_" + swid, "name": swval, 
+                              "hubnum": -1, "type": "page", "value": faketile};
+                result = makeThing(0, tileid, thing, swval, 0, 0, 99, "", api);
+            } else {
+                var idx = swtype + "|" + swid;
+                var thing = allthings[idx];
+                result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 99, "", api);
+            }
+            break;
+                
+        case "getoptions":
+            var reload = ( body['swattr']==="reload" );
+            if ( reload ) {
+                readOptions();
+            }
+            result = GLB.options;
+            break;
+
+        case "showid":
+        case "showoptions":
+            var result = "error - [" + api + "] API call is no longer supported.";
+            console.log(result);
+            break;
+
+        case "refresh":
+            getAllThings();
+            result = "success";
+            break;
+            
+        case "savetileedit":
+            var partnum = parseInt(swid);
+            var skin = getSkin();
+            result = writeCustomCss(partnum, skin, swval);
+            break;
+
+        case "pageorder":
+            result = setOrder(swid, swtype, swval, swattr);
+            break;
+
+        case "pageadd":
+            result = addPage();
+            break;
+
+        case "pagedelete":
+            result = delPage(swval);
+            break;
+    
+        case "getcatalog":
+            result = getCatalog(swattr);
+            break;
+
+        case "dragdrop":
+            result = setPosition(swid, swtype, swval, swattr);
+            break;
+
+        case "dragmake":
+            result = addThing(swid, swtype, swval, swattr);
+            break;
+    
+        case "dragdelete":
+            result = delThing(swid, swtype, swval, swattr);
+            break;
+    
+        case "updatenames":
+            result = updateNames(swid, tileid, swval, swattr);
+            break;
+
+        case "saveoptions":
+            if ( protocol==="POST" ) {
+                processOptions(body);
+                result = "success";
+            } else {
+                result = "error - api call [" + api + "] not supported in GET mode.";
+            }
+            break;
+
+        case "filteroptions":
+            saveFilters(body);
+            result = "success";
+            break;
+        
+        case "refactor":
+            if ( protocol==="POST" ) {
+                refactorOptions();
+                getAllThings();
+                result = "success";
+            } else {
+                result = "error - api call [" + api + "] not supported in GET mode.";
+            }
+            break;
+            
+        case "geticons":
+            var result = getIcons(swval, swattr);
+            break;
+
+        case "pwhash":
+            var result;
+            if ( swtype==="hash" ) {
+                result = pw_hash(swval);
+            } else if ( swtype==="verify" ) {
+                if ( pw_verify(swval, swattr) ) {
+                    result = "success";
+                } else {
+                    result = "error";
+                }
+            } else {
+                result = "error";
+            }
+            break;
+
+        case "addcustom":
+            var result = {}
+            result.value = addCustom(swid, swtype, swval, swattr, subid);
+            result.options = GLB.options;
+            result.things = allthings;
+            break;
+
+        case "delcustom":
+            var result = {}
+            result.value = delCustom(swid, swtype, swval, swattr, subid);
+            result.options = GLB.options;
+            result.things = allthings;
+            break;
+        
+        case "dologin":
+            if ( protocol==="POST" ) {
+                var uname = body["uname"];
+                var pword = body["pword"];
+                if ( pword!=="" ) {
+                    var thehash = crypto.createHash("sha256");
+                    thehash.update(pword);
+                    pword = thehash.digest('hex');
+                }
+
+                // check to see if the provided username is valid
+                // and that the passwords match
+                var result = "error";
+                var pwords = GLB.options["config"]["pword"];
+
+                if ( DEBUG2 ) {
+                    console.log("dologin: uname= ", uname, " pword: ", pword, " body: ", body, " pwords: ", pwords);
+                }
+
+                if ( array_key_exists(uname, pwords ) ) {
+                    var pw = pwords[uname];
+                    if ( pw[0] === pword ) {
+                        GLB.options["config"]["uname"] = uname;
+                        GLB.options["config"]["skin"] = pw[1];
+                        writeOptions(GLB.options);
+                        result = "success";
+                    }
+                }
+            } else {
+                result = "error - api call [" + api + "] not supported in GET mode.";
+            }
+            break;
+
+        default:
+            result = "error - unrecognized " + protocol + " api call: " + api;
+            break;
+    }
+    return result;
+
+}
+
 // ***************************************************
 // beginning of main routine
 // ***************************************************
@@ -3256,10 +3725,30 @@ if ( app && applistening ) {
         
         var hostname = req.protocol + "://" + req.headers.host;
         console.log((new Date()) + " serving page at: ", hostname);
+        var $tc;
 
         if ( req.path==="/" || typeof req.path==="undefined" || req.path==="/undefined" || req.path==="undefined" ) {
             // set the global variable so other functions can return here
-            var $tc = mainPage(req.protocol, req.headers.host, req.path);
+
+            var queryobj = req.query || {};
+            var isquery = (utils.count(queryobj) > 0);
+            if ( array_key_exists("code", queryobj) ) {
+                var code = queryobj.code;
+                if ( code==="reset" ) {
+                    config["pword"] = {};
+                    config["pword"]["default"] = ["", "skin-housepanel"];
+                    config["uname"] = "default";
+                    GLB.options["config"] = config;
+                    writeOptions(GLB.options);
+                }
+
+                // TODO - puth hub auth logic flow here
+            } else if ( isquery ) {
+                console.log("api call: ",  queryobj);
+                $tc = apiCall(queryobj, "GET");
+            } else {
+                $tc = mainPage(req.protocol, req.headers.host, req.path);
+            }
             res.send($tc);
             res.end();
 
@@ -3273,8 +3762,15 @@ if ( app && applistening ) {
             res.send($tc);
             res.end();
 
-        } else if ( req.path==="/dologin") {
+        } else if ( req.path==="/logout") {
             var $tc = getLoginPage();
+            GLB.options.config["uname"] = "";
+            writeOptions(GLB.options, true);
+            res.send($tc);
+            res.end();
+
+        } else if ( req.path==="/reauth") {
+            var $tc = getAuthPage();
             res.send($tc);
             res.end();
 
@@ -3346,198 +3842,11 @@ if ( app && applistening ) {
 
         // handle all api calls upon the server from js client here
         } else if ( typeof req.body['useajax']!=="undefined" || typeof req.body["api"]!=="undefined" ) {
-            
-            if ( req.body['useajax'] ) {
-                var api = req.body['useajax'];
-            } else {
-                api = req.body['api'];
-            }
-            var swid = req.body["id"] || "0";
-            var swtype = req.body["type"] || "none";
-            var swval = req.body["value"] || "none";
-            var swattr = req.body["attr"] || "none";
-            var subid = req.body["subid"] || "";
-            var tileid = req.body["tile"] || "";
-            var command = req.body["command"] || "";
-
-            if ( hubs && hubs.length ) {
-                var defhub = hubs[0]["hubId"];
-            } else {
-                defhub = "-1";
-            }
-            var hubid = req.body["hubid"] || defhub;
-            var result;
-            
-            switch(api) {
-                
-                case "doaction":
-                    result = doAction(hubid, swid, swtype, swval, swattr, subid, command);
-                    res.json(result);
-                    break;
-                    
-                case "doquery":
-                    result = doQuery(hubid, swid, swtype);
-                    res.json(result);
-                    break;
-                    
-                case "getthings" :
-                    var reload = ( req.body['swattr']==="reload" );
-                    if ( reload ) {
-                        getAllThings();
-                    }
-                    res.json(allthings);
-                    break;
-
-                case "wysiwyg2":
-                    // if we sorted the user fields in the customizer, save them
-                    if ( is_array(swattr) ) {
-                        GLB.options["user_" + swid] = swattr;
-                        writeOptions(GLB.options);
-                    }
-
-                case "wysiwyg":
-                    if ( swtype==="page" && api==="wysiwyg" ) {
-                        // make the fake tile for the room for editing purposes
-                        var faketile = {"panel": "Panel", "tab": "Tab Inactive", "tabon": "Tab Selected"};
-                        var thing = { "id": "r_" + swid, "name": swval, 
-                                      "hubnum": -1, "type": "page", "value": faketile};
-                        var tilejson = makeThing(0, tileid, thing, swval, 0, 0, 99, "", api);
-                    } else {
-                        var idx = swtype + "|" + swid;
-                        var thing = allthings[idx];
-                        tilejson = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 99, "", api);
-                    }
-                    res.json(tilejson);
-                    break;
-                        
-                case "getoptions":
-                    var reload = ( req.body['swattr']==="reload" );
-                    if ( reload ) {
-                        readOptions();
-                    }
-                    res.json(GLB.options);
-                    break;
-
-                case "showid":
-                case "showoptions":
-                        console.log("Warning: " + api + " API call is no longer supported.");
-                    res.json("success");
-                    break;
-
-                case "refresh":
-                    console.log("refreshing tiles");
-                    getAllThings();
-                    res.json("success");
-                    break;
-                    
-                case "savetileedit":
-                    var partnum = parseInt(swid);
-                    var skin = getSkin();
-                    var result = writeCustomCss(partnum, skin, swval);
-                    res.json(result);
-                    break;
-
-                case "pageorder":
-                    var result = setOrder(swid, swtype, swval, swattr);
-                    res.json(result);
-                    break;
-
-                case "pageadd":
-                    var result = addPage();
-                    res.json(result);
-                    break;
+            var result = apiCall(req.body, "POST");
+            res.json(result);
+            res.end();
         
-                case "pagedelete":
-                    var result = delPage(swval);
-                    res.json(result);
-                    break;
-            
-                case "getcatalog":
-                    var result = getCatalog(swattr);
-                    res.json(result);
-                    break;
-        
-                case "dragdrop":
-                    var result = setPosition(swid, swtype, swval, swattr);
-                    res.json(result);
-                    break;
-
-                // make new tile from drag / drop
-                case "dragmake":
-                    var result = addThing(swid, swtype, swval, swattr);
-                    res.json(result);
-                    break;
-            
-                // remove tile from drag / drop
-                case "dragdelete":
-                    var result = delThing(swid, swtype, swval, swattr);
-                    res.json(result);
-                    break;
-            
-
-                case "updatenames":
-                    var result = updateNames(swid, tileid, swval, swattr);
-                    res.json(result);
-                    break;
-
-                case "saveoptions":
-                    processOptions(req.body);
-                    res.json("success");
-                    break;
-
-                case "filteroptions":
-                    saveFilters(req.body);
-                    res.json("success");
-                    break;
-                
-                case "refactor":
-                    refactorOptions();
-                    getAllThings();
-                    res.json("success");
-                    break;
-                    
-                case "geticons":
-                    var icons = getIcons(swval, swattr);
-                    res.json(icons);
-                    break;
-
-                case "pwhash":
-                    var presult;
-                    if ( swtype==="hash" ) {
-                        presult = pw_hash(swval);
-                    } else if ( swtype==="verify" ) {
-                        if ( pw_verify(swval, swattr) ) {
-                            presult = "success";
-                        } else {
-                            presult = "error";
-                        }
-                    } else {
-                        presult = "error";
-                    }
-                    res.json(presult);
-                    break;
-        
-                case "addcustom":
-                    var result = {}
-                    result.value = addCustom(swid, swtype, swval, swattr, subid);
-                    result.options = GLB.options;
-                    result.things = allthings;
-                    res.json(result);
-                    break;
-
-                case "delcustom":
-                    var result = {}
-                    result.value = delCustom(swid, swtype, swval, swattr, subid);
-                    result.options = GLB.options;
-                    result.things = allthings;
-                    res.json(result);
-                    break;
-    
-                default:
-                    res.json(req.body);
-                    break;
-            }
-            
+        // handle unknown requests
         } else {
             console.log((new Date()) + "hpserver received unknown message.", req.body);
             res.json('hpserver received unknown message.');
