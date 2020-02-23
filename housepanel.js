@@ -325,12 +325,12 @@ function setupUserOpts() {
 
     // this can be disabled by setting anything less than 1000
     // dont need slow and fast timers for Node since it has state
-    if ( fast_timer && fast_timer >= 1000 ) {
-        setupTimer(fast_timer, "fast", -1);
-    }
-        if ( slow_timer && slow_timer >= 1000 ) {
-        setupTimer(slow_timer, "slow", -1);
-    }
+    // if ( fast_timer && fast_timer >= 1000 ) {
+    //     setupTimer(fast_timer, "fast", -1);
+    // }
+    //     if ( slow_timer && slow_timer >= 1000 ) {
+    //     setupTimer(slow_timer, "slow", -1);
+    // }
 
     // get the webSocket info and the timers
     try {
@@ -406,6 +406,7 @@ function setupWebsocket()
             var thetype = presult.type;
             var client = presult.client;
             var clientcount = presult.clientcount;
+            var trigger = presult.trigger;
 
             // reload page if signalled from server
             if ( bid==="reload" && thetype==="reload" ) {
@@ -439,7 +440,6 @@ function setupWebsocket()
 
             // grab name and trigger for console log
             var pname = pvalue["name"] ? pvalue["name"] : "";
-            var trigger = presult.trigger;
 
             // remove reserved fields
             $.each(reservedcap, function(index, val) {
@@ -454,23 +454,6 @@ function setupWebsocket()
         } catch (err) {
             console.log("Error interpreting webSocket message. err: ", err);
             return;
-        }
-        
-        if ( thetype==="music" ) {
-            // remove any existing image since it could be old
-            // if ( pvalue["trackImage"] ) {
-            //     delete( pvalue["trackImage"] );
-            // }
-            // skip music track descriptions that start with grouped to avoid
-            // overwriting more useful variant also typically sent previously
-//            var desc = pvalue["trackDescription"];
-//            if ( desc && desc.startsWith("Grouped with") ) {
-//                delete( pvalue["trackDescription"] );
-//            }
-            
-            if ( pvalue["status"] === "stopped" ) {
-                pvalue["trackDescription"] = "None";
-            }
         }
         
         // check if we have valid info for this update item
@@ -491,6 +474,39 @@ function setupWebsocket()
                     updateTile(aid, pvalue);
                 } catch (e) {
                     console.log("Error updating tile of type: "+ thetype + " and id: " + bid + " with value: ", pvalue);
+                }
+            });
+
+            // handle links - loop through all tiles that have a link to see if they match
+            // because this link shadow field has the real subid triggered we dont have to check subid below
+            console.log("trigger= ", trigger);
+            $('div.panel div[command="' + "LINK" + '"][subid="' + trigger + '"]').each(function() {
+
+                // get the id to see if it is the thing being updated
+                var linkedtile = $(this).attr("linkval");
+                var src = $("div.thing.p_"+linkedtile);
+                var lbid = src.attr("bid");
+
+                // if we have a match, update the sibling field
+                if ( lbid === bid ) {
+                    var sibling = $(this).next();
+                    var oldvalue = sibling.html();
+                    var oldclass = $(sibling).attr("class");
+                    var value = pvalue[trigger];
+
+                    // swap out the class and change value
+                    if ( oldclass && oldvalue && value &&
+                         trigger!=="name" && trigger!=="trackImage" && trigger!=="color" &&
+                         trigger!=="trackDescription" && trigger!=="mediaSource" &&
+                         trigger!=="currentArtist" && trigger!=="currentAlbum" &&
+                         $.isNumeric(value)===false && 
+                         $.isNumeric(oldvalue)===false &&
+                         oldclass.indexOf(oldvalue)>=0 ) 
+                    {
+                            $(sibling).removeClass(oldvalue);
+                            $(sibling).addClass(value);
+                    }
+                    $(sibling).html( pvalue[trigger] );
                 }
             });
         }
@@ -678,20 +694,12 @@ function processLinks(pname, bid, thetype, trigger, pvalue) {
             // invoke the command for the subscribed tile
             var currentvalue = $("#a-"+aid+"-"+subidtrigger).html();
 
+            // like other places don't update tile here
             if ( ontrigger && ontrigger !== currentvalue ) {
                 var ajaxcall = "doaction";
                 console.log("LINK trigger for tile: ", tilenum, "trigger: ", trigger, " type: ", trtype, " bid: ", trbid, "subid: ", subidtrigger, " current: ",currentvalue," ontrigger: ", ontrigger);
                 $.post(cm_Globals.returnURL, 
-                       {useajax: ajaxcall, id: trbid, type: trtype, value: ontrigger, attr: theattr, hubid: hubnum, subid: subidtrigger},
-                       function (presult, pstatus) {
-                            if (pstatus==="success" && typeof presult === "object" ) {
-                                console.log( ajaxcall + ": POST returned: ", presult );
-                                if ( presult["name"] ) { delete presult["name"]; }
-                                if ( presult["password"] ) { delete presult["password"]; }
-                                updateTile(aid, presult);
-                            }
-                       }, "json"
-                );
+                       {useajax: ajaxcall, id: trbid, type: trtype, value: ontrigger, attr: theattr, hubid: hubnum, subid: subidtrigger} );
             }
             
         }
@@ -915,16 +923,7 @@ function setupColors() {
                 var ajaxcall = "doaction";
                 console.log(ajaxcall + ": id= "+bid+" type= "+ thetype+ " color= "+ hslstr);
                 $.post(cm_Globals.returnURL, 
-                       {useajax: ajaxcall, id: bid, type: thetype, value: hslstr, attr: "color", hubid: hubnum},
-                       function (presult, pstatus) {
-                            if (pstatus==="success" && typeof presult==="object") {
-                                console.log(ajaxcall + ": value: ", presult);
-                                if ( presult["name"] ) { delete presult["name"]; }
-                                if ( presult["password"] ) { delete presult["password"]; }
-                                updateTile(aid, presult);
-                            }
-                       }, "json"
-                );
+                       {useajax: ajaxcall, id: bid, type: thetype, value: hslstr, attr: "color", hubid: hubnum} );
             }
         });
     });   
@@ -973,19 +972,8 @@ function setupSliders() {
             }
 
             $.post(cm_Globals.returnURL, 
-                {useajax: ajaxcall, id: bid, type: linktype, value: thevalue, attr: "level", subid: subid, hubid: hubnum, command: command, linkval: linkval},
-                function (presult, pstatus) {
-                    if (pstatus==="success" && typeof presult==="object" ) {
-                        // console.log( ajaxcall + ": POST returned: ", presult );
-                        if ( presult["name"] ) { delete presult["name"]; }
-                        if ( presult["password"] ) { delete presult["password"]; }
-                        setTimeout(function() {
-                            updateTile(aid, presult);
-                        }, updwait);
-                    }
-                    console.log( ajaxcall + ": POST returned: ", presult );
-                }, "json"
-            );
+                {useajax: ajaxcall, id: bid, type: linktype, value: thevalue, attr: "level", 
+                 subid: subid, hubid: hubnum, command: command, linkval: linkval} );
         }
     });
 
@@ -1017,7 +1005,6 @@ function setupSliders() {
             var command = "";
             var linktype = thetype;
             var linkval = "";
-            var updwait = 200;
             if ( usertile ) {
                 command = $(usertile).attr("command");    // command type
                 if ( !thevalue ) {
@@ -1030,18 +1017,8 @@ function setupSliders() {
             console.log(ajaxcall + ": command= " + command + " id= "+bid+" type= "+linktype+ " value= " + thevalue + " subid= " + subid + " command= " + command + " linkval: ", linkval);
             
             $.post(cm_Globals.returnURL, 
-                {useajax: ajaxcall, id: bid, type: thetype, value: parseInt(ui.value), attr: "colorTemperature", subid: subid, hubid: hubnum, command: command, linkval: linkval },
-                function (presult, pstatus) {
-                    if (pstatus==="success" && typeof presult==="object" ) {
-                        if ( presult["name"] ) { delete presult["name"]; }
-                        if ( presult["password"] ) { delete presult["password"]; }
-                        setTimeout(function() {
-                            updateTile(aid, presult);
-                        }, updwait);
-                    }
-                    console.log( ajaxcall + ": POST returned: ", presult );
-                }, "json"
-            );
+                {useajax: ajaxcall, id: bid, type: thetype, value: parseInt(ui.value), 
+                          attr: "colorTemperature", subid: subid, hubid: hubnum, command: command, linkval: linkval } );
         }
     });
 
@@ -1444,7 +1421,7 @@ function dynoPost(ajaxcall, body, id, type, value, attr, reload) {
 
     $.post(cm_Globals.returnURL, body,
         function (presult, pstatus) {
-            if ( isreload ) {
+            if ( isreload && pstatus==="success" ) {
                 window.location.href = cm_Globals.returnURL;
             } else {
                 console.log("dyno POST: ", pstatus, " body: ", body, " presult: ", presult);
@@ -1455,9 +1432,32 @@ function dynoPost(ajaxcall, body, id, type, value, attr, reload) {
 
 function execButton(buttonid) {
     
-    // alert("prior= " + priorOpmode + " buttonid= " + buttonid);
-    // blank out screen with a black box size of the window and pause timers
-    if ( buttonid === "blackout") {
+    if ( buttonid==="optSave") {
+        // first save our filters
+        var fobj = formToObject("filteroptions");
+        dynoPost("filteroptions", fobj);
+
+        // next save our form - this is done asynchronously
+        // when done the server will push a signal to clients to reload
+        var obj = formToObject("optionspage");
+        dynoPost("saveoptions", obj, true);
+        // window.location.href = cm_Globals.returnURL;
+
+    } else if ( buttonid==="optCancel" ) {
+        // do nothing but reload the main page
+        window.location.href = cm_Globals.returnURL;
+
+    } else if ( buttonid==="optReset" ) {
+        // reset the forms on the options page to their starting values
+        $("#optionspage")[0].reset();
+        $("#filteroptions")[0].reset();
+
+    } else if ( buttonid==="dologin") {
+        var genobj = formToObject("loginform");
+        dynoPost("dologin", genobj, true);
+
+    } else if ( buttonid === "blackout") {
+        // blank out screen with a black box size of the window and pause timers
         var w = window.innerWidth;
         var h = window.innerHeight;            
         priorOpmode = "Sleep";
@@ -1504,13 +1504,13 @@ function execButton(buttonid) {
             cancelSortable();
             cancelPagemove();
             if ( reordered ) {
-                location.reload(true);
+                // location.reload(true);
+                window.location.href = cm_Globals.returnURL;
             }
         } else if ( priorOpmode === "DragDrop" ) {
             updateFilters();
             cancelDraggable();
             delEditLink();
-            // location.reload(true);
         }
         $("#mode_Operate").prop("checked",true);
         priorOpmode = "Operate";
@@ -1585,8 +1585,8 @@ function checkInputs(port, webSocketServerPort, fast_timer, slow_timer, uname, p
 
 function setupButtons() {
 
-    if ( pagename==="main" && !disablebtn ) {
-        $("#controlpanel").on("click", "div.formbutton", function(evt) {
+    if ( $("div.formbutton") ) {
+        $("div.formbutton").on('click', function() {
             var buttonid = $(this).attr("id");
             var textname = $(this).text();
 
@@ -1609,6 +1609,13 @@ function setupButtons() {
                 evt.stopPropagation();
             }
         });
+    }
+        
+    $("button.infobutton").on('click', function() {
+        window.location.href = cm_Globals.returnURL;
+    });
+
+    if ( pagename==="main" && !disablebtn ) {
 
         $("div.modeoptions").on("click","input.radioopts",function(evt){
             var opmode = $(this).attr("value");
@@ -1622,16 +1629,7 @@ function setupButtons() {
             createModal("modalexec","Log out user "+ username + " <br/>Are you sure?", "body" , true, pos, function(ui, content) {
                 var clk = $(ui).attr("name");
                 if ( clk==="okay" ) {
-                    $.post(cm_Globals.returnURL, 
-                        {useajax: "logout", id: 0, type: "none", value: username},
-                        function (presult, pstatus) {
-                            if ( pstatus==="success" ) {
-                                window.location.href = cm_Globals.returnURL;
-                            } else {
-                                console.log("error - logout call: status: ", pstatus, " result: ", presult);
-                             }
-                        }
-                    );
+                    window.location.href = cm_Globals.returnURL + "/logout";
                 } else {
                     closeModal("modalexec");
                 }
@@ -1649,38 +1647,6 @@ function setupButtons() {
                 $(this).html("Show Dev Log");
             }
         });
-        
-        $("button.infobutton").on('click', function() {
-            window.location.href = cm_Globals.returnURL;
-        });
-
-    } else if ( pagename==="options" ) {
-
-        $("div.formbutton").on('click', function() {
-            var buttonid = $(this).attr("id");
-
-            if ( buttonid==="optSave") {
-                // first save our filters
-                var fobj = formToObject("filteroptions");
-                dynoPost("filteroptions", fobj);
-
-                // next save our form - this is done asynchronously
-                // when done the server will push a signal to clients to reload
-                var obj = formToObject("optionspage");
-                dynoPost("saveoptions", obj, true);
-                // window.location.href = cm_Globals.returnURL;
-
-            } else if ( buttonid==="optCancel" ) {
-                // do nothing but reload the main page
-                window.location.href = cm_Globals.returnURL;
-
-            } else if ( buttonid==="optReset" ) {
-                // reset the forms on the options page to their starting values
-                $("#optionspage")[0].reset();
-                $("#filteroptions")[0].reset();
-            }
-        });
-
 
     } else if ( pagename==="auth" ) {
 
@@ -1984,7 +1950,8 @@ function addEditLink() {
                     {useajax: "pageadd", id: "none", type: "none", value: "none", attr: "none"},
                     function (presult, pstatus) {
                         if ( pstatus==="success" && !presult.startsWith("error") ) {
-                            location.reload(true);
+                            // location.reload(true);
+                            window.location.href = cm_Globals.returnURL;
                         } else {
                             console.log(presult);
                         }
@@ -2264,7 +2231,7 @@ function updateTile(aid, presult) {
         presult["trackImage"] = audiodata["albumArtUrl"];
         presult["mediaSource"] = audiodata["mediaSource"];
         delete presult["audioTrackData"];
-        console.log("audio track changed from: ["+oldvalue+"] to: ["+ presult["trackDescription"] +"]");
+        // console.log("audio track changed from: ["+oldvalue+"] to: ["+ presult["trackDescription"] +"]");
     }
     
     // handle native track images - including audio devices above
@@ -2275,7 +2242,6 @@ function updateTile(aid, presult) {
             nativeimg = true;
         }
     }
-    // console.log("updateTile: ", presult);
     
     $.each( presult, function( key, value ) {
         var targetid = '#a-'+aid+'-'+key;
@@ -2349,22 +2315,9 @@ function updateTile(aid, presult) {
                 } 
                 
                 // if ( (forceit || (value!==oldvalue)) && !value.startsWith("Grouped with") ) {
-                if ( forceit || (value!==oldvalue) ) {
+                if ( value!==oldvalue ) {
                     value = value.trim();
-                    
                     console.log("music track changed from: [" + oldvalue + "] to: [" + value + "]");
-                    $.post(cm_Globals.returnURL, 
-                           {useajax: "trackupdate", id: 1, type: "music", value: value},
-                           function (presult, pstatus) {
-                                if (pstatus==="success" && typeof presult==="object" ) {
-                                    try {
-                                        $("#a-"+aid+"-currentArtist").html(presult.currentArtist);
-                                        $("#a-"+aid+"-currentAlbum").html(presult.currentAlbum);
-                                        $("#a-"+aid+"-trackImage").html(presult.trackImage);
-                                    } catch (err) {}
-                                }
-                           }, "json"
-                    );
                 }
                 
             // add status of things to the class and remove old status
@@ -2398,15 +2351,7 @@ function updateTile(aid, presult) {
 function refreshTile(aid, bid, thetype, hubnum) {
     var ajaxcall = "doquery";
     $.post(cm_Globals.returnURL, 
-        {useajax: ajaxcall, id: bid, type: thetype, value: "none", attr: "none", hubid: hubnum},
-        function (presult, pstatus) {
-            if (pstatus==="success" && typeof presult==="object") {
-                if ( presult["name"] ) { delete presult["name"]; }
-                if ( presult["password"] ) { delete presult["password"]; }
-                updateTile(aid, presult);
-            }
-        }, "json"
-    );
+        {useajax: ajaxcall, id: bid, type: thetype, value: "none", attr: "none", hubid: hubnum} );
 }
 
 // refresh tiles on this page when switching to it
@@ -2560,6 +2505,9 @@ function setupTimer(timerval, timertype, hubnum) {
                                             if ( thevalue["trackImage"] ) { delete thevalue["trackImage"]; }
                                             if ( thevalue["currentArtist"] ) { delete thevalue["currentArtist"]; }
                                             if ( thevalue["currentAlbum"] ) { delete thevalue["currentAlbum"]; }
+                                        }
+                                        if ( strtype==="audio" && thevalue["audioTrackData"] ) {
+                                            delete thevalue["audioTrackData"];
                                         }
                                         updateTile(aid,thevalue); 
                                     }
@@ -2754,8 +2702,6 @@ function processClick(that, thingname) {
     var ajaxcall = "doaction";
     var thevalue = $(targetid).html();
 
-    console.log("value: ", thevalue);
-
     // special case of thermostat clicking on things without values
     // send the temperature as the value
     if ( !thevalue && thetype=="thermostat" &&
@@ -2797,7 +2743,7 @@ function processClick(that, thingname) {
         // remove the http requirement to support Android stuff
         // this places extra burden on users to avoid doing stupid stuff
         // if ( command==="URL" && userval.startsWith("http") ) {
-        if ( command==="URL" ) {
+        if ( command==="URL" || (command==="TEXT" && userval.startsWith("http")) ) {
             window.open(userval,'_blank');
             return;
 
@@ -2806,40 +2752,24 @@ function processClick(that, thingname) {
         // update the text on screen and return it to the log
         } else if ( command==="TEXT" ) {
             console.log(ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" hub= " + hubnum + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
-            $.post(cm_Globals.returnURL, 
-                {useajax: ajaxcall, id: bid, type: thetype, value: thevalue, 
-                attr: theattr, subid: subid, hubid: hubnum, command: command, linkval: linkval},
-                function(presult, pstatus) {
-                    if (pstatus==="success" && typeof presult==="object") {
-                        console.log( ajaxcall + ": POST returned:", presult);
-                        if ( presult["name"] ) { delete presult["name"]; }
-                        if ( presult["password"] ) { delete presult["password"]; }
-                        
-                        // fix up new Sonos fields
-                        if ( presult["audioTrackData"] ) {
-                            var audiodata = JSON.parse(presult["audioTrackData"]);
-                            presult["trackDescription"] = audiodata["title"];
-                            presult["currentArtist"] = audiodata["artist"];
-                            presult["currentAlbum"] = audiodata["album"];
-                            presult["trackImage"] = audiodata["albumArtUrl"];
-                            presult["mediaSource"] = audiodata["mediaSource"];
-                            // delete presult["audioTrackData"];
-                        }
-                        
-                        updateTile(aid, presult);
-                    } else {
-                        console.log(ajaxcall + " error: ", pstatus, presult);
-                    }
-                }, "json");
-            return;
+            $(targetid).html(thevalue);
+            // $.post(cm_Globals.returnURL, 
+            //     {useajax: ajaxcall, id: bid, type: thetype, value: thevalue, 
+            //      attr: theattr, subid: subid, hubid: hubnum, command: command, linkval: linkval},
+            //     function(presult, pstatus) {
+            //         if (pstatus==="success" && typeof presult==="object") {
+            //             console.log( ajaxcall + ": POST returned:", presult);
+            //             if ( presult["name"] ) { delete presult["name"]; }
+            //             if ( presult["password"] ) { delete presult["password"]; }
+            //             updateTile(aid, presult);
+            //         } else {
+            //             console.log(ajaxcall + " error: ", pstatus, presult);
+            //         }
+            //     }, "json");
         }
 
         // all the other command types are handled on the PHP server side
         // this is enabled by the settings above for command, linkval, and linktype
-    // } else {
-    //     linkval = "";
-    //     command = "";
-    //     linktype = thetype;
     }
 
     // turn momentary and piston items on or off temporarily
