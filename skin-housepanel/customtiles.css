@@ -1422,10 +1422,11 @@ div.thing.door-thing.p_106 div.overlay.door.v_106 div.door.p_106.open {
  }
 div.thing.door-thing.p_105 div.overlay.door.v_105 div.door.p_105.closed {
  height: 97px;
+ background-image: url("icons/garage-closed.png");
  }
 div.thing.door-thing.p_105 div.overlay.door.v_105 div.door.p_105.open {
  height: 97px;
- background-image: url("http://localhost:3080/skin-housepanel/icons/garage-opened.png");
+ background-image: url("icons/garage-opened.png");
  }
 div.thing.door-thing.p_105 div.overlay.event_1.v_105 div.event_1.p_105 {
  height: 15px;
@@ -2046,7 +2047,7 @@ div.hin.thermostat-thing.p_57 div.overlay.battery.v_57 div.battery.p_57 {
 div.overlay.bttery.v_57 {
  display: none;
  }
-div.thing.momentary-thing.p_4 div.overlay.momentary.v_43 div.momentary.p_43.on {
+div.thing.momentry-thing.p_4 div.overlay.momentary.v_43 div.momentary.p_43.on {
  padding-top: 10px;
  background-color: rgba(0, 51, 204, 0.01);
  }
