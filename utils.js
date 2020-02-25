@@ -1,6 +1,8 @@
 'use strict';
 
 var devhistory =  ` 
+2.203      Added OAUTH flow and hub data entry screen
+2.202      Rules and Links implemented and numerous bug fixes - getting close...
 2.201      First nearly fully functional Node.js version
 2.200      Initial Node.js version release
 2.118      Fix bug that prevented user from changing custom tile count

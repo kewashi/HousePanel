@@ -85,13 +85,14 @@ function getCssRuleTarget(str_type, subid, thingindex, useall) {
 
     // get the scope to use
     var scope = $("#scopeEffect").val();
-//    if ( useall!==0 && useall!==1 && useall!==2 ) {
-        if ( scope=== "alltypes") { useall= 1; }
-        else if ( scope=== "alltiles") { useall= 2; }
-        else { useall = 0; }
-//    }
-    
-    if ( useall!==0 && useall!==1 && useall!==2 ) { 
+
+    if ( subid==="head" ) {
+        useall= 0
+    } else if ( !useall && scope=== "alltypes") { 
+        useall= 1; 
+    } else if ( !useall && scope=== "alltiles") { 
+        useall= 2; 
+    } else if ( useall && useall!==1 && useall!==2 )  { 
         useall= 0; 
     }
     
@@ -916,15 +917,15 @@ function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, htmlconten
                     var newname = $("#editName").val();
                     if ( str_type==="page") {
                         var oldname = thingindex;
-                        alert(oldname);
+                        // alert(oldname);
                         var target1 = getCssRuleTarget(str_type, "head", thingindex);
                     } else {
                         var target1 = getCssRuleTarget(str_type, "head", thingindex);
                         var target2 = getCssRuleTarget(str_type, "name", thingindex);
                         var oldname = $(target1).html();
+                        $(target1).html(newname);
                         $(target2).html(newname);
                     }
-                    $(target1).html(newname);
                     saveTileEdit(str_type, thingindex, oldname, newname);
                 } else if ( clk==="cancel" ) {
                     cancelTileEdit(str_type, thingindex);

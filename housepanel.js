@@ -28,7 +28,6 @@ var pagename = "main";
 var wsSocket = null;
 var webSocketUrl = null;
 var wsinterval = null;
-var nodejsUrl = null;
 var reordered = false;
 
 // set this global variable to true to disable actions
@@ -115,9 +114,7 @@ function getAllthings(modalwindow, reload) {
                     var keys = Object.keys(presult);
                     cm_Globals.allthings = presult;
                     console.log("getAllthings returned from " + cm_Globals.returnURL + " " + keys.length + " things  (reload: " + swattr + ")");
-                    if ( ! cm_Globals.options ) {
-                        getOptions();
-                    }
+                    getOptions();
                     
                     // setup customize dialog box if it is open
                     if ( cm_Globals.thingindex && cm_Globals.thingidx ) {
@@ -160,6 +157,9 @@ function getOptions(reload) {
                 console.log("getOptions returned: " + indexkeys.length + " things");
                 if ( pagename==="main" ) {
                     setupUserOpts();
+                }
+                if ( pagename==="main" || pagename==="auth" ) {
+                    initWebsocket();
                 }
             } else {
                 cm_Globals.options = null;
@@ -230,7 +230,7 @@ $(document).ready(function() {
     }
     
     // load things for pages that get rendered
-    if ( pagename==="main" || pagename==="options" || pagename==="info" || pagename==="login" ) {
+    if ( pagename==="main" || pagename==="options" || pagename==="info" || pagename==="login" || pagename==="auth" ) {
         getAllthings(false, false);
     }
     
@@ -333,19 +333,35 @@ function setupUserOpts() {
     // }
 
     // get the webSocket info and the timers
-    try {
-        webSocketUrl = $("input[name='webSocketUrl']").val();
-        nodejsUrl = $("input[name='nodejsUrl']").val();
-    } catch(err) {
-        console.log("Error attempting to retrieve webSocket URL. err: ", err);
-        webSocketUrl = null;
-        nodejsUrl = null;
-    }
+    // try {
+    //     webSocketUrl = $("input[name='webSocketUrl']").val();
+    // } catch(err) {
+    //     console.log("Error attempting to retrieve webSocket URL. err: ", err);
+    //     webSocketUrl = null;
+    // }
+    // periodically check for socket open and if not open reopen
+    // if ( webSocketUrl ) {
+    //     wsSocketCheck();
+    //     wsinterval = setInterval(wsSocketCheck, 300000);
+    // }
     
     var tzoffset = 0;
     // TODO: wire up a new time zone feature
     clockUpdater(tzoffset);
 
+
+}
+
+function initWebsocket() {
+
+    // get the webSocket info and the timers
+    try {
+        webSocketUrl = $("input[name='webSocketUrl']").val();
+    } catch(err) {
+        console.log("Error attempting to retrieve webSocket URL. err: ", err);
+        webSocketUrl = null;
+    }
+    
     // periodically check for socket open and if not open reopen
     if ( webSocketUrl ) {
         wsSocketCheck();
@@ -397,6 +413,7 @@ function setupWebsocket()
 
     // received a message from housepanel-push
     // this contains a single device object
+    // this is where pushClient is processed
     wsSocket.onmessage = function (evt) {
         var reservedcap = ["name", "DeviceWatch-DeviceStatus", "DeviceWatch-Enroll", "checkInterval", "healthStatus"];
         try {
@@ -409,9 +426,16 @@ function setupWebsocket()
             var trigger = presult.trigger;
 
             // reload page if signalled from server
-            if ( bid==="reload" && thetype==="reload" ) {
-                window.location.href = cm_Globals.returnURL;
-                // console.log("reload request");
+            if ( bid==="reload" ) {
+                if ( typeof thetype==="undefined" || thetype==="" || thetype==="/" || thetype==="reload" ) {
+                    var reloadpage =  cm_Globals.returnURL;
+                } else {
+                    if ( thetype.substr(0,1)!=="/" ) {
+                        thetype = "/" + thetype;
+                    }
+                    reloadpage =  cm_Globals.returnURL + thetype;
+                }
+                window.location.href = reloadpage;
                 return;
             }
             
@@ -479,7 +503,7 @@ function setupWebsocket()
 
             // handle links - loop through all tiles that have a link to see if they match
             // because this link shadow field has the real subid triggered we dont have to check subid below
-            console.log("trigger= ", trigger);
+            // console.log("trigger= ", trigger);
             $('div.panel div[command="' + "LINK" + '"][subid="' + trigger + '"]').each(function() {
 
                 // get the id to see if it is the thing being updated
@@ -759,7 +783,7 @@ function getMaxZindex(panel) {
             if ( zindex && zindex > zmax ) { zmax = zindex; }
         }
     });
-    if ( zmax >= 999 ) {
+    if ( zmax >= 49 ) {
         zmax = 2;
     }
     return zmax;
@@ -1185,7 +1209,7 @@ function thingDraggable(thing, snap) {
             startPos.zindex = $(evt.target).css("z-index");
             
             // while dragging make sure we are on top
-            $(evt.target).css("z-index", 9999);
+            $(evt.target).css("z-index", 999);
         },
         stop: function(evt, ui) {
             startPos.zindex = parseInt(startPos.zindex) ;
@@ -1282,7 +1306,8 @@ function setupDraggable() {
                                                 console.log( "Added " + thingname + " of type " + thingtype + " and bid= " + bid + " to room " + panel);
                                                 lastthing.after(presult);
                                                 var newthing = lastthing.next();
-                                                var zmax = getMaxZindex(panel) + 1;
+                                                // var zmax = getMaxZindex(panel) + 1;
+                                                var zmax = 2;
                                                 $(newthing).css( {"z-index": zmax.toString()} );
                                                 var snap = $("#mode_Snap").prop("checked");
                                                 thingDraggable( newthing, snap );
@@ -1399,7 +1424,7 @@ function setupDraggable() {
 }
 
 // make the post call back to main server
-function dynoPost(ajaxcall, body, id, type, value, attr, reload) {
+function dynoPost(ajaxcall, body, id, type, value, attr, reload, callback) {
     var isreload;
 
     // if body is not given or is not an object then use all other values
@@ -1419,15 +1444,25 @@ function dynoPost(ajaxcall, body, id, type, value, attr, reload) {
         body["api"] = ajaxcall;
     }
 
-    $.post(cm_Globals.returnURL, body,
-        function (presult, pstatus) {
-            if ( isreload && pstatus==="success" ) {
-                window.location.href = cm_Globals.returnURL;
-            } else {
-                console.log("dyno POST: ", pstatus, " body: ", body, " presult: ", presult);
+    if ( callback && typeof callback==="function" ) {
+        $.post(cm_Globals.returnURL, body, callback);
+
+    } else {
+        $.post(cm_Globals.returnURL, body,
+            function (presult, pstatus) {
+                if ( isreload && pstatus==="success" ) {
+                    window.location.href = cm_Globals.returnURL;
+                } else {
+                    console.log("dyno POST: ", pstatus, " body: ", body, " presult: ", presult);
+
+                    // clear blinking interval if requested
+                    if ( typeof type!=="undefined" && type==="::blink::" & typeof value!=="undefined" ) {
+                        clearInterval(value);
+                    }
+                }
             }
-        }
-    );
+        );
+    }
 }
 
 function execButton(buttonid) {
@@ -1676,19 +1711,16 @@ function setupButtons() {
         });
         
         // this clears out the message window
-        $("#authhubwrapper").on('click',function(evt) {
+        $("div.greetingopts").on('click',function(evt) {
             $("#newthingcount").html("");
         });
         
         // handle auth submissions
         // add on one time info from user
         $("input.hubauth").click(function(evt) {
-            var err;
             try {
-                var hubnum = $(this).attr("hub");
                 var hubId = $(this).attr("hubid");
-                var myform = document.getElementById("hubform_"+hubId);
-                var formData = new FormData(myform);
+                var formData = formToObject("hubform_"+hubId);
             } catch(err) {
                 evt.stopPropagation(); 
                 alert("Something went wrong when trying to authenticate your hub...\n" + err.message);
@@ -1696,68 +1728,68 @@ function setupButtons() {
                 return;
             }
             
-            // tell user we are authorizing hub...
-            // $("#newthingcount").html("Authorizing...").fadeTo(500, 0.3 ).fadeTo(500, 1).fadeTo(500, 0.3 ).fadeTo(500, 1);
-            $("#newthingcount").html("Authorizing...").fadeTo(400, 0.1 ).fadeTo(400, 1);
-            var blinkauth = setInterval(function() {
-                $("#newthingcount").fadeTo(400, 0.1 ).fadeTo(400, 1);
-            }, 1000);
-            var hubHost = formData.get("hubHost");
-            var clientId = formData.get("clientId");
+            // make an api call and process results
+            // some hubs return devices on server and pushes results later
+            // others return a request to start an OATH redirection flow
+            formData["api"] = "hubauth";
+            $.post(cm_Globals.returnURL, formData,  function(presult, pstatus) {
+                console.log("dynoPost hubauth: ", presult);
 
-            // grab all the values the user specified
-            // this is done manually below
-            var values = {};
-            values.doauthorize = formData.get("doauthorize");
-            values.hubType = formData.get("hubType");
-            values.hubHost = hubHost;
-            values.clientId = clientId;
-            values.clientSecret = formData.get("clientSecret");
-            values.userAccess = formData.get("userAccess");
-            values.userEndpt = formData.get("userEndpt");
-            values.hubName = formData.get("hubName");
-            
-            // set hubId to the value in the drop down selection
-            values.hubId = hubId;
-            values.hubTimer = formData.get("hubTimer");
-            
-            $.post(cm_Globals.returnURL, values, function(presult, pstatus) {
                 if ( pstatus==="success" && typeof presult==="object") {
-                    clearInterval(blinkauth);
-                    console.log("hub auth: status: ", pstatus, " result: ", presult);
                     var obj = presult;
                     if ( obj.action === "things" ) {
-                        $("input[name='hubName']").val(obj.hubName);
-                        var ntc = "Hub #" + hubnum + " hub ID: " + hubId + " was authorized and " + obj.count + " devices were retrieved.";
-                        $("#newthingcount").html(ntc);
+                        // tell user we are authorizing hub...
+                        $("#newthingcount").html("Authorizing hub: " + obj.hubName).fadeTo(400, 0.1 ).fadeTo(400, 1.0);
+                        var blinkauth = setInterval(function() {
+                            $("#newthingcount").fadeTo(400, 0.1 ).fadeTo(400, 1);
+                        }, 1000);
+
                     }
 
                     // if oauth flow then start the process
                     else if ( obj.action === "oauth" ) {
-                        var nvpreq= "response_type=code&client_id=" + encodeURI(clientId) + "&scope=app&redirect_uri=" + encodeURI(cm_Globals.returnURL);
-                        var location = hubHost + "/oauth/authorize?" + nvpreq;
+                        $("#newthingcount").html("Redirecting to OAUTH page");
+                        var nvpreq= "response_type=code&client_id=" + encodeURI(obj.clientId) + "&scope=app&redirect_uri=" + encodeURI(obj.url);
+                        var location = obj.host + "/oauth/authorize?" + nvpreq;
                         window.location.href = location;
                     }
                 }
-            },"json");
-            evt.stopPropagation(); 
+    });
+
+
+        //     $.post(cm_Globals.returnURL, values, function(presult, pstatus) {
+        //         if ( pstatus==="success" && typeof presult==="object") {
+        //             clearInterval(blinkauth);
+        //             console.log("hub auth: status: ", pstatus, " result: ", presult);
+        //             var obj = presult;
+        //             if ( obj.action === "things" ) {
+        //                 $("input[name='hubName']").val(obj.hubName);
+        //                 var ntc = "Hub #" + hubnum + " hub ID: " + hubId + " was authorized and " + obj.count + " devices were retrieved.";
+        //                 $("#newthingcount").html(ntc);
+        //             }
+
+        //             // if oauth flow then start the process
+        //             else if ( obj.action === "oauth" ) {
+        //                 var nvpreq= "response_type=code&client_id=" + encodeURI(clientId) + "&scope=app&redirect_uri=" + encodeURI(cm_Globals.returnURL);
+        //                 var location = hubHost + "/oauth/authorize?" + nvpreq;
+        //                 window.location.href = location;
+        //             }
+        //         }
+        //     },"json");
+        //     evt.stopPropagation(); 
         });
 
-        // TODO: send user to options page if first time
+        // send user to options page if first time
         // user is done authorizing so make an API call to clean up
         // and then return to the main app
         $("#cancelauth").click(function(evt) {
-            $("#newthingcount").html("Done... Please wait...").fadeTo(400, 0.1 ).fadeTo(400, 1);
-            var blinkauth = setInterval(function() {
-                $("#newthingcount").fadeTo(400, 0.1 ).fadeTo(400, 1);
-            }, 1000);
             $.post(cm_Globals.returnURL, 
-                {useajax: "cancelauth", id: 1, type: "none", value: "none"},
+                {useajax: "cancelauth", id: "", type: "none"},
                 function (presult, pstatus) {
                     if (pstatus==="success") {
-                        window.location.href = cm_Globals.returnURL;
+                        window.location.href = cm_Globals.returnURL + "/showoptions";
                     } else {
-                        clearInterval(blinkauth);
+                        window.location.href = cm_Globals.returnURL;
                     }
                 }
             );
@@ -1769,7 +1801,7 @@ function setupButtons() {
             var hubId = $(this).attr("hubid");
             var bodytag = "body";
             var pos = {position: "absolute", top: 600, left: 150, 
-                       width: 400, height: 60, border: "4px solid"};
+                       width: 600, height: 60, border: "4px solid"};
             // alert("Remove request for hub: " + hubnum + " hubID: " + hubId );
 
             createModal("modalhub","Remove hub #" + hubnum + " hubID: " + hubId + "? Are you sure?", bodytag , true, pos, function(ui, content) {

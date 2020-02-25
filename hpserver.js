@@ -25,6 +25,7 @@ var utils = require("./utils");
 
 // global variables are all part of GLB object plus clients and allthings
 var GLB = {};
+
 // list of currently connected clients (users)
 var clients = [];
 // array of all tiles in all hubs
@@ -209,7 +210,7 @@ function readOptions() {
     }
 
     // read the hubs
-    var hubs = GLB.options.config["hubs"];
+    hubs = GLB.options.config["hubs"];
     if ( is_array(hubs) && hubs.length > 0 ) {
         if ( DEBUG1 ) {
             console.log((new Date()) + ' Loading ', hubs.length,' hubs.');
@@ -219,8 +220,8 @@ function readOptions() {
         }
     } else {
         console.log((new Date()) + ' No hubs found. HousePanel will only show special and custom tiles.');
-        hubs = [];
         GLB.options.config["hubs"] = [];
+        hubs = GLB.options.config["hubs"];
         rewrite = true;
     }
 
@@ -288,7 +289,7 @@ function readOptions() {
 function writeOptions(options, skipuser) {
     
     if ( !options ) {
-        return;
+        options = GLB.options;
     }
 
     var d = new Date();
@@ -346,7 +347,143 @@ function curl_call(host, headertype, nvpstr, formdata, calltype, callback) {
     request(opts, callback);
 }
 
-function getDevices(hubnum, hubAccess, hubEndpt, clientId, clientSecret, hubName, hubType) {
+function getAccessToken(code, hub) {
+
+    // these are the parameters determined here using a series of curl calls and callbacks
+    var token = "";
+    var endpt = "";
+
+    var hubType = hub["hubType"];
+    var hubName = hub["hubName"];
+    var hubHost = hub["hubHost"];
+    var clientId = hub["clientId"];
+    var clientSecret = hub["clientSecret"];
+    var hubnum = GLB.defhub;
+    var redirect = GLB.returnURL + "/oauth";
+
+    // make the call to get the token
+    var tokenhost = hubHost + "/oauth/token";
+    var header = {'Content-Type' : "application/x-www-form-urlencoded"};
+    var nvpreq = {"grant_type": "authorization_code", "code": encodeURI(code), "client_id": encodeURI(clientId), 
+                  "client_secret": encodeURI(clientSecret), "redirect_uri": encodeURI(redirect)};
+    if ( DEBUG2 ) {
+        console.log("calling with nvpreq: ", nvpreq);
+    }
+    
+    curl_call(tokenhost, header, nvpreq, false, "POST", tokenCallback);
+
+    // callback from the token request
+    function tokenCallback(err, res, body) {
+        // save the access token
+        var jsonbody = JSON.parse(body);
+        if ( DEBUG2 ) {
+            console.log("access token return: ", jsonbody);
+        }
+
+        if ( jsonbody["error"] ) {
+            console.log("Token error authorizing hub: ", hubName, " error: ", err, " ", jsonbody["error"]);
+            GLB.defhub = "-1";
+            pushClient("reload", "/reauth");
+        } else if ( typeof jsonbody==="object" && array_key_exists("access_token", jsonbody) ) {
+            token = jsonbody["access_token"];
+            if (token) {
+                var ephost;
+                if ( hubType==="SmartThings" ) {
+                    ephost = hubHost + "/api/smartapps/endpoints";
+                } else if ( hubType ==="Hubitat" ) {
+                    ephost = hubHost + "/apps/api/endpoints";
+                } else {
+                    console.log("Invalid hub type: ", hubType, " in access token request call");
+                    GLB.defhub = "-1";
+                    pushClient("reload", "/reauth");
+                }
+
+                // console.log("Calling endpoint with token: ", token);
+                header = {"Authorization": "Bearer " + token};
+                curl_call(ephost, header, false, false, "GET", endptCallback);
+            }
+        } else {
+            console.log("Unknown error authorizing hub: ", hubName, " error: ", err, " body: ", body);
+            GLB.defhub = "-1";
+            pushClient("reload", "/reauth");
+        }
+    }        
+    
+    function endptCallback(err, res, body) {
+        var jsonbody = null;
+        endpt = null;
+        try {
+            jsonbody = JSON.parse(body);
+            if ( DEBUG2 ) {
+                console.log("endpoint return: ", jsonbody);
+            }
+        } catch(e) {
+            err = e;
+        }
+
+        if ( err ) {
+            console.log("getEndpoint error authorizing hub: ", hubName, " error: ", err);
+            GLB.defhub = "-1";
+            pushClient("reload", "/reauth");
+        } else {
+            var endptzero = jsonbody[0];
+            endpt = endptzero.uri;
+        }
+
+        if ( token && endpt ) {
+            var namehost = endpt + "/gethubinfo";
+            header = {"Authorization": "Bearer " + token};
+            nvpreq = {"scope": "app", "client_id": encodeURI(clientId), "client_secret": encodeURI(clientSecret)};
+            curl_call(namehost, header, nvpreq, false, "POST", nameCallback);
+        } else {
+            GLB.defhub = "-1";
+            console.log("getEndpoint error authorizing hub: ", hubName, " bad token: ", token, " or endpt: ", endpt);
+            pushClient("reload", "/reauth");
+        }
+    }
+
+    function nameCallback(err, res, body) {
+        var jsonbody = null;
+        var hname;
+        try {
+            jsonbody = JSON.parse(body);
+            hname = jsonbody["sitename"];
+            if ( DEBUG2 ) {
+                console.log("hubName request return: ", jsonbody);
+            }
+        } catch(e) {
+            err = e;
+            hname  = hubName;
+            if ( hname==="" ) {
+                hname = hubType + " Home";
+            }
+            console.log("Error retrieving hub name: ", hubName);
+        }
+
+        // now save our info
+        if ( DEBUG1 ) {
+            console.log("OAUTH Flow completed. token= ", token, " endpt= ", endpt, " name= ", hname);
+        }
+        hubName = hname;
+        hub["hubAccess"] = token;
+        hub["hubEndpt"] = endpt;
+        hub["hubName"]  = hubName;
+
+        // console.log("hubnum= ",  hubnum, " GLB.defhub= ", GLB.defhub);
+
+        // update this hub
+        var hubs = GLB.options.config["hubs"];
+        updateHubs(hubs, hub, hubnum);
+        writeOptions(GLB.options, true);
+
+        // retrieve all devices and go back to reauth page
+        getDevices(hubnum, hubType, token, endpt, clientId, clientSecret, hubName, "/reauth");
+        // pushClient("reload", "/reauth");
+    }
+}
+
+
+function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret, hubName, reloadpath) {
 
     // retrieve all things from ST
     if ( hubType==="SmartThings" || hubType==="Hubitat" ) {
@@ -359,7 +496,6 @@ function getDevices(hubnum, hubAccess, hubEndpt, clientId, clientSecret, hubName
         var buff = Buffer.from(hubAccess);
         var base64 = buff.toString('base64');
         stheader = {"Authorization": "Basic " + base64};
-        // console.log(stheader);
         curl_call(hubEndpt + "/nodes", stheader, false, false, "GET", getAllNodes);
         
     } else {
@@ -400,7 +536,7 @@ function getDevices(hubnum, hubAccess, hubEndpt, clientId, clientSecret, hubName
                     console.log("ISY thing: ", allthings[idx]);
                 }
             }
-            updateOptions();
+            updateOptions(reloadpath);
         }
     }
     
@@ -435,13 +571,13 @@ function getDevices(hubnum, hubAccess, hubEndpt, clientId, clientSecret, hubName
                     };
                 });
             }
-            updateOptions();
+            updateOptions(reloadpath);
         }
     }
 }
 
 // updates the global options array with new things found on hub
-function updateOptions() {
+function updateOptions(reloadpath) {
 
     if ( ! GLB.options ) {
         return;
@@ -462,9 +598,7 @@ function updateOptions() {
         if ( !array_key_exists(thingid, GLB.options["index"]) ||
              parseInt(GLB.options["index"][thingid])===0 ) {
             GLB.options["index"][thingid] = cnt;
-
             // console.log("found new thing: idx= ", thingid, " cnt= ", cnt);
-
             cnt++;
         }
     }
@@ -483,7 +617,7 @@ function updateOptions() {
     // console.log("Updated options, rooms: ", GLB.options.rooms, " things: ", GLB.options.things, " index: ", GLB.options.index);
 
     // signal clients to reload
-    pushClient("reload", "reload");
+    pushClient("reload", reloadpath);
 }
 
 function setDefaults() {
@@ -546,7 +680,7 @@ function getLoginPage() {
     $tc += utils.hidden("pagename", "login");
     $tc += utils.hidden("api", "dologin");
     $tc += utils.hidden("id", "none");
-    $tc += utils. hidden("type", "none");
+    $tc += utils.hidden("type", "none");
     $tc += "<div>";
     $tc += "<label for=\"uname\" class=\"startupinp\">Username: </label>";
     $tc += "<input id=\"uname\" name=\"uname\" width=\"20\" type=\"text\" value=\"\"/>"; 
@@ -562,13 +696,221 @@ function getLoginPage() {
     return $tc;
 }
 
-function getAuthPage() {
+function getAuthPage(hostname, hpcode) {
+    const DONATE = false;
     var $tc = "";
     var skin = getSkin();
     $tc += utils.getHeader(skin);
     $tc += "<h2>" + utils.APPNAME + " Hub Authorization</h2>";
-    $tc += "<br /><br />";
 
+    // provide welcome page with instructions for what to do
+    // this will show only if the user hasn't set up HP
+    // or if a reauth is requested or when converting old passwords
+    $tc += "<div class=\"greeting\">";
+
+    $tc +="<p>Here is where you link a SmartThings or Hubitat hub to " +
+            "HousePanel to gain access to your smart home devices. " +
+            "You can link any number and combination of hubs. " + 
+            "To link a hub you must have the following info: " +
+            "API URL, Client ID, and Client Secret. " +
+            "</p><br />";
+    
+    $tc += "<p><strong>*** IMPORTANT ***</strong> Information you provide here is secret and will be stored " +
+            "on your server in a configuration file called <i>hmoptions.cfg</i> " + 
+            "This is why HousePanel should <strong>*** NOT ***</strong> be hosted on a public-facing website. " +
+            "A locally hosted website on a Raspberry Pi is the strongly recommended option. " +
+            "HousePanel does periodically store anonymized and encrypted use frequency data. " + 
+            "By proceeding you are agreeing to this practice.</p>";
+    $tc += "</div>";
+
+    if ( DONATE===true ) {
+        $tc += '<br /><h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
+            <br /><div><form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank"> \
+            <input type="hidden" name="cmd" value="_s-xclick"> \
+            <input type="hidden" name="hosted_button_id" value="XS7MHW7XPYJA4"> \
+            <input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!"> \
+            <img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1"> \
+            </form></div>';
+    }
+    
+    // get the current settings from options file
+    // legacy file support removed
+    // readOptions();
+    var options = GLB.options;
+    var rewrite = false;
+    var config = options["config"];
+    
+    // removed old legacy file handling since it was prone to errors
+    if ( array_key_exists("hubs", config) ) {
+        var authhubs = clone(config["hubs"]);
+    } else {
+        authhubs = [];
+        rewrite = true;
+    }
+    
+    // get version and time info
+    // force rewrite of options if a new version
+    if ( array_key_exists("time", options) ) {
+        var time = options["time"];
+        var info = time.split(" @ ");
+        var version = info[0].trim();
+        var timestamp = parseInt(info[1].trim());
+        var d = new Date(timestamp);
+        var lastedit =  d.toLocaleDateString() + "  " + d.toLocaleTimeString();
+        if ( version !== utils.HPVERSION ) {
+            rewrite = true;
+        }
+    } else {
+        rewrite = true;
+        lastedit = "Unknown";
+        version = "Pre Version 1.7";
+    }
+
+    // last one given is saved here also in main area as the new default
+    // if ( rewrite ) {
+    //     config["hubs"] = authhubs;
+    //     options["config"] = config;
+    //     writeOptions(options);
+    // }
+        
+    // add a new blank hub at the end for adding new ones
+    // note: the type must be "New" because js uses this to do stuff
+    var newhub = {"hubType": "New", "hubHost": "https://graph.api.smartthings.com", 
+                  "clientId": "", "clientSecret": "",
+                  "userAccess": "", "userEndpt": "", "hubName": "", "hubId": "",
+                  "hubTimer": 0, "hubAccess": "", "hubEndpt": ""};
+    authhubs.push(newhub);
+
+    var webSocketUrl = "";
+    if ( config.webSocketServerPort && !isNaN(parseInt(config.webSocketServerPort)) ) {
+        var icolon = hostname.indexOf(":");
+        if ( icolon >= 0 ) {
+            webSocketUrl = "ws://" + hostname.substr(0, icolon);
+        } else {
+            webSocketUrl = "ws://" + hostname;
+        }
+        webSocketUrl = webSocketUrl + ":" + config.webSocketServerPort;
+    }
+    
+    $tc += utils.hidden("returnURL", GLB.returnURL);
+    $tc += utils.hidden("pagename", "auth");
+    $tc += utils.hidden("webSocketUrl", webSocketUrl);
+    $tc += "<div class=\"greetingopts\">";
+    $tc += "<h3><span class=\"startupinp\">Last update: " + lastedit + "</span></h3>";
+    
+    // ------------------ general settings ----------------------------------
+    var numnewthings = 0;
+    if ( DEBUG2 ) {
+        console.log("Hub auth default hub: ", GLB.defhub);
+    }
+    if ( GLB.defhub && GLB.defhub!=="-1" ) {
+        var defhub = GLB.defhub;
+        for ( var idx in allthings) {
+            var thing = allthings[idx];
+            if ( thing["hubnum"] === defhub ) {
+                numnewthings++;
+            }
+        }
+        var ntc= "Hub with hubId= " + defhub + " was authorized and " + numnewthings + " devices were retrieved.";
+    } else {
+        defhub = authhubs[0]["hubId"];
+        ntc = "";
+    }
+
+    $tc += "<div id=\"newthingcount\">" + ntc + "</div>";
+    $tc += "<div class='hubopt'><label for=\"pickhub\" class=\"startupinp\">Authorize Hub: </label>";
+    $tc += "<select name=\"pickhub\" id=\"pickhub\" class=\"startupinp pickhub\">";
+
+    var i= 0;
+    authhubs.forEach(function(hub) {
+        var hubName = hub["hubName"];
+        var hubType = hub["hubType"];
+        var hubId = hub["hubId"].toString();
+        if ( hubId === defhub) {
+            var hubselected = "selected";
+        } else {
+            hubselected = "";
+        }
+        $tc += "<option value=\"" + hubId + "\" " + hubselected + ">Hub #" + i + " " + hubName + " (" + hubType + ")</option>";
+        i++;
+    });
+    $tc += "</select></div>";
+
+    $tc +="<div id=\"authhubwrapper\">";
+    i = 0;
+    authhubs.forEach(function(hub) {
+        
+        // putStats(hub);
+        var hubType = hub["hubType"];
+        var hubId = hub["hubId"].toString();
+        if ( hubId === defhub) {
+            var hubclass = "authhub";
+        } else {
+            hubclass = "authhub hidden";
+        }
+
+        // for each hub make a section with its own form that comes back here as a post
+        $tc +="<div id=\"authhub_" + hubId + "\" hubid=\"" + hubId + "\" hubtype=\"" + hubType + "\" class=\"" + hubclass + "\">";
+        $tc += "<form id=\"hubform_" + hubId + "\" class=\"houseauth\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
+        $tc += utils.hidden("doauthorize", hpcode);
+
+        // we use this div below to grab the hub type dynamically chosen
+        $tc += "<div id=\"hubdiv_" + hubId + "\"><label class=\"startupinp\">Hub Type: </label>";
+        $tc += "<select name=\"hubType\" class=\"startupinp\">";
+        var st_select = "";
+        var he_select = "";
+        var isy_select = "";
+        if ( hubType==="SmartThings" ) { st_select = "selected"; }
+        if ( hubType==="Hubitat" ) { he_select = "selected"; }
+        if ( hubType==="ISY" ) { isy_select = "selected"; }
+        $tc += "<option value=\"SmartThings\" " + st_select + ">SmartThings</option>";
+        $tc += "<option value=\"Hubitat\" " + he_select + ">Hubitat</option>";
+        $tc += "<option value=\"ISY\" " + isy_select + ">ISY</option>";
+        $tc += "</select></div>";
+        
+        if ( !hub["hubHost"] ) {
+            hub["hubHost"] = "https://graph.api.smartthings.com";
+        }
+        $tc += "<div><label class=\"startupinp required\">API Url: </label>";
+        $tc += "<input class=\"startupinp\" title=\"Enter the hub OAUTH address here\" name=\"hubHost\" width=\"80\" type=\"text\" value=\"" + hub["hubHost"] + "\"/></div>"; 
+
+        $tc += "<div><label class=\"startupinp required\">Client ID: </label>";
+        $tc += "<input class=\"startupinp\" name=\"clientId\" width=\"80\" type=\"text\" value=\"" + hub["clientId"] + "\"/></div>"; 
+
+        $tc += "<div><label class=\"startupinp required\">Client Secret: </label>";
+        $tc += "<input class=\"startupinp\" name=\"clientSecret\" width=\"80\" type=\"text\" value=\"" + hub["clientSecret"] + "\"/></div>"; 
+
+        $tc += "<div><label class=\"startupinp\">Fixed Access Token: </label>";
+        $tc += "<input class=\"startupinp\" name=\"userAccess\" width=\"80\" type=\"text\" value=\"" + hub["userAccess"] + "\"/></div>"; 
+
+        $tc += "<div><label class=\"startupinp\">Fixed Endpoint: </label>";
+        $tc += "<input class=\"startupinp\" name=\"userEndpt\" width=\"80\" type=\"text\" value=\"" + hub["userEndpt"] + "\"/></div>"; 
+
+        $tc += "<div><label class=\"startupinp\">Hub Name: </label>";
+        $tc += "<input class=\"startupinp\" name=\"hubName\" width=\"80\" type=\"text\" value=\"" + hub["hubName"] + "\"/></div>"; 
+
+        $tc += utils.hidden("hubId", hubId);
+
+        $tc += "<div><label class=\"startupinp required\">Refresh Timer: </label>";
+        $tc += "<input class=\"startupinp\" name=\"hubTimer\" width=\"10\" type=\"text\" value=\"" + hub["hubTimer"] + "\"/></div>"; 
+
+        $tc += "<input class=\"hidden\" name=\"hubAccess\" type=\"hidden\" value=\"" + hub["hubAccess"] + "\"/>"; 
+        $tc += "<input class=\"hidden\" name=\"hubEndpt\" type=\"hidden\" value=\"" + hub["hubEndpt"] + "\"/>"; 
+        
+        $tc += "<div>";
+        $tc += "<input hub=\"" + i + "\" hubid=\"" + hubId + "\" class=\"authbutton hubauth\" value=\"Authorize Hub #" + i + "\" type=\"button\" />";
+        $tc += "<input hub=\"" + i + "\" hubid=\"" + hubId + "\" class=\"authbutton hubdel\" value=\"Remove Hub #" + i + "\" type=\"button\" />";
+        $tc += "</div>";
+        
+        $tc += "</form>";
+        $tc += "</div>";
+        
+        i++;
+    });
+    $tc += "</div>";
+    $tc += "<div id=\"authmessage\"></div>";
+    $tc += "<br><br>";
+    $tc += "<input id=\"cancelauth\" class=\"authbutton\" value=\"Setup Things & Options\" name=\"cancelauth\" type=\"button\" />";
     $tc += "<button class=\"infobutton\">Return to HousePanel</button>";
 
     $tc += utils.getFooter();
@@ -1031,7 +1373,6 @@ function getWeatherIcon(num) {
 
         // uncomment this to use ST's copy. Default is to use local copy
         // so everything stays local
-        // $iconimg = "https://smartthings-twc-icons.s3.amazonaws.com/" . $num . ".png";
         var iconimg = "media/weather/" + num + ".png";
         iconstr = "<img src=\"" + iconimg + "\" alt=\"" + num + "\" width=\"80\" height=\"80\">";
     }
@@ -1416,7 +1757,7 @@ function getCustomName(defname, idx) {
            var things = thingoptions[room];
            for (var kindexarr in things) {
                  // if our tile matches and there is a custom name, use it
-                if ( tileid===kindexarr[0] && kindexarr[4] ) {
+                if ( tileid===kindexarr[0] && kindexarr[4] && kindexarr[4]!=="" ) {
                     return kindexarr[4];
                 }
            }
@@ -1504,7 +1845,7 @@ function getAllThings() {
 
     // add the special tiles
     addSpecials();
-    updateOptions();
+    updateOptions("/");
 
     // get all things from all configured servers
     var hubs = GLB.options.config["hubs"];
@@ -1517,7 +1858,7 @@ function getAllThings() {
             var clientSecret = hub["clientSecret"];
             var hubName = hub["hubName"];
             var hubType = hub["hubType"];
-            getDevices(hubnum, accesstoken, hubEndpt, clientId, clientSecret, hubName, hubType);
+            getDevices(hubnum, hubType, accesstoken, hubEndpt, clientId, clientSecret, hubName, "/");
         });
 
     // if no hubs, force a reload to update any special tiles added above
@@ -1723,7 +2064,9 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
 
     // save the result to push to all clients
     entry["value"] = thevalue;
-    console.log("pushClient: ", thevalue, " linkinfo: ", linkinfo);
+    if ( DEBUG2 ) {
+        console.log("pushClient: ", entry, " linkinfo: ", linkinfo);
+    }
 
     // update the main array with changed push values
     if ( swid!=="reload" && swid!=="popup" ) {
@@ -1858,6 +2201,30 @@ function findHub(hubid) {
         if ( ahub["hubId"]===hubid ) { hub = ahub; }
     }
     return hub;
+}
+
+// update the hubs array with a new hub value of a certain ID
+// if not found the hub is added
+function updateHubs(hubs, newhub, oldid) {
+    var num = 0;
+    oldid = oldid.toString();
+    var found = false;
+
+    // every hub that matches gets updated
+    // should only be one but just in case
+    hubs.forEach(function(hub) {
+        if ( hub["hubId"].toString() === oldid ) {
+            hubs[num] = newhub;
+            found = true;
+        }
+        num++;
+    });
+
+    // if not found then add new hub
+    if ( !found ) {
+        hubs.push(newhub);
+    }
+    return found;
 }
 
 function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, linkval, protocol) {
@@ -2087,7 +2454,6 @@ function setOrder(swid, swtype, swval, swattr) {
         // now update either the page or the tiles based on type
         switch(swtype) {
             case "rooms":
-                // $options["rooms"] = $swval;
                 options["rooms"] = {};
                 for (var roomname in swval) {
                     var roomid = parseInt(swval[roomname]);
@@ -2382,6 +2748,7 @@ function getInfoPage(returnURL, pathname) {
         if ( is_object(thing["value"]) ) {
             for (var key in thing["value"] ) {
                 var val = thing["value"][key];
+                value += " ";
                 if ( array_key_exists(key, specialtiles) ) {
                     value += key + "= <strong>embedded " + key + "</strong><br/>";
                 } else if ( thing["type"]==="custom" && typeof val==="object" ) { 
@@ -3030,7 +3397,7 @@ function processOptions($optarray) {
             // add any new ones that were not there before
             // set position to next to last one unless it is moved a lot
             // the 400 distance is subjective but works in most cases
-            var $newthings = $options["things"][$roomname];
+            var newthings = $options["things"][$roomname];
             if ( $lasttop < -400 || $lasttop > 400 || $lastleft < -400 || $lastleft > 400 ) {
                 $lasttop = 0;
                 $lastleft = 0; 
@@ -3038,7 +3405,7 @@ function processOptions($optarray) {
 
             $val.forEach(function($tilestr) {
                 var $tilenum = parseInt($tilestr);
-                if ( ! inroom($tilenum, $newthings) ) {
+                if ( ! inroom($tilenum, newthings) ) {
                     var newtile = [$tilenum,$lasttop,$lastleft, $lastz, ""];
                     $options["things"][$roomname].push(newtile);
                 }
@@ -3441,14 +3808,6 @@ function apiCall(body, protocol) {
                 result = doQuery(hubid, swid, swtype, tileid, protocol);
             }
             break;
-            
-        case "getthings" :
-            var reload = ( body['swattr']==="reload" );
-            if ( reload && protocol==="POST" ) {
-                getAllThings();
-            }
-            result = clone(allthings);
-            break;
 
         case "wysiwyg2":
             // if we sorted the user fields in the customizer, save them
@@ -3470,46 +3829,9 @@ function apiCall(body, protocol) {
                 result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 99, "", api);
             }
             break;
-                
-        case "getoptions":
-            var reload = ( body['swattr']==="reload" );
-            if ( reload ) {
-                readOptions();
-            }
-            result = GLB.options;
-            break;
-
-        case "showid":
-        case "showoptions":
-            var result = "error - [" + api + "] API call is no longer supported.";
-            console.log(result);
-            break;
-
-        case "refresh":
-            getAllThings();
-            result = "success";
-            break;
-            
-        case "savetileedit":
-            var partnum = parseInt(swid);
-            var skin = getSkin();
-            result = writeCustomCss(partnum, skin, swval);
-            break;
 
         case "pageorder":
             result = setOrder(swid, swtype, swval, swattr);
-            break;
-
-        case "pageadd":
-            result = addPage();
-            break;
-
-        case "pagedelete":
-            result = delPage(swval);
-            break;
-    
-        case "getcatalog":
-            result = getCatalog(swattr);
             break;
 
         case "dragdrop":
@@ -3523,9 +3845,64 @@ function apiCall(body, protocol) {
         case "dragdelete":
             result = delThing(swid, swtype, swval, swattr);
             break;
+
+        case "pagedelete":
+            result = delPage(swval);
+            break;
     
-        case "updatenames":
-            result = updateNames(swid, tileid, swval, swattr);
+        case "pageadd":
+            result = addPage();
+            break;
+
+        case "getcatalog":
+            result = getCatalog(swattr);
+            break;
+            
+        case "refactor":
+            if ( protocol==="POST" ) {
+                refactorOptions();
+                getAllThings();
+                result = "success";
+            } else {
+                result = "error - api call [" + api + "] is only supported in POST mode.";
+            }
+            break;
+    
+        case "refresh":
+            getAllThings();
+            result = "success";
+            break;
+        
+        case "getoptions":
+            var reload = ( body['swattr']==="reload" );
+            if ( reload ) {
+                readOptions();
+            }
+            result = GLB.options;
+            break;
+        
+        case "getthings" :
+            var reload = ( body['swattr']==="reload" );
+            if ( reload && protocol==="POST" ) {
+                getAllThings();
+            }
+            result = clone(allthings);
+            break;
+                
+        case "gethubs" :
+           result = hubs;
+           break;
+
+        case "filteroptions":
+        case "savefilters":
+            saveFilters(body);
+            result = "success";
+            break;
+
+        case "savetileedit":
+            var partnum = parseInt(swid);
+            var skin = getSkin();
+            result = writeCustomCss(partnum, skin, swval);
             break;
 
         case "saveoptions":
@@ -3537,52 +3914,8 @@ function apiCall(body, protocol) {
             }
             break;
 
-        case "filteroptions":
-            saveFilters(body);
-            result = "success";
-            break;
-        
-        case "refactor":
-            if ( protocol==="POST" ) {
-                refactorOptions();
-                getAllThings();
-                result = "success";
-            } else {
-                result = "error - api call [" + api + "] not supported in GET mode.";
-            }
-            break;
-            
-        case "geticons":
-            var result = getIcons(swval, swattr);
-            break;
-
-        case "pwhash":
-            var result;
-            if ( swtype==="hash" ) {
-                result = pw_hash(swval);
-            } else if ( swtype==="verify" ) {
-                if ( pw_verify(swval, swattr) ) {
-                    result = "success";
-                } else {
-                    result = "error";
-                }
-            } else {
-                result = "error";
-            }
-            break;
-
-        case "addcustom":
-            var result = {}
-            result.value = addCustom(swid, swtype, swval, swattr, subid);
-            result.options = GLB.options;
-            result.things = allthings;
-            break;
-
-        case "delcustom":
-            var result = {}
-            result.value = delCustom(swid, swtype, swval, swattr, subid);
-            result.options = GLB.options;
-            result.things = allthings;
+        case "updatenames":
+            result = updateNames(swid, tileid, swval, swattr);
             break;
         
         case "dologin":
@@ -3618,6 +3951,120 @@ function apiCall(body, protocol) {
             }
             break;
 
+        case "pwhash":
+            var result;
+            if ( swtype==="hash" ) {
+                result = pw_hash(swval);
+            } else if ( swtype==="verify" ) {
+                if ( pw_verify(swval, swattr) ) {
+                    result = "success";
+                } else {
+                    result = "error";
+                }
+            } else {
+                result = "error";
+            }
+            break;
+
+        case "addcustom":
+            var result = {}
+            result.value = addCustom(swid, swtype, swval, swattr, subid);
+            result.options = GLB.options;
+            result.things = allthings;
+            break;
+
+        case "delcustom":
+            var result = {}
+            result.value = delCustom(swid, swtype, swval, swattr, subid);
+            result.options = GLB.options;
+            result.things = allthings;
+            break;
+            
+        case "geticons":
+            var result = getIcons(swval, swattr);
+            break;
+
+        case "hubauth":
+            // if ( protocol==="POST" && typeof body["doauthorize"]!=="undefined" ) {
+            //     console.log("hpcode= ", GLB.hpcode, " doauthorize= ", body.doauthorize);
+            //     console.log("Auth form: ", body);
+            // }
+
+            // now load the new data
+            var hub = {};
+            hub["hubType"] = body.hubType;
+            hub["hubHost"] = body.hubHost;
+            hub["clientId"] = body.clientId;
+            hub["clientSecret"] = body.clientSecret;
+            hub["userAccess"] = body.userAccess;
+            hub["userEndpt"] = body.userEndpt;
+            hub["hubName"] = body.hubName;
+            hub["hubId"] = body.hubId;
+            hub["hubAccess"] = body.hubAccess;
+            hub["hubEndpt"] = body.hubEndpt;
+            hub["hubTimer"] = body.hubTimer;
+
+            // update existing or add a new hub
+            updateHubs(GLB.options["config"]["hubs"], hub, body.hubId);
+            console.log("hubs: ", hubs);
+
+            // now authorize them
+            // handle direct access including ISY hubs first
+            var hubnum = hub["hubId"];
+            var hubName = hub["hubName"];
+            var hubType = hub["hubType"];
+            var host = hub["hubHost"];
+            var clientId = hub["clientId"];
+            var clientSecret = hub["clientSecret"];
+            GLB.defhub = hubnum;
+            if ( (body.userAccess && body.userEndpt) || body.hubType==="ISY" ) {
+
+                // get all new devices and update the options index array
+                // this forces page reload with all the new stuff
+                // notice the reference to /reauth in the call to getDevices
+                // this makes the final read redirect back to reauth page
+                var accesstoken  = hub["hubAccess"];
+                var hubEndpt = hub["hubEndpt"];
+                var returnloc = GLB.returnURL + "/reauth";
+                writeOptions(GLB.options, true);
+                getDevices(hubnum, hubType, accesstoken, hubEndpt, clientId, clientSecret, hubName, "/reauth");
+                result = {action: "things", host: host, hubName: hubName, clientId: clientId, clientSecret: clientSecret, url: returnloc};
+                if ( DEBUG2 ) {
+                    console.log("Device retrieval initiated: ", result);
+                }
+
+            // here we start an oauth flow
+            // we complete the flow later when redirection happens back to /oauth GET call
+            } else {
+                var returnloc = GLB.returnURL + "/oauth";
+                result = {action: "oauth", host: host, hubName: hubName, clientId: clientId, clientSecret: clientSecret, url: returnloc};
+                if ( DEBUG2 ) {
+                    console.log("OAUTH flow initiated: ", result);
+                }
+            }
+    
+            break;
+    
+        case "hubdelete":
+            // TODO - implement hubDelete() function
+            result = "success";
+            break;
+
+        case "cancelauth":
+            // TODO - implement logic to return or pick options
+            result = "success";
+            break;
+    
+        case "showoptions":
+        case "showid":
+        case "reauth":
+        case "showid":
+        case "logout":
+        case "trackupdate":
+                var result = "error - [" + api + "] API call is no longer supported.";
+                console.log(result);
+                break;
+                
         default:
             result = "error - unrecognized " + protocol + " api call: " + api;
             break;
@@ -3629,6 +4076,9 @@ function apiCall(body, protocol) {
 // ***************************************************
 // beginning of main routine
 // ***************************************************
+var d = new Date();
+var hpcode = d.getTime();
+GLB.hpcode = hpcode.toString();
 
 // read the config file and get array of hubs
 readOptions();
@@ -3642,6 +4092,7 @@ var port = config["port"];
 if ( !port ) {
     port = 3080;
 }
+GLB.defhub = "-1"; // hubs[0].hubId;
 
 // start our main server
 try {
@@ -3672,7 +4123,6 @@ var maxroom = 0;
 if ( array_key_exists("things", GLB.options) && 
      array_key_exists("rooms", GLB.options) ) {
     var thingoptions = GLB.options["things"];
-    // foreach ($thingoptions as $roomname => $thinglist) {
     for (var roomname in thingoptions) {
         var thinglist = thingoptions[roomname];
         if ( thinglist.length > maxroom ) {
@@ -3747,6 +4197,9 @@ if ( app && applistening ) {
                 console.log("api call: ",  queryobj);
                 $tc = apiCall(queryobj, "GET");
             } else {
+                // reset for next refresh
+                GLB.defhub = "-1";
+
                 $tc = mainPage(req.protocol, req.headers.host, req.path);
             }
             res.send($tc);
@@ -3770,8 +4223,37 @@ if ( app && applistening ) {
             res.end();
 
         } else if ( req.path==="/reauth") {
-            var $tc = getAuthPage();
+            d = new Date();
+            hpcode = d.getTime();
+            GLB.hpcode = hpcode.toString();
+            var $tc = getAuthPage(req.headers.host, GLB.hpcode);
             res.send($tc);
+            res.end();
+
+        } else if ( req.path==="/oauth") {
+            var queryobj = req.query || {};
+            if ( queryobj["code"] ) {
+                var hubnum = GLB.defhub;
+                var hub = findHub(hubnum);
+
+                // get token, endpt, and retrieve devices
+                // this goes through a series of callbacks
+                // and ends with a pushClient to update the auth page
+                getAccessToken(queryobj["code"], hub);
+            } else {
+                GLB.defhub = "-1";
+            }
+            d = new Date();
+            hpcode = d.getTime();
+            GLB.hpcode = hpcode.toString();
+            var $tc = getAuthPage(req.headers.host, GLB.hpcode);
+            res.send($tc);
+            res.end();
+
+        } else if ( req.path==="/reset") {
+            readOptions();
+            getAllThings();
+            res.send("Resetting...");
             res.end();
 
         } else {
@@ -3844,7 +4326,7 @@ if ( app && applistening ) {
         } else if ( typeof req.body['useajax']!=="undefined" || typeof req.body["api"]!=="undefined" ) {
             var result = apiCall(req.body, "POST");
             res.json(result);
-            res.end();
+            // res.end();
         
         // handle unknown requests
         } else {
