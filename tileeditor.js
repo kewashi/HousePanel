@@ -94,6 +94,8 @@ function getCssRuleTarget(str_type, subid, thingindex, useall) {
         useall= 2; 
     } else if ( useall && useall!==1 && useall!==2 )  { 
         useall= 0; 
+    } else {
+        useall= 0;
     }
     
     var target = "";
