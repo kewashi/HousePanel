@@ -387,7 +387,12 @@ function actionButtons() {
 // returns an options list of available fields of a given tile
 function loadLinkItem(idx, allowuser, sortval, sortup) {
     var thing = cm_Globals.allthings[idx];
+    // if ( !thing ) {
+    //     idx = "clock|clockdigital";
+    //     thing = cm_Globals.allthings[idx];
+    // }
     var thevalue = thing["value"];
+
     // console.log("idx= ", idx, " thing= ", thing, " loadLinkItem - thevalue= ", thevalue);
     var subids = Object.keys(thevalue);
     
@@ -449,6 +454,12 @@ function loadLinkItem(idx, allowuser, sortval, sortup) {
     }
     
     var linkidx = cm_Globals.currentidx;
+
+    // if the link isn't there then reset to digital clock default
+    if ( !cm_Globals.allthings[linkidx] ) {
+        linkidx = "clock|clockdigital";
+    }
+
     var n = linkidx.indexOf("|");
     var bid = linkidx.substring(n+1);
     linkid = options.index[cm_Globals.currentidx];

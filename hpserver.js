@@ -248,7 +248,7 @@ function readOptions() {
         fs.writeFileSync(customfname, str_customopt);
     } else {
 
-        if ( DEBUG1 ) {
+        if ( DEBUG2 ) {
             console.log("Customizing room setup for user: ", uname);
         }
 
@@ -669,6 +669,42 @@ function setDefaults() {
     writeOptions(GLB.options);
 }
 
+// this used to create input blocks for auth page
+// it was modified for use now on the options page
+function tsk($timezone, $skin, $uname, $port, $webSocketServerPort, $fast_timer, $slow_timer) {
+
+    var $tc= "";
+    $tc += "<div class='inp'><label class=\"startupinp\">Skin: </label>";
+    $tc += "<input id=\"skinid\" class=\"startupinp\" name=\"skin\" width=\"80\" type=\"text\" value=\"" + $skin + "\"/></div>"; 
+    
+    $tc += "<div><label class=\"startupinp\">Timezone: </label>";
+    $tc += "<input id=\"newtimezone\" class=\"startupinp\" name=\"timezone\" width=\"80\" type=\"text\" value=\"" + $timezone + "\"/></div>"; 
+
+    $tc += "<div><label class=\"startupinp\">Listen On Port: </label>";
+    $tc += "<input id=\"newport\" class=\"startupinp\" name=\"port\" width=\"20\" type=\"text\" value=\"" + $port + "\"/></div>"; 
+
+    $tc += "<div><label class=\"startupinp\">WebSocket Port: </label>";
+    $tc += "<input id=\"newsocketport\" class=\"startupinp\" name=\"webSocketServerPort\" width=\"20\" type=\"text\" value=\"" + $webSocketServerPort + "\"/></div>"; 
+
+    // $tc += "<div><label class=\"startupinp\">Fast Timer: </label>";
+    // $tc += "<input id=\"newfast_timer\" class=\"startupinp\" name=\"fast_timer\" width=\"20\" type=\"text\" value=\"" + $fast_timer + "\"/></div>"; 
+
+    // $tc += "<div><label class=\"startupinp\">Slow Timer: </label>";
+    // $tc += "<input id=\"newslow_timer\" class=\"startupinp\" name=\"slow_timer\" width=\"20\" type=\"text\" value=\"" + $slow_timer + "\"/></div>"; 
+
+    $tc += "<div><label for=\"uname\" class=\"startupinp\">Username: </label>";
+    $tc += "<input id=\"uname\" class=\"startupinp\" name=\"uname\" width=\"20\" type=\"text\" value=\"" + $uname + "\"/></div>"; 
+
+    $tc += "<div><label for=\"pword\" class=\"startupinp\">Set New Password: </label>";
+    $tc += "<input id=\"pword\" class=\"startupinp\" name=\"pword\" width=\"80\" type=\"password\" value=\"\"/></div>"; 
+    
+    $tc += "<div><label></label><span class='indent typeopt'>(blank to keep prior)</span></div>";
+    $tc += "<div></div><br />";
+
+    return $tc;
+    
+}
+
 function getLoginPage() {
     var $tc = "";
     var skin = getSkin();
@@ -910,7 +946,7 @@ function getAuthPage(hostname, hpcode) {
     $tc += "</div>";
     $tc += "<div id=\"authmessage\"></div>";
     $tc += "<br><br>";
-    $tc += "<input id=\"cancelauth\" class=\"authbutton\" value=\"Setup Things & Options\" name=\"cancelauth\" type=\"button\" />";
+    $tc += "<input id=\"cancelauth\" class=\"authbutton\" value=\"Return to Options Page\" name=\"cancelauth\" type=\"button\" />";
     $tc += "<button class=\"infobutton\">Return to HousePanel</button>";
 
     $tc += utils.getFooter();
@@ -1360,6 +1396,23 @@ function returnFile(thingvalue, thingtype) {
 
     thingvalue[thingtype] = $v;
     return thingvalue;
+}
+
+// function to create frame2.html with AccuWeather for a city
+// the City Name, Country Code, and the Location Code from AccuWeather must be provided
+// getAccuWeather("ann-arbor-mi","us","329380");
+function getAccuWeather($city, $region, $code) {
+    const acid = "awcc1531959686475";
+    const $unit = "F";
+
+    var rcitycode = $region + "/" + $city + "/" + $code + "/weather-forecast/" + $code;
+    var $tc = "<!DOCTYPE html>";
+    $tc += "<html><body>";
+    $tc += "<a href=\"https://www.accuweather.com/en/" + rcitycode + "\" class=\"aw-widget-legal\">";
+    $tc += "</a><div id=\"" + acid + "\" class=\"aw-widget-current\"  data-locationkey=\"" + $code + "\" data-unit=\"" + $unit + "\" data-language=\"en-us\" data-useip=\"false\" data-uid=\"" + acid + "\"></div>";
+    $tc += "<script type=\"text/javascript\" src=\"https://oap.accuweather.com/launch.js\"></script>";
+    $tc += "</body></html>";
+    fs.writeFileSync("frame2.html", $tc, {encoding: "utf8", flag:"w"});
 }
 
 function getWeatherIcon(num) {
@@ -2133,7 +2186,9 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
         if ( err ) {
             console.log("Error calling hub: ", err);
         } else {
-            console.log("doAction: ", swid, " type: ", swtype, " subid: ", subid, " value: ", body);
+            if ( DEBUG5 ) {
+                console.log("doAction: ", swid, " type: ", swtype, " subid: ", subid, " value: ", body);
+            }
             if ( body ) {
                 pushClient(swid, swtype, subid, body, linkinfo, popup);
             }
@@ -2145,7 +2200,9 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
             console.log("Error calling ISY node: ", err);
         } else {
             var result = parser.parse(body);
-            console.log("ISY action: ", result);
+            if ( DEBUG5 ) {
+                console.log("ISY action: ", result);
+            }
             pushClient(swid, swtype, subid, result, linkinfo, popup);
         }
     }
@@ -2172,7 +2229,9 @@ function queryHub(hub, swid, swtype, popup) {
         if ( err ) {
             console.log("Error requesting hub node properties: ", err);
         } else {
-            console.log("doQuery: ", swid, " type: ", swtype, " value: ", body);
+            if ( DEBUG5 ) {
+                console.log("doQuery: ", swid, " type: ", swtype, " value: ", body);
+            }
             if ( body ) {
                 pushClient(swid, swtype, "none", body, null, popup);
             }
@@ -2185,7 +2244,9 @@ function queryHub(hub, swid, swtype, popup) {
         } else {
             var result = parser.parse(body);
             var properties = result.nodeInfo.properties;
-            console.log("ISY query: ", result," properties: ", properties);
+            if ( DEBUG5 ) {
+                console.log("ISY query: ", result," properties: ", properties);
+            }
             if ( result ) {
                 pushClient(swid, swtype, subid, result, null, popup);
             }
@@ -2592,7 +2653,7 @@ function delThing(bid, thingtype, panel, tile) {
     if ( panel && array_key_exists(panel, GLB.options["things"]) &&
                    array_key_exists(idx, GLB.options["index"]) ) {
 
-        var optionthings = GLB.options["things"][panel];
+        var optionthings = clone(GLB.options["things"][panel]);
 
         // as a double check the options file tile should match
         // if it doesn't then something weird triggered drag drop
@@ -2618,9 +2679,10 @@ function delThing(bid, thingtype, panel, tile) {
                 optionthings.forEach(function(orderthing) {
                     GLB.options["things"][panel].push(orderthing);
                 })
-                console.log("success - deleted tile: ", tile, " with id: ", bid, " from room: ", panel);
-                // console.log("new tiles: ", GLB.options["things"][panel]);
-                // writeOptions(GLB.options);
+                if ( DEBUG2 ) {
+                    console.log("success - deleted tile: ", tile, " with id: ", bid, " from room: ", panel);
+                }
+                writeOptions(GLB.options);
             } else {
                 console.log("error - could not safely delete tile: ", tile, " with id: ", bid, " from room: ", panel);
             }
@@ -2915,7 +2977,6 @@ function getOptionsPage(pathname) {
     var $indexoptions = $options["index"];
     var $useroptions = $options["useroptions"];
     var $configoptions = $options["config"];
-    var $hubs = $configoptions["hubs"];
     var skin = getSkin();
     var $port = $configoptions["port"];
     var $webSocketServerPort = $configoptions["webSocketServerPort"];
@@ -2924,6 +2985,7 @@ function getOptionsPage(pathname) {
     var $kioskoptions = $configoptions["kiosk"];
     var $ruleoptions = $configoptions["rules"];
     var $timezone = $configoptions["timezone"];
+    var $uname = getUserName();
 
     var hubpick = "all";
     if ( $configoptions["hubpick"] ) {
@@ -2946,9 +3008,9 @@ function getOptionsPage(pathname) {
 
     $tc+= "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + retpage + "\"  method=\"POST\">";
 
-    // $tc+= "<div class=\"filteroption\">";
-    // $tc+= tsk($timezone, skin, $uname, $port, $webSocketServerPort, $fast_timer, $slow_timer);
-    // $tc+= "</div>";
+    $tc+= "<div class=\"filteroption\">";
+    $tc+= tsk($timezone, skin, $uname, $port, $webSocketServerPort, $fast_timer, $slow_timer);
+    $tc+= "</div>";
 
     $tc+= "<div class=\"filteroption\">Specify number of special tiles: ";
     for (var $stype in $specialtiles) {
@@ -3239,8 +3301,6 @@ function processOptions($optarray) {
     var $city = "ann-arbor-mi";
     var $region = "us";
     var $code = "329380";
-    // $expiry = time()+3650*24*3600;
-    // $expirz = time()-3650*24*3600;
     
     var $options = clone(GLB.options);;
     $options["things"] = {};
@@ -3260,39 +3320,41 @@ function processOptions($optarray) {
     // // checkbox items simply will not be there if not selected
     $configoptions["kiosk"] = "false";
     $configoptions["rules"] = "false";
+    var $timezone = $configoptions["timezone"];
 
     // // get logged in user or set default if not logged in
     var $uname = getUserName();
     var $olduname = $uname;
     var skin = $configoptions["skin"];
     
-    
     // // get default pw and its skin
-    // if (array_key_exists("pword", $configoptions)) {
-    //     $pwords = $configoptions["pword"];
-    //     if ( array_key_exists($uname, $pwords) ) {
-    //         if ( is_array($pwords[$uname]) ) {
-    //             $hash = $pwords[$uname][0];
-    //             skin = $pwords[$uname][1];
-    //         } else {
-    //             $hash = $pwords[$uname];
-    //             $pwords[$uname] = array($hash, skin);
-    //             $configoptions["pword"] = $pwords;
-    //         }
-    //     } else {
-    //         $pwords = array();
-    //         $pwords[$uname] = array($hash, skin);
-    //         $configoptions["pword"] = $pwords;
-    //     }
-    // } else {
-    //     $pwords = array();
-    //     $hash = "";
-    //     $pwords[$uname] = array($hash, skin);
-    //     $configoptions["pword"] = $pwords;
-    // }
-    // $defskin = skin;
-    // $oldhash = $hash;
-    // $hash = "";
+    var $pwords;
+    if (array_key_exists("pword", $configoptions)) {
+        $pwords = clone($configoptions["pword"]);
+        if ( array_key_exists($uname, $pwords) ) {
+            if ( is_array($pwords[$uname]) ) {
+                $hash = $pwords[$uname][0];
+                skin = $pwords[$uname][1];
+            } else {
+                $hash = $pwords[$uname];
+                $pwords[$uname] = [$hash, skin];
+                $configoptions["pword"] = clone($pwords);
+            }
+        } else {
+            $pwords = {};
+            $pwords[$uname] = [$hash, skin];
+            $configoptions["pword"] = clone($pwords);
+        }
+    } else {
+        $pwords = {};
+        $hash = "";
+        $pwords[$uname] = [$hash, skin];
+        $configoptions["pword"] = clone($pwords);
+    }
+
+    var $defskin = skin;
+    var $oldhash = $hash;
+    var $hash = "";
     
     // // fix long-standing bug by putting a clock in any empty room
     // // to force the form to return each room defined in options file
@@ -3320,21 +3382,19 @@ function processOptions($optarray) {
         } else if ( $key==="port" ) {
             $configoptions["port"] = parseInt($val);
         } else if ( $key==="webSocketServerPort" ) {
-            $configoptions["webSocketServerPort"] = intval($val);
+            $configoptions["webSocketServerPort"] = parseInt($val);
         } else if ( $key==="fast_timer" ) {
-            $configoptions["fast_timer"] = intval($val);
+            $configoptions["fast_timer"] = parseInt($val);
         } else if ( $key==="slow_timer" ) {
-            $configoptions["slow_timer"] = intval($val);
-
-        // else if ( $key==="uname" && $val ) {
-        //     $uname = checkuser($val);
-        // }
-        // else if ( $key==="pword" && $val ) {
-        //     $pword = trim($val);
-        //     $hash = pw_hash($pword);
-        //     $oldhash = $hash;
-        //     // setcookie("pwcrypt", "", $expirz, "/");
-        // }
+            $configoptions["slow_timer"] = parseInt($val);
+        } else if ( $key==="uname" && $val ) {
+            $uname = $val.trim();
+            if ( $uname==="" ) {
+                $uname = "default";
+            }
+        } else if ( $key==="pword" && $val ) {
+            $hash = pw_hash($val);
+            $oldhash = $hash;
         } else if ( $key==="accucity" && $val ) {
             $city = $val.trim();
         } else if ( $key==="accuregion" && $val ) {
@@ -3360,7 +3420,6 @@ function processOptions($optarray) {
         // made this more robust by checking room name being valid
         } else if ( in_array($key, $roomnames) && is_array($val) ) {
             var $roomname = $key;
-            $options["things"][$roomname] = [];
             
             // first save the existing order of tiles if still there
             // this will preserve user drag and drop positions
@@ -3371,41 +3430,27 @@ function processOptions($optarray) {
             var $lastz = 1;
 
             // $oldthings = $oldoptions["things"][$roomname];
-            for (var $arr in GLB.options["things"][$roomname]) {
-                if ( is_array($arr) ) {
-                    var $tilenum = parseInt($arr[0]);
-                    var $postop = $arr[1];
-                    var $posleft = $arr[2];
-                    var $zindex = $arr[3];
-                    var $customname = $arr[4];
-                } else {
-                    $tilenum = parseInt($arr);
-                    $postop = 0;
-                    $posleft = 0;
-                    $zindex = 1;
-                    $customname = "";
-                }
-                if ( inroom($tilenum, $val) ) {
-                    var newtile = [$tilenum,$postop,$posleft,$zindex,$customname];
-                    $options["things"][$roomname].push(newtile);
-                    $lasttop = $postop;
-                    $lastleft = $posleft;
-                    $lastz = $zindex;
-                }
+            $options["things"][$roomname] = clone(GLB.options["things"][$roomname]);
+
+            if ( $options["things"][$roomname].length > 0 ) {
+                var lastitem = $options["things"][$roomname].length -1;
+                var arr = $options["things"][$roomname][lastitem];
+                $lasttop = arr[1];
+                $lastleft = arr[2];
+                $lastz = arr[3];
             }
-            
-            // add any new ones that were not there before
+
             // set position to next to last one unless it is moved a lot
             // the 400 distance is subjective but works in most cases
-            var newthings = $options["things"][$roomname];
             if ( $lasttop < -400 || $lasttop > 400 || $lastleft < -400 || $lastleft > 400 ) {
                 $lasttop = 0;
                 $lastleft = 0; 
             }
 
+            // add any new ones that were not there before
             $val.forEach(function($tilestr) {
                 var $tilenum = parseInt($tilestr);
-                if ( ! inroom($tilenum, newthings) ) {
+                if ( ! inroom($tilenum, GLB.options["things"][$roomname]) ) {
                     var newtile = [$tilenum,$lasttop,$lastleft, $lastz, ""];
                     $options["things"][$roomname].push(newtile);
                 }
@@ -3420,12 +3465,12 @@ function processOptions($optarray) {
     
     // // everything from this point on is after processing the options table
     // // start by handling the weather
-    // if ( $city && $region && $code ) {
-    //     getAccuWeather($city, $region, $code);
-    //     $configoptions["accucity"] = $city;
-    //     $configoptions["accuregion"] = $region;
-    //     $configoptions["accucode"] = $code;
-    // }
+    if ( $city && $region && $code ) {
+        getAccuWeather($city, $region, $code);
+        $configoptions["accucity"] = $city;
+        $configoptions["accuregion"] = $region;
+        $configoptions["accucode"] = $code;
+    }
     
     // // now process things that used to be in auth page
     // // includes timezone, fast_timer, slow_timer, skin, port, and webSocketPort
@@ -3436,38 +3481,36 @@ function processOptions($optarray) {
     //     $timezone = date_default_timezone_get();
     //     date_default_timezone_set($timezone);
     // }
-    // $configoptions["timezone"] = $timezone;
+    $configoptions["timezone"] = $timezone;
 
     // // set the skin if it is a good one or use default from above
-    // if ( skin && file_exists(skin . "/housepanel.css") ) {
-    //     if ( !file_exists(skin . "/customtiles.css") ) {
-    //         writeCustomCss(skin, "");
-    //     }
-    //     $configoptions["skin"] = skin;
-    // } else {
-    //     skin = $defskin;
-    // }
+    if ( skin && file_exists(skin + "/housepanel.css") ) {
+        if ( !file_exists(skin + "/customtiles.css") ) {
+            writeCustomCss(skin, "");
+        }
+        $configoptions["skin"] = skin;
+    } else {
+        skin = $defskin;
+    }
     
     // // process username and password settings and save in skin specific loc
     // // includes logic to bundle the skin with this user so that
     // // now each user can use their own skin if they want
-    // if ( $uname === $olduname ) {
-    //     $hash = $oldhash;
-    // }
-    // $pwords[$uname] = array($hash, skin);
+    if ( $uname === $olduname ) {
+        $hash = $oldhash;
+    }
+    $pwords[$uname] = [$hash, skin];
     
     // // now set all the parameters with complex logic
-    // $configoptions["pword"] = $pwords;
-    // $configoptions["timezone"] = $timezone;
-    // $configoptions["specialtiles"] = $specialcounts;
+    $configoptions["uname"] = $uname;
+    $configoptions["pword"] = $pwords;
+    $configoptions["timezone"] = $timezone;
     
     // save the configuration parameters in the main options array
     $options["config"] = clone($configoptions);
-    
-    // // set the user cookie
-    // // and log this user in
-    // setcookie("uname", $uname, $expiry, "/");
-    // setcookie("pwcrypt", $uname, $expiry, "/");
+
+    // save our login info
+    GLB.pwcrypt =  $pwords[$uname][0];  // $uname;
     
     if (DEBUG4) {
         console.log("Debug Print for New Options Created - After Processing");
@@ -3611,9 +3654,10 @@ function getIcons(icondir, category) {
 function pw_hash(pword) {
 
     var hash;
-    if ( typeof pword !== "string"  || !pword ) {
+    if ( typeof pword !== "string"  || !pword || !pword.trim() ) {
         hash = "";
     } else {
+        pword = pword.trim();
         var thehash = crypto.createHash("sha256");
         thehash.update(pword);
         hash = thehash.digest('hex');
@@ -3920,34 +3964,37 @@ function apiCall(body, protocol) {
         
         case "dologin":
             if ( protocol==="POST" ) {
-                var uname = body["uname"];
-                var pword = body["pword"];
+                var uname = body["uname"].trim();
+                var pword = body["pword"].trim();
                 if ( pword!=="" ) {
                     var thehash = crypto.createHash("sha256");
                     thehash.update(pword);
                     pword = thehash.digest('hex');
                 }
+                GLB.options["config"]["uname"] = uname;
+                writeOptions(GLB.options, true);
 
                 // check to see if the provided username is valid
                 // and that the passwords match
                 var result = "error";
                 var pwords = GLB.options["config"]["pword"];
 
-                if ( DEBUG2 ) {
-                    console.log("dologin: uname= ", uname, " pword: ", pword, " body: ", body, " pwords: ", pwords);
+                if ( DEBUG4 ) {
+                    console.log("dologin: uname= ", uname, " pword: [", pword, "] body: ", body, " pwords: ", pwords);
                 }
 
+                // check for matching passwords
                 if ( array_key_exists(uname, pwords ) ) {
                     var pw = pwords[uname];
                     if ( pw[0] === pword ) {
-                        GLB.options["config"]["uname"] = uname;
-                        GLB.options["config"]["skin"] = pw[1];
-                        writeOptions(GLB.options);
-                        result = "success";
+                        GLB.pwcrypt = pw[0];
+                    } else {
+                        GLB.pwcrypt = false;
                     }
+                    result = "success";
                 }
             } else {
-                result = "error - api call [" + api + "] not supported in GET mode.";
+                result = "error - api call [" + api + "] is only supported in POST mode.";
             }
             break;
 
@@ -3985,10 +4032,6 @@ function apiCall(body, protocol) {
             break;
 
         case "hubauth":
-            // if ( protocol==="POST" && typeof body["doauthorize"]!=="undefined" ) {
-            //     console.log("hpcode= ", GLB.hpcode, " doauthorize= ", body.doauthorize);
-            //     console.log("Auth form: ", body);
-            // }
 
             // now load the new data
             var hub = {};
@@ -4047,14 +4090,15 @@ function apiCall(body, protocol) {
     
         case "hubdelete":
             // TODO - implement hubDelete() function
+            console.log("Hub deletion is not yet supported...");
             result = "success";
             break;
 
         case "cancelauth":
-            // TODO - implement logic to return or pick options
+            // by returning success we signal a redirection to the options page
             result = "success";
             break;
-    
+
         case "showoptions":
         case "showid":
         case "reauth":
@@ -4082,6 +4126,13 @@ GLB.hpcode = hpcode.toString();
 
 // read the config file and get array of hubs
 readOptions();
+var uname = getUserName();
+try {
+    GLB.pwcrypt = GLB.options.config.pword[uname][0];
+} catch (e) {
+    GLB.pwcrypt = false;
+}
+
 if ( DEBUG6 ) {
     console.log("Index: ", GLB.options.index);
 }
@@ -4092,7 +4143,7 @@ var port = config["port"];
 if ( !port ) {
     port = 3080;
 }
-GLB.defhub = "-1"; // hubs[0].hubId;
+GLB.defhub = "-1";
 
 // start our main server
 try {
@@ -4178,46 +4229,60 @@ if ( app && applistening ) {
         var $tc;
 
         if ( req.path==="/" || typeof req.path==="undefined" || req.path==="/undefined" || req.path==="undefined" ) {
-            // set the global variable so other functions can return here
 
+            // read options upon a reload
+            readOptions();
+            uname = getUserName();
+            
+            // set the global variable so other functions can return here
             var queryobj = req.query || {};
             var isquery = (utils.count(queryobj) > 0);
-            if ( array_key_exists("code", queryobj) ) {
-                var code = queryobj.code;
-                if ( code==="reset" ) {
-                    config["pword"] = {};
-                    config["pword"]["default"] = ["", "skin-housepanel"];
-                    config["uname"] = "default";
-                    GLB.options["config"] = config;
-                    writeOptions(GLB.options);
-                }
 
-                // TODO - puth hub auth logic flow here
+            // allow user to manually reset things with this code
+            // the hub auth flow is handled with the /reauth path later below
+            if ( isquery && queryobj.code && (queryobj.code==="reset" || queryobj.code==="refresh") ) {
+                config["pword"] = {};
+                config["pword"]["default"] = ["", "skin-housepanel"];
+                config["uname"] = "default";
+                GLB.pwcrypt = false;
+                GLB.options["config"] = config;
+                writeOptions(GLB.options);
+                $tc = getLoginPage();
+
+            // handle user provided get api calls
             } else if ( isquery ) {
                 console.log("api call: ",  queryobj);
                 $tc = apiCall(queryobj, "GET");
-            } else {
+
+            // display the main page if password matches
+            // or if we don't have a pw
+            } else if ( array_key_exists(uname, config["pword"]) && GLB.pwcrypt===config["pword"][uname][0] ) {
                 // reset for next refresh
                 GLB.defhub = "-1";
-
+                console.log("login accepted. uname = ", uname, " pwcrypt = ", GLB.pwcrypt);
                 $tc = mainPage(req.protocol, req.headers.host, req.path);
+
+            // default is to ask for login creds
+            } else {
+                console.log("login rejected. uname = ", uname, " pwcrypt = ", GLB.pwcrypt);
+                $tc = getLoginPage();
             }
             res.send($tc);
             res.end();
 
         } else if ( req.path==="/showid") {
-            var $tc = getInfoPage(GLB.returnURL, req.path);
+            $tc = getInfoPage(GLB.returnURL, req.path);
             res.send($tc);
             res.end();
 
         } else if ( req.path==="/showoptions") {
-            var $tc = getOptionsPage(req.path);
+            $tc = getOptionsPage(req.path);
             res.send($tc);
             res.end();
 
         } else if ( req.path==="/logout") {
-            var $tc = getLoginPage();
-            GLB.options.config["uname"] = "";
+            $tc = getLoginPage();
+            GLB.pwcrypt = false;
             writeOptions(GLB.options, true);
             res.send($tc);
             res.end();
