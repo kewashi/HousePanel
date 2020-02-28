@@ -655,9 +655,9 @@ div.thing.audio-thing {
     height: auto;
 }
 /* use italic serif font for music titles and a custom size */
-div.overlay.track div.music.track, 
-div.overlay.track div.custom.track, 
-div.overlay.trackDescription div.trackDescription
+div.overlay.trackDescription div.custom.trackDescription, 
+div.music-thing div.overlay.trackDescription div.trackDescription,
+div.audio-thing div.overlay.trackDescription div.trackDescription
 {
     font-family: "Raleway",serif;
     font-size: 11pt;

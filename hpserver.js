@@ -1176,7 +1176,7 @@ function inroom($idx, $things) {
         var $arr = $things[i];
         var $thingindex = is_array($arr) ? $arr[0] : parseInt($arr);
         if ( $idxint === $thingindex ) {
-            $found = true;
+            $found = i;
             break;
         }
     }
@@ -3291,19 +3291,19 @@ function clone(obj) {
 // process user options page
 function processOptions($optarray) {
 
-    if (DEBUG6) {
-        console.log($optarray);
-        console.log(GLB.options["config"]);
+    if (DEBUG4) {
+        console.log($optarray["Kitchen"]);
+        console.log("original:", GLB.options["things"]["Kitchen"]);
+        // console.log(GLB.options["config"]);
     }
-    
-    // default location
     var $specialtiles = utils.getSpecials();
-    var $city = "ann-arbor-mi";
-    var $region = "us";
-    var $code = "329380";
-    
     var $options = clone(GLB.options);;
+
+    // start with a blank slate
     $options["things"] = {};
+    for( var $room in GLB.options["rooms"]) {
+        $options["things"][$room] = [];  // clone(GLB.options["things"][$roomname]);
+    }
 
     // var $oldoptions = clone(GLB.options);
     var $configoptions = clone($options["config"]);
@@ -3316,6 +3316,7 @@ function processOptions($optarray) {
 
     // // use clock instead of blank for default only tile
     var $onlytile = GLB.options["index"]["clock|clockdigital"];
+    var onlyarr = [$onlytile,0,0,1,""];
 
     // // checkbox items simply will not be there if not selected
     $configoptions["kiosk"] = "false";
@@ -3326,7 +3327,10 @@ function processOptions($optarray) {
     var $uname = getUserName();
     var $olduname = $uname;
     var skin = $configoptions["skin"];
-    
+    var $city = $configoptions["accucity"];
+    var $region = $configoptions["accuregion"];
+    var $code = $configoptions["accucode"];
+
     // // get default pw and its skin
     var $pwords;
     if (array_key_exists("pword", $configoptions)) {
@@ -3355,13 +3359,6 @@ function processOptions($optarray) {
     var $defskin = skin;
     var $oldhash = $hash;
     var $hash = "";
-    
-    // // fix long-standing bug by putting a clock in any empty room
-    // // to force the form to return each room defined in options file
-    var onlyarr = [$onlytile,0,0,1,""];
-    for( var $room in GLB.options["rooms"]) {
-        $options["things"][$room] = [];
-    }
 
     // // get all the rooms checkboxes and reconstruct list of active things
     // // note that the list of checkboxes can come in any random order
@@ -3429,32 +3426,49 @@ function processOptions($optarray) {
             var $lastleft = 0;
             var $lastz = 1;
 
-            // $oldthings = $oldoptions["things"][$roomname];
-            $options["things"][$roomname] = clone(GLB.options["things"][$roomname]);
+            // first put all existing tiles in the room
+            // this retains the existing order
+            GLB.options["things"][$roomname].forEach(function(newtile) {
+                var tnum = parseInt(newtile[0]);
+                var rnum = array_search(tnum, $val);
+                if ( rnum!==false ) {
+                    $options["things"][$roomname].push(newtile);
+                }
+            });
 
+            if ( DEBUG4 && $roomname==="Kitchen" ) {
+                console.log("var: ", $val);
+                console.log("Before: ", $options["things"][$roomname]);
+            }
+            
+            // get the index offset of last existing tile
             if ( $options["things"][$roomname].length > 0 ) {
                 var lastitem = $options["things"][$roomname].length -1;
                 var arr = $options["things"][$roomname][lastitem];
                 $lasttop = arr[1];
                 $lastleft = arr[2];
                 $lastz = arr[3];
-            }
 
-            // set position to next to last one unless it is moved a lot
-            // the 400 distance is subjective but works in most cases
-            if ( $lasttop < -400 || $lasttop > 400 || $lastleft < -400 || $lastleft > 400 ) {
-                $lasttop = 0;
-                $lastleft = 0; 
+                // set position to next to last one unless it is moved a lot
+                // the 400 distance is subjective but works in most cases
+                if ( $lasttop < -400 || $lasttop > 400 || $lastleft < -400 || $lastleft > 400 ) {
+                    $lasttop = 0;
+                    $lastleft = 0; 
+                }
             }
 
             // add any new ones that were not there before
             $val.forEach(function($tilestr) {
                 var $tilenum = parseInt($tilestr);
-                if ( ! inroom($tilenum, GLB.options["things"][$roomname]) ) {
+                if ( inroom($tilenum, GLB.options["things"][$roomname]) === false ) {
                     var newtile = [$tilenum,$lasttop,$lastleft, $lastz, ""];
                     $options["things"][$roomname].push(newtile);
                 }
             });
+
+            if ( DEBUG4 && $roomname==="Kitchen" ) {
+                console.log("After: ", $options["things"][$roomname]);
+            }
             
             // put a clock in a room if it is empty
             if ( $options["things"][$roomname].length === 0  ) {
@@ -3463,13 +3477,13 @@ function processOptions($optarray) {
         }
     }
     
-    // // everything from this point on is after processing the options table
-    // // start by handling the weather
+    // everything from this point on is after processing the options table
+    // start by handling the weather
     if ( $city && $region && $code ) {
-        getAccuWeather($city, $region, $code);
         $configoptions["accucity"] = $city;
         $configoptions["accuregion"] = $region;
         $configoptions["accucode"] = $code;
+        getAccuWeather($city, $region, $code);
     }
     
     // // now process things that used to be in auth page
@@ -3481,9 +3495,8 @@ function processOptions($optarray) {
     //     $timezone = date_default_timezone_get();
     //     date_default_timezone_set($timezone);
     // }
-    $configoptions["timezone"] = $timezone;
 
-    // // set the skin if it is a good one or use default from above
+    // set the skin if it is a good one or use default from above
     if ( skin && file_exists(skin + "/housepanel.css") ) {
         if ( !file_exists(skin + "/customtiles.css") ) {
             writeCustomCss(skin, "");
@@ -3510,13 +3523,13 @@ function processOptions($optarray) {
     $options["config"] = clone($configoptions);
 
     // save our login info
-    GLB.pwcrypt =  $pwords[$uname][0];  // $uname;
+    GLB.pwcrypt =  $pwords[$uname][0];
     
     if (DEBUG4) {
         console.log("Debug Print for New Options Created - After Processing");
-        console.log("index: ", $options["index"]);
-        console.log("config: ", $options["config"]);
-        console.log("rooms: ", $options["rooms"]);
+        // console.log("index: ", $options["index"]);
+        // console.log("config: ", $options["config"]);
+        // console.log("rooms: ", $options["rooms"]);
         console.log("things: ", $options["things"]);
     }
 
@@ -3972,14 +3985,14 @@ function apiCall(body, protocol) {
                     pword = thehash.digest('hex');
                 }
                 GLB.options["config"]["uname"] = uname;
-                writeOptions(GLB.options, true);
+                writeOptions(GLB.options);
 
                 // check to see if the provided username is valid
                 // and that the passwords match
                 var result = "error";
                 var pwords = GLB.options["config"]["pword"];
 
-                if ( DEBUG4 ) {
+                if ( DEBUG6 ) {
                     console.log("dologin: uname= ", uname, " pword: [", pword, "] body: ", body, " pwords: ", pwords);
                 }
 
