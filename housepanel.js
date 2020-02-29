@@ -19,7 +19,7 @@ cm_Globals.returnURL = "http://localhost:3080";
 cm_Globals.hubId = "all";
 
 var modalStatus = 0;
-var modalWindows = [];
+var modalWindows = {};
 var priorOpmode = "Operate";
 var dragZindex = 1;
 var pagename = "main";
@@ -271,6 +271,25 @@ $(document).ready(function() {
     }, 1000);
 
 });
+
+function getHub(hubnum) {
+    var ahub = null;
+    try {
+        var options = cm_Globals.options;
+        var hubs = options.config["hubs"];
+    } catch (e) {
+        hubs = null;
+    }
+
+    if ( hubs && hubnum!=="-1" ) {
+        $.each(hubs, function (num, hub) {
+            if ( hubnum === hub.hubId ) {
+                ahub = hub;
+            }
+        });
+    }
+    return ahub;
+}
 
 function setupUserOpts() {
     
@@ -802,12 +821,17 @@ function convertToModal(modalcontent, addok) {
 
 function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunction, loadfunction) {
     // var modalid = "modalid";
-    
+
     // skip if this modal window is already up...
-    if ( typeof modalWindows["modalcustom"]!=="undefined" && modalWindows[modalid]>0 ) { return; }
+    if ( typeof modalWindows[modalid]!=="undefined" && modalWindows[modalid]>0 ) { 
+        console.log("modal suppressed: ", modalWindows);
+        return; 
+    }
     
     modalWindows[modalid] = 1;
     modalStatus = modalStatus + 1;
+
+    console.log("modalid= ", modalid, "modaltag= ", modaltag, " addok= ", addok, " pos= ", pos, " modalWindows= ", modalWindows, " modalStatus= ", modalStatus);
     
     var modaldata = modalcontent;
     var modalhook;
@@ -1332,15 +1356,6 @@ function setupDraggable() {
                     var customname = $("div." + thingtype + ".name.p_"+tile).html();
                     if ( !customname ) { customname = thingname; }
                     dragthing["custom"] = customname;
-//                     dragZindex = parseInt(dragZindex,10);
-//                    
-//                    if ( !startPos.zindex ) {
-//                        startPos.zindex = 2;
-//                    }
-//                    if ( startPos.zindex < dragZindex ) { 
-//                        startPos.zindex = dragZindex + 1; 
-//                    }
-//                     dragZindex = startPos.zindex;
                     
                     // make this sit on top
                     var zmax = getMaxZindex(dragthing["panel"]);
@@ -1413,7 +1428,7 @@ function setupDraggable() {
                             $(thing).css("position","relative").css("left",startPos.left).css("top",startPos.top);
                             $(thing).css( {"z-index": startPos.zindex.toString()} );
                         } catch(e) { 
-                            alert("Drag/drop error. Please share this with @kewashi on the ST or HE Community Forum: " + e.message); 
+                            console.log("Drag/drop error. Please share this with @kewashi on the ST or HE Community Forum: ", e); 
                         }
                     }
                 });
@@ -1878,10 +1893,15 @@ function addEditLink() {
         var thingclass = $(thing).attr("class");
         var bid = $(thing).attr("bid");
         var hubnum = $(thing).attr("hub");
+        var hub = getHub(hubnum);
+        var hubName = "None";
+        if ( hub ) {
+            hubName = hub.hubName;
+        }
         
         // replace all the id tags to avoid dynamic updates
         strhtml = strhtml.replace(/ id="/g, " id=\"x_");
-        editTile(str_type, tile, aid, bid, thingclass, hubnum, strhtml);
+        editTile(str_type, tile, aid, bid, thingclass, hubnum, hubName, strhtml);
     });
     
     $("div.cmzlink").on("click",function(evt) {
@@ -1968,7 +1988,7 @@ function addEditLink() {
         var roomnum = $(evt.target).attr("roomnum");
         var roomname = $(evt.target).attr("roomname");
         var thingclass = $(evt.target).attr("class");
-        editTile("page", roomname, 0, 0, thingclass, roomnum, "");
+        editTile("page", roomname, 0, 0, thingclass, roomnum, "", "None");
     });
    
     $("#addpage").off("click");

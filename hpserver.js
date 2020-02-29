@@ -16,7 +16,6 @@ var http = require('http');
 var fs = require('fs');
 var express = require('express');
 var bodyParser = require('body-parser');
-// var parseString = require('xml2js').parseString;
 var parser = require('fast-xml-parser');
 var crypto = require('crypto');
 
@@ -132,7 +131,7 @@ function writeCustomCss(partnum, skin, str) {
         try {
             fs.writeFileSync(skin + "/customtiles.css", fixstr, {encoding: "utf8", flag: opts});
             console.log("custom CSS file saved in skin folder: ", skin, " of size: ", fixstr.length," part #", partnum);
-            results = "success";
+            results = "success " + partnum;
         } catch (e) {
             console.log(e);
             console.log("Error attempting to save custom CSS file in skin folder: ", skin," part #", partnum);
@@ -478,7 +477,6 @@ function getAccessToken(code, hub) {
 
         // retrieve all devices and go back to reauth page
         getDevices(hubnum, hubType, token, endpt, clientId, clientSecret, hubName, "/reauth");
-        // pushClient("reload", "/reauth");
     }
 }
 
@@ -3230,9 +3228,6 @@ function mainPage(proto, hostname, pathname) {
     // end of the tabs
     $tc += "</div>";
 
-    // end drag region enclosing catalog and main things
-    $tc += "</div>";
-
     // set the websock servername as same as hosted page but different port
     var webSocketUrl = "";
     if ( config.webSocketServerPort && !isNaN(parseInt(config.webSocketServerPort)) ) {
@@ -3278,6 +3273,9 @@ function mainPage(proto, hostname, pathname) {
         $tc +="</div>";
     }
     $tc += "</form>";
+
+    // end drag region enclosing catalog and main things
+    $tc += "</div>";
 
     $tc += utils.getFooter();
         
@@ -4284,16 +4282,19 @@ if ( app && applistening ) {
             res.end();
 
         } else if ( req.path==="/showid") {
+            readOptions();
             $tc = getInfoPage(GLB.returnURL, req.path);
             res.send($tc);
             res.end();
 
         } else if ( req.path==="/showoptions") {
+            readOptions();
             $tc = getOptionsPage(req.path);
             res.send($tc);
             res.end();
 
         } else if ( req.path==="/logout") {
+            readOptions();
             $tc = getLoginPage();
             GLB.pwcrypt = false;
             writeOptions(GLB.options, true);
@@ -4301,6 +4302,7 @@ if ( app && applistening ) {
             res.end();
 
         } else if ( req.path==="/reauth") {
+            readOptions();
             d = new Date();
             hpcode = d.getTime();
             GLB.hpcode = hpcode.toString();

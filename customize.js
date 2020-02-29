@@ -94,7 +94,10 @@ function customizeTile(thingindex, aid, bid, str_type, hubnum) {
                 // but always skip if we didn't actually change anything
                 cm_Globals.thingindex = null;
                 cm_Globals.thingidx = null;
-                if ( (et_Globals.reload || cm_Globals.reload) && ( modalWindows["modalid"] === 0 || typeof modalWindows["modalid"] === "undefined" ) ) {
+
+                // only reload if edit window isn't open
+                // which will be true if we invoked the customizer from the edit window
+                if ( (et_Globals.reload || cm_Globals.reload) && ( typeof modalWindows["modalid"] === "undefined" || modalWindows["modalid"] === 0 ) ) {
                     location.reload(true);
                 }
             },

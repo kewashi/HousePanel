@@ -15,6 +15,8 @@ By moving things here we reduce the skin file to the bare needs
     background-position: center center;
 }
 body {
+    width: 100%;
+    height: 100%;
     background-color: #ffffff;
     color: #000000;
     height: auto;
@@ -23,46 +25,37 @@ body {
     position:relative;
     width: 100%;
 }
-.ui-tabs .ui-tabs-nav li {
-    margin: 1px 3px 0 0;
-    width: auto;
+.ui-tabs .ui-tabs-nav {
+    padding: 0.2em 0.2em 0em 0em;
+    width: 100%;
+    background-color: #666666;
 }
 @media (orientation: landscape) {
-    body {
-        width: 1200px;
-        /* width: 100%; */
-        /* height: 100%; */
-    }
     #dragregion, #dragregion div.panel {
-        min-height: 600px;
+        min-height: 620px;
+        width: 1200px;
+        /* height: 700px; */
     }
     .ui-tabs .ui-tabs-nav .ui-tabs-anchor {
         font-size: 11pt;
     }
+    .ui-tabs .ui-tabs-nav {
+        width: 85%;
+    }
 }
 @media (orientation: portrait) {
-    body {
-        width: 750px;
-        /* width: 100%; */
-        /* height: 100%; */
-    }
     #dragregion, #dragregion div.panel {
         min-height: 1000px;
+        width: 700px;
+        /* height: 1200px; */
     }
     .ui-tabs .ui-tabs-nav .ui-tabs-anchor {
         font-size: 10pt;
     }
+    .ui-tabs .ui-tabs-nav {
+        width: 70%;
+    }
 }
-
-/*.ui-tabs .ui-tabs-nav {
-    padding: 0.2em 0.2em 0em 0.4em;
-}*/
-
-/*#dragregion div.panel {
-    position:relative;
-    width: auto;
-    height: auto;
-}*/
 
 div.greeting {
     margin-top: 10px;
@@ -230,7 +223,8 @@ div#catalog {
 }
 
 .ui-widget.ui-widget-content{
-    margin: 0px 0 0 0;
+    background-color: #666666;
+    margin: 0px -5px 5px 0px;
     border: none;
 }
 .ui-tabs .ui-tabs-nav .ui-tabs-anchor{

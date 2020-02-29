@@ -10,8 +10,7 @@
     "fast-xml-parser": "^3.16.0",
     "request": "^2.88.0",
     "url": "^0.11.0",
-    "websocket": "^1.0.28",
-    "xml2js": "^0.4.23"
+    "websocket": "^1.0.28"
   },
   "devDependencies": {},
   "scripts": {

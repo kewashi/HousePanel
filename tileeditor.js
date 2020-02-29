@@ -13,6 +13,151 @@ var priorIcon = "none";
 var defaultOverlay = "block";
 var tileCount = 0;
 
+// popup dialog box now uses createModal
+function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, hubName, htmlcontent) {  
+    // var returnURL;
+    // try {
+    //     returnURL = $("input[name='returnURL']").val();
+    // } catch(e) {
+    //     returnURL = "housepanel.php";
+    // }
+    var returnURL = cm_Globals.returnURL;
+    
+    et_Globals.aid = aid;
+    et_Globals.id = bid;
+    et_Globals.hubnum = hubnum;
+    et_Globals.hubName = hubName;
+    et_Globals.reload = false;
+
+    // save the sheet upon entry for cancel handling
+    savedSheet = document.getElementById('customtiles').sheet;
+    
+    // * DIALOG START *	
+    var dialog_html = "<div id='tileDialog' class='tileDialog' str_type='" + 
+                      str_type + "' thingindex='" + thingindex +"' >";
+	
+    // header
+    if ( str_type==="page" ) {
+        dialog_html += "<div class='editheader' id='editheader'>Editing Page#" + hubnum + 
+                   " of Name: " + thingindex + "</div>";
+        
+    } else {
+        if ( hubName==="None" || hubnum==="-1" ) {
+            var hubstr = "";
+        } else {
+            hubstr = " From hub: " + hubName;
+        }
+        dialog_html += "<div class='editheader' id='editheader'>Editing Tile #" + thingindex + 
+                   " of Type: " + str_type + hubstr + "</div>";
+    }
+
+    // option on the left side - colors and options
+    dialog_html += colorpicker(str_type, thingindex);
+    dialog_html += editSection(str_type, thingindex);
+    
+    // icons on the right side
+    dialog_html += iconlist();
+    
+    // tileEdit display on the far right side 
+    dialog_html += "<div id='tileDisplay' class='tileDisplay'>";
+    dialog_html += "<div id='editInfo' class='editInfo'>Select or Change State</div>";
+    
+    // we either use the passed in content or make an Ajax call to get the content
+    var jqxhr = null;
+    if ( str_type==="page" ) {
+        var roomname = thingindex;
+        var roomnum = hubnum;
+        // thingindex = 1000 + parseInt(roomnum,10);
+        // dialog_html += "<div class=\"" + thingclass + "\" id='wysiwyg'></div>";
+        // dialog_html += "<div class=\"thing " + str_type + "-thing\" id='wysiwyg'></div>";
+        jqxhr = $.post(returnURL, 
+            {useajax: "wysiwyg", id: roomnum, type: 'page', tile: thingindex, value: roomname, attr: ''},
+            function (presult, pstatus) {
+                if (pstatus==="success" ) {
+                    htmlcontent = presult;
+                }
+            }
+        );
+        
+    } else if ( htmlcontent ) {
+        // dialog_html += "<div class=\"" + thingclass + "\" id='wysiwyg'>" + htmlcontent + "</div>";
+        htmlcontent = "<div class=\"" + thingclass + "\" id='wysiwyg'>" + htmlcontent + "</div>";
+    } else {
+        // put placeholder and populate after Ajax finishes retrieving true wysiwyg content
+        // dialog_html += "<div class=\"thing " + str_type + "-thing p_"+thingindex+"\" id='wysiwyg'></div>";
+        jqxhr = $.post(returnURL, 
+            {useajax: "wysiwyg", id: '', type: '', tile: thingindex, value: '', attr: ''},
+            function (presult, pstatus) {
+                if (pstatus==="success" ) {
+                    htmlcontent = presult;
+                }
+            }
+        );
+    }
+    dialog_html += "<div id='subsection'></div>";
+    dialog_html += "</div>";
+    
+    // * DIALOG_END *
+    dialog_html += "</div>";
+    
+    // create a function to display the tile
+    var dodisplay = function() {
+        var pos = {top: 100, left: 200, zindex: 99999};
+        createModal("modalid", dialog_html, "body", true, pos, 
+            // function invoked upon leaving the dialog
+            function(ui, content) {
+                $("body").off("keydown");
+                var clk = $(ui).attr("name");
+                if ( clk==="okay" ) {
+                    var newname = $("#editName").val();
+                    if ( str_type==="page") {
+                        var oldname = thingindex;
+                        // alert(oldname);
+                        var target1 = getCssRuleTarget(str_type, "head", thingindex);
+                    } else {
+                        var target1 = getCssRuleTarget(str_type, "head", thingindex);
+                        var target2 = getCssRuleTarget(str_type, "name", thingindex);
+                        var oldname = $(target1).html();
+                        $(target1).html(newname);
+                        $(target2).html(newname);
+                    }
+                    saveTileEdit(str_type, thingindex, oldname, newname);
+                } else if ( clk==="cancel" ) {
+                    cancelTileEdit(str_type, thingindex);
+                }
+                tileCount = 0;
+            },
+            // function invoked upon starting the dialog
+            function(hook, content) {
+                $("body").on("keydown",function(e) {
+                    if ( e.which===13  ){
+                        $("#modalokay").click();
+                    }
+                    if ( e.which===27  ){
+                        $("#modalcancel").click();
+                    }
+                });
+                $("#modalid").draggable();
+            }
+        );
+    };
+    
+    if ( jqxhr ) {
+        jqxhr.done(function() {
+            dodisplay();
+            $("#editInfo").after(htmlcontent);
+            tileCount++;
+            setupClicks(str_type, thingindex);
+        });
+    } else {
+        dodisplay();
+        $("#editInfo").after(htmlcontent);
+        tileCount++;
+        setupClicks(str_type, thingindex);
+    }
+    
+}
+
 $.fn.isAuto = function(dimension){
     // will detect auto widths including percentage changes
     if (dimension == 'width'){
@@ -306,9 +451,7 @@ function initDialogBinds(str_type, thingindex) {
             $(target2).html(newname);
         }
         updateNames(str_type, thingindex, oldname, newname);
-        if ( ( typeof modalWindows["modalcustom"]==="undefined"  || modalWindows["modalcustom"] === 0 ) ) {
-            cm_Globals.reload = true;
-        }
+        cm_Globals.reload = true;
         event.stopPropagation;
     });
 
@@ -821,150 +964,6 @@ function colorpicker(str_type, thingindex) {
     return dh;
 }
 
-// popup dialog box now uses createModal
-function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, htmlcontent) {  
-    // var returnURL;
-    // try {
-    //     returnURL = $("input[name='returnURL']").val();
-    // } catch(e) {
-    //     returnURL = "housepanel.php";
-    // }
-    var returnURL = cm_Globals.returnURL;
-    
-    et_Globals.aid = aid;
-    et_Globals.id = bid;
-    et_Globals.hubnum = hubnum;
-    et_Globals.reload = false;
-
-    // save the sheet upon entry for cancel handling
-    savedSheet = document.getElementById('customtiles').sheet;
-    
-    // * DIALOG START *	
-    var dialog_html = "<div id='tileDialog' class='tileDialog' str_type='" + 
-                      str_type + "' thingindex='" + thingindex +"' >";
-	
-    // header
-    if ( str_type==="page" ) {
-        dialog_html += "<div class='editheader' id='editheader'>Editing Page#" + hubnum + 
-                   " of Name: " + thingindex + "</div>";
-        
-    } else {
-        if ( hubnum < 0 ) {
-            var hubstr = " Hub not applicable";
-        } else {
-            hubstr = " From hub #" + hubnum;
-        }
-        dialog_html += "<div class='editheader' id='editheader'>Editing Tile #" + thingindex + 
-                   " of Type: " + str_type + hubstr + "</div>";
-    }
-
-    // option on the left side - colors and options
-    dialog_html += colorpicker(str_type, thingindex);
-    dialog_html += editSection(str_type, thingindex);
-    
-    // icons on the right side
-    dialog_html += iconlist();
-    
-    // tileEdit display on the far right side 
-    dialog_html += "<div id='tileDisplay' class='tileDisplay'>";
-    dialog_html += "<div id='editInfo' class='editInfo'>Select or Change State</div>";
-    
-    // we either use the passed in content or make an Ajax call to get the content
-    var jqxhr = null;
-    if ( str_type==="page" ) {
-        var roomname = thingindex;
-        var roomnum = hubnum;
-        // thingindex = 1000 + parseInt(roomnum,10);
-        // dialog_html += "<div class=\"" + thingclass + "\" id='wysiwyg'></div>";
-        // dialog_html += "<div class=\"thing " + str_type + "-thing\" id='wysiwyg'></div>";
-        jqxhr = $.post(returnURL, 
-            {useajax: "wysiwyg", id: roomnum, type: 'page', tile: thingindex, value: roomname, attr: ''},
-            function (presult, pstatus) {
-                if (pstatus==="success" ) {
-                    htmlcontent = presult;
-                }
-            }
-        );
-        
-    } else if ( htmlcontent ) {
-        // dialog_html += "<div class=\"" + thingclass + "\" id='wysiwyg'>" + htmlcontent + "</div>";
-        htmlcontent = "<div class=\"" + thingclass + "\" id='wysiwyg'>" + htmlcontent + "</div>";
-    } else {
-        // put placeholder and populate after Ajax finishes retrieving true wysiwyg content
-        // dialog_html += "<div class=\"thing " + str_type + "-thing p_"+thingindex+"\" id='wysiwyg'></div>";
-        jqxhr = $.post(returnURL, 
-            {useajax: "wysiwyg", id: '', type: '', tile: thingindex, value: '', attr: ''},
-            function (presult, pstatus) {
-                if (pstatus==="success" ) {
-                    htmlcontent = presult;
-                }
-            }
-        );
-    }
-    dialog_html += "<div id='subsection'></div>";
-    dialog_html += "</div>";
-    
-    // * DIALOG_END *
-    dialog_html += "</div>";
-    
-    // create a function to display the tile
-    var dodisplay = function() {
-        var pos = {top: 100, left: 200, zindex: 99999};
-        createModal("modalid", dialog_html, "body", true, pos, 
-            // function invoked upon leaving the dialog
-            function(ui, content) {
-                $("body").off("keydown");
-                var clk = $(ui).attr("name");
-                if ( clk==="okay" ) {
-                    var newname = $("#editName").val();
-                    if ( str_type==="page") {
-                        var oldname = thingindex;
-                        // alert(oldname);
-                        var target1 = getCssRuleTarget(str_type, "head", thingindex);
-                    } else {
-                        var target1 = getCssRuleTarget(str_type, "head", thingindex);
-                        var target2 = getCssRuleTarget(str_type, "name", thingindex);
-                        var oldname = $(target1).html();
-                        $(target1).html(newname);
-                        $(target2).html(newname);
-                    }
-                    saveTileEdit(str_type, thingindex, oldname, newname);
-                } else if ( clk==="cancel" ) {
-                    cancelTileEdit(str_type, thingindex);
-                }
-                tileCount = 0;
-            },
-            // function invoked upon starting the dialog
-            function(hook, content) {
-                $("body").on("keydown",function(e) {
-                    if ( e.which===13  ){
-                        $("#modalokay").click();
-                    }
-                    if ( e.which===27  ){
-                        $("#modalcancel").click();
-                    }
-                });
-                $("#modalid").draggable();
-            }
-        );
-    };
-    
-    if ( jqxhr ) {
-        jqxhr.done(function() {
-            dodisplay();
-            $("#editInfo").after(htmlcontent);
-            tileCount++;
-            setupClicks(str_type, thingindex);
-        });
-    } else {
-        dodisplay();
-        $("#editInfo").after(htmlcontent);
-        tileCount++;
-        setupClicks(str_type, thingindex);
-    }
-    
-}
-
 function setupClicks(str_type, thingindex) {
     var firstsub = setsubid(str_type);
     var target1 = getCssRuleTarget(str_type, firstsub, thingindex);
@@ -1215,83 +1214,36 @@ function saveTileEdit(str_type, thingindex, oldname, newname) {
     } else {
         nparts = 1;
     }
+    var successcheck = "success " + nparts;
     for (var n=1; n <= nparts; n++) {
         
         var subcontent= sheetContents.substring(n1, n2-1);
         
-        $.post(returnURL, 
-            {useajax: "savetileedit", id: n, type: str_type, value: subcontent, attr: newname, tile: thingindex},
-            function (presult, pstatus) {
-                if (pstatus==="success" ) {
-                    console.log(presult);
-                    if ( cm_Globals.reload && ( typeof modalWindows["modalcustom"]==="undefined"  || modalWindows["modalcustom"] === 0 ) ) {
-                        cm_Globals.reload = true;
-                    }
-                }
-            }
-        );
         var info = "n= " + n + " n1= " + n1 + " n2= " + n2;
         console.log(info);
         n1 = n2;
         n2 = n1 + 60000;
         if ( n2 > sheetContents.length ) { n2 = sheetContents.length; }
-    }
-}
 
-// call to write Custom Css Back to customtiles.css
-function writeCustomCss(skin, str) {
-    // proceed only if there is a main css file in this skin folder
-    if ( skin && file_exists(skin + "/housepanel.css") ) {
-        var d = new Date();
-        var today = d.toLocaleString();
-        var fixstr = "";
-        var ipos = str.indexOf("*---*/");
+        $.post(returnURL, 
+            {useajax: "savetileedit", id: n, type: str_type, value: subcontent, attr: newname, tile: thingindex},
+            function (presult, pstatus) {
+                if (pstatus==="success" ) {
+                    console.log(presult, " reload: ", cm_Globals.reload);
 
-        // preserve the header info and update it with date
-        if ( !str || ipos=== -1 ) {
-            fixstr += "/* HousePanel Generated Tile Customization File */\n";
-            if ( str ) {
-                fixstr += "/* Updated: " + today + " *---*/\n";
-            } else {
-                fixstr += "/* Created: " + today + " *---*/\n";
+                    // reload if tile updated and if we are saving the last file part
+                    if ( (et_Globals.reload || cm_Globals.reload) && (presult === successcheck) ) {
+                        location.reload(true);
+                    }
+                }
             }
-            fixstr += "/* ********************************************* */\n";
-            fixstr += "/* ****** DO NOT EDIT THIS FILE DIRECTLY  ****** */\n";
-            fixstr += "/* ****** EDITS MADE MAY BE REPLACED      ****** */\n";
-            fixstr += "/* ****** WHENEVER TILE EDITOR IS USED    ****** */\n";
-            fixstr += "/* ********************************************* */\n";
-        } else {
-            fixstr += "/* HousePanel Generated Tile Customization File */\n";
-            fixstr += "/* Updated: " + today + " *---*/\n";
-            ipos = ipos + 7;
-            str = str.substring(ipos);
-        }
-
-        // fix addition of backslashes before quotes on some servers
-        // also, old custom skins used the directory of the skin in URL references
-        // but this no longer works because the css file is now left in the skin folder
-        // so we remove all references to rewrite the file
-        if ( str && str.length ) {
-            var str3 = str.replace("\\\"","\"");
-            var str4 = str3.replace(skin + "/", "");
-            fixstr += str4;
-        }
-    
-        // write to specific skin folder if the location is valid
-        fs.writeFile(skin + "/customtiles.css", fixstr, 'utf8', function(err) {
-            if (err) {
-                console.log("Error attempting to save custom CSS file in skin folder: ", skin);
-            } else {
-                console.log("custom CSS file saved in skin folder: ", skin, " of size: ", fixstr.length);
-            }
-        });
+        );
     }
 }
 
 function cancelTileEdit(str_type, thingindex) {
     document.getElementById('customtiles').sheet = savedSheet;
-    // alert( modalWindows["modalcustom"] );
-    if ( (et_Globals.reload || cm_Globals.reload) && ( typeof modalWindows["modalcustom"]==="undefined"  || modalWindows["modalcustom"] === 0 ) ) {
+    if ( (et_Globals.reload || cm_Globals.reload) ) {
         location.reload(true);
     }
 }
