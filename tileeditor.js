@@ -195,10 +195,12 @@ function getOnOff(str_type, subid) {
     var onoff = ["",""];
     
     // handle the cases for custom tiles that could have any subid starting with valid names
-    if ( subid.startsWith("switch" ) ) {
+    if ( str_type!=="isy" && subid.startsWith("switch" ) ) {
         onoff = ["on","off","flash"];
     } else if ( (str_type==="momentary") && subid.startsWith("momentary" ) ) {
         onoff = ["on","off"];
+    } else if ( (str_type==="isy") && subid.startsWith("switch" ) ) {
+        onoff = ["DON","DOF"];
     } else if ( subid.startsWith("contact" ) || subid.startsWith("door" ) || subid.startsWith("valve" ) ) {
         onoff = ["open","closed"];
     } else if ( subid.startsWith("lock" ) ) {

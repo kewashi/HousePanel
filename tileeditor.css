@@ -265,7 +265,7 @@ ul.ui-tabs-nav {
     color: #ffffcc;  
     font-size: 11pt;
 }
-.hidden, ul.ul-tabs-nav.hidden {
+div.overlay.hidden, .hidden, ul.ul-tabs-nav.hidden {
     display: none;
 }
 
@@ -1779,5 +1779,10 @@ div.audio-thing div.groupRole,
 div.audio-thing div.groupPrimaryDeviceId,
 div.audio-thing div.groupId,
 div.isy.name {
+    display: none;
+}
+
+/* hide unwanted items from ISY */
+div.overlay.RR {
     display: none;
 }
