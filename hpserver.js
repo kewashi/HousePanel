@@ -8,10 +8,12 @@ var DEBUG3 = false;
 var DEBUG4 = false;
 var DEBUG5 = false;
 var DEBUG6 = false;
-var DEBUG7 = true;
+var DEBUG7 = false;
+var DEBUG8 = true;
 
 // websocket and http servers
 var webSocketServer = require('websocket').server;
+var webSocketClient = require('websocket').client;
 var path = require('path');
 var http = require('http');
 var fs = require('fs');
@@ -375,7 +377,7 @@ function getAccessToken(code, hub) {
     curl_call(tokenhost, header, nvpreq, false, "POST", tokenCallback);
 
     // callback from the token request
-    function tokenCallback(err, res, body) {
+    async function tokenCallback(err, res, body) {
         // save the access token
         var jsonbody = JSON.parse(body);
         if ( DEBUG2 ) {
@@ -411,7 +413,7 @@ function getAccessToken(code, hub) {
         }
     }        
     
-    function endptCallback(err, res, body) {
+    async function endptCallback(err, res, body) {
         var jsonbody = null;
         endpt = null;
         try {
@@ -444,7 +446,7 @@ function getAccessToken(code, hub) {
         }
     }
 
-    function nameCallback(err, res, body) {
+    async function nameCallback(err, res, body) {
         var jsonbody = null;
         var hname;
         try {
@@ -497,7 +499,8 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
         
     } else {
         console.log("Error: attempt to read an unknown hub type= ", hubType);
-        return;
+        pushClient("reload", reloadpath);
+        // return;
     }
     function getAllDevices(err, res, body) {
         if ( err ) {
@@ -524,7 +527,8 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                         "id": id,
                         "name": content["name"], 
                         "hubnum": hubnum,
-                        "type": thetype, 
+                        "type": thetype,
+                        "hint": "", 
                         "refresh": "normal",
                         "value": content["value"]
                     };
@@ -533,6 +537,18 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
             updateOptions(reloadpath);
         }
     }
+}
+
+function mapIsy(isyid) {
+    const idmap = {"ST": "switch", "OL": "level", "SETLVL": "level", "BATLVL": "battery", "CV": "voltage", "TPW": "power",
+                   "CLISPH": "heatingSetpoint", "CLISPC": "coolingSetpoint", "CLIHUM": "humidity", "LUMIN": "illuminance", 
+                   "CLIMD": "thermostatMode", "CLIHCS": "thermostatState", "CLIFS": "thermostatFanMode",
+                   "CLIFRS": "thermostatOperatingState"};
+    var id = isyid;
+    if ( array_key_exists(isyid, idmap) ) {
+        id = idmap[isyid];
+    }
+    return id;
 }
 
 // version that supports ISY
@@ -544,7 +560,7 @@ function getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSec
     // curl_call(hubEndpt + "/config", stheader, false, false, "GET", callbackIsyConfig);
     curl_call(hubEndpt + "/nodes", stheader, false, false, "GET", getAllNodes);
     
-    function getAllNodes(err, res, body) {
+    async function getAllNodes(err, res, body) {
         var id;
         if ( err ) {
             console.log("Error retrieving ISY nodes: ", err);
@@ -555,7 +571,7 @@ function getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSec
                 console.log((new Date()) + " Retrieved ", thenodes.length, " things from hub: ", hubName);
             }
 
-            // TODO ... read the real attributes and map to HP fields
+            // read the real attributes and map to HP fields
             for ( var obj in thenodes ) {
                 var node = thenodes[obj];
                 id = node["address"];
@@ -563,6 +579,14 @@ function getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSec
                 var thetype = "isy";
                 var idx = thetype + "|" + id;
                 var hint = node["type"].toString();
+
+                // set hint to nothing if default of zeros is provided
+                // TODO - provide a more useful mapping of hints to type names
+                // until then user can still style hints using CSS
+                if ( hint==="0.0.0.0" ) {
+                    hint = "";
+                }
+
                 var name = node["name"];
                 var thevalue = {"name": name};
 
@@ -573,6 +597,7 @@ function getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSec
                     "name": name, 
                     "hubnum": hubnum,
                     "type": thetype, 
+                    "hint": hint,
                     "refresh": "never",
                     "value": thevalue
                 };
@@ -580,97 +605,96 @@ function getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSec
                 if (DEBUG5) {
                     console.log("idx= ", idx," hint= ", hint, " node: ", node);
                 }
-
-                // make the call to get the node details
-                curl_call(hubEndpt + "/nodes/" + id, stheader, false, false, "GET", callbackSetFields);
-            
-                function callbackSetFields(err, res, body) {
-                    if ( err ) {
-                        console.log("ISY Error retrieving fields for node. error: ", err);
-                    } else if ( body ) {
-                        xml2js(body, async function(xmlerr, result) {
-                            try {
-                                if ( result ) {
-                                    var nodeid = result.nodeInfo.node[0]["address"];
-                                    if ( nodeid ) {
-                                        // console.log("ISY fields for node: ", nodeid, " fields: ", UTIL.inspect(result, false, null));
-                                        await setIsyFields(result.nodeInfo);
-                                    } else {
-                                        throw "Something went wrong reading node from ISY";
-                                    }
-                                } else {
-                                    throw "No data for this node...";
-                                }
-                            } catch(e) { 
-                                console.log("error: ", e);
-                            }
-                        });
-                    }
-                }
             }
-            updateOptions(reloadpath);
         }
 
-    }
-    
-    async function setIsyFields(nodeInfo) {
-        const idmap = {"ST": "switch","OL": "level","BATLVL": "battery","CV": "voltage","TPW": "power",
-                       "CLITEMP": "temperature","CLIHUM": "humidity","LUMIN": "lux"};
-        
-        var nodeid = nodeInfo.node[0]["address"];
-        var idx = "isy|" + nodeid;
-        var value = clone(allthings[idx]["value"]);
+        // now that we have all the nodes identified, get the details
+        curl_call(hubEndpt + "/status", stheader, false, false, "GET", callbackStatusInfo);
 
-        var props = nodeInfo.properties[0].property;
-        if ( is_array(props) ) {
-            props.forEach(function(aprop) {
-                var obj = aprop['$'];
-                console.log("node: ", nodeid, " prop: ", JSON.stringify(obj));
-                var id = obj.id;
-                if ( array_key_exists(obj.id, idmap) ) {
-                    id = idmap[obj.id];
-                }
+        async function callbackStatusInfo(err, res, body) {
+            xml2js(body, async function(xmlerr, result) {
+                try {
+                    if ( result ) {
+                        var nodes = result.nodes.node;
+                        if ( nodes ) {
+                            console.log("nodes returned from status");
+                            nodes.forEach(function(node) {
+                                var nodeid = node["$"]["id"];
+                                var idx = "isy|" + nodeid;
+                                var value = clone(allthings[idx]["value"]);
+                                var props = node["property"];
 
-                // map ISY logic to the HousePanel logic based on SmartThings and Hubitat
-                value["uom_" + id] = obj.uom;
-                var val = obj.value;
-                switch (obj.id) {
-
-                    case "ST":
-                        val = (obj.formatted==="Off" || obj.value==="0" ? "DOF" : "DON");
-                        value[id] = val;
-                        break;
-
-                    case "OL":
-                        if ( obj.formatted==="On" ) {
-                            val = "100";
-                        } else if ( obj.formatted==="Off" ) {
-                            val = "0";
+                                // if there are props give us a debug print and set values
+                                if ( props ) {
+                                    console.log("node: ", nodeid, " properties: ", props);
+                                    setIsyFields(nodeid, value, props);
+                                }
+                            });
                         } else {
-                            val = obj.formatted;
-                            val = val.substr(0, val.length-1);
-                            if ( isNaN(parseInt(val)) ) {
-                                val = "0";
-                            }
+                            throw "Something went wrong reading status from ISY";
                         }
-                        value[id] = val;
-                        break;
-
-                    default:
-                        val = obj.formatted;
-                        if ( val.substr(-1) ==="%" ) {
-                            val = val.substr(0, val.length-1);
-                        }
-                        value[id] = val;
-                        break;
-        
+                    }
+                } catch(e) { 
+                    console.log("error: ", e);
                 }
-                allthings[idx]["value"] = clone(value);
             });
         }
+        
+        // update things and reload page after handling all tiles
         updateOptions(reloadpath);
     }
 
+}
+
+function setIsyFields(nodeid, value, props) {
+    var idx = "isy|" + nodeid;
+    if ( is_array(props) ) {
+        props.forEach(function(aprop) {
+            var obj = aprop['$'];
+            var id = mapIsy(obj.id);
+
+            // map ISY logic to the HousePanel logic based on SmartThings and Hubitat
+            value["uom_" + id] = obj.uom;
+            var val = obj.value;
+            switch (obj.id) {
+
+                case "ST":
+                    val = (obj.formatted==="Off" || obj.value==="0" ? "DOF" : "DON");
+                    value[id] = val;
+                    if ( obj.formatted.substr(-1) === "%" ) {
+                        value["level"]= obj.formatted.substr(0, obj.formatted.length-1);
+                    }
+                    break;
+
+                case "OL":
+                    if ( obj.formatted==="On" ) {
+                        val = "100";
+                    } else if ( obj.formatted==="Off" ) {
+                        val = "0";
+                    } else {
+                        val = obj.formatted;
+                        val = val.substr(0, val.length-1);
+                        if ( isNaN(parseInt(val)) ) {
+                            val = "0";
+                        }
+                    }
+                    value[id] = val;
+                    break;
+
+                default:
+                    val = obj.formatted;
+                    if ( val.substr(-1) ==="%" ) {
+                        val = val.substr(0, val.length-1);
+                    }
+                    value[id] = val;
+                    break;
+    
+            }
+            allthings[idx]["value"] = clone(value);
+            pushClient(nodeid, "isy", id, value);
+        });
+    }
+    // updateOptions(reloadpath);
 }
 
 // updates the global options array with new things found on hub
@@ -680,6 +704,7 @@ function updateOptions(reloadpath) {
         return;
     }
     // console.log("Initial index: ", GLB.options.index);
+    var update = false;
    
     // make all the user options visible by default
     if ( !array_key_exists("useroptions", GLB.options )) {
@@ -696,25 +721,29 @@ function updateOptions(reloadpath) {
              parseInt(GLB.options["index"][thingid])===0 ) {
             GLB.options["index"][thingid] = cnt;
             // console.log("found new thing: idx= ", thingid, " cnt= ", cnt);
+            update = true;
             cnt++;
         }
     }
     
-    // make exactly the right number of special tiles
-    var specialtiles = utils.getSpecials();
-    // $oldindex = $options["index"];
-    for (var stype in specialtiles) {
-        var sid = specialtiles[stype];
-        var customcnt = getCustomCount(stype, sid[3]);
-        createSpecialIndex(customcnt, stype, sid[0]);
-    }
-
     // save the options file
-    writeOptions(GLB.options);
-    // console.log("Updated options, rooms: ", GLB.options.rooms, " things: ", GLB.options.things, " index: ", GLB.options.index);
+    if ( update ) {
+            // make exactly the right number of special tiles
+        var specialtiles = utils.getSpecials();
+        // $oldindex = $options["index"];
+        for (var stype in specialtiles) {
+            var sid = specialtiles[stype];
+            var customcnt = getCustomCount(stype, sid[3]);
+            createSpecialIndex(customcnt, stype, sid[0]);
+        }
+
+        writeOptions(GLB.options);
+        // console.log("Updated options, rooms: ", GLB.options.rooms, " things: ", GLB.options.things, " index: ", GLB.options.index);
+    }
 
     // signal clients to reload
     pushClient("reload", reloadpath);
+
 }
 
 function setDefaults() {
@@ -1535,6 +1564,11 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     var bid = thesensor["id"];
     var thingvalue = thesensor["value"];
     var thingtype = thesensor["type"];
+
+    // set type to hint if one is given
+    // this is to support ISY nodes that all register as ISY types
+    // so we can figure out what type of tile this is closest to
+    var hint = thesensor["hint"];
     
     var hubnum = "-1";
     if ( array_key_exists("hubnum", thesensor) ) {
@@ -1578,7 +1612,11 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     // IMPORTANT - changed tile to the saved index in the master list
     //             so one must now use the id to get the value of "i" to find elements
     $tc=   "<div id=\""+idtag+"\" hub=\""+hubnum+"\" tile=\""+kindex+"\" bid=\""+bid+"\" type=\""+thingtype+"\" ";
-    $tc += "panel=\""+panelname+"\" class=\"thing "+thingtype+"-thing" + subtype + " p_"+kindex+"\" "; 
+    $tc += "panel=\""+panelname+"\" class=\"thing "+thingtype+"-thing" + subtype + " p_"+kindex; 
+    if ( hint ) {
+        $tc += " " + hint;
+    }
+    $tc += "\" ";
     $tc += "refresh=\""+refresh+"\"";
     if ( (postop!==0 && posleft!==0) || zindex>1 ) {
         $tc += " style=\"position: relative; left: "+posleft+"px; top: "+postop+"px; z-index: "+zindex+";\"";
@@ -1666,6 +1704,9 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
             if ( array_key_exists("color", thingvalue) ) {
                 var cval = thingvalue["color"];
                 if ( cval.match(/^#[abcdefABCDEF\d]{6}/) !== null ) {
+                    bgcolor = " style=\"background-color:"+cval+";\"";
+                } else {
+                    cval = " white";
                     bgcolor = " style=\"background-color:"+cval+";\"";
                 }
             }
@@ -1874,10 +1915,10 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         }
         if (sibling) { $tc += sibling; }
         if ( tkey === "level" || tkey==="colorTemperature" || tkey==="volume" || tkey==="groupVolume" ) {
-            $tc += aidi + ttype + " subid=\""+tkey+"\" value=\""+tval+"\" title=\""+tkey+"\" class=\"" + thingtype + tkeyshow + pkindex + "\" " + aitkey + "\"></div>";
+            $tc += aidi + ttype + " subid=\""+tkey+"\" value=\""+tval+"\" title=\""+tkey+"\" class=\"" + thingtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\"></div>";
         } else if ( thingtype==="other" && tval.substr(0,7)==="number_" ) {
             var numval = tkey.substring(8);
-            $tc += aidi + ttype + " subid=\"" + tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" " + aitkey + "\">" + numval + "</div>";
+            $tc += aidi + ttype + " subid=\"" + tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\">" + numval + "</div>";
         } else {
             if ( typeof tval==="string" && tval.substr(0,6)==="RULE::" && subtype!=="rule" ) {
                 tkeyshow += " rule";
@@ -2018,8 +2059,8 @@ function getAllThings() {
 
     // if no hubs, force a reload to update any special tiles added above
     // otherwise we don't need to do that because a hub reload will catch that
-    } else {
-        pushClient("reload", "reload");
+    // } else {
+    //     updateOptions("/");
     }
 }
 
@@ -2188,6 +2229,89 @@ function getCustomTile(custom_val, customtype, customid) {
     return custom_val;
 }
 
+// this function handles processing of all websocket calls from ISY
+// used to keep clients in sync with the status of ISY operation
+function processIsyMessage(isymsg) {
+    xml2js(isymsg, function(err, result) {
+        if ( !err && result.Event ) {
+            // console.log("ISY event: ", result);
+            var control = result.Event.control;
+            var action = result.Event.action;
+            var node = result.Event.node;
+            // var evtinfo = result.Event.eventInfo;
+            // console.log("subid: ", subid, " action: ", action, " node: ", node, " evtinfo: ", evtinfo);
+
+            if ( is_array(node) && node.length && node[0]!=="" &&
+                 is_array(control) && control.length && control[0]!=="" ) {
+                var id = node[0];
+                var subid = mapIsy(control[0]);
+                var idx = "isy|" + id;
+
+                if ( allthings && allthings[idx] && allthings[idx].value && allthings[idx].type==="isy" ) {
+                    var oldvalue = allthings[idx].value;
+                    var newvalue = clone(oldvalue);
+                    var newval = action[0]["_"] || oldvalue;
+                    var uom = action[0]["$"]["uom"] || "";
+
+                    // adjust the value based on precision
+                    if ( action[0]["$"]["prec"] ) {
+                        var prec = parseInt(action[0]["$"]["prec"]);
+                        if ( ! isNaN(prec) && prec > 0 ) {
+                            var pow10 = Math.pow(10,prec);
+                            newval = parseFloat(newval) / pow10;
+                        } else {
+                            newval = parseFloat(newval);
+                        }
+                    }
+
+                    // set the uom field in case user wants it
+                    if ( uom ) {
+                        newvalue["uom_" + subid] = uom;
+
+                        // convert levels for Insteon range
+                        if ( uom==="100" ) {
+                            newval = Math.floor(parseInt(newval) * 100 / 255);
+                        }
+                    }
+
+                    // handle all the different types of responses
+                    var res;
+                    newval = newval.toString();
+                    switch (control[0]) {
+
+                        case "ST":
+                            if ( newval==="0") {
+                                newvalue[subid] = "DOF";
+                            } else if ( newval==="100" ) {
+                                newvalue[subid] = "DON";
+                            } else if ( !isNaN(parseInt(newval)) ) {
+                                newvalue[subid] = "DON";
+                                newvalue["level"] = newval;
+                            } else {
+                                newvalue[subid] = newval;
+                            }
+                            break;
+
+                        case "OL":
+                            newvalue[subid] = "DOF";
+                            newvalue["level"] = newval;
+                            break;
+
+                        default:
+                            newvalue[subid] = newval;
+                    }
+
+                    allthings[idx].value = clone(newvalue);
+                    pushClient(id, "isy", subid, newvalue);
+                    if ( DEBUG8 ) {
+                        console.log("ISY webSocket updated node: ", id, " newvalue: ", JSON.stringify(newvalue));
+                    }
+                }
+            }
+        }
+    });
+}
+
 function pushClient(swid, swtype, subid, body, linkinfo, popup) {
     // send the new results to all clients
     var entry = {};
@@ -2298,7 +2422,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
         }
     }
     
-    function getHubResponse(err, res, body) {
+    async function getHubResponse(err, res, body) {
         // var response = body;
         if ( err ) {
             console.log("Error calling hub: ", err);
@@ -2312,7 +2436,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
         }
     }
 
-    function getNodeResponse(err, res, body) {
+    async function getNodeResponse(err, res, body) {
         if ( err ) {
             console.log("Error calling ISY node: ", err);
         } else {
@@ -2345,9 +2469,9 @@ function queryHub(hub, swid, swtype, popup) {
         curl_call(endpt + cmd, header, false, false, "GET", getNodeQueryResponse);
     }
     
-    function getQueryResponse(err, res, body) {
+    async function getQueryResponse(err, res, body) {
         if ( err ) {
-            console.log("Error requesting hub node properties: ", err);
+            console.log("Error requesting hub node query: ", err);
         } else {
             if ( DEBUG5 ) {
                 console.log("doQuery: ", swid, " type: ", swtype, " value: ", body);
@@ -2363,13 +2487,24 @@ function queryHub(hub, swid, swtype, popup) {
             console.log("Error requesting ISY node query: ", err);
         } else {
             var result = parser.parse(body);
-            var properties = result.nodeInfo.properties;
-            if ( DEBUG7 ) {
-                console.log("ISY query: ", result," properties: ", properties);
-            }
-            if ( result ) {
-                pushClient(swid, swtype, subid, result, null, popup);
-            }
+
+            xml2js(body, async function(xmlerr, result) {
+                try {
+                    if ( result ) {
+                        var nodeid = result.nodeInfo.node[0]["address"];
+                        if ( nodeid ) {
+                            var idx = "isy|" + nodeid;
+                            var value = clone(allthings[idx]["value"]);
+                            var props = result.nodeInfo.properties[0].property;
+                            setIsyFields(nodeid, value, props); // result.nodeInfo);
+                        } else {
+                            throw "Something went wrong reading node from ISY in getNodeQueryResponse";
+                        }
+                    }
+                } catch(e) { 
+                    console.log("error: ", e);
+                }
+            });
         }
 
     }
@@ -2560,7 +2695,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
 
     }
 
-    function urlCallback(err, res, body) {
+    async function urlCallback(err, res, body) {
         var webresponse = {};
         if ( err ) {
             webresposne[subid] = command + ": error";
@@ -4338,6 +4473,64 @@ if ( server && config.webSocketServerPort ) {
     serverlistening = false;
     console.log((new Date()) + " webSocket port not valid. webSocketServerPort= ", config.webSocketServerPort);
 }
+
+// make websocket connection to any ISY hub
+var isyhub = false;
+var wshost;
+for (var h in hubs) {
+    var hub = hubs[h];
+    wshost = false;
+    if ( hub["hubType"]==="ISY" && hub["hubEndpt"] && hub["hubAccess"] ) { 
+
+        var hubhost = hub["hubEndpt"];
+        if ( hubhost.startsWith("https://") ) {
+            wshost = "wss://" + hubhost.substr(8);
+        } else if ( hubhost.startsWith("http://") ) {
+            wshost = "ws://" + hubhost.substr(7);
+        }
+    }
+
+    // set up socket for ISY hub if one is there
+    if ( wshost ) {
+        var wsclient = new webSocketClient();
+        var buff = Buffer.from(hub["hubAccess"]);
+        var base64 = buff.toString('base64');
+        var origin = "com.universal-devices.websockets.isy";
+        var header = {"Authorization": "Basic " + base64, "Sec-WebSocket-Protocol": "ISYSUB",  
+                    "Sec-WebSocket-Version": "13", "Origin": "com.universal-devices.websockets.isy"};
+        wshost = wshost + "/subscribe";
+
+        wsclient.on("connectFailed", function(err) {
+            console.log("Connection failure to ISY socket: ", err.toString());
+            console.log("wshost= ", wshost, " header= ", header);
+        });
+
+        wsclient.on("connect", function(connection) {
+            console.log("Connected to ISY socket.");
+
+            // handle incoming state messages from ISY
+            // this will be ignored if the node isn't in our list
+            connection.on("message", function(msg) {
+                if ( msg.type==="utf8" ) {
+                    // console.log("ISY Message: ", msg.utf8Data);
+                    processIsyMessage(msg.utf8Data);
+                }
+            });
+        
+            connection.on("error", function(err) {
+                console.log("Connection error to ISY socket: ", err.toString());
+            });
+        
+            connection.on("close", function() {
+                console.log("Connection closed to ISY socket");
+            });
+        
+        });
+
+        wsclient.connect(wshost, "ISYSUB", origin, header);
+    }
+}
+
     
 // handler functions for HousePanel
 // this is where we render the baseline web page for the dashboard

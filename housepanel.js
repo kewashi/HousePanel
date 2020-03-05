@@ -514,6 +514,9 @@ function setupWebsocket()
             $('div.panel div.thing[bid="'+bid+'"][type="'+thetype+'"]').each(function() {
                 try {
                     var aid = $(this).attr("id").substring(2);
+                    if ( pvalue["level"] ) {
+                        console.log("About to update tile - pvalue= ", pvalue);
+                    }
                     updateTile(aid, pvalue);
                 } catch (e) {
                     console.log("Error updating tile of type: "+ thetype + " and id: " + bid + " with value: ", pvalue);
@@ -2302,9 +2305,10 @@ function updateTile(aid, presult) {
         if ($(targetid)) {
             var oldvalue = $(targetid).html();
             var oldclass = $(targetid).attr("class");
-//            if ( key==="text") {
-//                alert(" aid="+aid+" key="+key+" targetid="+targetid+" value="+value+" oldvalue="+oldvalue+" oldclass= "+oldclass);
-//            }
+
+        //    if ( key==="level") {
+        //        alert(" aid="+aid+" key="+key+" targetid="+targetid+" value="+value+" oldvalue="+oldvalue+" oldclass= "+oldclass);
+        //    }
 
             // remove the old class type and replace it if they are both
             // single word text fields like open/closed/on/off
