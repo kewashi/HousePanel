@@ -364,8 +364,8 @@ function setupUserOpts() {
     //     wsinterval = setInterval(wsSocketCheck, 300000);
     // }
     
-    var tzoffset = 0;
     // TODO: wire up a new time zone feature
+    var tzoffset = -5;
     clockUpdater(tzoffset);
 
 
@@ -2423,6 +2423,53 @@ function setupTabclick() {
 }
 
 function clockUpdater(tz) {
+
+    // update the date every hour
+    setInterval(function() {
+        // var old = new Date();
+        // var utc = old.getTime() + (old.getTimezoneOffset() * 60000);
+        // var d = new Date(utc + (1000*tz));        
+        var d = new Date();
+
+        var weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+        var months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        var dofw = d.getDay();
+        var mofy = d.getMonth();
+        var weekday = weekdays[dofw];
+        var month = months[mofy];
+        var day = d.getDate().toString();
+        if ( day < 10 ) {
+            day = "0" + day.toString();
+        } else {
+            day = day.toString();
+        }
+        var year = d.getFullYear().toString();
+        
+        // set the weekday
+        $("div.panel div.clock.weekday").each(function() {
+            $(this).html(weekday);
+        });
+
+        // set the date
+        $("div.panel div.clock.date").each(function() {
+            if ( $(this).parent().siblings("div.overlay.fmt_date").length > 0 ) {
+                var timestr = $(this).parent().siblings("div.overlay.fmt_date").children("div.fmt_date").html();
+                timestr = timestr.replace("M",month);
+                timestr = timestr.replace("d",day);
+                timestr = timestr.replace("Y",year);
+                $(this).html(timestr);
+            } else if ( $(this).siblings("div.user_hidden").length > 0 ) {
+                var linkval = $(this).siblings("div.user_hidden").attr("linkval");
+                if ( linkval && $("div.clock.date.p_"+linkval) ) {
+                    var timestr = $("div.clock.date.p_"+linkval).html();
+                    $(this).html(timestr);
+                }
+            } else {
+                var defstr = month + " " + day + ", " + year;
+                $(this).html(defstr);
+            }
+        });
+    }, 5000 );
 
     setInterval(function() {
         // var old = new Date();

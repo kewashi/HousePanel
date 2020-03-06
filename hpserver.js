@@ -1562,7 +1562,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     var $tc = "";
     
     var bid = thesensor["id"];
-    var thingvalue = thesensor["value"];
+    var thingvalue = setValOrder(thesensor["value"]);
     var thingtype = thesensor["type"];
 
     // set type to hint if one is given
@@ -1963,11 +1963,23 @@ function getCustomName(defname, idx) {
 }
 
 function getClock(clockname, clockid, clockskin, fmtdate, fmttime) {
-    var daynames = ["Sun", "Mon", "Tue", "Wed", "Thr", "Fri", "Sat", "Sun"];
+    var weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    var months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     var clockname = getCustomName(clockname, "clock" + "|" + clockid);
     var d = new Date();
-    var weekday = daynames[d.getDay()];
-    var dateofmonth = d.toLocaleDateString();
+    var dofw = d.getDay();
+    var mofy = d.getMonth();
+    var weekday = weekdays[dofw];
+    var month = months[mofy];
+    var day = d.getDate().toString();
+    if ( day < 10 ) {
+        day = "0" + day.toString();
+    } else {
+        day = day.toString();
+    }
+    var year = d.getFullYear().toString();
+
+    var dateofmonth = month + " " + day + ", " + year;
     var timeofday = d.toLocaleTimeString();
     var timezone = d.getTimezoneOffset().toString();
     var dclock = {"name": clockname, "skin": clockskin, "weekday": weekday,
@@ -2227,6 +2239,19 @@ function getCustomTile(custom_val, customtype, customid) {
         });
     }
     return custom_val;
+}
+
+// this little gem makes sure levels are always at the end of a tile
+function setValOrder(val) {
+    if ( array_key_exists("level", val) && array_key_exists("switch", val) ) {
+        var levelval = val["level"];
+        var newval = clone(val);
+        delete newval["level"];
+        newval["level"] = levelval;
+        return newval;
+    } else {
+        return val;
+    }
 }
 
 // this function handles processing of all websocket calls from ISY
