@@ -1,6 +1,7 @@
 'use strict';
 
 var devhistory =  ` 
+2.210      Enable thermostat operation for ISY hub and more bug fixes
 2.206      Fix slider render bug and improve ISY status query
 2.205      Fix tile editor bug that now enables multi tiles
 2.204      Fix order of options table processing

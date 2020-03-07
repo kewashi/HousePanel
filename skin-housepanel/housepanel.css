@@ -516,53 +516,43 @@ div.weather.temperature, div.weather.feelsLike {
     box-shadow: 5px 4px 15px black;
     cursor: default;
     text-align: center;
-    height: 50px;
-    width: 50px;
+    height: 70px;
+    width: 70px;
     padding: 4px 3px 0 3px;
     margin: 10px 12px 10px 12px;
     border-radius: 50%;
     font-size: 20px;
-    line-height: 45px;
+    line-height: 65px;
     -webkit-border-radius: 50%;
     -moz-border-radius: 50%;
 }
 
-div.thermomode.on, div.thermostatMode.on, 
-div.thermofan.on, div.thermostatFanMode.on {
+div.thermostatFanMode.on {
     background-color: #3333ff;
 }
-div.thermomode.heat, div.thermostatMode.heat {
+div.overlay div.thermostatMode.heat, div.overlay div.thermostatMode.Heat {
     background-color: #ff3300;
 }
-div.thermomode.cool, div.thermostatMode.cool {
+div.overlay div.thermostatMode.cool, div.overlay div.thermostatMode.Cool {
     background-color: #3333ff;
 }
-div.thermomode.auto, div.thermofan.auto, 
-div.thermostatMode.auto, div.thermostatFanMode.auto {
+div.overlay div.thermostatFanMode {
     background-color: #009999;
 }
-div.thermostatFanMode::before,
-div.thermofan::before {
+div.overlay div.thermostatFanMode::before {
     content: "Fan: ";
 }
-div.thermostatMode::before,
-div.thermomode::before {
+div.overlay div.thermostatMode::before,
+div.overlay div.thermomode::before {
     content: "Mode: ";
 }
-div.thermostat.thermostate::before,
-div.thermostat.thermostatOperatingState::before,
-div.custom.thermostatOperatingState::before,
-div.custom.thermostate::before {
+div.overlay div.thermostatOperatingState::before {
     content: "State: ";
 }
-div.thermostat.humidity::before,
-div.other.humidity::before,
-div.custom.humidity::before {
+div.overlay div.humidity::before {
     content: "Humidity: ";
 }
-div.thermostat.humidity::after,
-div.other.humidity::after,
-div.custom.humidity::after {
+div.overlay div.humidity::after {
     content: "%";
 }
 

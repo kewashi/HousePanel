@@ -2,14 +2,15 @@
 process.title = 'hpserver';
 
 // debug options
-var DEBUG1 = true;
+var DEBUG1 = false;
 var DEBUG2 = false;
 var DEBUG3 = false;
 var DEBUG4 = false;
 var DEBUG5 = false;
 var DEBUG6 = false;
 var DEBUG7 = false;
-var DEBUG8 = true;
+var DEBUG8 = false;
+var DEBUG9 = true;
 
 // websocket and http servers
 var webSocketServer = require('websocket').server;
@@ -51,12 +52,14 @@ function file_exists(fname) {
 
 function getUserName() {
     var uname;
-    if ( array_key_exists("uname", GLB.options["config"]) ) {
+    if ( typeof GLB.options!=="undefined" && GLB.options["config"] && array_key_exists("uname", GLB.options["config"]) ) {
         uname = GLB.options["config"]["uname"];
         if ( !uname ) { uname = "default"; }
     } else {
         uname = "default";
-        GLB.options["config"]["uname"] = uname;
+        if ( typeof GLB.options!=="undefined" && GLB.options["config"] ) {
+            GLB.options["config"]["uname"] = uname;
+        }
     }
     return uname;
 }
@@ -64,16 +67,22 @@ function getUserName() {
 // get the active user and skin
 function getSkin() {
     var uname = getUserName();
-    var pwords = GLB.options["config"]["pword"];
     var skin;
+    var pwords;
+    if ( typeof GLB.options!=="undefined" && GLB.options["config"] && GLB.options["config"]["pword"] ) {
+        pwords = GLB.options["config"]["pword"];
+    }
+
     if ( !pwords || utils.count(pwords)===0 ) {
         skin = "skin-housepanel";
     } else if ( uname && array_key_exists(uname, pwords) ) {
         var pword = pwords[uname];
         if ( is_array(pword) ) {
             skin = pword[1];
-        } else {
+        } else if ( GLB.options["config"]["skin"] ) {
             skin = GLB.options["config"]["skin"];
+        } else {
+            skin = "skin-housepanel";
         }
     } else {
         skin = "skin-housepanel";
@@ -155,17 +164,25 @@ function readOptions() {
 
     try {
         if ( !fs.existsSync(fname) ) {
-            throw ' hmoptions.cfg file not found. HousePanel will operate without any hubs until one is authorized.';
+            console.log(' hmoptions.cfg file not found. HousePanel will operate without any hubs until one is authorized.');
+            GLB.options = {};
+        } else {
+            GLB.options = JSON.parse(fs.readFileSync(fname, 'utf8'));
+            if ( !GLB.options ) {
+                GLB.options = {};
+            }
         }
-        GLB.options = JSON.parse(fs.readFileSync(fname, 'utf8'));
-        if ( !GLB.options || ! array_key_exists("config",GLB.options) ) {
+
+        if ( !array_key_exists("config",GLB.options) ) {
             console.log(' configuration settings were not found in ' + fname + ' configuration file.');
             GLB.options["config"] = {};
-            return;
+            rewrite = true;
         }
     } catch(e) {
         console.log((new Date()), e); 
-        return;
+        GLB.options = {};
+        GLB.options["config"] = {};
+        rewrite = true;
     }
 
     // handle time settings
@@ -209,23 +226,34 @@ function readOptions() {
         rewrite = true;
     }
 
+    if ( !array_key_exists("pword", GLB.options["config"]) ) {
+        var pword = {};
+        pword[uname] = "";
+        GLB.options["config"]["pword"] = pword;
+        rewrite = true;
+    }
+
     if ( DEBUG1 ) {
         console.log((new Date()) + ' Config file for HP Version: ', version, " username: ", uname);
     }
 
     // read the hubs
-    hubs = GLB.options.config["hubs"];
+    if ( array_key_exists("hubs", GLB.options["config"]) ) {
+        hubs = GLB.options.config["hubs"];
+    } else {
+        hubs = [];
+        rewrite = true;
+    }
+
     if ( is_array(hubs) && hubs.length > 0 ) {
-        if ( DEBUG1 ) {
-            console.log((new Date()) + ' Loading ', hubs.length,' hubs.');
-        }
         if ( DEBUG2 ) {
+            console.log((new Date()) + ' Loading ', hubs.length,' hubs.');
             console.log(hubs);
         }
     } else {
         console.log((new Date()) + ' No hubs found. HousePanel will only show special and custom tiles.');
-        GLB.options.config["hubs"] = [];
-        hubs = GLB.options.config["hubs"];
+        hubs = [];
+        GLB.options.config["hubs"] = hubs;
         rewrite = true;
     }
 
@@ -539,15 +567,16 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
     }
 }
 
-function mapIsy(isyid) {
-    const idmap = {"ST": "switch", "OL": "level", "SETLVL": "level", "BATLVL": "battery", "CV": "voltage", "TPW": "power",
+function mapIsy(isyid, uom) {
+    const idmap = {"ST": "switch", "OL": "onlevel", "SETLVL": "level", "BATLVL": "battery", "CV": "voltage", "TPW": "power",
                    "CLISPH": "heatingSetpoint", "CLISPC": "coolingSetpoint", "CLIHUM": "humidity", "LUMIN": "illuminance", 
                    "CLIMD": "thermostatMode", "CLIHCS": "thermostatState", "CLIFS": "thermostatFanMode",
-                   "CLIFRS": "thermostatOperatingState"};
+                   "CLIFRS": "thermostatOperatingState", "CLISMD": "thermostatHold"};
     var id = isyid;
     if ( array_key_exists(isyid, idmap) ) {
         id = idmap[isyid];
     }
+
     return id;
 }
 
@@ -626,7 +655,9 @@ function getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSec
 
                                 // if there are props give us a debug print and set values
                                 if ( props ) {
-                                    console.log("node: ", nodeid, " properties: ", props);
+                                    if ( DEBUG8 ) {
+                                        console.log("node: ", nodeid, " properties: ", props);
+                                    }
                                     setIsyFields(nodeid, value, props);
                                 }
                             });
@@ -646,52 +677,197 @@ function getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSec
 
 }
 
+function translateIsy(nodeid, objid, uom, value, val, formatted) {
+
+    // convert levels for Insteon range
+    if ( uom && uom==="100" ) {
+        val = Math.floor(parseInt(val) * 100 / 255);
+    }
+    val = val.toString();
+
+    if ( typeof formatted === "undefined" ) {
+        formatted = "";
+    }
+
+    // convert the trigger into a subid to modify
+    var subid = mapIsy(objid, uom);
+
+    // use formatted version if it is there
+    // if ( formatted ) {
+    //     if ( formatted.substr(-1) ==="%" ) {
+    //         val = formatted.substr(0, val.length-1);
+    //     } else if ( formatted.substr(-1) === "F" || formatted.substr(-1) === "C" ) {
+    //         val= formatted.substr(0, val.length-2);
+    //     } else {
+    //         val = formatted;
+    //     }
+    // }
+
+    // set the HP equivalent subid for this type of node field
+    // if maps are not present then the native ISY subid will show up
+    var newvalue = clone(value);
+    // newvalue[subid] = val;
+
+    if ( nodeid === "n001_t411911563177" || nodeid==="4D A1 42 1")  {
+        console.log("debug: trigger: ", objid, " node: ", nodeid, " val: ", val, " uom: ", uom, " formatted: ", formatted, " value: ", value);
+    }
+ 
+    // handle special cases
+    switch (objid) {
+
+        case "ST":
+            if ( (uom==="51" || uom==="100") ) {
+                // newvalue["level"]= val;  // formatted.substr(0, formatted.length-1);
+                if ( val!=="0" && val!=="100") {
+                    newvalue["level"] = val;
+                }
+                if ( val==="0" ) {
+                    val = "DOF";
+                } else if ( val==="100" ) {
+                    val = "DON";
+                } else {
+                    newvalue["level"] = val;
+                    val = "DON";
+                }
+                newvalue[subid] = val;
+
+            } else if (uom==="78") {
+                val = (formatted==="Off" || val==="0") ? "DOF" : "DON";
+                newvalue[subid] = val;
+
+            } else if ( uom==="17" ) {
+                // newvalue["temperature"]= formatted.substr(0, formatted.length-2);
+                if ( typeof formatted==="undefined" || formatted==="" ) {
+                    formatted = val + "°F";
+                }
+                newvalue["temperature"]= formatted;
+
+            } else {
+                val = (formatted==="Off" || val==="0" ? "DOF" : "DON");
+                newvalue[subid] = val;
+            }
+            break;
+
+        case "OL":
+            if ( formatted && formatted==="On" ) {
+                val = "100";
+            } else if ( formatted && formatted==="Off" ) {
+                val = "0";
+            } else if ( formatted && formatted.substr(-1) === "%" ) {
+                val = formatted.substr(0, formatted.length-1);
+                if ( isNaN(parseInt(val)) ) {
+                    val = "0";
+                }
+            } else {
+                if ( isNaN(parseInt(val)) ) {
+                    val = "0";
+                }
+            }
+            newvalue[subid] = val;
+            newvalue["level"] = val;
+            break;
+
+        case "CLIHUM":
+        case "BATLVL":
+            newvalue[subid] = val;
+            break;
+
+        case "CLISPC":
+        case "CLISPH":
+            if ( uom==="17" && formatted==="" ) {
+                formatted = val + "°F";
+            } else if ( formatted==="" ) {
+                formatted = val;
+            }
+            newvalue[subid] = formatted;
+            break;
+
+        case "RR":
+            var index = parseInt(val);
+            if ( uom==="25" && !isNaN(index) && index<=31 ) {
+                const RRindex = ["9.0 min", "8.0 min", "7.0 min", "6.0 min", "5.0 min", "4.5 min", "4.0 min", "3.5 min",
+                                 "3.0 min", "2.5 min", "2.0 min", "1.5 min", "1.0 min", "47.0 sec", "43.0 sec", "38.5 sec",
+                                 "34.0 sec", "32.0 sec", "30.0 sec", "28.0 sec", "26.0 sec", "23.5 sec", "21.5 sec", "19.0 sec",
+                                 "8.5 sec", "6.5 sec", "4.5 sec", "2.0 sec", "0.5 sec", "0.3 sec", "0.2 sec", "0.1 sec"];
+                val = RRindex[index];
+            }
+            newvalue[subid] = val;
+            break;
+
+        case "CLIFRS":
+            var index = parseInt(val);
+            const CLHindex = ["Off", "On", "On High", "On Medium", "Circulation", "Humidity Circ", "R/L Circ", "U/D Circ", "Quiet"];
+            if ( uom==="80" && !isNaN(index) && index < CLHindex.length ) {
+                val = CLHindex[index];
+            }
+            newvalue[subid] = val;
+
+        case "CLIHCS":
+            var index = parseInt(val);
+            const CLFindex = ["Idle", "Heating", "Cooling", "Off"];
+            if ( uom==="25" && !isNaN(index) && index < CLFindex.length ) {
+                val = CLFindex[index];
+            }
+
+            newvalue[subid] = val;
+        
+        default:
+            newvalue[subid] = formatted ? formatted : val;
+            break;
+
+    }
+    return newvalue;
+}
+
 function setIsyFields(nodeid, value, props) {
     var idx = "isy|" + nodeid;
     if ( is_array(props) ) {
         props.forEach(function(aprop) {
             var obj = aprop['$'];
-            var id = mapIsy(obj.id);
+            var subid = mapIsy(obj.id, obj.uom);
 
             // map ISY logic to the HousePanel logic based on SmartThings and Hubitat
-            value["uom_" + id] = obj.uom;
+            value["uom_" + subid] = obj.uom;
             var val = obj.value;
-            switch (obj.id) {
 
-                case "ST":
-                    val = (obj.formatted==="Off" || obj.value==="0" ? "DOF" : "DON");
-                    value[id] = val;
-                    if ( obj.formatted.substr(-1) === "%" ) {
-                        value["level"]= obj.formatted.substr(0, obj.formatted.length-1);
-                    }
-                    break;
+            value = translateIsy(nodeid, obj.id, obj.uom, value, val, obj.formatted);
 
-                case "OL":
-                    if ( obj.formatted==="On" ) {
-                        val = "100";
-                    } else if ( obj.formatted==="Off" ) {
-                        val = "0";
-                    } else {
-                        val = obj.formatted;
-                        val = val.substr(0, val.length-1);
-                        if ( isNaN(parseInt(val)) ) {
-                            val = "0";
-                        }
-                    }
-                    value[id] = val;
-                    break;
+            // switch (obj.id) {
 
-                default:
-                    val = obj.formatted;
-                    if ( val.substr(-1) ==="%" ) {
-                        val = val.substr(0, val.length-1);
-                    }
-                    value[id] = val;
-                    break;
+            //     case "ST":
+            //         val = (obj.formatted==="Off" || obj.value==="0" ? "DOF" : "DON");
+            //         value[subid] = val;
+            //         if ( obj.formatted.substr(-1) === "%" ) {
+            //             value["level"]= obj.formatted.substr(0, obj.formatted.length-1);
+            //         }
+            //         break;
+
+            //     case "OL":
+            //         if ( obj.formatted==="On" ) {
+            //             val = "100";
+            //         } else if ( obj.formatted==="Off" ) {
+            //             val = "0";
+            //         } else {
+            //             val = obj.formatted;
+            //             val = val.substr(0, val.length-1);
+            //             if ( isNaN(parseInt(val)) ) {
+            //                 val = "0";
+            //             }
+            //         }
+            //         value[subid] = val;
+            //         break;
+
+            //     default:
+            //         val = obj.formatted;
+            //         if ( val.substr(-1) ==="%" ) {
+            //             val = val.substr(0, val.length-1);
+            //         }
+            //         value[subid] = val;
+            //         break;
     
-            }
+            // }
             allthings[idx]["value"] = clone(value);
-            pushClient(nodeid, "isy", id, value);
+            pushClient(nodeid, "isy", subid, value);
         });
     }
     // updateOptions(reloadpath);
@@ -1909,7 +2085,7 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         // finally, adjust for level sliders that can't have values in the content
         // hide all of the ISY uom items - couid do in CSS but this is easier and faster
         if ( thingtype==="isy" && tkey.startsWith("uom_") ) {
-            $tc += "<div class=\"overlay hidden "+tkey+" v_"+kindex+"\">";
+            $tc += "<div class=\"overlay "+tkey+" hidden v_"+kindex+"\">";
         } else {
             $tc += "<div class=\"overlay "+tkey+" v_"+kindex+"\">";
         }
@@ -2257,6 +2433,7 @@ function setValOrder(val) {
 // this function handles processing of all websocket calls from ISY
 // used to keep clients in sync with the status of ISY operation
 function processIsyMessage(isymsg) {
+    const util = require('util');
     xml2js(isymsg, function(err, result) {
         if ( !err && result.Event ) {
             // console.log("ISY event: ", result);
@@ -2269,67 +2446,39 @@ function processIsyMessage(isymsg) {
             if ( is_array(node) && node.length && node[0]!=="" &&
                  is_array(control) && control.length && control[0]!=="" ) {
                 var id = node[0];
-                var subid = mapIsy(control[0]);
                 var idx = "isy|" + id;
 
                 if ( allthings && allthings[idx] && allthings[idx].value && allthings[idx].type==="isy" ) {
-                    var oldvalue = allthings[idx].value;
-                    var newvalue = clone(oldvalue);
-                    var newval = action[0]["_"] || oldvalue;
-                    var uom = action[0]["$"]["uom"] || "";
+                    var value = allthings[idx].value;
+                    try {
+                        var newval = action[0]["_"] || value[subid];
+                        var uom = action[0]["$"]["uom"] || "";
 
-                    // adjust the value based on precision
-                    if ( action[0]["$"]["prec"] ) {
-                        var prec = parseInt(action[0]["$"]["prec"]);
-                        if ( ! isNaN(prec) && prec > 0 ) {
-                            var pow10 = Math.pow(10,prec);
-                            newval = parseFloat(newval) / pow10;
-                        } else {
-                            newval = parseFloat(newval);
-                        }
-                    }
-
-                    // set the uom field in case user wants it
-                    if ( uom ) {
-                        newvalue["uom_" + subid] = uom;
-
-                        // convert levels for Insteon range
-                        if ( uom==="100" ) {
-                            newval = Math.floor(parseInt(newval) * 100 / 255);
-                        }
-                    }
-
-                    // handle all the different types of responses
-                    var res;
-                    newval = newval.toString();
-                    switch (control[0]) {
-
-                        case "ST":
-                            if ( newval==="0") {
-                                newvalue[subid] = "DOF";
-                            } else if ( newval==="100" ) {
-                                newvalue[subid] = "DON";
-                            } else if ( !isNaN(parseInt(newval)) ) {
-                                newvalue[subid] = "DON";
-                                newvalue["level"] = newval;
+                        // adjust the value based on precision
+                        if ( action[0]["$"]["prec"] ) {
+                            var prec = parseInt(action[0]["$"]["prec"]);
+                            if ( ! isNaN(prec) && prec > 0 ) {
+                                var pow10 = Math.pow(10,prec);
+                                newval = parseFloat(newval) / pow10;
                             } else {
-                                newvalue[subid] = newval;
+                                newval = parseFloat(newval);
                             }
-                            break;
+                        }
 
-                        case "OL":
-                            newvalue[subid] = "DOF";
-                            newvalue["level"] = newval;
-                            break;
-
-                        default:
-                            newvalue[subid] = newval;
+                        newval = newval.toString();
+                    } catch (e) {
+                        console.log("error in webSocket interpretation: ");
+                        console.log("webSocket returned: ", util.inspect(result, false, null, true /* enable colors */) );
+                        return;
                     }
 
-                    allthings[idx].value = clone(newvalue);
+                    var newvalue = translateIsy(id, control[0], uom, value, newval, "");
+
+                    var subid = mapIsy(control[0], uom);
+                    allthings[idx].value = newvalue;
                     pushClient(id, "isy", subid, newvalue);
-                    if ( DEBUG8 ) {
-                        console.log("ISY webSocket updated node: ", id, " newvalue: ", JSON.stringify(newvalue));
+                    if ( DEBUG9 ) {
+                        console.log("ISY webSocket updated node: ", id, " trigger:", control[0], " uom: ", uom, " newval: ", newval, " value: ", newvalue);
                     }
                 }
             }
@@ -2424,29 +2573,88 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
         var base64 = buff.toString('base64');
         var isyheader = {"Authorization": "Basic " + base64};
         var cmd;
-        if ( subid==="level" ) {
-            // cmd = "/nodes/" + swid + "/cmd/DON/" + swval;
-            // for now semd both level commands since either could be expected
-            // one is for Insteon other is for Polyglot nodes
-            // later we will flag this in the item
-            var cmd1 = "/nodes/" + swid + "/cmd/SETLVL/" + swval;
-            curl_call(endpt + cmd1, isyheader, false, false, "GET", getNodeResponse);
 
-            // convert percentage to 0 - 256 range for Insteon
-            var irange = Math.floor(parseInt(swval) * 255 / 100);
-            var cmd2 = "/nodes/" + swid + "/cmd/DON/" + irange;
-            curl_call(endpt + cmd2, isyheader, false, false, "GET", getNodeResponse);
-            isyresp[subid] = swval;
-            isyresp["switch"] = "DON";
-        } else if ( subid==="switch" ) {
-            cmd = "/nodes/" + swid + "/cmd/" + swval;
-            curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
-            isyresp[subid] = swval;
-        } else {
-            console.log("Command " + subid + " not yet supported for ISY tiles");
+        switch(subid) {
+
+            case "level":
+                // cmd = "/nodes/" + swid + "/cmd/DON/" + swval;
+                // for now semd both level commands since either could be expected
+                // one is for Insteon other is for Polyglot nodes
+                // later we will flag this in the item
+                var cmd1 = "/nodes/" + swid + "/cmd/SETLVL/" + swval;
+                curl_call(endpt + cmd1, isyheader, false, false, "GET", getNodeResponse);
+
+                // convert percentage to 0 - 256 range for Insteon
+                var irange = Math.floor(parseInt(swval) * 255 / 100);
+                var cmd2 = "/nodes/" + swid + "/cmd/DON/" + irange;
+                curl_call(endpt + cmd2, isyheader, false, false, "GET", getNodeResponse);
+                isyresp[subid] = swval;
+                isyresp["switch"] = "DON";
+                break;
+
+            // } else if ( subid==="switch" ) {
+            case "switch":
+                cmd = "/nodes/" + swid + "/cmd/" + swval;
+                curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+
+                // this code will preserve the prior dimmer setting; otherwise the onlevel is used
+                // the default behavior for Insteon lights
+                // set light level to prior level since Insteon insists upon using OL setting
+                // var idx = "isy|"+swid;
+                // if ( swval==="DON" && array_key_exists("level", allthings[idx]["value"]) ) {
+                //     var level = allthings[idx]["value"]["level"];
+                //     var cmd1 = "/nodes/" + swid + "/cmd/SETLVL/" + level;
+                //     curl_call(endpt + cmd1, isyheader, false, false, "GET", getNodeResponse);
+        
+                //     // convert percentage to 0 - 256 range for Insteon
+                //     var irange = Math.floor(parseInt(level) * 255 / 100);
+                //     var cmd2 = "/nodes/" + swid + "/cmd/DON/" + irange;
+                //     curl_call(endpt + cmd2, isyheader, false, false, "GET", getNodeResponse);
+        
+                // }
+                isyresp[subid] = swval;
+                break;
+
+            case "heatingSetpoint-up":
+                var newval = extractTemp(swval);
+                if ( !isNaN(newval) ) { 
+                    newval++;
+                    cmd = "/nodes/" + swid + "/cmd/CLISPH/" + newval.toString();
+                    console.log("oldval: ", swval, "newval= ", newval, " cmd = ", cmd);
+                    curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+                } else {
+                    console.log("error: thermostat set point cannot be interpreted.  value: ", swval);
+                }
+                break;
+
+            case "heatingSetpoint-dn":
+                var newval = extractTemp(swval);
+                if ( !isNaN(newval) ) { 
+                    newval--;
+                    cmd = "/nodes/" + swid + "/cmd/CLISPH/" + newval.toString();
+                    console.log("oldval: ", swval, "newval= ", newval, " cmd = ", cmd);
+                    curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+                } else {
+                    console.log("error: thermostat set point cannot be interpreted.  value: ", swval);
+                }
+                break;
+    
+        default:
+            console.log("Command " + subid + " not yet supported for ISY tiles. value: ", swval);
+
         }
     }
     
+    function extractTemp(val) {
+        var newval;
+        if ( swval.substr(-1)==="F" || swval.substr(-1)==="C" ) {
+            newval = parseInt(swval.substr(0, swval.length-2));
+        } else {
+            newval = parseInt(swval);
+        }
+        return newval;
+    }
+
     async function getHubResponse(err, res, body) {
         // var response = body;
         if ( err ) {
@@ -3070,7 +3278,18 @@ function getInfoPage(returnURL, pathname) {
     });
 
     $tc += "</div>";
+
+    if ( clients.length > 0 ) {
+        var str = "<p>Currently connected to " + clients.length + " clients.</p>";
+        str = str + "<br><hr><br>";
+        for (var i=0; i < clients.length; i++) {
+            str = str + "Client #" + i + " host= " + clients[i].socket.remoteAddress + " <br>";
+        }
+        str = str + "<br><hr><br>";
+        $tc +=  str;
+    }
     
+
     $tc += "<button class=\"showhistory\">Show Dev Log</button>";
     $tc += "<div id=\"devhistory\" class=\"infopage hidden\">";
     $tc += "<pre>" + utils.DEV + "</pre>";

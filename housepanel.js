@@ -2807,7 +2807,7 @@ function processClick(that, thingname) {
 
     // special case of thermostat clicking on things without values
     // send the temperature as the value
-    if ( !thevalue && thetype=="thermostat" &&
+    if ( !thevalue && (thetype=="thermostat" || thetype==="isy") &&
          ( subid.endsWith("-up") || subid.endsWith("-dn") ) ) {
         thevalue = $("#a-"+aid+"-temperature").html();
         // alert(thevalue);
