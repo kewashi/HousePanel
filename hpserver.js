@@ -2,15 +2,15 @@
 process.title = 'hpserver';
 
 // debug options
-var DEBUG1 = false;
+var DEBUG1 = true;
 var DEBUG2 = false;
 var DEBUG3 = false;
 var DEBUG4 = false;
 var DEBUG5 = false;
-var DEBUG6 = false;
+var DEBUG6 = true;
 var DEBUG7 = false;
 var DEBUG8 = false;
-var DEBUG9 = true;
+var DEBUG9 = false;
 
 // websocket and http servers
 var webSocketServer = require('websocket').server;
@@ -23,7 +23,7 @@ var bodyParser = require('body-parser');
 var parser = require('fast-xml-parser');
 var xml2js = require('xml2js').parseString;
 var crypto = require('crypto');
-var UTIL = require('util');
+const UTIL = require('util');
 
 // load supporting modules
 var utils = require("./utils");
@@ -161,27 +161,27 @@ function readOptions() {
 
     var rewrite = false;
     var fname = "hmoptions.cfg";
+    GLB.options = {};
 
     try {
         if ( !fs.existsSync(fname) ) {
-            console.log(' hmoptions.cfg file not found. HousePanel will operate without any hubs until one is authorized.');
-            GLB.options = {};
+            throw "hmoptions.cfg file not found. HousePanel will operate without any hubs until one is authorized.";
         } else {
             GLB.options = JSON.parse(fs.readFileSync(fname, 'utf8'));
             if ( !GLB.options ) {
                 GLB.options = {};
+                throw "hmoptions.cfg file found but was not able to be processed.  Resetting.";
             }
         }
 
-        if ( !array_key_exists("config",GLB.options) ) {
-            console.log(' configuration settings were not found in ' + fname + ' configuration file.');
-            GLB.options["config"] = {};
-            rewrite = true;
+        if ( !array_key_exists("config", GLB.options) ) {
+            throw "configuration settings were not found in " + fname + " configuration file.";
+            // GLB.options["config"] = {};
+            // rewrite = true;
         }
     } catch(e) {
         console.log((new Date()), e); 
-        GLB.options = {};
-        GLB.options["config"] = {};
+        setDefaults();
         rewrite = true;
     }
 
@@ -190,27 +190,24 @@ function readOptions() {
         var timeval = GLB.options["time"];
         var info = timeval.split(" @ ");
         var version = info[0];
+        timeval = info[1];
     } else {
         var d = new Date();
         timeval = d.getTime();
+        timeval = timeval.toString();
         version = utils.HPVERSION;
         GLB.options["time"] = version + " @ " + timeval;
         rewrite = true;
     }
 
     // check for empty rooms, things, and index
-    if ( !array_key_exists("rooms", GLB.options) ) {
-        GLB.options["rooms"]= {};
+    if ( !array_key_exists("rooms", GLB.options) ||
+         !array_key_exists("things", GLB.options) ||
+         !array_key_exists("index", GLB.options) ) {
+        setDefaults();
         rewrite = true;
     }
-    if ( !array_key_exists("things", GLB.options) ) {
-        GLB.options["things"]= {};
-        rewrite = true;
-    }
-    if ( !array_key_exists("index", GLB.options) ) {
-        GLB.options["index"]= {};
-        rewrite = true;
-    }
+
     if ( !array_key_exists("useroptions", GLB.options) ) {
         GLB.options["useroptions"]= utils.getTypes();
         rewrite = true;
@@ -218,18 +215,21 @@ function readOptions() {
 
     // get the last user that logged in
     // and if not there use the default user
+    var uname;
     if ( array_key_exists("uname", GLB.options["config"]) ) {
-        var uname = GLB.options["config"]["uname"];
+        uname = GLB.options["config"]["uname"];
+        if ( !uname ) {
+            uname = "default";
+        }
     } else {
-        var uname = "default";
+        uname = "default";
         GLB.options["config"]["uname"] = uname;
         rewrite = true;
     }
 
-    if ( !array_key_exists("pword", GLB.options["config"]) ) {
-        var pword = {};
-        pword[uname] = "";
-        GLB.options["config"]["pword"] = pword;
+    if ( !array_key_exists("pword", GLB.options.config) ) {
+        GLB.options.config["pword"] = {};
+        GLB.options.config["pword"][uname] =  ["","skin-housepanel"];
         rewrite = true;
     }
 
@@ -240,21 +240,19 @@ function readOptions() {
     // read the hubs
     if ( array_key_exists("hubs", GLB.options["config"]) ) {
         hubs = GLB.options.config["hubs"];
+        if ( !is_array(hubs) ) { hubs = [] };
     } else {
         hubs = [];
         rewrite = true;
     }
 
-    if ( is_array(hubs) && hubs.length > 0 ) {
+    if ( hubs.length > 0 ) {
+        console.log((new Date()) + ' Loading ', hubs.length,' hubs.');
         if ( DEBUG2 ) {
-            console.log((new Date()) + ' Loading ', hubs.length,' hubs.');
             console.log(hubs);
         }
     } else {
         console.log((new Date()) + ' No hubs found. HousePanel will only show special and custom tiles.');
-        hubs = [];
-        GLB.options.config["hubs"] = hubs;
-        rewrite = true;
     }
 
     // update the options file if we added default info
@@ -326,6 +324,7 @@ function writeOptions(options, skipuser) {
 
     var d = new Date();
     var timeval = d.getTime();
+    timeval = timeval.toString();
     options["time"] = utils.HPVERSION + " @ " + timeval;
     GLB.options = clone(options);
     
@@ -653,9 +652,9 @@ function getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSec
                                 var value = clone(allthings[idx]["value"]);
                                 var props = node["property"];
 
-                                // if there are props give us a debug print and set values
+                                // if there are props set values
                                 if ( props ) {
-                                    if ( DEBUG8 ) {
+                                    if ( DEBUG5 ) {
                                         console.log("node: ", nodeid, " properties: ", props);
                                     }
                                     setIsyFields(nodeid, value, props);
@@ -903,8 +902,8 @@ function updateOptions(reloadpath) {
     }
     
     // save the options file
-    if ( update ) {
-            // make exactly the right number of special tiles
+    if ( update && reloadpath!==false) {
+        // make exactly the right number of special tiles
         var specialtiles = utils.getSpecials();
         // $oldindex = $options["index"];
         for (var stype in specialtiles) {
@@ -918,22 +917,56 @@ function updateOptions(reloadpath) {
     }
 
     // signal clients to reload
-    pushClient("reload", reloadpath);
-
+    if ( reloadpath !== false ) {
+        pushClient("reload", reloadpath);
+    }
 }
 
 function setDefaults() {
-
+     
     // generic room setup
-    var defaultrooms = {
+    const defaultrooms = {
         "Kitchen": "clock|kitchen|sink|pantry|dinette" ,
         "Family": "clock|family|mud|fireplace|casual|thermostat",
         "Living": "clock|living|dining|entry|front door|foyer",
         "Office": "clock|office|computer|desk|work",
-        "Bedrooms": "clock|bedroom|kid|kids|bathroom|closet|master|guest",
+        "Bedroom": "clock|bedroom|kid|kids|bathroom|closet|master|guest",
         "Outside": "clock|garage|yard|outside|porch|patio|driveway|weather",
         "Music": "clock|sonos|music|tv|television|alexa|echo|stereo|bose|samsung|pioneer"
     };
+
+    if ( !GLB.options ) {
+        GLB.options = {};
+    }
+    GLB.options.config = {};
+
+    // set defaults here
+    GLB.options.config["port"] = "3080";
+    GLB.options.config["skin"] = "skin-housepanel";
+    GLB.options.config["kiosk"] = "false";
+    GLB.options.config["webSocketServerPort"] = "1380";
+    GLB.options.config["timezone"] = "America/Detroit";
+    GLB.options.config["hubs"] = [];
+
+    GLB.options.config["specialtiles"] = {"video": 4, "frame": 4, "image": 4, "blank": 2, "custom": 8};
+
+    GLB.options.config["fast_timer"] = "0";
+    GLB.options.config["slow_timer"] = "300000";
+    GLB.options.config["rules"] = "false";
+    GLB.options.config["accucity"] = "ann-arbor-mi";
+    GLB.options.config["accuregion"] = "us";
+    GLB.options.config["accucode"] = "329380";
+    GLB.options.config["hubpick"] = "all";
+
+    var uname = "default";
+    var skin = "skin-housepanel";
+    GLB.options.config["uname"] = uname;
+    GLB.pwcrypt = "";
+
+    GLB.options.config["pword"] = {};
+    GLB.options.config["pword"][uname] = ["", skin];
+
+    GLB.options["useroptions"] = utils.getTypes();
     
     // make a default options array based on the old logic
     // protocol for the options array is an array of room names
@@ -943,6 +976,21 @@ function setDefaults() {
     // encoded as ST-id|ST-type to enable an easy quick text search
     GLB.options["rooms"] = {};
     GLB.options["things"] = {};
+
+    // if we don't have allthings yet, load the special tiles
+    if ( utils.count(allthings)===0 ) {
+        addSpecials();
+    }
+
+    // put the special things in the index
+    if ( !array_key_exists("index", GLB.options ) ) {
+        GLB.options["index"] = {};
+    }
+    updateOptions(false);
+
+    // var defbid = GLB.options.index["clock|clockdigital"];
+    // var defthing = [defbid, 0, 0, 1, ""];
+
     var k = 0;
     // foreach(array_keys($defaultrooms) as $room) {
     for (var room in defaultrooms) {
@@ -951,6 +999,7 @@ function setDefaults() {
         k++;
     }
 
+    // organize things into rooms
     for (var thingid in allthings) {
         var thesensor = allthings[thingid];
         var thename= thesensor["name"].toLowerCase();
@@ -968,7 +1017,7 @@ function setDefaults() {
             }
         }
     }
-    writeOptions(GLB.options);
+
 }
 
 // this used to create input blocks for auth page
@@ -1115,7 +1164,7 @@ function getAuthPage(hostname, hpcode) {
     // note: the type must be "New" because js uses this to do stuff
     var newhub = {"hubType": "New", "hubHost": "https://graph.api.smartthings.com", 
                   "clientId": "", "clientSecret": "",
-                  "userAccess": "", "userEndpt": "", "hubName": "", "hubId": "",
+                  "userAccess": "", "userEndpt": "", "hubName": "", "hubId": "new",
                   "hubTimer": 0, "hubAccess": "", "hubEndpt": ""};
     authhubs.push(newhub);
 
@@ -2121,6 +2170,10 @@ function getCustomCount(stype, defcount) {
 }
 
 function getCustomName(defname, idx) {
+    if ( !GLB.options.rooms || !GLB.options.things || !GLB.options.index ) {
+        return defname;
+    }
+
     var rooms = GLB.options["rooms"];
     var thingoptions = GLB.options["things"];
     var tileid = GLB.options["index"][idx];
@@ -2190,7 +2243,6 @@ function addSpecials() {
     // putting this here allows them to be handled just like other modifiable tiles
     // these tiles all refresh fast except first 4 frames that are reserved for weather
     // renamed accuweather to forecast2 for simplicity sake and to make sorting work
-    var config = GLB.options.config;
     var specialtiles = utils.getSpecials();
     for (var stype in specialtiles) {
         var sid = specialtiles[stype];
@@ -2256,13 +2308,22 @@ function getAllThings() {
 // this enables a unique customization effect
 // the last parameter is only needed for LINK customizations
 function getCustomTile(custom_val, customtype, customid) {
+    const reserved = ["index","rooms","things","config","control","useroptions"];
 
-    var reserved = ["index","rooms","things","config","control","useroptions"];
-    var idx = customtype + "|" + customid;
-    var rooms = GLB.options["rooms"];
-    var index = GLB.options["index"];
-    var thingoptions = GLB.options["things"];
-    var tileid = parseInt(GLB.options["index"][idx]);
+    // do nothing if options are not loaded
+    if ( utils.count(GLB.options.rooms)===0 || utils.count(GLB.options.index)===0 || utils.count(GLB.options.things)===0 ) {
+        return custom_val;
+    }
+
+    try {
+        var idx = customtype + "|" + customid;
+        var rooms = GLB.options["rooms"];
+        var index = GLB.options["index"];
+        var thingoptions = GLB.options["things"];
+        var tileid = parseInt(GLB.options["index"][idx]);
+    } catch(e) {
+        return custom_val;
+    }
     
     // get custom tile name if it was defined in tile editor and stored
     // in the room array
@@ -2305,7 +2366,6 @@ function getCustomTile(custom_val, customtype, customid) {
         if ( !is_array(lines[0]) ) {
             lines = [lines];
         }
-        // console.log("lines= ", lines);
         
         // first remove existing ones so we can readd them in the proper order
         lines.forEach(function(msgs) {
@@ -2433,7 +2493,6 @@ function setValOrder(val) {
 // this function handles processing of all websocket calls from ISY
 // used to keep clients in sync with the status of ISY operation
 function processIsyMessage(isymsg) {
-    const util = require('util');
     xml2js(isymsg, function(err, result) {
         if ( !err && result.Event ) {
             // console.log("ISY event: ", result);
@@ -2468,7 +2527,7 @@ function processIsyMessage(isymsg) {
                         newval = newval.toString();
                     } catch (e) {
                         console.log("error in webSocket interpretation: ");
-                        console.log("webSocket returned: ", util.inspect(result, false, null, true /* enable colors */) );
+                        console.log("webSocket returned: ", UTIL.inspect(result, false, null, true /* enable colors */) );
                         return;
                     }
 
@@ -2558,6 +2617,8 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
 function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
     var access_token = hub["hubAccess"];
     var endpt = hub["hubEndpt"];
+    // console.log("access= ", access_token, " endpt= ", endpt, " subid= ", subid);
+
     var isyresp = {};
     if ( hub["hubType"]==="SmartThings" || hub["hubType"]==="Hubitat" ) {
         var host = endpt + "/doaction";
@@ -2577,7 +2638,6 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
         switch(subid) {
 
             case "level":
-                // cmd = "/nodes/" + swid + "/cmd/DON/" + swval;
                 // for now semd both level commands since either could be expected
                 // one is for Insteon other is for Polyglot nodes
                 // later we will flag this in the item
@@ -2590,28 +2650,21 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
                 curl_call(endpt + cmd2, isyheader, false, false, "GET", getNodeResponse);
                 isyresp[subid] = swval;
                 isyresp["switch"] = "DON";
+
+                // comment this code to preserve the prior dimmer setting; 
+                // otherwise the onlevel is set to current level
+                // the default behavior for Insteon lights would be to comment this
+                // but I kept it here to make them work like all others
+                var cmd3 = "/nodes/" + swid + "/cmd/OL/" + irange;
+                // isyresp["onlevel"] = swval;
+                curl_call(endpt + cmd3, isyheader, false, false, "GET", getNodeResponse);
                 break;
 
             // } else if ( subid==="switch" ) {
             case "switch":
                 cmd = "/nodes/" + swid + "/cmd/" + swval;
+                // console.log("Calling curl with cmd: ", endpt + cmd, " header: ", isyheader);
                 curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
-
-                // this code will preserve the prior dimmer setting; otherwise the onlevel is used
-                // the default behavior for Insteon lights
-                // set light level to prior level since Insteon insists upon using OL setting
-                // var idx = "isy|"+swid;
-                // if ( swval==="DON" && array_key_exists("level", allthings[idx]["value"]) ) {
-                //     var level = allthings[idx]["value"]["level"];
-                //     var cmd1 = "/nodes/" + swid + "/cmd/SETLVL/" + level;
-                //     curl_call(endpt + cmd1, isyheader, false, false, "GET", getNodeResponse);
-        
-                //     // convert percentage to 0 - 256 range for Insteon
-                //     var irange = Math.floor(parseInt(level) * 255 / 100);
-                //     var cmd2 = "/nodes/" + swid + "/cmd/DON/" + irange;
-                //     curl_call(endpt + cmd2, isyheader, false, false, "GET", getNodeResponse);
-        
-                // }
                 isyresp[subid] = swval;
                 break;
 
@@ -2620,7 +2673,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
                 if ( !isNaN(newval) ) { 
                     newval++;
                     cmd = "/nodes/" + swid + "/cmd/CLISPH/" + newval.toString();
-                    console.log("oldval: ", swval, "newval= ", newval, " cmd = ", cmd);
+                    // console.log("oldval: ", swval, "newval= ", newval, " cmd = ", cmd);
                     curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
                 } else {
                     console.log("error: thermostat set point cannot be interpreted.  value: ", swval);
@@ -2632,7 +2685,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
                 if ( !isNaN(newval) ) { 
                     newval--;
                     cmd = "/nodes/" + swid + "/cmd/CLISPH/" + newval.toString();
-                    console.log("oldval: ", swval, "newval= ", newval, " cmd = ", cmd);
+                    // console.log("oldval: ", swval, "newval= ", newval, " cmd = ", cmd);
                     curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
                 } else {
                     console.log("error: thermostat set point cannot be interpreted.  value: ", swval);
@@ -2908,12 +2961,11 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                         }
                         hubid = allthings[idx]["hubnum"];
                         var hub = findHub(hubid);
-                        console.log(tileid, swid, swtype, swval, swattr, subid);
                         callHub(hub, swid, swtype, swval, swattr, subid, false, false);
                     }
                 });
                 response = "success";
-                console.log("RULE: ", rulecommands);
+                // console.log("RULE: ", rulecommands);
                 break;
 
             case "HUB":
@@ -4315,6 +4367,7 @@ function apiCall(body, protocol) {
     var command = body["command"] || "";
     var linkval = body["linkval"] || "";
 
+    // console.log( UTIL.inspect(body, false, null, true) );
     if ( hubs && hubs.length ) {
         var defhub = hubs[0]["hubId"];
     } else {
@@ -4345,10 +4398,12 @@ function apiCall(body, protocol) {
             if ( multicall ) {
                 result = [];
                 tilearray.forEach(function(atile) {
+                    // console.log("hubid: ", hubid, " swid: ", swid, " swval: ", swval, " swattr: ", swattr, " subid: ", subid, " atile: ", atile);
                     var aresult = doAction("auto", "", "", swval, swattr, subid, atile, "", "", protocol);
                     result.push(aresult);
                 });
             } else {
+                // console.log("hubid: ", hubid, " swid: ", swid, " swval: ", swval, " swattr: ", swattr, " subid: ", subid, " tileid: ", tileid);
                 result = doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, linkval, protocol);
             }
             break;
@@ -4491,7 +4546,7 @@ function apiCall(body, protocol) {
                 var result = "error";
                 var pwords = GLB.options["config"]["pword"];
 
-                if ( DEBUG6 ) {
+                if ( DEBUG8 ) {
                     console.log("dologin: uname= ", uname, " pword: [", pword, "] body: ", body, " pwords: ", pwords);
                 }
 
@@ -4558,6 +4613,30 @@ function apiCall(body, protocol) {
             hub["hubAccess"] = body.hubAccess;
             hub["hubEndpt"] = body.hubEndpt;
             hub["hubTimer"] = body.hubTimer;
+
+            // if user provides hub access info, use it
+            // this is required for ISY hubs
+            if ( body.userEndpt ) {
+                // remove trailing slash if it is there
+                if ( body.userEndpt.substr(-1) === "/" ) {
+                    body.userEndpt = body.userEndpt.substr(0, body.userEndpt.length -1);
+                }
+                hub["hubEndpt"] = body.userEndpt;
+                if (body.hubType==="ISY") {
+                    body.userAccess = body.clientId + ":" + body.clientSecret;
+                    hub["userAccess"] = body.userAccess;
+                    hub["hubAccess"] = hub["userAccess"];
+                    var num = 1;
+                    GLB.options.config["hubs"].forEach(function(ihub) {
+                        if ( ihub.hubType==="ISY") {num++; }
+                    });
+                    num = (num< 10) ? "0" + num.toString() : num.toString();
+                    hub["hubId"] = "isy" + num;
+                }
+            }
+            if ( body.userAccess && body.hubType!=="ISY" ) {
+                hub["hubAccess"] = body.userAccess;
+            }
 
             // update existing or add a new hub
             updateHubs(GLB.options["config"]["hubs"], hub, body.hubId);
@@ -4638,6 +4717,7 @@ GLB.hpcode = hpcode.toString();
 
 // read the config file and get array of hubs
 readOptions();
+
 var uname = getUserName();
 try {
     GLB.pwcrypt = GLB.options.config.pword[uname][0];
@@ -4646,7 +4726,7 @@ try {
 }
 
 if ( DEBUG6 ) {
-    console.log("Index: ", GLB.options.index);
+    console.log("Index: ", UTIL.inspect(GLB.options, false, null, true));
 }
 
 var config = GLB.options.config;
@@ -4693,11 +4773,6 @@ if ( array_key_exists("things", GLB.options) &&
         }
     }
 }
-
-// setup default rooms if no rooms exist
-// if ( utils.count(GLB.rooms) === 0 || maxroom < 2 ) {
-//     setDefaults();
-// }
 
 // create the HTTP server for handling sockets
 server = http.createServer(function(req, res) {

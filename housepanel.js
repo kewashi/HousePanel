@@ -2967,6 +2967,7 @@ function processClick(that, thingname) {
         // pass the call to main routine
         // if an object is returned then show it in a popup dialog
         // values returned from actions are pushed in another place now
+        // alert("API call: " + ajaxcall + " bid: " + bid + " type: " + thetype + " value: " + thevalue);
         $.post(cm_Globals.returnURL, 
                {useajax: ajaxcall, id: bid, type: thetype, value: thevalue, 
                 attr: theattr, subid: subid, hubid: hubnum, command: command, linkval: linkval},

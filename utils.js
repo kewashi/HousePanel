@@ -1,6 +1,7 @@
 'use strict';
 
 var devhistory =  ` 
+2.211      First public beta release
 2.210      Enable thermostat operation for ISY hub and more bug fixes
 2.206      Fix slider render bug and improve ISY status query
 2.205      Fix tile editor bug that now enables multi tiles
@@ -457,10 +458,12 @@ exports.getTypes = function getTypes() {
 // returns the maximum index from the options
 exports.getMaxIndex = function(optindex) {
     var maxindex = 0;
-    for ( var key in optindex ) {
-        var value = parseInt(optindex[key]);
-        if ( !isNaN(value) ) {
-            maxindex = ( value > maxindex ) ? value : maxindex;
+    if ( typeof optindex==="object" ) {
+        for ( var key in optindex ) {
+            var value = parseInt(optindex[key]);
+            if ( !isNaN(value) ) {
+                maxindex = ( value > maxindex ) ? value : maxindex;
+            }
         }
     }
     return maxindex;
