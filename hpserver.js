@@ -2,12 +2,12 @@
 process.title = 'hpserver';
 
 // debug options
-var DEBUG1 = true;
+var DEBUG1 = false;
 var DEBUG2 = false;
 var DEBUG3 = false;
 var DEBUG4 = false;
 var DEBUG5 = false;
-var DEBUG6 = true;
+var DEBUG6 = false;
 var DEBUG7 = false;
 var DEBUG8 = false;
 var DEBUG9 = false;
@@ -278,7 +278,7 @@ function readOptions() {
         fs.writeFileSync(customfname, str_customopt);
     } else {
 
-        if ( DEBUG2 ) {
+        if ( DEBUG3 ) {
             console.log("Customizing room setup for user: ", uname);
         }
 
@@ -378,11 +378,63 @@ function curl_call(host, headertype, nvpstr, formdata, calltype, callback) {
     request(opts, callback);
 }
 
+function getHubInfo(hub, token, endpt, clientId, clientSecret) {
+
+    // no need to check for valid token and endpt since we can't get here unless both are valid
+    var namehost = endpt + "/gethubinfo";
+    var header = {"Authorization": "Bearer " + token};
+    var nvpreq = {"scope": "app", "client_id": encodeURI(clientId), "client_secret": encodeURI(clientSecret)};
+    curl_call(namehost, header, nvpreq, false, "POST", nameidCallback);
+
+    function nameidCallback(err, res, body) {
+        var jsonbody;
+        var hubName;
+        var hubId;
+        if ( err ) {
+            console.log("error attempting to make hub name request.");
+            return;
+        }
+
+        try {
+            jsonbody = JSON.parse(body);
+            hubName = jsonbody["sitename"];
+            hubId = jsonbody["hubId"];
+            if ( DEBUG2 ) {
+                console.log("hubName request return: ", jsonbody);
+            }
+        } catch(e) {
+            console.log("error retrieving hub name.");
+            GLB.defhub = "-1";
+            pushClient("reload", "/reauth");
+            return;
+        }
+
+        if ( DEBUG2 ) {
+            console.log("hub info: token= ", token, " endpt= ", endpt, " hubName= ", hubName, " hubId= ", hubId);
+        }
+
+        // now save our info
+        hub["hubName"]  = hubName;
+        hub["hubId"] = hubId;
+        var hubType = hub["hubType"];
+        GLB.defhub = hubId;
+
+        // update this hub
+        var hubs = GLB.options.config["hubs"];
+        updateHubs(hubs, hub, hubId);
+        writeOptions(GLB.options, true);
+
+        // retrieve all devices and go back to reauth page
+        getDevices(hubId, hubType, token, endpt, clientId, clientSecret, hubName, "/reauth");
+    }
+    return "success";
+
+}
+
 function getAccessToken(code, hub) {
 
     // these are the parameters determined here using a series of curl calls and callbacks
     var token = "";
-    var endpt = "";
 
     var hubType = hub["hubType"];
     var hubName = hub["hubName"];
@@ -441,8 +493,8 @@ function getAccessToken(code, hub) {
     }        
     
     async function endptCallback(err, res, body) {
-        var jsonbody = null;
-        endpt = null;
+        var jsonbody;
+        var endpt;
         try {
             jsonbody = JSON.parse(body);
             if ( DEBUG2 ) {
@@ -453,7 +505,7 @@ function getAccessToken(code, hub) {
         }
 
         if ( err ) {
-            console.log("getEndpoint error authorizing hub: ", hubName, " error: ", err);
+            console.log("getEndpoint error authorizing " + hub.hubType + " hub. error: ", err);
             GLB.defhub = "-1";
             pushClient("reload", "/reauth");
         } else {
@@ -462,54 +514,56 @@ function getAccessToken(code, hub) {
         }
 
         if ( token && endpt ) {
-            var namehost = endpt + "/gethubinfo";
-            header = {"Authorization": "Bearer " + token};
-            nvpreq = {"scope": "app", "client_id": encodeURI(clientId), "client_secret": encodeURI(clientSecret)};
-            curl_call(namehost, header, nvpreq, false, "POST", nameCallback);
+            getHubInfo(hub, token, endpt, clientId, clientSecret);
+
+            // var namehost = endpt + "/gethubinfo";
+            // header = {"Authorization": "Bearer " + token};
+            // nvpreq = {"scope": "app", "client_id": encodeURI(clientId), "client_secret": encodeURI(clientSecret)};
+            // curl_call(namehost, header, nvpreq, false, "POST", nameCallback);
         } else {
             GLB.defhub = "-1";
-            console.log("getEndpoint error authorizing hub: ", hubName, " bad token: ", token, " or endpt: ", endpt);
+            console.log("getEndpoint error authorizing " + hub.hubType + " hub. bad token: ", token, " or endpt: ", endpt);
             pushClient("reload", "/reauth");
         }
     }
 
-    async function nameCallback(err, res, body) {
-        var jsonbody = null;
-        var hname;
-        try {
-            jsonbody = JSON.parse(body);
-            hname = jsonbody["sitename"];
-            if ( DEBUG2 ) {
-                console.log("hubName request return: ", jsonbody);
-            }
-        } catch(e) {
-            err = e;
-            hname  = hubName;
-            if ( hname==="" ) {
-                hname = hubType + " Home";
-            }
-            console.log("Error retrieving hub name: ", hubName);
-        }
+    // async function nameCallback(err, res, body) {
+    //     var jsonbody = null;
+    //     var hname;
+    //     try {
+    //         jsonbody = JSON.parse(body);
+    //         hname = jsonbody["sitename"];
+    //         if ( DEBUG2 ) {
+    //             console.log("hubName request return: ", jsonbody);
+    //         }
+    //     } catch(e) {
+    //         err = e;
+    //         hname  = hubName;
+    //         if ( hname==="" ) {
+    //             hname = hubType + " Home";
+    //         }
+    //         console.log("Error retrieving hub name: ", hubName);
+    //     }
 
-        // now save our info
-        if ( DEBUG1 ) {
-            console.log("OAUTH Flow completed. token= ", token, " endpt= ", endpt, " name= ", hname);
-        }
-        hubName = hname;
-        hub["hubAccess"] = token;
-        hub["hubEndpt"] = endpt;
-        hub["hubName"]  = hubName;
+    //     // now save our info
+    //     if ( DEBUG1 ) {
+    //         console.log("OAUTH Flow completed. token= ", token, " endpt= ", endpt, " name= ", hname);
+    //     }
+    //     hubName = hname;
+    //     hub["hubAccess"] = token;
+    //     hub["hubEndpt"] = endpt;
+    //     hub["hubName"]  = hubName;
 
-        // console.log("hubnum= ",  hubnum, " GLB.defhub= ", GLB.defhub);
+    //     // console.log("hubnum= ",  hubnum, " GLB.defhub= ", GLB.defhub);
 
-        // update this hub
-        var hubs = GLB.options.config["hubs"];
-        updateHubs(hubs, hub, hubnum);
-        writeOptions(GLB.options, true);
+    //     // update this hub
+    //     var hubs = GLB.options.config["hubs"];
+    //     updateHubs(hubs, hub, hubnum);
+    //     writeOptions(GLB.options, true);
 
-        // retrieve all devices and go back to reauth page
-        getDevices(hubnum, hubType, token, endpt, clientId, clientSecret, hubName, "/reauth");
-    }
+    //     // retrieve all devices and go back to reauth page
+    //     getDevices(hubnum, hubType, token, endpt, clientId, clientSecret, hubName, "/reauth");
+    // }
 }
 
 function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret, hubName, reloadpath) {
@@ -691,26 +745,10 @@ function translateIsy(nodeid, objid, uom, value, val, formatted) {
     // convert the trigger into a subid to modify
     var subid = mapIsy(objid, uom);
 
-    // use formatted version if it is there
-    // if ( formatted ) {
-    //     if ( formatted.substr(-1) ==="%" ) {
-    //         val = formatted.substr(0, val.length-1);
-    //     } else if ( formatted.substr(-1) === "F" || formatted.substr(-1) === "C" ) {
-    //         val= formatted.substr(0, val.length-2);
-    //     } else {
-    //         val = formatted;
-    //     }
-    // }
-
     // set the HP equivalent subid for this type of node field
     // if maps are not present then the native ISY subid will show up
     var newvalue = clone(value);
-    // newvalue[subid] = val;
 
-    if ( nodeid === "n001_t411911563177" || nodeid==="4D A1 42 1")  {
-        console.log("debug: trigger: ", objid, " node: ", nodeid, " val: ", val, " uom: ", uom, " formatted: ", formatted, " value: ", value);
-    }
- 
     // handle special cases
     switch (objid) {
 
@@ -735,7 +773,6 @@ function translateIsy(nodeid, objid, uom, value, val, formatted) {
                 newvalue[subid] = val;
 
             } else if ( uom==="17" ) {
-                // newvalue["temperature"]= formatted.substr(0, formatted.length-2);
                 if ( typeof formatted==="undefined" || formatted==="" ) {
                     formatted = val + "°F";
                 }
@@ -823,48 +860,11 @@ function setIsyFields(nodeid, value, props) {
     if ( is_array(props) ) {
         props.forEach(function(aprop) {
             var obj = aprop['$'];
-            var subid = mapIsy(obj.id, obj.uom);
-
             // map ISY logic to the HousePanel logic based on SmartThings and Hubitat
+            var subid = mapIsy(obj.id, obj.uom);
             value["uom_" + subid] = obj.uom;
             var val = obj.value;
-
             value = translateIsy(nodeid, obj.id, obj.uom, value, val, obj.formatted);
-
-            // switch (obj.id) {
-
-            //     case "ST":
-            //         val = (obj.formatted==="Off" || obj.value==="0" ? "DOF" : "DON");
-            //         value[subid] = val;
-            //         if ( obj.formatted.substr(-1) === "%" ) {
-            //             value["level"]= obj.formatted.substr(0, obj.formatted.length-1);
-            //         }
-            //         break;
-
-            //     case "OL":
-            //         if ( obj.formatted==="On" ) {
-            //             val = "100";
-            //         } else if ( obj.formatted==="Off" ) {
-            //             val = "0";
-            //         } else {
-            //             val = obj.formatted;
-            //             val = val.substr(0, val.length-1);
-            //             if ( isNaN(parseInt(val)) ) {
-            //                 val = "0";
-            //             }
-            //         }
-            //         value[subid] = val;
-            //         break;
-
-            //     default:
-            //         val = obj.formatted;
-            //         if ( val.substr(-1) ==="%" ) {
-            //             val = val.substr(0, val.length-1);
-            //         }
-            //         value[subid] = val;
-            //         break;
-    
-            // }
             allthings[idx]["value"] = clone(value);
             pushClient(nodeid, "isy", subid, value);
         });
@@ -895,7 +895,6 @@ function updateOptions(reloadpath) {
         if ( !array_key_exists(thingid, GLB.options["index"]) ||
              parseInt(GLB.options["index"][thingid])===0 ) {
             GLB.options["index"][thingid] = cnt;
-            // console.log("found new thing: idx= ", thingid, " cnt= ", cnt);
             update = true;
             cnt++;
         }
@@ -1095,11 +1094,13 @@ function getAuthPage(hostname, hpcode) {
     // or if a reauth is requested or when converting old passwords
     $tc += "<div class=\"greeting\">";
 
-    $tc +="<p>Here is where you link a SmartThings or Hubitat hub to " +
+    $tc +="<p>Here is where you link a SmartThings, Hubitat, or ISY hub to " +
             "HousePanel to gain access to your smart home devices. " +
             "You can link any number and combination of hubs. " + 
             "To link a hub you must have the following info: " +
             "API URL, Client ID, and Client Secret. " +
+            "For ISY hubs enter your username in the ClientID field and " +
+            "password in the Client Secret field, and enter the URL of your ISY hub for API Url." +
             "</p><br />";
     
     $tc += "<p><strong>*** IMPORTANT ***</strong> Information you provide here is secret and will be stored " +
@@ -2448,7 +2449,7 @@ function getCustomTile(custom_val, customtype, customid) {
                     } else {
                         custom_val[companion] = "::" + thetype + "::" + calltype + "::" + content;
                         custom_val[subid] = "Link #" + content + " subid=" + subid + " idx=" + idx + " invalid";
-                        if ( DEBUG2 ) {
+                        if ( DEBUG3 ) {
                             console.log("Links unavailable to link #" + content + " with subid= " + subid + " idx= " + idx);
                         }
                     }
@@ -2576,7 +2577,7 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
 
     // save the result to push to all clients
     entry["value"] = thevalue;
-    if ( DEBUG2 ) {
+    if ( DEBUG9 ) {
         console.log("pushClient: ", entry, " linkinfo: ", linkinfo);
     }
 
@@ -2816,7 +2817,7 @@ function updateHubs(hubs, newhub, oldid) {
     // should only be one but just in case
     hubs.forEach(function(hub) {
         if ( hub["hubId"].toString() === oldid ) {
-            hubs[num] = newhub;
+            hubs[num] = clone(newhub);
             found = true;
         }
         num++;
@@ -3219,9 +3220,6 @@ function delThing(bid, thingtype, panel, tile) {
                 optionthings.forEach(function(orderthing) {
                     GLB.options["things"][panel].push(orderthing);
                 })
-                if ( DEBUG2 ) {
-                    console.log("success - deleted tile: ", tile, " with id: ", bid, " from room: ", panel);
-                }
                 writeOptions(GLB.options);
             } else {
                 console.log("error - could not safely delete tile: ", tile, " with id: ", bid, " from room: ", panel);
@@ -4379,7 +4377,7 @@ function apiCall(body, protocol) {
         if ( !isNaN(hubnum) && hubnum >=0 && hubnum < hubs.length ) {
             hubid = hubs[hubnum]["hubId"];
         } else {
-            hubid = defhub;
+            hubid = "auto";
         }
     }
 
@@ -4615,7 +4613,13 @@ function apiCall(body, protocol) {
             hub["hubTimer"] = body.hubTimer;
 
             // if user provides hub access info, use it
-            // this is required for ISY hubs
+            // for ISY hubs we know the endpoint as /rest so use it
+
+            if ( body.hubType==="ISY" ) {
+                body.userEndpt = body.hubHost + "/rest";
+                hub["userEndpt"] = body.userEndpt;
+            }
+
             if ( body.userEndpt ) {
                 // remove trailing slash if it is there
                 if ( body.userEndpt.substr(-1) === "/" ) {
@@ -4626,21 +4630,23 @@ function apiCall(body, protocol) {
                     body.userAccess = body.clientId + ":" + body.clientSecret;
                     hub["userAccess"] = body.userAccess;
                     hub["hubAccess"] = hub["userAccess"];
-                    var num = 1;
-                    GLB.options.config["hubs"].forEach(function(ihub) {
-                        if ( ihub.hubType==="ISY") {num++; }
-                    });
-                    num = (num< 10) ? "0" + num.toString() : num.toString();
-                    hub["hubId"] = "isy" + num;
+
+                    // use default name if one not given
+                    if ( hub["hubName"].trim()==="" ) {
+                        hub["hubName"] = "ISY";
+                    }
                 }
             }
+
             if ( body.userAccess && body.hubType!=="ISY" ) {
                 hub["hubAccess"] = body.userAccess;
             }
 
             // update existing or add a new hub
             updateHubs(GLB.options["config"]["hubs"], hub, body.hubId);
-            console.log("hubs: ", hubs);
+            if (DEBUG1) {
+                console.log("hubs: ", hubs);
+            }
 
             // now authorize them
             // handle direct access including ISY hubs first
@@ -4651,7 +4657,15 @@ function apiCall(body, protocol) {
             var clientId = hub["clientId"];
             var clientSecret = hub["clientSecret"];
             GLB.defhub = hubnum;
-            if ( (body.userAccess && body.userEndpt) || body.hubType==="ISY" ) {
+            if ( (hub["userAccess"] && hub["userEndpt"]) || body.hubType==="ISY" ) {
+
+                // get the hubId if this is a new hub
+                if ( !hub["hubId"] || hub["hubId"]==="new" ) {
+                    hub["hubId"] = "new";
+                    if ( !hub.hubName ) {
+                        hub.hubName = "New Hub";
+                    }
+                }            
 
                 // get all new devices and update the options index array
                 // this forces page reload with all the new stuff
@@ -4659,10 +4673,30 @@ function apiCall(body, protocol) {
                 // this makes the final read redirect back to reauth page
                 var accesstoken  = hub["hubAccess"];
                 var hubEndpt = hub["hubEndpt"];
-                var returnloc = GLB.returnURL + "/reauth";
-                writeOptions(GLB.options, true);
-                getDevices(hubnum, hubType, accesstoken, hubEndpt, clientId, clientSecret, hubName, "/reauth");
-                result = {action: "things", host: host, hubName: hubName, clientId: clientId, clientSecret: clientSecret, url: returnloc};
+
+                // for ISY we can go right to getting devices
+                // for ST and HE we need to use getHubInfo to first get hubId and hubName
+                // and then we call devices from there given the async nature of Node
+                // this is much like what happens in the getAccessToken function in the OAUTH flow
+                if ( body.hubType==="ISY" ) {
+                    if ( hub["hubId"]==="new" ) {
+                        var num = 1;
+                        hubs.forEach(function(ihub) {
+                            if ( ihub.hubType==="ISY") {num++; }
+                        });
+                        num = (num< 10) ? "0" + num.toString() : num.toString();
+                        hub["hubId"] = "isy" + num;
+                    }
+                    GLB.defhub = hub["hubId"];
+                    writeOptions(GLB.options, true);
+                    getDevices(hubnum, hubType, accesstoken, hubEndpt, clientId, clientSecret, hubName, "/reauth");
+                } else {
+                    getHubInfo(hub, accesstoken, hubEndpt, clientId, clientSecret);
+                }
+
+                // writeOptions(GLB.options, true);
+                // getDevices(hubnum, hubType, accesstoken, hubEndpt, clientId, clientSecret, hubName, "/reauth");
+                result = {action: "things", hubType: hubType, hubName: hubName};
                 if ( DEBUG2 ) {
                     console.log("Device retrieval initiated: ", result);
                 }

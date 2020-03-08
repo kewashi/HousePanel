@@ -1,6 +1,7 @@
 'use strict';
 
 var devhistory =  ` 
+2.212      Fix auth bug to properly set hubId and cleanup debug statements
 2.211      First public beta release
 2.210      Enable thermostat operation for ISY hub and more bug fixes
 2.206      Fix slider render bug and improve ISY status query

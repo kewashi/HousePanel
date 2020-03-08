@@ -1757,7 +1757,7 @@ function setupButtons() {
                     var obj = presult;
                     if ( obj.action === "things" ) {
                         // tell user we are authorizing hub...
-                        $("#newthingcount").html("Authorizing hub: " + obj.hubName).fadeTo(400, 0.1 ).fadeTo(400, 1.0);
+                        $("#newthingcount").html("Authorizing " + obj.hubType + " hub: " + obj.hubName).fadeTo(400, 0.1 ).fadeTo(400, 1.0);
                         var blinkauth = setInterval(function() {
                             $("#newthingcount").fadeTo(400, 0.1 ).fadeTo(400, 1);
                         }, 1000);
@@ -1772,29 +1772,7 @@ function setupButtons() {
                         window.location.href = location;
                     }
                 }
-    });
-
-
-        //     $.post(cm_Globals.returnURL, values, function(presult, pstatus) {
-        //         if ( pstatus==="success" && typeof presult==="object") {
-        //             clearInterval(blinkauth);
-        //             console.log("hub auth: status: ", pstatus, " result: ", presult);
-        //             var obj = presult;
-        //             if ( obj.action === "things" ) {
-        //                 $("input[name='hubName']").val(obj.hubName);
-        //                 var ntc = "Hub #" + hubnum + " hub ID: " + hubId + " was authorized and " + obj.count + " devices were retrieved.";
-        //                 $("#newthingcount").html(ntc);
-        //             }
-
-        //             // if oauth flow then start the process
-        //             else if ( obj.action === "oauth" ) {
-        //                 var nvpreq= "response_type=code&client_id=" + encodeURI(clientId) + "&scope=app&redirect_uri=" + encodeURI(cm_Globals.returnURL);
-        //                 var location = hubHost + "/oauth/authorize?" + nvpreq;
-        //                 window.location.href = location;
-        //             }
-        //         }
-        //     },"json");
-        //     evt.stopPropagation(); 
+            });
         });
 
         // send user to options page if first time
