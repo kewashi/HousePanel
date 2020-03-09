@@ -2528,7 +2528,7 @@ function processIsyMessage(isymsg) {
                         newval = newval.toString();
                     } catch (e) {
                         console.log("error in webSocket interpretation: ");
-                        console.log("webSocket returned: ", UTIL.inspect(result, false, null, true /* enable colors */) );
+                        console.log("webSocket returned: ", UTIL.inspect(result, false, null, false) );
                         return;
                     }
 
@@ -4760,7 +4760,7 @@ try {
 }
 
 if ( DEBUG6 ) {
-    console.log("Index: ", UTIL.inspect(GLB.options, false, null, true));
+    console.log("Index: ", UTIL.inspect(GLB.options, false, null, false));
 }
 
 var config = GLB.options.config;
@@ -4941,10 +4941,21 @@ if ( app && applistening ) {
                 console.log("login accepted. uname = ", uname, " pwcrypt = ", GLB.pwcrypt);
                 $tc = mainPage(req.protocol, req.headers.host, req.path);
 
-            // default is to ask for login creds
+            // if user didn't provide a recognized login, show main page anyway
+            // this prevents many problems where users could not log in
+            // the default log in here forces a user name to "default" and the pw to blank
             } else {
-                console.log("login rejected. uname = ", uname, " pwcrypt = ", GLB.pwcrypt);
-                $tc = getLoginPage();
+                console.log("login rejected. uname = ", uname, " pwcrypt = ", GLB.pwcrypt," but... loading page anyway as default user");
+                if ( !array_key_exists("pword", config) ) {
+                    config["pword"] = {};
+                }
+                config["pword"]["default"] = ["", "skin-housepanel"];
+                config["uname"] = "default";
+                GLB.pwcrypt = "";
+                GLB.options["config"] = config;
+                writeOptions(GLB.options);
+                GLB.defhub = "-1";
+                $tc = mainPage(req.protocol, req.headers.host, req.path);
             }
             res.send($tc);
             res.end();
