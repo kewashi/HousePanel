@@ -21,7 +21,6 @@ cm_Globals.hubId = "all";
 var modalStatus = 0;
 var modalWindows = {};
 var priorOpmode = "Operate";
-var dragZindex = 1;
 var pagename = "main";
 
 // set a global socket variable to manage two-way handshake
@@ -266,7 +265,6 @@ $(document).ready(function() {
     setTimeout(function() {
         if ( pagename==="main" && !disablepub ) {
             setupPage();
-            dragZindex = getMaxZindex("");
         }
     }, 1000);
 
@@ -793,7 +791,7 @@ function rgb2hsv(r, g, b) {
 }
 
 function getMaxZindex(panel) {
-    var zmax = 2;
+    var zmax = 1;
     var target = "div.panel";
     if ( panel ) {
         target = target + "-" + panel;
@@ -802,11 +800,12 @@ function getMaxZindex(panel) {
         var zindex = $(this).css("z-index");
         if ( zindex ) {
             zindex = parseInt(zindex, 10);
-            if ( zindex && zindex > zmax ) { zmax = zindex; }
+            if ( !isNaN(zindex) && zindex > zmax && zindex < 999) { zmax = zindex; }
         }
     });
-    if ( zmax >= 49 ) {
-        zmax = 2;
+    console.log("zmax = ", zmax);
+    if ( zmax >= 998 ) {
+        zmax = 1;
     }
     return zmax;
 }
@@ -1239,13 +1238,14 @@ function thingDraggable(thing, snap) {
             $(evt.target).css("z-index", 999);
         },
         stop: function(evt, ui) {
-            startPos.zindex = parseInt(startPos.zindex) ;
+            // startPos.zindex = parseInt(startPos.zindex) ;
             
             // fix invalid tiles
-            if ( startPos.zindex > 99 ) {
-                startPos.zindex = 99;
-            }
-            $(evt.target).css( {"z-index": startPos.zindex.toString()} );
+            if ( isNaN(startPos.zindex) || startPos.zindex > 998 ) {
+                startPos.zindex = 2;
+                $(evt.target).css( {"z-index": startPos.zindex.toString()} );
+        }
+            // $(evt.target).css( {"z-index": startPos.zindex.toString()} );
         },
         grid: snapgrid
     });
@@ -1333,8 +1333,8 @@ function setupDraggable() {
                                                 console.log( "Added " + thingname + " of type " + thingtype + " and bid= " + bid + " to room " + panel);
                                                 lastthing.after(presult);
                                                 var newthing = lastthing.next();
-                                                // var zmax = getMaxZindex(panel) + 1;
-                                                var zmax = 2;
+                                                var zmax = getMaxZindex(panel) + 1;
+                                                // var zmax = 2;
                                                 $(newthing).css( {"z-index": zmax.toString()} );
                                                 var snap = $("#mode_Snap").prop("checked");
                                                 thingDraggable( newthing, snap );
@@ -1361,9 +1361,10 @@ function setupDraggable() {
                     dragthing["custom"] = customname;
                     
                     // make this sit on top
-                    var zmax = getMaxZindex(dragthing["panel"]);
+                    var zmax = getMaxZindex(dragthing["panel"]) + 1;
                     dragthing["zindex"] = zmax;
                     $(thing).css( {"z-index": zmax.toString()} );
+                    // $(thing).attr("style", "left: "+ui.position.left+"px; top: "+ui.position.top+"px; z-index: "+zmax);
                     
                     // now post back to housepanel to save the position
                     // also send the dragthing object to get panel name and tile pid index
@@ -1469,7 +1470,13 @@ function dynoPost(ajaxcall, body, id, type, value, attr, reload, callback) {
         $.post(cm_Globals.returnURL, body,
             function (presult, pstatus) {
                 if ( isreload && pstatus==="success" ) {
-                    window.location.href = cm_Globals.returnURL;
+
+                    // window.location.href = cm_Globals.returnURL;
+                    // don't reload right away... wait one second
+                    setTimeout( function() {
+                        window.location.href = cm_Globals.returnURL;
+                    }, 1000);
+
                 } else {
                     console.log("dyno POST: ", pstatus, " body: ", body, " presult: ", presult);
 
@@ -1490,10 +1497,20 @@ function execButton(buttonid) {
         var fobj = formToObject("filteroptions");
         dynoPost("filteroptions", fobj);
 
+        // save our username and password info
+        // this is in the tsk function
+        var uobj = formToObject("userpw");
+        dynoPost("saveuserpw", uobj);
+
         // next save our form - this is done asynchronously
         // when done the server will push a signal to clients to reload
         var obj = formToObject("optionspage");
         dynoPost("saveoptions", obj, true);
+        // pause 2 seconds to let save take hold then reload
+        // the callback doesn't seem to work
+        // setTimeout( function() {
+        //     window.location.href = cm_Globals.returnURL;
+        // }, 2000);
         // window.location.href = cm_Globals.returnURL;
 
     } else if ( buttonid==="optCancel" ) {
@@ -1969,7 +1986,7 @@ function addEditLink() {
         var roomnum = $(evt.target).attr("roomnum");
         var roomname = $(evt.target).attr("roomname");
         var thingclass = $(evt.target).attr("class");
-        editTile("page", roomname, 0, 0, thingclass, roomnum, "", "None");
+        editTile("page", roomname, 0, 0, thingclass, roomnum, "None", "");
     });
    
     $("#addpage").off("click");
@@ -2929,11 +2946,14 @@ function processClick(that, thingname) {
         // in ST and HE the inversion is handled in the groovy code on attr
         // and the value is ignored unless attr is blank which it won't be here
         // but for ISY we pass the value directly to the hub so must be right
+        // however, I still inverted the ST and HE values to support future update
+        // where I might just look at thevalue for these hubs types as it should be
+        // the attr action was a terrible workaround put in a much earlier version
         if ( (thetype==="switch" || thetype==="switchlevel" || thetype==="bulb" || thetype==="light" ) &&
              (thevalue==="on" || thevalue==="off")  ) {
             thevalue = thevalue==="on" ? "off" : "on";
         }
-        else if ( thetype==="isy" && (thevalue==="DON" || thevalue==="DOF")  ) {
+        else if ( thetype==="isy" && (thevalue==="DON" || thevalue==="DOF" )  ) {
             thevalue = thevalue==="DON" ? "DOF" : "DON";
         }
         console.log(ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" hub= " + hubnum + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);

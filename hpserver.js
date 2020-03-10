@@ -2,15 +2,16 @@
 process.title = 'hpserver';
 
 // debug options
-var DEBUG1 = false;
+var DEBUG1 = true;
 var DEBUG2 = false;
 var DEBUG3 = false;
 var DEBUG4 = false;
 var DEBUG5 = false;
 var DEBUG6 = false;
-var DEBUG7 = false;
+var DEBUG7 = true;
 var DEBUG8 = false;
 var DEBUG9 = false;
+// var ignorepw = false;
 
 // websocket and http servers
 var webSocketServer = require('websocket').server;
@@ -699,7 +700,9 @@ function getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSec
                     if ( result ) {
                         var nodes = result.nodes.node;
                         if ( nodes ) {
-                            console.log("nodes returned from status");
+                            if ( DEBUG5 ) {
+                                console.log("nodes returned from status");
+                            }
                             nodes.forEach(function(node) {
                                 var nodeid = node["$"]["id"];
                                 var idx = "isy|" + nodeid;
@@ -837,6 +840,7 @@ function translateIsy(nodeid, objid, uom, value, val, formatted) {
                 val = CLHindex[index];
             }
             newvalue[subid] = val;
+            break;
 
         case "CLIHCS":
             var index = parseInt(val);
@@ -844,8 +848,8 @@ function translateIsy(nodeid, objid, uom, value, val, formatted) {
             if ( uom==="25" && !isNaN(index) && index < CLFindex.length ) {
                 val = CLFindex[index];
             }
-
             newvalue[subid] = val;
+            break;
         
         default:
             newvalue[subid] = formatted ? formatted : val;
@@ -1017,42 +1021,6 @@ function setDefaults() {
         }
     }
 
-}
-
-// this used to create input blocks for auth page
-// it was modified for use now on the options page
-function tsk($timezone, $skin, $uname, $port, $webSocketServerPort, $fast_timer, $slow_timer) {
-
-    var $tc= "";
-    $tc += "<div class='inp'><label class=\"startupinp\">Skin: </label>";
-    $tc += "<input id=\"skinid\" class=\"startupinp\" name=\"skin\" width=\"80\" type=\"text\" value=\"" + $skin + "\"/></div>"; 
-    
-    $tc += "<div><label class=\"startupinp\">Timezone: </label>";
-    $tc += "<input id=\"newtimezone\" class=\"startupinp\" name=\"timezone\" width=\"80\" type=\"text\" value=\"" + $timezone + "\"/></div>"; 
-
-    $tc += "<div><label class=\"startupinp\">Listen On Port: </label>";
-    $tc += "<input id=\"newport\" class=\"startupinp\" name=\"port\" width=\"20\" type=\"text\" value=\"" + $port + "\"/></div>"; 
-
-    $tc += "<div><label class=\"startupinp\">WebSocket Port: </label>";
-    $tc += "<input id=\"newsocketport\" class=\"startupinp\" name=\"webSocketServerPort\" width=\"20\" type=\"text\" value=\"" + $webSocketServerPort + "\"/></div>"; 
-
-    // $tc += "<div><label class=\"startupinp\">Fast Timer: </label>";
-    // $tc += "<input id=\"newfast_timer\" class=\"startupinp\" name=\"fast_timer\" width=\"20\" type=\"text\" value=\"" + $fast_timer + "\"/></div>"; 
-
-    // $tc += "<div><label class=\"startupinp\">Slow Timer: </label>";
-    // $tc += "<input id=\"newslow_timer\" class=\"startupinp\" name=\"slow_timer\" width=\"20\" type=\"text\" value=\"" + $slow_timer + "\"/></div>"; 
-
-    $tc += "<div><label for=\"uname\" class=\"startupinp\">Username: </label>";
-    $tc += "<input id=\"uname\" class=\"startupinp\" name=\"uname\" width=\"20\" type=\"text\" value=\"" + $uname + "\"/></div>"; 
-
-    $tc += "<div><label for=\"pword\" class=\"startupinp\">Set New Password: </label>";
-    $tc += "<input id=\"pword\" class=\"startupinp\" name=\"pword\" width=\"80\" type=\"password\" value=\"\"/></div>"; 
-    
-    $tc += "<div><label></label><span class='indent typeopt'>(blank to keep prior)</span></div>";
-    $tc += "<div></div><br />";
-
-    return $tc;
-    
 }
 
 function getLoginPage() {
@@ -1625,7 +1593,7 @@ function processName(thingname, thingtype) {
     return [thingname, subtype];
 }
 
-// returns proper html to display an image, video, or frame
+// returns proper html to display an image, video, frame, or custom
 // if some other type is requested it returns a div of requested size and skips search
 // searches in main folder and media subfolder for file name
 function returnFile(thingvalue, thingtype) {
@@ -1656,44 +1624,52 @@ function returnFile(thingvalue, thingtype) {
         thingvalue["height"] = fh;
     }
 
-    var $grtypes;
+    var grtypes;
     switch (thingtype) {
         case "image":
-            $grtypes = ["",".jpg",".png",".gif"];
+            grtypes = [".jpg",".png",".gif"];
             break;
         case "video":
-            $grtypes = ["",".mp4",".ogg"];
+            grtypes = [".mp4",".ogg"];
             break;
         case "frame":
-            $grtypes = ["",".html",".htm",".php"];
+            grtypes = [".html",".htm",".php"];
             break;
         case "custom":
-            $grtypes = ["",".jpg",".png",".gif",".mp4",".ogg",".html",".htm",".php"];
+            grtypes = [".jpg",".png",".gif",".mp4",".ogg",".html",".htm",".php"];
             break;
+        // for blanks never load a file
+        // but we do set the name above
+        // below we set the tile size for blanks and others
         default:
-            $grtypes = null;
+            grtypes = null;
             break;
     }
-    
+
+    // this block sets the file name to load based on extension requested
     var $vn = "";
     var $fext = "";
-    if ( fn && $grtypes ) {
-        $grtypes.forEach(function($ext) {
-            if ( $fext==="" && file_exists(fn + $ext) ) {
-                $vn = fn + $ext;
-                $fext = $ext;
-            } else if ( $fext==="" && file_exists("media/" + fn + $ext) ) {
-                $vn = "media/" + fn + $ext;
-                $fext = $ext;
-            }
-        });
-    } else if ( fn ) {
+    if ( grtypes ) {
+
+        // first check names without extensions
         if (file_exists(fn)) {
             $vn = fn;
+            $fext = "";
         } else if (file_exists("media/"+ fn)) {
             $vn = "media/" + fn;
+            $fext = "";
         } else {
-            $vn = "";
+
+            // next check names without extensions
+            grtypes.forEach(function($ext) {
+                if ( $vn==="" && file_exists(fn + $ext) ) {
+                    $vn = fn + $ext;
+                    $fext = $ext;
+                } else if ( $vn==="" && file_exists("media/" + fn + $ext) ) {
+                    $vn = "media/" + fn + $ext;
+                    $fext = $ext;
+                }
+            });
         }
     }
     
@@ -1719,7 +1695,7 @@ function returnFile(thingvalue, thingtype) {
             case "mp4":
             case "ogg":
                 $v= "<video width=\"" + fw + "\" height=\"" + fh + "\" autoplay>";
-                $v+= "<source src=\"" + $vn + "\" type=\"video/" + $ve + "\">";
+                $v+= "<source src=\"" + $vn + "\" type=\"video/" + $fext + "\">";
                 $v+= "Video Not Supported</video>";
                 break;
                 
@@ -1733,17 +1709,23 @@ function returnFile(thingvalue, thingtype) {
             // otherwise just show the contents of the file
             default:
                 try {
-                    var $contents = fs.readFileSync($vn);
+                    var contents = fs.readFileSync($vn);
                 } catch(e) {
-                    $contents = "";
+                    contents = "";
                 }
-                $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\">" + $contents + "</div>";
+                $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\">" + contents + "</div>";
                 break;
         }
     
     // if file wasn't found just make an empty block of the requested size
+    // but for custom tiles don't do this since we can use blanks to make empty block sizes
+    // for custom tiles only create a block of size if there is content to be seen
     } else {
-        $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\"></div>";
+        if ( thingtype==="custom" ) {
+            $v = "";
+        } else {
+            $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\"></div>";
+        }
     }
 
     thingvalue[thingtype] = $v;
@@ -1790,6 +1772,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     var bid = thesensor["id"];
     var thingvalue = setValOrder(thesensor["value"]);
     var thingtype = thesensor["type"];
+    var defname = thesensor["name"] || "Unknown";
 
     // set type to hint if one is given
     // this is to support ISY nodes that all register as ISY types
@@ -1820,6 +1803,8 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     // set the custom name
     if ( customname ) { 
         thingvalue["name"] = customname;
+    } else if (!thingvalue["name"]) {
+        thingvalue["name"] = defname;
     }
 
     // update fields with custom settings
@@ -2630,6 +2615,10 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
                     "swtype": swtype};
         if ( subid && subid!=="none" ) { nvpreq["subid"] = subid; }
         curl_call(host, header, nvpreq, false, "POST", getHubResponse);
+
+    // this module below is the equivalent of the ST and HE groovy app
+    // for ISY where the logic for handling actions is provided
+    // compare this to the doAction function in HousePanel.groovy
     } else if ( hub["hubType"]==="ISY" ) {
         var buff = Buffer.from(access_token);
         var base64 = buff.toString('base64');
@@ -2655,14 +2644,19 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
                 // comment this code to preserve the prior dimmer setting; 
                 // otherwise the onlevel is set to current level
                 // the default behavior for Insteon lights would be to comment this
-                // but I kept it here to make them work like all others
+                // but I kept it here to make them work like all other hubs
                 var cmd3 = "/nodes/" + swid + "/cmd/OL/" + irange;
-                // isyresp["onlevel"] = swval;
+                isyresp["onlevel"] = swval;
                 curl_call(endpt + cmd3, isyheader, false, false, "GET", getNodeResponse);
                 break;
 
-            // } else if ( subid==="switch" ) {
             case "switch":
+                // handle toggle command - note that the GUI will never produce a toggle swval command
+                // but the RULE logic can and so can users when using api calls
+                if ( swval==="toggle" ) {
+                        var currentval = allthings["isy|"+swid]["value"]["switch"];
+                        swval = currentval==="DON" ? "DOF" : "DON";
+                }
                 cmd = "/nodes/" + swid + "/cmd/" + swval;
                 // console.log("Calling curl with cmd: ", endpt + cmd, " header: ", isyheader);
                 curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
@@ -2832,7 +2826,6 @@ function updateHubs(hubs, newhub, oldid) {
 
 function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, linkval, protocol) {
 
-    // get the hub being acted upon
     var response = {};
     var idx;
 
@@ -2857,10 +2850,9 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
     
     // handle types that just return the current status
     } else if   (   (   (typeof command==="undefined" || command==="") && 
-                          (swtype==="contact" || swtype==="presence" || swtype==="motion" || subid==="temperature" ||
-                           swtype==="weather" || swtype==="temperature" || swtype==="blank") 
+                            (swtype==="contact" || swtype==="presence" || swtype==="motion" || subid==="temperature" || swtype==="weather") 
                     ) ||
-                    (command==="LINK" && (subid==="contact" || subid==="presence" || subid==="motion") ) 
+                    (command==="LINK" && (subid==="contact" || subid==="presence" || subid==="motion" || subid==="name") ) 
                 ) {
         response = allthings[idx]["value"];
         
@@ -2920,7 +2912,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                     } else {
                         $realsubid = false;
                         for (var key in $linked_val) {
-                            if ( subid.indexOf(key) === 0 ) {   //  strpos($subid, $key) === 0 ) {
+                            if ( subid.indexOf(key) === 0 ) {   //  strpos($subid, key) === 0 ) {
                                 $realsubid = key;
                                 break;
                             }
@@ -3135,7 +3127,7 @@ function setPosition(swid, swtype, swval, swattr) {
         options["things"][panel][moved] = newtile;
         writeOptions(options);
         var result = "success";
-        console.log("new tile position for tile: ", tile," to: (", top, ",", left, ")");
+        console.log("new tile position for tile: ", tile," to: (", top, ",", left, ",", zindex, ")");
     } else {
         result = "error";
         console.log("position for tile: ", tile," was not found to change");
@@ -3515,6 +3507,47 @@ function getCatalog(hubpick) {
     return $tc;
 }
 
+// this used to create input blocks for auth page
+// it was modified for use now on the options page
+function tsk($timezone, $skin, $uname, $port, $webSocketServerPort, $fast_timer, $slow_timer) {
+
+    var $tc= "";
+    $tc += "<form id=\"userpw\" class=\"options\" name=\"userpw\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
+
+    $tc += "<div class=\"filteroption\">";
+    $tc += "<div class='inp'><label class=\"startupinp\">Skin Folder: </label>";
+    $tc += "<input id=\"skinid\" class=\"startupinp\" name=\"skin\" width=\"80\" type=\"text\" value=\"" + $skin + "\"/></div>"; 
+    
+    $tc += "<div><label class=\"startupinp\">Timezone: </label>";
+    $tc += "<input id=\"newtimezone\" class=\"startupinp\" name=\"timezone\" width=\"80\" type=\"text\" value=\"" + $timezone + "\"/></div>"; 
+
+    $tc += "<div><label class=\"startupinp\">Main App Port: </label>";
+    $tc += "<input id=\"newport\" class=\"startupinp\" name=\"port\" width=\"20\" type=\"text\" value=\"" + $port + "\"/></div>"; 
+
+    $tc += "<div><label class=\"startupinp\">WebSocket Port: </label>";
+    $tc += "<input id=\"newsocketport\" class=\"startupinp\" name=\"webSocketServerPort\" width=\"20\" type=\"text\" value=\"" + $webSocketServerPort + "\"/></div>"; 
+
+    // $tc += "<div><label class=\"startupinp\">Fast Timer: </label>";
+    // $tc += "<input id=\"newfast_timer\" class=\"startupinp\" name=\"fast_timer\" width=\"20\" type=\"text\" value=\"" + $fast_timer + "\"/></div>"; 
+
+    // $tc += "<div><label class=\"startupinp\">Slow Timer: </label>";
+    // $tc += "<input id=\"newslow_timer\" class=\"startupinp\" name=\"slow_timer\" width=\"20\" type=\"text\" value=\"" + $slow_timer + "\"/></div>"; 
+
+    $tc += "<div><label for=\"uname\" class=\"startupinp\">Username: </label>";
+    $tc += "<input id=\"uname\" class=\"startupinp\" name=\"uname\" width=\"20\" type=\"text\" value=\"" + $uname + "\"/></div>"; 
+
+    $tc += "<div><label for=\"pword\" class=\"startupinp\">Set New Password: </label>";
+    $tc += "<input id=\"pword\" class=\"startupinp\" name=\"pword\" width=\"80\" type=\"password\" value=\"\"/></div>"; 
+    
+    $tc += "<div><label></label><span class='indent typeopt'>(blank to keep prior)</span></div>";
+    $tc += "<div></div><br />";
+    $tc += "</div>";
+    $tc += "</form>";
+
+    return $tc;
+    
+}
+
 function getOptionsPage(pathname) {
     var retpage = GLB.returnURL;
     var $thingtypes = utils.getTypes();
@@ -3545,23 +3578,20 @@ function getOptionsPage(pathname) {
     $tc += utils.getHeader(skin);
     $tc += "<h3>" + utils.APPNAME + " Options</h3>";
     $tc += "<div class=\"formbutton formauto\"><a href=\"" + retpage + "\">Cancel and Return to HousePanel</a></div>";
-    $tc += "<div id=\"optionstable\" class=\"optionstable\">";
+    
+    // $tc += "<div id=\"optionstable\" class=\"optionstable\">";
 
-    $tc += "<form name=\"pageoptions\" action=\"#\"  method=\"POST\">";
     $tc += utils.hidden("returnURL", retpage);
     $tc += utils.hidden("pathname", pathname);
     $tc += utils.hidden("pagename", "options");
-    $tc += "</form>";
 
     $tc += hubFilters(hubpick, 7);
+    $tc += tsk($timezone, skin, $uname, $port, $webSocketServerPort, $fast_timer, $slow_timer);
 
-    $tc+= "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + retpage + "\"  method=\"POST\">";
+    $tc += "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + retpage + "\"  method=\"POST\">";
 
-    $tc+= "<div class=\"filteroption\">";
-    $tc+= tsk($timezone, skin, $uname, $port, $webSocketServerPort, $fast_timer, $slow_timer);
-    $tc+= "</div>";
-
-    $tc+= "<div class=\"filteroption\">Specify number of special tiles: ";
+    $tc += "<div class=\"filteroption\">";
+    $tc += "Specify number of special tiles: ";
     for (var $stype in $specialtiles) {
         var sid = $specialtiles[$stype];
         var $customcnt = getCustomCount($stype, sid[3]);
@@ -3571,29 +3601,31 @@ function getOptionsPage(pathname) {
     }
     $tc+= "</div>";
 
-    $tc+= "<div class=\"filteroption\">Other options: <br/>";
-    $tc+= "<label for=\"kioskid\" class=\"kioskoption\">Kiosk Mode: </label>";    
+    $tc += "<div class=\"filteroption\">";
+    $tc += "Other options: <br/>";
+    $tc += "<label for=\"kioskid\" class=\"kioskoption\">Kiosk Mode: </label>";    
     var $kstr = ($kioskoptions===true || $kioskoptions==="true" || $kioskoptions==="1" || $kioskoptions==="yes") ? "checked" : "";
     $tc+= "<input id=\"kioskid\" width=\"24\" type=\"checkbox\" name=\"kiosk\"  value=\"" + $kioskoptions + "\" " + $kstr + "/>";
-    
-    $tc+= "<label for=\"ruleid\" class=\"kioskoption\">Enable Rules? </label>";
+    $tc += "<label for=\"ruleid\" class=\"kioskoption\">Enable Rules? </label>";
     var $rstr = ($ruleoptions===true || $ruleoptions==="true" || $ruleoptions==="1" || $ruleoptions==="yes") ? "checked" : "";
-    $tc+= "<input id=\"ruleid\" width=\"24\" type=\"checkbox\" name=\"rules\"  value=\"" + $ruleoptions + "\" " + $rstr + "/>";
-    $tc+= "</div>";
+    $tc += "<input id=\"ruleid\" width=\"24\" type=\"checkbox\" name=\"rules\"  value=\"" + $ruleoptions + "\" " + $rstr + "/>";
+    $tc += "</div>";
 
     var $accucity = $configoptions["accucity"];
     var $accuregion = $configoptions["accuregion"];
     var $accucode = $configoptions["accucode"];      // ann-arbor-mi code is 329380
-    $tc+= "<div class=\"filteroption\"><label for=\"accucityid\" class=\"kioskoption\">Accuweather City: <input id=\"accucityid\" width=\"180\" ";
-    $tc+= "type=\"text\" name=\"accucity\"  value=\"" + $accucity + "\" />";
-    $tc+= "<label for=\"accuregionid\" class=\"kioskoption\">Region: <input id=\"accuregionid\" width=\"6\" type=\"text\" name=\"accuregion\"  value=\"" + $accuregion + "\"/>";
-    $tc+= "<label for=\"accucodeid\" class=\"kioskoption\">Code: <input id=\"accucodeid\" width=\"40\" type=\"text\" name=\"accucode\"  value=\"" + $accucode + "\"/>";
-    $tc+= "</div>";
+    $tc += "<div class=\"filteroption\">";
+    $tc += "<label for=\"accucityid\" class=\"kioskoption\">Accuweather City: <input id=\"accucityid\" width=\"180\" ";
+    $tc += "type=\"text\" name=\"accucity\"  value=\"" + $accucity + "\" />";
+    $tc += "<label for=\"accuregionid\" class=\"kioskoption\">Region: <input id=\"accuregionid\" width=\"6\" type=\"text\" name=\"accuregion\"  value=\"" + $accuregion + "\"/>";
+    $tc += "<label for=\"accucodeid\" class=\"kioskoption\">Code: <input id=\"accucodeid\" width=\"40\" type=\"text\" name=\"accucode\"  value=\"" + $accucode + "\"/>";
+    $tc += "</div>";
     
-    $tc+= "<br /><br />";
-    $tc+= "<table class=\"headoptions\"><thead>";
-    $tc+= "<tr><th class=\"thingname\">Thing Name (type)</th>";
-    $tc+= "<th class=\"hubname\">Hub</th>";
+    // now display the table of all the rooms and thing options
+    $tc += "<br /><br />";
+    $tc += "<table class=\"headoptions\"><thead>";
+    $tc += "<tr><th class=\"thingname\">Thing Name (type)</th>";
+    $tc += "<th class=\"hubname\">Hub</th>";
    
     // list the room names in the proper order
     // for ($k=0; $k < count($roomoptions); $k++) {
@@ -3601,11 +3633,11 @@ function getOptionsPage(pathname) {
         $tc+= "<th class=\"roomname\">" + $roomname;
         $tc+= "</th>";
     }
-    $tc+= "</tr></thead>";
-    $tc+= "</table>";
-    $tc+= "<div class='scrollvtable'>";
-    $tc+= "<table class=\"roomoptions\">";
-    $tc+= "<tbody>";
+    $tc += "</tr></thead>";
+    $tc += "</table>";
+    $tc += "<div class='scrollvtable'>";
+    $tc += "<table class=\"roomoptions\">";
+    $tc += "<tbody>";
 
     // sort the things
     // uasort(allthings, "mysortfunc");
@@ -3707,7 +3739,8 @@ function getOptionsPage(pathname) {
     $tc +='<div id="optCancel" class="formbutton">Cancel</div><br>';
     $tc+= "</div>";
     $tc+= "</form>";
-    $tc+= "</div>";
+    
+    // $tc+= "</div>";
 
     $tc += utils.getFooter();
 
@@ -3809,7 +3842,7 @@ function mainPage(proto, hostname, pathname) {
         $tc += "<div id=\"controlpanel\">";
         $tc +='<div id="showoptions" class="formbutton">Options</div>';
         $tc +='<div id="refresh" class="formbutton">Refresh</div>';
-        $tc +='<div id="refactor" class="formbutton confirm">Reset</div>';
+        // $tc +='<div id="refactor" class="formbutton confirm">Refactor</div>';
         $tc +='<div id="reauth" class="formbutton confirm">Hub Auth</div>';
         $tc +='<div id="showid" class="formbutton">Show Info</div>';
         $tc +='<div id="toggletabs" class="formbutton">Hide Tabs</div>';
@@ -3837,13 +3870,165 @@ function clone(obj) {
     return JSON.parse(JSON.stringify(obj));
 }
 
+
+function saveFilters(body) {
+    if ( DEBUG3 ) {
+        console.log(body);
+    }
+    var rewrite = false;
+    var result = {};
+
+    if ( body.useroptions ) {
+        GLB.options["useroptions"] = body.useroptions;
+        result.useroptions = body.useroptions;
+        rewrite = true;
+    }
+
+    if ( typeof body.huboptpick !== "undefined" ) {
+        GLB.options["config"]["hubpick"] = body.huboptpick;
+        result.huboptpick = body.huboptpick;
+        rewrite = true;
+    }
+
+    if ( rewrite ) {
+        writeOptions(GLB.options, true);
+    }
+    return result;
+}
+
+function saveUserPw(body) {
+    if ( DEBUG3 ) {
+        console.log(body);
+    }
+
+    // get current options;
+    // readOptions();
+
+    // get the username and passwords
+    var olduname = getUserName();
+    var uname = olduname;
+    var oldhash = "";
+    var hash = "";
+    var defskin;
+    if ( GLB.options.config["skin"] ) {
+        defskin = GLB.options.config["skin"];
+    } else {
+        defskin = "skin-housepanel";
+        GLB.options.config["skin"] = defskin;
+    }
+    
+    // get default pw and its skin
+    // or set up default if isn't configured
+    if (array_key_exists("pword", GLB.options.config)) {
+        if ( array_key_exists(uname, GLB.options.config["pword"]) ) {
+            var pwords = GLB.options.config["pword"];
+            oldhash = pwords[uname][0];
+            defskin = pwords[uname][1];
+            GLB.options.config["skin"] = defskin;
+        }
+    } else {
+        GLB.options.config["pword"] = {};
+        GLB.options.config["pword"][uname] = [oldhash, defskin];
+    }
+    // console.log("uname= ", uname, " oldhash= ", oldhash, " body: ", body);
+
+    var skin = defskin;
+    var result = {};
+
+    for (var key in body) {
+        var val = body[key];
+
+        //skip the returns from the submit button and the flag
+        if (key==="skin") {
+            skin = val;
+        } else if ( key==="timezone" ) {
+            GLB.options.config["timezone"] = val;
+        } else if ( key==="port" ) {
+            var port = parseInt(val);
+            if ( !isNaN(port) ) {
+                GLB.options.config["port"] = port;
+                var loc = GLB.returnURL.indexOf(":", 7);
+                result.port = port;
+                result.returnURL = GLB.returnURL.substr(0, loc) + ":" + port.toString();
+            }
+        } else if ( key==="webSocketServerPort" ) {
+            var wsport = parseInt(val);
+            if ( !isNaN(wsport) ) {
+                GLB.options.config["webSocketServerPort"] = wsport;
+            }
+        } else if ( key==="fast_timer" ) {
+            GLB.options.config["fast_timer"] = parseInt(val);
+        } else if ( key==="slow_timer" ) {
+            GLB.options.config["slow_timer"] = parseInt(val);
+        } else if ( key==="uname" ) {
+            uname = val.trim();
+            if ( uname==="" ) {
+                uname = olduname;
+            }
+            result.uname = uname;
+        } else if ( key==="pword" ) {
+            val = val.trim();
+            if ( val!=="" ) {
+                hash = pw_hash(val);
+            } else {
+                hash = "";
+            }
+            // console.log("processed hash: ", val, " => ", hash);
+        }
+    }
+
+    // now that we have all the new facts, set up password field
+    // process username and password settings and save in skin specific loc
+    // includes logic to bundle the skin with this user so that
+    // now each user can use their own skin if they want
+
+    // if password field is blank and user name is the same, keep old password
+    if ( olduname===uname && hash==="" ) {
+        hash = oldhash;
+    }
+    GLB.options.config["uname"] = uname;
+
+    // 
+    // set the skin and replace the custom file with that skin's version
+    // but first check to make sure it is a valid name
+    if ( !fs.existsSync(skin + "/housepanel.css") ) {
+        skin = defskin;
+        if ( !fs.existsSync(skin + "/housepanel.css") ) {
+            skin = "skin-housepanel";
+        }
+    }
+
+    // make sure our default skin has a custom file
+    if ( !fs.existsSync(skin + "/customtiles.css") ) {
+        writeCustomCss(1, skin, "");
+    }
+    // set default skin to this skin - although it shouldn't be used ever
+    GLB.options["config"]["skin"] = skin;
+
+
+    // save the skin in my user specific setting
+    GLB.options.config["pword"][uname] = [hash, skin];
+    GLB.options.config["skin"] = skin;
+
+    GLB.pwcrypt = hash;
+
+    // set some return values
+    result.hash = hash;
+    result.skin = skin;
+    console.log("saveuserpw processed: ", result, " uname: ", uname, " oldpw: ", oldhash, " newpw: ", hash);
+
+    // write options to file
+    writeOptions( GLB.options, true);
+
+    return result;
+}
+
 // process user options page
 function processOptions($optarray) {
 
     if (DEBUG4) {
-        console.log($optarray["Kitchen"]);
-        console.log("original:", GLB.options["things"]["Kitchen"]);
-        // console.log(GLB.options["config"]);
+        console.log("Debug Print for New Options Created - After Processing");
+        console.log(UTIL.inspect(GLB.options, false, null, false));
     }
     var $specialtiles = utils.getSpecials();
     var $options = clone(GLB.options);;
@@ -3855,11 +4040,9 @@ function processOptions($optarray) {
     }
 
     // var $oldoptions = clone(GLB.options);
-    var $configoptions = clone($options["config"]);
+    var $configoptions = $options["config"];
     var $roomnames = Object.keys($options["rooms"]);
-
     if ( !is_object($configoptions["specialtiles"]) ) {
-        console.log("Config = ", $configoptions);
         $configoptions["specialtiles"] = {};
     }
 
@@ -3870,102 +4053,45 @@ function processOptions($optarray) {
     // // checkbox items simply will not be there if not selected
     $configoptions["kiosk"] = "false";
     $configoptions["rules"] = "false";
-    var $timezone = $configoptions["timezone"];
 
-    // // get logged in user or set default if not logged in
-    var $uname = getUserName();
-    var $olduname = $uname;
-    var skin = $configoptions["skin"];
-    var $city = $configoptions["accucity"];
-    var $region = $configoptions["accuregion"];
-    var $code = $configoptions["accucode"];
-
-    // // get default pw and its skin
-    var $pwords;
-    if (array_key_exists("pword", $configoptions)) {
-        $pwords = clone($configoptions["pword"]);
-        if ( array_key_exists($uname, $pwords) ) {
-            if ( is_array($pwords[$uname]) ) {
-                $hash = $pwords[$uname][0];
-                skin = $pwords[$uname][1];
-            } else {
-                $hash = $pwords[$uname];
-                $pwords[$uname] = [$hash, skin];
-                $configoptions["pword"] = clone($pwords);
-            }
-        } else {
-            $pwords = {};
-            $pwords[$uname] = [$hash, skin];
-            $configoptions["pword"] = clone($pwords);
-        }
-    } else {
-        $pwords = {};
-        $hash = "";
-        $pwords[$uname] = [$hash, skin];
-        $configoptions["pword"] = clone($pwords);
-    }
-
-    var $defskin = skin;
-    var $oldhash = $hash;
-    var $hash = "";
+    // force all three to be given for change to happen
+    var $city = "";
+    var $region = "";
+    var $code = "";
 
     // // get all the rooms checkboxes and reconstruct list of active things
     // // note that the list of checkboxes can come in any random order
-    for (var $key in $optarray) {
-        var $val = $optarray[$key];
+    for (var key in $optarray) {
+        var $val = $optarray[key];
 
         //skip the returns from the submit button and the flag
-        if ($key==="options" || $key==="api" || $key==="useajax" ) {
+        if (key==="options" || key==="api" || key==="useajax" ) {
             continue;
-        } else if ($key==="skin") {
-            skin = $val;
-        } else if ( $key==="kiosk") {
+        } else if ( key==="kiosk") {
             $configoptions["kiosk"] = "true";
-        } else if ( $key==="rules") {
+        } else if ( key==="rules") {
             $configoptions["rules"] = "true";
-        } else if ( $key==="timezone" ) {
-            $timezone = $val;
-        } else if ( $key==="port" ) {
-            $configoptions["port"] = parseInt($val);
-        } else if ( $key==="webSocketServerPort" ) {
-            $configoptions["webSocketServerPort"] = parseInt($val);
-        } else if ( $key==="fast_timer" ) {
-            $configoptions["fast_timer"] = parseInt($val);
-        } else if ( $key==="slow_timer" ) {
-            $configoptions["slow_timer"] = parseInt($val);
-        } else if ( $key==="uname" && $val ) {
-            $uname = $val.trim();
-            if ( $uname==="" ) {
-                $uname = "default";
-            }
-        } else if ( $key==="pword" && $val ) {
-            $hash = pw_hash($val);
-            $oldhash = $hash;
-        } else if ( $key==="accucity" && $val ) {
+        } else if ( key==="accucity" ) {
             $city = $val.trim();
-        } else if ( $key==="accuregion" && $val ) {
+        } else if ( key==="accuregion" ) {
             $region = $val.trim();
-        } else if ( $key==="accucode" && $val ) {
+        } else if ( key==="accucode" ) {
             $code = $val.trim();
         
         // handle user selected special tile count
-        } else if ( $key.substr(0,4)==="cnt_" ) {
-            var $stype = $key.substr(4);
+        } else if ( key.substr(0,4)==="cnt_" ) {
+            var $stype = key.substr(4);
             if ( array_key_exists($stype, $specialtiles) ) {
                 var $spid = $specialtiles[$stype][0];
                 var $customcnt = parseInt($val);
                 createSpecialIndex($customcnt, $stype, $spid);
-                $configoptions["specialtiles"] = GLB.options["config"]["specialtiles"];
+                $configoptions["specialtiles"] = clone(GLB.options["config"]["specialtiles"]);
                 
             }
         
-        // handle the option to limit view
-        } else if ( $key==="useroptions" && is_array($val) ) {
-            $options["useroptions"] = $val;
-        
         // made this more robust by checking room name being valid
-        } else if ( in_array($key, $roomnames) && is_array($val) ) {
-            var $roomname = $key;
+        } else if ( in_array(key, $roomnames) && is_array($val) ) {
+            var $roomname = key;
             
             // first save the existing order of tiles if still there
             // this will preserve user drag and drop positions
@@ -3985,11 +4111,6 @@ function processOptions($optarray) {
                 }
             });
 
-            if ( DEBUG4 && $roomname==="Kitchen" ) {
-                console.log("var: ", $val);
-                console.log("Before: ", $options["things"][$roomname]);
-            }
-            
             // get the index offset of last existing tile
             if ( $options["things"][$roomname].length > 0 ) {
                 var lastitem = $options["things"][$roomname].length -1;
@@ -4035,98 +4156,16 @@ function processOptions($optarray) {
         getAccuWeather($city, $region, $code);
     }
     
-    // // now process things that used to be in auth page
-    // // includes timezone, fast_timer, slow_timer, skin, port, and webSocketPort
-    // // wrap the timzeone in a try block to avoid breaking app
-    // try {
-    //     date_default_timezone_set($timezone);
-    // } catch (Exception $e) {
-    //     $timezone = date_default_timezone_get();
-    //     date_default_timezone_set($timezone);
-    // }
-
-    // set the skin if it is a good one or use default from above
-    if ( skin && file_exists(skin + "/housepanel.css") ) {
-        if ( !file_exists(skin + "/customtiles.css") ) {
-            writeCustomCss(skin, "");
-        }
-        $configoptions["skin"] = skin;
-    } else {
-        skin = $defskin;
-    }
-    
-    // // process username and password settings and save in skin specific loc
-    // // includes logic to bundle the skin with this user so that
-    // // now each user can use their own skin if they want
-    if ( $uname === $olduname ) {
-        $hash = $oldhash;
-    }
-    $pwords[$uname] = [$hash, skin];
-    
-    // // now set all the parameters with complex logic
-    $configoptions["uname"] = $uname;
-    $configoptions["pword"] = $pwords;
-    $configoptions["timezone"] = $timezone;
-    
     // save the configuration parameters in the main options array
-    $options["config"] = clone($configoptions);
-
-    // save our login info
-    GLB.pwcrypt =  $pwords[$uname][0];
+    $options["config"] = $configoptions;
     
     if (DEBUG4) {
         console.log("Debug Print for New Options Created - After Processing");
-        // console.log("index: ", $options["index"]);
-        // console.log("config: ", $options["config"]);
-        // console.log("rooms: ", $options["rooms"]);
-        console.log("things: ", $options["things"]);
+        console.log(UTIL.inspect(GLB.options, false, null, false));
     }
 
     // write options to file
     writeOptions($options);
-}
-
-function saveFilters(body) {
-    if ( DEBUG3 ) {
-        console.log(body);
-    }
-    var rewrite = false;
-
-    if ( body.useroptions ) {
-        GLB.options["useroptions"] = body.useroptions;
-        rewrite = true;
-    }
-
-    if ( typeof body.huboptpick !== "undefined" ) {
-        GLB.options["config"]["hubpick"] = body.huboptpick;
-        rewrite = true;
-    }
-
-    // set the skin and replace the custom file with that skin's version
-    if ( typeof body.skin !== "undefined" && body.skin && fs.existsSync(body.skin + "/housepanel.css") ) {
-        var skin = body.skin;
-
-        // save the skin in my user specific setting
-        var $uname = getUserName();
-        var $pwords = GLB.options["config"]["pword"];
-        if ( $uname && array_key_exists($uname, $pwords) ) {
-            $pwords[$uname][1] = skin;
-            GLB.options["config"]["pword"] = $pwords;
-        }
-        
-        // make sure our default skin has a custom file
-        if ( !fs.existsSync(skin + "/customtiles.css") ) {
-            writeCustomCss(1, skin, "");
-        }
-            
-        // set default skin to this skin - although it shouldn't be used ever
-        GLB.options["config"]["skin"] = skin;
-        rewrite = true;
-    }
-
-    if ( rewrite ) {
-        writeOptions(GLB.options);
-    }
 }
 
 function changePageName($oldname, $pagename) {
@@ -4141,7 +4180,7 @@ function changePageName($oldname, $pagename) {
         writeOptions(options);
     } else {
         console.log("old page name not valid: ", $oldname);
-        retcode = "error";
+        retcode = "error - old page name not valid: " + $oldname;
     }
     return retcode;
 }
@@ -4149,7 +4188,7 @@ function changePageName($oldname, $pagename) {
 function updateNames(type, tileid, oldname, newname) {
     var result;
     if ( type === "page" ) {
-        var newname = newname.replace(" ", "_");
+        var newname = newname.replace(/ /g, "_");
         result = changePageName(oldname, newname);
     } else {
         var options = GLB.options;
@@ -4424,14 +4463,19 @@ function apiCall(body, protocol) {
                 GLB.options["user_" + swid] = swattr;
                 writeOptions(GLB.options);
             }
+            var idx = swtype + "|" + swid;
+            var thing = allthings[idx];
+            result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 99, "", api);
+            break;
 
         case "wysiwyg":
-            if ( swtype==="page" && api==="wysiwyg" ) {
+            if ( swtype==="page" ) {
                 // make the fake tile for the room for editing purposes
-                var faketile = {"panel": "Panel", "tab": "Tab Inactive", "tabon": "Tab Selected"};
+                var faketile = {"panel": "panel", "name": swval, "tab": "Tab Inactive", "tabon": "Tab Selected"};
                 var thing = { "id": "r_" + swid, "name": swval, 
                               "hubnum": -1, "type": "page", "value": faketile};
-                result = makeThing(0, tileid, thing, swval, 0, 0, 99, "", api);
+                // result = makeThing(0, tileid, thing, swval, 0, 0, 99, "", api);
+                result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 99, "", api);
             } else {
                 var idx = swtype + "|" + swid;
                 var thing = allthings[idx];
@@ -4503,9 +4547,19 @@ function apiCall(body, protocol) {
            break;
 
         case "filteroptions":
-        case "savefilters":
-            saveFilters(body);
-            result = "success";
+            if ( protocol==="POST" ) {
+                result = saveFilters(body);
+            } else {
+                result = "error - api call [" + api + "] not supported in GET mode.";
+            }
+        break;
+
+        case "saveuserpw":
+            if ( protocol==="POST" ) {
+                result = saveUserPw(body);
+            } else {
+                result = "error - api call [" + api + "] not supported in GET mode.";
+            }
             break;
 
         case "savetileedit":
@@ -4524,7 +4578,7 @@ function apiCall(body, protocol) {
             break;
 
         case "updatenames":
-            result = updateNames(swid, tileid, swval, swattr);
+            result = updateNames(swtype, tileid, swval, swattr);
             break;
         
         case "dologin":
@@ -4537,7 +4591,7 @@ function apiCall(body, protocol) {
                     pword = thehash.digest('hex');
                 }
                 GLB.options["config"]["uname"] = uname;
-                writeOptions(GLB.options);
+                writeOptions(GLB.options, true);
 
                 // check to see if the provided username is valid
                 // and that the passwords match
@@ -4925,7 +4979,7 @@ if ( app && applistening ) {
                 config["uname"] = "default";
                 GLB.pwcrypt = false;
                 GLB.options["config"] = config;
-                writeOptions(GLB.options);
+                writeOptions(GLB.options, true);
                 $tc = getLoginPage();
 
             // handle user provided get api calls
@@ -4944,18 +4998,21 @@ if ( app && applistening ) {
             // if user didn't provide a recognized login, show main page anyway
             // this prevents many problems where users could not log in
             // the default log in here forces a user name to "default" and the pw to blank
+            // } else if ( ignorepw===true ) {
+            //     console.log("login rejected. uname = ", uname, " pwcrypt = ", GLB.pwcrypt," but... loading page anyway because you have ignorepw turned on.");
+            //     if ( !array_key_exists("pword", config) ) {
+            //         config["pword"] = {};
+            //     }
+            //     config["pword"][uname] = ["", "skin-housepanel"];
+            //     // config["uname"] = "default";
+            //     GLB.pwcrypt = "";
+            //     GLB.options["config"] = config;
+            //     writeOptions(GLB.options);
+            //     GLB.defhub = "-1";
+            //     $tc = mainPage(req.protocol, req.headers.host, req.path);
             } else {
-                console.log("login rejected. uname = ", uname, " pwcrypt = ", GLB.pwcrypt," but... loading page anyway as default user");
-                if ( !array_key_exists("pword", config) ) {
-                    config["pword"] = {};
-                }
-                config["pword"]["default"] = ["", "skin-housepanel"];
-                config["uname"] = "default";
-                GLB.pwcrypt = "";
-                GLB.options["config"] = config;
-                writeOptions(GLB.options);
-                GLB.defhub = "-1";
-                $tc = mainPage(req.protocol, req.headers.host, req.path);
+                console.log("login rejected. uname = ", uname, " pwcrypt = ", GLB.pwcrypt);
+                $tc = getLoginPage();
             }
             res.send($tc);
             res.end();
@@ -4976,7 +5033,6 @@ if ( app && applistening ) {
             readOptions();
             $tc = getLoginPage();
             GLB.pwcrypt = false;
-            writeOptions(GLB.options, true);
             res.send($tc);
             res.end();
 

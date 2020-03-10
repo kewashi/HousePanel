@@ -965,7 +965,7 @@ function showPreview() {
     }
     
     $.post(cm_Globals.returnURL, 
-        {useajax: "wysiwyg2", id: bid, type: str_type, tile: tileid, value: "none", attr: swattr},
+        {useajax: "wysiwyg2", id: bid, type: str_type, tile: tileid, value: "", attr: swattr},
         function (presult, pstatus) {
             if (pstatus==="success" ) {
                 $("#cm_preview").html(presult);

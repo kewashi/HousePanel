@@ -23,8 +23,10 @@ function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, hubName, h
     // }
     var returnURL = cm_Globals.returnURL;
     
-    et_Globals.aid = aid;
-    et_Globals.id = bid;
+    if ( str_type!=="page") {
+        et_Globals.aid = aid;
+        et_Globals.id = bid;
+    }
     et_Globals.hubnum = hubnum;
     et_Globals.hubName = hubName;
     et_Globals.reload = false;
@@ -39,7 +41,7 @@ function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, hubName, h
     // header
     if ( str_type==="page" ) {
         dialog_html += "<div class='editheader' id='editheader'>Editing Page#" + hubnum + 
-                   " of Name: " + thingindex + "</div>";
+                   " Name: " + thingindex + "</div>";
         
     } else {
         if ( hubName==="None" || hubnum==="-1" ) {
@@ -75,6 +77,7 @@ function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, hubName, h
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;
+                    // console.log("page wysiwyg: ", htmlcontent);
                 }
             }
         );
@@ -84,9 +87,9 @@ function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, hubName, h
         htmlcontent = "<div class=\"" + thingclass + "\" id='wysiwyg'>" + htmlcontent + "</div>";
     } else {
         // put placeholder and populate after Ajax finishes retrieving true wysiwyg content
-        // dialog_html += "<div class=\"thing " + str_type + "-thing p_"+thingindex+"\" id='wysiwyg'></div>";
+        // this is actually no longer used but left code here in case I want to use it later
         jqxhr = $.post(returnURL, 
-            {useajax: "wysiwyg", id: '', type: '', tile: thingindex, value: '', attr: ''},
+            {useajax: "wysiwyg", id: bid, type: str_type, tile: thingindex, value: '', attr: ''},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;
@@ -109,19 +112,7 @@ function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, hubName, h
                 $("body").off("keydown");
                 var clk = $(ui).attr("name");
                 if ( clk==="okay" ) {
-                    var newname = $("#editName").val();
-                    if ( str_type==="page") {
-                        var oldname = thingindex;
-                        // alert(oldname);
-                        var target1 = getCssRuleTarget(str_type, "head", thingindex);
-                    } else {
-                        var target1 = getCssRuleTarget(str_type, "head", thingindex);
-                        var target2 = getCssRuleTarget(str_type, "name", thingindex);
-                        var oldname = $(target1).html();
-                        $(target1).html(newname);
-                        $(target2).html(newname);
-                    }
-                    saveTileEdit(str_type, thingindex, oldname, newname);
+                    saveTileEdit(str_type, thingindex);
                 } else if ( clk==="cancel" ) {
                     cancelTileEdit(str_type, thingindex);
                 }
@@ -253,18 +244,24 @@ function getCssRuleTarget(str_type, subid, thingindex, useall) {
             target = "li.ui-tabs-tab.ui-state-default";
             if ( useall===0 ) { target+= '.tab-'+thingindex; }
             // target+= ",.tab-" +thingindex + ">a.ui-tabs-anchor";
+
         } else if ( subid==="tabon" ) {
             target = "li.ui-tabs-tab.ui-state-default.ui-tabs-active";
             if ( useall===0 ) { target+= '.tab-'+thingindex; }
             // target+= ",.tab-" +thingindex + ">a.ui-tabs-anchor";
-        } else if ( subid==="head" ) {
+
+        } else if ( subid==="panel" ) {
             target = "#dragregion div.panel";
-            target+= '.panel-'+ thingindex;
+            if ( useall===0 ) { target+= '.panel-'+ thingindex; }
+
+        } else if ( subid==="name" ) {
+            target = "li.ui-tabs-tab.ui-state-default >a.ui-tabs.anchor";
 
         } else {
-            target = "div.panel";
-            if ( useall < 1 ) { target+= '.panel-'+thingindex; }
+            target = "li.ui-tabs-tab.ui-state-default >a.ui-tabs.anchor";
+            // target = "#ui-id-" + et_Globals.hubnum;
         }
+        console.log("page subid= ", subid," target= ", target);
         
     // if a tile isn't specified we default to changing all things
     } else if ( thingindex===null || typeof thingindex==="undefined " || thingindex==="all" ) {
@@ -444,15 +441,7 @@ function initDialogBinds(str_type, thingindex) {
         
     // new button to process the name change
     $("#processName").on("click", function (event) {
-        var newname = $("#editName").val();
-        var target1 = getCssRuleTarget(str_type, "head", thingindex);
-        var oldname = $(target1).html();
-        $(target1).html(newname);
-        if ( str_type!=="page" ) {
-            var target2 = getCssRuleTarget(str_type, "name", thingindex);
-            $(target2).html(newname);
-        }
-        updateNames(str_type, thingindex, oldname, newname);
+        updateNames(str_type, thingindex);
         cm_Globals.reload = true;
         event.stopPropagation;
     });
@@ -689,12 +678,19 @@ function initDialogBinds(str_type, thingindex) {
                     rule = "width: 50px;";
                 } else if ( str_type==="page" && subid==="panel") {
                     rule = "width: 100%; padding-left: 0px; padding-right: 0px;";
+                } else if ( str_type==="page") {
+                    rule = "width: auto;";
                 } else {
                     rule = "width: 100%;";
                 }
                 $("#editWidth").prop("disabled", true);
                 $("#editWidth").css("background-color","gray");
-                addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+                if ( subid==="page" && subid!=="panel" ) {
+                    addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
+                    addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
+                } else {
+                    addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+                }
             } else {
                 var newsize = parseInt( $("#editWidth").val() );
                 $("#editWidth").prop("disabled", false);
@@ -704,6 +700,8 @@ function initDialogBinds(str_type, thingindex) {
                         rule = "width: 50px;";
                     } else if ( str_type==="page" && subid==="panel") {
                         rule = "width: 100%; padding-left: 0px; padding-right: 0px;";
+                    } else if ( str_type==="page") {
+                        rule = "width: auto;";
                     } else {
                         rule = "width: 100%;";
                     }
@@ -712,7 +710,12 @@ function initDialogBinds(str_type, thingindex) {
                     // rule = "width: " + newsize + " display: inline-block;";
                     rule = "width: " + newsize;
                 }
-                addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+                if ( subid==="page" && subid!=="panel" ) {
+                    addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
+                    addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
+                } else {
+                    addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+                }
             }
         }
         event.stopPropagation;
@@ -986,7 +989,7 @@ function setupClicks(str_type, thingindex) {
             if ( $(event.target).hasClass("thingname") ) {
                 subid = "head";
             } else {
-                subid = "wholetile";
+                subid = (str_type==="page") ? "panel" : "wholetile";
             }
         }
         
@@ -1173,7 +1176,22 @@ function setsubid(str_type) {
     return subid;
 }
 
-function updateNames(str_type, thingindex, oldname, newname) {
+function updateNames(str_type, thingindex) {
+
+    var newname = $("#editName").val();
+    if ( str_type==="page") {
+        var oldname = thingindex;
+        // alert(oldname);
+        var target1 = getCssRuleTarget(str_type, "name", thingindex);
+        $(target1).html(newname);
+    } else {
+        var target1 = getCssRuleTarget(str_type, "head", thingindex);
+        var target2 = getCssRuleTarget(str_type, "name", thingindex);
+        var oldname = $(target1).html();
+        $(target1).html(newname);
+        $(target2).html(newname);
+    }
+
     var returnURL = cm_Globals.returnURL;
     $.post(returnURL, 
         {useajax: "updatenames", id: 0, type: str_type, value: oldname, attr: newname, tile: thingindex},
@@ -1186,13 +1204,14 @@ function updateNames(str_type, thingindex, oldname, newname) {
 
 }
 
-function saveTileEdit(str_type, thingindex, oldname, newname) {
+function saveTileEdit(str_type, thingindex) {
     var returnURL = cm_Globals.returnURL;
 
     // first update the names
-    updateNames(str_type, thingindex, oldname, newname);
+    updateNames(str_type, thingindex);
 
     // get all custom CSS text
+    var newname = $("#editName").val();
     var sheet = document.getElementById('customtiles').sheet;
     var sheetContents = "";
     c=sheet.cssRules;
@@ -1346,7 +1365,7 @@ function initColor(str_type, subid, thingindex) {
     // set the Overall Tile Size parameters
     var wholetarget;
     if ( str_type==="page" ) {
-        wholetarget = getCssRuleTarget(str_type, "panel", thingindex, 0);
+        wholetarget = getCssRuleTarget(str_type, "name", thingindex, 0);
     } else {
         wholetarget = getCssRuleTarget(str_type, "tile", thingindex, 0);
     }
@@ -2108,10 +2127,10 @@ function updateSize(str_type, subid, thingindex) {
         if ( isNaN(iconsize) || iconsize <= 0 ) {
             if ( subid.startsWith("music") ) {
                 rule = "40px;"
-            } else if ( str_type==="page" && subid==="page" ) {
+            } else if ( str_type==="page" ) {
                 rule = "cover;";
-            } else if ( str_type==="page" && (subid==="tab" || subid==="tabon") ) {
-                rule = "cover;";
+            // } else if ( str_type==="page" && (subid==="tab" || subid==="tabon") ) {
+            //     rule = "cover;";
             } else {
                 iconsize = 80;
                 rule = iconsize.toString() + "px;";
