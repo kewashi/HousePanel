@@ -1,6 +1,6 @@
 {
   "name": "hpserver",
-  "version": "0.2.217",
+  "version": "0.2.218",
   "description": "HousePanel Node Server",
   "main": "hpserver.js",
   "dependencies": {
