@@ -421,8 +421,7 @@ function getHubInfo(hub, token, endpt, clientId, clientSecret) {
         GLB.defhub = hubId;
 
         // update this hub
-        var hubs = GLB.options.config["hubs"];
-        updateHubs(hubs, hub, hubId);
+        updateHubs(hub, hubId);
         writeOptions(GLB.options, true);
 
         // retrieve all devices and go back to reauth page
@@ -3017,16 +3016,16 @@ function findHub(hubid) {
 
 // update the hubs array with a new hub value of a certain ID
 // if not found the hub is added
-function updateHubs(hubs, newhub, oldid) {
+function updateHubs(newhub, oldid) {
     var num = 0;
     oldid = oldid.toString();
     var found = false;
 
     // every hub that matches gets updated
     // should only be one but just in case
-    hubs.forEach(function(hub) {
+    GLB.options.config.hubs.forEach(function(hub) {
         if ( hub["hubId"].toString() === oldid ) {
-            hubs[num] = clone(newhub);
+            GLB.options.config.hubs[num] = clone(newhub);
             found = true;
         }
         num++;
@@ -3034,7 +3033,7 @@ function updateHubs(hubs, newhub, oldid) {
 
     // if not found then add new hub
     if ( !found ) {
-        hubs.push(newhub);
+        GLB.options.config.hubs.push(newhub);
     }
     return found;
 }
@@ -4931,6 +4930,7 @@ function apiCall(body, protocol) {
                     body.userAccess = body.clientId + ":" + body.clientSecret;
                     hub["userAccess"] = body.userAccess;
                     hub["hubAccess"] = hub["userAccess"];
+                    hub.hubId = "isy01";
 
                     // use default name if one not given
                     if ( hub["hubName"].trim()==="" ) {
@@ -4943,9 +4943,18 @@ function apiCall(body, protocol) {
                 hub["hubAccess"] = body.userAccess;
             }
 
+            // if this is a new hub and no name given, give it one
+            if ( body.hubId==="new" && !hub.hubName ) {
+                hub.hubName = "New " + hub.hubType;
+            }
+
             // update existing or add a new hub
-            updateHubs(GLB.options["config"]["hubs"], hub, body.hubId);
+            updateHubs(hub, body.hubId);
+            writeOptions(GLB.options, true);
+            hubs = GLB.options.config.hubs;
+
             if (DEBUG1) {
+                console.log("There are " + hubs.length + " hubs are available after hubauth.");
                 console.log("hubs: ", hubs);
             }
 
@@ -4960,14 +4969,6 @@ function apiCall(body, protocol) {
             GLB.defhub = hubnum;
             if ( (hub["userAccess"] && hub["userEndpt"]) || body.hubType==="ISY" ) {
 
-                // get the hubId if this is a new hub
-                if ( !hub["hubId"] || hub["hubId"]==="new" ) {
-                    hub["hubId"] = "new";
-                    if ( !hub.hubName ) {
-                        hub.hubName = "New Hub";
-                    }
-                }            
-
                 // get all new devices and update the options index array
                 // this forces page reload with all the new stuff
                 // notice the reference to /reauth in the call to getDevices
@@ -4980,16 +4981,6 @@ function apiCall(body, protocol) {
                 // and then we call devices from there given the async nature of Node
                 // this is much like what happens in the getAccessToken function in the OAUTH flow
                 if ( body.hubType==="ISY" ) {
-                    if ( hub["hubId"]==="new" ) {
-                        var num = 1;
-                        hubs.forEach(function(ihub) {
-                            if ( ihub.hubType==="ISY") {num++; }
-                        });
-                        num = (num< 10) ? "0" + num.toString() : num.toString();
-                        hub["hubId"] = "isy" + num;
-                    }
-                    GLB.defhub = hub["hubId"];
-                    writeOptions(GLB.options, true);
                     getDevices(hubnum, hubType, accesstoken, hubEndpt, clientId, clientSecret, hubName, "/reauth");
                 } else {
                     getHubInfo(hub, accesstoken, hubEndpt, clientId, clientSecret);
