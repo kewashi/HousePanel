@@ -1,6 +1,7 @@
 'use strict';
 
 var devhistory =  ` 
+2.216      Clean up when options file is read and sync npm version number
 2.215      Fix video embedded, provide arlo4.py, and enable ISY toggle for RULEs and api calls
 2.214      Enable moved tiles to always show on top of all others
 2.213      Relax login constraints to by default log everyone in

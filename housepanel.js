@@ -428,9 +428,9 @@ function setupWebsocket()
         console.error("webSocket error observed: ", evt);
     };
 
-    // received a message from housepanel-push
+    // received a message from housepanel-push or hpserver.js
     // this contains a single device object
-    // this is where pushClient is processed
+    // this is where pushClient is processed for hpserver.js
     wsSocket.onmessage = function (evt) {
         var reservedcap = ["name", "DeviceWatch-DeviceStatus", "DeviceWatch-Enroll", "checkInterval", "healthStatus"];
         try {
@@ -507,14 +507,9 @@ function setupWebsocket()
         
             // update all the tiles that match this type and id
             // this now works even if tile isn't on the panel because
-            // now we read the options file and grab the tile number
-            // this is done in the processRules function below
             $('div.panel div.thing[bid="'+bid+'"][type="'+thetype+'"]').each(function() {
                 try {
                     var aid = $(this).attr("id").substring(2);
-                    if ( pvalue["level"] ) {
-                        console.log("About to update tile - pvalue= ", pvalue);
-                    }
                     updateTile(aid, pvalue);
                 } catch (e) {
                     console.log("Error updating tile of type: "+ thetype + " and id: " + bid + " with value: ", pvalue);
@@ -556,16 +551,14 @@ function setupWebsocket()
         }
         
         // handle rules and link triggers but only for the last client
-        // since we only need one of the clients to execute rules
-        // rules and link triggers do not update the screen
-        // so you must have the node pusher app installed to keep things synced
-        // TODO ... move this to the server routine
-        if ( cm_Globals.options && client===clientcount ) {
-            if ( cm_Globals.options["rules"]==="true" || cm_Globals.options["rules"]===true ) {
-                processRules(pname, bid, thetype, trigger, pvalue);
-                processLinks(pname, bid, thetype, trigger, pvalue);
-            } 
-        }
+        // TODO ... move this to the server routine ... DONE
+        // console.log("rules: ", cm_Globals.options.rules, " client= ", client);
+        // if ( cm_Globals.options && client===clientcount ) {
+        //     if ( cm_Globals.options["rules"]==="true" || cm_Globals.options["rules"]===true ) {
+        //         processRules(pname, bid, thetype, trigger, pvalue);
+        //         processLinks(pname, bid, thetype, trigger, pvalue);
+        //     } 
+        // }
     };
     
     // if this socket connection closes then try to reconnect
@@ -573,181 +566,6 @@ function setupWebsocket()
         console.log("webSocket connection closed for: ", webSocketUrl);
         wsSocket = null;
     };
-}
-
-function processRules(pname, bid, thetype, trigger, pvalue) {
-    // go through all tiles with a new rule type
-    var idx = thetype + "|" + bid;
-    try {
-        var index = cm_Globals.options["index"];
-        var tileid = index[idx].toString();
-    } catch (e) {
-        console.log("webSocket RULE error: ", pname, " id: ", bid, " type: ", thetype, " trigger: ", trigger, " error: ", e);
-        return;
-    }
-    
-    // rule structure
-    // if: tile=num[= or < or > or !]value, tile=num=value[=attr], tile=num=attr=[attr]...
-    // num is the tile number and value is the comparison text or value string
-    // the symbol between num and value determines if this is an equal, less, greater, or not equal test
-    // the attr variable is optional but if provided will be sent to the api
-    // 
-    
-    // construct the if phrase for the trigger
-    var regpattern = /if\s*[:| ]\s*(\d*)\s*=\s*([\w\s-]*)(=|<|>|!)\s*(.*)/;
-    var itempattern =  /(\d*)\s*=\s*([\w\s-]*)\s*=\s*(.*)/;
-    var itempattern2 = /(\d*)\s*=\s*([\w\s-]*)\s*=\s*(.*)=(.*)/;
-    var regsplit = /[,;]/;
-    var ifvalue = pvalue[trigger];
-    
-    // print some debug info
-    if ( LOGWEBSOCKET ) {
-        console.log("webSocket RULE - name: ", pname, " id: ", bid, " type: ", thetype, " trigger: ", trigger, " tileid: ", tileid);
-    }
-
-    // process all tiles that subscribe to this trigger
-    $('div.user_hidden[command="RULE"]').each(function() {
-        var linkval = $(this).attr("linkval");
-        
-        // split the commands into trigger and other commands
-        var testcommands = linkval.split(regsplit);
-        var triggercom = testcommands[0].trim();
-        var res = triggercom.match(regpattern);
-        var ismatch = false;
-        
-        if ( testcommands.length > 1 && res ) {
-            
-            var matchtile = res[1].trim();
-            var matchsubid = res[2].trim();
-            var matchop = res[3];
-            var matchval = res[4].trim();
-                
-            // check to see if this custom tile matches the rule specification
-            // to match the tile number and the subid must match the trigger
-            // and the rule operand must be either =, <, >, or !
-            if ( matchtile===tileid && matchsubid===trigger ) {
-                ismatch = ( 
-                    matchop==="=" && matchval===ifvalue ||
-                    matchop==="!" && matchval!==ifvalue ||
-                    matchop==="<" && matchval < ifvalue ||
-                    matchop===">" && matchval > ifvalue 
-                );
-            }
-        }
-        
-        // console.log("ismatch: ", ismatch, " tileid: ", tileid, " linkval: ", linkval, " res: ", res, " testcommands: ", testcommands);
-        // process all the actions requested if the if conditions are met
-        // this loops through all the actions specified after the trigger test
-        // the triggering tile must exist on the panel for this to work
-        if ( ismatch ) {
-            var i;
-            for ( i= 1; i < testcommands.length; i++ ) {
-                
-                var itemaction = testcommands[i].trim();
-                var items = itemaction.match(itempattern);
-                var items2 = itemaction.match(itempattern2);
-                
-                if ( items ) {
-                    
-                    // get the tile info for this rule item
-                    // this pulls the items from the regular expression variables
-                    var tilenum = items[1].trim();
-                    var subidtrigger = items[2].trim();
-                    var ontrigger;
-                    var theattr;
-                    
-                    // get the first tile on the panel that matches this tile number
-                    var tile = $('div.panel div.thing[tile="'+tilenum+'"]').first();
-                    
-                    if ( tile ) {
-                        var aid = tile.attr("id").substring(2);
-                        var trbid = tile.attr("bid");
-                        if ( items2 ) {
-                            ontrigger = items2[3].trim();
-                            theattr = items2[4].trim();
-                        } else {
-                            ontrigger = items[3];
-                            // theattr = $("a-"+aid+"-"+subidtrigger).attr("class");
-                            theattr = "";
-                        }
-                        var hubnum = tile.attr("hub");
-                        var trtype = tile.attr("type");
-                        // invoke the command for the subscribed tile if it will make a difference
-                        // var currentvalue = $("#a-"+aid+"-"+subidtrigger).html();
-
-                        console.log("Rule trigger for tile: ", tilenum, " type: ", trtype, " id: ", trbid, "subid: ", subidtrigger, " value: ", ontrigger, " attr: ", theattr);
-                        var ajaxcall = "doaction";
-                        $.post(cm_Globals.returnURL, 
-                               {useajax: ajaxcall, id: trbid, tile: tilenum, type: trtype, value: ontrigger, attr: theattr, hubid: hubnum, subid: subidtrigger},
-                               function (presult, pstatus) {
-                                    if (pstatus==="success") {
-                                        console.log( ajaxcall + ": POST returned: ", presult );
-                                    } else {
-                                        console.log(ajavcall, " Error = ", pstatus);
-                                    }
-                               }, "json"
-                        );
-                    }
-                }
-            }
-        }
-    });
-}
-
-function processLinks(pname, bid, thetype, trigger, pvalue) {
-    // go through all tiles with a new rule type
-    var idx = thetype + "|" + bid;
-    try {
-        var index = cm_Globals.options["index"];
-        var tileid = index[idx];
-    } catch (e) {
-        console.log("webSocket LINK error: ", pname, " id: ", bid, " type: ", thetype, " trigger: ", trigger, " error: ", e);
-        return;
-    }
-    
-    // process linked auto-on auto-off lights
-    $('div.user_hidden[command="LINK"][linkval="' + tileid + '"]').each(function() {
-        var ontrigger = "";
-        var subidtrigger = "switch";
-        var tile = $(this).parents("div.thing").last();
-        var tilenum = tile.attr("tile");
-        var trbid = tile.attr("bid");
-        var aid = tile.attr("id").substring(2);
-        var theattr = tile.attr("class");
-        var hubnum = tile.attr("hub");
-        var trtype = tile.attr("type");
-        
-        // handle case where changed tile is linked to this one
-        if (  trtype === "switch" || trtype === "switchlevel" || 
-              trtype==="bulb" || trtype==="light" )
-        {
-            
-            if ( trigger==="motion" && pvalue.motion ==="active" ) {
-                ontrigger = "on";
-            } else if ( trigger==="motion" && pvalue.motion ==="inactive" ) {
-                ontrigger = "off";
-            } else if ( trigger==="contact" && pvalue.contact ==="open" ) {
-                ontrigger = "on";
-            } else if ( trigger==="contact" && pvalue.contact ==="closed" ) {
-                ontrigger = "off";
-            } else if ( trigger==="switch" && pvalue.switch ==="on" ) {
-                ontrigger = "on";
-            } else if ( trigger==="switch" && pvalue.switch ==="off" ) {
-                ontrigger = "off";
-            }
-            // invoke the command for the subscribed tile
-            var currentvalue = $("#a-"+aid+"-"+subidtrigger).html();
-
-            // like other places don't update tile here
-            if ( ontrigger && ontrigger !== currentvalue ) {
-                var ajaxcall = "doaction";
-                console.log("LINK trigger for tile: ", tilenum, "trigger: ", trigger, " type: ", trtype, " bid: ", trbid, "subid: ", subidtrigger, " current: ",currentvalue," ontrigger: ", ontrigger);
-                $.post(cm_Globals.returnURL, 
-                       {useajax: ajaxcall, id: trbid, type: trtype, value: ontrigger, attr: theattr, hubid: hubnum, subid: subidtrigger} );
-            }
-            
-        }
-    });
 }
 
 function rgb2hsv(r, g, b) {
@@ -1656,7 +1474,7 @@ function checkInputs(port, webSocketServerPort, fast_timer, slow_timer, uname, p
 function setupButtons() {
 
     if ( $("div.formbutton") ) {
-        $("div.formbutton").on('click', function() {
+        $("div.formbutton").on('click', function(evt) {
             var buttonid = $(this).attr("id");
             var textname = $(this).text();
 

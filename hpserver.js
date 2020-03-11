@@ -8,10 +8,10 @@ var DEBUG3 = false;
 var DEBUG4 = false;
 var DEBUG5 = false;
 var DEBUG6 = false;
-var DEBUG7 = true;
+var DEBUG7 = false;
 var DEBUG8 = false;
 var DEBUG9 = false;
-// var ignorepw = false;
+var IGNOREPW = false;
 
 // websocket and http servers
 var webSocketServer = require('websocket').server;
@@ -162,11 +162,13 @@ function readOptions() {
 
     var rewrite = false;
     var fname = "hmoptions.cfg";
+    GLB.newuser = false;
     GLB.options = {};
 
     try {
         if ( !fs.existsSync(fname) ) {
-            throw "hmoptions.cfg file not found. HousePanel will operate without any hubs until one is authorized.";
+            GLB.newuser = true;
+            throw "hmoptions.cfg file not found.  New user assumed.  Welcome to HousePanel.";
         } else {
             GLB.options = JSON.parse(fs.readFileSync(fname, 'utf8'));
             if ( !GLB.options ) {
@@ -177,11 +179,31 @@ function readOptions() {
 
         if ( !array_key_exists("config", GLB.options) ) {
             throw "configuration settings were not found in " + fname + " configuration file.";
-            // GLB.options["config"] = {};
-            // rewrite = true;
         }
     } catch(e) {
         console.log((new Date()), e); 
+        setDefaults();
+        rewrite = true;
+    }
+
+    // get the last user that logged in
+    // and if not there use the default user
+    var uname;
+    if ( array_key_exists("uname", GLB.options["config"]) ) {
+        uname = GLB.options["config"]["uname"];
+        if ( !uname ) {
+            uname = "default";
+        }
+    } else {
+        uname = "default";
+        GLB.options["config"]["uname"] = uname;
+        rewrite = true;
+    }
+
+    // check for empty rooms, things, and index
+    if ( !array_key_exists("rooms", GLB.options) ||
+         !array_key_exists("things", GLB.options) ||
+         !array_key_exists("index", GLB.options) ) {
         setDefaults();
         rewrite = true;
     }
@@ -201,30 +223,8 @@ function readOptions() {
         rewrite = true;
     }
 
-    // check for empty rooms, things, and index
-    if ( !array_key_exists("rooms", GLB.options) ||
-         !array_key_exists("things", GLB.options) ||
-         !array_key_exists("index", GLB.options) ) {
-        setDefaults();
-        rewrite = true;
-    }
-
     if ( !array_key_exists("useroptions", GLB.options) ) {
         GLB.options["useroptions"]= utils.getTypes();
-        rewrite = true;
-    }
-
-    // get the last user that logged in
-    // and if not there use the default user
-    var uname;
-    if ( array_key_exists("uname", GLB.options["config"]) ) {
-        uname = GLB.options["config"]["uname"];
-        if ( !uname ) {
-            uname = "default";
-        }
-    } else {
-        uname = "default";
-        GLB.options["config"]["uname"] = uname;
         rewrite = true;
     }
 
@@ -264,6 +264,7 @@ function readOptions() {
     }
     
     // get custom settings for this user
+    // or create the custom config for new users
     var customfname = "hm_" + uname + ".cfg";
     if ( !fs.existsSync(customfname) ) {
         // this format is now in real json format and includes user_ tiles
@@ -287,8 +288,7 @@ function readOptions() {
         var str = fs.readFileSync(customfname, 'utf8');
         var str1 = str.replace("\r","");
         var str2 = str1.replace("\n","");
-        var str3 = str2.replace("\t","");
-        var opts = JSON.parse(str3);
+        var opts = JSON.parse(str2);
 
         var opt_rooms = null;
         var opt_things = null;
@@ -870,7 +870,7 @@ function setIsyFields(nodeid, value, props) {
             var val = obj.value;
             value = translateIsy(nodeid, obj.id, obj.uom, value, val, obj.formatted);
             allthings[idx]["value"] = clone(value);
-            pushClient(nodeid, "isy", subid, value);
+            pushClient(nodeid, "isy", subid, value, false, false);
         });
     }
     // updateOptions(reloadpath);
@@ -964,7 +964,7 @@ function setDefaults() {
     var uname = "default";
     var skin = "skin-housepanel";
     GLB.options.config["uname"] = uname;
-    GLB.pwcrypt = "";
+    GLB.pwcrypt = IGNOREPW ? true : false;
 
     GLB.options.config["pword"] = {};
     GLB.options.config["pword"][uname] = ["", skin];
@@ -2490,8 +2490,8 @@ function processIsyMessage(isymsg) {
 
             if ( is_array(node) && node.length && node[0]!=="" &&
                  is_array(control) && control.length && control[0]!=="" ) {
-                var id = node[0];
-                var idx = "isy|" + id;
+                var bid = node[0];
+                var idx = "isy|" + bid;
 
                 if ( allthings && allthings[idx] && allthings[idx].value && allthings[idx].type==="isy" ) {
                     var value = allthings[idx].value;
@@ -2517,18 +2517,223 @@ function processIsyMessage(isymsg) {
                         return;
                     }
 
-                    var newvalue = translateIsy(id, control[0], uom, value, newval, "");
-
+                    var newvalue = translateIsy(bid, control[0], uom, value, newval, "");
                     var subid = mapIsy(control[0], uom);
                     allthings[idx].value = newvalue;
-                    pushClient(id, "isy", subid, newvalue);
+
+                    pushClient(bid, "isy", subid, newvalue, false, false);
+
+                    // process rules and links
+                    if ( GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true ) {
+                        // processRules(bid, "isy", subid, newvalue);
+                        processLinks(bid, "isy", subid, newvalue);
+                    }
                     if ( DEBUG9 ) {
-                        console.log("ISY webSocket updated node: ", id, " trigger:", control[0], " uom: ", uom, " newval: ", newval, " value: ", newvalue);
+                        console.log("ISY webSocket updated node: ", bid, " trigger:", control[0], " uom: ", uom, " newval: ", newval, " value: ", newvalue);
                     }
                 }
             }
         }
     });
+}
+
+// function processRules(bid, thetype, trigger, pvalue) {
+//     // go through all tiles with a new rule type
+//     var idx = thetype + "|" + bid;
+//     try {
+//         var index = GLB.options["index"];
+//         var tileid = index[idx].toString();
+//     } catch (e) {
+//         console.log("webSocket RULE error: id: ", bid, " type: ", thetype, " trigger: ", trigger, " error: ", e);
+//         return;
+//     }
+    
+//     // rule structure
+//     // if: tile=num[= or < or > or !]value, tile=num=value[=attr], tile=num=attr=[attr]...
+//     // num is the tile number and value is the comparison text or value string
+//     // the symbol between num and value determines if this is an equal, less, greater, or not equal test
+//     // the attr variable is optional but if provided will be sent to the api
+//     // 
+    
+//     // construct the if phrase for the trigger
+//     var regpattern = /if\s*[:| ]\s*(\d*)\s*=\s*([\w\s-]*)(=|<|>|!)\s*(.*)/;
+//     var itempattern =  /(\d*)\s*=\s*([\w\s-]*)\s*=\s*(.*)/;
+//     var itempattern2 = /(\d*)\s*=\s*([\w\s-]*)\s*=\s*(.*)=(.*)/;
+//     var regsplit = /[,;]/;
+//     var ifvalue = pvalue[trigger];
+    
+//     // print some debug info
+//     if ( LOGWEBSOCKET ) {
+//         console.log("webSocket RULE - name: id: ", bid, " type: ", thetype, " trigger: ", trigger, " tileid: ", tileid);
+//     }
+
+//     // process all tiles that subscribe to this trigger
+//     $('div.user_hidden[command="RULE"]').each(function() {
+//         var linkval = $(this).attr("linkval");
+        
+//         // split the commands into trigger and other commands
+//         var testcommands = linkval.split(regsplit);
+//         var triggercom = testcommands[0].trim();
+//         var res = triggercom.match(regpattern);
+//         var ismatch = false;
+        
+//         if ( testcommands.length > 1 && res ) {
+            
+//             var matchtile = res[1].trim();
+//             var matchsubid = res[2].trim();
+//             var matchop = res[3];
+//             var matchval = res[4].trim();
+                
+//             // check to see if this custom tile matches the rule specification
+//             // to match the tile number and the subid must match the trigger
+//             // and the rule operand must be either =, <, >, or !
+//             if ( matchtile===tileid && matchsubid===trigger ) {
+//                 ismatch = ( 
+//                     matchop==="=" && matchval===ifvalue ||
+//                     matchop==="!" && matchval!==ifvalue ||
+//                     matchop==="<" && matchval < ifvalue ||
+//                     matchop===">" && matchval > ifvalue 
+//                 );
+//             }
+//         }
+        
+//         // console.log("ismatch: ", ismatch, " tileid: ", tileid, " linkval: ", linkval, " res: ", res, " testcommands: ", testcommands);
+//         // process all the actions requested if the if conditions are met
+//         // this loops through all the actions specified after the trigger test
+//         // the triggering tile must exist on the panel for this to work
+//         if ( ismatch ) {
+//             var i;
+//             for ( i= 1; i < testcommands.length; i++ ) {
+                
+//                 var itemaction = testcommands[i].trim();
+//                 var items = itemaction.match(itempattern);
+//                 var items2 = itemaction.match(itempattern2);
+                
+//                 if ( items ) {
+                    
+//                     // get the tile info for this rule item
+//                     // this pulls the items from the regular expression variables
+//                     var tilenum = items[1].trim();
+//                     var subidtrigger = items[2].trim();
+//                     var ontrigger;
+//                     var theattr;
+                    
+//                     // get the first tile on the panel that matches this tile number
+//                     var tile = $('div.panel div.thing[tile="'+tilenum+'"]').first();
+                    
+//                     if ( tile ) {
+//                         var aid = tile.attr("id").substring(2);
+//                         var trbid = tile.attr("bid");
+//                         if ( items2 ) {
+//                             ontrigger = items2[3].trim();
+//                             theattr = items2[4].trim();
+//                         } else {
+//                             ontrigger = items[3];
+//                             // theattr = $("a-"+aid+"-"+subidtrigger).attr("class");
+//                             theattr = "";
+//                         }
+//                         var hubnum = tile.attr("hub");
+//                         var trtype = tile.attr("type");
+//                         // invoke the command for the subscribed tile if it will make a difference
+//                         // var currentvalue = $("#a-"+aid+"-"+subidtrigger).html();
+
+//                         console.log("Rule trigger for tile: ", tilenum, " type: ", trtype, " id: ", trbid, "subid: ", subidtrigger, " value: ", ontrigger, " attr: ", theattr);
+//                         var ajaxcall = "doaction";
+//                         $.post(cm_Globals.returnURL, 
+//                                {useajax: ajaxcall, id: trbid, tile: tilenum, type: trtype, value: ontrigger, attr: theattr, hubid: hubnum, subid: subidtrigger},
+//                                function (presult, pstatus) {
+//                                     if (pstatus==="success") {
+//                                         console.log( ajaxcall + ": POST returned: ", presult );
+//                                     } else {
+//                                         console.log(ajavcall, " Error = ", pstatus);
+//                                     }
+//                                }, "json"
+//                         );
+//                     }
+//                 }
+//             }
+//         }
+//     });
+// }
+
+function processLinks(bid, thetype, trigger, pvalue) {
+
+    // go through all things that could be links for this tile
+    var userid = "user_" + bid;
+
+    // if this tile has no link, do nothing
+    if ( !array_key_exists(userid, GLB.options) ) {
+        return;
+    }
+
+    // determine the type of trigger
+    var ontrigger = false;
+    if ( trigger==="motion" && (pvalue.motion ==="active" || pvalue.switch ==="DON") ) {
+        ontrigger = "on";
+    } else if ( trigger==="motion" && (pvalue.motion ==="inactive" || pvalue.switch ==="DOF") ) {
+        ontrigger = "off";
+    } else if ( trigger==="contact" && (pvalue.contact ==="open"  || pvalue.switch ==="DON") ) {
+        ontrigger = "on";
+    } else if ( trigger==="contact" && (pvalue.contact ==="closed" || pvalue.switch ==="DOF") ) {
+        ontrigger = "off";
+    } else if ( trigger==="switch" && (pvalue.switch ==="on" || pvalue.switch ==="DON") ) {
+        ontrigger = "on";
+    } else if ( trigger==="switch" && (pvalue.switch ==="off" || pvalue.switch ==="DOF") ) {
+        ontrigger = "off";
+    }
+
+    // debug info
+    var idx = thetype + "|" + bid;
+    console.log("linked trigger: ", trigger, " on trigger: ", ontrigger, " idx: ", idx, " pvalue: ", pvalue);
+
+    if ( !ontrigger ) {
+        return;
+    }
+
+    var items = GLB.options[userid];
+    var linkidx;
+    items.forEach( function(item) {
+
+        // process only links
+        if ( item[0]==="LINK" ) {
+            var tilenum = parseInt(item[1]);
+            var linksubid = item[2];
+
+            // auto trigger any linked field that is a switch
+            // this has to start with the name switch
+            if ( isNaN(tilenum) || !linksubid.startsWith("switch") )  {
+                console.log("LINK error - either a non-integer provided or not a switch. tilenum: ", item[1], " subid:", linksubid);
+                linkidx = false;
+            } else {
+                console.log("Processing LINK for tilenum: ", tilenum, " subid: ", item[2]);
+                linkidx = array_search(tilenum, GLB.options.index);
+            }
+
+            if ( linkidx!==false ) {
+                var linktype = allthings[linkidx]["type"];
+
+                // fix up isy devices
+                if ( linktype==="isy" && ontrigger==="on" ) { ontrigger = "DON"; }
+                if ( linktype==="isy" && ontrigger==="off" ) { ontrigger = "DOF"; }
+
+                var linkbid = allthings[linkidx]["id"];
+                var hubId = allthings[linkidx]["hubnum"];
+                var hub = findHub(hubId);
+
+                // hub, swid, swtype, swval, swattr, subid, linkinfo, popup
+                callHub(hub, linkbid, linktype, ontrigger, "", "switch");
+
+                // push to clients immediately
+                // Note: this isn't really needed since callHub also pushes status when done
+                // but we can do it here to create instant feedback
+                // the code is commented out because I want to mirror what is actually happening
+                // pushClient(linkbid, linktype, "switch", {switch: ontrigger}, false, false);
+                // pushClient(linkbid, linktype, linksubid, {switch: ontrigger}, false, false);
+            }
+        }
+
+    });
+
 }
 
 function pushClient(swid, swtype, subid, body, linkinfo, popup) {
@@ -2563,7 +2768,7 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
     // save the result to push to all clients
     entry["value"] = thevalue;
     if ( DEBUG9 ) {
-        console.log("pushClient: ", entry, " linkinfo: ", linkinfo);
+        console.log("pushClient: ", UTIL.inspect(entry, false, null, false), " linkinfo: ", linkinfo);
     }
 
     // update the main array with changed push values
@@ -2711,6 +2916,10 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
             if ( DEBUG7 ) {
                 console.log("doAction: ", swid, " type: ", swtype, " subid: ", subid, " value: ", body);
             }
+            // update all clients - this is actually not needed if your server is accessible to websocket updates
+            // It is left here because my dev machine sometimes doesn't get websocket pushes
+            // you can comment this if your server gets pushes reliable
+            // leaving it here causes no harm other than processing the visual update twice
             if ( body ) {
                 pushClient(swid, swtype, subid, body, linkinfo, popup);
             }
@@ -2724,9 +2933,15 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
             var result = parser.parse(body);
             var rres = result.RestResponse;
             if ( DEBUG7 ) {
-                console.log("ISY doAction: ", rres, " value: ", isyresp);
+                console.log("ISY doAction: ", rres, " value: ", isyresp, " linkinfo: ", linkinfo);
             }
-            if ( rres && rres.status===200 ) {
+            // update all clients - this is actually not needed if your server is accessible to websocket updates
+            // because ISY will push state updates via a websocket
+            // and that will process a similar pushClient but for only those things that change
+            // It is left here because my dev machine sometimes doesn't get websocket pushes
+            // you can comment this if your server gets pushes reliable
+            // leaving it here causes no harm other than processing the visual update twice
+            if ( rres && rres.status.toString()==="200" ) {
                 pushClient(swid, swtype, subid, isyresp, linkinfo, popup);
             }
         }
@@ -3751,8 +3966,6 @@ function getOptionsPage(pathname) {
 function mainPage(proto, hostname, pathname) {
     var $tc = "";
 
-    console.log("Displaying main HousePanel web page");
-
     var thingoptions = GLB.options["things"];
     var roomoptions = GLB.options["rooms"];
     var config = GLB.options.config;
@@ -3764,8 +3977,17 @@ function mainPage(proto, hostname, pathname) {
         kioskmode = false;
     }
     GLB.returnURL = proto + "://" + hostname
+    console.log("Displaying main HousePanel web page: ", GLB.returnURL);
 
     $tc += utils.getHeader(skin);
+
+    if ( GLB.newuser ) {
+        $tc += "<div class=\"greeting\"><strong>Welcome New User!</strong><br/ >You should first try to link your smart home hubs, using the Hub Auth button below. ";
+        $tc += "You can also explore all that HousePanel has to offer by experimenting with the two clock tiles placed in each room. ";
+        $tc += "When you are done, they can be removed in Edit mode or from the Options page. Click on the ? mark in the upper right corner. ";
+        $tc += "to access the full online manual. Have fun!</div>";
+        GLB.newuser = false;
+    }
 
     if ( DEBUG3 ) {
         console.log(GLB.options);
@@ -4027,7 +4249,7 @@ function saveUserPw(body) {
 function processOptions($optarray) {
 
     if (DEBUG4) {
-        console.log("Debug Print for New Options Created - After Processing");
+        console.log("Process Options - Before Processing");
         console.log(UTIL.inspect(GLB.options, false, null, false));
     }
     var $specialtiles = utils.getSpecials();
@@ -4160,7 +4382,7 @@ function processOptions($optarray) {
     $options["config"] = $configoptions;
     
     if (DEBUG4) {
-        console.log("Debug Print for New Options Created - After Processing");
+        console.log("Process Options - After Processing");
         console.log(UTIL.inspect(GLB.options, false, null, false));
     }
 
@@ -4488,23 +4710,43 @@ function apiCall(body, protocol) {
             break;
 
         case "dragdrop":
-            result = setPosition(swid, swtype, swval, swattr);
+            if ( protocol==="POST" ) {
+                result = setPosition(swid, swtype, swval, swattr);
+            } else {
+                result = "error - api call [" + api + "] is only supported in " + protocol + " mode.";
+            }
             break;
 
         case "dragmake":
-            result = addThing(swid, swtype, swval, swattr);
+            if ( protocol==="POST" ) {
+                result = addThing(swid, swtype, swval, swattr);
+            } else {
+                result = "error - api call [" + api + "] is only supported in " + protocol + " mode.";
+            }
             break;
     
         case "dragdelete":
-            result = delThing(swid, swtype, swval, swattr);
+            if ( protocol==="POST" ) {
+                result = delThing(swid, swtype, swval, swattr);
+            } else {
+                result = "error - api call [" + api + "] is only supported in " + protocol + " mode.";
+            }
             break;
 
         case "pagedelete":
-            result = delPage(swval);
+            if ( protocol==="POST" ) {
+                result = delPage(swval);
+            } else {
+                result = "error - api call [" + api + "] is only supported in " + protocol + " mode.";
+            }
             break;
     
         case "pageadd":
-            result = addPage();
+            if ( protocol==="POST" ) {
+                result = addPage();
+            } else {
+                result = "error - api call [" + api + "] is only supported in " + protocol + " mode.";
+            }
             break;
 
         case "getcatalog":
@@ -4513,11 +4755,15 @@ function apiCall(body, protocol) {
             
         case "refactor":
             if ( protocol==="POST" ) {
-                refactorOptions();
+                // TODO: this does not yet work so it was removed from menu
+                // note really needed any more - it just renumbers tiles
+                // the same effect can be had by deleting your hmoptions.cfg file
+                // but this will remove all customizations. This routine attempted to save them but it isn't working right now
+                // refactorOptions();
                 getAllThings();
                 result = "success";
             } else {
-                result = "error - api call [" + api + "] is only supported in POST mode.";
+                result = "error - api call [" + api + "] is only supported in " + protocol + " mode.";
             }
             break;
     
@@ -4526,6 +4772,7 @@ function apiCall(body, protocol) {
             result = "success";
             break;
         
+        // the GUI will never ask to reload options but a user might when making an api call
         case "getoptions":
             var reload = ( body['swattr']==="reload" );
             if ( reload ) {
@@ -4550,7 +4797,7 @@ function apiCall(body, protocol) {
             if ( protocol==="POST" ) {
                 result = saveFilters(body);
             } else {
-                result = "error - api call [" + api + "] not supported in GET mode.";
+                result = "error - api call [" + api + "] is only supported in " + protocol + " mode.";
             }
         break;
 
@@ -4558,7 +4805,7 @@ function apiCall(body, protocol) {
             if ( protocol==="POST" ) {
                 result = saveUserPw(body);
             } else {
-                result = "error - api call [" + api + "] not supported in GET mode.";
+                result = "error - api call [" + api + "] is only supported in " + protocol + " mode.";
             }
             break;
 
@@ -4573,7 +4820,7 @@ function apiCall(body, protocol) {
                 processOptions(body);
                 result = "success";
             } else {
-                result = "error - api call [" + api + "] not supported in GET mode.";
+                result = "error - api call [" + api + "] is only supported in " + protocol + " mode.";
             }
             break;
 
@@ -4605,7 +4852,7 @@ function apiCall(body, protocol) {
                 // check for matching passwords
                 if ( array_key_exists(uname, pwords ) ) {
                     var pw = pwords[uname];
-                    if ( pw[0] === pword ) {
+                    if ( pw[0] === pword || IGNOREPW ) {
                         GLB.pwcrypt = pw[0];
                     } else {
                         GLB.pwcrypt = false;
@@ -4784,10 +5031,26 @@ function apiCall(body, protocol) {
         case "showid":
         case "logout":
         case "trackupdate":
-                var result = "error - [" + api + "] API call is no longer supported.";
+                var result = "error - [" + api + "] API call is no longer supported. Try loading browser with: " + GLB.returnURL + "/" + api;
                 console.log(result);
                 break;
                 
+        case "reset":
+            if ( protocol==="GET" ) {
+                readOptions();
+                config["pword"] = {};
+                config["pword"]["default"] = ["", "skin-housepanel"];
+                config["uname"] = "default";
+                GLB.pwcrypt = true;
+                GLB.options["config"] = config;
+                writeOptions(GLB.options, true);
+                pushClient("reload", "/logout");
+                result = getLoginPage();
+            } else {
+                result = "error - api call [" + api + "] is only supported in " + protocol + " mode.";
+            }
+            break;
+
         default:
             result = "error - unrecognized " + protocol + " api call: " + api;
             break;
@@ -4810,7 +5073,7 @@ var uname = getUserName();
 try {
     GLB.pwcrypt = GLB.options.config.pword[uname][0];
 } catch (e) {
-    GLB.pwcrypt = false;
+    GLB.pwcrypt = (IGNOREPW || GLB.newuser) ? true : false;
 }
 
 if ( DEBUG6 ) {
@@ -4836,28 +5099,30 @@ try {
 
     // list on the port
     app.listen(port, function () {
-        console.log((new Date()) + " HousePanel Server is running on port: ", port);
+        console.log((new Date()) + " HousePanel Node.js Server is running on port: ", port);
     });
     applistening = true;
     
 } catch (e) {
-    console.log((new Date()) + ' HousePanel Node.js server could not be started on port: ', port);
+    console.log((new Date()) + ' HousePanel Node.js Server could not be started on port: ', port);
     app = null;
     applistening = false;
 }
 
 // retrieve all nodes/things
 // client pages are refreshed when each hub is done reading
-getAllThings();
+if ( applistening ) {
+    getAllThings();
 
-var maxroom = 0;
-if ( array_key_exists("things", GLB.options) && 
-     array_key_exists("rooms", GLB.options) ) {
-    var thingoptions = GLB.options["things"];
-    for (var roomname in thingoptions) {
-        var thinglist = thingoptions[roomname];
-        if ( thinglist.length > maxroom ) {
-            maxroom = thinglist.length;
+    var maxroom = 0;
+    if ( array_key_exists("things", GLB.options) && 
+        array_key_exists("rooms", GLB.options) ) {
+        var thingoptions = GLB.options["things"];
+        for (var roomname in thingoptions) {
+            var thinglist = thingoptions[roomname];
+            if ( thinglist.length > maxroom ) {
+                maxroom = thinglist.length;
+            }
         }
     }
 }
@@ -4866,7 +5131,7 @@ if ( array_key_exists("things", GLB.options) &&
 server = http.createServer(function(req, res) {
 });
 
-
+// set up server for a two way socket communication with the browser
 if ( server && config.webSocketServerPort ) {
     // create the webSocket server
     wsServer = new webSocketServer({
@@ -4881,7 +5146,9 @@ if ( server && config.webSocketServerPort ) {
     console.log((new Date()) + " webSocket port not valid. webSocketServerPort= ", config.webSocketServerPort);
 }
 
+
 // make websocket connection to any ISY hub
+// unlike ST and HE hubs below, communication from ISY happens over a real webSocket
 var isyhub = false;
 var wshost;
 for (var h in hubs) {
@@ -4964,7 +5231,7 @@ if ( app && applistening ) {
         if ( req.path==="/" || typeof req.path==="undefined" || req.path==="/undefined" || req.path==="undefined" ) {
 
             // read options upon a reload
-            readOptions();
+            // readOptions();
             uname = getUserName();
             
             // set the global variable so other functions can return here
@@ -4973,14 +5240,17 @@ if ( app && applistening ) {
 
             // allow user to manually reset things with this code
             // the hub auth flow is handled with the /reauth path later below
-            if ( isquery && queryobj.code && (queryobj.code==="reset" || queryobj.code==="refresh") ) {
+            // this removes all user accounts and logs everyone out
+            if ( isquery && queryobj.code && (queryobj.code==="reset") ) {
+                readOptions();
                 config["pword"] = {};
                 config["pword"]["default"] = ["", "skin-housepanel"];
                 config["uname"] = "default";
                 GLB.pwcrypt = false;
                 GLB.options["config"] = config;
                 writeOptions(GLB.options, true);
-                $tc = getLoginPage();
+                pushClient("reload", "/logout");
+                $tc = "Logging out all clients..."; // getLoginPage();
 
             // handle user provided get api calls
             } else if ( isquery ) {
@@ -4989,27 +5259,18 @@ if ( app && applistening ) {
 
             // display the main page if password matches
             // or if we don't have a pw
-            } else if ( array_key_exists(uname, config["pword"]) && GLB.pwcrypt===config["pword"][uname][0] ) {
+            } else if ( IGNOREPW || GLB.newuser || GLB.pwcrypt===true || (array_key_exists(uname, config["pword"]) && GLB.pwcrypt===config["pword"][uname][0]) ) {
                 // reset for next refresh
                 GLB.defhub = "-1";
+                
+                // set this to always see new user welcome message
+                // otherwise, comment it out
+                // GLB.newuser = true;
+
+                GLB.pwcrypt===config["pword"][uname][0];
                 console.log("login accepted. uname = ", uname, " pwcrypt = ", GLB.pwcrypt);
                 $tc = mainPage(req.protocol, req.headers.host, req.path);
 
-            // if user didn't provide a recognized login, show main page anyway
-            // this prevents many problems where users could not log in
-            // the default log in here forces a user name to "default" and the pw to blank
-            // } else if ( ignorepw===true ) {
-            //     console.log("login rejected. uname = ", uname, " pwcrypt = ", GLB.pwcrypt," but... loading page anyway because you have ignorepw turned on.");
-            //     if ( !array_key_exists("pword", config) ) {
-            //         config["pword"] = {};
-            //     }
-            //     config["pword"][uname] = ["", "skin-housepanel"];
-            //     // config["uname"] = "default";
-            //     GLB.pwcrypt = "";
-            //     GLB.options["config"] = config;
-            //     writeOptions(GLB.options);
-            //     GLB.defhub = "-1";
-            //     $tc = mainPage(req.protocol, req.headers.host, req.path);
             } else {
                 console.log("login rejected. uname = ", uname, " pwcrypt = ", GLB.pwcrypt);
                 $tc = getLoginPage();
@@ -5018,26 +5279,26 @@ if ( app && applistening ) {
             res.end();
 
         } else if ( req.path==="/showid") {
-            readOptions();
+            // readOptions();
             $tc = getInfoPage(GLB.returnURL, req.path);
             res.send($tc);
             res.end();
 
         } else if ( req.path==="/showoptions") {
-            readOptions();
+            // readOptions();
             $tc = getOptionsPage(req.path);
             res.send($tc);
             res.end();
 
         } else if ( req.path==="/logout") {
-            readOptions();
+            // readOptions();
             $tc = getLoginPage();
             GLB.pwcrypt = false;
             res.send($tc);
             res.end();
 
         } else if ( req.path==="/reauth") {
-            readOptions();
+            // readOptions();
             d = new Date();
             hpcode = d.getTime();
             GLB.hpcode = hpcode.toString();
@@ -5112,7 +5373,8 @@ if ( app && applistening ) {
             readOptions();
             getAllThings();
         
-        // handle api calls from the hubs here
+        // handle callbacks from ST and HE hubs here
+        // for ISY this is done via websockets above
         } else if ( req.body['msgtype'] == "update" ) {
             console.log((new Date()) + " Received update msg from hub. ", req.body["hubid"], " body: ", req.body);
 
@@ -5132,6 +5394,13 @@ if ( app && applistening ) {
                     if ( entry['value']['trackData'] ) { delete entry['value']['trackData']; }
                     console.log((new Date()) + ' Updating tile #',entry['id'],' from trigger:', req.body['change_attribute'] );
                     pushClient(entry.id, entry.type, req.body['change_attribute'], entry['value'])
+
+                    // process rules and links
+                    if ( GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true ) {
+                        // processRules(bid, "isy", subid, newvalue);
+                        processLinks(entry.id, entry.type, req.body['change_attribute'], entry['value']);
+                    }
+
                 }
             }
             // console.log((new Date()) + ' pushed new status info to ' + cnt + ' tiles');
