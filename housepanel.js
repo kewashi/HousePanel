@@ -130,10 +130,12 @@ function getAllthings(modalwindow, reload) {
                 } else {
                     console.log("Error: failure obtaining things from HousePanel: ", presult);
                     cm_Globals.allthings = null;
-                    if ( modalwindow ) {
-                        closeModal(modalwindow);
-                    }
                 }
+
+                if ( modalwindow ) {
+                    closeModal(modalwindow);
+                }
+
             }, "json"
         );
 }
@@ -435,12 +437,8 @@ function setupWebsocket()
         var reservedcap = ["name", "DeviceWatch-DeviceStatus", "DeviceWatch-Enroll", "checkInterval", "healthStatus"];
         try {
             var presult = JSON.parse(evt.data);
-            var pvalue = presult.value;
             var bid = presult.id;
             var thetype = presult.type;
-            var client = presult.client;
-            var clientcount = presult.clientcount;
-            var trigger = presult.trigger;
 
             // reload page if signalled from server
             if ( bid==="reload" ) {
@@ -455,6 +453,10 @@ function setupWebsocket()
                 window.location.href = reloadpage;
                 return;
             }
+            var pvalue = presult.value;
+            var client = presult.client;
+            var clientcount = presult.clientcount;
+            var trigger = presult.trigger;
             
             // handle popups returned from a query
             // this currently is not used but could be later
@@ -504,6 +506,12 @@ function setupWebsocket()
             if ( pvalue["color"] ) {
                 delete( pvalue["color"] );
             }
+
+            // change not present to absent for presence tiles
+            // it was an early bad design decision to alter ST's value that I'm now stuck with
+            if ( pvalue["presence"] && pvalue["presence"] ==="not present" ) {
+                pvalue["presence"] = "absent";
+            }
         
             // update all the tiles that match this type and id
             // this now works even if tile isn't on the panel because
@@ -533,6 +541,12 @@ function setupWebsocket()
                     var oldclass = $(sibling).attr("class");
                     var value = pvalue[trigger];
 
+                    // change not present to absent for presence tiles
+                    // it was an early bad design decision to alter ST's value that I'm now stuck with
+                    if ( trigger==="presence" && value==="not present" ) {
+                        value = "absent";
+                    }
+
                     // swap out the class and change value
                     if ( oldclass && oldvalue && value &&
                          trigger!=="name" && trigger!=="trackImage" && trigger!=="color" &&
@@ -545,20 +559,13 @@ function setupWebsocket()
                             $(sibling).removeClass(oldvalue);
                             $(sibling).addClass(value);
                     }
-                    $(sibling).html( pvalue[trigger] );
+                    $(sibling).html( value );
                 }
             });
         }
         
-        // handle rules and link triggers but only for the last client
-        // TODO ... move this to the server routine ... DONE
-        // console.log("rules: ", cm_Globals.options.rules, " client= ", client);
-        // if ( cm_Globals.options && client===clientcount ) {
-        //     if ( cm_Globals.options["rules"]==="true" || cm_Globals.options["rules"]===true ) {
-        //         processRules(pname, bid, thetype, trigger, pvalue);
-        //         processLinks(pname, bid, thetype, trigger, pvalue);
-        //     } 
-        // }
+        // note: the old HP processed rules and links here
+        // this was moved to the Node server wehre it is far more efficient
     };
     
     // if this socket connection closes then try to reconnect
@@ -644,14 +651,13 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
 
     // skip if this modal window is already up...
     if ( typeof modalWindows[modalid]!=="undefined" && modalWindows[modalid]>0 ) { 
-        console.log("modal suppressed: ", modalWindows);
+        // console.log("modal suppressed: ", modalWindows);
         return; 
     }
     
     modalWindows[modalid] = 1;
     modalStatus = modalStatus + 1;
-
-    console.log("modalid= ", modalid, "modaltag= ", modaltag, " addok= ", addok, " pos= ", pos, " modalWindows= ", modalWindows, " modalStatus= ", modalStatus);
+    // console.log("modalid= ", modalid, "modaltag= ", modaltag, " addok= ", addok, " pos= ", pos, " modalWindows= ", modalWindows, " modalStatus= ", modalStatus);
     
     var modaldata = modalcontent;
     var modalhook;
@@ -764,9 +770,13 @@ function setupColors() {
     
    $("div.overlay.color >div.color").each( function() {
         var that = $(this);
+        var defcolor = that.html();
+        if ( !defcolor ) {
+            defcolor = "#FFFFFF";
+        }
         $(this).minicolors({
             position: "bottom left",
-            defaultValue: that.html(),
+            defaultValue: defcolor,
             theme: 'default',
             change: function(hex) {
                 try {
@@ -2336,7 +2346,8 @@ function clockUpdater(tz) {
             // take care of linked times
             } else if ( $(this).siblings("div.user_hidden").length > 0 ) {
                 var linkval = $(this).siblings("div.user_hidden").attr("linkval");
-                if ( linkval && $("div.clock.time.p_"+linkval) ) {
+                var ival = parseInt(linkval);
+                if ( linkval && !isNaN(ival) && $("div.clock.time.p_"+linkval) ) {
                     var timestr = $("div.clock.time.p_"+linkval).html();
                     $(this).html(timestr);
                 }

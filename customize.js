@@ -114,7 +114,8 @@ function customizeTile(thingindex, aid, bid, str_type, hubnum) {
                 });
 
                 // grab the global list of all things and options
-                if ( !cm_Globals.allthings || !cm_Globals.options ) {
+                var forceload = true;
+                if ( forceload || !cm_Globals.allthings || !cm_Globals.options ) {
                     var pos = {top: 5, left: 5, zindex: 9999, background: "red", color: "white"};
                     createModal("waitbox", "Loading data. Please wait...", "div.modalbuttons", false, pos);
                     getAllthings("waitbox", false);
@@ -396,7 +397,7 @@ function loadLinkItem(idx, allowuser, sortval, sortup) {
     // }
     var thevalue = thing["value"];
 
-    // console.log("idx= ", idx, " thing= ", thing, " loadLinkItem - thevalue= ", thevalue);
+    console.log("idx= ", idx, " loadLinkItem - thevalue= ", thevalue, " allowuser= ", allowuser);
     var subids = Object.keys(thevalue);
     
     var numthings = 0;
@@ -427,45 +428,49 @@ function loadLinkItem(idx, allowuser, sortval, sortup) {
     // first sort and make sure we get rid of dups
     if ( allowuser ) {
         var uid = "user_" + cm_Globals.id;
+        console.log("uid: ", uid, " subids: ", cm_Globals.options[uid]);
         sortExistingFields(sortval, sortup);
         $.each(cm_Globals.options[uid], function(index, val) {
             var subid = val[2];
-            if ( !subid.startsWith("user_") && subids.includes(subid) && subids.includes("user_" + subid) ) {
-                results+= "<option value='" + subid + "'>" + subid + "<span class='reddot'> *</span></option>";
-                numthings++;
-            }
+            // if ( !subid.startsWith("user_") && subids.includes(subid) && subids.includes("user_" + subid) ) {
+            results+= "<option value='" + subid + "'>" + subid + "<span class='reddot'> *</span></option>";
+            numthings++;
+            // }
         });
     }
     
     return {fields: results, num: numthings, firstitem: firstitem};
 }
  
- function initLinkActions(linkid, subid) {
+ function initLinkActions(linkidx, subid) {
     // get our fields and load them into link list box
     // and select the first item
 
     var options = cm_Globals.options;
     
     // if we pass an existing link, start with that
-    if ( linkid ) {
-        for ( var idx in options.index ) {
-            if ( options.index[idx].toString() === linkid ) {
-                cm_Globals.currentidx = idx;
-                break;
-            }
-        }
-    }
+    // we now pass the idx directly
+    // if ( linkid ) {
+    //     for ( var idx in options.index ) {
+    //         if ( options.index[idx].toString() === linkid ) {
+    //             cm_Globals.currentidx = idx;
+    //             break;
+    //         }
+    //     }
+    // }
     
-    var linkidx = cm_Globals.currentidx;
+    // var linkidx = cm_Globals.currentidx;
 
     // if the link isn't there then reset to digital clock default
-    if ( !cm_Globals.allthings[linkidx] ) {
-        linkidx = "clock|clockdigital";
+    if ( !linkidx || !cm_Globals.allthings[linkidx] ) {
+        linkidx = cm_Globals.currentidx;
+    } else {
+        cm_Globals.currentidx = linkidx;
     }
 
     var n = linkidx.indexOf("|");
     var bid = linkidx.substring(n+1);
-    linkid = options.index[cm_Globals.currentidx];
+    linkid = options.index[linkidx];
     
     // set the drop down list to the linked item
     $("#cm_link").prop("value", linkidx);
@@ -804,6 +809,8 @@ function handleBuiltin(subid) {
     var companion = "user_" + subid;
     cm_Globals.defaultclick = subid;
 
+    // console.log("builtin handler: subid= ", subid, "subids: ", subids, " companion= ", companion);
+
     // put the field clicked on in the input box
     $("#cm_userfield").attr("value",subid);
     $("#cm_userfield").val(subid);
@@ -814,22 +821,25 @@ function handleBuiltin(subid) {
     if ( subids.includes(companion) ) {
         var helperval = value[companion];
         helpers = helperval.split("::");
+
+        // helpers will always be this size now
         if ( helpers.length===3) {
             cmtype = helpers[1];
-            cmtext = decodeURIComponent(helpers[2]);
-            if ( cmtype==="TEXT" ) {
-                cmtext = cmtext.replace( /\+/g, ' ' );
+            if ( cmtype==="LINK" || cmtype==="RULE" || cmtype==="TEXT" ) {
+                cmtext = helpers[2];
+            } else {
+                cmtext = decodeURIComponent(helpers[2]);
             }
-        } else {
-            cmtype = helpers[2];
-            cmtext = "";
+            // if ( cmtype==="TEXT" ) {
+            //     cmtext = cmtext.replace( /\+/g, ' ' );
+            // }
         }
     }
 
     // update dyno panel
     if ( cmtype==="LINK" ) {
         // var oldval = $("#cm_customtype").val();
-        var linkid = helpers[3];
+        var linkid = helpers[2];
         $("#cm_customtype").prop("value", "LINK");
         $("#cm_customtype option[value='LINK']").prop('selected',true);
         var content = loadLinkPanel(cm_Globals.thingindex);

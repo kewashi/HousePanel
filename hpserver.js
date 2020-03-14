@@ -2,16 +2,18 @@
 process.title = 'hpserver';
 
 // debug options
-var DEBUG1 = true;
-var DEBUG2 = false;
-var DEBUG3 = false;
-var DEBUG4 = false;
-var DEBUG5 = false;
-var DEBUG6 = false;
-var DEBUG7 = false;
-var DEBUG8 = false;
-var DEBUG9 = false;
-var IGNOREPW = false;
+const DEBUG1 = true;       // basic debug info - file loading, hub loading
+const DEBUG2 = false;
+const DEBUG3 = false;
+const DEBUG4 = false;
+const DEBUG5 = false;
+const DEBUG6 = false;
+const DEBUG7 = false;
+const DEBUG8 = false;
+const DEBUG9 = false;
+const DEBUG10 = false;
+const DEBUG11 = false;
+const IGNOREPW = false;
 
 // websocket and http servers
 var webSocketServer = require('websocket').server;
@@ -145,12 +147,12 @@ function writeCustomCss(partnum, skin, str) {
         // write to specific skin folder if the location is valid
         try {
             fs.writeFileSync(skin + "/customtiles.css", fixstr, {encoding: "utf8", flag: opts});
-            console.log("custom CSS file saved in skin folder: ", skin, " of size: ", fixstr.length," part #", partnum);
+            console.log( (ddbg()), "custom CSS file saved in skin folder: ", skin, " of size: ", fixstr.length," part #", partnum);
             results = "success " + partnum;
         } catch (e) {
-            console.log(e);
-            console.log("Error attempting to save custom CSS file in skin folder: ", skin," part #", partnum);
-            results = "error - " + e;
+            var err = "error - attempting to save custom CSS file in skin folder: " + skin + " part #" + partnum;
+            console.log( (ddbg()), err);
+            results = err;
         }
     } else {
         results = "error - invalid skin: " + skin;
@@ -181,7 +183,7 @@ function readOptions() {
             throw "configuration settings were not found in " + fname + " configuration file.";
         }
     } catch(e) {
-        console.log((new Date()), e); 
+        console.log( (ddbg()), e); 
         setDefaults();
         rewrite = true;
     }
@@ -235,7 +237,7 @@ function readOptions() {
     }
 
     if ( DEBUG1 ) {
-        console.log((new Date()) + ' Config file for HP Version: ', version, " username: ", uname);
+        console.log( (ddbg()) + ' Config file for HP Version: ', version, " username: ", uname);
     }
 
     // read the hubs
@@ -248,12 +250,12 @@ function readOptions() {
     }
 
     if ( hubs.length > 0 ) {
-        console.log((new Date()) + ' Loading ', hubs.length,' hubs.');
+        console.log((ddbg()) + ' Loading ', hubs.length,' hubs.');
         if ( DEBUG2 ) {
             console.log(hubs);
         }
     } else {
-        console.log((new Date()) + ' No hubs found. HousePanel will only show special and custom tiles.');
+        console.log((ddbg()) + ' No hubs found. HousePanel will only show special and custom tiles.');
     }
 
     // update the options file if we added default info
@@ -281,7 +283,7 @@ function readOptions() {
     } else {
 
         if ( DEBUG3 ) {
-            console.log("Customizing room setup for user: ", uname);
+            console.log( (ddbg()), "Customizing room setup for user: ", uname);
         }
 
         // read this assuming new method only
@@ -392,7 +394,7 @@ function getHubInfo(hub, token, endpt, clientId, clientSecret) {
         var hubName;
         var hubId;
         if ( err ) {
-            console.log("error attempting to make hub name request.");
+            console.log( (ddbg()), "error - attempting to make hub name request.");
             return;
         }
 
@@ -401,7 +403,7 @@ function getHubInfo(hub, token, endpt, clientId, clientSecret) {
             hubName = jsonbody["sitename"];
             hubId = jsonbody["hubId"];
             if ( DEBUG2 ) {
-                console.log("hubName request return: ", jsonbody);
+                console.log( (ddbg()), "hubName request return: ", jsonbody);
             }
         } catch(e) {
             console.log("error retrieving hub name.");
@@ -411,7 +413,7 @@ function getHubInfo(hub, token, endpt, clientId, clientSecret) {
         }
 
         if ( DEBUG2 ) {
-            console.log("hub info: token= ", token, " endpt= ", endpt, " hubName= ", hubName, " hubId= ", hubId);
+            console.log( (ddbg()), "hub info: token= ", token, " endpt= ", endpt, " hubName= ", hubName, " hubId= ", hubId);
         }
 
         // now save our info
@@ -450,7 +452,7 @@ function getAccessToken(code, hub) {
     var nvpreq = {"grant_type": "authorization_code", "code": encodeURI(code), "client_id": encodeURI(clientId), 
                   "client_secret": encodeURI(clientSecret), "redirect_uri": encodeURI(redirect)};
     if ( DEBUG2 ) {
-        console.log("calling with nvpreq: ", nvpreq);
+        console.log( (ddbg()), "calling with nvpreq: ", nvpreq);
     }
     
     curl_call(tokenhost, header, nvpreq, false, "POST", tokenCallback);
@@ -460,11 +462,11 @@ function getAccessToken(code, hub) {
         // save the access token
         var jsonbody = JSON.parse(body);
         if ( DEBUG2 ) {
-            console.log("access token return: ", jsonbody);
+            console.log( (ddbg()), "access token return: ", jsonbody);
         }
 
         if ( jsonbody["error"] ) {
-            console.log("Token error authorizing hub: ", hubName, " error: ", err, " ", jsonbody["error"]);
+            console.log( (ddbg()), "Token error authorizing hub: ", hubName, " error: ", err, " ", jsonbody["error"]);
             GLB.defhub = "-1";
             pushClient("reload", "/reauth");
         } else if ( typeof jsonbody==="object" && array_key_exists("access_token", jsonbody) ) {
@@ -486,7 +488,7 @@ function getAccessToken(code, hub) {
                 curl_call(ephost, header, false, false, "GET", endptCallback);
             }
         } else {
-            console.log("Unknown error authorizing hub: ", hubName, " error: ", err, " body: ", body);
+            console.log( (ddbg()), "Unknown error authorizing hub: ", hubName, " error: ", err, " body: ", body);
             GLB.defhub = "-1";
             pushClient("reload", "/reauth");
         }
@@ -498,14 +500,14 @@ function getAccessToken(code, hub) {
         try {
             jsonbody = JSON.parse(body);
             if ( DEBUG2 ) {
-                console.log("endpoint return: ", jsonbody);
+                console.log( (ddbg()), "endpoint return: ", jsonbody);
             }
         } catch(e) {
             err = e;
         }
 
         if ( err ) {
-            console.log("getEndpoint error authorizing " + hub.hubType + " hub. error: ", err);
+            console.log( (ddbg()), "getEndpoint error authorizing " + hub.hubType + " hub. error: ", err);
             GLB.defhub = "-1";
             pushClient("reload", "/reauth");
         } else {
@@ -516,54 +518,12 @@ function getAccessToken(code, hub) {
         if ( token && endpt ) {
             getHubInfo(hub, token, endpt, clientId, clientSecret);
 
-            // var namehost = endpt + "/gethubinfo";
-            // header = {"Authorization": "Bearer " + token};
-            // nvpreq = {"scope": "app", "client_id": encodeURI(clientId), "client_secret": encodeURI(clientSecret)};
-            // curl_call(namehost, header, nvpreq, false, "POST", nameCallback);
         } else {
             GLB.defhub = "-1";
-            console.log("getEndpoint error authorizing " + hub.hubType + " hub. bad token: ", token, " or endpt: ", endpt);
+            console.log( (ddbg()), "getEndpoint error authorizing " + hub.hubType + " hub. bad token: ", token, " or endpt: ", endpt);
             pushClient("reload", "/reauth");
         }
     }
-
-    // async function nameCallback(err, res, body) {
-    //     var jsonbody = null;
-    //     var hname;
-    //     try {
-    //         jsonbody = JSON.parse(body);
-    //         hname = jsonbody["sitename"];
-    //         if ( DEBUG2 ) {
-    //             console.log("hubName request return: ", jsonbody);
-    //         }
-    //     } catch(e) {
-    //         err = e;
-    //         hname  = hubName;
-    //         if ( hname==="" ) {
-    //             hname = hubType + " Home";
-    //         }
-    //         console.log("Error retrieving hub name: ", hubName);
-    //     }
-
-    //     // now save our info
-    //     if ( DEBUG1 ) {
-    //         console.log("OAUTH Flow completed. token= ", token, " endpt= ", endpt, " name= ", hname);
-    //     }
-    //     hubName = hname;
-    //     hub["hubAccess"] = token;
-    //     hub["hubEndpt"] = endpt;
-    //     hub["hubName"]  = hubName;
-
-    //     // console.log("hubnum= ",  hubnum, " GLB.defhub= ", GLB.defhub);
-
-    //     // update this hub
-    //     var hubs = GLB.options.config["hubs"];
-    //     updateHubs(hubs, hub, hubnum);
-    //     writeOptions(GLB.options, true);
-
-    //     // retrieve all devices and go back to reauth page
-    //     getDevices(hubnum, hubType, token, endpt, clientId, clientSecret, hubName, "/reauth");
-    // }
 }
 
 function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret, hubName, reloadpath) {
@@ -579,23 +539,23 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
         getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret, hubName, reloadpath);
         
     } else {
-        console.log("Error: attempt to read an unknown hub type= ", hubType);
+        console.log( (ddbg()), "error - attempt to read an unknown hub type= ", hubType);
         pushClient("reload", reloadpath);
         // return;
     }
     function getAllDevices(err, res, body) {
         if ( err ) {
-            console.log("Error retrieving devices: ", err);
+            console.log( (ddbg()), "error retrieving devices: ", err);
         } else {
             try {
                 var jsonbody = JSON.parse(body);
             } catch (e) {
-                console.log("Error translating devices: ", e);
+                console.log( (ddbg()), "error translating devices: ", e);
                 jsonbody = {};
                 return;
             }
             if (DEBUG1) {
-                console.log((new Date()) + " Retrieved ", jsonbody.length, " things from hub: ", hubName);
+                console.log( (ddbg()) + " Retrieved ", jsonbody.length, " things from hub: ", hubName);
             }    
 
             // configure returned array with the "id"
@@ -604,6 +564,11 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                     var thetype = content["type"];
                     var id = content["id"];
                     var idx = thetype + "|" + id;
+
+                    // this is the proper place to load customizations
+                    // and we have to do it for ISY too
+                    var pvalue = getCustomTile(content.value, thetype, id);
+
                     allthings[idx] = {
                         "id": id,
                         "name": content["name"], 
@@ -611,7 +576,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                         "type": thetype,
                         "hint": "", 
                         "refresh": "normal",
-                        "value": content["value"]
+                        "value": pvalue
                     };
                 });
             }
@@ -650,7 +615,7 @@ function getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSec
             var result = parser.parse(body);
             var thenodes = result.nodes["node"];
             if (DEBUG1) {
-                console.log((new Date()) + " Retrieved ", thenodes.length, " things from hub: ", hubName);
+                console.log( (ddbg()) + " Retrieved ", thenodes.length, " things from hub: ", hubName);
             }
 
             // read the real attributes and map to HP fields
@@ -670,7 +635,11 @@ function getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSec
                 }
 
                 var name = node["name"];
-                var thevalue = {"name": name};
+                var pvalue = {"name": name};
+
+                // this is the proper place to load customizations
+                pvalue = getCustomTile(pvalue, thetype, id);
+                // console.log("post custom: ", pvalue);
 
                 // set bare minimum info
                 // this is updated below in the callback after getting node details
@@ -681,11 +650,11 @@ function getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSec
                     "type": thetype, 
                     "hint": hint,
                     "refresh": "never",
-                    "value": thevalue
+                    "value": pvalue
                 };
 
                 if (DEBUG5) {
-                    console.log("idx= ", idx," hint= ", hint, " node: ", node);
+                    console.log( (ddbg()), "idx= ", idx," hint= ", hint, " node: ", node);
                 }
             }
         }
@@ -700,7 +669,7 @@ function getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSec
                         var nodes = result.nodes.node;
                         if ( nodes ) {
                             if ( DEBUG5 ) {
-                                console.log("nodes returned from status");
+                                console.log( (ddbg()), "nodes returned from status");
                             }
                             nodes.forEach(function(node) {
                                 var nodeid = node["$"]["id"];
@@ -711,7 +680,7 @@ function getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSec
                                 // if there are props set values
                                 if ( props ) {
                                     if ( DEBUG5 ) {
-                                        console.log("node: ", nodeid, " properties: ", props);
+                                        console.log( (ddbg()), "ISY status callback. node: ", nodeid, " properties: ", props);
                                     }
                                     setIsyFields(nodeid, value, props);
                                 }
@@ -721,7 +690,7 @@ function getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSec
                         }
                     }
                 } catch(e) { 
-                    console.log("error: ", e);
+                    console.log( (ddbg()), "error - ", e);
                 }
             });
         }
@@ -881,7 +850,6 @@ function updateOptions(reloadpath) {
     if ( ! GLB.options ) {
         return;
     }
-    // console.log("Initial index: ", GLB.options.index);
     var update = false;
    
     // make all the user options visible by default
@@ -915,7 +883,6 @@ function updateOptions(reloadpath) {
         }
 
         writeOptions(GLB.options);
-        // console.log("Updated options, rooms: ", GLB.options.rooms, " things: ", GLB.options.things, " index: ", GLB.options.index);
     }
 
     // signal clients to reload
@@ -1156,7 +1123,7 @@ function getAuthPage(hostname, hpcode) {
     // ------------------ general settings ----------------------------------
     var numnewthings = 0;
     if ( DEBUG2 ) {
-        console.log("Hub auth default hub: ", GLB.defhub);
+        console.log( (ddbg()), "Hub auth default hub: ", GLB.defhub);
     }
     if ( GLB.defhub && GLB.defhub!=="-1" ) {
         var defhub = GLB.defhub;
@@ -1254,7 +1221,7 @@ function getAuthPage(hostname, hpcode) {
         
         $tc += "<div>";
         $tc += "<input hub=\"" + i + "\" hubid=\"" + hubId + "\" class=\"authbutton hubauth\" value=\"Authorize Hub #" + i + "\" type=\"button\" />";
-        $tc += "<input hub=\"" + i + "\" hubid=\"" + hubId + "\" class=\"authbutton hubdel\" value=\"Remove Hub #" + i + "\" type=\"button\" />";
+        // $tc += "<input hub=\"" + i + "\" hubid=\"" + hubId + "\" class=\"authbutton hubdel\" value=\"Remove Hub #" + i + "\" type=\"button\" />";
         $tc += "</div>";
         
         $tc += "</form>";
@@ -1400,7 +1367,6 @@ function refactorOptions() {
             if ( !is_array(lines[0]) ) {
                 lines = [lines];
             }
-            // console.log("lines= ", lines);
 
             newlines = [];
             for (var k in lines) {
@@ -1418,7 +1384,6 @@ function refactorOptions() {
                 }
                 newlines.push(msgs);
             }
-            // console.log("newlines= ", newlines);
             if ( newlines.length ) {
                 options[key] = newlines;
             }
@@ -1486,6 +1451,11 @@ function array_key_exists(key, arr) {
     return ( typeof arr[key] !== "undefined" );
 }
 
+function ddbg() {
+    var d = new Date();
+    var dstr = d.toLocaleDateString() + "  " + d.toLocaleTimeString() + " ";
+    return dstr;
+}
 
 // returns true if the index is in the room things list passed
 function inroom($idx, $things) {
@@ -1807,7 +1777,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     }
 
     // update fields with custom settings
-    thingvalue = getCustomTile(thingvalue, thingtype, bid);
+    // thingvalue = getCustomTile(thingvalue, thingtype, bid);
 
     // set the custom name
     // limit to 132 visual columns but show all for special tiles and custom names
@@ -1816,6 +1786,19 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     var thingpr = thingname;
     if ( !customname && thingname && thingname.length > 132 && !array_key_exists(thingtype, utils.getSpecials()) ) {
         thingpr = thingname.substring(0,132) + " ...";
+    }
+            
+    // check if there is a color key - use to set color
+    // no longer print this first since we need to include in custom logic
+    var bgcolor= "";
+    if ( array_key_exists("color", thingvalue) ) {
+        var cval = thingvalue["color"];
+        if ( cval.match(/^#[abcdefABCDEF\d]{6}/) !== null ) {
+            bgcolor = " style=\"background-color:"+cval+";\"";
+        // } else {
+        //     cval = " white";
+        //     bgcolor = " style=\"background-color:"+cval+";\"";
+        }
     }
     
     // wrap thing in generic thing class and specific type for css handling
@@ -1862,10 +1845,8 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
         $tc += putElement(kindex, cnt, 5, thingtype, ficonstr, "forecastIcon");
         $tc += "</div>";
         $tc += putElement(kindex, cnt, 6, thingtype, "Sunrise: " + thingvalue["localSunrise"] + " Sunset: " + thingvalue["localSunset"], "sunriseset");
-        $tc += putElement(kindex, cnt, 7, thingtype, thingvalue["localSunrise"], "localSunrise");
-        $tc += putElement(kindex, cnt, 8, thingtype, thingvalue["localSunset"], "localSunset");
         
-        var j = 9;
+        var j = 7;
         for ( var tkey in thingvalue ) {
             if (tkey!=="temperature" &&
                 tkey!=="feelsLike" &&
@@ -1873,12 +1854,18 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                 tkey!=="weather" &&
                 tkey!=="weatherIcon" &&
                 tkey!=="forecastIcon" &&
-                tkey!=="alertKeys" &&
-                tkey!=="localSunrise" &&
-                tkey!=="localSunset" ) 
+                tkey!=="alertKeys" && 
+                typeof tkey==="string" && tkey.substring(0,5)!=="user_" ) 
             {
+                var helperkey = "user_" + tkey;
                 var tval = thingvalue[tkey];
-                $tc += putElement(kindex, cnt, j, thingtype, tval, tkey);
+                // $tc += putElement(kindex, cnt, j, thingtype, tval, tkey);
+                if (  array_key_exists(helperkey, thingvalue) && thingvalue[helperkey] && thingvalue[helperkey].substr(0,2)==="::" ) {
+                    var helperval = thingvalue[helperkey];
+                    $tc += putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor);
+                } else {
+                    $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor);
+                }
                 j++;
             }
         };
@@ -1906,28 +1893,16 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
         // for multiple row ID's the prefix is a$j-$bid where $j is the jth row
         if (typeof thingvalue === "object") {
             var j = 0;
-            var sibling = "";
-            
-            // check if there is a color key - use to set color
-            // no longer print this first since we need to include in custom logic
-            var bgcolor= "";
-            if ( array_key_exists("color", thingvalue) ) {
-                var cval = thingvalue["color"];
-                if ( cval.match(/^#[abcdefABCDEF\d]{6}/) !== null ) {
-                    bgcolor = " style=\"background-color:"+cval+";\"";
-                } else {
-                    cval = " white";
-                    bgcolor = " style=\"background-color:"+cval+";\"";
-                }
-            }
             
             // create on screen element for each key
             // this includes a check for helper items created in tile customizer
             for ( var tkey in thingvalue ) {
+                var helperkey = "user_" + tkey;
                 var tval = thingvalue[tkey];
                 
                 // handle the new Sonos audio type which has a media type with details
-                if ( thingtype==="audio" && tkey==="audioTrackData" ) {
+                // but even this is skipped if a user field was given to override it
+                if ( thingtype==="audio" && tkey==="audioTrackData" && !array_key_exists(helperkey, thingvalue) ) {
                     var audiodata = JSON.parse(tval);
                     $tc += putElement(kindex, cnt, j,   thingtype, audiodata["title"], "trackDescription", "trackDescription", bgcolor);
                     $tc += putElement(kindex, cnt, j+1, thingtype, audiodata["artist"], "currentArtist", "currentArtist", bgcolor);
@@ -1937,54 +1912,21 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                     j = j+5;	
                 }
                 
-                // print a hidden field for user web calls and links
-                // this is what enables customization of any tile to happen
-                // ::type::LINK::tval  or ::LINK::tval
-                // this special element is not displayed and sits inside the overlay
-                // we only process the non helpers and look for helpers in same list
-                else if ( typeof tkey==="string" && tkey.substring(0,5)!=="user_" && (typeof tval==="string" || typeof tval==="number") && (typeof tval==="number" || tval.substr(0,2)!=="::") ) { 
+                else if ( typeof tkey==="string" && tkey.substring(0,5)!=="user_" && (typeof tval==="string" || typeof tval==="number") ) { 
                     
-                    var helperkey = "user_" + tkey;
-                    var helperval = thingvalue[helperkey];
-                    if ( helperval && helperval.substr(0,2)==="::" ) {
-                    
-                        var ipos = helperval.indexOf("::",2);
-                        var jpos = helperval.indexOf("::",ipos+2);
-
-                        // case with helperval = ::TEXT::val  &  linktypeval = ::val
-                        var linktype;
-                        var command;
-                        var linkval;
-                        var realsubid = tkey;
-                        if ( jpos===-1 ) { 
-                            linktype = thingtype;
-                            command = helperval.substring(2, ipos);
-                            linkval = helperval.substring(ipos+2);
-
-                        // case with tval = ::type::LINK::val &  linktypeval = ::LINK::val
-                        } else {
-                            linktype = helperval.substring(2, ipos);
-                            command = helperval.substring(ipos+2, jpos);
-                            var kpos = helperval.indexOf("::",jpos+2);
-                            if ( kpos>=0 ) {
-                                linkval = helperval.substring(jpos+2, kpos);
-                                realsubid = helperval.substring(kpos+2);
-                            } else {
-                                linkval = helperval.substr(jpos+2);
-                            }
-                        }
-                        // use the original type here so we have it for later
-                        // but in the actual target we use the linktype
-                        sibling= "<div linktype=\""+linktype+"\" value=\""+tval+"\" linkval=\""+linkval+"\" command=\""+command+"\" subid=\""+realsubid+"\" class=\"user_hidden\"></div>";
-                        // console.log("helperval: ", helperval);
-                        // console.log(ipos, jpos, "sibling: ", sibling);
-
+                    // new logic for links - they all now follow the format ::LINK::code
+                    // print a hidden field for user web calls and links
+                    // this is what enables customization of any tile to happen
+                    // ::type::LINK::tval  or ::LINK::tval
+                    // this special element is not displayed and sits inside the overlay
+                    // we only process the non helpers and look for helpers in same list
+                    if (  array_key_exists(helperkey, thingvalue) && thingvalue[helperkey] && thingvalue[helperkey].substr(0,2)==="::" ) {
+                        var helperval = thingvalue[helperkey];
+                        $tc += putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor);
                     } else {
-                        linktype = thingtype;
-                        sibling = "";
+                        $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor);
                     }
 
-                    $tc += putElement(kindex, cnt, j, linktype, tval, tkey, subtype, bgcolor, sibling, realsubid);
                     j++;
                 }
             }
@@ -1995,6 +1937,59 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     }
     $tc += "</div>";
     
+    return $tc;
+}
+
+function putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor) {
+
+    var linktype = thingtype;
+    var linkbid = bid;
+    var realsubid = tkey;
+    var idx = thingtype + "|" + bid;
+
+    var ipos = helperval.indexOf("::",2);
+    var command = helperval.substring(2, ipos);
+    var linkval = helperval.substring(ipos+2);
+
+    // get info for links
+    if ( command==="LINK" ) {
+        var lidx = linkval;
+        linkval = GLB.options.index[lidx];
+        var idxitems = lidx.split("|");
+        linktype = idxitems[0];
+        linkbid = idxitems[1];
+
+        // use the link value - if subid isn't there look for subid's that form the beginning of our link subid
+        if ( array_key_exists(lidx, allthings) ) {
+            var linktileval = allthings[lidx]["value"];
+            if ( array_key_exists(realsubid, linktileval) ) {
+                tval = linktileval[realsubid];
+            } else {
+                for (var ltkey in linktileval) {
+                    if ( realsubid.startsWith(ltkey) ) {
+                        realsubid = ltkey;
+                        tval = linktileval[ltkey];
+                        break;
+                    }
+                }
+            }
+
+            // save the value in our main array for user queries and api calls
+            // note that all screen refreshes will come here again and update it
+            // but we skip this for non permanent things being made for visual sake
+            if ( cnt!== 0 ) {
+                allthings[idx]["value"][tkey] = tval;
+            }
+        }
+    }
+
+    // use the original type here so we have it for later
+    // but in the actual target we use the linktype
+    var sibling= "<div linktype=\""+linktype+"\" value=\""+tval+"\" linkval=\""+linkval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
+    if ( DEBUG10 ) {
+        console.log( (ddbg()), "bid: ", bid, " helperval: ", helperval, " sibling: ", sibling);
+    }
+    var $tc = putElement(kindex, cnt, j, linktype, tval, tkey, subtype, bgcolor, sibling, realsubid);
     return $tc;
 }
 
@@ -2199,7 +2194,6 @@ function getClock(clockname, clockid, clockskin, fmtdate, fmttime) {
     var dclock = {"name": clockname, "skin": clockskin, "weekday": weekday,
         "date": dateofmonth, "time": timeofday, "tzone": timezone,
         "fmt_date": fmtdate, "fmt_time": fmttime};
-    // console.log(dclock);
     dclock = getCustomTile(dclock, "clock", clockid);
     return dclock;
 }
@@ -2242,6 +2236,7 @@ function addSpecials() {
                 var fn = getCustomName(stype + k, idx);
                 var ftile = {"name": fn};
                 ftile = returnFile(ftile, stype);
+                ftile = getCustomTile(ftile, stype, fid);
                 allthings[idx] = {"id":  fid, "name":  ftile["name"], "hubnum":  hubnum, 
                     "type": stype, "refresh": speed, "value":  ftile};
             }
@@ -2388,7 +2383,7 @@ function getCustomTile(custom_val, customtype, customid) {
                      (calltype==="PUT" || calltype==="GET" || calltype==="POST")  )
                 {
                     custom_val[companion] = "::" + calltype + "::" + posturl;
-                    custom_val[subid] = calltype + ": " + subid;
+                    custom_val[subid] = calltype + "::" + subid;
                
                 } else if ( calltype==="LINK" ) {
                     // code for enabling mix and match subid's into custom tiles
@@ -2396,51 +2391,53 @@ function getCustomTile(custom_val, customtype, customid) {
                     // this also allows me to find the hub number of the linked tile easily
                     // and finally, the linked tile is displayable at user's discretion
                     // for this to work the link info is stored in a new element that is hidden
+                    
                     var idx = array_search(content, index);
-                    if ( allthings && idx!== false && array_key_exists(idx, allthings) ) {
-                        var thesensor = allthings[idx];
-                        var thevalue = thesensor["value"];
-                        var thetype = thesensor["type"];
+
+                    // changed the link logic so we don't need to know the value at link time
+                    // if ( allthings && idx!== false && array_key_exists(idx, allthings) ) {
+                    if ( idx !== false ) {
+                        // var thesensor = allthings[idx];
+                        // var pvalue = thesensor["value"];
+                        // var thetype = thesensor["type"];
                 
                         // if the subid exists in our linked tile add it
                         // this can replace existing fields with linked value
                         // if an error exists show text of intended link
                         // first case is if link is valid and not an existing field
-                        if ( array_key_exists(subid, thevalue) ) {
-                            custom_val[companion] = "::" + thetype + "::" + calltype + "::" + content;
-                            custom_val[subid]= thevalue[subid];
+                        // if ( array_key_exists(subid, pvalue) ) {
+                            custom_val[companion] = "::" + calltype + "::" + idx;
+                            custom_val[subid]= "LINK::" + content; // pvalue[subid];
                             
                         // final two cases are if link tile wasn't found
                         // first sub-case is if subid begins with the text of a valid key
-                        } else {
-                            // handle user provided names that start with a valid link subid
-                            // and there is more beyond the start than numbers
-                            var realsubid = false;
-                            for (var key in custom_val) {
-                                if ( subid.indexOf(key) === 0 ) {   // strpos(subid, key) === 0 ) {
-                                    realsubid = key;
-                                    break;
-                                }
-                            }
-                            if ( realsubid ) {
-                                custom_val[companion] = "::" + thetype + "::" + calltype + "::" + content + "::" + realsubid;
-                                custom_val[subid]= thevalue[realsubid];
-                            } else {
-                                custom_val[companion] = "::" + thetype + "::" + calltype + "::" + content;
-                                custom_val[subid] = "Invalid link to tile #" + content + " with subid= " + subid;
-                            }
-                        }
+                        // } else {
+                        //     // handle user provided names that start with a valid link subid
+                        //     // and there is more beyond the start than numbers
+                        //     var realsubid = false;
+                        //     for (var key in custom_val) {
+                        //         if ( subid.indexOf(key) === 0 ) {   // strpos(subid, key) === 0 ) {
+                        //             realsubid = key;
+                        //             break;
+                        //         }
+                        //     }
+                        //     if ( realsubid ) {
+                        //         custom_val[companion] = "::" + thetype + "::" + calltype + "::" + content + "::" + realsubid;
+                        //         custom_val[subid]= pvalue[realsubid];
+                        //     } else {
+                        //         custom_val[companion] = "::" + thetype + "::" + calltype + "::" + content;
+                        //         custom_val[subid] = "Invalid link to tile #" + content + " with subid= " + subid;
+                        //     }
+                        // }
                     } else {
-                        custom_val[companion] = "::" + thetype + "::" + calltype + "::" + content;
-                        custom_val[subid] = "Link #" + content + " subid=" + subid + " idx=" + idx + " invalid";
-                        if ( DEBUG3 ) {
-                            console.log("Links unavailable to link #" + content + " with subid= " + subid + " idx= " + idx);
-                        }
+                        custom_val[companion] = "::" + calltype + "::0";
+                        custom_val[subid] = "Link::" + subid + "=" + content;
+                        console.log( (ddbg()), "Links unavailable to link #" + content + " with subid= " + subid);
                     }
 
                 } else if ( calltype==="URL" ) {
                     custom_val[companion] = "::" + calltype + "::" + posturl;
-                    custom_val[subid] = content;
+                    custom_val[subid] = "URL::" + subid;
                
                 } else if ( calltype==="RULE" ) {
                     custom_val[companion] = "::" + calltype + "::" + content;
@@ -2463,16 +2460,46 @@ function getCustomTile(custom_val, customtype, customid) {
 }
 
 // this little gem makes sure levels are always at the end of a tile
+// and it puts all user created fields at the end of tile too
 function setValOrder(val) {
-    if ( array_key_exists("level", val) && array_key_exists("switch", val) ) {
-        var levelval = val["level"];
-        var newval = clone(val);
-        delete newval["level"];
-        newval["level"] = levelval;
-        return newval;
-    } else {
-        return val;
-    }
+
+    var keys = Object.keys(val).sort( function(vala, valb) {
+
+        // look for a companion
+        var compa = array_key_exists("user_"+vala, val);
+        var compb = array_key_exists("user_"+valb, val);
+
+        // put all companions at the end
+
+        if ( vala===valb ) {
+            return 0;
+        } else if ( vala==="level" || vala==="colorTemperature" ) {
+            return 1;
+        } else if ( valb==="level" || valb==="colorTemperature" ) {
+            return -1;
+        } else if ( vala.startsWith("user_") && valb.startsWith("user_") ) {
+            return 0;
+        } else if ( vala.startsWith("user_") ) {
+            return 1
+        } else if ( valb.startsWith("user_") ) {
+            return -1
+        } else if ( compa && compb ) {
+            return 0;
+        } else if ( compa ) {
+            return 1;
+        } else if ( compb ) {
+            return -1;
+        } else {
+            return 0;
+        }
+    });
+
+    var newval = {};
+    keys.forEach( function(key) {
+        newval[key] = val[key];
+    });
+
+    return newval;
 }
 
 // this function handles processing of all websocket calls from ISY
@@ -2480,12 +2507,12 @@ function setValOrder(val) {
 function processIsyMessage(isymsg) {
     xml2js(isymsg, function(err, result) {
         if ( !err && result.Event ) {
-            // console.log("ISY event: ", result);
             var control = result.Event.control;
             var action = result.Event.action;
             var node = result.Event.node;
-            // var evtinfo = result.Event.eventInfo;
-            // console.log("subid: ", subid, " action: ", action, " node: ", node, " evtinfo: ", evtinfo);
+            if ( DEBUG9 ) {
+                console.log( (ddbg()), "ISY event: ", isymsg, " result: ", UTIL.inspect(result, false, null, false) );
+            }
 
             if ( is_array(node) && node.length && node[0]!=="" &&
                  is_array(control) && control.length && control[0]!=="" ) {
@@ -2511,8 +2538,8 @@ function processIsyMessage(isymsg) {
 
                         newval = newval.toString();
                     } catch (e) {
-                        console.log("error in webSocket interpretation: ");
-                        console.log("webSocket returned: ", UTIL.inspect(result, false, null, false) );
+                        console.log( (ddbg()), "error in webSocket interpretation: ");
+                        console.log( (ddbg()), "webSocket returned: ", UTIL.inspect(result, false, null, false) );
                         return;
                     }
 
@@ -2524,7 +2551,7 @@ function processIsyMessage(isymsg) {
 
                     // process rules and links
                     if ( GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true ) {
-                        // processRules(bid, "isy", subid, newvalue);
+                        processRules(bid, "isy", subid, newvalue);
                         processLinks(bid, "isy", subid, newvalue);
                     }
                     if ( DEBUG9 ) {
@@ -2536,124 +2563,234 @@ function processIsyMessage(isymsg) {
     });
 }
 
-// function processRules(bid, thetype, trigger, pvalue) {
-//     // go through all tiles with a new rule type
-//     var idx = thetype + "|" + bid;
-//     try {
-//         var index = GLB.options["index"];
-//         var tileid = index[idx].toString();
-//     } catch (e) {
-//         console.log("webSocket RULE error: id: ", bid, " type: ", thetype, " trigger: ", trigger, " error: ", e);
-//         return;
-//     }
-    
-//     // rule structure
-//     // if: tile=num[= or < or > or !]value, tile=num=value[=attr], tile=num=attr=[attr]...
-//     // num is the tile number and value is the comparison text or value string
-//     // the symbol between num and value determines if this is an equal, less, greater, or not equal test
-//     // the attr variable is optional but if provided will be sent to the api
-//     // 
-    
-//     // construct the if phrase for the trigger
-//     var regpattern = /if\s*[:| ]\s*(\d*)\s*=\s*([\w\s-]*)(=|<|>|!)\s*(.*)/;
-//     var itempattern =  /(\d*)\s*=\s*([\w\s-]*)\s*=\s*(.*)/;
-//     var itempattern2 = /(\d*)\s*=\s*([\w\s-]*)\s*=\s*(.*)=(.*)/;
-//     var regsplit = /[,;]/;
-//     var ifvalue = pvalue[trigger];
-    
-//     // print some debug info
-//     if ( LOGWEBSOCKET ) {
-//         console.log("webSocket RULE - name: id: ", bid, " type: ", thetype, " trigger: ", trigger, " tileid: ", tileid);
-//     }
+function processRules(bid, thetype, trigger, pvalue) {
 
-//     // process all tiles that subscribe to this trigger
-//     $('div.user_hidden[command="RULE"]').each(function() {
-//         var linkval = $(this).attr("linkval");
-        
-//         // split the commands into trigger and other commands
-//         var testcommands = linkval.split(regsplit);
-//         var triggercom = testcommands[0].trim();
-//         var res = triggercom.match(regpattern);
-//         var ismatch = false;
-        
-//         if ( testcommands.length > 1 && res ) {
+    // go through all things that could be links for this tile
+    var userid = "user_" + bid;
+
+    if ( DEBUG11 ) {
+        console.log( (ddbg()), "RULE debug...");
+    }
+
+    // if this tile has no rule, do nothing
+    if ( !array_key_exists(userid, GLB.options) ) {
+        return;
+    }
+
+    // go through all tiles with a new rule type
+    var idx = thetype + "|" + bid;
+    try {
+        var index = GLB.options["index"];
+        var tileid = index[idx].toString();
+    } catch (e) {
+        console.log( (ddbg()), "webSocket RULE error: id: ", bid, " type: ", thetype, " trigger: ", trigger, " error: ", e);
+        return;
+    }
+    
+    // rule structure
+    // you cannot safely mix the logic of "or" with the logic of "and"
+    // if num=subid>=xx or num=subid=on or num=subid=off... , num=subid=value=attr, num=subid=value=attr, ...
+    // if num=subid>=xx and num=subid=on and num=subid=off... , num=subid=value=attr, num=subid=value=attr, ...
+    // for example...
+    // user_custome_1 : [ [RULE, "if 12=switch==on and 167=switch==on, 28=switch=on, 12=switch=on", myrule, 1], 
+    //                   [RULE, "if 71=state==away or 42=presence==absent", 19=thermostatMode=heat, 19=heatingSetpoint=72, 14=lock=lock, rule2, 2] ]
+
+    const regsplit = /[,;]/;
+    const ifpattern = /(if)\s+(.*)/;
+    const rulepattern = /(\d*)\s*=\s*(\w+)\s*([=|!|<|>])(=?)\s*(\w+)/;
+    const actpattern = /(\d+)\s*=\s*(\w+)\s*=\s*(\w+)\s*=?\s*(.*)/;
+    
+    // print some debug info
+    var items = GLB.options[userid];
+    if ( DEBUG11 ) {
+        console.log( (ddbg()), "RULE: id: ", bid, " type: ", thetype, " trigger: ", trigger, " tileid: ", tileid, " userid: ", userid, " rules: ", UTIL.inspect(items, false, null, false));
+    }
+
+    // loop through all the custom elements of this tile looking for rules
+    items.forEach( function(item) {
+
+        // process custom entries that are rules
+        // the subid it is tied to is ignored as is the order number
+        // so we only need to get item[0] and item[1]
+        if ( item[0]==="RULE" ) {
+            var linkval = item[1].trim();
+            var isrule = false;
+            var isfirst = true;
+
+            // split the test line between commas and semi-colons
+            var testcommands = linkval.split(regsplit);
+
+            // only proceed if there are at least two parts and the first part starts with "if "
+            if ( testcommands.length > 1 && testcommands[0].startsWith("if") ) {
+
+
+                // get the if and the rule and continue if in the right format
+                var iftest = testcommands[0].match(ifpattern);
+                var rulestr = (iftest && iftest.length>1 && iftest[2]) ? iftest[2] : "";
+                if ( DEBUG11 ) {
+                    console.log( (ddbg()), "RULE debug: iftest: ", iftest, " rulestr: ", rulestr);
+                }
             
-//             var matchtile = res[1].trim();
-//             var matchsubid = res[2].trim();
-//             var matchop = res[3];
-//             var matchval = res[4].trim();
-                
-//             // check to see if this custom tile matches the rule specification
-//             // to match the tile number and the subid must match the trigger
-//             // and the rule operand must be either =, <, >, or !
-//             if ( matchtile===tileid && matchsubid===trigger ) {
-//                 ismatch = ( 
-//                     matchop==="=" && matchval===ifvalue ||
-//                     matchop==="!" && matchval!==ifvalue ||
-//                     matchop==="<" && matchval < ifvalue ||
-//                     matchop===">" && matchval > ifvalue 
-//                 );
-//             }
-//         }
-        
-//         // console.log("ismatch: ", ismatch, " tileid: ", tileid, " linkval: ", linkval, " res: ", res, " testcommands: ", testcommands);
-//         // process all the actions requested if the if conditions are met
-//         // this loops through all the actions specified after the trigger test
-//         // the triggering tile must exist on the panel for this to work
-//         if ( ismatch ) {
-//             var i;
-//             for ( i= 1; i < testcommands.length; i++ ) {
-                
-//                 var itemaction = testcommands[i].trim();
-//                 var items = itemaction.match(itempattern);
-//                 var items2 = itemaction.match(itempattern2);
-                
-//                 if ( items ) {
-                    
-//                     // get the tile info for this rule item
-//                     // this pulls the items from the regular expression variables
-//                     var tilenum = items[1].trim();
-//                     var subidtrigger = items[2].trim();
-//                     var ontrigger;
-//                     var theattr;
-                    
-//                     // get the first tile on the panel that matches this tile number
-//                     var tile = $('div.panel div.thing[tile="'+tilenum+'"]').first();
-                    
-//                     if ( tile ) {
-//                         var aid = tile.attr("id").substring(2);
-//                         var trbid = tile.attr("bid");
-//                         if ( items2 ) {
-//                             ontrigger = items2[3].trim();
-//                             theattr = items2[4].trim();
-//                         } else {
-//                             ontrigger = items[3];
-//                             // theattr = $("a-"+aid+"-"+subidtrigger).attr("class");
-//                             theattr = "";
-//                         }
-//                         var hubnum = tile.attr("hub");
-//                         var trtype = tile.attr("type");
-//                         // invoke the command for the subscribed tile if it will make a difference
-//                         // var currentvalue = $("#a-"+aid+"-"+subidtrigger).html();
+                if ( iftest[1]==="if" && rulestr ) {
 
-//                         console.log("Rule trigger for tile: ", tilenum, " type: ", trtype, " id: ", trbid, "subid: ", subidtrigger, " value: ", ontrigger, " attr: ", theattr);
-//                         var ajaxcall = "doaction";
-//                         $.post(cm_Globals.returnURL, 
-//                                {useajax: ajaxcall, id: trbid, tile: tilenum, type: trtype, value: ontrigger, attr: theattr, hubid: hubnum, subid: subidtrigger},
-//                                function (presult, pstatus) {
-//                                     if (pstatus==="success") {
-//                                         console.log( ajaxcall + ": POST returned: ", presult );
-//                                     } else {
-//                                         console.log(ajavcall, " Error = ", pstatus);
-//                                     }
-//                                }, "json"
-//                         );
-//                     }
-//                 }
-//             }
-//         }
-//     });
-// }
+                    // get the rule set
+                    var ruleset = rulestr.split(" ");
+                    var doand = true;
+                    if ( DEBUG11 ) {
+                        console.log( (ddbg()), "RULE debug: rulseset: ", ruleset);
+                    }
+    
+                    // loop through each one and add to test
+                    ruleset.forEach( function(rule) {
+
+                        rule = rule.trim();
+                        if ( DEBUG11 ) {
+                            console.log( (ddbg()), "RULE debug: rule: ", rule);
+                        }
+    
+                        // set rule mode based on word - if it is "and" then use and logic
+                        if ( rule==="and" || rule==="&&" ) {
+                            doand = true;
+
+                        // if the separator word is "or" then use or logic
+                        } else if ( rule==="or" || rule==="||" ) {
+                            doand = false;
+
+                        // otherwise we are on an element so interpret the test
+                        } else {
+                            var ruleparts = rule.match(rulepattern);
+                            if ( DEBUG11 ) {
+                                console.log( (ddbg()), "RULE debug: before rule: ", doand, " ", rule, " isrule: ", isrule);
+                            }
+    
+                            // compute the test if this test part has the required elements
+                            if ( ruleparts ) {
+                                var ruletileid = parseInt(ruleparts[1]);
+                                var rulesubid = ruleparts[2];
+                                var ruleop = ruleparts[3];
+                                var ruleop2 = ruleparts[4];
+                                if ( ruleop2 ) { ruleop = ruleop + ruleop2; }
+                                var rulevalue = ruleparts[5];
+
+                                var ifvalue = false;
+
+                                // if zero given use the current tile
+                                if ( isNaN(ruletileid) || ruletileid===0 ) {
+                                    ifvalue = pvalue[rulesubid];
+                                } else {
+                                    // find the tile index and proceed with activating the rule
+                                    var ridx = array_search(ruletileid, GLB.options["index"]);
+                                    try {
+                                        var ritems = ridx.split("|");
+                                        var rtype = ritems[0];
+                                        // var rid = ritems[1];
+                                        ifvalue = allthings[ridx]["value"][rulesubid];
+                                    } catch (e) {
+                                        ifvalue = false;
+                                    }
+                                }
+
+                                // fix up ISY hubs
+                                if ( rtype==="isy" && rulevalue==="on" ) { rulevalue = "DON"; }
+                                if ( rtype==="isy" && rulevalue==="off" ) { rulevalue = "DOF"; }
+
+                                if ( DEBUG11 ) {
+                                    console.log( (ddbg()), "RULE debug: ruleop: ", ruleop, " ridx: ", ridx, " ifvalue: ", ifvalue, "rulevalue: ", rulevalue, " ruletileid: ", ruletileid, " parts: ", ruleparts );
+                                }
+
+                                    // get the rule check if the requested subid is recognized
+                                if ( ruleop && ifvalue!==false ) {
+
+                                    var ismatch = ( 
+                                        ( (ruleop==="=" || ruleop==="==") && (ifvalue===rulevalue) ) ||
+                                        ( (ruleop==="!" || ruleop==="!=") && (ifvalue!==rulevalue) ) ||
+                                        ( (ruleop==="<" ) && (ifvalue <  rulevalue) ) ||
+                                        ( (ruleop==="<=") && (ifvalue <= rulevalue) ) ||
+                                        ( (ruleop===">" ) && (ifvalue >  rulevalue) ) ||
+                                        ( (ruleop===">=") && (ifvalue >= rulevalue) ) 
+                                    );
+
+                                    // apply and/or logic to the final rule determination
+                                    if ( doand ) {
+                                        isrule = isfirst ? ismatch : isrule && ismatch;
+                                    } else {
+                                        isrule = isfirst ? ismatch : isrule || ismatch;
+                                    }
+                                }
+                            }
+
+                            // flag that we are not on the first loop now
+                            isfirst = false;
+                        }
+
+                        // report state of test
+                        if ( DEBUG11 ) {
+                            console.log( (ddbg()), "RULE debug: after rule: ", doand, " ", rule, " isrule: ", isrule);
+                        }
+            
+                    });
+                }
+            } else {
+                isrule = false;
+            }
+
+            if ( DEBUG11 ) {
+                console.log( (ddbg()), "RULE debug: isrule: ", isrule);
+            }
+            if ( isrule ) {
+
+                // perform all of the commands if we meet the if test
+                for (var i= 1; i<testcommands.length; i++) {
+                    var autostr = testcommands[i];
+
+                    // get the parts of the auto exec
+                    var autoexec = autostr.match(actpattern);
+                    if ( autoexec ) {
+                        var rtileid = autoexec[1];
+                        var rsubid = autoexec[2];
+                        var rvalue = autoexec[3];
+                        var rswattr = autoexec[4] ? autoexec[4] : "";
+
+                        if ( DEBUG11 ) {
+                            console.log( (ddbg()), "RULE debug: rtileid: ", rtileid, " rsubid: ", rsubid, " rvalue: ", rvalue, " rswattr: ", rswattr);
+                        }
+            
+                        // find the tile index and proceed with activating the rule
+                        var ridx = array_search(rtileid, GLB.options["index"]);
+                        if ( ridx ) {
+                            var idxitems = ridx.split("|");
+                            var rswtype = idxitems[0];
+                            var rswid = idxitems[1];
+
+                            // fix up ISY hubs
+                            if ( rswtype==="isy" && rvalue==="on" ) { rvalue = "DON"; }
+                            if ( rswtype==="isy" && rvalue==="off" ) { rvalue = "DOF"; }
+
+                            if ( rsubid==="level" || rsubid==="colorTemperature" ) {
+                                rswattr= "level";
+                            } else if ( rsubid==="switch") {
+                                rswattr="";
+                            } else if ( !rswattr ) {
+                                swattr= swtype + " p_" + rtileid + " " + rswval;
+                            }
+                            var hubid = allthings[ridx]["hubnum"];
+                            var hub = findHub(hubid);
+                            if ( hub ) {
+                                callHub(hub, rswid, rswtype, rvalue, rswattr, rsubid, false, false);
+                            }
+                        }
+
+
+                    }
+                }
+                
+            }
+
+        }
+
+    });
+
+}
 
 function processLinks(bid, thetype, trigger, pvalue) {
 
@@ -2683,7 +2820,9 @@ function processLinks(bid, thetype, trigger, pvalue) {
 
     // debug info
     var idx = thetype + "|" + bid;
-    console.log("linked trigger: ", trigger, " on trigger: ", ontrigger, " idx: ", idx, " pvalue: ", pvalue);
+    if ( DEBUG9 ) {
+        console.log( (ddbg()), "linked trigger: ", trigger, " on trigger: ", ontrigger, " idx: ", idx, " pvalue: ", pvalue);
+    }
 
     if ( !ontrigger ) {
         return;
@@ -2701,10 +2840,12 @@ function processLinks(bid, thetype, trigger, pvalue) {
             // auto trigger any linked field that is a switch
             // this has to start with the name switch
             if ( isNaN(tilenum) || !linksubid.startsWith("switch") )  {
-                console.log("LINK error - either a non-integer provided or not a switch. tilenum: ", item[1], " subid:", linksubid);
+                console.log( (ddbg()), "error - either a non-integer provided or not a switch in LINK attempt. tilenum: ", item[1], " subid: ", linksubid);
                 linkidx = false;
             } else {
-                console.log("Processing LINK for tilenum: ", tilenum, " subid: ", item[2]);
+                if ( DEBUG9 ) {
+                    console.log( (ddbg()), "Processing LINK for tilenum: ", tilenum, " subid: ", item[2]);
+                }
                 linkidx = array_search(tilenum, GLB.options.index);
             }
 
@@ -2748,26 +2889,31 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
     } else {
         entry["popup"] = "";
     }
-    // console.log(entry);
-    var thevalue;
+    var pvalue;
 
     if ( typeof body === "undefined" || body==="" || !body ) {
-        thevalue = {};
+        pvalue = {};
     } else if ( typeof body === "string") {
-        thevalue = JSON.parse(body);
+        pvalue = JSON.parse(body);
     } else if ( typeof body === "object") {
-        thevalue = body;
+        pvalue = body;
     } else {
-        console.log("Warning - unrecognized body in hub push update: ", body);
+        console.log( (ddbg()), "warning - unrecognized body in hub push update: ", body);
         return;
     }
 
-    if ( thevalue["password"] ) { delete thevalue["password"]; }
+    if ( pvalue["password"] ) { delete pvalue["password"]; }
+        
+    // remove color for now until we get it fixed - but report it so I can inspect
+    if ( pvalue["color"] ) {
+        console.log( (ddbg()), "webSocket color: ", pvalue.color);
+        delete( pvalue["color"] );
+    }
 
     // save the result to push to all clients
-    entry["value"] = thevalue;
+    entry["value"] = pvalue;
     if ( DEBUG9 ) {
-        console.log("pushClient: ", UTIL.inspect(entry, false, null, false), " linkinfo: ", linkinfo);
+        console.log( (ddbg()), "pushClient: ", UTIL.inspect(entry, false, null, false), " linkinfo: ", linkinfo);
     }
 
     // update the main array with changed push values
@@ -2784,14 +2930,14 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
         }
 
         if ( array_key_exists(idx, allthings) ) {
-            for (var thekey in thevalue) {
-                allthings[idx]["value"][thekey] = thevalue[thekey];
+            for (var thekey in pvalue) {
+                allthings[idx]["value"][thekey] = pvalue[thekey];
 
                 // update the link that triggered if this was a link
                 // we do something similar on the client side to change
                 // all linked things that match this
                 if ( lidx && lsubid && lreal && lreal===thekey ) {
-                    allthings[lidx]["value"][lsubid] = thevalue[thekey];
+                    allthings[lidx]["value"][lsubid] = pvalue[thekey];
                 }
             }
         }
@@ -2807,7 +2953,9 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
 function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
     var access_token = hub["hubAccess"];
     var endpt = hub["hubEndpt"];
-    // console.log("access= ", access_token, " endpt= ", endpt, " subid= ", subid);
+    if ( DEBUG6 ) {
+        console.log( (ddbg()), "callHub: access: ", access_token, " endpt: ", endpt, " subid: ", subid, " attr: ", swattr);
+    }
 
     var isyresp = {};
     if ( hub["hubType"]==="SmartThings" || hub["hubType"]==="Hubitat" ) {
@@ -2862,7 +3010,6 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
                         swval = currentval==="DON" ? "DOF" : "DON";
                 }
                 cmd = "/nodes/" + swid + "/cmd/" + swval;
-                // console.log("Calling curl with cmd: ", endpt + cmd, " header: ", isyheader);
                 curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
                 isyresp[subid] = swval;
                 break;
@@ -2872,10 +3019,9 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
                 if ( !isNaN(newval) ) { 
                     newval++;
                     cmd = "/nodes/" + swid + "/cmd/CLISPH/" + newval.toString();
-                    // console.log("oldval: ", swval, "newval= ", newval, " cmd = ", cmd);
                     curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
                 } else {
-                    console.log("error: thermostat set point cannot be interpreted.  value: ", swval);
+                    console.log( (ddbg()), "error: thermostat set point cannot be interpreted.  value: ", swval);
                 }
                 break;
 
@@ -2884,15 +3030,14 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
                 if ( !isNaN(newval) ) { 
                     newval--;
                     cmd = "/nodes/" + swid + "/cmd/CLISPH/" + newval.toString();
-                    // console.log("oldval: ", swval, "newval= ", newval, " cmd = ", cmd);
                     curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
                 } else {
-                    console.log("error: thermostat set point cannot be interpreted.  value: ", swval);
+                    console.log( (ddbg()), "error: thermostat set point cannot be interpreted.  value: ", swval);
                 }
                 break;
     
         default:
-            console.log("Command " + subid + " not yet supported for ISY tiles. value: ", swval);
+            console.log( (ddbg()), "Command " + subid + " not yet supported for ISY tiles. value: ", swval);
 
         }
     }
@@ -2910,10 +3055,10 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
     async function getHubResponse(err, res, body) {
         // var response = body;
         if ( err ) {
-            console.log("Error calling hub: ", err);
+            console.log( (ddbg()), "Error calling hub: ", err);
         } else {
             if ( DEBUG7 ) {
-                console.log("doAction: ", swid, " type: ", swtype, " subid: ", subid, " value: ", body);
+                console.log( (ddbg()), "doAction: ", swid, " type: ", swtype, " subid: ", subid, " value: ", body);
             }
             // update all clients - this is actually not needed if your server is accessible to websocket updates
             // It is left here because my dev machine sometimes doesn't get websocket pushes
@@ -2927,12 +3072,12 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
 
     async function getNodeResponse(err, res, body) {
         if ( err ) {
-            console.log("Error calling ISY node: ", err);
+            console.log( (ddbg()), "Error calling ISY node: ", err);
         } else {
             var result = parser.parse(body);
             var rres = result.RestResponse;
             if ( DEBUG7 ) {
-                console.log("ISY doAction: ", rres, " value: ", isyresp, " linkinfo: ", linkinfo);
+                console.log( (ddbg()), "ISY doAction: ", rres, " value: ", isyresp, " linkinfo: ", linkinfo);
             }
             // update all clients - this is actually not needed if your server is accessible to websocket updates
             // because ISY will push state updates via a websocket
@@ -2966,10 +3111,10 @@ function queryHub(hub, swid, swtype, popup) {
     
     async function getQueryResponse(err, res, body) {
         if ( err ) {
-            console.log("Error requesting hub node query: ", err);
+            console.log( (ddbg()), "Error requesting hub node query: ", err);
         } else {
             if ( DEBUG5 ) {
-                console.log("doQuery: ", swid, " type: ", swtype, " value: ", body);
+                console.log( (ddbg()), "doQuery: ", swid, " type: ", swtype, " value: ", body);
             }
             if ( body ) {
                 pushClient(swid, swtype, "none", body, null, popup);
@@ -2979,7 +3124,7 @@ function queryHub(hub, swid, swtype, popup) {
 
     function getNodeQueryResponse(err, res, body) {
         if ( err ) {
-            console.log("Error requesting ISY node query: ", err);
+            console.log( (ddbg()), "Error requesting ISY node query: ", err);
         } else {
             var result = parser.parse(body);
 
@@ -2997,7 +3142,7 @@ function queryHub(hub, swid, swtype, popup) {
                         }
                     }
                 } catch(e) { 
-                    console.log("error: ", e);
+                    console.log( (ddbg()), "error in getNodeQueryResponse: ", e);
                 }
             });
         }
@@ -3063,10 +3208,10 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
         response = getClock("Analog Clock", "clockanalog", "CoolClock:swissRail:72", "M d, Y", "h:i:s A");
     
     // handle types that just return the current status
-    } else if   (   (   (typeof command==="undefined" || command==="") && 
-                            (swtype==="contact" || swtype==="presence" || swtype==="motion" || subid==="temperature" || swtype==="weather") 
-                    ) ||
-                    (command==="LINK" && (subid==="contact" || subid==="presence" || subid==="motion" || subid==="name") ) 
+    } else if   (   (typeof command==="undefined" || command==="") && 
+                    (  swtype==="contact" || swtype==="presence" || swtype==="motion" || subid==="temperature" || swtype==="weather" 
+                       // || ( command==="LINK" && (subid==="contact" || subid==="presence" || subid==="motion" || subid==="name" || subid==="temperature") )
+                    )
                 ) {
         response = allthings[idx]["value"];
         
@@ -3103,6 +3248,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                 break;
             
             case "TEXT":
+                response = allthings[idx]["value"];
                 response[subid] = linkval;
                 break;
 
@@ -3135,9 +3281,14 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                     
                     // make the action call on the linked thing
                     // the hub callback now handles the linked resposnes properly
-                    if ( $realsubid ) {
+                    // if link is to something static, show it
+                    if ( $realsubid==="contact" || $realsubid==="presence" || $realsubid==="motion" || $realsubid==="name"|| subid==="temperature" || 
+                         $linked_swtype==="contact" || $linked_swtype==="presence" || $linked_swtype==="motion" || $linked_swtype==="weather") {
+                        response = $linked_val;
+                    } else if ( $realsubid ) {
                         var linkinfo = [swid, swtype, subid, $realsubid];
                         callHub($lhub, $linked_swid, $linked_swtype, swval, swattr, $realsubid, linkinfo, false);
+                        response = "success";
                     }
                 }
                 break;
@@ -3145,34 +3296,48 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
             case "RULE":
                 var rulecommands = linkval.split(",");
                 rulecommands.forEach(function(rule) {
-
                     rule = rule.trim();
                     var rulepair = rule.split("=");
-                    var tileid = parseInt(rulepair[0]);
-                    
-                    // only process rules here that are tile id based simple actions
-                    if ( rulepair.length===3 && !isNaN(tileid) ) {
-                                                
-                        subid = rulepair[1].toString().trim();
-                        swval = rulepair[2].toString().trim();
-                        idx = array_search(tileid, GLB.options["index"]);
-                        items = idx.split("|");
-                        swtype = items[0];
-                        swid = items[1];
-                        if ( subid==="level" || subid==="colorTemperature" ) {
-                            swattr=level;
-                        } else if ( subid==="switch") {
-                            swattr="";
-                        } else {
-                            swattr= swtype + " p_" + tileid + " " + swval;
+
+                    // skip rules that are designed to auto-trigger via webSockets
+                    if ( rulepair[0]!=="if" ) {
+
+                        var tileid = parseInt(rulepair[0]);
+
+                        // only process rules that have the required number of fields and a valid tile number
+                        if ( rulepair.length>=3 && !isNaN(tileid) ) {
+                            subid = rulepair[1].toString().trim();
+                            swval = rulepair[2].toString().trim();
+
+                            idx = array_search(tileid, GLB.options["index"]);
+                            if ( idx ) {
+                                items = idx.split("|");
+                                swtype = items[0];
+                                swid = items[1];
+
+                                // fix up ISY hubs
+                                if ( swtype==="isy" && swval==="on" ) { swval = "DON"; }
+                                if ( swtype==="isy" && swval==="off" ) { swval = "DOF"; }
+                                
+                                if ( rulepair.length > 3 ) {
+                                    swattr = rulepair[3].toString().trim();
+                                } else if ( subid==="level" || subid==="colorTemperature" ) {
+                                    swattr="level";
+                                } else if ( subid==="switch") {
+                                    swattr="";
+                                } else {
+                                    swattr= swtype + " p_" + tileid + " " + swval;
+                                }
+                                hubid = allthings[idx]["hubnum"];
+                                var hub = findHub(hubid);
+                                if ( hub ) {
+                                    callHub(hub, swid, swtype, swval, swattr, subid, false, false);
+                                }
+                            }
                         }
-                        hubid = allthings[idx]["hubnum"];
-                        var hub = findHub(hubid);
-                        callHub(hub, swid, swtype, swval, swattr, subid, false, false);
                     }
                 });
                 response = "success";
-                // console.log("RULE: ", rulecommands);
                 break;
 
             case "HUB":
@@ -3341,10 +3506,12 @@ function setPosition(swid, swtype, swval, swattr) {
         options["things"][panel][moved] = newtile;
         writeOptions(options);
         var result = "success";
-        console.log("new tile position for tile: ", tile," to: (", top, ",", left, ",", zindex, ")");
+        if ( DEBUG7 ) {
+            console.log( (ddbg()), "new tile position for tile: ", tile," to: (", top, ",", left, ",", zindex, ")");
+        }
     } else {
         result = "error";
-        console.log("position for tile: ", tile," was not found to change");
+        console.log( (ddbg()), "error - position for tile: ", tile," was not found to change");
     }
     return result;
     
@@ -3362,7 +3529,7 @@ function addThing(bid, thingtype, panel, cnt) {
     try {
         cnt = parseInt(cnt);
     } catch(e) {
-        console.log("error - cnt value is invalid: ", cnt);
+        console.log( (ddbg()), "error - in addThing cnt value is invalid: ", cnt);
         return "error";
     }
 
@@ -3428,7 +3595,7 @@ function delThing(bid, thingtype, panel, tile) {
                 })
                 writeOptions(GLB.options);
             } else {
-                console.log("error - could not safely delete tile: ", tile, " with id: ", bid, " from room: ", panel);
+                console.log( (ddbg()), "error - could not safely delete tile: ", tile, " with id: ", bid, " from room: ", panel);
             }
         }
     }
@@ -3976,7 +4143,7 @@ function mainPage(proto, hostname, pathname) {
         kioskmode = false;
     }
     GLB.returnURL = proto + "://" + hostname
-    console.log("Displaying main HousePanel web page: ", GLB.returnURL);
+    console.log( (ddbg()), "Displaying main HousePanel web page: ", GLB.returnURL);
 
     $tc += utils.getHeader(skin);
 
@@ -3989,7 +4156,7 @@ function mainPage(proto, hostname, pathname) {
     }
 
     if ( DEBUG3 ) {
-        console.log(GLB.options);
+        console.log( (ddbg()), GLB.options);
     }
     // make sure our active skin has a custom file
     if ( !fs.existsSync(skin + "/customtiles.css") ) {
@@ -4094,7 +4261,7 @@ function clone(obj) {
 
 function saveFilters(body) {
     if ( DEBUG3 ) {
-        console.log(body);
+        console.log( (ddbg()), "filters save request: ", body);
     }
     var rewrite = false;
     var result = {};
@@ -4119,7 +4286,7 @@ function saveFilters(body) {
 
 function saveUserPw(body) {
     if ( DEBUG3 ) {
-        console.log(body);
+        console.log( (ddbg()), "password save request: ", body);
     }
 
     // get current options;
@@ -4151,7 +4318,6 @@ function saveUserPw(body) {
         GLB.options.config["pword"] = {};
         GLB.options.config["pword"][uname] = [oldhash, defskin];
     }
-    // console.log("uname= ", uname, " oldhash= ", oldhash, " body: ", body);
 
     var skin = defskin;
     var result = {};
@@ -4194,7 +4360,6 @@ function saveUserPw(body) {
             } else {
                 hash = "";
             }
-            // console.log("processed hash: ", val, " => ", hash);
         }
     }
 
@@ -4236,7 +4401,7 @@ function saveUserPw(body) {
     // set some return values
     result.hash = hash;
     result.skin = skin;
-    console.log("saveuserpw processed: ", result, " uname: ", uname, " oldpw: ", oldhash, " newpw: ", hash);
+    console.log( (ddbg()), "saveuserpw processed: ", result, " uname: ", uname, " oldpw: ", oldhash, " newpw: ", hash);
 
     // write options to file
     writeOptions( GLB.options, true);
@@ -4248,8 +4413,8 @@ function saveUserPw(body) {
 function processOptions($optarray) {
 
     if (DEBUG4) {
-        console.log("Process Options - Before Processing");
-        console.log(UTIL.inspect(GLB.options, false, null, false));
+        console.log( (ddbg()), "Process Options - Before Processing");
+        console.log( (ddbg()), UTIL.inspect(GLB.options, false, null, false));
     }
     var $specialtiles = utils.getSpecials();
     var $options = clone(GLB.options);;
@@ -4357,8 +4522,9 @@ function processOptions($optarray) {
                 }
             });
 
-            if ( DEBUG4 && $roomname==="Kitchen" ) {
-                console.log("After: ", $options["things"][$roomname]);
+            var rmnum = $options["rooms"][$roomname];
+            if ( (DEBUG4 && rmnum===0) || DEBUG9 ) {
+                console.log( (ddbg()),"Roomname: ", $roomname, " Room num: ", rmnum, " After: ", $options["things"][$roomname]);
             }
             
             // put a clock in a room if it is empty
@@ -4381,8 +4547,8 @@ function processOptions($optarray) {
     $options["config"] = $configoptions;
     
     if (DEBUG4) {
-        console.log("Process Options - After Processing");
-        console.log(UTIL.inspect(GLB.options, false, null, false));
+        console.log( (ddbg()), "Process Options - After Processing");
+        console.log( (ddbg()), UTIL.inspect(GLB.options, false, null, false));
     }
 
     // write options to file
@@ -4400,7 +4566,7 @@ function changePageName($oldname, $pagename) {
         delete options["things"][$oldname];
         writeOptions(options);
     } else {
-        console.log("old page name not valid: ", $oldname);
+        console.log( (ddbg()), "old page name not valid: ", $oldname);
         retcode = "error - old page name not valid: " + $oldname;
     }
     return retcode;
@@ -4625,7 +4791,9 @@ function apiCall(body, protocol) {
     var command = body["command"] || "";
     var linkval = body["linkval"] || "";
 
-    // console.log( UTIL.inspect(body, false, null, true) );
+    if ( DEBUG9 ) {
+        console.log( (ddbg()), "api call: protocol: ", protocol, " body: ", UTIL.inspect(body, false, null, true) );
+    }
     if ( hubs && hubs.length ) {
         var defhub = hubs[0]["hubId"];
     } else {
@@ -4656,12 +4824,16 @@ function apiCall(body, protocol) {
             if ( multicall ) {
                 result = [];
                 tilearray.forEach(function(atile) {
-                    // console.log("hubid: ", hubid, " swid: ", swid, " swval: ", swval, " swattr: ", swattr, " subid: ", subid, " atile: ", atile);
+                    if ( DEBUG8 ) {
+                        console.log( (ddbg()), "doaction multicall: hubid: ", hubid, " swid: ", swid, " swval: ", swval, " swattr: ", swattr, " subid: ", subid, " atile: ", atile);
+                    }
                     var aresult = doAction("auto", "", "", swval, swattr, subid, atile, "", "", protocol);
                     result.push(aresult);
                 });
             } else {
-                // console.log("hubid: ", hubid, " swid: ", swid, " swval: ", swval, " swattr: ", swattr, " subid: ", subid, " tileid: ", tileid);
+                if ( DEBUG8 ) {
+                    console.log( (ddbg()), "doaction: hubid: ", hubid, " swid: ", swid, " swval: ", swval, " swattr: ", swattr, " subid: ", subid, " tileid: ", tileid);
+                }
                 result = doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, linkval, protocol);
             }
             break;
@@ -4676,6 +4848,13 @@ function apiCall(body, protocol) {
             } else {
                 result = doQuery(hubid, swid, swtype, tileid, protocol);
             }
+            break;
+
+        case "status":
+            var activehubs = GLB.options.config ? utils.count(GLB.options.config.hubs) : 0;
+            var thingcount = utils.count(allthings);
+            var username = GLB.options.config.uname || "";
+            result = {"state": "active", "hubs": activehubs, "clients": clients.length, "things": thingcount, "username": username};
             break;
 
         case "wysiwyg2":
@@ -4845,7 +5024,7 @@ function apiCall(body, protocol) {
                 var pwords = GLB.options["config"]["pword"];
 
                 if ( DEBUG8 ) {
-                    console.log("dologin: uname= ", uname, " pword: [", pword, "] body: ", body, " pwords: ", pwords);
+                    console.log( (ddbg()), "dologin: uname= ", uname, " pword: [", pword, "] body: ", body, " pwords: ", pwords);
                 }
 
                 // check for matching passwords
@@ -4881,6 +5060,7 @@ function apiCall(body, protocol) {
         case "addcustom":
             var result = {}
             result.value = addCustom(swid, swtype, swval, swattr, subid);
+            readOptions();
             result.options = GLB.options;
             result.things = allthings;
             break;
@@ -4888,6 +5068,7 @@ function apiCall(body, protocol) {
         case "delcustom":
             var result = {}
             result.value = delCustom(swid, swtype, swval, swattr, subid);
+            readOptions();
             result.options = GLB.options;
             result.things = allthings;
             break;
@@ -4953,9 +5134,9 @@ function apiCall(body, protocol) {
             writeOptions(GLB.options, true);
             hubs = GLB.options.config.hubs;
 
-            if (DEBUG1) {
-                console.log("There are " + hubs.length + " hubs are available after hubauth.");
-                console.log("hubs: ", hubs);
+            if (DEBUG2) {
+                console.log( (ddbg()), "There are " + hubs.length + " hubs are available after hubauth.");
+                console.log( (ddbg()), "hubs: ", hubs);
             }
 
             // now authorize them
@@ -4990,7 +5171,7 @@ function apiCall(body, protocol) {
                 // getDevices(hubnum, hubType, accesstoken, hubEndpt, clientId, clientSecret, hubName, "/reauth");
                 result = {action: "things", hubType: hubType, hubName: hubName};
                 if ( DEBUG2 ) {
-                    console.log("Device retrieval initiated: ", result);
+                    console.log( (ddbg()), "Device retrieval initiated: ", result);
                 }
 
             // here we start an oauth flow
@@ -4999,7 +5180,7 @@ function apiCall(body, protocol) {
                 var returnloc = GLB.returnURL + "/oauth";
                 result = {action: "oauth", host: host, hubName: hubName, clientId: clientId, clientSecret: clientSecret, url: returnloc};
                 if ( DEBUG2 ) {
-                    console.log("OAUTH flow initiated: ", result);
+                    console.log( (ddbg()), "OAUTH flow initiated: ", result);
                 }
             }
     
@@ -5007,7 +5188,7 @@ function apiCall(body, protocol) {
     
         case "hubdelete":
             // TODO - implement hubDelete() function
-            console.log("Hub deletion is not yet supported...");
+            console.log( (ddbg()), "Hub deletion is not yet supported...");
             result = "success";
             break;
 
@@ -5023,7 +5204,7 @@ function apiCall(body, protocol) {
         case "logout":
         case "trackupdate":
                 var result = "error - [" + api + "] API call is no longer supported. Try loading browser with: " + GLB.returnURL + "/" + api;
-                console.log(result);
+                console.log( (ddbg()), result);
                 break;
                 
         case "reset":
@@ -5067,8 +5248,8 @@ try {
     GLB.pwcrypt = (IGNOREPW || GLB.newuser) ? true : false;
 }
 
-if ( DEBUG6 ) {
-    console.log("Index: ", UTIL.inspect(GLB.options, false, null, false));
+if ( DEBUG5 ) {
+    console.log( (ddbg()), "Index: ", UTIL.inspect(GLB.options, false, null, false));
 }
 
 var config = GLB.options.config;
@@ -5090,12 +5271,12 @@ try {
 
     // list on the port
     app.listen(port, function () {
-        console.log((new Date()) + " HousePanel Node.js Server is running on port: ", port);
+        console.log((ddbg()) + "HousePanel Node.js Server is running on port: ", port);
     });
     applistening = true;
     
 } catch (e) {
-    console.log((new Date()) + ' HousePanel Node.js Server could not be started on port: ', port);
+    console.log((ddbg()) + 'HousePanel Node.js Server could not be started on port: ', port);
     app = null;
     applistening = false;
 }
@@ -5129,12 +5310,12 @@ if ( server && config.webSocketServerPort ) {
         httpServer: server
     });
     server.listen(config.webSocketServerPort, function() {
-        console.log((new Date()) + " webSocket Server is listening on port: ", config.webSocketServerPort);
+        console.log((ddbg()) + "webSocket Server is listening on port: ", config.webSocketServerPort);
     });
     serverlistening = true;
 } else {
     serverlistening = false;
-    console.log((new Date()) + " webSocket port not valid. webSocketServerPort= ", config.webSocketServerPort);
+    console.log((ddbg()) + "webSocket port not valid. webSocketServerPort= ", config.webSocketServerPort);
 }
 
 
@@ -5166,28 +5347,26 @@ for (var h in hubs) {
         wshost = wshost + "/subscribe";
 
         wsclient.on("connectFailed", function(err) {
-            console.log("Connection failure to ISY socket: ", err.toString());
-            console.log("wshost= ", wshost, " header= ", header);
+            console.log( (ddbg()), "Connection failure to ISY socket: ", err.toString(), " wshost: ", wshost, " header: ", header);
         });
 
         wsclient.on("connect", function(connection) {
-            console.log("Connected to ISY socket.");
+            console.log( (ddbg()), "Success connecting to ISY socket. Listening for messages...");
 
             // handle incoming state messages from ISY
             // this will be ignored if the node isn't in our list
             connection.on("message", function(msg) {
                 if ( msg.type==="utf8" ) {
-                    // console.log("ISY Message: ", msg.utf8Data);
                     processIsyMessage(msg.utf8Data);
                 }
             });
         
             connection.on("error", function(err) {
-                console.log("Connection error to ISY socket: ", err.toString());
+                console.log( (ddbg()), "Connection error to ISY socket: ", err.toString());
             });
         
             connection.on("close", function() {
-                console.log("Connection closed to ISY socket");
+                console.log( (ddbg()), "Connection closed to ISY socket");
             });
         
         });
@@ -5216,7 +5395,7 @@ if ( app && applistening ) {
     app.get('*', function (req, res) {
         
         var hostname = req.protocol + "://" + req.headers.host;
-        console.log((new Date()) + " serving page at: ", hostname);
+        console.log((ddbg()) + " serving page at: ", hostname);
         var $tc;
 
         if ( req.path==="/" || typeof req.path==="undefined" || req.path==="/undefined" || req.path==="undefined" ) {
@@ -5245,7 +5424,7 @@ if ( app && applistening ) {
 
             // handle user provided get api calls
             } else if ( isquery ) {
-                console.log("api call: ",  queryobj);
+                console.log( (ddbg()), "api call: ",  queryobj);
                 $tc = apiCall(queryobj, "GET");
 
             // display the main page if password matches
@@ -5259,11 +5438,11 @@ if ( app && applistening ) {
                 // GLB.newuser = true;
 
                 GLB.pwcrypt===config["pword"][uname][0];
-                console.log("login accepted. uname = ", uname, " pwcrypt = ", GLB.pwcrypt);
+                console.log( (ddbg()), "login accepted. uname = ", uname, " pwcrypt = ", GLB.pwcrypt);
                 $tc = mainPage(req.protocol, req.headers.host, req.path);
 
             } else {
-                console.log("login rejected. uname = ", uname, " pwcrypt = ", GLB.pwcrypt);
+                console.log( (ddbg()), "login rejected. uname = ", uname, " pwcrypt = ", GLB.pwcrypt);
                 $tc = getLoginPage();
             }
             res.send($tc);
@@ -5328,8 +5507,8 @@ if ( app && applistening ) {
             if (file.indexOf(dir + path.sep) !== 0) {
                 res.status(403).end('Forbidden');
             }
-            if ( DEBUG6 ) {
-                console.log("Loading module: ", req.path, " as: ", file);
+            if ( DEBUG1 ) {
+                console.log( (ddbg()) + " Loading module: ", req.path, " as: ", file);
             }
             var type = mime[path.extname(file).slice(1)] || 'text/plain';
             var s = fs.createReadStream(file);
@@ -5345,10 +5524,10 @@ if ( app && applistening ) {
         }
     });
     
-    // app.put('*', function(req, res) {
-    //     console.log("requesting put: ", req.path);
-    //     res.end();
-    // });
+    app.put('*', function(req, res) {
+        console.log( (ddbg()), "PUT api calls not yet supported. requested put: ", req.path);
+        res.end();
+    });
 
 // ***************************************************
 // these are server treatments for processing jQuery
@@ -5360,14 +5539,14 @@ if ( app && applistening ) {
         // the first initialize type tells Node.js to update elements
         if ( req.body['msgtype'] == "initialize" ) {
             res.json('hub info updated');
-            console.log((new Date()) + " New hub authorized; updating things in hpserver.");
+            console.log( (ddbg()), "New hub authorized; updating things in hpserver.");
             readOptions();
             getAllThings();
         
         // handle callbacks from ST and HE hubs here
         // for ISY this is done via websockets above
         } else if ( req.body['msgtype'] == "update" ) {
-            console.log((new Date()) + " Received update msg from hub. ", req.body["hubid"], " body: ", req.body);
+            console.log( (ddbg()), "Received update msg from hub. ", req.body["hubid"], " body: ", req.body);
 
             // loop through all things for this hub
             // remove music trackData field that we don't know how to handle
@@ -5383,18 +5562,17 @@ if ( app && applistening ) {
                     cnt = cnt + 1;
                     entry['value'][req.body['change_attribute']] = req.body['change_value'];
                     if ( entry['value']['trackData'] ) { delete entry['value']['trackData']; }
-                    console.log((new Date()) + ' Updating tile #',entry['id'],' from trigger:', req.body['change_attribute'] );
+                    console.log( (ddbg()), 'Updating tile #',entry['id'],' from trigger:', req.body['change_attribute'] );
                     pushClient(entry.id, entry.type, req.body['change_attribute'], entry['value'])
 
                     // process rules and links
                     if ( GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true ) {
-                        // processRules(bid, "isy", subid, newvalue);
+                        processRules(bid, entry.type, subid, newvalue);
                         processLinks(entry.id, entry.type, req.body['change_attribute'], entry['value']);
                     }
 
                 }
             }
-            // console.log((new Date()) + ' pushed new status info to ' + cnt + ' tiles');
             res.json('pushed new status info to ' + cnt + ' tiles');
 
         // handle all api calls upon the server from js client here
@@ -5405,7 +5583,7 @@ if ( app && applistening ) {
         
         // handle unknown requests
         } else {
-            console.log((new Date()) + "hpserver received unknown message.", req.body);
+            console.log((ddbg()) + "hpserver received unknown message.", req.body);
             res.json('hpserver received unknown message.');
         }
 
@@ -5415,7 +5593,7 @@ if ( app && applistening ) {
 // This callback function handles new connections and closed connections
 if ( wsServer && serverlistening ) {
     wsServer.on('request', function(request) {
-        console.log((new Date()) + ' Connecting websocket to: ', request.origin);
+        console.log( (ddbg()), 'Connecting websocket to: ', request.origin);
 
         // accept connection - you should check 'request.origin' to make sure that
         // client is connecting from your website
@@ -5438,12 +5616,12 @@ if ( wsServer && serverlistening ) {
         // we no longer rely on this to close prior connections
         // instead we just shut down any that match
         var index = clients.push(connection) - 1;
-        console.log((new Date()) + ' Connection accepted. Client #' + index + " host=" + host);
+        console.log( (ddbg()), 'Connection accepted. Client #' + index + " host=" + host);
 
         // user disconnected - remove all clients that match this socket
         connection.on('close', function(reason, description) {
             var host = connection.socket.remoteAddress;
-            console.log((new Date()) + " Peer: ", host, " disconnected. for: ", reason, " desc: ", description);
+            console.log( (ddbg()), "Peer: ", host, " disconnected. for: ", reason, " desc: ", description);
 
             // remove clients that match this host
             // clients.splice(indexsave, 1);

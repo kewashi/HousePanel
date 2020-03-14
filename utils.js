@@ -1,6 +1,9 @@
 'use strict';
 
 var devhistory =  ` 
+2.221      Ported over and improved powerful RULE engine feature
+            - change how links work to be faster and more robust
+            - remove button to remove hub since it doesn't work yet
 2.220      Fix startup bug so new hubs now work - and give up on npm installs
 2.216      Clean up when options file is read and sync npm version number
 2.215      Fix video embedded, provide arlo4.py, and enable ISY toggle for RULEs and api calls
