@@ -1,6 +1,7 @@
 'use strict';
 
 var devhistory =  ` 
+2.222      Found login bug and squashed it
 2.221      Ported over and improved powerful RULE engine feature
             - change how links work to be faster and more robust
             - remove button to remove hub since it doesn't work yet

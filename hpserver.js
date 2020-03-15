@@ -242,17 +242,16 @@ function readOptions() {
 
     // read the hubs
     if ( array_key_exists("hubs", GLB.options["config"]) ) {
-        hubs = GLB.options.config["hubs"];
-        if ( !is_array(hubs) ) { hubs = [] };
+        if ( !is_array(GLB.options.config["hubs"]) ) { GLB.options.config["hubs"] = [] };
     } else {
-        hubs = [];
+        GLB.options.config["hubs"] = [];
         rewrite = true;
     }
 
-    if ( hubs.length > 0 ) {
-        console.log((ddbg()) + ' Loading ', hubs.length,' hubs.');
+    if (  GLB.options.config["hubs"].length > 0 ) {
+        console.log((ddbg()) + ' Loading ',  GLB.options.config["hubs"].length,' hubs.');
         if ( DEBUG2 ) {
-            console.log(hubs);
+            console.log( GLB.options.config["hubs"] );
         }
     } else {
         console.log((ddbg()) + ' No hubs found. HousePanel will only show special and custom tiles.');
@@ -2538,8 +2537,9 @@ function processIsyMessage(isymsg) {
 
                         newval = newval.toString();
                     } catch (e) {
-                        console.log( (ddbg()), "error in webSocket interpretation: ");
-                        console.log( (ddbg()), "webSocket returned: ", UTIL.inspect(result, false, null, false) );
+                        if ( DEBUG9 ) {
+                            console.log( (ddbg()), "error - webSocket returned: ", UTIL.inspect(result, false, null, false) );
+                        }
                         return;
                     }
 
@@ -3151,9 +3151,9 @@ function queryHub(hub, swid, swtype, popup) {
 }
 
 function findHub(hubid) {
-    var hub = hubs[0];
-    for (var h in hubs) {
-        var ahub = hubs[h];
+    var hub =  GLB.options.config["hubs"][0];
+    for (var h in  GLB.options.config["hubs"]) {
+        var ahub =  GLB.options.config["hubs"][h];
         if ( ahub["hubId"]===hubid ) { hub = ahub; }
     }
     return hub;
@@ -4775,7 +4775,7 @@ function delCustom(swid, swtype, swval, swattr, subid) {
 
 function apiCall(body, protocol) {
     var config = GLB.options.config;
-    var hubs = config["hubs"];
+    var hubs = GLB.options.config["hubs"];
 
     if ( body['useajax'] ) {
         var api = body['useajax'];
@@ -5210,11 +5210,10 @@ function apiCall(body, protocol) {
         case "reset":
             if ( protocol==="GET" ) {
                 readOptions();
-                config["pword"] = {};
-                config["pword"]["default"] = ["", "skin-housepanel"];
-                config["uname"] = "default";
+                GLB.options.config["pword"] = {};
+                GLB.options.config["pword"]["default"] = ["", "skin-housepanel"];
+                GLB.options. config["uname"] = "default";
                 GLB.pwcrypt = true;
-                GLB.options["config"] = config;
                 writeOptions(GLB.options, true);
                 pushClient("reload", "/logout");
                 result = getLoginPage();
@@ -5253,7 +5252,7 @@ if ( DEBUG5 ) {
 }
 
 var config = GLB.options.config;
-var hubs = config["hubs"];
+// var hubs = config["hubs"];
 var port = config["port"];
 if ( !port ) {
     port = 3080;
@@ -5320,11 +5319,11 @@ if ( server && config.webSocketServerPort ) {
 
 
 // make websocket connection to any ISY hub
-// unlike ST and HE hubs below, communication from ISY happens over a real webSocket
+// unlike ST and HE below, communication from ISY happens over a real webSocket
 var isyhub = false;
 var wshost;
-for (var h in hubs) {
-    var hub = hubs[h];
+for (var h in GLB.options.config["hubs"]) {
+    var hub = GLB.options.config["hubs"][h];
     wshost = false;
     if ( hub["hubType"]==="ISY" && hub["hubEndpt"] && hub["hubAccess"] ) { 
 
@@ -5413,11 +5412,10 @@ if ( app && applistening ) {
             // this removes all user accounts and logs everyone out
             if ( isquery && queryobj.code && (queryobj.code==="reset") ) {
                 readOptions();
-                config["pword"] = {};
-                config["pword"]["default"] = ["", "skin-housepanel"];
-                config["uname"] = "default";
-                GLB.pwcrypt = false;
-                GLB.options["config"] = config;
+                GLB.options.config["pword"] = {};
+                GLB.options.config["pword"]["default"] = ["", "skin-housepanel"];
+                GLB.options.config["uname"] = "default";
+                GLB.pwcrypt = true;
                 writeOptions(GLB.options, true);
                 pushClient("reload", "/logout");
                 $tc = "Logging out all clients..."; // getLoginPage();
@@ -5429,7 +5427,7 @@ if ( app && applistening ) {
 
             // display the main page if password matches
             // or if we don't have a pw
-            } else if ( IGNOREPW || GLB.newuser || GLB.pwcrypt===true || (array_key_exists(uname, config["pword"]) && GLB.pwcrypt===config["pword"][uname][0]) ) {
+            } else if ( IGNOREPW || GLB.newuser || GLB.pwcrypt===true || (array_key_exists(uname, GLB.options.config["pword"]) && GLB.pwcrypt===GLB.options.config["pword"][uname][0]) ) {
                 // reset for next refresh
                 GLB.defhub = "-1";
                 
@@ -5442,7 +5440,7 @@ if ( app && applistening ) {
                 $tc = mainPage(req.protocol, req.headers.host, req.path);
 
             } else {
-                console.log( (ddbg()), "login rejected. uname = ", uname, " pwcrypt = ", GLB.pwcrypt);
+                console.log( (ddbg()), "login rejected. uname= ", uname, " pwcrypt= ", GLB.pwcrypt, " configpw= ", GLB.options.config["pword"][uname][0]);
                 $tc = getLoginPage();
             }
             res.send($tc);
@@ -5543,7 +5541,7 @@ if ( app && applistening ) {
             readOptions();
             getAllThings();
         
-        // handle callbacks from ST and HE hubs here
+        // handle callbacks from ST and HE here
         // for ISY this is done via websockets above
         } else if ( req.body['msgtype'] == "update" ) {
             console.log( (ddbg()), "Received update msg from hub. ", req.body["hubid"], " body: ", req.body);
