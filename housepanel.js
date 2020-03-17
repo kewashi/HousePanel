@@ -84,6 +84,13 @@ function is_object(obj) {
     }
 }
 
+function is_function(obj) {
+    var test1 = Object.prototype.toString.call(obj) == '[object Function]';
+    var test2 = Function.prototype.isPrototypeOf(obj);
+    console.log("test1= ", test1," test2= ", test2);
+    return test1 || test2;
+}
+
 function formToObject(id) {
     var myform = document.getElementById(id);
     var formData = new FormData(myform);
@@ -143,11 +150,11 @@ function getAllthings(modalwindow, reload) {
 // obtain options using an ajax api call
 // could probably read Options file instead
 // but doing it this way ensure we get what main app sees
-function getOptions(reload) {
+function getOptions(optcallback) {
     var doreload = "";
-    if ( typeof reload !== "undefined" && (reload===true || reload==="reload") ) {
-        doreload = "reload";
-    }
+    // if ( typeof reload !== "undefined" && (reload===true || reload==="reload") ) {
+    //     doreload = "reload";
+    // }
     try {
     $.post(cm_Globals.returnURL, 
         {useajax: "getoptions", id: "none", type: "none", attr: doreload},
@@ -156,6 +163,10 @@ function getOptions(reload) {
                 cm_Globals.options = presult;
                 var indexkeys = Object.keys(presult.index);
                 console.log("getOptions returned: " + indexkeys.length + " things");
+                if ( is_function(optcallback) ) {
+                    optcallback();
+                    return;
+                }
                 if ( pagename==="main" ) {
                     setupUserOpts();
                 }
@@ -1637,6 +1648,7 @@ function setupButtons() {
             evt.stopPropagation(); 
         });
         
+        // TODO - test and activate this feature
         $("input.hubdel").click(function(evt) {
             var hubnum = $(this).attr("hub");
             var hubId = $(this).attr("hubid");

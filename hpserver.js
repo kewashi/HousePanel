@@ -3357,12 +3357,22 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
         if ( err ) {
             webresposne[subid] = command + ": error";
         } else if ( typeof body === "object" ) {
-            webresponse[subid] = JSON.stringify(body);
-        } else {
-            webresponse[subid] = body;
+            // add any fields returned as an object
+            for ( var bkey in body ) {
+                if ( typeof body[bkey]==="string" ) {
+                    webresponse[bkey] = body[bkey]
+                } else if ( typeof body[bkey]==="object" ) {
+                    webresponse[bkey] = JSON.stringify(body[bkey]);
+                }
+            }
+            pushClient(swid, swtype, subid, webresponse);
+        } else if ( typeof body === "string" && body!=="" ) {
+            webresponse[command] = body;
+            pushClient(swid, swtype, subid, webresponse);
         }
+        console.log("URL callback response: ", UTIL.inspect(body, false, null, false) );
         // push the response to the clients
-        pushClient(swid, swtype, subid, webresponse);
+        // pushClient(swid, swtype, subid, webresponse);
     }
 
     // while (!finished) { }
@@ -4774,7 +4784,8 @@ function delCustom(swid, swtype, swval, swattr, subid) {
 }
 
 function apiCall(body, protocol) {
-    var config = GLB.options.config;
+    // var config = GLB.options.config;
+    readOptions();
     var hubs = GLB.options.config["hubs"];
 
     if ( body['useajax'] ) {
@@ -4874,11 +4885,14 @@ function apiCall(body, protocol) {
                 var faketile = {"panel": "panel", "name": swval, "tab": "Tab Inactive", "tabon": "Tab Selected"};
                 var thing = { "id": "r_" + swid, "name": swval, 
                               "hubnum": -1, "type": "page", "value": faketile};
-                // result = makeThing(0, tileid, thing, swval, 0, 0, 99, "", api);
                 result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 99, "", api);
             } else {
                 var idx = swtype + "|" + swid;
                 var thing = allthings[idx];
+                
+                // load customizations
+                thing.value = getCustomTile(thing.value, swtype, swid);
+                allthings[idx] = thing;            
                 result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 99, "", api);
             }
             break;
@@ -4958,6 +4972,28 @@ function apiCall(body, protocol) {
             }
             result = GLB.options;
             break;
+        
+        // the GUI currently does not make use of this api call
+        case "putoptions":
+            if ( swval && is_object(swval) ) {
+                writeOptions(swval);
+            }
+            result = GLB.options;
+            break;
+
+        case "sortupdate":
+            var idx = swtype + "|" + swid;
+            var uid = swattr;
+            if ( uid && array_key_exists(uid, GLB.options) && swval && is_array(swval) ) {
+                GLB.options[uid] = swval;
+                allthings[idx]["value"] = getCustomTile(allthings[idx]["value"], swtype, swid);
+                writeOptions(GLB.options);
+                result = allthings[idx]["value"];
+            } else {
+                result = "error - invalid request to update user Options";
+            }
+            break;
+
         
         case "getthings" :
             var reload = ( body['swattr']==="reload" );
@@ -5072,7 +5108,19 @@ function apiCall(body, protocol) {
             result.options = GLB.options;
             result.things = allthings;
             break;
-            
+
+        case "updcustom":
+            var result = {}
+            // tile customizer has updated the list of options
+            // this api call is used to update things so we stay in sync
+            readOptions();
+            result.options = GLB.options;
+            var idx = swtype + "|" + swid;
+            var pvalue = getCustomTile(allthings[idx].value, swtype, swid);
+            allthings[idx]["value"] = pvalue;
+            result.things = allthings;
+            break;
+                
         case "geticons":
             var result = getIcons(swval, swattr);
             break;

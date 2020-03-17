@@ -1402,8 +1402,7 @@ div.overlay {
 }
 /* put sliders on bottom */
 div.thing div.overlay.level {
-    height: 32px;
-    position: absolute;
+    height: 25px;
     bottom: 0px;
 }
 div.overlay.name {
