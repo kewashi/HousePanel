@@ -1,6 +1,7 @@
 'use strict';
 
 var devhistory =  ` 
+2.224      Clean and speed up rules, add timer delay to rule syntax
 2.223      Fix bug in sorting user custom fields and change slider skin setting
 2.222      Found login bug and squashed it
 2.221      Ported over and improved powerful RULE engine feature

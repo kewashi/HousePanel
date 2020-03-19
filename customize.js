@@ -805,7 +805,7 @@ function handleBuiltin(subid) {
     var companion = "user_" + subid;
     cm_Globals.defaultclick = subid;
 
-    // console.log("builtin handler: subid= ", subid, "subids: ", subids, " companion= ", companion);
+    console.log("builtin handler: subid= ", subid, "subids: ", subids, " companion= ", companion);
 
     // put the field clicked on in the input box
     $("#cm_userfield").attr("value",subid);
