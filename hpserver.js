@@ -12,7 +12,7 @@ const DEBUG7 = false;               // hub responses
 const DEBUG8 = false;               // API calls
 const DEBUG9 = false;               // ISY callbacks
 const DEBUG10 = false;              // sibling tag
-const DEBUG11 = false;               // rules
+const DEBUG11 = false;              // rules
 const DEBUG12 = false;              // links
 const DEBUG13 = false;              // URL callbacks
 const DEBUG14 = false;              // tile link details
@@ -607,52 +607,118 @@ function getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSec
     curl_call(hubEndpt + "/nodes", stheader, false, false, "GET", getAllNodes);
 
     // also get all the variables and put them into tiles too
-    curl_call(hubEndpt + "/vars/get/1", stheader, false, false, "GET", getAllVars);
+    // start by creating the default vars tile with customizations
+    var id = "vars";
+    var thetype = "isy";
+    var idx = thetype + "|" + id;
+    var pvalue = {name: "Variables"};
+    pvalue = getCustomTile(pvalue, thetype, id);
+    allthings[idx] = {"id": id, "name": pvalue.name, "hubnum": hubnum, "type": thetype, "hint": "", "refresh": "never", "value": pvalue };
+
+    // now read in any int and state variables
+    curl_call(hubEndpt + "/vars/get/1", stheader, false, false, "GET", getIntVars);
+    curl_call(hubEndpt + "/vars/get/2", stheader, false, false, "GET", getStateVars);
 
     // also get programs
     curl_call(hubEndpt + "/programs", stheader, false, false, "GET", getAllProgs);
     
-    function getAllVars(err, res, body) {
-        var id = "vars";
-        var thetype = "isy";
-        if ( err ) {
-            console.log( (ddbg()), "error retrieving ISY variables: ", err);
-        } else {
-            var result = parser.parse(body);
-            if (DEBUG1) {
-                console.log( (ddbg()), "Variables: ", UTIL.inspect(result, false, null, false) );
-            }
+//     function getIntVars(err, res, body) {
+//         var id = "vars";
+//         var thetype = "isy";
+//         if ( err ) {
+//             console.log( (ddbg()), "error retrieving ISY int variables: ", err);
+//         } else {
+//             var result = parser.parse(body);
+//             if (DEBUG1) {
+//                 console.log( (ddbg()), "Int Variables: ", UTIL.inspect(result, false, null, false) );
+//             }
 
-            // make a single tile with all the variables in it
-            var varobj = result.vars.var;
-            if ( is_array(varobj) && varobj.length ) {
+//             // make a single tile with all the variables in it
+//             var varobj = result.vars.var;
+//             if ( is_array(varobj) && varobj.length ) {
                 
-                var idx = thetype + "|" + id;
-                var pvalue = {};
-                var k = 1;
-                varobj.forEach(function( obj) {
-                    var prec = obj.prec;
-                    var val10 = parseFloat(obj.val) / Math.pow(10, prec);
-                    pvalue["int_"+k] = val10.toString();
-                    k++;
-                });
+//                 var existing = false;
+//                 var idx = thetype + "|" + id;
+//                 var pvalue = {};
+//                 var k = 1;
+//                 varobj.forEach(function( obj) {
+//                     var prec = obj.prec;
+//                     var val10 = parseFloat(obj.val) / Math.pow(10, prec);
+//                     pvalue["int_"+k] = val10.toString();
+//                     k++;
+//                 });
 
-                // this is the proper place to load customizations
-                pvalue = getCustomTile(pvalue, thetype, id);
+//                 // this is the proper place to load customizations
+//                 pvalue = getCustomTile(pvalue, thetype, id);
 
-                allthings[idx] = {
-                    "id": id,
-                    "name": "Variables", 
-                    "hubnum": hubnum,
-                    "type": thetype, 
-                    "hint": "",
-                    "refresh": "never",
-                    "value": pvalue
-                };
-            }
+//                 allthings[idx] = {
+//                     "id": id,
+//                     "name": pvalue.name, 
+//                     "hubnum": hubnum,
+//                     "type": thetype, 
+//                     "hint": "",
+//                     "refresh": "never",
+//                     "value": pvalue
+//                 };
+//             }
+//         }
+//     }
+    
+    function getIntVars(err, res, body) {
+        if ( err ) {
+            console.log( (ddbg()), "error retrieving ISY int variables: ", err);
+        } else {
+            getISY_Vars(body, "int");
         }
     }
     
+    function getStateVars(err, res, body) {
+        if ( err ) {
+            console.log( (ddbg()), "error retrieving ISY state variables: ", err);
+        } else {
+            getISY_Vars(body, "state");
+        }
+    }
+
+    function getISY_Vars(body, vartype) {
+        var id = "vars";
+        var thetype = "isy";
+        var idx = thetype + "|" + id;
+
+        var result = parser.parse(body);
+        if (DEBUG2) {
+            console.log( (ddbg()), vartype, "variables: ", UTIL.inspect(result, false, null, false) );
+        }
+
+        // make a single tile with all the variables in it
+        var varobj = result.vars.var;
+        if ( !is_object(varobj) || !array_key_exists(idx, allthings) ) {
+            return;
+        }
+
+        if ( !is_array(varobj) ) {
+            varobj = [varobj];
+        }
+            
+        var pvalue = allthings[idx]["value"];
+        var k = 1;
+        varobj.forEach(function( obj) {
+            var prec = obj.prec;
+            var val10 = parseFloat(obj.val) / Math.pow(10, prec);
+            while ( typeof pvalue[vartype+"_"+k] !== "undefined" ) {
+                k++;
+            }
+            pvalue[vartype+"_"+k] = val10.toString();
+            k++;
+        });
+
+        allthings[idx]["value"] = pvalue;
+        if ( DEBUG2 ) {
+            console.log( (ddbg()), "New variable value: ", pvalue);
+        }
+    }
+
+    // TODO: Make program tiles similar to how Piston tiles are done
     function getAllProgs(err, res, body) {
         var id = "progs";
         var thetype = "isy";
@@ -702,7 +768,7 @@ function getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSec
                 // this is updated below in the callback after getting node details
                 allthings[idx] = {
                     "id": id,
-                    "name": name, 
+                    "name": pvalue.name, 
                     "hubnum": hubnum,
                     "type": thetype, 
                     "hint": hint,
@@ -2677,6 +2743,7 @@ function processRules(bid, thetype, trigger, pvalue) {
 
     // if this tile has no rule, do nothing
     if ( !array_key_exists(userid, GLB.options) ) {
+        console.log("rule not found...");
         return;
     }
 
@@ -3463,7 +3530,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                     }  
                 });
 
-                // do what processRules does here
+                // get the execution statements and call them all here
                 const regsplit = /[,;]/;
                 if ( linkval ) {
                     var testcommands = linkval.split(regsplit);
@@ -3482,6 +3549,18 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
 
             case "HUB":
                 callHub(hub, swid, swtype, swval, swattr, subid, false, false);
+
+                // process rules and links instantly in case the webSocket doesn't work
+                // this also makes the rules run much quicker
+                // only harm or side effect is the rule will be executed twice
+                // TODO: find a way to flag the webSocket callback to not do this
+                if ( subid && swval && GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true ) {
+                    var pvalue = allthings[idx]["value"];
+                    pvalue[subid] = swval;
+                    processRules(swid, swtype, subid, pvalue);
+                    processLinks(swid, swtype, subid, pvalue);
+                }
+
                 response = "success";
                 break;
 
@@ -5719,9 +5798,13 @@ if ( app && applistening ) {
         res.end();
     });
 
-// ***************************************************
-// these are server treatments for processing jQuery
-// ***************************************************
+// *********************************************************************************************
+// these are server treatments for processing updates
+// from SmartThings and Hubitat hubs
+// this is done in the "changeHandler" function
+// found in the HousePanel.groovy application with this line
+//     postHub(state.directIP, state.directPort, "update", deviceName, deviceid, attr, value)
+// *********************************************************************************************
     
     app.post("/", function (req, res) {
 
@@ -5729,7 +5812,7 @@ if ( app && applistening ) {
         // the first initialize type tells Node.js to update elements
         if ( req.body['msgtype'] == "initialize" ) {
             res.json('hub info updated');
-            if ( DEBUG1 ) {
+            if ( DEBUG2 ) {
                 console.log( (ddbg()), "New hub authorized; updating things in hpserver.");
             }
             readOptions();
@@ -5738,7 +5821,7 @@ if ( app && applistening ) {
         // handle callbacks from ST and HE here
         // for ISY this is done via websockets above
         } else if ( req.body['msgtype'] == "update" ) {
-            if ( DEBUG1 ) {
+            if ( DEBUG2 ) {
                 console.log( (ddbg()), "Received update msg from hub. ", req.body["hubid"], " body: ", req.body);
             }
 
@@ -5763,7 +5846,7 @@ if ( app && applistening ) {
 
                     // process rules and links
                     if ( GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true ) {
-                        processRules(bid, entry.type, subid, newvalue);
+                        processRules(bid, entry.type, req.body['change_attribute'], entry['value']);
                         processLinks(entry.id, entry.type, req.body['change_attribute'], entry['value']);
                     }
 

@@ -1406,13 +1406,6 @@ div.thing div.overlay.level {
     bottom: 0px;
 }
 div.overlay.name {
-    position: absolute;
-    display: block;
-    color: rgba(255, 255, 255, 0.01);
-    width: auto;
-}
-div.config-thing div.overlay.name {
-    position: relative;
     display: none;
     color: rgba(255, 255, 255, 1);
 }
@@ -1574,6 +1567,7 @@ div.weather.forecastToday, div.weather.forecastTonight, div.weather.forecastTomo
 div.weather-thing div.overlay.name, div.weather-thing div.overlay.city {
     display: none;
     position: relative;
+    color: rgba(255, 255, 255, 1);
 }
 /* weather styling */
 div.thing.weather-thing {
@@ -1664,7 +1658,7 @@ div.thing.control-thing div.thingname {
     background-color: rgba(50, 50, 100, 1);
 }
 
-div.control.name {
+div.thing.control-thing div.overlay.name {
     display: none;
 }
 div.thing.control-thing div.overlay:hover {
@@ -1782,8 +1776,7 @@ div.bold {
 
 div.audio-thing div.groupRole,
 div.audio-thing div.groupPrimaryDeviceId,
-div.audio-thing div.groupId,
-div.isy.name {
+div.audio-thing div.groupId {
     display: none;
 }
 
