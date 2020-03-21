@@ -225,8 +225,11 @@ div#catalog {
 
 .ui-widget.ui-widget-content{
     background-color: #666666;
-    margin: 0px -5px 5px 0px;
+    margin: 0px -5px 0px 0px;
     border: none;
+}
+.ui-widget-content a {
+    color: #cccccc;
 }
 .ui-tabs .ui-tabs-nav .ui-tabs-anchor{
 	text-decoration: none;
@@ -1786,4 +1789,33 @@ div.isy.thermostatState, div.isy.thermostatOperatingState, div.isy.thermostatHol
 div.isy.GV1, div.isy.GV2, div.isy.GV3, div.isy.GV4, div.isy.GV5, div.isy.GV6,
 div.isy.GV7, div.isy.GV8, div.isy.GV9, div.isy.GV10, div.isy.GV11, div.isy.GV12 {
     display: none;
+}
+div.level-dn, div.switchlevel-dn, div.isy.variable-dn,
+div.colorTemperature-dn, div.hue-dn, div.saturation-dn,
+div.heatingSetpoint-dn, div.coolingSetpoint-dn {
+    color: rgba(255, 255, 255, 0.01);
+    background-image: url("media/down.png");
+    box-shadow: 0px 1px 2px rgba(0,0,0,0.8);
+    width: 32px; height: 32px;
+    cursor: pointer;
+    display: inline-block;
+}
+
+div.heat-up, div.cool-up, div.level-up, div.switchlevel-up, div.isy.variable-up,
+div.colorTemperature-up, div.hue-up, div.saturation-up,
+div.heatingSetpoint-up, div.coolingSetpoint-up {
+    color: rgba(255, 255, 255, 0.01);
+    background-image: url("media/up.png");
+    box-shadow: 0px 1px 2px rgba(0,0,0,0.8);
+    width: 32px; height: 32px;
+    cursor: pointer;
+    display: inline-block;
+}
+div.overlay.variables div.variable {
+    width: 50px;
+    display: inline-block;
+}
+div.overlay.variables div.variable-up, div.overlay.variables div.variable-dn {
+    width: 32px;
+    display: inline-block;
 }

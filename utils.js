@@ -1,6 +1,10 @@
 'use strict';
 
 var devhistory =  ` 
+2.226      Fixed page name update
+            - fix readOptions to not read in so often
+            - support rules acting upon variable values from ISY
+            - various misc bug fixes
 2.225      Added both Int and State variable support
 2.224      Clean and speed up rules, add timer delay to rule syntax
 2.223      Fix bug in sorting user custom fields and change slider skin setting

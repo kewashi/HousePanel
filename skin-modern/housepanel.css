@@ -3,6 +3,27 @@
  * icons will look similar to other dashboards
  */
 
+/* *********************************************************************************************
+This first section modifies the menu look and feel of the main GUI
+********************************************************************************************** */
+input.submitbutton, input.resetbutton, input.authbutton, 
+div.restoretabs, div.formbutton, button.showhistory, button.infobutton {
+    background-color: #202020;
+    color: #eeeeee;    text-align: center;    font-weight: normal;
+    border-bottom: 4px solid rgba(255, 255, 255, 1); 
+    border-right: 4px solid rgba(255, 255, 255, 1); 
+}
+
+div.modeoptions {
+    background-color: black;
+}
+.ui-tabs .ui-tabs-nav li.ui-tabs-active {
+    background-color: black;
+}
+
+/* *********************************************************************************************
+This section modifies the content icons
+********************************************************************************************** */
 /* panel backgrounds go here in the skin */
 div.panel-Family, div.panel-family, div.panel-Familyroom, div.panel-familyroom {
     background-image: none;
@@ -748,7 +769,7 @@ div.thing.video-thing {
     width: auto;
     height: auto;
 }
-div.video-thing div.overlay.name {
+div.video-thing div.overlay.name, div.image-thing div.overlay.name {
     display: none;
 }
 
@@ -793,4 +814,93 @@ div.blank-thing.b2x1, div.blank-thing.b2x2 {
 }
 div.blank-thing div.overlay.name {
     display: none;
+}
+
+
+/* *********************************************************************************************
+This section below is just a demo of how you get images on screen that are updated
+in a fixed location. This is how you would support an IP camera that stores an image
+periodically to a known location on your local LAN. In this came my images are stored
+in a folder related to my SmartThings account but it could have been anywhere
+You can ignore this or delete it or replace it with your own custom settings
+You can also use the tile editor to change the name of image tiles to match a file name
+********************************************************************************************** */
+div.overlay.image div.image.image1 {
+    background-image: url('http://192.168.11.20/smartthings/media/livingroom.jpg');
+}
+div.overlay.image div.image.image2 {
+    background-image: url('http://192.168.11.20/smartthings/media/mudcam.jpg');
+}
+div.overlay.image div.image.image3 {
+    background-image: url('http://192.168.11.20/smartthings/media/garagepic.jpg');
+}
+div.overlay.image div.image.image4 {
+    background-image: url('http://192.168.11.20/smartthings/media/myhouse.jpg');
+}
+/* *********************************************************************************************
+These settings are for my Stereo and TV both controled via KuKuHarmony 
+They are installed in HP using an Other tile
+********************************************************************************************** */
+div.other-thing div.switch.on {
+    height: 30px;
+    color: rgba(255, 255, 255, 0.01);
+    background-image: url('icons/switchon.png');
+    background-size: 50px;
+}
+div.other-thing div.switch.off {
+    height: 30px;
+    color: rgba(255, 255, 255, 0.01);
+    background-image: url('icons/switchoff.png');
+    background-size: 50px;
+}
+div.other-thing.pioneer, div.other-thing.pioneer div.thingname, div.other-thing.lg, div.other-thing.lg div.thingname {
+    width: 420px;
+    height: auto;
+    padding-left: 0;
+    padding-right: 0;
+}
+div.other-thing.pioneer, div.other-thing.lg {
+    background-color: rgba(200, 200, 200, 1);
+}
+div.other-thing div.overlay {
+    display: inline-block;
+    width: 80px; height: 30px;
+    padding-top: 10px;
+    border: 2px solid black;
+    cursor: pointer;
+}
+div.other-thing div.overlay.healthStatus,
+div.other-thing.pioneer div.overlay.name, 
+div.other-thing.lg div.overlay.name 
+{
+    display: none;
+}
+div.other.switch {
+    background-image: none;
+    height: auto;
+    width: auto;
+    font-size: 11pt;
+    color: rgba(255, 255, 255, 1);
+}
+/* disable events for kuku */
+div.other-thing.pioneer div.overlay.event_1,
+div.other-thing.pioneer div.overlay.event_2,
+div.other-thing.pioneer div.overlay.event_3,
+div.other-thing.pioneer div.overlay.event_4,
+div.other-thing.lg div.overlay.event_1, 
+div.other-thing.lg div.overlay.event_2, 
+div.other-thing.lg div.overlay.event_3, 
+div.other-thing.lg div.overlay.event_4
+{
+    display: none;
+}
+
+/* these make KuKu harmony things show up correctly */
+div.other-thing.pioneer div.overlay._on,
+div.other-thing.pioneer div.overlay._off,
+div.other-thing.lg div.overlay._on,
+div.other-thing.lg div.overlay._off {
+    display: inline-block;
+    color: rgba(255,255,255,1);
+    font-size: 12pt;
 }

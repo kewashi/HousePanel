@@ -809,14 +809,6 @@ div.thing.image-thing {
     width: auto;
     height: auto;
 }
-div.image.url {
-    width: 246px;
-    height: 160px;
-    font-size: 0px;
-    background-color: #000000;
-    background-repeat: no-repeat;
-    background-position: center;
-}
 
 /* presence styling */
 div.presence.present, div.custom.present {
@@ -1005,4 +997,16 @@ div.thermostat-thing div.thingname {
 
 div.music-thing div.thingname, div.audio-thing div.thingname {
     width: 100%;
+}
+div.overlay.image div.image.image1 {
+    background-image: url('http://192.168.11.20/smartthings/media/livingroom.jpg');
+}
+div.overlay.image div.image.image2 {
+    background-image: url('http://192.168.11.20/smartthings/media/mudcam.jpg');
+}
+div.overlay.image div.image.image3 {
+    background-image: url('http://192.168.11.20/smartthings/media/garagepic.jpg');
+}
+div.overlay.image div.image.image4 {
+    background-image: url('http://192.168.11.20/smartthings/media/myhouse.jpg');
 }

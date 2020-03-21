@@ -255,11 +255,12 @@ function getCssRuleTarget(str_type, subid, thingindex, useall) {
             if ( useall===0 ) { target+= '.panel-'+ thingindex; }
 
         } else if ( subid==="name" ) {
-            target = "li.ui-tabs-tab.ui-state-default >a.ui-tabs.anchor";
+            target = "li.ui-tabs-tab.ui-state-default";
+            if ( useall===0 ) { target+= '.tab-'+thingindex; }
+            target = target + " a.ui-tabs-anchor";
 
         } else {
-            target = "li.ui-tabs-tab.ui-state-default >a.ui-tabs.anchor";
-            // target = "#ui-id-" + et_Globals.hubnum;
+            target = null;
         }
         console.log("page subid= ", subid," target= ", target);
         
@@ -278,7 +279,7 @@ function getCssRuleTarget(str_type, subid, thingindex, useall) {
         }
 
     // handle special case when whole tile is being requested
-    } else if ( subid==="wholetile"  || subid==="tile" ) {
+    } else if ( subid==="wholetile" ) {
         target = "div.thing";
         if ( useall < 2 ) { target+= "." + str_type + "-thing"; }
         if ( useall < 1 ) { target+= '.p_'+thingindex; }
@@ -498,7 +499,7 @@ function initDialogBinds(str_type, thingindex) {
         if ( str_type==="page" ) {
             addCSSRule(getCssRuleTarget(str_type, 'panel', thingindex), rule);
         } else {
-            addCSSRule(getCssRuleTarget(str_type, 'tile', thingindex), rule);
+            addCSSRule(getCssRuleTarget(str_type, 'wholetile', thingindex), rule);
         }
         event.stopPropagation;
     });
@@ -512,7 +513,7 @@ function initDialogBinds(str_type, thingindex) {
         if ( str_type==="page" ) {
             addCSSRule(getCssRuleTarget(str_type, 'panel', thingindex), rule);
         } else {
-            addCSSRule(getCssRuleTarget(str_type, 'tile', thingindex), rule);
+            addCSSRule(getCssRuleTarget(str_type, 'wholetile', thingindex), rule);
             addCSSRule(getCssRuleTarget(str_type, 'head', thingindex), rule);
             if ( str_type==="switchlevel" || str_type==="bulb" ) {
                 addCSSRule("div.overlay.level.v_"+thingindex+" .ui-slider", rule);
@@ -523,8 +524,8 @@ function initDialogBinds(str_type, thingindex) {
         if ( str_type === "thermostat" ) {
             var midsize = newsize - 64;
             rule = "width: " + midsize.toString() + "px;";
-            addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.heat-val", rule);
-            addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.cool-val", rule);
+            addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.heatingSetpoint", rule);
+            addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.coolingSetpoint", rule);
         }
         event.stopPropagation;
     });
@@ -551,7 +552,7 @@ function initDialogBinds(str_type, thingindex) {
         if ( str_type==="page" ) {
             addCSSRule(getCssRuleTarget(str_type, 'panel', thingindex), rule);
         } else {
-            addCSSRule(getCssRuleTarget(str_type, "tile", thingindex), rule);
+            addCSSRule(getCssRuleTarget(str_type, 'wholetile', thingindex), rule);
         }
         event.stopPropagation;
     });
@@ -581,15 +582,15 @@ function initDialogBinds(str_type, thingindex) {
         if ( str_type==="page" ) {
             addCSSRule(getCssRuleTarget(str_type, 'panel', thingindex), rule);
         } else {
-            addCSSRule(getCssRuleTarget(str_type, 'tile', thingindex), rule);
+            addCSSRule(getCssRuleTarget(str_type, 'wholetile', thingindex), rule);
             if ( str_type==="switchlevel" || str_type==="bulb" ) {
                 addCSSRule("div.overlay.level.v_"+thingindex+" .ui-slider", rule);
             }
         }
         
         if ( str_type === "thermostat" ) {
-            addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.heat-val", midrule);
-            addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.cool-val", midrule);
+            addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.heatingSetpoint", midrule);
+            addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.coolingSetpoint", midrule);
         }
         event.stopPropagation;
     });
@@ -685,7 +686,7 @@ function initDialogBinds(str_type, thingindex) {
                 }
                 $("#editWidth").prop("disabled", true);
                 $("#editWidth").css("background-color","gray");
-                if ( subid==="page" && subid!=="panel" ) {
+                if ( str_type==="page" && subid!=="panel" ) {
                     addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
                     addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
                 } else {
@@ -710,7 +711,7 @@ function initDialogBinds(str_type, thingindex) {
                     // rule = "width: " + newsize + " display: inline-block;";
                     rule = "width: " + newsize;
                 }
-                if ( subid==="page" && subid!=="panel" ) {
+                if ( str_type==="page" && subid!=="panel" ) {
                     addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
                     addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
                 } else {
@@ -1119,7 +1120,7 @@ function setsubid(str_type) {
     var subid = str_type;
     switch(str_type) {
         case "page":
-            subid= "panel";
+            subid= "tab";
             break;
 
         case "bulb":
@@ -1367,7 +1368,7 @@ function initColor(str_type, subid, thingindex) {
     if ( str_type==="page" ) {
         wholetarget = getCssRuleTarget(str_type, "name", thingindex, 0);
     } else {
-        wholetarget = getCssRuleTarget(str_type, "tile", thingindex, 0);
+        wholetarget = getCssRuleTarget(str_type, "wholetile", thingindex, 0);
     }
     var tilewidth = $(wholetarget).css("width");
     var tileheight = $(wholetarget).css("height");
@@ -2181,10 +2182,12 @@ function addCSSRule(selector, rules, resetFlag){
 function resetCSSRules(str_type, subid, thingindex){
 
         cm_Globals.reload = true;
-        var ruletypes = ['wholetile','head'];
+        var ruletypes = ['wholetile','head','name'];
         ruletypes.forEach( function(rule, idx, arr) {
             var subtarget = getCssRuleTarget(str_type, rule, thingindex);
-            removeCSSRule(subtarget, thingindex, null, 0);
+            if ( subtarget ) {
+                removeCSSRule(subtarget, thingindex, null, 0);
+            }
         });
 
         // remove all the subs
@@ -2192,7 +2195,9 @@ function resetCSSRules(str_type, subid, thingindex){
         if ( onoff && onoff.length ) {
             onoff.forEach( function(rule, idx, arr) {
                 var subtarget = getCssRuleTarget(str_type, rule, thingindex);
-                removeCSSRule(subtarget, thingindex, null, 0);
+                if ( subtarget ) {
+                    removeCSSRule(subtarget, thingindex, null, 0);
+                }
             });
         }
 }
