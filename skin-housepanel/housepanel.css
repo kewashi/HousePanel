@@ -67,6 +67,10 @@ div.thing:hover{
     -webkit-box-shadow: 0px 0px 41px rgba(0, 0, 0, 0.70); 
 }
 
+div.name {
+    display: none;
+}
+
 div.thing.switch-thing, div.thing.switchlevel-thing, div.thing.bulb-thing {
     height: auto;
     width: auto;

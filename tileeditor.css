@@ -1408,10 +1408,10 @@ div.thing div.overlay.level {
     height: 25px;
     bottom: 0px;
 }
-div.overlay.name {
+/* div.overlay.name {
     display: none;
     color: rgba(255, 255, 255, 1);
-}
+} */
 div.page-thing div.overlay.name {
     position: relative;
     display: block;

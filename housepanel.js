@@ -1427,8 +1427,14 @@ function execButton(buttonid) {
         var snap = $("#mode_Snap").prop("checked");
         console.log("snap mode: ",snap);
 
-    } else if ( buttonid==="refresh" || buttonid==="refactor" ) {
+    } else if ( buttonid==="refresh" ) {
+        var pstyle = "position: absolute; background-color: red; color: white; font-weight: bold; font-size: 32px; left: 400px; top: 300px; width: 400px; height: 200px; margin-top: 50px;";
+        createModal("info", "Screen will refresh in<br/>10 seconds...","body", false, {style: pstyle});
         dynoPost(buttonid);
+
+    } else if ( buttonid==="refactor" ) {
+        alert("This feature is not yet available.");
+        // dynoPost(buttonid);
 
     // default is to call main node app with the id as a path
     } else {
@@ -1825,8 +1831,7 @@ function addEditLink() {
     $("#roomtabs div.editpage").on("click",function(evt) {
         var roomnum = $(evt.target).attr("roomnum");
         var roomname = $(evt.target).attr("roomname");
-        var thingclass = $(evt.target).attr("class");
-        editTile("page", roomname, 0, 0, thingclass, roomnum, "None", "");
+        editTile("page", roomname, 0, 0, "", roomnum, "None");
     });
    
     $("#addpage").off("click");

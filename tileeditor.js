@@ -14,6 +14,7 @@ var defaultOverlay = "block";
 var tileCount = 0;
 
 // popup dialog box now uses createModal
+//        editTile("page", roomname, 0, 0, "", roomnum, "None");
 function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, hubName, htmlcontent) {  
     // var returnURL;
     // try {
@@ -67,17 +68,12 @@ function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, hubName, h
     // we either use the passed in content or make an Ajax call to get the content
     var jqxhr = null;
     if ( str_type==="page" ) {
-        var roomname = thingindex;
-        var roomnum = hubnum;
-        // thingindex = 1000 + parseInt(roomnum,10);
-        // dialog_html += "<div class=\"" + thingclass + "\" id='wysiwyg'></div>";
-        // dialog_html += "<div class=\"thing " + str_type + "-thing\" id='wysiwyg'></div>";
         jqxhr = $.post(returnURL, 
-            {useajax: "wysiwyg", id: roomnum, type: 'page', tile: thingindex, value: roomname, attr: ''},
+            {useajax: "wysiwyg", id: hubnum, type: 'page', tile: thingindex, value: thingindex, attr: ''},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;
-                    // console.log("page wysiwyg: ", htmlcontent);
+                    console.log("page wysiwyg: ", htmlcontent);
                 }
             }
         );
@@ -736,13 +732,19 @@ function initDialogBinds(str_type, thingindex) {
         var rule;
         if ( subid === "wholetile" || subid === "panel" ) {
             rule = "background-position-y: " + newsize;
+            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+        } else if ( str_type==="page" ) {
+            rule = "padding-top: " + newsize;
+            addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
+            addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
         } else if ( subid==="temperature" || subid==="feelsLike" ||
                     subid==="weatherIcon" || subid==="forecastIcon" ) {
             rule = "margin-top: " + newsize;
+            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         } else {
             rule = "padding-top: " + newsize;
+            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         }
-        addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         event.stopPropagation;
     });
 
@@ -758,8 +760,13 @@ function initDialogBinds(str_type, thingindex) {
             newsize = newsize.toString() + "px;";
         }
         var rule;
-        if ( subid === "wholetile" || subid === "panel") {
+        if ( subid === "wholetile" || subid === "panel" ) {
             rule = "background-position-x: " + newsize;
+            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+        } else if ( str_type==="page" ) {
+            rule = "padding-left: " + newsize;
+            addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
+            addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
         } else if ( subid==="temperature" || subid==="feelsLike" ||
                     subid==="weatherIcon" || subid==="forecastIcon" ) {
             rule = "margin-left: " + newsize;
@@ -1180,25 +1187,36 @@ function setsubid(str_type) {
 function updateNames(str_type, thingindex) {
 
     var newname = $("#editName").val();
+    var oldname;
     if ( str_type==="page") {
-        var oldname = thingindex;
-        // alert(oldname);
+        oldname = thingindex;
         var target1 = getCssRuleTarget(str_type, "name", thingindex);
         $(target1).html(newname);
     } else {
         var target1 = getCssRuleTarget(str_type, "head", thingindex);
         var target2 = getCssRuleTarget(str_type, "name", thingindex);
-        var oldname = $(target1).html();
+        oldname = $(target1).html();
         $(target1).html(newname);
         $(target2).html(newname);
     }
 
+    if ( oldname === newname ) {
+        console.log("Names match in updateNames, so doing nothing.");
+        return;
+    }
+
     var returnURL = cm_Globals.returnURL;
     $.post(returnURL, 
-        {useajax: "updatenames", id: 0, type: str_type, value: oldname, attr: newname, tile: thingindex},
+        {useajax: "updatenames", id: 0, type: str_type, value: newname, tile: thingindex},
         function (presult, pstatus) {
-            if (pstatus==="success" ) {
+            if (pstatus==="success" && presult.startsWith("success") ) {
+                if ( str_type==="page"  ) {
+                    thingindex = newname;
+                }
                 console.log(presult);
+                cm_Globals.reload = true;
+            } else {
+                console.log("pstatus: ", pstatus," presult: ", presult);
             }
         }
     );
@@ -1207,9 +1225,6 @@ function updateNames(str_type, thingindex) {
 
 function saveTileEdit(str_type, thingindex) {
     var returnURL = cm_Globals.returnURL;
-
-    // first update the names
-    updateNames(str_type, thingindex);
 
     // get all custom CSS text
     var newname = $("#editName").val();
@@ -1254,7 +1269,8 @@ function saveTileEdit(str_type, thingindex) {
                     console.log(presult, " reload: ", cm_Globals.reload);
 
                     // reload if tile updated and if we are saving the last file part
-                    if ( (et_Globals.reload || cm_Globals.reload) && (presult === successcheck) ) {
+                    // or if we save a page edit
+                    if ( (et_Globals.reload || cm_Globals.reload) && (presult===successcheck || str_type==="page") ) {
                         location.reload(true);
                     }
                 }

@@ -36,7 +36,6 @@ var utils = require("./utils");
 
 // global variables are all part of GLB object plus clients and allthings
 var GLB = {};
-GLB["rulestat"] = {};
 
 // list of currently connected clients (users)
 var clients = [];
@@ -534,6 +533,35 @@ function getAccessToken(code, hub) {
     }
 }
 
+function getAllThings() {
+    
+    allthings = {};
+
+    // add the special tiles
+    addSpecials();
+    // updateOptions("/");
+
+    // get all things from all configured servers
+    var hubs = GLB.options.config["hubs"];
+    if ( hubs && utils.count(hubs) > 0 ) {
+        hubs.forEach(function(hub) {
+            var hubnum = hub["hubId"];
+            var accesstoken  = hub["hubAccess"];
+            var hubEndpt = hub["hubEndpt"];
+            var clientId = hub["clientId"];
+            var clientSecret = hub["clientSecret"];
+            var hubName = hub["hubName"];
+            var hubType = hub["hubType"];
+            getDevices(hubnum, hubType, accesstoken, hubEndpt, clientId, clientSecret, hubName, "");
+        });
+    }
+
+    // send a reload in 5 seconds to give time for above to finish
+    setTimeout( function() {
+        updateOptions("/");
+    }, 10000);
+}
+
 function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret, hubName, reloadpath) {
 
     // retrieve all things from ST
@@ -543,14 +571,20 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                       scope: "app",
                       client_id: clientSecret};
         curl_call(hubEndpt + "/getallthings", stheader, params, false, "POST", getAllDevices);
+
+    // retrieve all things from ISY
+    // impt note - this is called within the scope of getDevices just like the callback above
     } else if ( hubType==="ISY" ) {
-        getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret, hubName, reloadpath);
+        // getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret, hubName, reloadpath);
+        getIsyDevices();
         
     } else {
         console.log( (ddbg()), "error - attempt to read an unknown hub type= ", hubType);
         pushClient("reload", reloadpath);
         // return;
     }
+
+    // callback for loading ST and HE hub devices
     function getAllDevices(err, res, body) {
         if ( err ) {
             console.log( (ddbg()), "error retrieving devices: ", err);
@@ -572,7 +606,6 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                     var thetype = content["type"];
                     var id = content["id"];
                     var idx = thetype + "|" + id;
-                    GLB["rulestat"][idx] = false;
 
                     // this is the proper place to load customizations
                     // and we have to do it for ISY too
@@ -583,16 +616,283 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                         "name": content["name"], 
                         "hubnum": hubnum,
                         "type": thetype,
-                        "hint": "", 
+                        "hint": hubType, 
                         "refresh": "normal",
                         "value": pvalue
                     };
                 });
             }
-            updateOptions(reloadpath);
+            if ( reloadpath ) {
+                updateOptions(reloadpath);
+            }
+        }
+    }
+
+    // version that supports ISY
+    // function for loading ST and HE hub devices
+    function getIsyDevices() {
+        var buff = Buffer.from(hubAccess);
+        var base64 = buff.toString('base64');
+        var stheader = {"Authorization": "Basic " + base64};
+
+        // first get all the nodes
+        curl_call(hubEndpt + "/nodes", stheader, false, false, "GET", getAllNodes);
+
+        // also get all the variables and put them into tiles too
+        // start by creating the default vars tile with customizations
+        var id = "vars";
+        var thetype = "isy";
+        var idx = thetype + "|" + id;
+        var pvalue = {name: "Variables"};
+        pvalue = getCustomTile(pvalue, thetype, id);
+        allthings[idx] = {"id": id, "name": pvalue.name, "hubnum": hubnum, "type": thetype, "hint": "ISY variable", "refresh": "never", "value": pvalue };
+
+        // now read in any int and state variables
+        curl_call(hubEndpt + "/vars/get/1", stheader, false, false, "GET", getIntVars);
+        curl_call(hubEndpt + "/vars/get/2", stheader, false, false, "GET", getStateVars);
+
+        // also get programs
+        curl_call(hubEndpt + "/programs", stheader, false, false, "GET", getAllProgs);
+        
+        function getIntVars(err, res, body) {
+            if ( err ) {
+                console.log( (ddbg()), "error retrieving ISY int variables: ", err);
+            } else {
+                getISY_Vars(body, "int");
+            }
+        }
+        
+        function getStateVars(err, res, body) {
+            if ( err ) {
+                console.log( (ddbg()), "error retrieving ISY state variables: ", err);
+            } else {
+                getISY_Vars(body, "state");
+            }
+        }
+
+        function getISY_Vars(body, vartype) {
+            var id = "vars";
+            var thetype = "isy";
+            var idx = thetype + "|" + id;
+
+            var result = parser.parse(body);
+            if (DEBUG2) {
+                console.log( (ddbg()), vartype, "variables: ", UTIL.inspect(result, false, null, false) );
+            }
+
+            // make a single tile with all the variables in it
+            var varobj = result.vars.var;
+            if ( !is_object(varobj) || !array_key_exists(idx, allthings) ) {
+                return;
+            }
+
+            // convert single variable object into an array of variable objects
+            if ( !is_array(varobj) ) {
+                varobj = [varobj];
+            }
+                
+            var pvalue = allthings[idx]["value"];
+            var k = 1;
+            varobj.forEach(function( obj) {
+                var prec = obj.prec;
+                var val10 = parseFloat(obj.val) / Math.pow(10, prec);
+                while ( typeof pvalue[vartype+"_"+k] !== "undefined" ) {
+                    k++;
+                }
+                pvalue[vartype+"_"+k] = val10.toString();
+                k++;
+            });
+
+            allthings[idx]["value"] = pvalue;
+            if ( DEBUG2 ) {
+                console.log( (ddbg()), "New variable value: ", pvalue);
+            }
+        }
+
+        // get programs and setup program tiles much like how Piston tiles are done in ST and HE
+        function getAllProgs(err, res, body) {
+            if ( err ) {
+                console.log( (ddbg()), "error retrieving ISY programs: ", err);
+                return;
+            }
+
+            // var result = parser.parse(body);
+            // have to use the full parser here
+            xml2js(body, function(xmlerr, result) {
+                var thetype = "isy";
+                try {
+                    if ( result ) {
+
+                        console.log( (ddbg()), "Programs: ", UTIL.inspect(result, false, null, false) );
+
+                        var programlist = result.programs.program;
+                        if ( !is_object(programlist) ) {
+                            return;
+                        }
+
+                        // // convert single variable object into an array of variable objects
+                        if ( !is_array(programlist) ) {
+                            programlist = [programlist];
+                        }
+
+                        // now lets get all the master program nodes
+                        // and create a tile for any program that is not a folder
+                        // TODO: recurse into folders and get programs there too
+                        var pvalue = allthings[idx]["value"];
+                        programlist.forEach(function(prog) {
+                            var proginfo = prog["$"];
+                            var isfolder = proginfo.folder;
+                            console.log( (ddbg()), "Programs ", prog.name, " Last run: ", prog.lastRunTime );
+
+                            // create tile for programs that are not folders
+                            if ( isfolder!=="true") {
+                                var progid = "prog_" + proginfo.id;
+                                idx  = thetype + "|" + progid;
+
+                                // set the program name. Add Program if it isn't there
+                                // this will help make program names unique from tiles
+                                var progname;
+                                if ( is_array(prog.name) ) {
+                                    progname = prog.name[0];
+                                } else {
+                                    progname = prog.name;
+                                }
+                                if ( progname.toLowerCase().indexOf("program") === -1 ) {
+                                    progname = progname + " Program";
+                                }
+
+                                var progcommands = "run|runThen|runElse|stop|enable|disable";
+                                var progarr = progcommands.split("|");
+                                pvalue = {name: progname};
+                                progarr.forEach(function(command) {
+                                    pvalue[command] = command;
+                                });
+                                for ( var key in prog ) {
+                                    if ( key!=="$" && key!=="name" ) {
+                                        var val = prog[key];
+                                        if ( is_array(val) ) {
+                                            pvalue[key] = val[0];
+                                        } else {
+                                            pvalue[key] = val;
+                                        }
+                                    }
+                                }
+                                pvalue.status = proginfo.status;
+                                allthings[idx] = {
+                                    "id": progid,
+                                    "name": progname, 
+                                    "hubnum": hubnum,
+                                    "type": thetype,
+                                    "hint": "ISY program",
+                                    "refresh": "never",
+                                    "value": pvalue
+                                };
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.log(e);
+                }
+            });
+
+        }
+
+        async function getAllNodes(err, res, body) {
+            var thetype = "isy";
+            if ( err ) {
+                console.log( (ddbg()), "error retrieving ISY nodes: ", err);
+            } else {
+                var result = parser.parse(body);
+                var thenodes = result.nodes["node"];
+                if (DEBUG1) {
+                    console.log( (ddbg()), "Retrieved ", thenodes.length, " things from hub: ", hubName);
+                }
+
+                // read the real attributes and map to HP fields
+                for ( var obj in thenodes ) {
+                    var node = thenodes[obj];
+                    var id = node["address"];
+                    var idx = thetype + "|" + id;
+                    var hint = node["type"].toString();
+
+                    // set hint to nothing if default of zeros is provided
+                    // TODO - provide a more useful mapping of hints to type names
+                    // until then user can still style hints using CSS
+                    if ( hint==="0.0.0.0" ) {
+                        hint = "ISY";
+                    } else {
+                        hint = "ISY " + hint;
+                    }
+
+                    var name = node["name"];
+                    var pvalue = {"name": name};
+
+                    // this is the proper place to load customizations
+                    pvalue = getCustomTile(pvalue, thetype, id);
+                    // console.log("post custom: ", pvalue);
+
+                    // set bare minimum info
+                    // this is updated below in the callback after getting node details
+                    allthings[idx] = {
+                        "id": id,
+                        "name": pvalue.name, 
+                        "hubnum": hubnum,
+                        "type": thetype, 
+                        "hint": hint,
+                        "refresh": "never",
+                        "value": pvalue
+                    };
+
+                    if (DEBUG5) {
+                        console.log( (ddbg()), "idx= ", idx," hint= ", hint, " node: ", node);
+                    }
+                }
+            }
+        
+            // now that we have all the nodes identified, get the details
+            curl_call(hubEndpt + "/status", stheader, false, false, "GET", callbackStatusInfo);
+
+            function callbackStatusInfo(err, res, body) {
+                xml2js(body, async function(xmlerr, result) {
+                    try {
+                        if ( result ) {
+                            var nodes = result.nodes.node;
+                            if ( nodes ) {
+                                if ( DEBUG5 ) {
+                                    console.log( (ddbg()), "nodes returned from status");
+                                }
+                                nodes.forEach(function(node) {
+                                    var nodeid = node["$"]["id"];
+                                    var idx = "isy|" + nodeid;
+                                    var value = clone(allthings[idx]["value"]);
+                                    var props = node["property"];
+
+                                    // if there are props set values
+                                    if ( props ) {
+                                        if ( DEBUG5 ) {
+                                            console.log( (ddbg()), "ISY status callback. node: ", nodeid, " properties: ", props);
+                                        }
+                                        setIsyFields(nodeid, value, props);
+                                    }
+                                });
+                            } else {
+                                throw "Something went wrong reading status from ISY";
+                            }
+                        }
+                    } catch(e) { 
+                        console.log( (ddbg()), "error - ", e);
+                    }
+                });
+            }
+            
+            // update things and reload page after handling all tiles
+            if ( reloadpath ) {
+                updateOptions(reloadpath);
+            }
         }
     }
 }
+// end of getDevices which contains multiple other functions
 
 function mapIsy(isyid, uom) {
     const idmap = {"ST": "switch", "OL": "onlevel", "SETLVL": "level", "BATLVL": "battery", "CV": "voltage", "TPW": "power",
@@ -605,192 +905,6 @@ function mapIsy(isyid, uom) {
     }
 
     return id;
-}
-
-// version that supports ISY
-function getIsyDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret, hubName, reloadpath) {
-    var buff = Buffer.from(hubAccess);
-    var base64 = buff.toString('base64');
-    var stheader = {"Authorization": "Basic " + base64};
-
-    // first get all the nodes
-    curl_call(hubEndpt + "/nodes", stheader, false, false, "GET", getAllNodes);
-
-    // also get all the variables and put them into tiles too
-    // start by creating the default vars tile with customizations
-    var id = "vars";
-    var thetype = "isy";
-    var idx = thetype + "|" + id;
-    var pvalue = {name: "Variables"};
-    pvalue = getCustomTile(pvalue, thetype, id);
-    allthings[idx] = {"id": id, "name": pvalue.name, "hubnum": hubnum, "type": thetype, "hint": "", "refresh": "never", "value": pvalue };
-    GLB["rulestat"][idx] = false;
-
-    // now read in any int and state variables
-    curl_call(hubEndpt + "/vars/get/1", stheader, false, false, "GET", getIntVars);
-    curl_call(hubEndpt + "/vars/get/2", stheader, false, false, "GET", getStateVars);
-
-    // also get programs
-    curl_call(hubEndpt + "/programs", stheader, false, false, "GET", getAllProgs);
-    
-    function getIntVars(err, res, body) {
-        if ( err ) {
-            console.log( (ddbg()), "error retrieving ISY int variables: ", err);
-        } else {
-            getISY_Vars(body, "int");
-        }
-    }
-    
-    function getStateVars(err, res, body) {
-        if ( err ) {
-            console.log( (ddbg()), "error retrieving ISY state variables: ", err);
-        } else {
-            getISY_Vars(body, "state");
-        }
-    }
-
-    function getISY_Vars(body, vartype) {
-        var id = "vars";
-        var thetype = "isy";
-        var idx = thetype + "|" + id;
-
-        var result = parser.parse(body);
-        if (DEBUG2) {
-            console.log( (ddbg()), vartype, "variables: ", UTIL.inspect(result, false, null, false) );
-        }
-
-        // make a single tile with all the variables in it
-        var varobj = result.vars.var;
-        if ( !is_object(varobj) || !array_key_exists(idx, allthings) ) {
-            return;
-        }
-
-        if ( !is_array(varobj) ) {
-            varobj = [varobj];
-        }
-            
-        var pvalue = allthings[idx]["value"];
-        var k = 1;
-        varobj.forEach(function( obj) {
-            var prec = obj.prec;
-            var val10 = parseFloat(obj.val) / Math.pow(10, prec);
-            while ( typeof pvalue[vartype+"_"+k] !== "undefined" ) {
-                k++;
-            }
-            pvalue[vartype+"_"+k] = val10.toString();
-            k++;
-        });
-
-        allthings[idx]["value"] = pvalue;
-        if ( DEBUG2 ) {
-            console.log( (ddbg()), "New variable value: ", pvalue);
-        }
-    }
-
-    // TODO: Make program tiles similar to how Piston tiles are done
-    function getAllProgs(err, res, body) {
-        var id = "progs";
-        var thetype = "isy";
-        if ( err ) {
-            console.log( (ddbg()), "error retrieving ISY programs: ", err);
-        } else {
-            var result = parser.parse(body);
-            if (DEBUG1 || true) {
-                console.log( (ddbg()), "Programs: ", UTIL.inspect(result, false, null, false) );
-            }
-        }
-    }
-    
-    async function getAllNodes(err, res, body) {
-        var thetype = "isy";
-        if ( err ) {
-            console.log( (ddbg()), "error retrieving ISY nodes: ", err);
-        } else {
-            var result = parser.parse(body);
-            var thenodes = result.nodes["node"];
-            if (DEBUG1) {
-                console.log( (ddbg()), "Retrieved ", thenodes.length, " things from hub: ", hubName);
-            }
-
-            // read the real attributes and map to HP fields
-            for ( var obj in thenodes ) {
-                var node = thenodes[obj];
-                var id = node["address"];
-                var idx = thetype + "|" + id;
-                var hint = node["type"].toString();
-
-                // set hint to nothing if default of zeros is provided
-                // TODO - provide a more useful mapping of hints to type names
-                // until then user can still style hints using CSS
-                if ( hint==="0.0.0.0" ) {
-                    hint = "";
-                }
-
-                var name = node["name"];
-                var pvalue = {"name": name};
-
-                // this is the proper place to load customizations
-                pvalue = getCustomTile(pvalue, thetype, id);
-                // console.log("post custom: ", pvalue);
-
-                // set bare minimum info
-                // this is updated below in the callback after getting node details
-                allthings[idx] = {
-                    "id": id,
-                    "name": pvalue.name, 
-                    "hubnum": hubnum,
-                    "type": thetype, 
-                    "hint": hint,
-                    "refresh": "never",
-                    "value": pvalue
-                };
-
-                if (DEBUG5) {
-                    console.log( (ddbg()), "idx= ", idx," hint= ", hint, " node: ", node);
-                }
-            }
-        }
-    
-        // now that we have all the nodes identified, get the details
-        curl_call(hubEndpt + "/status", stheader, false, false, "GET", callbackStatusInfo);
-
-        async function callbackStatusInfo(err, res, body) {
-            xml2js(body, async function(xmlerr, result) {
-                try {
-                    if ( result ) {
-                        var nodes = result.nodes.node;
-                        if ( nodes ) {
-                            if ( DEBUG5 ) {
-                                console.log( (ddbg()), "nodes returned from status");
-                            }
-                            nodes.forEach(function(node) {
-                                var nodeid = node["$"]["id"];
-                                var idx = "isy|" + nodeid;
-                                var value = clone(allthings[idx]["value"]);
-                                var props = node["property"];
-
-                                // if there are props set values
-                                if ( props ) {
-                                    if ( DEBUG5 ) {
-                                        console.log( (ddbg()), "ISY status callback. node: ", nodeid, " properties: ", props);
-                                    }
-                                    setIsyFields(nodeid, value, props);
-                                }
-                            });
-                        } else {
-                            throw "Something went wrong reading status from ISY";
-                        }
-                    }
-                } catch(e) { 
-                    console.log( (ddbg()), "error - ", e);
-                }
-            });
-        }
-        
-        // update things and reload page after handling all tiles
-        updateOptions(reloadpath);
-    }
-
 }
 
 function translateIsy(nodeid, objid, uom, value, val, formatted) {
@@ -1832,6 +1946,20 @@ function getWeatherIcon(num) {
     return iconstr;
 }
 
+// removes dup words from a string
+function uniqueWords(str) {
+    var arr = str.split(" ");
+    var newarr = [];
+    arr.forEach(function(word) {
+        word = word.trim();
+        if ( !newarr.includes(word) ) {
+            newarr.push(word);
+        }
+    });
+    var newstr = newarr.join(" ");
+    return newstr;
+}
+
 function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, customname, wysiwyg) {
     var $tc = "";
     
@@ -1843,6 +1971,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     // set type to hint if one is given
     // this is to support ISY nodes that all register as ISY types
     // so we can figure out what type of tile this is closest to
+    // this also is used to include the hub type in the tile
     var hint = thesensor["hint"];
     
     var hubnum = "-1";
@@ -1899,14 +2028,18 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     }
     
     // wrap thing in generic thing class and specific type for css handling
-    // IMPORTANT - changed tile to the saved index in the master list
-    //             so one must now use the id to get the value of "i" to find elements
     $tc=   "<div id=\""+idtag+"\" hub=\""+hubnum+"\" tile=\""+kindex+"\" bid=\""+bid+"\" type=\""+thingtype+"\" ";
-    $tc += "panel=\""+panelname+"\" class=\"thing "+thingtype+"-thing" + subtype + " p_"+kindex; 
+    
+    // get the class setting - this is set up to make the p_ last
+    // we also use the unique function to remove dups
+    var classstr = "thing " + thingtype+"-thing" + subtype;
     if ( hint ) {
-        $tc += " " + hint;
+        classstr += " " + hint;
     }
-    $tc += "\" ";
+    classstr += " p_"+kindex;
+    // classstr = uniqueWords(classstr);
+
+    $tc += "panel=\""+panelname+"\" class=\""+classstr+"\" ";
     $tc += "refresh=\""+refresh+"\"";
     if ( (postop!==0 && posleft!==0) || zindex>1 ) {
         $tc += " style=\"position: relative; left: "+posleft+"px; top: "+postop+"px; z-index: "+zindex+";\"";
@@ -2123,13 +2256,14 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         
     // fix thermostats to have proper consistent tags
     // this is supported by changes in the .js file and .css file
-    if ( tkey==="heat" || tkey==="cool" || tkey==="hue" || tkey==="saturation" ||
+    if ( tkey==="hue" || tkey==="saturation" ||
          tkey==="heatingSetpoint" || tkey==="coolingSetpoint" || 
          (tkey.startsWith("int_") && thingtype==="isy") ||
          (tkey.startsWith("state_") && thingtype==="isy") ) {
-        
-        if ( thingtype==="isy" ) {
-            var modvar = "variable";
+
+        var modvar;
+        if ( tkey.startsWith("int_") || tkey.startsWith("state_") ) {
+            modvar = "variable " + tkey;
         } else {
             modvar = tkey;
         }
@@ -2363,35 +2497,6 @@ function addSpecials() {
                  "blackout": "Blackout","operate": "Operate","reorder": "Reorder","edit": "Edit"};
     allthings["control|control_1"] = {"id":  "control_1", "name":  controlval["name"], "hubnum":  hubnum, 
                 "type":  "control", "refresh": "never", "value":  controlval};
-}
-
-function getAllThings() {
-    
-    allthings = {};
-
-    // add the special tiles
-    addSpecials();
-    updateOptions("/");
-
-    // get all things from all configured servers
-    var hubs = GLB.options.config["hubs"];
-    if ( hubs && utils.count(hubs) > 0 ) {
-        hubs.forEach(function(hub) {
-            var hubnum = hub["hubId"];
-            var accesstoken  = hub["hubAccess"];
-            var hubEndpt = hub["hubEndpt"];
-            var clientId = hub["clientId"];
-            var clientSecret = hub["clientSecret"];
-            var hubName = hub["hubName"];
-            var hubType = hub["hubType"];
-            getDevices(hubnum, hubType, accesstoken, hubEndpt, clientId, clientSecret, hubName, "/");
-        });
-
-    // if no hubs, force a reload to update any special tiles added above
-    // otherwise we don't need to do that because a hub reload will catch that
-    // } else {
-    //     updateOptions("/");
-    }
 }
 
 // create addon subid's for any tile
@@ -2628,7 +2733,8 @@ function processIsyMessage(isymsg) {
             }
 
             if ( is_array(node) && node.length && node[0]!=="" &&
-                 is_array(control) && control.length && control[0]!=="" ) {
+                 is_array(control) && control.length && control[0]!=="" &&
+                 action[0] && action[0]["$"] && action[0]["_"] ) {
                 var bid = node[0];
                 var idx = "isy|" + bid;
 
@@ -2660,11 +2766,10 @@ function processIsyMessage(isymsg) {
                     pushClient(bid, "isy", subid, pvalue, false, false);
 
                     // process rules and links
-                    if ( !GLB.rulestat[idx] && GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true ) {
+                    if ( GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true ) {
                         processRules(bid, "isy", subid, pvalue);
                         processLinks(bid, "isy", subid, pvalue);
                     }
-                    // GLB.rulestat = false;
                     if ( DEBUG9 ) {
                         console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " uom: ", uom, " newval: ", newval, " value: ", pvalue);
                     }
@@ -2698,12 +2803,10 @@ function processIsyMessage(isymsg) {
                         pushClient(bid, "isy", subid, pvalue, false, false);
 
                         // process rules and links
-                        if ( !GLB.rulestat[idx] && GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true ) {
+                        if ( GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true ) {
                             processRules(bid, "isy", subid, pvalue);
                             processLinks(bid, "isy", subid, pvalue);
                         }
-                        // GLB.rulestat[idx] = false;
-
                         if ( DEBUG9 ) {
                             console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " newval: ", newval, " pvalue: ", pvalue);
                         }
@@ -3196,6 +3299,8 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
         var base64 = buff.toString('base64');
         var isyheader = {"Authorization": "Basic " + base64};
         var cmd;
+        var idx = "isy|" + swid;
+        var hint = allthings[idx].hint;
 
         switch(subid) {
 
@@ -3249,8 +3354,9 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
                 var newval = extractTemp(swval);
                 if ( !isNaN(newval) ) { 
                     newval = (isup === "up") ? newval + 1 : newval - 1;
-                    cmd = "/nodes/" + swid + "/cmd/ " + clicommand + "/" + newval.toString();
+                    cmd = "/nodes/" + swid + "/cmd/" + clicommand + "/" + newval.toString();
                     isyresp[subid] = newval;
+                    console.log( (ddbg()), "Thermostat debug: newval: ", newval, " cmd: ", cmd );
                     curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
                 } else {
                     result = "error - ISY thermostat set point cannot be interpreted.  value: " + swval;
@@ -3260,7 +3366,8 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
     
             default:
 
-                if ( subid.startsWith("int_") && (subid.endsWith("-up") || subid.endsWith("-dn")) ) {
+                // handle arrows for variable changes
+                if ( hint==="ISY variable" && subid.startsWith("int_") && (subid.endsWith("-up") || subid.endsWith("-dn")) ) {
                     // get the real subid that the arrows are pointing toward
                     var varnum = subid.substr(4, subid.length-7);
                     var realsubid = subid.substr(0, subid.length-3);
@@ -3270,7 +3377,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
                     isyresp[realsubid] = intvar.toString();
                     curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
 
-                } else if ( subid.startsWith("state_") && (subid.endsWith("-up") || subid.endsWith("-dn")) ) {
+                } else if ( hint==="ISY variable" && subid.startsWith("state_") && (subid.endsWith("-up") || subid.endsWith("-dn")) ) {
                     // get the real subid that the arrows are pointing toward
                     // state_5-up  ==>  varnum = 5   realsubid = state_5
                     var varnum = subid.substr(6, subid.length-9);
@@ -3281,6 +3388,19 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
                     isyresp[realsubid] = intvar.toString();
                     curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
 
+                // run commands
+                } else if ( hint==="ISY program" ) {
+                    var progcommands = "run|runThen|runElse|stop|enable|disable";
+                    var progarr = progcommands.split("|");
+                    var progid = allthings[idx].id;
+                    progid = progid.substr(5);
+                    if ( progarr.includes(subid) ) {
+                        cmd = "/programs/" + progid + "/" + subid;
+                        curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+                        result = "success";
+                    } else {
+                        result = allthings[idx].value;
+                    } 
                 } else {
                     result = "error - command: " + subid + " not yet supported for ISY hubs";
                     console.log( (ddbg()), result);
@@ -3316,8 +3436,6 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
                 pushClient(swid, swtype, subid, body, linkinfo, popup);
 
                 if ( subid && GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true ) {
-                    // var idx = swtype + "|" + swid;
-                    // GLB.rulestat[idx] = true;
                     processRules(swid, swtype, subid, body);
                     processLinks(swid, swtype, subid, body);
                 }
@@ -3350,8 +3468,6 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
             //     pushClient(swid, swtype, subid, isyresp, linkinfo, popup);
 
             //     if ( subid && GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true ) {
-            //         // var idx = swtype + "|" + swid;
-            //         // GLB.rulestat[idx] = true;
             //         processRules(swid, swtype, subid, isyresp);
             //         processLinks(swid, swtype, subid, isyresp);
             //     }
@@ -3601,8 +3717,6 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                     if ( !subid.endsWith("-up") && !subid.endsWith("-dn") ) {
                         pvalue[subid] = swval;
                     }
-                    var idx = swtype + "|" + swid;
-                    // GLB.rulestat[idx] = true;
                     processRules(swid, swtype, subid, pvalue);
                     processLinks(swid, swtype, subid, pvalue);
                 }
@@ -4828,37 +4942,62 @@ function processOptions($optarray) {
     writeOptions($options);
 }
 
-function changePageName($oldname, $pagename) {
+function changePageName(oldname, newname) {
  
-    var retcode = "success";
+    var retcode = "success - testing";
     var options = GLB.options;
-    if ( $oldname && $pagename && array_key_exists($oldname, options["rooms"]) ) {
-        options["rooms"][$pagename] = clone(options["rooms"][$oldname]);
-        options["things"][$pagename] = clone(options["things"][$oldname]);
-        delete options["rooms"][$oldname];
-        delete options["things"][$oldname];
+
+    if ( oldname && newname && oldname!==newname && array_key_exists(oldname, options["rooms"]) ) {
+
+        // set new room to the number of the old room
+        options["rooms"][newname] = options["rooms"][oldname];
+
+        // create a new set of things tied to the new room name
+        options["things"][newname] = [];
+        var things = options["things"][oldname];
+        things.forEach(function(tile, k) {
+            if ( is_array(tile) ) {
+                var newtile = clone(tile);
+                options["things"][newname].push(newtile);
+            }
+        });
+
+        // delete the old room and thing list
+        delete options["rooms"][oldname];
+        delete options["things"][oldname];
+        retcode = "success - Renamed room: " + oldname + " to: " + newname;
         if ( DEBUG1 ) {
-            console.log( (ddbg()), "Renamed room: ", $oldname, " to: ", $pagename);
+            console.log( (ddbg()), "changePageNmae: ", UTIL.inspect(options.things[newname]));
+            console.log( (ddbg()), retcode);
         }
-        writeOptions(options);
+        writeOptions(options, false);
     } else {
-        console.log( (ddbg()), "old page name not valid: ", $oldname);
-        retcode = "error - old page name not valid: " + $oldname;
+        retcode = "error - old page: " + oldname + " new page: " + newname;
+        console.log( (ddbg()), retcode);
     }
     return retcode;
 }
 
-function updateNames(type, tileid, oldname, newname) {
+function updateNames(type, tileid, newname) {
     var result;
+    var oldname = "";
     if ( type === "page" ) {
-        var newname = newname.replace(/ /g, "_");
+        newname = newname.replace(/ /g, "_");
+        oldname = tileid;
         result = changePageName(oldname, newname);
     } else {
         var options = GLB.options;
         var updcss = false;
         var nupd = 0;
         tileid = parseInt(tileid);
-        oldname = newname;
+
+        // if the name is blank, reset it to original
+        newname = newname.trim();
+        if ( newname==="" ) {
+            var idx = array_search(tileid, options["index"]);
+            newname = allthings[idx]["name"];
+        }
+
         for (var room in options["things"]) {
             var things = options["things"][room];
         
@@ -4872,7 +5011,10 @@ function updateNames(type, tileid, oldname, newname) {
                      (parseInt(tiles[0]) === tileid) && tiles[4]!==newname  ) {
                     oldname = tiles[4];
                     tiles[4] = newname;
+
+                    // update the things names in room lists
                     options["things"][room][k] = tiles;
+
                     nupd++;
                     updcss = true;
                 }
@@ -4883,7 +5025,7 @@ function updateNames(type, tileid, oldname, newname) {
             writeOptions(options);
             result = "success " + nupd.toString() + " names changed for type= " + type + " oldname= " + oldname + " newname= " + newname;
         } else {
-            result = "success but nothing updated for type= " + type + " oldname= " + oldname + " newname= " + newname;
+            result = "warning - nothing updated for type= " + type + " oldname= " + oldname + " newname= " + newname;
         }
     }
     return result;
@@ -5150,7 +5292,7 @@ function apiCall(body, protocol) {
                 // make the fake tile for the room for editing purposes
                 var faketile = {"panel": "panel", "name": swval, "tab": "Tab Inactive", "tabon": "Tab Selected"};
                 var thing = { "id": "r_" + swid, "name": swval, 
-                              "hubnum": -1, "type": "page", "value": faketile};
+                              "hubnum": "-1", "type": "page", "value": faketile};
                 result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 99, "", api);
             } else {
                 var idx = swtype + "|" + swid;
@@ -5305,7 +5447,8 @@ function apiCall(body, protocol) {
             break;
 
         case "updatenames":
-            result = updateNames(swtype, tileid, swval, swattr);
+            // value (swval) is new name, tileid is oldname for pages
+            result = updateNames(swtype, tileid, swval);
             break;
         
         case "dologin":
@@ -5708,7 +5851,9 @@ if ( app && applistening ) {
     app.get('*', function (req, res) {
         
         var hostname = req.protocol + "://" + req.headers.host;
-        console.log( (ddbg()), " serving page at: ", hostname);
+        console.log( (ddbg()), "\n****************************************************************",
+                               "\nServing page at: ", hostname,
+                               "\n****************************************************************");
         var $tc;
 
         if ( req.path==="/" || typeof req.path==="undefined" || req.path==="/undefined" || req.path==="undefined" ) {
@@ -5892,12 +6037,10 @@ if ( app && applistening ) {
                     pushClient(entry.id, entry.type, req.body['change_attribute'], entry['value'])
 
                     // process rules and links
-                    if ( !GLB.rulestat[idx] && GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true ) {
+                    if ( GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true ) {
                         processRules(bid, entry.type, req.body['change_attribute'], entry['value']);
                         processLinks(entry.id, entry.type, req.body['change_attribute'], entry['value']);
                     }
-                    // GLB.rulestat[idx] = false;
-
                 }
             }
             res.json('pushed new status info to ' + cnt + ' tiles');
