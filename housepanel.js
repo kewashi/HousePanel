@@ -17,6 +17,7 @@ cm_Globals.allthings = null;
 cm_Globals.options = null;
 cm_Globals.returnURL = "http://localhost:3080";
 cm_Globals.hubId = "all";
+cm_Globals.client = 0;
 
 var modalStatus = 0;
 var modalWindows = {};
@@ -87,7 +88,7 @@ function is_object(obj) {
 function is_function(obj) {
     var test1 = Object.prototype.toString.call(obj) == '[object Function]';
     var test2 = Function.prototype.isPrototypeOf(obj);
-    console.log("test1= ", test1," test2= ", test2);
+    // console.log("test1= ", test1," test2= ", test2);
     return test1 || test2;
 }
 
@@ -194,6 +195,15 @@ $(document).ready(function() {
     } catch(e) {
         console.log("***Warning*** ", e);
         cm_Globals.returnURL = "http://localhost:3080";
+    }
+
+    var client = getCookie("client");
+    if ( client==="" || isNaN(parseInt(client)) ) {
+        cm_Globals.client = 0;
+        console.log("Client # not yet identified. Assuming 0");
+    } else {
+        cm_Globals.client = parseInt(client);
+        console.log("Identified as client #", cm_Globals.client);
     }
     
     try {
@@ -450,25 +460,45 @@ function setupWebsocket()
             var presult = JSON.parse(evt.data);
             var bid = presult.id;
             var thetype = presult.type;
+            var pvalue = presult.value;
+            var client = parseInt(presult.client);
+            var clientcount = presult.clientcount;
+            var subid = presult.trigger;
 
             // reload page if signalled from server
             if ( bid==="reload" ) {
+
+                // reload all screens if that is requested
                 if ( typeof thetype==="undefined" || thetype==="" || thetype==="/" || thetype==="reload" ) {
                     var reloadpage =  cm_Globals.returnURL;
+                    window.location.href = reloadpage;
+
+                // otherwise a redirect to a specific page is only done on the requesting tablet
                 } else {
                     if ( thetype.substr(0,1)!=="/" ) {
                         thetype = "/" + thetype;
                     }
-                    reloadpage =  cm_Globals.returnURL + thetype;
+                    
+                    // redirect to page if this is the requesting client
+                    // otherwise do nothing
+                    if ( client === cm_Globals.client ) {
+                        reloadpage =  cm_Globals.returnURL + thetype;
+                        window.location.href = reloadpage;
+                    } else {
+                        console.log("Redirected client #" + client, " to: ", reloadpage, "  This is client #" + GLB.client);
+                    }
                 }
-                window.location.href = reloadpage;
                 return;
             }
-            var pvalue = presult.value;
-            var client = presult.client;
-            var clientcount = presult.clientcount;
-            var trigger = presult.trigger;
-            
+
+            // handle case for identifying which client this is
+            else if ( bid==="cient" ) {
+                cm_Globals.client = client;
+                setCookie('client', client, 30);
+                console.log("Saving client #" + client);
+                return;
+            }
+
             // handle popups returned from a query
             // this currently is not used but could be later
             if ( presult.popup ) {
@@ -492,7 +522,7 @@ function setupWebsocket()
                 });
             }
 
-            // grab name and trigger for console log
+            // grab name and subid for console log
             var pname = pvalue["name"] ? pvalue["name"] : "";
 
             // remove reserved fields
@@ -503,7 +533,7 @@ function setupWebsocket()
             });
             
             if ( LOGWEBSOCKET ) {
-                console.log("webSocket message from: ", webSocketUrl," bid= ",bid," name:",pname," client:",client," of:",clientcount," type= ",thetype," trigger= ",trigger," value= ",pvalue);
+                console.log("webSocket message from: ", webSocketUrl," bid= ",bid," name:",pname," client:",client," of: ",clientcount," type= ",thetype," subid= ",subid," value= ",pvalue);
             }
         } catch (err) {
             console.log("Error interpreting webSocket message. err: ", err);
@@ -537,8 +567,8 @@ function setupWebsocket()
 
             // handle links - loop through all tiles that have a link to see if they match
             // because this link shadow field has the real subid triggered we dont have to check subid below
-            // console.log("trigger= ", trigger);
-            $('div.panel div[command="' + "LINK" + '"][subid="' + trigger + '"]').each(function() {
+            // console.log("subid= ", subid);
+            $('div.panel div[command="' + "LINK" + '"][subid="' + subid + '"]').each(function() {
 
                 // get the id to see if it is the thing being updated
                 var linkedtile = $(this).attr("linkval");
@@ -550,19 +580,19 @@ function setupWebsocket()
                     var sibling = $(this).next();
                     var oldvalue = sibling.html();
                     var oldclass = $(sibling).attr("class");
-                    var value = pvalue[trigger];
+                    var value = pvalue[subid];
 
                     // change not present to absent for presence tiles
                     // it was an early bad design decision to alter ST's value that I'm now stuck with
-                    if ( trigger==="presence" && value==="not present" ) {
+                    if ( subid==="presence" && value==="not present" ) {
                         value = "absent";
                     }
 
                     // swap out the class and change value
                     if ( oldclass && oldvalue && value &&
-                         trigger!=="name" && trigger!=="trackImage" && trigger!=="color" &&
-                         trigger!=="trackDescription" && trigger!=="mediaSource" &&
-                         trigger!=="currentArtist" && trigger!=="currentAlbum" &&
+                         subid!=="name" && subid!=="trackImage" && subid!=="color" && subid!=='ERR' &&
+                         subid!=="trackDescription" && subid!=="mediaSource" &&
+                         subid!=="currentArtist" && subid!=="currentAlbum" &&
                          $.isNumeric(value)===false && 
                          $.isNumeric(oldvalue)===false &&
                          oldclass.indexOf(oldvalue)>=0 ) 
@@ -2489,7 +2519,7 @@ function updateMode() {
     });
 }
 
-// setup trigger for clicking on the action portion of this thing
+// setup clicking on the action portion of this thing
 // this used to be done by page but now it is done by sensor type
 function setupPage() {
     

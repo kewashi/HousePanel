@@ -5,6 +5,7 @@ var devhistory =  `
             - suppoprt for ISY programs and state variables
             - fix readOptions to not read in so often
             - support rules acting upon variable values from ISY
+            - only reload page of screen that is calling reload
             - numerous bug fixes
 2.225      Added both Int and State variable support
 2.224      Clean and speed up rules, add timer delay to rule syntax

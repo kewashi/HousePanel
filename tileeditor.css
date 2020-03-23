@@ -1819,3 +1819,8 @@ div.overlay.variables div.variable-up, div.overlay.variables div.variable-dn {
     width: 32px;
     display: inline-block;
 }
+
+/* turn off ISY program date fields by default */
+div.isy.lastRunTime, div.isy.lastFinishTime {
+    display: none;
+}

@@ -16,6 +16,7 @@ const DEBUG11 = false;              // rules
 const DEBUG12 = false;              // links
 const DEBUG13 = false;              // URL callbacks
 const DEBUG14 = false;              // tile link details
+const DEBUG15 = false;              // program retrieval
 const IGNOREPW = false;
 
 // websocket and http servers
@@ -723,7 +724,9 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                 try {
                     if ( result ) {
 
-                        console.log( (ddbg()), "Programs: ", UTIL.inspect(result, false, null, false) );
+                        if ( DEBUG15 ) {
+                            console.log( (ddbg()), "Programs: ", UTIL.inspect(result, false, null, false) );
+                        }
 
                         var programlist = result.programs.program;
                         if ( !is_object(programlist) ) {
@@ -2263,7 +2266,7 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
 
         var modvar;
         if ( tkey.startsWith("int_") || tkey.startsWith("state_") ) {
-            modvar = "variable " + tkey;
+            modvar = tkey + " variable";
         } else {
             modvar = tkey;
         }
@@ -2778,7 +2781,9 @@ function processIsyMessage(isymsg) {
             // set variable changes events
             } else if ( is_object(eventInfo[0]) && array_key_exists("var", eventInfo[0]) ) {
                 var varobj = eventInfo[0].var[0];
-                console.log("Event info: ", UTIL.inspect(varobj, false, null, false) );
+                if ( DEBUG9 ) {
+                    console.log("Event info: ", UTIL.inspect(varobj, false, null, false) );
+                }
                 var bid = "vars";
                 var idx = "isy|" + bid;
                 if ( allthings && allthings[idx] && allthings[idx].value && allthings[idx].type==="isy" ) {
@@ -3206,7 +3211,7 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
     entry["type"] = swtype;
     entry["clientcount"] = clients.length;
     entry["trigger"] = subid;
-    if ( typeof popup!=="undefined" && popup===true ) {
+    if ( typeof popup!=="undefined" && popup ) {
         entry["popup"] = "popup";
     } else {
         entry["popup"] = "";
@@ -3239,7 +3244,7 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
     }
 
     // update the main array with changed push values
-    if ( swid!=="reload" && swid!=="popup" ) {
+    if ( swid!=="reload" && swid!=="popup" && swid!=="client" && swtype ) {
         var idx = swtype + "|" + swid;
         var lidx = "";
         var lsubid = "";
@@ -3265,8 +3270,13 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
         }
     }
 
+    // do a push to each client
+    // if this is a screen reload request only the triggering screen should reload
     for (var i=0; i < clients.length; i++) {
-        entry["client"] = i+1;
+        entry["client"] = i;
+        if ( swid==="client" ) {
+            console.log("Pushing client #" + i);
+        }
         clients[i].sendUTF(JSON.stringify(entry));
     }
 
@@ -4967,7 +4977,7 @@ function changePageName(oldname, newname) {
         delete options["things"][oldname];
         retcode = "success - Renamed room: " + oldname + " to: " + newname;
         if ( DEBUG1 ) {
-            console.log( (ddbg()), "changePageNmae: ", UTIL.inspect(options.things[newname]));
+            // console.log( (ddbg()), "changePageNmae: ", UTIL.inspect(options.things[newname]));
             console.log( (ddbg()), retcode);
         }
         writeOptions(options, false);
@@ -6088,7 +6098,10 @@ if ( wsServer && serverlistening ) {
         // we no longer rely on this to close prior connections
         // instead we just shut down any that match
         var index = clients.push(connection) - 1;
-        console.log( (ddbg()), 'Connection accepted. Client #' + index + " host=" + host);
+        console.log( (ddbg()), 'Connection accepted. Client #' + index + " host=" + host, " Client count: ", clients.length);
+
+        // send client number to the javascript so it knows its index
+        pushClient("client", "client");
 
         // user disconnected - remove all clients that match this socket
         connection.on('close', function(reason, description) {
