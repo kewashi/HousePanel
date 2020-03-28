@@ -1,6 +1,11 @@
 'use strict';
 
 var devhistory =  ` 
+2.228      Added sorting capabilities:
+            - sort catalog listing and add scroll bars
+            - sort options and show info pages by hub, name, and type
+2.227      Fix long-standing bug where new tiles had dup id's and got mixed
+            - clean up hub treatment and fix bugs
 2.226      New ISY features and bug fixes
             - suppoprt for ISY programs and state variables
             - fix readOptions to not read in so often
@@ -370,6 +375,7 @@ var devhistory =  `
 `;
 
 var version = devhistory.substr(1,10).trim();
+
 exports.DEV = devhistory;
 exports.HPVERSION = version;
 exports.APPNAME = 'HousePanel V' + version;
@@ -488,7 +494,7 @@ exports.getMaxIndex = function(optindex) {
     return maxindex;
 }
 
-exports.count = function(obj) {
+exports.count = function count(obj) {
     if ( typeof obj === "object" )  {
         return Object.keys(obj).length;
     } else {

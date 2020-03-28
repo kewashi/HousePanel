@@ -197,6 +197,10 @@ input.startupinp {
     display: inline-block;
 }
 
+form.filteroptions {
+    margin-bottom: 20px;
+}
+
 div.filteroption div {
     margin-bottom: 4px;
     display: block;
@@ -211,11 +215,11 @@ select.startupinp.pickhub {
 }
 
 div#catalog {
-    width: 390px;
+    width: 410px;
     display: block;
     position: absolute;
     top: 0px;
-    left: 1200px;
+    left: 1210px;
     border: 2px solid rgb(128, 128, 128);
     background-color: rgba(255, 255, 255, 1);
     
@@ -247,16 +251,17 @@ ul.ui-tabs-nav {
 .ui-tabs .ui-tabs-nav li {
     cursor: pointer;
 }
-.ui-tabs .ui-tabs-nav li:hover {
-    filter: invert(1);
+.ui-tabs .ui-tabs-nav li a.ui-tabs-anchor:hover {
+    background-color: black;
+    color: white;
 }
 .ui-tabs .ui-tabs-nav li.ui-tabs-active {
-    cursor: pointer;
     background-color: rgba(22, 24, 138, 1);
     color: white;
 }
-.ui-tabs .ui-tabs-nav li.ui-tabs-active:hover {
-    filter: invert(0);
+.ui-tabs .ui-tabs-nav li a.ui-tabs-active:hover {
+    background-color: rgba(22, 24, 138, 1);
+    color: white;
 }
 .ui-tabs {
     padding: 0;
@@ -291,6 +296,14 @@ div.skinoption input {
 div.filteroption {
     margin-top: 12px;
 }
+div#thingfilters {
+    margin-top: 20px;
+    padding: 5px;
+    width: 200px;
+    background-color: #cccccc;
+    border: 2px solid black;
+    cursor: pointer;
+}
 table.useroptions, table.catoptions {
     margin-left: 8px;
     background-color: #eeeeee;
@@ -304,8 +317,8 @@ table.catoptions input {
     margin-left: 15px;
 }
 td label.optname {
-    padding-left: 5px;
-    padding-right: 30px;
+    padding-left: 1px;
+    padding-right: 9px;
 }
 td label.optname:hover {
     background: black;
@@ -382,6 +395,14 @@ div.scrollvtable {
     div.scrollvtable {
         overflow-y: scroll;
         max-height: 750px;
+    }
+    div.scrollvtable.ftall {
+        overflow-y: scroll;
+        max-height: 508px;
+    }
+    div.scrollvtable.fshort {
+        overflow-y: scroll;
+        max-height: 225px;
     }
 }
 div.scrollhtable {
@@ -805,20 +826,21 @@ div.editpage, div.delpage, div.addpage {
     border-radius: 50%;
     width: 18px; height: 18px;
     position: absolute; 
-    z-index: 501; 
+    z-index: 51; 
     top: 5px;
     cursor: pointer;
 }
 div.editpage, div.editlink {
-    background-color: rgba(0, 102, 102, 0.6);
+    background-color: rgba(0, 134, 0, 0.6);
     left: 0px;
 }
 div.delpage, div.dellink {
     background-color: rgba(255, 0, 0, 0.6);
     right: 0px;
 }
+
 div.cmzlink {
-    background-color: rgba(0, 0, 102, 0.6);
+    background-color: rgba(0, 0, 192, 0.6);
     right: 0px;
 }
 div.editlink, div.dellink, div.cmzlink {
@@ -963,7 +985,6 @@ div.colorgroup.font {
 	position: relative;
 	box-shadow: 0px 0px 41px rgba(0, 0, 0, 0.70);
 	-moz-box-shadow: 0px 0px 41px rgba(0, 0, 0, 0.70);
-	box-shadow: 0px 0px 41px rgba(0, 0, 0, 0.70); 
 	transition-duration: .1s;
 	-webkit-transition-duration: .1s;
 }
@@ -1227,9 +1248,13 @@ div.panel {
     background-size: cover;
 }
 
-div.panel div.thingname:hover {
+/* div.panel div.thingname:hover {
     filter: invert(1);
 }
+div.panel div.editpage:hover, div.panel div.delpage:hover {
+    filter: invert(0);
+} */
+
 
 /* all things look like this */  
 /* the heights are set to auto for larger items like weather and thermostats */
@@ -1822,5 +1847,9 @@ div.overlay.variables div.variable-up, div.overlay.variables div.variable-dn {
 
 /* turn off ISY program date fields by default */
 div.isy.lastRunTime, div.isy.lastFinishTime {
+    display: none;
+}
+
+div.thing.isy-thing div.overlay.ERR {
     display: none;
 }

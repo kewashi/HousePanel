@@ -30,7 +30,6 @@ function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, hubName, h
     }
     et_Globals.hubnum = hubnum;
     et_Globals.hubName = hubName;
-    et_Globals.reload = false;
 
     // save the sheet upon entry for cancel handling
     savedSheet = document.getElementById('customtiles').sheet;
@@ -1270,7 +1269,7 @@ function saveTileEdit(str_type, thingindex) {
 
                     // reload if tile updated and if we are saving the last file part
                     // or if we save a page edit
-                    if ( (et_Globals.reload || cm_Globals.reload) && (presult===successcheck || str_type==="page") ) {
+                    if ( cm_Globals.reload && (presult===successcheck || str_type==="page") ) {
                         location.reload(true);
                     }
                 }
@@ -1281,7 +1280,7 @@ function saveTileEdit(str_type, thingindex) {
 
 function cancelTileEdit(str_type, thingindex) {
     document.getElementById('customtiles').sheet = savedSheet;
-    if ( (et_Globals.reload || cm_Globals.reload) ) {
+    if ( cm_Globals.reload ) {
         location.reload(true);
     }
 }

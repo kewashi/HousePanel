@@ -97,7 +97,7 @@ function customizeTile(thingindex, aid, bid, str_type, hubnum) {
 
                 // only reload if edit window isn't open
                 // which will be true if we invoked the customizer from the edit window
-                if ( (et_Globals.reload || cm_Globals.reload) && ( typeof modalWindows["modalid"] === "undefined" || modalWindows["modalid"] === 0 ) ) {
+                if ( cm_Globals.reload && ( typeof modalWindows["modalid"] === "undefined" || modalWindows["modalid"] === 0 ) ) {
                     location.reload(true);
                 }
             },
@@ -117,9 +117,6 @@ function customizeTile(thingindex, aid, bid, str_type, hubnum) {
                 if ( !cm_Globals.allthings || !cm_Globals.options ) {
                     console.log("Please try again in a few moments. HousePanel is setting up your server...");
                     return;
-                    // var pos = {top: 5, left: 5, zindex: 9999, background: "red", color: "white"};
-                    // createModal("waitbox", "Loading data. Please wait...", "div.modalbuttons", false, pos);
-                    // getAllthings("waitbox", false);
                 } else {
                     try {
                         getDefaultSubids();
