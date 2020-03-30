@@ -1,6 +1,10 @@
 'use strict';
 
 var devhistory =  ` 
+2.229      Fixed a few really nasty bugs impacting ST and HE hubs
+            - equally gnarly bug fixed for ISY hub reading
+            - fixed ISY thermostat editing features
+            - more code cleanup in prep for pro transition
 2.228      Added sorting capabilities:
             - sort catalog listing and add scroll bars
             - sort options and show info pages by hub, name, and type

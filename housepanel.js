@@ -179,14 +179,14 @@ $(document).ready(function() {
         cm_Globals.returnURL = "http://localhost:3080";
     }
 
-    var client = getCookie("client");
-    if ( client==="" || isNaN(parseInt(client)) ) {
-        cm_Globals.client = 0;
-        console.log("Client # not yet identified. Assuming 0");
-    } else {
-        cm_Globals.client = parseInt(client);
-        console.log("Identified as client #", cm_Globals.client);
-    }
+    // var client = getCookie("client");
+    // if ( client==="" || isNaN(parseInt(client)) ) {
+    //     cm_Globals.client = 0;
+    //     console.log("Client # not yet identified. Assuming 0");
+    // } else {
+    //     cm_Globals.client = parseInt(client);
+    //     console.log("Identified as client #", cm_Globals.client);
+    // }
     
     try {
         pagename = $("input[name='pagename']").val();
@@ -456,23 +456,23 @@ function setupWebsocket()
                     
                     // redirect to page if this is the requesting client
                     // otherwise do nothing
-                    if ( client === cm_Globals.client ) {
-                        reloadpage =  cm_Globals.returnURL + thetype;
-                        window.location.href = reloadpage;
-                    } else {
-                        console.log("Redirected client #" + client, " to: ", reloadpage, "  This is client #" + GLB.client);
-                    }
+                    // if ( client === cm_Globals.client ) {
+                    reloadpage =  cm_Globals.returnURL + thetype;
+                    window.location.href = reloadpage;
+                    // } else {
+                    //     console.log("Redirected client #" + client, " to: ", reloadpage, "  This is client #" + GLB.client);
+                    // }
                 }
                 return;
             }
 
             // handle case for identifying which client this is
-            else if ( bid==="cient" ) {
-                cm_Globals.client = client;
-                setCookie('client', client, 30);
-                console.log("Saving client #" + client);
-                return;
-            }
+            // else if ( bid==="cient" ) {
+            //     cm_Globals.client = client;
+            //     setCookie('client', client, 30);
+            //     console.log("Saving client #" + client);
+            //     return;
+            // }
 
             // handle popups returned from a query
             // this currently is not used but could be later
@@ -1761,13 +1761,15 @@ function addEditLink() {
         var hubnum = $(thing).attr("hub");
         var hub = getHub(hubnum);
         var hubName = "None";
+        var hubType = "SmartThings";
         if ( hub ) {
             hubName = hub.hubName;
+            hubType = hub.hubType;
         }
 
         // replace all the id tags to avoid dynamic updates
         strhtml = strhtml.replace(/ id="/g, " id=\"x_");
-        editTile(str_type, tile, aid, bid, thingclass, hubnum, hubName, strhtml);
+        editTile(str_type, tile, aid, bid, thingclass, hubnum, hubName, hubType, strhtml);
     });
     
     $("div.cmzlink").on("click",function(evt) {
@@ -1866,7 +1868,7 @@ function addEditLink() {
     $("#roomtabs div.editpage").on("click",function(evt) {
         var roomnum = $(evt.target).attr("roomnum");
         var roomname = $(evt.target).attr("roomname");
-        editTile("page", roomname, 0, 0, "", roomnum, "None");
+        editTile("page", roomname, 0, 0, "", roomnum, "None", "None");
     });
    
     $("#addpage").off("click");

@@ -427,6 +427,9 @@ function getHubInfo(hub, token, endpt, clientId, clientSecret) {
         }
 
         // now save our info
+        // we also have to save the access point and endpt in case this was an oauth flow
+        hub["hubAccess"] = token;
+        hub["hubEndpt"] = endpt;
         hub["hubName"]  = hubName;
         hub["hubId"] = hubId;
         var hubType = hub["hubType"];
@@ -535,6 +538,9 @@ function getAccessToken(code, hub) {
     }
 }
 
+// this makes Insteon ID's look good but it messes up the hub calls
+// which oddly enough expect the id in the mangled form that does not match
+// the way the id is written on the Insteon device
 function fixISYid(id) {
     // if ( id.indexOf(" ") !== -1 ) {
     //     var idparts = id.split(" ");
@@ -592,6 +598,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
     // retrieve all things from ISY
     // impt note - this is called within the scope of getDevices just like the callback above
     } else if ( hubType==="ISY" ) {
+        console.log("getting ISY devices.  reload= ", reloadpath);
         getIsyDevices(reloadpath);
     } else {
         console.log( (ddbg()), "error - attempt to read an unknown hub type= ", hubType);
@@ -649,9 +656,6 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
         var base64 = buff.toString('base64');
         var stheader = {"Authorization": "Basic " + base64};
 
-        // first get all the nodes
-        curl_call(hubEndpt + "/nodes", stheader, false, false, "GET", getAllNodes);
-
         // also get all the variables and put them into tiles too
         // start by creating the default vars tile with customizations
         var id = "vars";
@@ -667,11 +671,22 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
 
         // also get programs
         curl_call(hubEndpt + "/programs", stheader, false, false, "GET", getAllProgs);
+
+        // now get all the nodes and do callback to auth page
+        curl_call(hubEndpt + "/nodes", stheader, false, false, "GET", getAllNodes);
+            
+        // update things and reload page after handling all tiles
+        // setTimeout(function() {
+        //     if ( reloadpath ) {
+        //         updateOptions(reloadpath);
+        //     }
+        // }, 5000);
         
         function getIntVars(err, res, body) {
             if ( err ) {
                 console.log( (ddbg()), "error retrieving ISY int variables: ", err);
             } else {
+                // console.log("getting int variables...", body);
                 getISY_Vars(body, "int");
             }
         }
@@ -680,6 +695,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
             if ( err ) {
                 console.log( (ddbg()), "error retrieving ISY state variables: ", err);
             } else {
+                // console.log("getting state variables...", body);
                 getISY_Vars(body, "state");
             }
         }
@@ -731,6 +747,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
 
                 // var result = parser.parse(body);
                 // have to use the full parser here
+                // console.log("getting programs...", body);
                 xml2js(body, function(xmlerr, result) {
                     var thetype = "isy";
                     try {
@@ -794,10 +811,6 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                                     allthings[idx] = {
                                         "id": progid,
                                         "name": progname, 
-                                    "name": progname, 
-                                        "name": progname, 
-                                    "name": progname, 
-                                        "name": progname, 
                                         "hubnum": hubnum,
                                         "type": thetype,
                                         "hint": "ISY program",
@@ -808,6 +821,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                             });
                         }
                     } catch (e) {
+                        console.log("error - failed loading ISY programs");
                         console.log(e);
                     }
                 });
@@ -823,7 +837,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
             } else {
                 var result = parser.parse(body);
                 var thenodes = result.nodes["node"];
-                if (DEBUG1) {
+                if ( DEBUG1 ) {
                     console.log( (ddbg()), "Retrieved ", thenodes.length, " things from hub: ", hubName);
                 }
 
@@ -905,11 +919,14 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                         console.log( (ddbg()), "error - ", e);
                     }
                 });
-            }
-            
-            // update things and reload page after handling all tiles
-            if ( reloadpath ) {
-                updateOptions(reloadpath);
+
+                // update things and reload page after handling all tiles
+                // wait two seconds just to give variables and programs some room
+                if ( reloadpath ) {
+                    setTimeout( function() {
+                        updateOptions(reloadpath);
+                    }, 2000);
+                }
             }
         }
     }
@@ -2641,8 +2658,8 @@ function getCustomTile(custom_val, customtype, customid) {
                         // if an error exists show text of intended link
                         // first case is if link is valid and not an existing field
                         // if ( array_key_exists(subid, pvalue) ) {
-                            custom_val[companion] = "::" + calltype + "::" + idx;
-                            custom_val[subid]= "LINK::" + content; // pvalue[subid];
+                        custom_val[companion] = "::" + calltype + "::" + idx;
+                        custom_val[subid]= "LINK::" + content; // pvalue[subid];
                             
                         // final two cases are if link tile wasn't found
                         // first sub-case is if subid begins with the text of a valid key
@@ -2666,8 +2683,8 @@ function getCustomTile(custom_val, customtype, customid) {
                         // }
                     } else {
                         custom_val[companion] = "::" + calltype + "::0";
-                        custom_val[subid] = "Link::" + subid + "=" + content;
-                        console.log( (ddbg()), "Links unavailable to link #" + content + " with subid= " + subid);
+                        custom_val[subid] = "Link::" + content;
+                        console.log( (ddbg()), "error - Links unavailable to link #" + content + " with subid= " + subid);
                     }
 
                 } else if ( calltype==="URL" ) {
@@ -2772,7 +2789,7 @@ function processHubMessage(hubmsg) {
         }
     }
     resetRules();
-    res.json('pushed new status info to ' + cnt + ' tiles');
+    return 'pushed new status info to ' + cnt + ' tiles';
 }
 
 function resetRules() {
@@ -3146,7 +3163,7 @@ function execRules(istart, testcommands) {
                 console.log( (ddbg()), "RULE debug: exec step #", i, " rtileid: ", rtileid, " rsubid: ", rsubid, " rvalue: ", rvalue, " rswattr: ", rswattr, " ridx: ", ridx, " delay: ", delay);
             }
 
-            if ( ridx ) {
+            if ( ridx && allthings[ridx] ) {
                 var idxitems = ridx.split("|");
                 var rswtype = idxitems[0];
                 var rswid = idxitems[1];
@@ -3299,7 +3316,7 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
         
     // remove color for now until we get it fixed - but report it so I can inspect
     if ( pvalue["color"] ) {
-        console.log( (ddbg()), "webSocket color: ", pvalue.color);
+        // console.log( (ddbg()), "webSocket color: ", pvalue.color);
         delete( pvalue["color"] );
     }
 
@@ -3310,7 +3327,7 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
     }
 
     // update the main array with changed push values
-    if ( swid!=="reload" && swid!=="popup" && swid!=="client" && swtype ) {
+    if ( swid!=="reload" && swid!=="popup" && swtype ) {
         var idx = swtype + "|" + swid;
         var lidx = "";
         var lsubid = "";
@@ -3340,9 +3357,6 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
     // if this is a screen reload request only the triggering screen should reload
     for (var i=0; i < clients.length; i++) {
         entry["client"] = i;
-        if ( swid==="client" ) {
-            console.log("Pushing client #" + i);
-        }
         clients[i].sendUTF(JSON.stringify(entry));
     }
 
@@ -3352,9 +3366,9 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
     var access_token = hub["hubAccess"];
     var endpt = hub["hubEndpt"];
     var result = "success";
-    // if ( DEBUG7 ) {
-    //     console.log( (ddbg()), "callHub: access: ", access_token, " endpt: ", endpt, " subid: ", subid, " attr: ", swattr);
-    // }
+    if ( DEBUG7 ) {
+        console.log( (ddbg()), "callHub: access: ", access_token, " endpt: ", endpt, " swval: ", swval, " subid: ", subid, " attr: ", swattr);
+    }
 
     var isyresp = {};
     if ( hub["hubType"]==="SmartThings" || hub["hubType"]==="Hubitat" ) {
@@ -3377,6 +3391,10 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
         var cmd;
         var idx = "isy|" + swid;
         var hint = allthings[idx].hint;
+
+        // fix up isy devices
+        if ( swval==="on" ) { swval = "DON"; }
+        else if ( swval==="off" ) { swval = "DOF"; }
 
         // set default subid so api calls will work
         if ( !subid ) {
@@ -3409,10 +3427,12 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
                 break;
 
             case "switch":
+            case "DOF":
+            case "DON":
                 // handle toggle command - note that the GUI will never produce a toggle swval command
                 // but the RULE logic can and so can users when using api calls
                 if ( swval==="toggle" ) {
-                        var currentval = allthings["isy|"+swid]["value"]["switch"];
+                        var currentval = allthings["isy|"+swid]["value"][subid];
                         swval = currentval==="DON" ? "DOF" : "DON";
                 }
                 cmd = "/nodes/" + swid + "/cmd/" + swval;
@@ -3437,7 +3457,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
                     newval = (isup === "up") ? newval + 1 : newval - 1;
                     cmd = "/nodes/" + swid + "/cmd/" + clicommand + "/" + newval.toString();
                     isyresp[subid] = newval;
-                    console.log( (ddbg()), "Thermostat debug: newval: ", newval, " cmd: ", cmd );
+                    // console.log( (ddbg()), "Thermostat debug: newval: ", newval, " cmd: ", cmd );
                     curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
                 } else {
                     result = "error - ISY thermostat set point cannot be interpreted.  value: " + swval;
@@ -3659,7 +3679,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
     // reset rules
     resetRules();
 
-    if ( (swid==="none" || swtype==="none" || swtype==="" || swid==="" || swid==="0") && tileid )  {
+    if ( (swid==="none" || swtype==="none" || !swtype || !swid || swid==="0") && tileid )  {
         idx = array_search(tileid, GLB.options["index"]);
         if ( idx===false || idx.indexOf("|")===-1 ) {
             return "error - invalid tile: " + tileid;
@@ -3854,7 +3874,7 @@ function doQuery(hubid, swid, swtype, tileid, protocol) {
             result[item] = res;
         }
     } else {
-        if ( (swid==="none" || swtype==="none" || swtype==="" || swid==="" || swid==="0") && tileid )  {
+        if ( (swid==="none" || swtype==="none" || !swtype || !swid || swid==="0") && tileid )  {
             idx = array_search(tileid, GLB.options["index"]);
             if ( idx===false || idx.indexOf("|")===-1 ) {
                 return "error - invalid tile: " + tileid;
@@ -4677,7 +4697,7 @@ function mainPage(proto, hostname, pathname) {
         kioskmode = false;
     }
     GLB.returnURL = proto + "://" + hostname
-    console.log( (ddbg()), "Displaying main HousePanel web page: ", GLB.returnURL);
+    console.log( (ddbg()), "HousePanel main page is being rendered to: ", GLB.returnURL);
 
     $tc += utils.getHeader(skin);
 
@@ -5797,7 +5817,7 @@ function apiCall(body, protocol) {
                 // for ST and HE we need to use getHubInfo to first get hubId and hubName
                 // and then we call devices from there given the async nature of Node
                 // this is much like what happens in the getAccessToken function in the OAUTH flow
-                console.log("hubType= ", hubType);
+                // console.log("hubType= ", hubType);
                 if ( hubType==="ISY" ) {
                     console.log("get devices...");
                     getDevices(hubnum, hubType, accesstoken, hubEndpt, clientId, clientSecret, hubName, "/reauth");
@@ -6204,7 +6224,9 @@ if ( app && applistening ) {
             if ( DEBUG2 ) {
                 console.log( (ddbg()), "Received update msg from hub: ", req.body["hubid"], " body: ", req.body);
             }
-            processHubMessage(req.body);
+            var msg = processHubMessage(req.body);
+            console.log( (ddbg()), msg );
+            res.json(msg);
 
         // handle all api calls upon the server from js client here
         } else if ( typeof req.body['useajax']!=="undefined" || typeof req.body["api"]!=="undefined" ) {
@@ -6252,7 +6274,7 @@ if ( wsServer && serverlistening ) {
         console.log( (ddbg()), 'Connection accepted. Client #' + index + " host=" + host, " Client count: ", clients.length);
 
         // send client number to the javascript so it knows its index
-        pushClient("client", "client");
+        // pushClient("client", "client");
 
         // user disconnected - remove all clients that match this socket
         connection.on('close', function(reason, description) {

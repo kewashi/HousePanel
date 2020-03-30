@@ -15,7 +15,7 @@ var tileCount = 0;
 
 // popup dialog box now uses createModal
 //        editTile("page", roomname, 0, 0, "", roomnum, "None");
-function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, hubName, htmlcontent) {  
+function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, hubName, hubType, htmlcontent) {  
     // var returnURL;
     // try {
     //     returnURL = $("input[name='returnURL']").val();
@@ -29,7 +29,8 @@ function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, hubName, h
         et_Globals.id = bid;
     }
     et_Globals.hubnum = hubnum;
-    et_Globals.hubName = hubName;
+    et_Globals.hubName = hubName || "None";
+    et_Globals.hubType = hubType || "None";
 
     // save the sheet upon entry for cancel handling
     savedSheet = document.getElementById('customtiles').sheet;
@@ -72,7 +73,7 @@ function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, hubName, h
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;
-                    console.log("page wysiwyg: ", htmlcontent);
+                    // console.log("page wysiwyg: ", htmlcontent);
                 }
             }
         );
@@ -179,14 +180,19 @@ $.fn.isAuto = function(dimension){
 
 function getOnOff(str_type, subid) {
     var onoff = ["",""];
-    
+    var hubType = et_Globals.hubType;
+
     // handle the cases for custom tiles that could have any subid starting with valid names
-    if ( str_type!=="isy" && subid.startsWith("switch" ) ) {
-        onoff = ["on","off","flash"];
+    if ( subid.startsWith("switch" ) ) {
+        if ( hubType==="ISY" || str_type==="isy" ) {
+            onoff = ["DON","DOF"];
+        } else if ( hubType==="Hubitat" ) {
+            onoff = ["on","off","flash"];
+        } else {
+            onoff = ["on","off"];
+        }
     } else if ( (str_type==="momentary") && subid.startsWith("momentary" ) ) {
         onoff = ["on","off"];
-    } else if ( (str_type==="isy") && subid.startsWith("switch" ) ) {
-        onoff = ["DON","DOF"];
     } else if ( subid.startsWith("contact" ) || subid.startsWith("door" ) || subid.startsWith("valve" ) ) {
         onoff = ["open","closed"];
     } else if ( subid.startsWith("lock" ) ) {
@@ -196,11 +202,23 @@ function getOnOff(str_type, subid) {
     } else if ( subid.startsWith("pistonName" ) ) {
         onoff = ["firing","idle"];
     } else if ( subid.startsWith("thermostatFanMode" ) ) {
-        onoff = ["auto","on"];
+        if ( hubType==="ISY" || str_type==="isy" ) {
+            onoff = ["Auto","On"];
+        } else {
+            onoff = ["auto","on"];
+        }
     } else if ( subid.startsWith("thermostatMode" ) ) {
-        onoff = ["heat","cool","auto","off"];
+        if ( hubType==="ISY" || str_type==="isy" ) {
+            onoff = ["Heat","Cool","Auto","Off"];
+        } else {
+            onoff = ["heat","cool","auto","off"];
+        }
     } else if ( subid.startsWith("thermostatOperatingState" ) ) {
-        onoff = ["idle","heating","cooling","off"];
+        if ( hubType==="ISY" || str_type==="isy" ) {
+            onoff = ["Idle","Heating","Cooling","Off"];
+        } else {
+            onoff = ["idle","heating","cooling","off"];
+        }
     } else if ( subid.startsWith("musicstatus" ) || subid.startsWith("playbackStatus") ) {
         onoff = ["stopped","paused","playing"];
     } else if ( subid.startsWith("musicmute" ) || (str_type==="audio" && subid.startsWith("mute")) ) {
@@ -257,7 +275,7 @@ function getCssRuleTarget(str_type, subid, thingindex, useall) {
         } else {
             target = null;
         }
-        console.log("page subid= ", subid," target= ", target);
+        // console.log("page subid= ", subid," target= ", target);
         
     // if a tile isn't specified we default to changing all things
     } else if ( thingindex===null || typeof thingindex==="undefined " || thingindex==="all" ) {
@@ -325,24 +343,12 @@ function getCssRuleTarget(str_type, subid, thingindex, useall) {
         // edit... changed to only use the subid since that is all we need
         //         this enables custom tile editing to work properly
         //         since the str_type can be any linked item for those
-//        var subidtag = "." + subid;
-//        if ( subid===str_type ) {
-//            subidtag = "";
-//        }
         if ( subid!=="level" && subid!=="head" ) {
-        // if ( subid!=="head" ) {
-            // target+= " div."+str_type;
-
-            // handle special thermostat wrapper case
             if ( useall===2 ){
                 target+= " div";
-            // } else if ( subid === "cool" || subid==="heat" ) { 
-            //    target+= " div." + subid + "-val"; 
             } else {
-                // target+= " div."+str_type + subidtag;
                 target+= " div." + subid;
             }
-            
             if ( useall === 0 ) target+= '.p_'+thingindex;
         }
 
@@ -373,7 +379,7 @@ function getCssRuleTarget(str_type, subid, thingindex, useall) {
 function toggleTile(target, str_type, subid) {
     // var target = "#tileDialog " + getCssRuleTarget(str_type, subid, thingindex);
     var swval = $(target).html();
-    console.log("toggleTile: target= ", target, " tile type= "+str_type+" subid= "+subid + " swval= ", swval);
+    // console.log("toggleTile: target= ", target, " tile type= "+str_type+" subid= "+subid + " swval= ", swval);
     $('#onoffTarget').html("");
     
     // activate the icon click to use this
@@ -384,7 +390,7 @@ function toggleTile(target, str_type, subid) {
             var oldsub = onoff[i];
             if ( $(target).hasClass(oldsub) ) { 
                 $(target).removeClass(oldsub); 
-                console.log("Removing attribute (" + oldsub + ") from wysiwyg display for tile: " + str_type + " swval = " + swval);
+                // console.log("Removing attribute (" + oldsub + ") from wysiwyg display for tile: " + str_type + " swval = " + swval);
             }
             if ( oldsub === swval ) {
                 newsub = i+1;
@@ -392,7 +398,7 @@ function toggleTile(target, str_type, subid) {
                 $(target).addClass( onoff[newsub] ); 
                 $(target).html( onoff[newsub] );
                 $('#onoffTarget').html(onoff[newsub]);
-                console.log("Adding attribute (" + onoff[newsub] + ") to wysiwyg display for tile: " + str_type);
+                // console.log("Adding attribute (" + onoff[newsub] + ") to wysiwyg display for tile: " + str_type);
                 break;
             }
         }
@@ -410,7 +416,7 @@ function setupIcons(category, old_str_type, old_thingindex) {
         var img = $(this).attr("src");
         var subid = $("#subidTarget").html();
         var strIconTarget = getCssRuleTarget(str_type, subid, thingindex);
-        console.log("Clicked on img= "+img+" Category= "+category+" strIconTarget= "+strIconTarget+" type= "+str_type+" subid= "+subid+" index= "+thingindex);
+        // console.log("Clicked on img= "+img+" Category= "+category+" strIconTarget= "+strIconTarget+" type= "+str_type+" subid= "+subid+" index= "+thingindex);
         iconSelected(category, strIconTarget, img, str_type, thingindex);
     });
 }
@@ -741,7 +747,12 @@ function initDialogBinds(str_type, thingindex) {
             rule = "margin-top: " + newsize;
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         } else {
-            rule = "padding-top: " + newsize;
+            var ischecked = $("#absPlace").prop("checked");
+            if ( ischecked ) {
+                rule = "top: " + newsize;
+            } else {
+                rule = "padding-top: " + newsize;
+            }
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         }
         event.stopPropagation;
@@ -769,10 +780,16 @@ function initDialogBinds(str_type, thingindex) {
         } else if ( subid==="temperature" || subid==="feelsLike" ||
                     subid==="weatherIcon" || subid==="forecastIcon" ) {
             rule = "margin-left: " + newsize;
+            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         } else {
-            rule = "padding-left: " + newsize;
+            var ischecked = $("#absPlace").prop("checked");
+            if ( ischecked ) {
+                rule = "left: " + newsize;
+            } else {
+                rule = "padding-left: " + newsize;
+            }
+            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         }
-        addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         event.stopPropagation;
     });
     
@@ -1104,7 +1121,7 @@ function loadSubSelect(str_type, firstsub, thingindex) {
         var subid = $(event.target).val();
         
         // set the first onoff state
-        var onoff = getOnOff(str_type, subid);
+        // var onoff = getOnOff(str_type, subid);
 //        $("#onoffTarget").html(onoff[0]);
         $("#onoffTarget").html("");
         
@@ -1200,7 +1217,7 @@ function updateNames(str_type, thingindex) {
     }
 
     if ( oldname === newname ) {
-        console.log("Names match in updateNames, so doing nothing.");
+        // console.log("Names match in updateNames, so doing nothing.");
         return;
     }
 
@@ -1212,10 +1229,10 @@ function updateNames(str_type, thingindex) {
                 if ( str_type==="page"  ) {
                     thingindex = newname;
                 }
-                console.log(presult);
+                // console.log(presult);
                 cm_Globals.reload = true;
             } else {
-                console.log("pstatus: ", pstatus," presult: ", presult);
+                console.log("error - failed to update names. pstatus: ", pstatus," presult: ", presult);
             }
         }
     );
@@ -1255,7 +1272,7 @@ function saveTileEdit(str_type, thingindex) {
         
         var subcontent= sheetContents.substring(n1, n2-1);
         
-        var info = "n= " + n + " n1= " + n1 + " n2= " + n2;
+        var info = "saving customtiles, part " + n + " of " + nparts + " (n1=" + n1 + " n2=" + n2 + ")";
         console.log(info);
         n1 = n2;
         n2 = n1 + 60000;
@@ -1265,7 +1282,7 @@ function saveTileEdit(str_type, thingindex) {
             {useajax: "savetileedit", id: n, type: str_type, value: subcontent, attr: newname, tile: thingindex},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
-                    console.log(presult, " reload: ", cm_Globals.reload);
+                    // console.log(presult, " reload: ", cm_Globals.reload);
 
                     // reload if tile updated and if we are saving the last file part
                     // or if we save a page edit
@@ -1333,7 +1350,7 @@ function initColor(str_type, subid, thingindex) {
     var generic = getCssRuleTarget(str_type, subid, thingindex, 1);
     var icontarget = "#tileDisplay " + target;
     
-    console.log ("initcolor: str_type= " + str_type + " subid= " + subid + " thingindex= " + thingindex + " target= " + target);
+    // console.log ("initcolor: str_type= " + str_type + " subid= " + subid + " thingindex= " + thingindex + " target= " + target);
     priorIcon = $(target).css("background-image");
         
     // set the first onoff state
@@ -1584,7 +1601,7 @@ function initColor(str_type, subid, thingindex) {
         var fstyle = $(target).css("font-style");
         var fontdef;
 
-        console.log("ffamily = " + ffamily + " fweight= " + fweight + " fstyle= " + fstyle);
+        // console.log("ffamily = " + ffamily + " fweight= " + fweight + " fstyle= " + fstyle);
 
         if ( ffamily===undefined || !ffamily || !ffamily.hasOwnProperty(("includes")) ) {
             fontdef = "sans";
@@ -1793,7 +1810,7 @@ function initColor(str_type, subid, thingindex) {
         var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
         var fontsize = $(this).val();
         var fontstr= "font-size: " + fontsize;
-        console.log("Changing font. Target= " + cssRuleTarget + " to: "+fontstr);
+        // console.log("Changing font. Target= " + cssRuleTarget + " to: "+fontstr);
         addCSSRule(cssRuleTarget, fontstr);
         event.stopPropagation;
     });
@@ -1807,7 +1824,7 @@ function initColor(str_type, subid, thingindex) {
         var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
         var aligneffect = $(this).val();
         var fontstr= "text-align: " + aligneffect;
-        console.log("Changing alignment. Target= " + cssRuleTarget + " to: "+fontstr);
+        // console.log("Changing alignment. Target= " + cssRuleTarget + " to: "+fontstr);
         addCSSRule(cssRuleTarget, fontstr);
         event.stopPropagation;
     });
@@ -1821,7 +1838,7 @@ function initColor(str_type, subid, thingindex) {
         var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
         var aligneffect = $(this).val();
         var fontstr= "background-position-x: " + aligneffect;
-        console.log("Changing alignment. Target= " + cssRuleTarget + " to: "+fontstr);
+        // console.log("Changing alignment. Target= " + cssRuleTarget + " to: "+fontstr);
         addCSSRule(cssRuleTarget, fontstr);
         event.stopPropagation;
     });
@@ -1978,7 +1995,7 @@ function updateColor(strCaller, cssRuleTarget, str_type, subid, thingindex, strC
             addCSSRule(sliderbox2, "background-color: " + strColor + ";");		
             addCSSRule(sliderbox2, "color: " + strColor + ";");		
         }
-        console.log("Slider color: caller= " + strCaller + " LineTarget= " + sliderline + " BoxTarget= "+ sliderbox);
+        // console.log("Slider color: caller= " + strCaller + " LineTarget= " + sliderline + " BoxTarget= "+ sliderbox);
 
     } else if ( strCaller==="background" ) {
         addCSSRule(cssRuleTarget, "background-color: " + strColor + ";");		
@@ -2030,7 +2047,7 @@ function getIcons(str_type, thingindex) {
             {useajax: "geticons", id: 0, type: "none", value: localPath, attr: iCategory},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
-                    console.log("reading icons from skin= " + skindir + " and path= "+localPath);
+                    // console.log("reading icons from skin= " + skindir + " and path= "+localPath);
                     $('#iconList').html(presult);
                     setupIcons(iCategory, str_type, thingindex);
                 } else {
@@ -2117,7 +2134,7 @@ function iconSelected(category, cssRuleTarget, imagePath, str_type, thingindex) 
     }
 
     var imgurl = 'background-image: url("' + imagePath + '")';
-    console.log("Setting icon: category= " + category + " target= " + cssRuleTarget + " icon= " + imagePath + " type= " + str_type + " index= " + thingindex + " rule= " + imgurl);
+    // console.log("Setting icon: category= " + category + " target= " + cssRuleTarget + " icon= " + imagePath + " type= " + str_type + " index= " + thingindex + " rule= " + imgurl);
     addCSSRule(cssRuleTarget, imgurl + strEffect + ";");
 
     // set new icons to default size
@@ -2240,7 +2257,7 @@ function removeCSSRule(strMatchSelector, thingindex, target, ignoreall){
              (current_style.selectorText === strMatchSelector &&
                ( !target || current_style.style.cssText.indexOf(target) !== -1 ) ) ) {
             sheet.deleteRule (i);
-            console.log("Removing rule: " + current_style.selectorText);
+            // console.log("Removing rule: " + current_style.selectorText);
         }
     }  
 }

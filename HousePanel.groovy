@@ -17,6 +17,7 @@
  * it displays and enables interaction with switches, dimmers, locks, etc
  * 
  * Revision history:
+ * 03/29/2020 - clean up mode and fix hub pushes to be more reliable
  * 02/02/2020 - added secondary hub push and include hub id in the push
  * 01/10/2020 - add mode chenge hub push and clean up code
  * 12/20/2019 - bug fixes and cleanup
@@ -214,7 +215,7 @@ def initialize() {
         webCoRE_init()
     }
     state.loggingLevelIDE = settings.configLogLevel?.toInteger() ?: 3
-    logger("Installed ${hubtype} hub with settings: ${settings} ", "debug")
+    logger("Installed ${hubtype} hub with settings: ${settings} ", "info")
     
     if (state.directIP)
     {
@@ -222,8 +223,7 @@ def initialize() {
         if ( state.directIP2 ) {
             postHub(state.directIP2, state.directPort2, "initialize", "", "", "", "")
         }
-        registerLocations()
-        runIn(200, "registerAll")
+        registerAll()
     }
 }
 
@@ -517,23 +517,13 @@ def getPower(swid, item=null) {
     getThing(mypowers, swid, item)
 }
 
-def extractName(swid, prefix) {
-    def postfix = swid ?: ""
-    if ( state.prefix && swid && swid.startsWith(state.prefix) ) {
-        def k = state.prefix.length()
-        postfix = swid.substring(k)
-    }
-    def thename = "$prefix $postfix"
-}
-
 def getMyMode(swid, item=null) {
     def allmodes = location.getModes()
     def curmode = location.getCurrentMode()
-    def resp = [ name: extractName(swid, "Mode"), 
-        sitename: location.getName(), themode: curmode?.getName() ];
+    def resp = [ name: "Mode ${swid}", sitename: location.getName(), themode: curmode?.getName() ];
     for (defcmd in allmodes) {
-        def modename = defcmd.getName()
-        resp.put("_${modename}",modename)
+        def modecmd = defcmd.getName()
+        resp.put("_${modecmd}",modecmd)
     }
     return resp
 }
@@ -583,16 +573,6 @@ def getHSMState(swid, item=null) {
             resp.put("_${defcmd}",defcmd)
         }
     }
-    return resp
-}
-
-def getBlank(swid, item=null) {
-    def resp = [name: extractName(swid, "Blank")]
-    return resp
-}
-
-def getImage(swid, item=null) {
-    def resp = [name: extractName(swid, "Image"), url: "${swid}"]
     return resp
 }
 
@@ -776,10 +756,6 @@ def getAllThings() {
     }
     run = logStepAndIncrement(run)
     resp = getOthers(resp)
-    // run = logStepAndIncrement(run)
-    // resp = getBlanks(resp)
-    // run = logStepAndIncrement(run)
-    // resp = getImages(resp)
     run = logStepAndIncrement(run)
     resp = getPowers(resp)
 
@@ -792,13 +768,16 @@ def getAllThings() {
     return resp
 }
 
+// modified to only return one mode tile
 def getModes(resp) {
-    logger("Getting 4 mode tiles","debug");
-    def vals = ["m1x1","m1x2","m2x1","m2x2"]
+    logger("Getting 4 mode tiles", "debug")
+    // def vals = ["m1x1","m1x2","m2x1","m2x2"]
+    def vals = ["mode"]
     try {
         vals.each {
-            def val = getMyMode(it)
-            resp << [name: val.name, id: "${state.prefix}${it}", value: val, type: "mode"]
+            var modeid = ${state.prefix}${it}
+            def val = getMyMode(modeid)
+            resp << [name: val.name, id: modeid, value: val, type: "mode"]
         }
     } catch (e) {}
     return resp
@@ -819,28 +798,6 @@ def getHSMStates(resp) {
         def val = getHSMState("${state.prefix}hsm")
         if ( val ) {
             resp << [name: "Hubitat Safety Monitor", id: "${state.prefix}hsm", value: val, type: "hsm"]
-        }
-    } catch (e) {}
-    return resp
-}
-
-def getBlanks(resp) {
-    def vals = ["b1x1","b1x2","b2x1","b2x2"]
-    try {
-        vals.each {
-            def val = getBlank("${state.prefix}${it}")
-            resp << [name: val.name, id: "${state.prefix}${it}", value: val, type: "blank"]
-        }
-    } catch (e) {}
-    return resp
-}
-
-def getImages(resp) {
-    def vals = ["img1","img2","img3","img4"]
-    try {
-        vals.each {
-            def val = getImage("${state.prefix}${it}")
-            resp << [name: val.name, id: "${state.prefix}${it}", value: val, type: "image"]
         }
     } catch (e) {}
     return resp
@@ -1058,9 +1015,7 @@ def autoType(swid) {
     else if ( mypowers?.find {it.id == swid } ) { swtype= "power" }
     else if ( swid=="${state.prefix}shm" ) { swtype= "shm" }
     else if ( swid=="${state.prefix}hsm" ) { swtype= "hsm" }
-    else if ( swid=="${state.prefix}m1x1" || swid=="${state.prefix}m1x2" || swid=="${state.prefix}m2x1" || swid=="${state.prefix}m2x2" ) { swtype= "mode" }
-    // else if ( swid=="${state.prefix}b1x1" || swid=="${state.prefix}b1x2" || swid=="${state.prefix}b2x1" || swid=="${state.prefix}b2x2" ) { swtype= "blank" }
-    // else if ( swid=="${state.prefix}img1" || swid=="${state.prefix}img2" || swid=="${state.prefix}img3" || swid=="${state.prefix}img4" ) { swtype= "image" }
+    else if ( swid=="${state.prefix}m1x1" || swid=="${state.prefix}m1x2" || swid=="${state.prefix}m2x1" || swid=="${state.prefix}m2x2" || swid=="${state.prefix}mode" ) { swtype= "mode" }
     else if ( state.usepistons && webCoRE_list().find {it.id == swid} ) { swtype= "piston" }
     else { swtype = "" }
     return swtype
@@ -1509,10 +1464,7 @@ def setMode(swid, cmd, swattr, subid) {
     }
 
     logger("Mode changed to $newsw", "info");
-    location.setMode(newsw);
-    resp =  [   sitename: location.getName(),
-                themode: newsw
-            ];
+    resp =  [ themode: newsw ];
     
     return resp
 }
@@ -2246,22 +2198,24 @@ def setRoutine(swid, cmd, swattr, subid) {
 }
 
 def registerAll() {
-    runIn(300, "registerLights");
-    runIn(300, "registerBulbs");
-    runIn(300, "registerDoors");
-    runIn(300, "registerMotions");
-    runIn(300, "registerOthers");
-    runIn(300, "registerThermostats");
-    runIn(300, "registerTracks");
-    runIn(300, "registerMusics");
-    runIn(300, "registerAudios");
+    runIn(2, "registerLights", [overwrite: true])
+    runIn(4, "registerBulbs", [overwrite: true])
+    runIn(6, "registerDoors", [overwrite: true])
+    runIn(8, "registerMotions", [overwrite: true])
+    runIn(10, "registerOthers", [overwrite: true])
+    runIn(12, "registerThermostats", [overwrite: true])
+    runIn(14, "registerTracks", [overwrite: true])
+    runIn(16, "registerMusics", [overwrite: true])
+    runIn(18, "registerAudios", [overwrite: true])
+    runIn(10, "registerSlows", [overwrite: true])
+    runIn(20, "registerLocations", [overwrite: true])
 }
 
 def registerLocations() {
     // lets subscribe to mode changes
     subscribe(location, "mode", modeChangeHandler)
     logger("Registered locations for mode changes", "info")
-    
+
     // doesn't do anything yet
     if ( isHubitat() ) {
         subscribe(location, "hsmStatus", hsmStatusHandler)
@@ -2337,7 +2291,7 @@ def registerTracks() {
 
 def registerCapabilities(devices, capability) {
     subscribe(devices, capability, changeHandler)
-    logger("Registering ${capability} for ${devices?.size() ?: 0} things", "trace")
+    logger("Registering ${capability} for ${devices?.size() ?: 0} things", "info")
 }
 
 def changeHandler(evt) {
@@ -2353,8 +2307,8 @@ def changeHandler(evt) {
 //        attr = "alarmSystemStatus"
 //    }
     
+    log.info "Sending ${src} Event ( ${deviceName}, ${deviceid}, ${attr}, ${value} ) to HousePanel clients  log = ${state.loggingLevelIDE}"
     if (state.directIP && state.directPort && deviceName && deviceid && attr && value) {
-        logger("Sending ${src} Event ( ${deviceName}, ${deviceid}, ${attr}, ${value} ) to HousePanel clients", "info")
 
         // fix bulbs
         if ( (mybulbs?.find {it.id == deviceid}) && (attr=="hue" || attr=="saturation" || attr=="level" || attr=="color") ) {
@@ -2378,15 +2332,16 @@ def changeHandler(evt) {
 }
 
 def modeChangeHandler(evt) {
-    
+    // modified to simplify modes to only deal with one tile
     // send group of hub actions for mode changes
     def themode = evt.value
     if (themode && state.directIP && state.directPort) {
-        logger("Sending new mode= ${themode} to HousePanel clients", "info")
-        def vals = ["m1x1","m1x2","m2x1","m2x2"]
+        // logger("Sending new mode= ${themode} to HousePanel clients", "info")
+        // def vals = ["m1x1","m1x2","m2x1","m2x2"]
+        def vals = ["mode"]
         vals.each {
             def modeid = "${state.prefix}${it}"
-            def modename = "Mode ${it}"
+            def modename = "Mode ${modeid}"
             postHub(state.directIP, state.directPort, "update", modename, modeid, "themode", themode)
             if (state.directIP2) {
                 postHub(state.directIP2, state.directPort2, "update", modename, modeid, "themode", themode)
@@ -2397,11 +2352,12 @@ def modeChangeHandler(evt) {
 
 def postHub(ip, port, msgtype, name, id, attr, value) {
 
-    logger("postHub to IP= ${ip} port= ${port} msgtype= ${msgtype} name= ${name} id= ${id} attr= ${attr} value= ${value}", "info" )
+    log.info "HousePanel postHub to IP= ${ip} port= ${port} msgtype= ${msgtype} name= ${name} id= ${id} attr= ${attr} value= ${value} ST= ${isST()}"
     
     if ( msgtype && ip && port ) {
         // Send Using the Direct Mechanism
-        logger("Sending ${msgtype} to Websocket at ${ip}:${port}", "info")
+        // logger("Sending ${msgtype} to Websocket at ${ip}:${port}", "info")
+        // log.debug "Sending ${msgtype} to Websocket at ${ip}:${port}";
 
         // set a hub action - include the access token so we know which hub this is
         def params = [
