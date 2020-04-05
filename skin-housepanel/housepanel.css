@@ -10,28 +10,40 @@
 /* panel backgrounds go here in the skin */
 div.panel-Family, div.panel-family, div.panel-Familyroom, div.panel-familyroom {
     background-image: url('media/family.jpg');
+    background-size: cover;
 }
 div.panel-Kitchen, div.panel-kitchen, div.panel-Dinette, div.panel-dinette {
     background-image: url('media/kitchenroom.jpg');
+    background-size: cover;
 }
 div.panel-Living, div.panel-living, div.panel-Livingroom, div.panel-livingroom {
     background-image: url('media/formal.jpg');
+    background-size: cover;
 }
 div.panel-Outside, div.panel-outside {
     background-image: url('media/outside.jpg');
+    background-size: cover;
 }
 div.panel-Garage, div.panel-garage {
     background-image: url('media/garage.jpg');
+    background-size: cover;
 }
 div.panel-Office, div.panel-office, div.panel-Library, div.panel-library {
     background-image: url('media/office.jpg');
+    background-size: cover;
 }
 div.panel-Bedroom, div.panel-bedroom, div.panel-Bedrooms, div.panel-bedrooms {
     background-image: url('media/bedroom.jpg');
+    background-size: cover;
 }
 div.panel-Music, div.panel-music, div.panel-Theater, div.panel-theater, 
 div.panel-Entertainment, div.panel-entertainment {
     background-image: url('media/music.jpg');
+    background-size: cover;
+}
+div.panel-Basement, div.panel-Downstairs {
+    background-image: url('media/basement.jpg');
+    background-size: cover;
 }
 
 /* all things look like this */  
@@ -156,19 +168,6 @@ div.open, div.closed, div.inactive, div.active, div.locked, div.unlocked, div.un
 div.on, div.off, div.present, div.absent, div.firing, div.piston.pistonName {
     font-size: 11pt;
     background-position: center center;
-}
-
-/* alter the thermostat on and off to show since we don't use an icon here */
-div.thermostat.thermostatMode, div.thermostat.thermostatFanMode, 
-div.thermostat.thermostatOperatingState, div.thermostat.humidity, div.other.humidity, div.isy.humidity,
-div.thermomode.auto, div.thermomode.off,
-div.thermomode.heat, div.thermomode.cool,
-div.thermofan.off, div.thermofan.on, div.thermofan.circulate {
-    font-size: 11pt;
-    background-image: none;
-    background-color: #333333;
-    background-position: center center;
-    color: rgba(255, 255, 255, 1);
 }
 
 /* this section is for specific thing icons and texts */
@@ -350,9 +349,12 @@ div.switchlevel.switch, div.bulb.switch, div.isy.switch {
 div.switchlevel.colorTemperature, div.switchlevel.hue, div.switchlevel.saturation {
     height: 16px;
 }
-
 div.switchlevel.level, div.bulb.level, div.music.level, div.audio.volume, div.audio.groupVolume {
     height: 4px;
+}
+div.colorTemperature-val, div.hue-val, div.saturation-val {
+    background-color: #ffffff;
+    color: #000000;
 }
 
 /* momentary styling */
@@ -506,12 +508,11 @@ div.audio._groupVolumeDown {
 
 /* make thermostat height auto */
 div.thing.thermostat-thing{
-    background-color: rgba(100,100,100,0.4);
+    background-color: rgba(100,100,100,0.9);
     height: auto;
 }
 
 /* round temperature value inside a thermostat */
-div.thermostat.temperature, div.isy.temperature,
 div.overlay.temperature div.temperature,
 div.weather.temperature, div.weather.feelsLike {
     display: inline-block;
@@ -526,7 +527,7 @@ div.weather.temperature, div.weather.feelsLike {
     padding: 4px 3px 0 3px;
     margin: 10px 12px 10px 12px;
     border-radius: 50%;
-    font-size: 20px;
+    font-size: 24px;
     line-height: 65px;
     -webkit-border-radius: 50%;
     -moz-border-radius: 50%;
@@ -563,12 +564,9 @@ div.overlay div.humidity::after {
 
 /* values of the adjustable items */
 /* include legacy and updated corrected names */
-div.heat-val, div.cool-val, div.level-val, div.switchlevel-val,
+div.level-val, div.switchlevel-val,
 div.colorTemperature-val, div.hue-val, div.saturation-val,
 div.heatingSetpoint-val, div.coolingSetpoint-val,
-div.hue, div.saturation,
-div.overlay.heat div.thermostat.heat, div.overlay.cool div.thermostat.cool,
-div.thermostat.heatingSetpoint, div.thermostat.coolingSetpoint,
 div.heatingSetpoint, div.coolingSetpoint {
     display: inline-block;
     position: relative;
@@ -581,32 +579,35 @@ div.heatingSetpoint, div.coolingSetpoint {
     color: rgba(255, 255, 255, 1);
     border: 0px;
 }
-div.thermostat.heatingSetpoint, div.thermostat.coolingSetpoint,
-div.other.heatingSetpoint, div.other.coolingSetpoint,
-div.overlay.heat div.thermostat.heat, div.overlay.heat div.thermostat.cool {
-    padding-top: 5px;
-    height: 27px;
+div.overlay.heatingSetpoint, div.overlay.coolingSetpoint {
+    height: 40px;
 }
 
-div.heatingSetpoint {
+div.overlay.heatingSetpoint div.heatingSetpoint {
+    padding-top: 6px;
+    border-radius: 50%;
     background-color: #cc3300;
-    height: 32px;
+    border: 1px solid white;
+    height: 28px; width: 34px;
+    position: absolute;
+    left: 5px;
 }
-div.coolingSetpoint {
+div.overlay.coolingSetpoint div.coolingSetpoint {
+    padding-top: 6px;
+    border-radius: 50%;
     background-color: #0033cc;
-    height: 32px;
+    border: 1px solid white;
+    height: 28px; width: 34px;
+    position: absolute;
+    left: 5px;
 }
-div.colorTemperature-val, div.hue-val, div.saturation-val, div.hue, div.saturation {
-    background-color: #ffffff;
-    color: #000000;
+div.heatingSetpoint-up, div.coolingSetpoint-up {
+    position: absolute;
+    right: 5px;
 }
-div.thermostat.thermomode, div.thermostat.thermofan, div.thermostat.thermofan.on,
-div.thermostat.thermostatMode, div.thermostat.thermostatFanMode,
-div.thermostat.thermostate, div.thermostat.humidity, div.other.humidity, div.isy.humidity {
-    width: 100%;
-}
-div.thing.temperature-thing {
-    height: 150px;
+div.heatingSetpoint-dn, div.coolingSetpoint-dn {
+    position: absolute;
+    right: 38px;
 }
 
 /* hover over the adjustment arrows */
@@ -622,6 +623,10 @@ div.level-up:hover, div.level-dn:hover {
     border: 2px solid #cccccc;
     width: 28px;
     height: 28px;
+}
+
+div.thing.temperature-thing {
+    height: 150px;
 }
 
 /* music styling */
@@ -695,9 +700,9 @@ div.overlay.temperature div.weather.temperature, div.overlay.feelsLike div.weath
     -webkit-border-radius: 50%;
     -moz-border-radius: 50%;
 }
-div.weather.feelsLike::before,
+div.overlay.feelsLike div.feelsLike::before,
 div.custom.feelsLike::before {
-    content: "Like: ";
+    content: "~ ";
     font-size: 8pt;
 }
 div.weather.humidity::before {

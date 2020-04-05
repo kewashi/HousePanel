@@ -485,13 +485,13 @@ div.overlay.temperature div.temperature {
     box-shadow: 5px 4px 15px black;
     cursor: default;
     text-align: center;
-    height: 50px;
-    width: 50px;
+    height: 70px;
+    width: 70px;
     padding: 4px 3px 0 3px;
     margin: 10px 12px 10px 12px;
     border-radius: 50%;
     font-size: 20px;
-    line-height: 45px;
+    line-height: 65px;
 }
 
 div.overlay.temperature div.weather.temperature,
@@ -503,6 +503,23 @@ div.overlay.feelsLike div.weather.feelsLike {
 /* make weather items side by side but thermostat not */
 div.thermostat-thing div.overlay.temperature {
     display: block;
+}
+
+div.overlay.coolingSetpoint, div.overlay.heatingSetpoint {
+    display: inline-block;
+    padding-right: 8px;
+}
+
+div.isy.coolingSetpoint, div.isy.heatingSetpoint {
+    display: inline-block;
+    vertical-align: top;
+    margin-top: 8px;
+    padding-left: 8px; padding-right: 8px;
+    color: white;
+}
+
+div.isy-thing.ecobee {
+    height: auto;
 }
 
 /* up and down arrows */

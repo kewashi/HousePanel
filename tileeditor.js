@@ -237,9 +237,9 @@ function getCssRuleTarget(str_type, subid, thingindex, useall) {
     // get the scope to use
     var scope = $("#scopeEffect").val();
 
-    if ( subid==="head" ) {
-        useall= 0
-    } else if ( !useall && scope=== "alltypes") { 
+    // if ( subid==="head" ) {
+    //     useall= 0
+    if ( !useall && scope=== "alltypes") { 
         useall= 1; 
     } else if ( !useall && scope=== "alltiles") { 
         useall= 2; 
@@ -1250,55 +1250,69 @@ function saveTileEdit(str_type, thingindex) {
     for(j=0;j<c.length;j++){
         sheetContents += c[j].cssText;
     };
+
+    // use this regexp to add returns after open and closed brackets and semi-colons
     var regex = /[{;}]/g;
     var subst = "$&\n";
-    
     sheetContents = sheetContents.replace(regex, subst);
-    var results = "";
     
     // post changes to save them in a custom css file
     // the new name of this tile is passed in the attr variable
     // we have to divide this into chunks if large to avoid Node limit
-    var n1 = 0;
-    var n2 = sheetContents.length;
-    if ( sheetContents.length > 60000 ) {
-        var nparts = Math.round(sheetContents.length / 60000);
-        n2 = n1 + 60000;
-    } else {
-        nparts = 1;
-    }
-    var successcheck = "success " + nparts;
-    for (var n=1; n <= nparts; n++) {
-        
-        var subcontent= sheetContents.substring(n1, n2-1);
-        
-        var info = "saving customtiles, part " + n + " of " + nparts + " (n1=" + n1 + " n2=" + n2 + ")";
-        console.log(info);
-        n1 = n2;
-        n2 = n1 + 60000;
-        if ( n2 > sheetContents.length ) { n2 = sheetContents.length; }
+    // done using a recursive call to ensure chunks done in order
+    postRecurse(0, 59000, sheetContents.length);
+
+    function postRecurse(n1, n2, nlen) {
+        // ensure we end on a proper bounday for sections
+        if ( n1 >= nlen ) {
+            return true;
+        } else if ( n2 >= nlen ) { 
+            n2 = nlen; 
+        } else {
+            var n3 = n2;
+            while ( sheetContents.substr(n3, 1)!=="}" && n3 < n2 + 1000 && n3 < nlen ) {
+                n3++;
+            }
+            n2 = n3 + 1;
+            if ( n2 > nlen ) { 
+                n2 = nlen; 
+            }
+        }
+        var subcontent= sheetContents.substring(n1, n2);
+        console.log( "n1: ", n1, " n2: ", n2, " nlen: ", nlen, " subcontent:");
+        // console.log("\n----------------------------------------------------------\n", subcontent);
+        // console.log("\n----------------------------------------------------------\n");
+        subcontent= encodeURI(subcontent);
 
         $.post(returnURL, 
-            {useajax: "savetileedit", id: n, type: str_type, value: subcontent, attr: newname, tile: thingindex},
+            {useajax: "savetileedit", id: n1, n1: n1, n2: n2, nlen: sheetContents.length, type: str_type, value: subcontent, attr: newname, tile: thingindex},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
-                    // console.log(presult, " reload: ", cm_Globals.reload);
+                    console.log("savetileedit: presult= ", presult);
+
+                    n1 = n2;
+                    n2 = n1 + 59000;
+                    var done = postRecurse(n1, n2, nlen);
+
 
                     // reload if tile updated and if we are saving the last file part
-                    // or if we save a page edit
-                    if ( cm_Globals.reload && (presult===successcheck || str_type==="page") ) {
-                        location.reload(true);
+                    if ( cm_Globals.reload && done ) {
+                        window.location.href = cm_Globals.returnURL;
                     }
                 }
             }
         );
+        return false;
+
     }
+
 }
 
 function cancelTileEdit(str_type, thingindex) {
     document.getElementById('customtiles').sheet = savedSheet;
     if ( cm_Globals.reload ) {
-        location.reload(true);
+        // location.reload(true);
+        window.location.href = cm_Globals.returnURL;
     }
 }
 

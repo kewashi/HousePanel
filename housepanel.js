@@ -18,7 +18,7 @@ cm_Globals.allthings = null;
 cm_Globals.options = null;
 cm_Globals.returnURL = "";
 cm_Globals.hubId = "all";
-cm_Globals.client = 0;
+cm_Globals.client = -1;
 
 var modalStatus = 0;
 var modalWindows = {};
@@ -179,15 +179,6 @@ $(document).ready(function() {
         cm_Globals.returnURL = "http://localhost:3080";
     }
 
-    // var client = getCookie("client");
-    // if ( client==="" || isNaN(parseInt(client)) ) {
-    //     cm_Globals.client = 0;
-    //     console.log("Client # not yet identified. Assuming 0");
-    // } else {
-    //     cm_Globals.client = parseInt(client);
-    //     console.log("Identified as client #", cm_Globals.client);
-    // }
-    
     try {
         pagename = $("input[name='pagename']").val();
     } catch(e) {
@@ -396,10 +387,12 @@ function wsSocketCheck() {
 }
 
 // send a message over to our web socket
-// usually to tell it to update the elements since dashboard has changed
-// but in theory this could be any message for future use
+// this can be any message for future use
 function wsSocketSend(msg) {
     if ( webSocketUrl && wsSocket && wsSocket.readyState===1 ) {
+        if ( typeof msg === "object" ) {
+            msg = JSON.stringify(msg);
+        }
         wsSocket.send(msg);
     }
 }
@@ -453,26 +446,11 @@ function setupWebsocket()
                     if ( thetype.substr(0,1)!=="/" ) {
                         thetype = "/" + thetype;
                     }
-                    
-                    // redirect to page if this is the requesting client
-                    // otherwise do nothing
-                    // if ( client === cm_Globals.client ) {
                     reloadpage =  cm_Globals.returnURL + thetype;
                     window.location.href = reloadpage;
-                    // } else {
-                    //     console.log("Redirected client #" + client, " to: ", reloadpage, "  This is client #" + GLB.client);
-                    // }
                 }
                 return;
             }
-
-            // handle case for identifying which client this is
-            // else if ( bid==="cient" ) {
-            //     cm_Globals.client = client;
-            //     setCookie('client', client, 30);
-            //     console.log("Saving client #" + client);
-            //     return;
-            // }
 
             // handle popups returned from a query
             // this currently is not used but could be later
@@ -1428,7 +1406,6 @@ function execButton(buttonid) {
             cancelSortable();
             cancelPagemove();
             if ( reordered ) {
-                // location.reload(true);
                 window.location.href = cm_Globals.returnURL;
             }
         } else if ( priorOpmode === "DragDrop" ) {
@@ -1663,16 +1640,17 @@ function setupButtons() {
         // user is done authorizing so make an API call to clean up
         // and then return to the main app
         $("#cancelauth").click(function(evt) {
-            $.post(cm_Globals.returnURL, 
-                {useajax: "cancelauth", id: "", type: "none"},
-                function (presult, pstatus) {
-                    if (pstatus==="success") {
-                        window.location.href = cm_Globals.returnURL + "/showoptions";
-                    } else {
-                        window.location.href = cm_Globals.returnURL;
-                    }
-                }
-            );
+            window.location.href = cm_Globals.returnURL + "/showoptions";
+            // $.post(cm_Globals.returnURL, 
+            //     {useajax: "cancelauth", id: "", type: "none"},
+            //     function (presult, pstatus) {
+            //         if (pstatus==="success") {
+            //             window.location.href = cm_Globals.returnURL + "/showoptions";
+            //         } else {
+            //             window.location.href = cm_Globals.returnURL;
+            //         }
+            //     }
+            // );
             evt.stopPropagation(); 
         });
         
@@ -2428,13 +2406,15 @@ function setupTimer(timerval, timertype, hubnum) {
             $.post(cm_Globals.returnURL, 
                 {useajax: "doquery", id: that[0], type: that[0], value: "none", attr: "none", hubid: that[2]},
                 function (presult, pstatus) {
-                    if ( LOGWEBSOCKET ) {
-                        console.log("pstatus = " + pstatus + " presult= ", presult);
-                    }
 
                     // skip all this stuff if we dont return an object
                     if (pstatus==="success" && typeof presult==="object" ) {
 
+                        if ( LOGWEBSOCKET ) {
+                            var keys = Object.keys(presult);
+                            console.log("pstatus = ", pstatus, " loaded ", keys.length, " things from server");
+                        }
+    
                         // go through all tiles and update
                         try {
                             $('div.panel div.thing').each(function() {
@@ -2463,9 +2443,9 @@ function setupTimer(timerval, timertype, hubnum) {
                                     }
                                     
                                     // do not update names because they are never updated on groovy
-                                    // also skip updating music album art if using websockets 
-                                    // since it seems to lag behind
-                                    // and doing it here messes up the websocket updates
+                                    // also skip updating music and audio album art if using websockets 
+                                    // since doing it here messes up the websocket updates
+                                    // I actually kept the audio refresh since it seems to work okay
                                     if ( thevalue && typeof thevalue==="object" ) {
                                         if ( thevalue["name"] ) { delete thevalue["name"]; }
                                         if ( thevalue["password"] ) { delete thevalue["password"]; }
@@ -2835,7 +2815,6 @@ function processClick(that, thingname) {
                                 leftpos = leftpos - 110;
                             }
                             var pos = {top: $(tile).position().top + 80, left: leftpos};
-                            // console.log("popup pos: ", pos, " winwidth: ", winwidth);
                             closeModal("modalpopup");
                             createModal("modalpopup", showstr, "body", false, pos, function(ui) {} );
                     } else if ( pstatus==="success" && presult==="success" ) {

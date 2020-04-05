@@ -1,6 +1,11 @@
 'use strict';
 
 var devhistory =  ` 
+2.230      POST action fix and other bug fixes
+            - redesigned customcss save architecture to be more robust
+            - fix tile editor to properly deal with header edits
+            - bug fix in Mode changes implemented in 2.229 for ST and HE
+            - visual changes to default housepanel skin for thermostats
 2.229      Fixed a few really nasty bugs impacting ST and HE hubs
             - equally gnarly bug fixed for ISY hub reading
             - fixed ISY thermostat editing features

@@ -32,9 +32,8 @@ body {
 }
 @media (orientation: landscape) {
     #dragregion, #dragregion div.panel {
-        min-height: 620px;
+        min-height: 700px;
         width: 1200px;
-        /* height: 700px; */
     }
     .ui-tabs .ui-tabs-nav .ui-tabs-anchor {
         font-size: 11pt;
@@ -45,9 +44,8 @@ body {
 }
 @media (orientation: portrait) {
     #dragregion, #dragregion div.panel {
-        min-height: 1000px;
+        min-height: 1200px;
         width: 700px;
-        /* height: 1200px; */
     }
     .ui-tabs .ui-tabs-nav .ui-tabs-anchor {
         font-size: 10pt;
@@ -735,7 +733,7 @@ input.editinp {
 }
 /* don't need to display this anymore since use clock and panel click instead */
 /* but the div needs to be in the php file to make the js work */
-div.panel div.restoretabs {
+div.restoretabs {
     font-size: 12pt;
     color: rgba(255, 255, 255, 1);
     width: auto; height: 20px; margin-top: 1px;
@@ -1235,7 +1233,7 @@ div.jsondump {
     border-bottom: 1px solid black;
 }
 
-div.panel {
+form.panel {
     display: inline-block;
     border: 0px;
     padding: 2px;    
@@ -1625,7 +1623,7 @@ div.overlay.temperature div.weather.temperature, div.overlay.feelsLike div.weath
     font-size: 20px;
     line-height: 55px;
 }
-div.weather.feelsLike::before {
+div.overlay.feelsLike div.feelsLike::before {
     content: "Like: ";
     font-size: 8pt;
 }

@@ -17,6 +17,7 @@
  * it displays and enables interaction with switches, dimmers, locks, etc
  * 
  * Revision history:
+ * 04/02/2020 - fix bug in mode and return only one now
  * 03/29/2020 - clean up mode and fix hub pushes to be more reliable
  * 02/02/2020 - added secondary hub push and include hub id in the push
  * 01/10/2020 - add mode chenge hub push and clean up code
@@ -518,9 +519,9 @@ def getPower(swid, item=null) {
 }
 
 def getMyMode(swid, item=null) {
-    def allmodes = location.getModes()
     def curmode = location.getCurrentMode()
     def resp = [ name: "Mode ${swid}", sitename: location.getName(), themode: curmode?.getName() ];
+    def allmodes = location.getModes()
     for (defcmd in allmodes) {
         def modecmd = defcmd.getName()
         resp.put("_${modecmd}",modecmd)
@@ -770,16 +771,18 @@ def getAllThings() {
 
 // modified to only return one mode tile
 def getModes(resp) {
-    logger("Getting 4 mode tiles", "debug")
+    logger("Getting mode tile", "info")
     // def vals = ["m1x1","m1x2","m2x1","m2x2"]
     def vals = ["mode"]
     try {
         vals.each {
-            var modeid = ${state.prefix}${it}
+            def modeid = "${state.prefix}${it}"
             def val = getMyMode(modeid)
             resp << [name: val.name, id: modeid, value: val, type: "mode"]
         }
-    } catch (e) {}
+    } catch (e) {
+        log.info e
+    }
     return resp
 }
 
