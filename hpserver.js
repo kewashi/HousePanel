@@ -4,6 +4,7 @@ process.title = 'hpserver';
 // debug options
 const DEBUG1 = true;                // basic debug info - file loading, hub loading
 const DEBUG2 = false;               // authorization flow
+const DEBUG2P = true;               // ISY programs
 const DEBUG3 = false;               // passwords
 const DEBUG4 = false;               // index, filters, options
 const DEBUG5 = false;               // hub node detail
@@ -439,7 +440,7 @@ function getHubInfo(hub, token, endpt, clientId, clientSecret) {
         writeOptions(GLB.options, true);
 
         // retrieve all devices and go back to reauth page
-        getDevices(hubId, hubType, token, endpt, clientId, clientSecret, hubName, "/reauth");
+        getDevices(hubId, hubType, token, endpt, clientId, clientSecret, hubName, true, "/reauth");
     }
     return "success";
 
@@ -555,7 +556,7 @@ function fixISYid(id) {
     return id;
 }
 
-function getAllThings() {
+function getAllThings(reload) {
     
     allthings = {};
 
@@ -574,17 +575,19 @@ function getAllThings() {
             var clientSecret = hub["clientSecret"];
             var hubName = hub["hubName"];
             var hubType = hub["hubType"];
-            getDevices(hubnum, hubType, accesstoken, hubEndpt, clientId, clientSecret, hubName, "");
+            getDevices(hubnum, hubType, accesstoken, hubEndpt, clientId, clientSecret, hubName, reload, "/");
         });
     }
 
-    // send a reload in 5 seconds to give time for above to finish
-    setTimeout( function() {
-        updateOptions("/");
-    }, 10000);
+    // send a reload in 10 seconds to give time for above to finish
+    // if ( reload ) {
+    //     setTimeout( function() {
+    //         updateOptions("/");
+    //     }, 10000);
+    // }
 }
 
-function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret, hubName, reloadpath) {
+function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret, hubName, reload, reloadpath) {
 
     // retrieve all things from ST
     if ( hubType==="SmartThings" || hubType==="Hubitat" ) {
@@ -597,7 +600,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
     // retrieve all things from ISY
     // impt note - this is called within the scope of getDevices just like the callback above
     } else if ( hubType==="ISY" ) {
-        getIsyDevices(reloadpath);
+        getIsyDevices();
     } else {
         console.log( (ddbg()), "error - attempt to read an unknown hub type= ", hubType);
         pushClient("reload", reloadpath);
@@ -641,7 +644,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                     };
                 });
             }
-            if ( reloadpath ) {
+            if ( reload && reloadpath ) {
                 updateOptions(reloadpath);
             }
         }
@@ -649,7 +652,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
 
     // version that supports ISY
     // function for loading ST and HE hub devices
-    function getIsyDevices(reloadpath) {
+    function getIsyDevices() {
         var buff = Buffer.from(hubAccess);
         var base64 = buff.toString('base64');
         var stheader = {"Authorization": "Basic " + base64};
@@ -668,7 +671,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
         curl_call(hubEndpt + "/vars/get/2", stheader, false, false, "GET", getStateVars);
 
         // also get programs
-        curl_call(hubEndpt + "/programs", stheader, false, false, "GET", getAllProgs);
+        curl_call(hubEndpt + "/programs?subfolders=true", stheader, false, false, "GET", getAllProgs);
 
         // now get all the nodes and do callback to auth page
         curl_call(hubEndpt + "/nodes", stheader, false, false, "GET", getAllNodes);
@@ -743,7 +746,6 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                 console.log( (ddbg()), "error retrieving ISY programs: ", err);
             } else {
 
-                // var result = parser.parse(body);
                 // have to use the full parser here
                 // console.log("getting programs...", body);
                 xml2js(body, function(xmlerr, result) {
@@ -768,12 +770,21 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                             programlist.forEach(function(prog) {
                                 var proginfo = prog["$"];
                                 var isfolder = proginfo.folder;
-                                if ( DEBUG2 ) {
-                                    console.log( (ddbg()), "Programs ", prog.name, " Last run: ", prog.lastRunTime );
+                                if ( DEBUG2P ) {
+                                    console.log( (ddbg()), "Program details: ", UTIL.inspect(prog, false, null, false) );
                                 }
 
+                                // if we have a folder don't add it
+                                if ( isfolder==="true" ) {
+                                    if ( DEBUG2 ) {
+                                        console.log( (ddbg()), "Program ", prog.name, " is a folder. id: ", proginfo.id, " Status: ", proginfo.status);
+                                    }
+
                                 // create tile for programs that are not folders
-                                if ( isfolder!=="true") {
+                                } else {
+                                    if ( DEBUG2 ) {
+                                        console.log( (ddbg()), "Program ", prog.name, " id: ", proginfo.id, " Status: ", proginfo.status, " Last run: ", prog.lastRunTime );
+                                    }
                                     var progid = "prog_" + proginfo.id;
                                     idx  = thetype + "|" + progid;
 
@@ -786,7 +797,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                                         progname = prog.name;
                                     }
                                     if ( progname.toLowerCase().indexOf("program") === -1 ) {
-                                        progname = progname + " Program";
+                                        progname = "Program " + progname;
                                     }
 
                                     var progcommands = "run|runThen|runElse|stop|enable|disable";
@@ -812,7 +823,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                                         "hubnum": hubnum,
                                         "type": thetype,
                                         "hint": "ISY program",
-                                        "refresh": "never",
+                                        "refresh": "normal",
                                         "value": pvalue
                                     };
                                 }
@@ -852,9 +863,8 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                     // set hint to nothing if default of zeros is provided
                     // TODO - provide a more useful mapping of hints to type names
                     // until then user can still style hints using CSS
-                    if ( hint==="0.0.0.0" ) {
-                        hint = "ISY";
-                    } else {
+                    if ( hint ) {
+                        hint.replace( /\./g, "_" );
                         hint = "ISY " + hint;
                     }
 
@@ -919,11 +929,11 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                 });
 
                 // update things and reload page after handling all tiles
-                // wait two seconds just to give variables and programs some room
-                if ( reloadpath ) {
+                // wait five seconds just to give variables and programs some room
+                if ( reload && reloadpath ) {
                     setTimeout( function() {
                         updateOptions(reloadpath);
-                    }, 2000);
+                    }, 5000);
                 }
             }
         }
@@ -1165,7 +1175,7 @@ function setDefaults() {
     GLB.options.config["timezone"] = "America/Detroit";
     GLB.options.config["hubs"] = [];
 
-    GLB.options.config["specialtiles"] = {"video": 4, "frame": 4, "image": 4, "blank": 2, "custom": 8};
+    GLB.options.config["specialtiles"] = {"video": 4, "frame": 4, "image": 4, "blank": 4, "custom": 8};
 
     GLB.options.config["fast_timer"] = "0";
     GLB.options.config["slow_timer"] = "300000";
@@ -1480,7 +1490,7 @@ function getAuthPage(hostname, hpcode) {
     $tc += "</div>";
     $tc += "<div id=\"authmessage\"></div>";
     $tc += "<br><br>";
-    $tc += "<input id=\"cancelauth\" class=\"authbutton\" value=\"Return to Options Page\" name=\"cancelauth\" type=\"button\" />";
+    // $tc += "<input id=\"cancelauth\" class=\"authbutton\" value=\"Return to HousePanel\" name=\"cancelauth\" type=\"button\" />";
     $tc += "<button class=\"infobutton\">Return to HousePanel</button>";
 
     $tc += utils.getFooter();
@@ -1609,7 +1619,7 @@ function refactorOptions() {
         var newlines;
         var calltype;
     
-        if ( ( key.substr(0,5)==="user_" || key.substr(0,7)==="custom_" ) && is_array(lines) ) {
+        if ( ( key.substr(0,5)==="user_" ) && is_array(lines) ) {
 
             // allow user to skip wrapping single entry in an array
             if ( !is_array(lines[0]) ) {
@@ -1781,11 +1791,8 @@ function processName(thingname, thingtype) {
     // get rid of 's and split along white space
     // but only for tiles that are not weather
     var subtype = "";
-    var ignore2 = ["routine","switch", "light", "switchlevel", "bulb", "momentary","contact",
-                "motion", "lock", "thermostat", "temperature", "music", "valve",
-                "illuminance", "smoke", "water", "panel",
-                "weather", "presence", "mode", "shm", "hsm", "piston", "other",
-                "clock", "blank", "image", "frame", "video", "custom", "control", "power"];
+    var ignore2 = utils.getTypes();
+    ignore2.push("panel");
     var lowname = thingname.toLowerCase();
     var pattern = /[,;:!-\'\*\<\>\{\}\+\&\%]/g;
     var s1 = lowname.replace(pattern,"");
@@ -1830,12 +1837,17 @@ function returnFile(thingvalue, thingtype) {
         fw = specialtiles[thingtype][1];
         thingvalue["width"] = fw;
     }
+    var fwnum = parseInt(fw);
+    if ( isNaN(fwnum) ) { fwnum = 900; }
+
     if ( array_key_exists("height", thingvalue) ) {
         var fh = thingvalue["height"];
     } else {
         fh = specialtiles[thingtype][2];
         thingvalue["height"] = fh;
     }
+    var fhnum = parseInt(fh);
+    if ( isNaN(fhnum) ) { fhnum = 600; }
 
     var grtypes;
     switch (thingtype) {
@@ -1846,10 +1858,11 @@ function returnFile(thingvalue, thingtype) {
             grtypes = [".mp4",".ogg"];
             break;
         case "frame":
-            grtypes = [".html",".htm",".php"];
+            grtypes = [".html",".htm"];
             break;
         case "custom":
-            grtypes = [".jpg",".png",".gif",".mp4",".ogg",".html",".htm",".php"];
+        case "blank":
+            grtypes = [".jpg",".png",".gif",".mp4",".ogg",".html",".htm"];
             break;
         // for blanks never load a file
         // but we do set the name above
@@ -1862,18 +1875,32 @@ function returnFile(thingvalue, thingtype) {
     // this block sets the file name to load based on extension requested
     var $vn = "";
     var $fext = "";
+    var skin = getSkin();
+
+    function getext(fname) {
+        var ipos = fname.indexOf(".");
+        var ext = "";
+        if ( ipos !== "-1" ) {
+            ext = fname.substr(ipos);
+        }
+        return ext;
+    }
+
     if ( grtypes ) {
 
         // first check names without extensions
         if (file_exists(fn)) {
             $vn = fn;
-            $fext = "";
+            $fext = getext(fn);
         } else if (file_exists("media/"+ fn)) {
             $vn = "media/" + fn;
-            $fext = "";
+            $fext = getext(fn);
+        } else if (file_exists(skin + "/media/"+ fn)) {
+            $vn = skin + "/media/" + fn;
+            $fext = getext(fn);
         } else {
 
-            // next check names without extensions
+            // next check names with extensions and in media folders including skin
             grtypes.forEach(function($ext) {
                 if ( $vn==="" && file_exists(fn + $ext) ) {
                     $vn = fn + $ext;
@@ -1881,12 +1908,17 @@ function returnFile(thingvalue, thingtype) {
                 } else if ( $vn==="" && file_exists("media/" + fn + $ext) ) {
                     $vn = "media/" + fn + $ext;
                     $fext = $ext;
+                } else if ( $vn==="" && file_exists(skin + "/media/" + fn + $ext) ) {
+                    $vn = skin + "/media/" + fn + $ext;
+                    $fext = $ext;
                 }
             });
         }
     }
-    
+
+    // console.log("type:", thingtype, " fn: ", fn, " size: ", fw, "x", fh,  " $fext: ", $fext, " $vn: ", $vn);
     var $v = "";
+    var mediafile = "";
 
     // process things if file was found
     if ( $vn ) {
@@ -1902,6 +1934,7 @@ function returnFile(thingvalue, thingtype) {
             case "png":
             case "gif":
                 $v= "<img width=\"" + fw + "\" height=\"" + fh + "\" src=\"" + $vn + "\">";
+                mediafile = $vn;
                 break;
 
             // video files
@@ -1910,23 +1943,24 @@ function returnFile(thingvalue, thingtype) {
                 $v= "<video width=\"" + fw + "\" height=\"" + fh + "\" autoplay>";
                 $v+= "<source src=\"" + $vn + "\" type=\"video/" + $fext + "\">";
                 $v+= "Video Not Supported</video>";
+
+                mediafile= $vn;
                 break;
                 
             // render web pages in a web iframe
             case "html":
             case "htm":
-            case "php":
                 $v = "<iframe width=\"" + fw + "\" height=\"" + fh + "\" src=\"" + $vn + "\" frameborder=\"0\"></iframe>";
+                mediafile= $vn;
                 break;
 
-            // otherwise just show the contents of the file
+            // otherwise just show a blank just like below
             default:
-                try {
-                    var contents = fs.readFileSync($vn);
-                } catch(e) {
-                    contents = "";
+                if ( thingtype==="custom" ) {
+                    $v = "";
+                } else {
+                    $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\"></div>";
                 }
-                $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\">" + contents + "</div>";
                 break;
         }
     
@@ -1942,6 +1976,11 @@ function returnFile(thingvalue, thingtype) {
     }
 
     thingvalue[thingtype] = $v;
+
+    // TODO - figure out a better way to show large images
+    if ( mediafile ) {
+        thingvalue["_media_"] = mediafile;
+    }
     return thingvalue;
 }
 
@@ -1995,10 +2034,13 @@ function uniqueWords(str) {
 
 function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, customname, wysiwyg) {
     var $tc = "";
-    
-    var bid = thesensor["id"];
-    var thingvalue = setValOrder(thesensor["value"]);
+
+    var thingvalue = thesensor["value"];
+
+    // handle special tiles
     var thingtype = thesensor["type"];
+    var bid = thesensor["id"];
+    thingvalue = setValOrder(thingvalue);
     var defname = thesensor["name"] || "Unknown";
 
     // set type to hint if one is given
@@ -2008,13 +2050,17 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     var hint = thesensor["hint"];
     
     var hubnum = "-1";
+    var refresh = "normal";
     if ( array_key_exists("hubnum", thesensor) ) {
         hubnum = thesensor["hubnum"];
     }
+
+    // use override if there
     if ( array_key_exists("refresh", thesensor) ) {
-        var refresh = thesensor["refresh"];
-    } else {
-        refresh = "normal";
+        refresh = thesensor["refresh"];
+    }
+    if ( array_key_exists("refresh", thingvalue) ) {
+        refresh = thingvalue["refresh"];
     }
 
     var pnames = processName(thesensor["name"], thingtype);
@@ -2136,10 +2182,11 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     } else {
 
         // handle special tiles
+        // don't think this should be here since we now handle this in addspecial
+        thingvalue = getCustomTile(thingvalue, thingtype, bid);
         thingvalue = returnFile(thingvalue, thingtype);
 
 // unfortunately, this no longer works because Google changed how they return image searches
-// 
 //        if ( $thingtype==="music" ) {
 //            $thingvalue = getMusicArt($thingvalue);
 //        }
@@ -2485,13 +2532,13 @@ function addSpecials() {
     var clockidd = "clockdigital";
     var dclock = getClock("Digital Clock", clockidd, "", "M d, Y", "h:i:s A");
     allthings["clock|"+clockidd] = {"id" :  clockidd, "name" :  dclock["name"], 
-        "hubnum" :  hubnum, "type" :  "clock", "refresh": "never", "value" :  dclock};
+        "hubnum" :  hubnum, "type" :  "clock", "refresh": "slow", "value" :  dclock};
 
     // add analog clock tile - no longer use dclock format settings by default
     var clockida = "clockanalog";
     var aclock = getClock("Analog Clock", clockida, "CoolClock:swissRail:72", "M d, Y", "h:i:s A");
     allthings["clock|"+clockida] = {"id" :  clockida, "name" :  aclock["name"], 
-        "hubnum" :  hubnum, "type" :  "clock", "refresh": "never", "value" :  aclock};
+        "hubnum" :  hubnum, "type" :  "clock", "refresh": "slow", "value" :  aclock};
 
     // add special tiles based on type and user provided count
     // this replaces the old code that handled only video and frame tiles
@@ -2502,7 +2549,8 @@ function addSpecials() {
     var specialtiles = utils.getSpecials();
     for (var stype in specialtiles) {
         var sid = specialtiles[stype];
-        var speed = (stype==="frame") ? "slow" : "normal";
+        var speed = sid[4] || "normal";
+        
         var fcnt = getCustomCount(stype, sid[3]);
         if ( fcnt ) {
             for (var i=0; i<fcnt; i++) {
@@ -2512,8 +2560,8 @@ function addSpecials() {
                 var idx = stype + "|" + fid;
                 var fn = getCustomName(stype + k, idx);
                 var ftile = {"name": fn};
-                ftile = returnFile(ftile, stype);
                 ftile = getCustomTile(ftile, stype, fid);
+                ftile = returnFile(ftile, stype);
                 allthings[idx] = {"id":  fid, "name":  ftile["name"], "hubnum":  hubnum, 
                     "type": stype, "refresh": speed, "value":  ftile};
             }
@@ -2524,7 +2572,7 @@ function addSpecials() {
     // keys starting with c__ will get the confirm class added to it
     // this tile cannot be customized by the user due to its unique nature
     // but it can be visually styled just like any other tile
-    var controlval = {"name": "Controller", "showoptions": "Options","refresh": "Refresh","c__refactor": "Reset",
+    var controlval = {"name": "Controller", "showoptions": "Options","refreshpage": "Refresh","c__refactor": "Reset",
                  "c__reauth": "Re-Auth","showid": "Show Info","toggletabs": "Toggle Tabs",
                  "showdoc": "Documentation",
                  "blackout": "Blackout","operate": "Operate","reorder": "Reorder","edit": "Edit"};
@@ -3706,6 +3754,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
     } else if ( (typeof command==="undefined" || command==="") && array_key_exists(swtype, specialtiles) ) {
         var thingvalue = allthings[idx]["value"];
         thingvalue = returnFile(thingvalue, swtype);
+        // thingvalue = getCustomTile(thingvalue, swtype, swid);
         response = thingvalue;
     } else {
 
@@ -3882,12 +3931,28 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
 
 function doQuery(hubid, swid, swtype, tileid, protocol) {
     var result;
-    if ( (swid==="all") || (swid==="fast"  && swtype==="fast") || (swid==="slow" && swtype==="slow") ) {
+    if ( swid==="all" || swid==="fast" || swid==="slow" ) {
+        if ( swid==="all" ) {
+            var rtype = "normal";
+        } else {
+            rtype = swid;
+        }
         result = {};
         for (var idx in (allthings || {}) ) {
             var res = allthings[idx];
-            var item = GLB.options["index"][idx];
-            result[item] = res;
+            var refresh = "normal";
+            if ( array_key_exists("refresh", res) ) {
+                refresh = res["refresh"];
+            }
+            if ( array_key_exists("refresh", res.value) ) {
+                refresh = res.value["refresh"];
+            }
+            if ( refresh===rtype ) {
+                var item = GLB.options["index"][idx];
+                res = getCustomTile(res, res.type, res.id);
+                res = returnFile(res, res.type);
+                result[item] = res;
+            }
         }
     } else {
         if ( (swid==="none" || swtype==="none" || !swtype || !swid || swid==="0") && tileid )  {
@@ -4175,7 +4240,7 @@ function addPage() {
 
 function getInfoPage(returnURL, pathname) {
 
-    readOptions("getInfoPage");
+    // readOptions("getInfoPage");
     var configoptions = GLB.options["config"];
     var skin = configoptions["skin"];
     var hubs = configoptions["hubs"];
@@ -4328,7 +4393,7 @@ function hubFilters(hubpick, ncols) {
         $tc+= "<div class='radiobutton'><input id='" + $hid + "' type='radio' name='huboptpick' value='all'"  + checked + "><label for='" + $hid + "'>All Hubs</label></div>";
         $hid = "hopt_none";
         checked = (hubpick==="-1") ? " checked='1'" : "";
-        $tc+= "<div class='radiobutton'><input id='" + $hid + "' type='radio' name='huboptpick' value='none'" + checked + "><label for='" + $hid + "'>No Hub</label></div>";
+        $tc+= "<div class='radiobutton'><input id='" + $hid + "' type='radio' name='huboptpick' value='-1'" + checked + "><label for='" + $hid + "'>No Hub</label></div>";
         var $hubcount = 0;
         $hubs.forEach(function($hub) {
             var $hubName = $hub["hubName"];
@@ -4469,8 +4534,8 @@ function tsk($timezone, $skin, $uname, $port, $webSocketServerPort, $fast_timer,
     $tc += "<div><label class=\"startupinp\">WebSocket Port: </label>";
     $tc += "<input id=\"newsocketport\" class=\"startupinp\" name=\"webSocketServerPort\" width=\"20\" type=\"text\" value=\"" + $webSocketServerPort + "\"/></div>"; 
 
-    // $tc += "<div><label class=\"startupinp\">Fast Timer: </label>";
-    // $tc += "<input id=\"newfast_timer\" class=\"startupinp\" name=\"fast_timer\" width=\"20\" type=\"text\" value=\"" + $fast_timer + "\"/></div>"; 
+    $tc += "<div><label class=\"startupinp\">Fast Timer: </label>";
+    $tc += "<input id=\"newfast_timer\" class=\"startupinp\" name=\"fast_timer\" width=\"20\" type=\"text\" value=\"" + $fast_timer + "\"/></div>"; 
 
     $tc += "<div><label class=\"startupinp\">Slow Timer: </label>";
     $tc += "<input id=\"newslow_timer\" class=\"startupinp\" name=\"slow_timer\" width=\"20\" type=\"text\" value=\"" + $slow_timer + "\"/></div>"; 
@@ -4803,7 +4868,7 @@ function mainPage(proto, hostname, pathname) {
     if ( !kioskmode ) {
         $tc += "<div id=\"controlpanel\">";
         $tc +='<div id="showoptions" class="formbutton">Options</div>';
-        $tc +='<div id="refresh" class="formbutton">Refresh</div>';
+        $tc +='<div id="refreshpage" class="formbutton">Refresh</div>';
         // $tc +='<div id="refactor" class="formbutton confirm">Refactor</div>';
         $tc +='<div id="reauth" class="formbutton confirm">Hub Auth</div>';
         $tc +='<div id="showid" class="formbutton">Show Info</div>';
@@ -5325,7 +5390,9 @@ function addCustom(swid, swtype, swval, swattr, subid) {
     var idx = swtype + "|" + swid;
     
     // make the new custom field using the updated options above
-    var thingval = getCustomTile(allthings[idx]["value"], swtype, swid);
+    var thingval = allthings[idx]["value"];
+    thingval = getCustomTile(thingval, swtype, swid);
+    thingval = returnFile(thingval, swtype);
 
     // save it in the main array - no need for sessions in Node
     allthings[idx]["value"] = thingval;
@@ -5381,10 +5448,14 @@ function delCustom(swid, swtype, swval, swattr, subid) {
     if ( array_key_exists(companion, thingval) ) {
         delete thingval[companion];
     }
+
+    // save here before calling because these routines use this array
     allthings[idx]["value"] = thingval;
 
     // make the new custom field using the updated options above
+    // thingval = returnFile(thingval, swtype);
     thingval = getCustomTile(thingval, swtype, swid);
+    thingval = returnFile(thingval, swtype);
    
     // save it in the main array - no need for sessions in Node
     allthings[idx]["value"] = thingval;
@@ -5567,16 +5638,16 @@ function apiCall(body, protocol) {
                 // the same effect can be had by deleting your hmoptions.cfg file
                 // but this will remove all customizations. This routine attempted to save them but it isn't working right now
                 // refactorOptions();
-                getAllThings();
+                // getAllThings(true);
                 result = "success";
             } else {
                 result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
             }
             break;
     
-        case "refresh":
+        case "refreshpage":
             if ( protocol==="POST" ) {
-                getAllThings();
+                getAllThings(true);
                 result = "success";
             } else {
                 result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
@@ -5621,14 +5692,15 @@ function apiCall(body, protocol) {
             }
             break;
 
-        
+        // this returns the existing things and optionally updates them
+        // the update will not be returned but could be retrieved on a second separate call
         case "getallthings":
         case "getthings":
         case "things":
-            if ( swattr==="reload" ) {
-                getAllThings();
-            }
             result = clone(allthings);
+            if ( swattr==="reload" ) {
+                getAllThings(true);
+            }
             break;
                 
         case "hubs":
@@ -5784,7 +5856,9 @@ function apiCall(body, protocol) {
                 readOptions("updcustom");
                 result.options = GLB.options;
                 var idx = swtype + "|" + swid;
-                var pvalue = getCustomTile(allthings[idx].value, swtype, swid);
+                var pvalue = allthings[idx].value;
+                pvalue = getCustomTile(pvalue, swtype, swid);
+                pvalue = returnFile(pvalue, swtype);
                 allthings[idx]["value"] = pvalue;
                 result.things = allthings;
             } else {
@@ -5912,13 +5986,13 @@ function apiCall(body, protocol) {
                     // console.log("hubType= ", hubType);
                     if ( hubType==="ISY" ) {
                         // console.log("get devices...");
-                        getDevices(hubnum, hubType, accesstoken, hubEndpt, clientId, clientSecret, hubName, "/reauth");
+                        getDevices(hubnum, hubType, accesstoken, hubEndpt, clientId, clientSecret, hubName, true, "/reauth");
                     } else {
                         getHubInfo(hub, accesstoken, hubEndpt, clientId, clientSecret);
                     }
 
                     // writeOptions(GLB.options, true);
-                    // getDevices(hubnum, hubType, accesstoken, hubEndpt, clientId, clientSecret, hubName, "/reauth");
+                    // getDevices(hubnum, hubType, accesstoken, hubEndpt, clientId, clientSecret, hubName, true, "/reauth");
                     result = {action: "things", hubType: hubType, hubName: hubName};
                     if ( DEBUG2 ) {
                         console.log( (ddbg()), "Device retrieval initiated: ", result);
@@ -5955,7 +6029,11 @@ function apiCall(body, protocol) {
                 var result = "error - [" + api + "] API call is no longer supported. Try loading browser with: " + GLB.returnURL + "/" + api;
                 console.log( (ddbg()), result);
                 break;
-                
+
+        case "reload":
+            pushClient("reload", "/");
+            break;
+
         case "reset":
             if ( protocol==="GET" ) {
                 readOptions("reset");
@@ -6168,7 +6246,7 @@ try {
 // retrieve all nodes/things
 // client pages are refreshed when each hub is done reading
 if ( app && applistening ) {
-    getAllThings();
+    getAllThings(true);
 
     var maxroom = 0;
     if ( array_key_exists("things", GLB.options) && 
@@ -6255,7 +6333,6 @@ if ( app && applistening ) {
             res.end();
 
         } else if ( req.path==="/showid") {
-            // readOptions();
             $tc = getInfoPage(GLB.returnURL, req.path);
             res.send($tc);
             res.end();
@@ -6274,7 +6351,7 @@ if ( app && applistening ) {
             res.end();
 
         } else if ( req.path==="/reauth") {
-            readOptions();
+            // readOptions();
             d = new Date();
             hpcode = d.getTime();
             GLB.hpcode = hpcode.toString();
@@ -6304,7 +6381,7 @@ if ( app && applistening ) {
 
         } else if ( req.path==="/reset") {
             readOptions();
-            getAllThings();
+            getAllThings(true);
             res.send("Resetting...");
             res.end();
 
@@ -6353,7 +6430,7 @@ if ( app && applistening ) {
                 console.log( (ddbg()), "New hub authorized; updating things in hpserver.");
             }
             readOptions();
-            getAllThings();
+            getAllThings(true);
         
         // handle callbacks from ST and HE here
         // for ISY this is done via websockets above

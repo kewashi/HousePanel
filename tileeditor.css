@@ -32,7 +32,7 @@ body {
 }
 @media (orientation: landscape) {
     #dragregion, #dragregion div.panel {
-        min-height: 700px;
+        min-height: 650px;
         width: 1200px;
     }
     .ui-tabs .ui-tabs-nav .ui-tabs-anchor {
@@ -45,7 +45,7 @@ body {
 @media (orientation: portrait) {
     #dragregion, #dragregion div.panel {
         min-height: 1200px;
-        width: 700px;
+        width: 650px;
     }
     .ui-tabs .ui-tabs-nav .ui-tabs-anchor {
         font-size: 10pt;
@@ -274,6 +274,10 @@ ul.ui-tabs-nav {
 }
 div.overlay.hidden, .hidden, ul.ul-tabs-nav.hidden {
     display: none;
+}
+input.disabled, button.disabled {
+    opacity: 0.5;
+    pointer-events: none;
 }
 
 .shown, ul.ul-tabs-nav.shown {
@@ -819,17 +823,19 @@ div.editheader {
 
 div.editlink, div.cmzlink, div.dellink, div.sortnum,
 div.editpage, div.delpage, div.addpage {
-    border: 2px solid white; 
-    color: rgba(255, 255, 255, 0.5);
+    border: 1px solid white; 
     border-radius: 50%;
     width: 18px; height: 18px;
+    color: rgba(255, 255, 255, 1);
     position: absolute; 
     z-index: 51; 
     top: 5px;
     cursor: pointer;
 }
 div.editpage, div.editlink {
-    background-color: rgba(0, 134, 0, 0.6);
+    background-color: rgba(255, 255, 255, 0.01);
+    background-image: url("media/editgear.png");
+    background-size: 32px;
     left: 0px;
 }
 div.delpage, div.dellink {
@@ -839,7 +845,6 @@ div.delpage, div.dellink {
 
 div.cmzlink {
     background-color: rgba(0, 0, 192, 0.6);
-    right: 0px;
 }
 div.editlink, div.dellink, div.cmzlink {
     top: 12px;
@@ -849,18 +854,18 @@ div.editlink {
     width: 32px; height: 32px;
 }
 div.cmzlink {
-    top: 40px;
-}
-div.cmzlink {
-    left: 36px;
+    top: 50px;
 }
 div.addpage {
     font-size: 14px;
-    padding: 2px;
     border-radius: 0;
-    width: 40px; height: 24px;
-    background-color: rgba(0, 102, 102, 1);
-    right: 2px;
+    width: 120px; 
+    height: 24px;
+    background-color: rgb(10, 10, 10);
+    color: white;
+    right: 105px;
+    padding-left: 15px;
+    padding-top: 7px;
 }
 div.sortnum {
     top: 12px;
@@ -871,7 +876,7 @@ div.sortnum {
     border: 2px solid black; 
     color: black;
     font-weight: bold;
-    left: 0px;
+    right: 2px;
 }
 
 div.wholetile {
@@ -998,6 +1003,7 @@ div.editInfo {
     margin-left: 2px;
     margin-right: 2px;
     margin-bottom: 10px;
+    margin-top: 18px;
     font-size: 11pt;
     color: white;
 }
@@ -1849,5 +1855,8 @@ div.isy.lastRunTime, div.isy.lastFinishTime {
 }
 
 div.thing.isy-thing div.overlay.ERR {
+    display: none;
+}
+div.overlay._media_ {
     display: none;
 }

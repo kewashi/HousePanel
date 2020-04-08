@@ -1,6 +1,7 @@
 'use strict';
 
 var devhistory =  ` 
+2.240      Hub reauth push happens everywhere now and other bug fixes
 2.230      POST action fix and other bug fixes
             - redesigned customcss save architecture to be more robust
             - fix tile editor to properly deal with header edits
@@ -464,15 +465,16 @@ exports.getFooter = function getFooter() {
 // define the default setup of custom tiles
 // first element is the id name
 // next two are the default sizes for making the tile
-// the last parameter is the default number of tiles
+// the next parameter is the default number of tiles
+// last parameter is the refresh flag indicator
 exports.getSpecials = function getSpecials() {
     var obj =
         {
-            "video":  ["vid",480,240, 4], 
-            "frame":  ["frame",480,212, 4],
-            "image":  ["img",480,240, 4],
-            "blank":  ["blank",120,150, 2],
-            "custom": ["custom_",120,150, 8]
+            "video":  ["vid",480,240, 4, "normal"], 
+            "frame":  ["frame",480,212, 4, "slow"],
+            "image":  ["img",480,240, 4, "normal"],
+            "blank":  ["blank",120,150, 2, "never"],
+            "custom": ["custom_",120,150, 8, "normal"]
         };
     return obj;
 }

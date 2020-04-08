@@ -79,7 +79,7 @@ function customizeTile(thingindex, aid, bid, str_type, hubnum) {
     
     // create a function to display the dialog
     var dodisplay = function() {
-        var pos = {top: 150, left: 250};
+        var pos = {top: 150, left: 250, zindex: 999};
         createModal("modalcustom", dh, "body", "Done", pos, 
             // function invoked upon leaving the dialog
             function(ui, content) {

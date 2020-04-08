@@ -1007,15 +1007,3 @@ div.thermostat-thing div.thingname {
 div.music-thing div.thingname, div.audio-thing div.thingname {
     width: 100%;
 }
-div.overlay.image div.image.image1 {
-    background-image: url('http://192.168.11.20/smartthings/media/livingroom.jpg');
-}
-div.overlay.image div.image.image2 {
-    background-image: url('http://192.168.11.20/smartthings/media/mudcam.jpg');
-}
-div.overlay.image div.image.image3 {
-    background-image: url('http://192.168.11.20/smartthings/media/garagepic.jpg');
-}
-div.overlay.image div.image.image4 {
-    background-image: url('http://192.168.11.20/smartthings/media/myhouse.jpg');
-}

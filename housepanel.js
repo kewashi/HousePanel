@@ -38,7 +38,7 @@ var reordered = false;
 // use the timers options to turn off polling
 var disablepub = false;
 var disablebtn = false;
-var LOGWEBSOCKET = true;
+var LOGWEBSOCKET = false;
 
 Number.prototype.pad = function(size) {
     var s = String(this);
@@ -335,16 +335,15 @@ function setupUserOpts() {
         var slow_timer = config.slow_timer;
         slow_timer = parseInt(slow_timer, 10);
     } catch(err) {
-        console.log ("Couldn't retrieve timers; using defaults. err: ", err);
+        console.log ("Couldn't retrieve slow or fast timers; using defaults. err: ", err);
         fast_timer = 0;
-        slow_timer = 3600000;
+        slow_timer = 24 * 3600;
     }
 
     // this can be disabled by setting anything less than 1000
-    // dont need fast timers for Node since it has state
-    // if ( fast_timer && fast_timer >= 1000 ) {
-    //     setupTimer(fast_timer, "fast", -1);
-    // }
+    if ( fast_timer && fast_timer >= 1000 ) {
+        setupTimer(fast_timer, "fast", -1);
+    }
 
     if ( slow_timer && slow_timer >= 1000 ) {
         setupTimer(slow_timer, "slow", -1);
@@ -425,7 +424,7 @@ function setupWebsocket()
         var reservedcap = ["name", "DeviceWatch-DeviceStatus", "DeviceWatch-Enroll", "checkInterval", "healthStatus"];
         try {
             var presult = JSON.parse(evt.data);
-            console.log("pushClient: ", presult);
+            // console.log("pushClient: ", presult);
             var bid = presult.id;
             var thetype = presult.type;
             var pvalue = presult.value;
@@ -1419,7 +1418,7 @@ function execButton(buttonid) {
         var snap = $("#mode_Snap").prop("checked");
         console.log("snap mode: ",snap);
 
-    } else if ( buttonid==="refresh" ) {
+    } else if ( buttonid==="refreshpage" ) {
         var pstyle = "position: absolute; background-color: red; color: white; font-weight: bold; font-size: 32px; left: 400px; top: 300px; width: 400px; height: 200px; margin-top: 50px;";
         createModal("info", "Screen will refresh in<br/>10 seconds...","body", false, {style: pstyle});
         dynoPost(buttonid);
@@ -1443,7 +1442,7 @@ function checkInputs() {
 
     var port = $("input[name='port']").val().trim();
     var webSocketServerPort = $("input[name='webSocketServerPort']").val().trim();
-    // var fast_timer = $("input[name='fast_timer']").val();
+    var fast_timer = $("input[name='fast_timer']").val();
     var slow_timer = $("input[name='slow_timer']").val().trim();
     var uname = $("input[name='uname']").val().trim();
     var pword = $("input[name='pword']").val().trim();
@@ -1469,10 +1468,10 @@ function checkInputs() {
         }
     }
 
-    // if ( !intre.test(fast_timer) ) {
-    //     errs.fast_timer = " " + fast_timer + ", must be an integer; enter 0 to disable";
-    //     isgood = false;
-    // }
+    if ( !intre.test(fast_timer) ) {
+        errs.fast_timer = " " + fast_timer + ", must be an integer; enter 0 to disable";
+        isgood = false;
+    }
     if ( !intre.test(slow_timer) ) {
         errs.slow_timer = " " + slow_timer + ", must be an integer; enter 0 to disable";
         isgood = false;
@@ -1524,10 +1523,20 @@ function setupButtons() {
             }
         });
     }
-        
-    $("button.infobutton").on('click', function() {
-        window.location.href = cm_Globals.returnURL;
-    });
+
+    // disable cancel auth button when page first loads
+    // and turn it on after 10 seconds which gives time for hubs to load
+    if ( $("button.infobutton") ) {
+        $("button.infobutton").addClass("disabled").prop("disabled", true);
+        setTimeout(function() {
+            $("button.infobutton").removeClass("disabled").prop("disabled", false);
+        }, 500);
+            
+        $("button.infobutton").on('click', function() {
+            // location.reload(true);
+            window.location.href = cm_Globals.returnURL;
+        });
+    }
 
     if ( pagename==="main" && !disablebtn ) {
 
@@ -1636,23 +1645,23 @@ function setupButtons() {
             });
         });
 
-        // send user to options page if first time
-        // user is done authorizing so make an API call to clean up
-        // and then return to the main app
-        $("#cancelauth").click(function(evt) {
-            window.location.href = cm_Globals.returnURL + "/showoptions";
-            // $.post(cm_Globals.returnURL, 
-            //     {useajax: "cancelauth", id: "", type: "none"},
-            //     function (presult, pstatus) {
-            //         if (pstatus==="success") {
-            //             window.location.href = cm_Globals.returnURL + "/showoptions";
-            //         } else {
-            //             window.location.href = cm_Globals.returnURL;
-            //         }
-            //     }
-            // );
-            evt.stopPropagation(); 
-        });
+        // disable cancel auth button when page first loads
+        // and turn it on after 10 seconds which gives time for hubs to load
+        // $("#cancelauth").addClass("disabled").prop("disabled", true);
+        // setTimeout(function() {
+        //     $("#cancelauth").removeClass("disabled").prop("disabled", false);
+        // }, 2000);
+
+        // // send user to options page if first time
+        // // user is done authorizing so make an API call to clean up
+        // // and then return to the main app
+        // $("#cancelauth").click(function(evt) {
+        //     // send a post to server to tell it to reload all the screens
+        //     $.post(cm_Globals.returnURL, 
+        //         {useajax: "reload", id: 0, type: "none"} );
+        //     // window.location.href = cm_Globals.returnURL + "/showoptions";
+        //     evt.stopPropagation(); 
+        // });
         
         // TODO - test and activate this feature
         $("input.hubdel").click(function(evt) {
@@ -1725,7 +1734,7 @@ function addEditLink() {
     })
     
     // add link to add a new page
-    var editdiv = "<div id=\"addpage\" class=\"addpage\" roomnum=\"new\">Add</div>";
+    var editdiv = "<div id=\"addpage\" class=\"addpage\" roomnum=\"new\">Add New Page</div>";
     $("#roomtabs").append(editdiv);
     
     $("div.editlink").on("click",function(evt) {
@@ -2494,6 +2503,8 @@ function setupPage() {
         var aid = $(this).attr("aid");
         var subid = $(this).attr("subid");
         var id = $(this).attr("id");
+
+        // alert("Clicked... id = " + id + " aid= " + aid + " subid= " + subid + " priorMode= " + priorOpmode);
         
         // avoid doing click if the target was the title bar
         // also skip sliders tied to subid === level or colorTemperature
@@ -2548,6 +2559,8 @@ function setupPage() {
                 pw = pwsib.children("div.password").html();
             }
         }
+
+        // alert("Clicked... id = " + id + " aid= " + aid + " subid= " + subid + " priorMode= " + priorOpmode + " pw= " + pw);
             
         // now ask user to provide a password to activate this tile
         // or if an empty password is given this becomes a confirm box
@@ -2748,6 +2761,13 @@ function processClick(that, thingname) {
                  || (thetype==="custom" && subid==="custom") ) {
         console.log("Refreshing special tile type: " + thetype);
         $(targetid).html(thevalue);
+
+        // open all images that are graphics files in a new window
+        var sibimage = $('#a-'+aid+'-_media_');
+        if ( sibimage && sibimage.html() ) {
+            window.open(sibimage.html(), "_blank");
+            return;
+        }
         
         // show popup window for blanks and customs
         if ( cm_Globals.allthings && (thetype==="blank" || thetype==="custom") ) {

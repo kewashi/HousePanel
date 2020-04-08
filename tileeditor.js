@@ -101,7 +101,7 @@ function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, hubName, h
     
     // create a function to display the tile
     var dodisplay = function() {
-        var pos = {top: 100, left: 200, zindex: 99999};
+        var pos = {top: 100, left: 200, zindex: 998};
         createModal("modalid", dialog_html, "body", true, pos, 
             // function invoked upon leaving the dialog
             function(ui, content) {
@@ -1060,8 +1060,8 @@ function loadSubSelect(str_type, firstsub, thingindex) {
         subcontent += "<option value='tab'>Tab Inactive</option>";
         subcontent += "<option value='tabon'>Tab Active</option>";
     } else {
-        subcontent += "<br><div class='editInfo'><button class='cm_button' id='cm_activateCustomize'>Customize</button></div>";
-        subcontent += "<br><div class='editInfo'>Select Feature:</div>";
+        subcontent += "<div class='editInfo'><button class='cm_button' id='cm_activateCustomize'>Customize</button></div>";
+        subcontent += "<div class='editInfo'>Select Feature:</div>";
         subcontent += "<select id='subidselect' name='subselect'>";
     
         if ( firstsub === "wholetile" ) {
