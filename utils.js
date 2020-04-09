@@ -1,6 +1,7 @@
 'use strict';
 
 var devhistory =  ` 
+2.242      Fix bug that prevented variable arrows from working
 2.241      Hub reauth push happens everywhere now and other bug fixes
             - added flag to neuter all RULES capabilities
             - rtsp and other JSON object support returned from hubs

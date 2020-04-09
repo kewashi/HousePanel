@@ -3753,7 +3753,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
 
     function testclick(clktype, clkid) {
         var test = false;
-        if ( clkid.startsWith("_") ) {
+        if ( clkid.startsWith("_") || clkid.endsWith("-up") || clkid.endsWith("-dn") ) {
             return test;
         }
 
