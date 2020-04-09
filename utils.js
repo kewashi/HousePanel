@@ -1,7 +1,10 @@
 'use strict';
 
 var devhistory =  ` 
-2.240      Hub reauth push happens everywhere now and other bug fixes
+2.241      Hub reauth push happens everywhere now and other bug fixes
+            - added flag to neuter all RULES capabilities
+            - rtsp and other JSON object support returned from hubs
+            - more bug fixes and tweaks
 2.230      POST action fix and other bug fixes
             - redesigned customcss save architecture to be more robust
             - fix tile editor to properly deal with header edits
@@ -400,7 +403,7 @@ exports.hidden = function hidden(pname, pvalue, id) {
 exports.getHeader = function getHeader(skin) {
     
     var $tc = '<!DOCTYPE html>';
-    $tc += '<html><head><title>House Panel</title>';
+    $tc += '<html><head><title>HousePanel</title>';
     $tc += '<meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">';
     
     // specify icon and color for windows machines

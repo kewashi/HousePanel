@@ -13,6 +13,7 @@ cm_Globals.reload = false;
 cm_Globals.thingindex = null;
 cm_Globals.thingidx = null;
 cm_Globals.defaultclick = "name";
+var ENABLERULES = true;
 
 function getDefaultSubids() {
     var thingindex = cm_Globals.thingindex;
@@ -58,7 +59,14 @@ function customizeTile(thingindex, aid, bid, str_type, hubnum) {
     try {
         cm_Globals.returnURL = $("input[name='returnURL']").val();
     } catch(e) {
-        cm_Globals.returnURL = "housepanel.php";
+        cm_Globals.returnURL = "http://localhost:3080";
+    }
+
+    // get the rules const
+    try {
+        ENABLERULES = $("input[name='enablerules']").val() === "true";
+    } catch(e) {
+        ENABLERULES = true;
     }
 
     dh += "<div class='editheader' id='cm_header'>Customizing Tile #" + thingindex + "</div>";
@@ -161,7 +169,9 @@ function customTypePanel() {
         dh+= "<option value='PUT'>PUT</option>";
         dh+= "<option value='URL'>URL</option>";
         dh+= "<option value='LINK'>LINK</option>";
-        dh+= "<option value='RULE'>RULE</option>";
+        if ( ENABLERULES ) {
+            dh+= "<option value='RULE'>RULE</option>";
+        }
     dh+= "</select>";
     dh+= "</div></div>";
 
@@ -573,7 +583,7 @@ function initCustomActions() {
             content = loadServicePanel(customType);
             $("#cm_dynoContent").html(content);
             initExistingFields();
-        } else if ( customType ==="RULE" ) {
+        } else if ( ENABLERULES && customType ==="RULE" ) {
             content = loadRulePanel();
             $("#cm_dynoContent").html(content);
             initExistingFields();
@@ -847,7 +857,7 @@ function handleBuiltin(subid) {
         if (cmtype==="POST" || cmtype==="GET" || cmtype==="POST" || cmtype==="PUT") {
             content = loadUrlPanel();
             $("#cm_dynoContent").html(content);
-        } else if (cmtype==="RULE") {
+        } else if ( ENABLERULES && cmtype==="RULE") {
             content = loadRulePanel();
             $("#cm_dynoContent").html(content);
         } else {

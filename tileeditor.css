@@ -5,6 +5,7 @@ Of course, anything here can be overridden by a skin since
 this file is loaded first, so nothing if carved in stone
 By moving things here we reduce the skin file to the bare needs
 
+* 04/08/2020 - rtsp styling, ISY hub support, hide _media_ subid
 * 01/02/2020 - minor tweaks to make floor plan skins look right
 
 */
@@ -162,16 +163,6 @@ div.greetingopts div.authhub {
 }
 
 div.maintable {
-/*    transform: scale(0.6);
-    -ms-transform: scale(0.6);
-    -moz-transform: scale(0.6);
-    -o-transform: scale(0.6);
-    -webkit-transform: scale(0.6);
-    transform-origin: 0 0;
-    -ms-transform-origin: 0 0;
-    -moz-transform-origin: 0 0;
-    -o-transform-origin: 0 0;
-    -webkit-transform-origin: 0 0;*/
     width: auto;
 }
 
@@ -1858,5 +1849,10 @@ div.thing.isy-thing div.overlay.ERR {
     display: none;
 }
 div.overlay._media_ {
+    display: none;
+}
+div.rtsp {
+    overflow-wrap: break-word;
+    width: 240px;
     display: none;
 }

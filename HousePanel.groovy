@@ -17,6 +17,7 @@
  * it displays and enables interaction with switches, dimmers, locks, etc
  * 
  * Revision history:
+ * 04/09/2020 - mode change fix from 03/29 update
  * 04/02/2020 - fix bug in mode and return only one now
  * 03/29/2020 - clean up mode and fix hub pushes to be more reliable
  * 02/02/2020 - added secondary hub push and include hub id in the push
@@ -1467,6 +1468,7 @@ def setMode(swid, cmd, swattr, subid) {
     }
 
     logger("Mode changed to $newsw", "info");
+    location.setMode(newsw);
     resp =  [ themode: newsw ];
     
     return resp

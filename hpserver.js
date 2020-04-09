@@ -2,9 +2,8 @@
 process.title = 'hpserver';
 
 // debug options
-const DEBUG1 = true;                // basic debug info - file loading, hub loading
-const DEBUG2 = false;               // authorization flow
-const DEBUG2P = true;               // ISY programs
+const DEBUG1 = false;               // basic debug info - file loading, hub loading
+const DEBUG2 = false;               // authorization flow and ISY programs
 const DEBUG3 = false;               // passwords
 const DEBUG4 = false;               // index, filters, options
 const DEBUG5 = false;               // hub node detail
@@ -19,8 +18,11 @@ const DEBUG13 = false;              // URL callbacks
 const DEBUG14 = false;              // tile link details
 const DEBUG15 = false;              // allthings and options dump
 const DEBUG16 = false;              // customtiles writing
+const DEBUG17 = false;              // push client
 
-const IGNOREPW = false;
+const IGNOREPW = false;             // set this to true to accept any text as a valid password
+const DONATE = false;               // set this to true to enable donation section
+const ENABLERULES = true;           // set this to false to neuter all rules
 
 // websocket and http servers
 var webSocketServer = require('websocket').server;
@@ -770,7 +772,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                             programlist.forEach(function(prog) {
                                 var proginfo = prog["$"];
                                 var isfolder = proginfo.folder;
-                                if ( DEBUG2P ) {
+                                if ( DEBUG2 ) {
                                     console.log( (ddbg()), "Program details: ", UTIL.inspect(prog, false, null, false) );
                                 }
 
@@ -1275,7 +1277,6 @@ function getLoginPage() {
 }
 
 function getAuthPage(hostname, hpcode) {
-    const DONATE = false;
     var $tc = "";
     var skin = getSkin();
     $tc += utils.getHeader(skin);
@@ -2153,9 +2154,9 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
         $tc += putElement(kindex, cnt, 4, thingtype, wiconstr, "weatherIcon");
         $tc += putElement(kindex, cnt, 5, thingtype, ficonstr, "forecastIcon");
         $tc += "</div>";
-        $tc += putElement(kindex, cnt, 6, thingtype, "Sunrise: " + thingvalue["localSunrise"] + " Sunset: " + thingvalue["localSunset"], "sunriseset");
+        // $tc += putElement(kindex, cnt, 6, thingtype, "Sunrise: " + thingvalue["localSunrise"] + " Sunset: " + thingvalue["localSunset"], "sunriseset");
         
-        var j = 7;
+        var j = 6;
         for ( var tkey in thingvalue ) {
             if (tkey!=="temperature" &&
                 tkey!=="feelsLike" &&
@@ -2209,17 +2210,35 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
             for ( var tkey in thingvalue ) {
                 var helperkey = "user_" + tkey;
                 var tval = thingvalue[tkey];
+
+                // check value for "json" strings
+                try {
+                    var jsontval = JSON.parse(tval);
+                } catch(jerr) {
+                    jsontval = null;
+                }
                 
                 // handle the new Sonos audio type which has a media type with details
                 // but even this is skipped if a user field was given to override it
-                if ( thingtype==="audio" && tkey==="audioTrackData" && !array_key_exists(helperkey, thingvalue) ) {
-                    var audiodata = JSON.parse(tval);
-                    $tc += putElement(kindex, cnt, j,   thingtype, audiodata["title"], "trackDescription", "trackDescription", bgcolor);
-                    $tc += putElement(kindex, cnt, j+1, thingtype, audiodata["artist"], "currentArtist", "currentArtist", bgcolor);
-                    $tc += putElement(kindex, cnt, j+2, thingtype, audiodata["album"], "currentAlbum", "currentAlbum", bgcolor);
-                    $tc += putElement(kindex, cnt, j+3, thingtype, audiodata["albumArtUrl"], "trackImage", "trackImage", bgcolor);
-                    $tc += putElement(kindex, cnt, j+4, thingtype, audiodata["mediaSource"], "mediaSource", "mediaSource", bgcolor);
+                if ( thingtype==="audio" && tkey==="audioTrackData" && jsontval && typeof jsontval==="object" && !array_key_exists(helperkey, thingvalue) ) {
+                    var audiodata = jsontval;
+                    $tc += putElement(kindex, cnt, j,   thingtype, audiodata["title"], "trackDescription", subtype, bgcolor);
+                    $tc += putElement(kindex, cnt, j+1, thingtype, audiodata["artist"], "currentArtist", subtype, bgcolor);
+                    $tc += putElement(kindex, cnt, j+2, thingtype, audiodata["album"], "currentAlbum", subtype, bgcolor);
+                    $tc += putElement(kindex, cnt, j+3, thingtype, audiodata["albumArtUrl"], "trackImage", subtype, bgcolor);
+                    $tc += putElement(kindex, cnt, j+4, thingtype, audiodata["mediaSource"], "mediaSource", subtype, bgcolor);
                     j = j+5;	
+                }
+
+                // handle other cases where the value is an object like audio
+                else if ( jsontval && typeof jsontval==="object" && !array_key_exists(helperkey, thingvalue) ) {
+                    for (var jtkey in jsontval ) {
+                        var jtval = jsontval[jtkey];
+                        if ( jtval ) {
+                            $tc += putElement(kindex, cnt, j, thingtype, jtval, jtkey, subtype, bgcolor);
+                            j++;
+                        }
+                    }
                 }
                 
                 else if ( typeof tkey==="string" && tkey.substring(0,5)!=="user_" && (typeof tval==="string" || typeof tval==="number") ) { 
@@ -2333,6 +2352,11 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         colorval = bgcolor;
     }
     if ( !tval ) { tval = ""; }
+
+    // do nothing if this is a rule and rules are disabled
+    if ( !ENABLERULES && typeof tval==="string" && tval.substr(0,6)==="RULE::" ) {
+        return $tc;
+    }
         
     // fix thermostats to have proper consistent tags
     // this is supported by changes in the .js file and .css file
@@ -2379,7 +2403,8 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
                    !isNaN(+tval) || thingtype===tval || tval==="" || 
                    (tval.substr(0,5)==="track") || 
                    (tval.substr(0,7)==="number_") || 
-                   (tval.substr(0,4)==="http") ||
+                //    (tval.substr(0,4)==="http") ||
+                   (tval.indexOf("://")!==-1) ||
                    (tval.indexOf(" ")!==-1) ) {
             extra = "";
         } else {
@@ -2397,6 +2422,9 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
             var powmod = parseInt(tval);
             powmod = powmod - (powmod % 10);
             tval = "<div style=\"width: " + tval + "%\" class=\"ovbLevel L" + powmod.toString() + "\"></div>";
+        } else if ( tval && typeof tval==="string" && tval.startsWith("rtsp:") && tval.length > 40 ) {
+            extra = extra + " rtsp";
+            // tval = "<div class=\"rtspwrap\">" + tval + "</div>";
         }
         
         // for music status show a play bar in front of it
@@ -2445,7 +2473,7 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         if (sibling) { $tc += sibling; }
         if ( tkey === "level" || tkey==="colorTemperature" || tkey==="volume" || tkey==="groupVolume" ) {
             $tc += aidi + ttype + " subid=\""+tkey+"\" value=\""+tval+"\" title=\""+tkey+"\" class=\"" + thingtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\"></div>";
-        } else if ( thingtype==="other" && tval.substr(0,7)==="number_" ) {
+        } else if ( thingtype==="other" && typeof tval==="string" && tval.substr(0,7)==="number_" ) {
             var numval = tkey.substring(8);
             $tc += aidi + ttype + " subid=\"" + tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\">" + numval + "</div>";
         } else {
@@ -2735,7 +2763,7 @@ function getCustomTile(custom_val, customtype, customid) {
                     custom_val[companion] = "::" + calltype + "::" + posturl;
                     custom_val[subid] = "URL::" + subid;
                
-                } else if ( calltype==="RULE" ) {
+                } else if ( ENABLERULES && calltype==="RULE" ) {
                     custom_val[companion] = "::" + calltype + "::" + content;
                     custom_val[subid] = "RULE::" + subid;
 
@@ -2825,7 +2853,7 @@ function processHubMessage(hubmsg) {
 
             // process rules and links
             // avoid against duplicate calls
-            if ( !GLB.rules[entry.id] && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
+            if ( ENABLERULES && subid && !GLB.rules[entry.id] && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
                 processRules(entry.id, entry.type, subid, entry['value']);
                 processLinks(entry.id, entry.type, subid, entry['value']);
                 GLB.rules[entry.id] = true;
@@ -2895,7 +2923,7 @@ function processIsyMessage(isymsg) {
                     pushClient(bid, "isy", subid, pvalue, false, false);
 
                     // process rules and links
-                    if ( GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true ) {
+                    if ( ENABLERULES && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
                         processRules(bid, "isy", subid, pvalue);
                         processLinks(bid, "isy", subid, pvalue);
                         GLB.rules[bid] = true;
@@ -2935,7 +2963,7 @@ function processIsyMessage(isymsg) {
                         pushClient(bid, "isy", subid, pvalue, false, false);
 
                         // process rules and links
-                        if ( GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true ) {
+                        if ( ENABLERULES && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
                             processRules(bid, "isy", subid, pvalue);
                             processLinks(bid, "isy", subid, pvalue);
                             GLB.rules[bid] = true;
@@ -3401,6 +3429,9 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
     // if this is a screen reload request only the triggering screen should reload
     for (var i=0; i < clients.length; i++) {
         entry["client"] = i;
+        if ( DEBUG17 ) {
+            console.log("Pushing client #", i, " id: ", entry.id);
+        }
         clients[i].sendUTF(JSON.stringify(entry));
     }
 
@@ -3580,7 +3611,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
             if ( body ) {
                 pushClient(swid, swtype, subid, body, linkinfo, popup);
 
-                if ( subid && GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true ) {
+                if ( ENABLERULES && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
                     processRules(swid, swtype, subid, body);
                     processLinks(swid, swtype, subid, body);
                     GLB.rules[swid] = true;
@@ -3613,7 +3644,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
             if ( rres && rres.status.toString()==="200" ) {
                 pushClient(swid, swtype, subid, isyresp, linkinfo, popup);
 
-                if ( subid && GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true ) {
+                if ( ENABLERULES && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
                     processRules(swid, swtype, subid, isyresp);
                     processLinks(swid, swtype, subid, isyresp);
                     GLB.rules[swid] = true;
@@ -3720,8 +3751,30 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
     var response = {};
     var idx;
 
+    function testclick(clktype, clkid) {
+        var test = false;
+        if ( clkid.startsWith("_") ) {
+            return test;
+        }
+
+        if (  clktype==="contact" || clktype==="presence" || clktype==="motion" || clktype==="weather" || clktype==="clock" ||
+              (clktype==="isy" && clkid.startsWith("int_")) ||
+              (clktype==="isy" && clkid.startsWith("state_")) ||
+              clkid==="temperature" || clkid==="name" || clkid==="contact" || clkid==="battery" ||
+              clkid==="heatingSetpoint" || clkid==="coolingSetpoint" ||
+              clkid==="presence" || clkid==="motion" || clkid.startsWith("event_") )  {
+            test = true;
+        }
+        return test;
+    }
+
     // reset rules
     resetRules();
+
+    if ( DEBUG7 ) {
+        console.log( (ddbg()), "doaction: swid: ", swid, " swtype:", swtype, " swval: ", swval, 
+                               " swattr: ", swattr, " subid: ", subid, " tileid: ", tileid, " command: ", command, " linkval: ", linkval);
+    }
 
     if ( (swid==="none" || swtype==="none" || !swtype || !swid || swid==="0") && tileid )  {
         idx = array_search(tileid, GLB.options["index"]);
@@ -3737,17 +3790,21 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
     var specialtiles = utils.getSpecials();
 
     // handle clocks
-    if ( (typeof command==="undefined" || command==="") && swid==="clockdigital") {
-        response = getClock("Digital Clock", "clockdigital", "", "M d, Y", "h:i:s A");
-    } else if ( (typeof command==="undefined" || command==="") && swid==="clockanalog" ) {
-        response = getClock("Analog Clock", "clockanalog", "CoolClock:swissRail:72", "M d, Y", "h:i:s A");
+    // if ( (typeof command==="undefined" || !command) && swid==="clockdigital") {
+    //     response = getClock("Digital Clock", "clockdigital", "", "M d, Y", "h:i:s A");
+    // } else if ( (typeof command==="undefined" || command==="") && swid==="clockanalog" ) {
+    //     response = getClock("Analog Clock", "clockanalog", "CoolClock:swissRail:72", "M d, Y", "h:i:s A");
     
     // handle types that just return the current status
-    } else if   (   (typeof command==="undefined" || command==="") && 
-                    (  swtype==="contact" || swtype==="presence" || swtype==="motion" || subid==="temperature" || swtype==="weather" 
-                       // || ( command==="LINK" && (subid==="contact" || subid==="presence" || subid==="motion" || subid==="name" || subid==="temperature") )
-                    )
-                ) {
+    // added check to skip clicks on things that are commands flagged in ST and HE with an underscore
+    // } else if   (   (typeof command==="undefined" || !command ) && ( !subid.startsWith("_") ) &&
+    //                 (  
+    //                    swtype==="contact" || swtype==="presence" || swtype==="motion" || swtype==="weather" || 
+    //                    subid==="temperature" || subid==="name" || subid==="contact" || 
+    //                    subid==="presence" || subid==="motion" || subid.startsWith("event_")
+    //                 )
+    //             ) {
+    if ( (typeof command==="undefined" || !command ) && testclick(swtype, subid) ) {
         response = allthings[idx]["value"];
         
     // send name, width, height to returnFile routine to get the html tag
@@ -3769,7 +3826,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
         // this requires alloptions to be loaded which is true if an active session
         // which is fine because linked tiles don't make sense for API calls anyway
         // use command to signal this - HUB is usual case which makes hub call
-        if ( command==="" || !command ) {
+        if ( !command ) {
             linkval = "";
             command = "HUB";
         }
@@ -3838,8 +3895,9 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                     // make the action call on the linked thing
                     // the hub callback now handles the linked resposnes properly
                     // if link is to something static, show it
-                    if ( $realsubid==="contact" || $realsubid==="presence" || $realsubid==="motion" || $realsubid==="name"|| subid==="temperature" || 
-                         $linked_swtype==="contact" || $linked_swtype==="presence" || $linked_swtype==="motion" || $linked_swtype==="weather") {
+                    // if ( $realsubid==="contact" || $realsubid==="presence" || $realsubid==="motion" || $realsubid==="name"|| subid==="temperature" || 
+                    //      $linked_swtype==="contact" || $linked_swtype==="presence" || $linked_swtype==="motion" || $linked_swtype==="weather") {
+                    if ( testclick($linked_swtype, $realsubid) ) {
                         response = $linked_val;
                     } else if ( $realsubid ) {
                         var linkinfo = [swid, swtype, subid, $realsubid];
@@ -3852,30 +3910,33 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
 
                 // rewrite the rule to use data in options array
                 // no need to pass it around in the tile as with old php version
-                var linksubid = "user_" + swid;
-                var allrules = GLB.options[linksubid];
-                linkval = false;
-                allrules.forEach(function(ruleset) {
-                    if ( linkval===false && ruleset[0]==="RULE" && ruleset[2]===subid ){
-                        linkval = ruleset[1];
-                    }  
-                });
+                if ( ENABLERULES ) {
+                    var linksubid = "user_" + swid;
+                    var allrules = GLB.options[linksubid];
+                    linkval = false;
+                    allrules.forEach(function(ruleset) {
+                        if ( linkval===false && ruleset[0]==="RULE" && ruleset[2]===subid ){
+                            linkval = ruleset[1];
+                        }  
+                    });
 
-                // get the execution statements and call them all here
-                const regsplit = /[,;]/;
-                if ( linkval ) {
-                    var testcommands = linkval.split(regsplit);
-                    var istart = 0;
-                    if ( testcommands[0].trim().startsWith("if") ) {
-                        istart = 1;
+                    // get the execution statements and call them all here
+                    const regsplit = /[,;]/;
+                    if ( linkval ) {
+                        var testcommands = linkval.split(regsplit);
+                        var istart = 0;
+                        if ( testcommands[0].trim().startsWith("if") ) {
+                            istart = 1;
+                        }
+                        if ( DEBUG11 ) {
+                            console.log( (ddbg()), "RULE execution: commands: ", testcommands );
+                        }
+                        execRules(istart, testcommands);
                     }
-                    if ( DEBUG11 ) {
-                        console.log( (ddbg()), "RULE execution: commands: ", testcommands );
-                    }
-                    execRules(istart, testcommands);
+                    response = "success";
+                } else {
+                    response = "error - Rules are not enabled in this version of HousePanel";
                 }
-
-                response = "success";
                 break;
 
             case "HUB":
@@ -3884,7 +3945,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                 // process rules and links instantly in case the webSocket doesn't work
                 // this also makes the rules run much quicker
                 // only harm or side effect is the rule will be executed twice
-                if ( response==="success" && subid && GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true ) {
+                if ( response==="success" && ENABLERULES && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
                     var pvalue = clone(allthings[idx]["value"]);
                     if ( !subid.endsWith("-up") && !subid.endsWith("-dn") ) {
                         pvalue[subid] = swval;
@@ -4613,9 +4674,11 @@ function getOptionsPage(pathname) {
     $tc += "<label for=\"kioskid\" class=\"kioskoption\">Kiosk Mode: </label>";    
     var $kstr = ($kioskoptions===true || $kioskoptions==="true" || $kioskoptions==="1" || $kioskoptions==="yes") ? "checked" : "";
     $tc+= "<input id=\"kioskid\" width=\"24\" type=\"checkbox\" name=\"kiosk\"  value=\"" + $kioskoptions + "\" " + $kstr + "/>";
-    $tc += "<label for=\"ruleid\" class=\"kioskoption\">Enable Rules? </label>";
-    var $rstr = ($ruleoptions===true || $ruleoptions==="true" || $ruleoptions==="1" || $ruleoptions==="yes") ? "checked" : "";
-    $tc += "<input id=\"ruleid\" width=\"24\" type=\"checkbox\" name=\"rules\"  value=\"" + $ruleoptions + "\" " + $rstr + "/>";
+    if ( ENABLERULES ) {
+        $tc += "<label for=\"ruleid\" class=\"kioskoption\">Enable Rules? </label>";
+        var $rstr = ($ruleoptions===true || $ruleoptions==="true" || $ruleoptions==="1" || $ruleoptions==="yes") ? "checked" : "";
+        $tc += "<input id=\"ruleid\" width=\"24\" type=\"checkbox\" name=\"rules\"  value=\"" + $ruleoptions + "\" " + $rstr + "/>";
+    }
     $tc += "</div>";
 
     var $accucity = configoptions["accucity"];
@@ -4854,6 +4917,8 @@ function mainPage(proto, hostname, pathname) {
     // include form with useful data for js operation
     $tc += "<form id='kioskform'>";
     $tc += utils.hidden("pagename", "main");
+    var erstr =  ENABLERULES ? "true" : "false"
+    $tc += utils.hidden("enablerules", erstr);
 
     // save the socket address for use on js side
     // var webSocketUrl = config.webSocketServerPort ? ("ws://" + serverName + ":" + config.webSocketServerPort) : "";
@@ -5105,7 +5170,7 @@ function processOptions($optarray) {
         } else if ( key==="kiosk") {
             configoptions["kiosk"] = "true";
         } else if ( key==="rules") {
-            configoptions["rules"] = "true";
+            configoptions["rules"] = ENABLERULES ? "true" : "false";
         } else if ( key==="accucity" ) {
             $city = $val.trim();
         } else if ( key==="accuregion" ) {

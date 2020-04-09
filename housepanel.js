@@ -38,7 +38,7 @@ var reordered = false;
 // use the timers options to turn off polling
 var disablepub = false;
 var disablebtn = false;
-var LOGWEBSOCKET = false;
+var LOGWEBSOCKET = true;
 
 Number.prototype.pad = function(size) {
     var s = String(this);
@@ -556,9 +556,6 @@ function setupWebsocket()
                 }
             });
         }
-        
-        // note: the old HP processed rules and links here
-        // this was moved to the Node server wehre it is far more efficient
     };
     
     // if this socket connection closes then try to reconnect
@@ -1534,7 +1531,9 @@ function setupButtons() {
             
         $("button.infobutton").on('click', function() {
             // location.reload(true);
-            window.location.href = cm_Globals.returnURL;
+            $.post(cm_Globals.returnURL, 
+                {useajax: "reload", id: 0, type: "none"} );
+            // window.location.href = cm_Globals.returnURL;
         });
     }
 
@@ -2661,10 +2660,9 @@ function processClick(that, thingname) {
 
     // special case of thermostat clicking on things without values
     // send the temperature as the value
-    if ( !thevalue && (thetype=="thermostat" || thetype==="isy") &&
+    if ( !thevalue && (thetype=="thermostat" || thetype==="isy") && ($("#a-"+aid+"-temperature")!==null) &&
          ( subid.endsWith("-up") || subid.endsWith("-dn") ) ) {
         thevalue = $("#a-"+aid+"-temperature").html();
-        // alert(thevalue);
     }
 
     // handle music commands (which need to get subid command) and
@@ -2710,9 +2708,10 @@ function processClick(that, thingname) {
         } else if ( command==="TEXT" ) {
             console.log(ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" hub= " + hubnum + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
             $(targetid).html(thevalue);
+            return;
         }
 
-        // all the other command types are handled on the PHP server side
+        // all the other command types are handled on the server side
         // this is enabled by the settings above for command, linkval, and linktype
     }
 
@@ -2808,7 +2807,7 @@ function processClick(that, thingname) {
         else if ( thetype==="isy" && (thevalue==="DON" || thevalue==="DOF" )  ) {
             thevalue = thevalue==="DON" ? "DOF" : "DON";
         }
-        console.log(ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" hub= " + hubnum + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
+        console.log("URL: ", cm_Globals.returnURL," ", ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" hub= " + hubnum + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
 
         // create a visual cue that we clicked on this item
         $(targetid).addClass("clicked");
@@ -2824,9 +2823,36 @@ function processClick(that, thingname) {
                function (presult, pstatus) {
                     if (pstatus==="success" && typeof presult==="object" ) {
                             var showstr = "";
+                            console.log("doaction query result: ", presult);
                             $.each(presult, function(s, v) {
                                 if ( s && v && s!=="password" && !s.startsWith("user_") ) {
-                                    showstr = showstr + s + ": " + v.toString() + "<br>";
+                                    // first try to parse as json string
+                                    try {
+                                        var jsontval = JSON.parse(v);
+                                    } catch(jerr) {
+                                        jsontval = null;
+                                    }
+                                    if ( jsontval && typeof jsontval==="object" ) {
+                                        for (var jtkey in jsontval ) {
+                                            var jtval = jsontval[jtkey];
+                                            if ( jtval ) {
+                                                if ( jtval.length > 12 ) {
+                                                    showstr = showstr + jtkey + ": " + jtval.substr(0,10) + "...<br>";
+                                                } else {
+                                                    showstr = showstr + jtkey + ": " + jtval + "<br>";
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        if ( typeof v !== "string" ) {
+                                            v = v.toString();
+                                        }
+                                        if ( v.length > 12 ) {
+                                            showstr = showstr + s + ": " + v.substr(0,10) + "...<br>";
+                                        } else {
+                                            showstr = showstr + s + ": " + v + "<br>";
+                                        }
+                                    }
                                 }
                             });
                             var winwidth = $("#dragregion").innerWidth();
