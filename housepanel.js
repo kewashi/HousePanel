@@ -1533,7 +1533,7 @@ function setupButtons() {
             // location.reload(true);
             $.post(cm_Globals.returnURL, 
                 {useajax: "reload", id: 0, type: "none"} );
-            // window.location.href = cm_Globals.returnURL;
+            window.location.href = cm_Globals.returnURL;
         });
     }
 
