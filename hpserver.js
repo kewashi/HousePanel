@@ -2082,9 +2082,6 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
         thingvalue["name"] = defname;
     }
 
-    // update fields with custom settings
-    // thingvalue = getCustomTile(thingvalue, thingtype, bid);
-
     // set the custom name
     // limit to 132 visual columns but show all for special tiles and custom names
     // now we use custom name in both places
@@ -2108,13 +2105,13 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     }
     
     // wrap thing in generic thing class and specific type for css handling
-    $tc=   "<div id=\""+idtag+"\" hub=\""+hubnum+"\" tile=\""+kindex+"\" bid=\""+bid+"\" type=\""+thingtype+"\" ";
+    $tc=   "<div id=\""+idtag+"\" aid=\""+cnt+"\" hub=\""+hubnum+"\" tile=\""+kindex+"\" bid=\""+bid+"\" type=\""+thingtype+"\" ";
     
     // get the class setting - this is set up to make the p_ last
     // we also use the unique function to remove dups
     var classstr = "thing " + thingtype+"-thing" + subtype;
     if ( hint ) {
-        classstr += " " + hint;
+        classstr += " " + hint.replace(/\./g,"_");
     }
     classstr += " p_"+kindex;
     // classstr = uniqueWords(classstr);
@@ -2184,13 +2181,14 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
 
         // handle special tiles
         // don't think this should be here since we now handle this in addspecial
-        thingvalue = getCustomTile(thingvalue, thingtype, bid);
-        thingvalue = returnFile(thingvalue, thingtype);
+        // thingvalue = getCustomTile(thingvalue, thingtype, bid);
+        // thingvalue = returnFile(thingvalue, thingtype);
 
-// unfortunately, this no longer works because Google changed how they return image searches
-//        if ( $thingtype==="music" ) {
-//            $thingvalue = getMusicArt($thingvalue);
-//        }
+        // unfortunately, this no longer works because Google changed how they return image searches
+        // but fortunately the new Sonos audio devices return an image url that we now use
+        //        if ( $thingtype==="music" ) {
+        //            $thingvalue = getMusicArt($thingvalue);
+        //        }
         
         $tc += "<div aid=\""+cnt+"\" type=\""+thingtype+"\" title=\""+thingpr+"\" class=\"thingname "+thingtype+" t_"+kindex+"\" id=\"s-"+cnt+"\">";
         $tc += thingpr;
@@ -2269,6 +2267,8 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     return $tc;
 }
 
+// compare this logic with how siblings are defined
+// in the getCustomTile function
 function putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor) {
 
     var linktype = thingtype;
@@ -2280,8 +2280,8 @@ function putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, s
     var command = helperval.substring(2, ipos);
     var linkval = helperval.substring(ipos+2);
 
-    // get info for links
-    if ( command==="LINK" ) {
+    // get info for links but skip if the link had an error
+    if ( command==="LINK" && linkval && linkval!=="error" && linkval.indexOf("|")!==-1 ) {
         var lidx = linkval;
         linkval = GLB.options.index[lidx];
         var idxitems = lidx.split("|");
@@ -2309,17 +2309,20 @@ function putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, s
             if ( cnt!== 0 ) {
                 allthings[idx]["value"][tkey] = tval;
             }
+        } else {
+            linkval = "dum";
         }
-    }
-
-    // neuter out RULE values since we no longer need them
-    if ( command==="RULE" ) {
-        linkval= "dum";
+    } else if ( command==="URL" || command==="POST" || command==="PUT" || command==="GET" ) {
+        linkval = decodeURI(linkval);
+    } else {
+        // neuter out linkvalsince we no longer use it
+        linkval = linkval || "dum";
     }
 
     // use the original type here so we have it for later
     // but in the actual target we use the linktype
-    var sibling= "<div linktype=\""+linktype+"\" value=\""+tval+"\" linkval=\""+linkval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
+    // var sibling= "<div aid=\""+cnt+"\" linktype=\""+linktype+"\" value=\""+tval+"\" linkval=\""+linkval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
+    var sibling= "<div aid=\""+cnt+"\" linktype=\""+linktype+"\" linkval=\""+linkval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
     if ( DEBUG10 ) {
         console.log( (ddbg()), "bid: ", bid, " helperval: ", helperval, " sibling: ", sibling);
     }
@@ -2394,18 +2397,19 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         // also prevent dates and times from being added
         // also do not include any music album or artist names in the class
         // and finally if the value is complex with spaces or other characters, skip
+        // also skip links and rules and anything longer than 30 characters
         var extra;
-        if ( tkey==="time" || tkey==="date" || tkey==="color" ||
+        if ( tkey==="time" || tkey==="date" || tkey==="color" || typeof tval!=="string" || tval==="" ||
+                   (tval.indexOf(" ")!==-1) ||
                    (tkey.substr(0,6)==="event_") ||
                    tkey==="trackDescription" || tkey==="currentArtist" || 
                    tkey==="currentAlbum" || tkey==="trackImage" ||
                    tkey==="weatherIcon" || tkey==="forecastIcon" ||
-                   !isNaN(+tval) || thingtype===tval || tval==="" || 
+                   !isNaN(+tval) || thingtype===tval ||
                    (tval.substr(0,5)==="track") || 
                    (tval.substr(0,7)==="number_") || 
-                //    (tval.substr(0,4)==="http") ||
                    (tval.indexOf("://")!==-1) ||
-                   (tval.indexOf(" ")!==-1) ) {
+                   (tval.indexOf("::")!==-1) || tval.length > 30 ) {
             extra = "";
         } else {
             extra = " " + tval;
@@ -2414,9 +2418,11 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         // fix track names for groups, empty, and super long
         if (tkey==="trackDescription" || tkey==="track") {
             tval = fixTrack(tval);
+        // change this over to a css so we can style it if needed
         } else if (tkey==="trackImage") {
             if ( tval.substr(0,4) === "http" ) {
-                tval = "<img width='120' height='120' src='" + tval + "'>";
+                // tval = "<img width='120' height='120' src='" + tval + "'>";
+                tval = "<img class='trackImage' src='" + tval + "'>";
             }
         } else if ( tkey === "battery") {
             var powmod = parseInt(tval);
@@ -2523,30 +2529,161 @@ function getCustomName(defname, idx) {
     return defname;
 }
 
-function getClock(clockname, clockid, clockskin, fmtdate, fmttime) {
+function getFormattedDate(fmtdate, d, clockid) {
     var weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     var months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    var clockname = getCustomName(clockname, "clock" + "|" + clockid);
-    var d = new Date();
+    if ( typeof d=== "undefined" || !d ) {
+        d = new Date();
+    }
     var dofw = d.getDay();
     var mofy = d.getMonth();
     var weekday = weekdays[dofw];
     var month = months[mofy];
     var day = d.getDate().toString();
-    if ( day < 10 ) {
-        day = "0" + day.toString();
-    } else {
-        day = day.toString();
+    var zday = day;
+    if ( zday.length < 2 ) {
+        zday = "0" + zday;
     }
     var year = d.getFullYear().toString();
+    var datestr;
 
-    var dateofmonth = month + " " + day + ", " + year;
+    // set date and weekday to react to custom values
+    if ( fmtdate && typeof fmtdate==="string" ) {
+        datestr = fmtdate;
+        if ( fmtdate.indexOf("Y")!==-1 ) {
+            datestr = datestr.replace("Y", year);
+        }
+        if ( fmtdate.indexOf("y")!==-1 ) {
+            datestr = datestr.replace("y", year.substr(-2));
+        }
+        if ( fmtdate.indexOf("D")!==-1 ) {
+            datestr = datestr.replace("D", zday);
+        }
+        if ( fmtdate.indexOf("d")!==-1 ) {
+            datestr = datestr.replace("d", day);
+        }
+        if ( fmtdate.indexOf("M")!==-1 ) {
+            datestr = datestr.replace("M", month);
+        }
+        if ( fmtdate.indexOf("m")!==-1 ) {
+            datestr = datestr.replace("m", month.substr(0,3));
+        }
+        if ( fmtdate.indexOf("W")!==-1 ) {
+            datestr = datestr.replace("W", weekday);
+        }
+        if ( fmtdate.indexOf("w")!==-1 ) {
+            datestr = datestr.replace("w", weekday.substr(0,3));
+            weekday = weekday.substr(0,3);
+        }
+    } else {
+        fmtdate = "M d, Y";
+        datestr = month + " " + day + ", " + year;
+    }
+    // console.log("\n ****** getFormattedDate ******\n clockid: ", clockid," fmtdate: ", fmtdate," datestr: ", datestr, " weekday: ", weekday);
+    var retobj = {fmt_date: fmtdate, date: datestr, week: weekday};
+    return retobj;
+}
+
+function getFormattedTime(fmttime, d, clockid) {
+    if ( typeof d=== "undefined" || !d ) {
+        d = new Date();
+    }
+
+    var timezone = d.getTimezoneOffset().toString();
+    var hour24 = d.getHours();
+    var hour = hour24;
+    var min = d.getMinutes().toString();
+    var sec = d.getSeconds().toString();
+
+    var zmin = min;
+    if ( zmin.length < 2 ) { 
+        zmin = "0" + min.toString();
+    }
+    var zsec = sec;
+    if ( zsec.length < 2 ) { 
+        zsec = "0" + zsec;
+    }
+    if ( hour24=== 0 ) {
+        hour = "12";
+    } else if ( hour24 > 12 ) {
+        hour = (+hour24 - 12).toString();
+    } else {
+        hour = hour.toString();
+    }
+    var zhour = hour;
+    if ( zhour.length < 2 ) {
+        zhour = "0" + zhour;
+    }
+    var zhour24 = hour24;
+    if ( zhour24.length < 2 ) {
+        zhour24 = "0" + zhour24;
+    }
+
+    var timezone;
+    var timestr;
+
+    if ( fmttime ) {
+        timestr = fmttime;
+        timestr = timestr.replace("g",hour24);
+        timestr = timestr.replace("h",hour);
+        timestr = timestr.replace("G",zhour24);
+        timestr = timestr.replace("H",zhour);
+        timestr = timestr.replace("i",min);
+        timestr = timestr.replace("I",zmin);
+        timestr = timestr.replace("s",sec);
+        timestr = timestr.replace("S",zsec);
+        if ( hour24 >= 12 ) {
+            timestr = timestr.replace("a","pm");
+            timestr = timestr.replace("A","PM");
+        } else {
+            timestr = timestr.replace("a","am");
+            timestr = timestr.replace("A","AM");
+        }
+    } else {
+        fmttime = "h:I:S A";
+        timestr = hour + ":" + zmin + ":" + zsec;
+        if ( hour24 >= 12 ) {
+            timestr+= " PM";
+        } else {
+            timestr+= " AM";
+        }
+    }
+
+    // console.log("\n ****** getFormattedTime ******\n clockid: ", clockid," fmttime: ", fmttime," timestr: ", timestr, " timezone: ", timezone);
+    var retobj = {fmt_time: fmttime, time: timestr, timezone: timezone};
+    return retobj;
+}
+
+function getClock(clockid) {
+    // set up all defaults here - can change with customizer
+    var clockname = "Digital Clock";
+    var clockskin = "";
+    if ( clockid==="clockanalog" ) {
+        clockname = "Analog Clock";
+        clockskin = "CoolClock:swissRail:72";
+    }
+    // var clockname = getCustomName(clockname, "clock" + "|" + clockid);
+
+    var d = new Date();
+    var dates = getFormattedDate("M D, Y", d, clockid);
+    var dateofmonth = dates.date;
+    var weekday = dates.week;
+    var fmtdate = dates.fmt_date;
+
+    var times = getFormattedTime("h:I:S A", d, clockid);
+    var timeofday = times.time;
+    var fmttime = times.fmt_time;
+    var timezone = times.timezone;
+
     var timeofday = d.toLocaleTimeString();
     var timezone = d.getTimezoneOffset().toString();
     var dclock = {"name": clockname, "skin": clockskin, "weekday": weekday,
         "date": dateofmonth, "time": timeofday, "tzone": timezone,
         "fmt_date": fmtdate, "fmt_time": fmttime};
-    dclock = getCustomTile(dclock, "clock", clockid);
+
+    // dclock = getCustomTile(dclock, "clock", clockid);
+    // console.log("\n ******** getClock *********\n clock: ", dclock);
+
     return dclock;
 }
 
@@ -2558,13 +2695,15 @@ function addSpecials() {
     // never refresh since clocks have their own refresh timer built into the javascript code
     // you will need to over-ride this with the tile customizer if you add custom fields
     var clockidd = "clockdigital";
-    var dclock = getClock("Digital Clock", clockidd, "", "M d, Y", "h:i:s A");
+    var dclock = getClock(clockidd);
+    dclock = getCustomTile(dclock, "clock", clockidd);
     allthings["clock|"+clockidd] = {"id" :  clockidd, "name" :  dclock["name"], 
         "hubnum" :  hubnum, "type" :  "clock", "refresh": "slow", "value" :  dclock};
 
     // add analog clock tile - no longer use dclock format settings by default
     var clockida = "clockanalog";
-    var aclock = getClock("Analog Clock", clockida, "CoolClock:swissRail:72", "M d, Y", "h:i:s A");
+    var aclock = getClock(clockida);
+    aclock = getCustomTile(aclock, "clock", clockida);
     allthings["clock|"+clockida] = {"id" :  clockida, "name" :  aclock["name"], 
         "hubnum" :  hubnum, "type" :  "clock", "refresh": "slow", "value" :  aclock};
 
@@ -2655,6 +2794,7 @@ function getCustomTile(custom_val, customtype, customid) {
     }
     
     // see if a section for this id is in options file
+    // this is where customizer updates are processed
     var lines = false;
     if (array_key_exists("user_" + customid, GLB.options) ) {
         lines = GLB.options["user_" + customid];
@@ -2671,7 +2811,7 @@ function getCustomTile(custom_val, customtype, customid) {
             lines = [lines];
         }
         
-        // first remove existing ones so we can readd them in the proper order
+        // first remove existing ones so we can read them in the proper order
         lines.forEach(function(msgs) {
             var subidraw = msgs[2].trim();
             var subid = subidraw.replace(/[\"\*\<\>\!\{\}\.\,\:\+\&\%]/g,""); //  str_replace(ignores, "", subidraw);
@@ -2694,7 +2834,7 @@ function getCustomTile(custom_val, customtype, customid) {
             
                 var calltype = msgs[0].toString().toUpperCase().trim();
                 var content = msgs[1].toString().trim();
-                var posturl = encodeURIComponent(content);
+                // var posturl = encodeURIComponent(content);
                 var subidraw = msgs[2].trim();
                 var subid = subidraw.replace(/[\"\*\<\>\!\{\}\.\,\:\+\&\%]/g,""); //  str_replace(ignores, "", subidraw);
                 var companion = "user_" + subid;
@@ -2703,10 +2843,10 @@ function getCustomTile(custom_val, customtype, customid) {
                 // this adds a new field for the URL or LINK information
                 // in a tag called user_subid where subid is the requested field
                 // web call results and linked values are stored in the subid field
-                if ( content && content.toLowerCase().substr(0,4) === "http" &&
-                     (calltype==="PUT" || calltype==="GET" || calltype==="POST")  )
+                if ( content && (calltype==="PUT" || calltype==="GET" || calltype==="POST" || calltype==="URL") )
                 {
-                    custom_val[companion] = "::" + calltype + "::" + posturl;
+                    // custom_val[companion] = "::" + calltype + "::" + posturl;
+                    custom_val[companion] = "::" + calltype + "::" + encodeURI(content);
                     custom_val[subid] = calltype + "::" + subid;
                
                 } else if ( calltype==="LINK" ) {
@@ -2721,9 +2861,6 @@ function getCustomTile(custom_val, customtype, customid) {
                     // changed the link logic so we don't need to know the value at link time
                     // if ( allthings && idx!== false && array_key_exists(idx, allthings) ) {
                     if ( idx !== false ) {
-                        // var thesensor = allthings[idx];
-                        // var pvalue = thesensor["value"];
-                        // var thetype = thesensor["type"];
                 
                         // if the subid exists in our linked tile add it
                         // this can replace existing fields with linked value
@@ -2731,37 +2868,19 @@ function getCustomTile(custom_val, customtype, customid) {
                         // first case is if link is valid and not an existing field
                         // if ( array_key_exists(subid, pvalue) ) {
                         custom_val[companion] = "::" + calltype + "::" + idx;
-                        custom_val[subid]= "LINK::" + content; // pvalue[subid];
+                        custom_val[subid]= "LINK::" + content;
                             
-                        // final two cases are if link tile wasn't found
-                        // first sub-case is if subid begins with the text of a valid key
-                        // } else {
-                        //     // handle user provided names that start with a valid link subid
-                        //     // and there is more beyond the start than numbers
-                        //     var realsubid = false;
-                        //     for (var key in custom_val) {
-                        //         if ( subid.indexOf(key) === 0 ) {   // strpos(subid, key) === 0 ) {
-                        //             realsubid = key;
-                        //             break;
-                        //         }
-                        //     }
-                        //     if ( realsubid ) {
-                        //         custom_val[companion] = "::" + thetype + "::" + calltype + "::" + content + "::" + realsubid;
-                        //         custom_val[subid]= pvalue[realsubid];
-                        //     } else {
-                        //         custom_val[companion] = "::" + thetype + "::" + calltype + "::" + content;
-                        //         custom_val[subid] = "Invalid link to tile #" + content + " with subid= " + subid;
-                        //     }
-                        // }
+                    // final cases are if link tile wasn't found
                     } else {
-                        custom_val[companion] = "::" + calltype + "::0";
+                        custom_val[companion] = "::" + calltype + "::" + "error";
                         custom_val[subid] = "Link::" + content;
                         console.log( (ddbg()), "error - Links unavailable to link #" + content + " with subid= " + subid);
                     }
 
-                } else if ( calltype==="URL" ) {
-                    custom_val[companion] = "::" + calltype + "::" + posturl;
-                    custom_val[subid] = "URL::" + subid;
+                    // } else if ( calltype==="URL" ) {
+                    //     // custom_val[companion] = "::" + calltype + "::" + posturl;
+                    //     custom_val[companion] = "::" + calltype + "::";
+                    //     custom_val[subid] = "URL::" + subid;
                
                 } else if ( ENABLERULES && calltype==="RULE" ) {
                     custom_val[companion] = "::" + calltype + "::" + content;
@@ -2779,6 +2898,15 @@ function getCustomTile(custom_val, customtype, customid) {
                 }
             }
         });
+
+        // fix clock date if the format sting is provided
+        if ( array_key_exists("date", custom_val) && array_key_exists("fmt_date", custom_val) ) {
+            var dates = getFormattedDate(custom_val["fmt_date"], null, customid);
+            custom_val["date"] = dates.date;
+            if ( array_key_exists("weekday", custom_val) ) {
+                custom_val["weekday"] = dates.week;
+            }
+        }
     }
     return custom_val;
 }
@@ -3113,7 +3241,7 @@ function processRules(bid, thetype, trigger, pvalue) {
                             }
     
                             // compute the test if this test part has the required elements
-                            if ( ! isNaN(ruletileid) && ruleop && rulevalue ) {
+                            if ( ruletileid && ! isNaN(ruletileid) && ruleop && rulevalue ) {
 
                                 var ifvalue = false;
                                 var ridx;
@@ -3169,7 +3297,9 @@ function processRules(bid, thetype, trigger, pvalue) {
                                     console.log("error - invalid RULE syntax: ", rule, " parts: ", ruleparts);
                                 }
                             } else {
-                                console.log("error - invalid RULE syntax: ", rule, " Target tile not found. tile #", ruletileid);
+                                if ( typeof ruletileid!=="undefined" ) {
+                                    console.log("error - invalid RULE syntax: ", rule, " Target tile not found. tile #", ruletileid);
+                                }
                                 ruleparts = false;
                             }
                         }
@@ -3761,6 +3891,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
               (clktype==="isy" && clkid.startsWith("int_")) ||
               (clktype==="isy" && clkid.startsWith("state_")) ||
               clkid==="temperature" || clkid==="name" || clkid==="contact" || clkid==="battery" ||
+              clkid==="date" || clkid==="time" || clkid==="weekday" || clkid==="tzone" ||
               clkid==="heatingSetpoint" || clkid==="coolingSetpoint" ||
               clkid==="presence" || clkid==="motion" || clkid.startsWith("event_") )  {
             test = true;
@@ -3789,11 +3920,13 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
     }
     var specialtiles = utils.getSpecials();
 
-    // handle clocks
-    // if ( (typeof command==="undefined" || !command) && swid==="clockdigital") {
-    //     response = getClock("Digital Clock", "clockdigital", "", "M d, Y", "h:i:s A");
-    // } else if ( (typeof command==="undefined" || command==="") && swid==="clockanalog" ) {
-    //     response = getClock("Analog Clock", "clockanalog", "CoolClock:swissRail:72", "M d, Y", "h:i:s A");
+    // handle clocks to return current time always
+    if ( (typeof command==="undefined" || !command) && swid==="clockdigital") {
+        response = getClock("clockdigital");
+        response = getCustomTile(response, "clock", "clockdigital");
+    } else if ( (typeof command==="undefined" || !command) && swid==="clockanalog" ) {
+        response = getClock("clockanalog");
+        response = getCustomTile(response, "clock", "clockanalog");
     
     // handle types that just return the current status
     // added check to skip clicks on things that are commands flagged in ST and HE with an underscore
@@ -3804,7 +3937,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
     //                    subid==="presence" || subid==="motion" || subid.startsWith("event_")
     //                 )
     //             ) {
-    if ( (typeof command==="undefined" || !command ) && testclick(swtype, subid) ) {
+    } else if ( (typeof command==="undefined" || !command ) && testclick(swtype, subid) ) {
         response = allthings[idx]["value"];
         
     // send name, width, height to returnFile routine to get the html tag
@@ -3821,12 +3954,20 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
         }
         var hub = findHub(hubid);
 
-        // first check if this subid has a companion link or post element
-        // and if so, handle differently using the linked info or making a web service call
-        // this requires alloptions to be loaded which is true if an active session
-        // which is fine because linked tiles don't make sense for API calls anyway
+        // first check if this subid has a companion link
         // use command to signal this - HUB is usual case which makes hub call
-        if ( !command ) {
+        // this has been generalized to always read the data from the options array
+        // unless command is not set in which case this is a normal HUB call
+        var goodcommands = ["POST", "PUT", "GET", "URL", "TEXT", "LINK", "RULE"];
+        if ( command && goodcommands.includes(command) ) {
+            linkval = "";
+            var links = GLB.options[ "user_" + swid];
+            links.forEach(function(linkset) {
+                if ( linkval==="" && linkset[0]===command && linkset[2]===subid ){
+                    linkval = linkset[1];
+                }  
+            });
+        } else {
             linkval = "";
             command = "HUB";
         }
@@ -3835,7 +3976,9 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
 
             case "POST":
             case "PUT":
-                var posturl = decodeURIComponent(linkval);
+            case "URL":
+                // var posturl = decodeURIComponent(linkval);
+                var posturl = linkval;
                 var isparm = posturl.indexOf("?");
                 var parmstr = "";
                 var jsonobj = {};
@@ -3850,21 +3993,31 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                         jsonobj[key[0]] = key[1];
                     })
                 }
-                console.log(command + " call: ", posturl, " parms: ", jsonobj);
+                if ( DEBUG7 ) {
+                    console.log( (ddbg()), command + " call: ", posturl, " parms: ", jsonobj);
+                }
                 curl_call(posturl, null, jsonobj, false, command, urlCallback);
                 break;
 
             case "GET":
-                var posturl = decodeURIComponent(linkval);
-                console.log(command + " call: ", posturl);
+                // var posturl = decodeURIComponent(linkval);
+                var posturl = linkval;
+                if ( DEBUG7 ) {
+                    console.log( (ddbg()), command + " call: ", posturl);
+                }
                 curl_call(posturl, null, jsonobj, false, command, urlCallback);
                 break;
             
+            // converted this over to getting the custom text out of the options
+            // this allows me to avoid lugging around the custom text in the sibling helper
+            // this mirrors the code in RULES below
             case "TEXT":
                 response = allthings[idx]["value"];
                 response[subid] = linkval;
                 break;
 
+            // link commands are the only ones that use the linkval setting
+            // all others get the user input values from the options file
             case "LINK":
                 var lidx = array_search(linkval, GLB.options["index"]);
 
@@ -3895,13 +4048,13 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                     // make the action call on the linked thing
                     // the hub callback now handles the linked resposnes properly
                     // if link is to something static, show it
-                    // if ( $realsubid==="contact" || $realsubid==="presence" || $realsubid==="motion" || $realsubid==="name"|| subid==="temperature" || 
-                    //      $linked_swtype==="contact" || $linked_swtype==="presence" || $linked_swtype==="motion" || $linked_swtype==="weather") {
-                    if ( testclick($linked_swtype, $realsubid) ) {
-                        response = $linked_val;
-                    } else if ( $realsubid ) {
-                        var linkinfo = [swid, swtype, subid, $realsubid];
-                        response = callHub($lhub, $linked_swid, $linked_swtype, swval, swattr, $realsubid, linkinfo, false);
+                    if ( $realsubid ) {
+                        if ( testclick($linked_swtype, $realsubid) ) {
+                            response = $linked_val;
+                        } else {
+                            var linkinfo = [swid, swtype, subid, $realsubid];
+                            response = callHub($lhub, $linked_swid, $linked_swtype, swval, swattr, $realsubid, linkinfo, false);
+                        }
                     }
                 }
                 break;
@@ -3911,14 +4064,14 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                 // rewrite the rule to use data in options array
                 // no need to pass it around in the tile as with old php version
                 if ( ENABLERULES ) {
-                    var linksubid = "user_" + swid;
-                    var allrules = GLB.options[linksubid];
-                    linkval = false;
-                    allrules.forEach(function(ruleset) {
-                        if ( linkval===false && ruleset[0]==="RULE" && ruleset[2]===subid ){
-                            linkval = ruleset[1];
-                        }  
-                    });
+                    // var linksubid = "user_" + swid;
+                    // var allrules = GLB.options[linksubid];
+                    // linkval = false;
+                    // allrules.forEach(function(ruleset) {
+                    //     if ( linkval===false && ruleset[0]==="RULE" && ruleset[2]===subid ){
+                    //         linkval = ruleset[1];
+                    //     }  
+                    // });
 
                     // get the execution statements and call them all here
                     const regsplit = /[,;]/;
@@ -3950,9 +4103,11 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                     if ( !subid.endsWith("-up") && !subid.endsWith("-dn") ) {
                         pvalue[subid] = swval;
                     }
-                    processRules(swid, swtype, subid, pvalue);
-                    processLinks(swid, swtype, subid, pvalue);
-                    GLB.rules[swid] = true;
+                    if ( ENABLERULES ) {
+                        processRules(swid, swtype, subid, pvalue);
+                        processLinks(swid, swtype, subid, pvalue);
+                        GLB.rules[swid] = true;
+                    }
                 }
                 break;
 
@@ -6082,6 +6237,23 @@ function apiCall(body, protocol) {
             // TODO - implement hubDelete() function
             console.log( (ddbg()), "Hub deletion is not yet supported...");
             result = "success";
+            break;
+
+        case "getclock":
+            if ( !swid || swid==="none" ) { swid = "clockdigital"; }
+            result = getClock(swid);
+            result = getCustomTile(result, "clock", swid);
+            // replace any links with stored link values
+            // otherwise update the main array with new time info
+            for (var rsubid in result) {
+                var rvalue = result[rsubid];
+                var idx = "clock|" + swid;
+                if ( rvalue && rvalue.startsWith("LINK::") ) {
+                    result[rsubid] = allthings[idx]["value"][rsubid];
+                } else {
+                    allthings[idx]["value"][rsubid] = rvalue;
+                }
+            }
             break;
 
         case "cancelauth":

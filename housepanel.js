@@ -2144,7 +2144,8 @@ function updateTile(aid, presult) {
     if ( presult["trackImage"] ) {
         var trackImage = presult["trackImage"].trim();
         if ( trackImage.startsWith("http") ) {
-            presult["trackImage"] = "<img height=\"120\" width=\"120\" src=\"" + trackImage + "\">";
+            // presult["trackImage"] = "<img height=\"120\" width=\"120\" src=\"" + trackImage + "\">";
+            presult["trackImage"] = "<img class='trackImage' src='" + trackImage + "'>";
             nativeimg = true;
         }
     }
@@ -2275,81 +2276,125 @@ function setupTabclick() {
 
 function clockUpdater(tz) {
 
-    // update the date every hour
+    // update the date every half hour
     setInterval(function() {
         // var old = new Date();
         // var utc = old.getTime() + (old.getTimezoneOffset() * 60000);
         // var d = new Date(utc + (1000*tz));        
-        var d = new Date();
 
-        var weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-        var months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-        var dofw = d.getDay();
-        var mofy = d.getMonth();
-        var weekday = weekdays[dofw];
-        var month = months[mofy];
-        var day = d.getDate().toString();
-        if ( day < 10 ) {
-            day = "0" + day.toString();
-        } else {
-            day = day.toString();
-        }
-        var year = d.getFullYear().toString();
-        
-        // set the weekday
-        $("div.panel div.clock.weekday").each(function() {
-            $(this).html(weekday);
-        });
+        // call server to get updated digital clocks
+        $.post(cm_Globals.returnURL, 
+            {useajax: "getclock", id: "clockdigital", type: "none"},
+            function (presult, pstatus) {
+                if ( pstatus==="success" && typeof presult==="object" ) {
+                    console.log("Updating digital clocks with: ", presult);
 
-        // set the date
-        $("div.panel div.clock.date").each(function() {
-            if ( $(this).parent().siblings("div.overlay.fmt_date").length > 0 ) {
-                var timestr = $(this).parent().siblings("div.overlay.fmt_date").children("div.fmt_date").html();
-                timestr = timestr.replace("M",month);
-                timestr = timestr.replace("d",day);
-                timestr = timestr.replace("Y",year);
-                $(this).html(timestr);
-            } else if ( $(this).siblings("div.user_hidden").length > 0 ) {
-                var linkval = $(this).siblings("div.user_hidden").attr("linkval");
-                if ( linkval && $("div.clock.date.p_"+linkval) ) {
-                    var timestr = $("div.clock.date.p_"+linkval).html();
-                    $(this).html(timestr);
+                    // remove time items since we don't want to mess up the second updater
+                    delete presult["time"];
+                    // delete presult["fmt_time"];
+
+                    // first update all the clock tiles
+                    $('div.panel div.thing[bid="clockdigital"]').each(function() {
+                        var aid = $(this).attr("aid");
+                        if ( aid ) {
+                            updateTile(aid, presult);
+                        }
+                    });
+
+                    // now update all linked tiles with weekdays and dates
+                    // don't bother updating time zones - they dont really change
+                    $('div.panel div.thing[linkbid="clockdigital"]').each(function() {
+                        var aid = $(this).attr("aid");
+                        if ( aid ) {
+                            var weekdayid = "#a-"+aid+"-weekday";
+                            if ( weekdayid ) { $(weekdayid).html(presult.weekday); }
+                            var dateid =  "#a-"+aid+"-date";
+                            if ( dateid ) { $(dateid).html(presult.date); }
+                        }
+                    });
+                } else {
+                    console.log("Error obtaining digital clock update");
                 }
-            } else {
-                var defstr = month + " " + day + ", " + year;
-                $(this).html(defstr);
             }
-        });
-    }, 5000 );
+        );
 
+        // call server to get updated analog clocks
+        $.post(cm_Globals.returnURL, 
+            {useajax: "getclock", id: "clockanalog", type: "none"},
+            function (presult, pstatus) {
+                if ( pstatus==="success" && typeof presult==="object" ) {
+                    console.log("Updating analog clocks with: ", presult);
+
+                    // remove time items since we don't want to mess up the second updater
+                    delete presult["time"];
+                    // delete presult["fmt_time"];
+        
+                    // first update all the clock tiles
+                    $('div.panel div.thing[bid="clockanalog"]').each(function() {
+                        var aid = $(this).attr("aid");
+                        if ( aid ) {
+                            updateTile(aid, presult);
+                        }
+                    });
+
+                    // now update all linked tiles with weekdays and dates
+                    // don't bother updating time zones - they dont really change
+                    $('div.panel div.thing[linkbid="clockanalog"]').each(function() {
+                        var aid = $(this).attr("aid");
+                        if ( aid ) {
+                            var weekdayid = "#a-"+aid+"-weekday";
+                            if ( weekdayid ) { $(weekdayid).html(presult.weekday); }
+                            var dateid =  "#a-"+aid+"-date";
+                            if ( dateid ) { $(dateid).html(presult.date); }
+                            var skinid =  "#a-"+aid+"-skin";
+                            if ( skinid ) { $(skinid).html(presult.skin); }
+                        }
+                    });
+                } else {
+                    console.log("Error obtaining analog clock update");
+                }
+            }
+        );
+
+    }, 1800000 );
+
+    // update the time fields every second
+    // this includes all linked fields
+    // this is also where we take care of all the time formatting
     setInterval(function() {
         // var old = new Date();
         // var utc = old.getTime() + (old.getTimezoneOffset() * 60000);
         // var d = new Date(utc + (1000*tz));     
         var d = new Date();
-        
-        // var ds = d.toString().split(" ");    
-        // var defaultstr = ds[4];
         var hour24 = d.getHours();
         var hour = hour24;
-        var min = d.getMinutes();
-        if ( min < 10 ) { 
-            min = "0" + min.toString();
-        } else {
-            min = (+ min).toString();
+        var min = d.getMinutes().toString();
+        var sec = d.getSeconds().toString();
+    
+        var zmin = min;
+        if ( zmin.length < 2 ) { 
+            zmin = "0" + min.toString();
         }
-        var sec = d.getSeconds();
-        if ( sec < 10 ) { 
-            sec = "0" + sec.toString();
-        } else {
-            sec = sec.toString();
+        var zsec = sec;
+        if ( zsec.length < 2 ) { 
+            zsec = "0" + zsec;
         }
         if ( hour24=== 0 ) {
             hour = "12";
         } else if ( hour24 > 12 ) {
-            hour = (+hour24 - 12).toLocaleString();
+            hour = (+hour24 - 12).toString();
+        } else {
+            hour = hour.toString();
         }
-        var defaultstr = hour.toString() + ":" + min + ":" + sec;
+        var zhour = hour;
+        if ( zhour.length < 2 ) {
+            zhour = "0" + zhour;
+        }
+        var zhour24 = hour24;
+        if ( zhour24.length < 2 ) {
+            zhour24 = "0" + zhour24;
+        }
+        var defaultstr = hour + ":" + zmin + ":" + zsec;
         
         // update the time of all things on the main page
         // this skips the wysiwyg items in edit boxes
@@ -2357,12 +2402,14 @@ function clockUpdater(tz) {
         $("div.panel div.clock.time").each(function() {
             if ( $(this).parent().siblings("div.overlay.fmt_time").length > 0 ) {
                 var timestr = $(this).parent().siblings("div.overlay.fmt_time").children("div.fmt_time").html();
-                timestr = timestr.replace("g",hour);
+                timestr = timestr.replace("g",hour24);
                 timestr = timestr.replace("h",hour);
-                timestr = timestr.replace("G",hour24);
-                timestr = timestr.replace("H",hour24);
+                timestr = timestr.replace("G",zhour24);
+                timestr = timestr.replace("H",zhour);
                 timestr = timestr.replace("i",min);
+                timestr = timestr.replace("I",zmin);
                 timestr = timestr.replace("s",sec);
+                timestr = timestr.replace("S",zsec);
                 if ( hour24 >= 12 ) {
                     timestr = timestr.replace("a","pm");
                     timestr = timestr.replace("A","PM");
@@ -2371,7 +2418,9 @@ function clockUpdater(tz) {
                     timestr = timestr.replace("A","AM");
                 }
                 $(this).html(timestr);
-            // take care of linked times
+            // take care of linked times that don't have their own formatting string
+            // one can of course add a unique formatting string to any linked time item
+            // in which case the linked time will use its own formatting
             } else if ( $(this).siblings("div.user_hidden").length > 0 ) {
                 var linkval = $(this).siblings("div.user_hidden").attr("linkval");
                 var ival = parseInt(linkval);
@@ -2686,34 +2735,28 @@ function processClick(that, thingname) {
         command = $(usertile).attr("command");    // command type
         // alert("Command = " + command);
         
-        if ( ismusic ) {
-            userval = thevalue;
-        } else  {
-            userval = $(usertile).attr("value");      // raw user provided val
-        }
         linkval = $(usertile).attr("linkval");    // urlencooded val
         linktype = $(usertile).attr("linktype");  // type of tile linked to
 
         // handle redirects to a user provided web page
         // remove the http requirement to support Android stuff
         // this places extra burden on users to avoid doing stupid stuff
-        // if ( command==="URL" && userval.startsWith("http") ) {
-        if ( command==="URL" || (command==="TEXT" && userval.startsWith("http")) ) {
-            window.open(userval,'_blank');
-            return;
-
-        // handle replacing text with user provided text that isn't a URL
-        // for this case there is nothing to do on the server so we just
-        // update the text on screen and return it to the log
-        } else if ( command==="TEXT" ) {
-            console.log(ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" hub= " + hubnum + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
-            $(targetid).html(thevalue);
+        if ( command==="URL" ) {
+            var userval = $(usertile).attr("value");      // raw user provided val
+            if ( userval ) {
+                window.open(userval,'_blank');
+            }
             return;
         }
 
         // all the other command types are handled on the server side
         // this is enabled by the settings above for command, linkval, and linktype
     }
+
+    var ispassive = (subid==="custom" || subid==="temperature" || subid==="battery" || command==="TEXT" ||
+        subid==="presence" || subid==="motion" || subid==="contact" || 
+        subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" ||
+        subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid==="custom");
 
     // turn momentary and piston items on or off temporarily
     // but only for the subid items that expect it
@@ -2753,29 +2796,30 @@ function processClick(that, thingname) {
             }, "json");
 
     // for clicking on the video link simply reload the video which forces a replay
-    } else if (     (thetype==="video" && subid==="video")
-                 || (thetype==="frame" && subid==="frame")
-                 || (thetype==="image" && subid==="image")
-                 || (thetype==="blank" && subid==="blank")
-                 || (thetype==="custom" && subid==="custom") ) {
-        console.log("Refreshing special tile type: " + thetype);
+    // } else if (     (thetype==="video"  && ispassive)
+    //              || (thetype==="frame"  && ispassive)
+    //              || (thetype==="image"  && ispassive)
+    //              || (thetype==="blank"  && ispassive)
+    //              || (thetype==="custom" && ispassive) ) {
+    } else if ( ispassive ) {
+        console.log("Refreshing tile of passive clicked on element: ", subid, " tile type: ", thetype);
         $(targetid).html(thevalue);
 
         // open all images that are graphics files in a new window
-        var sibimage = $('#a-'+aid+'-_media_');
-        if ( sibimage && sibimage.html() ) {
-            window.open(sibimage.html(), "_blank");
-            return;
-        }
+        // var sibimage = $('#a-'+aid+'-_media_');
+        // if ( sibimage && sibimage.html() ) {
+        //     window.open(sibimage.html(), "_blank");
+        //     return;
+        // }
         
         // show popup window for blanks and customs
-        if ( cm_Globals.allthings && (thetype==="blank" || thetype==="custom") ) {
+        if ( cm_Globals.allthings && thetype!=="image" && thetype!=="video" ) {
             var idx = thetype + "|" + bid;
             var thing= cm_Globals.allthings[idx];
             var value = thing.value;
             var showstr = "";
             $.each(value, function(s, v) {
-                if ( s!=="password" && !s.startsWith("user_") ) {
+                if ( v && s!=="password" && !s.startsWith("user_") ) {
                     var txt = v.toString();
                     txt = txt.replace(/<.*?>/g,'');
                     showstr = showstr + s + ": " + txt + "<br>";

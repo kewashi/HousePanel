@@ -1,6 +1,15 @@
 'use strict';
 
 var devhistory =  ` 
+2.243      Continued cleanup and bug fixes
+            - change music icon to enable size changes in tile editor
+            - included flag to completely neuter RULE engine for ISY
+            - add "aid" to master and sibling tags to facilitate easier manipulation
+            - fix tile width and height changes bug in tile editor
+            - enhance clock time and date formatting and fix custom handling
+            - tidy up extra tag to exclude command:: items
+            - add a getclock api call and use it to update clock from js
+            - improved logic for clicking on passive items that do nothing
 2.242      Fix bug that prevented variable arrows from working
 2.241      Hub reauth push happens everywhere now and other bug fixes
             - added flag to neuter all RULES capabilities

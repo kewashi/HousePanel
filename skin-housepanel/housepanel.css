@@ -637,7 +637,7 @@ div.thing.music-thing {
 }
 div.thing.audio-thing {
     background-color: rgba(0, 102, 102, 1);
-    width: 180px;
+    width: auto;
     height: auto;
 }
 /* use italic serif font for music titles and a custom size */
@@ -649,7 +649,7 @@ div.audio-thing div.overlay.trackDescription div.trackDescription
     font-size: 11pt;
     font-style: italic;
     height: auto;
-    width: 100%;
+    width: auto;
     padding-top: 10px; padding-bottom: 10px;
     border-bottom: none;
     background-color: rgba(80, 80, 80, 0.7);
@@ -765,15 +765,7 @@ div.clock.weekday, div.clock.date {
 
 div.mode.themode {
     font-size: 20pt;
-    margin-top: 10px;
     height: 24px;
-}
-div.mode-thing div.sitename {
-    margin-top: 45px;
-    height: auto;
-}
-div.mode-thing div.overlay.themode {
-    height: auto;
 }
 div.shm.state, div.hsm.state, div.custom.state {
     font-size: 18pt;
@@ -1006,4 +998,39 @@ div.thermostat-thing div.thingname {
 
 div.music-thing div.thingname, div.audio-thing div.thingname {
     width: 100%;
+}
+
+/* set piston images for ISY run and runThen items */
+/* one or both can be hidden */
+/* this overrides the usual click css which inverts the item */
+div.overlay.run div.run,
+div.overlay.runThen div.runThen {
+    background-image: url('icons/piston.png');
+    background-size: 70px;
+    background-position-y: bottom;
+    color: rgb(255, 255, 255);
+    font-size: 18px;
+    height: 100px;
+    filter: invert(0);
+}
+div.overlay.run div.run.clicked,
+div.overlay.runThen div.runThen.clicked {
+    background-image: url('icons/pistonfiring.png');
+    background-size: 70px;
+    background-position-y: bottom;
+    color: rgb(255, 255, 255);
+    font-size: 18px;
+    height: 100px;
+    filter: invert(0);
+}
+
+/* by default hide all the other program stuff in this skin */
+div.isy-thing.program div.overlay.runElse,
+div.isy-thing.program div.overlay.stop,
+div.isy-thing.program div.overlay.enable,
+div.isy-thing.program div.overlay.disable,
+div.isy-thing.program div.overlay.status,
+div.isy-thing.program div.overlay.lastRunTime,
+div.isy-thing.program div.overlay.lastFinishTime {
+    display: none;
 }

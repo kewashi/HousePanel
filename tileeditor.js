@@ -622,8 +622,14 @@ function initDialogBinds(str_type, thingindex) {
         var thingindex = $("#tileDialog").attr("thingindex");
         if ( subid !== "wholetile" ) {
             var target = getCssRuleTarget(str_type, subid, thingindex);
+
+            // just change the icon if this is a track image
+            if ( subid==="trackImage" ) {
+                target = target + " img.trackImage";
+            }
             var rule = "width: " + newsize.toString() + "px;";
             addCSSRule(target, rule);
+
         }
         event.stopPropagation;
     });
@@ -691,7 +697,11 @@ function initDialogBinds(str_type, thingindex) {
                     addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
                     addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
                 } else {
-                    addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+                    var wtarget = getCssRuleTarget(str_type, subid, thingindex);
+                    if ( subid==="trackImage" ) {
+                        wtarget = wtarget + " img.trackImage";
+                    }
+                    addCSSRule(wtarget, rule);
                 }
             } else {
                 var newsize = parseInt( $("#editWidth").val() );
@@ -716,7 +726,11 @@ function initDialogBinds(str_type, thingindex) {
                     addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
                     addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
                 } else {
-                    addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+                    var wtarget = getCssRuleTarget(str_type, subid, thingindex);
+                    if ( subid==="trackImage" ) {
+                        wtarget = wtarget + " img.trackImage";
+                    }
+                    addCSSRule(wtarget, rule);
                 }
             }
         }
@@ -1454,8 +1468,17 @@ function initColor(str_type, subid, thingindex) {
     
     // set the text height and width parameters
     if ( subid!=="wholetile" && subid!=="head" ) {
-        var editwidth = $(target).css("width");
         var editheight = $(target).css("height");
+        editheight = parseInt(editheight,10);
+        if ( isNaN(editheight) || editheight <= 0 ) { 
+            editheight = $(generic).css("height");
+            if ( isNaN(editheight) || editheight <= 0 ) { 
+                editheight = 150;
+                if ( subid==="panel" ) { editheight = 600; }
+            }
+        }
+        $("#editHeight").val(editheight);
+
         if ( $(target).isAuto("height") ) {
             $("#autoHeight").prop("checked", true);
             $("#editHeight").prop("disabled", true);
@@ -1464,17 +1487,19 @@ function initColor(str_type, subid, thingindex) {
             $("#autoHeight").prop("checked", false);
             $("#editHeight").prop("disabled", false);
             $("#editHeight").css("background-color","white");
-            editheight = parseInt(editheight,10);
-            if ( isNaN(editheight) || editheight <= 0 ) { 
-                editheight = $(generic).css("height");
-                if ( isNaN(editheight) || editheight <= 0 ) { 
-                    editheight = 150;
-                    if ( subid==="panel" ) { editheight = 600; }
-                }
-            }
-            $("#editHeight").val(editheight);
         }
         
+        var editwidth = $(target).css("width");
+        editwidth = parseInt(editwidth,10);
+        if ( isNaN(editwidth) || editwidth <= 0 ) { 
+            editwidth = $(generic).css("width");
+            if ( isNaN(editwidth) || editwidth <= 0 ) { 
+                editwidth = 80;
+                if ( subid==="panel" ) { editwidth = 1200; }
+            }
+        }
+        $("#editWidth").val(editwidth);
+
         if ( $(target).isAuto("width") ) {
             $("#autoWidth").prop("checked", true);
             $("#editWidth").prop("disabled", true);
@@ -1483,15 +1508,6 @@ function initColor(str_type, subid, thingindex) {
             $("#autoWidth").prop("checked", false);
             $("#editWidth").prop("disabled", false);
             $("#editWidth").css("background-color","white");
-            editwidth = parseInt(editwidth,10);
-            if ( isNaN(editwidth) || editwidth <= 0 ) { 
-                editwidth = $(generic).css("width");
-                if ( isNaN(editwidth) || editwidth <= 0 ) { 
-                    editwidth = 80;
-                    if ( subid==="panel" ) { editwidth = 1200; }
-                }
-            }
-            $("#editWidth").val(editwidth);
         }
     }
 

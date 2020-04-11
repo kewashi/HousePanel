@@ -831,7 +831,7 @@ function handleBuiltin(subid) {
             if ( cmtype==="LINK" || cmtype==="RULE" || cmtype==="TEXT" ) {
                 cmtext = helpers[2];
             } else {
-                cmtext = decodeURIComponent(helpers[2]);
+                cmtext = decodeURI(helpers[2]);
             }
             // if ( cmtype==="TEXT" ) {
             //     cmtext = cmtext.replace( /\+/g, ' ' );

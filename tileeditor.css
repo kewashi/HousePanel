@@ -1788,7 +1788,7 @@ div.mode._Home, div.mode._Away, div.mode._Night, div.mode._Movies {
     cursor: pointer;
 }
 
-div.clicked {
+div.panel div.overlay div.clicked {
     filter: invert(1);
 }
 
@@ -1855,4 +1855,8 @@ div.rtsp {
     overflow-wrap: break-word;
     width: 240px;
     display: none;
+}
+img.trackImage {
+    width: 120px;
+    height: auto;
 }
