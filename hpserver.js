@@ -1196,6 +1196,7 @@ function setDefaults() {
     GLB.options.config["accucity"] = "ann-arbor-mi";
     GLB.options.config["accuregion"] = "us";
     GLB.options.config["accucode"] = "329380";
+    GLB.options.config["fcastcity"] = "ann-arbor";
     GLB.options.config["hubpick"] = "all";
 
     var uname = "default";
@@ -2004,19 +2005,69 @@ function returnFile(thingvalue, thingtype) {
 
 // function to create frame2.html with AccuWeather for a city
 // the City Name, Country Code, and the Location Code from AccuWeather must be provided
-// getAccuWeather("ann-arbor-mi","us","329380");
-function getAccuWeather($city, $region, $code) {
+// writeAccuWeather("ann-arbor-mi","us","329380");
+function writeAccuWeather(city, region, code) {
     const acid = "awcc1531959686475";
-    const $unit = "F";
+    const unit = "F";
 
-    var rcitycode = $region + "/" + $city + "/" + $code + "/weather-forecast/" + $code;
+    var rcitycode = region + "/" + city + "/" + code + "/weather-forecast/" + code;
     var $tc = "<!DOCTYPE html>";
     $tc += "<html><body>";
     $tc += "<a href=\"https://www.accuweather.com/en/" + rcitycode + "\" class=\"aw-widget-legal\">";
-    $tc += "</a><div id=\"" + acid + "\" class=\"aw-widget-current\"  data-locationkey=\"" + $code + "\" data-unit=\"" + $unit + "\" data-language=\"en-us\" data-useip=\"false\" data-uid=\"" + acid + "\"></div>";
+    $tc += "</a><div id=\"" + acid + "\" class=\"aw-widget-current\"  data-locationkey=\"" + code + "\" data-unit=\"" + unit + "\" data-language=\"en-us\" data-useip=\"false\" data-uid=\"" + acid + "\"></div>";
     $tc += "<script type=\"text/javascript\" src=\"https://oap.accuweather.com/launch.js\"></script>";
     $tc += "</body></html>";
-    fs.writeFileSync("frame2.html", $tc, {encoding: "utf8", flag:"w"});
+    fs.writeFileSync("Frame2.html", $tc, {encoding: "utf8", flag:"w"});
+}
+
+// function to create Frame1.html with WeatherWidget for a city
+// the City Name must be provided
+// writeForecastWidget("ann-arbor","Ann Arbor","42d28n83d74");
+function writeForecastWidget(city, region, code) {
+
+    // if user doesn't provide a code, use my default account which should work
+    // and by default no region specified sets it to the city with -'s replaced with spaces
+    if ( !city ) {
+        return;
+    }
+    if ( !region ) {
+        var words = city.replace("-"," ").split(" ");
+        region = "";
+        for ( var i in words ) {
+            region += words[i].substr(0,1).toUpperCase() + words[i].substr(1).toLowerCase() + " ";
+        }
+        if ( !region ) {
+            region = city;
+        }
+
+    }
+    if ( !code ) {
+        code = "42d28n83d74";
+    }
+
+    var $tc = `
+    <!DOCTYPE html>
+    <html>
+        <head>
+            <title>Weather Forecast</title>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <script>
+                !function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];
+                if(!d.getElementById(id)){js=d.createElement(s);
+                js.id=id;js.src="https://weatherwidget.io/js/widget.min.js";
+                fjs.parentNode.insertBefore(js,fjs);}}(document,"script","weatherwidget-io-js");
+            </script>
+        </head>
+        <body style="margin: 0;">
+        <a class="weatherwidget-io" href="https://forecast7.com/en/{{code}}/{{city}}/?unit=us" data-label_1="{{region}}" data-label_2="Weather Forecast" data-icons="Climacons" data-days="7" data-theme="original" ></a>
+        </body>
+    </html>`;
+
+    $tc = $tc.replace("{{city}}", city);
+    $tc = $tc.replace("{{region}}", region);
+    $tc = $tc.replace("{{code}}", code);
+    fs.writeFileSync("Frame1.html", $tc, {encoding: "utf8", flag:"w"});
 }
 
 function getWeatherIcon(num) {
@@ -4858,18 +4909,33 @@ function getOptionsPage(pathname) {
     }
     $tc += "</div>";
 
+    var fcastcity = configoptions["fcastcity"] || "ann-arbor";
+    var fcastregion = configoptions["fcastregion"];
+    var fcastcode = configoptions["fcastcode"];      // ann-arbor code is 42d28n83d74
     var $accucity = configoptions["accucity"];
     var $accuregion = configoptions["accuregion"];
     var $accucode = configoptions["accucode"];      // ann-arbor-mi code is 329380
     $tc += "<div class=\"filteroption\">";
-    $tc += "<label for=\"accucityid\" class=\"kioskoption\">Accuweather City: <input id=\"accucityid\" width=\"180\" ";
-    $tc += "type=\"text\" name=\"accucity\"  value=\"" + $accucity + "\" />";
-    $tc += "<label for=\"accuregionid\" class=\"kioskoption\">Region: <input id=\"accuregionid\" width=\"6\" type=\"text\" name=\"accuregion\"  value=\"" + $accuregion + "\"/>";
-    $tc += "<label for=\"accucodeid\" class=\"kioskoption\">Code: <input id=\"accucodeid\" width=\"40\" type=\"text\" name=\"accucode\"  value=\"" + $accucode + "\"/>";
-    $tc += "</div>";
+    $tc += "<table>";
+    $tc += "<tr>";
+    $tc += "<td><label for=\"fcastcityid\" class=\"kioskoption\">Forecast City: </label></td>";
+    $tc += "<td><input id=\"fcastcityid\" width=\"180\" type=\"text\" name=\"fcastcity\"  value=\"" + fcastcity + "\" /></td>";
+    $tc += "<td><label for=\"fcastregionid\" class=\"kioskoption\">Forcast Region: </label></td>";
+    $tc += "<td><input id=\"fcastregionid\" width=\"40\" type=\"text\" name=\"fcastregion\"  value=\"" + fcastregion + "\"/></td>";
+    $tc += "<td><label for=\"fcastcodeid\" class=\"kioskoption\">Forecast Code: </label></td>";
+    $tc += "<td><input id=\"fcastcodeid\" width=\"20\" type=\"text\" name=\"fcastcode\"  value=\"" + fcastcode + "\"/>";
+    $tc += "<span class='typeopt'>(for Frame1 tiles)</span></td>";
+    $tc += "</tr><tr>";
+    $tc += "<td><label for=\"accucityid\" class=\"kioskoption\">Accuweather City: </label></td>";
+    $tc += "<td><input id=\"accucityid\" width=\"180\" type=\"text\" name=\"accucity\"  value=\"" + $accucity + "\" /></td>";
+    $tc += "<td><label for=\"accuregionid\" class=\"kioskoption\">Accuweather Region: </label></td>";
+    $tc += "<td><input id=\"accuregionid\" width=\"6\" type=\"text\" name=\"accuregion\"  value=\"" + $accuregion + "\"/></td>";
+    $tc += "<td><label for=\"accucodeid\" class=\"kioskoption\">AccuWeather Code: </label></td>";
+    $tc += "<td><input id=\"accucodeid\" width=\"40\" type=\"text\" name=\"accucode\"  value=\"" + $accucode + "\"/>";
+    $tc += "<span class='typeopt'>(for Frame2 tiles)</span></td>";
+    $tc += "</tr></table></div>";
     
     // now display the table of all the rooms and thing options
-    $tc += "<br /><br />";
     $tc += "<table class=\"headoptions\"><thead>";
     $tc += "<tr><th class=\"thingname\">Thing Name (type)</th>";
     $tc += "<th class=\"hubname\">Hub</th>";
@@ -5342,6 +5408,9 @@ function processOptions($optarray) {
     var $city = "";
     var $region = "";
     var $code = "";
+    var fcastcity = "";
+    var fcastregion = "";
+    var fcastcode = "";
 
     // // get all the rooms checkboxes and reconstruct list of active things
     // // note that the list of checkboxes can come in any random order
@@ -5361,6 +5430,12 @@ function processOptions($optarray) {
             $region = $val.trim();
         } else if ( key==="accucode" ) {
             $code = $val.trim();
+        } else if ( key==="fcastcity" ) {
+            fcastcity = $val.trim();
+        } else if ( key==="fcastregion" ) {
+            fcastregion = $val.trim();
+        } else if ( key==="fcastcode" ) {
+            fcastcode = $val.trim();
         
         // handle user selected special tile count
         } else if ( key.substr(0,4)==="cnt_" ) {
@@ -5434,7 +5509,14 @@ function processOptions($optarray) {
         configoptions["accucity"] = $city;
         configoptions["accuregion"] = $region;
         configoptions["accucode"] = $code;
-        getAccuWeather($city, $region, $code);
+        writeAccuWeather($city, $region, $code);
+
+    }
+    if ( fcastcity && fcastcode ) {
+        configoptions["fcastcity"] = fcastcity;
+        configoptions["fcastregion"] = fcastregion;
+        configoptions["fcastcode"] = fcastcode;
+        writeForecastWidget(fcastcity, fcastregion, fcastcode);
     }
     
     // save the configuration parameters in the main options array

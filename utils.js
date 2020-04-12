@@ -1,6 +1,8 @@
 'use strict';
 
 const devhistory =  ` 
+2.251   Fixed frame cap bug by renaming frame#.html to Frame#.html
+            - added ability to create Frame1.html file is code is known
 2.250   Cleaned up handling of names and headers to hide headers by default
             - headers now will always contain the original tile name from hub
             - modified names in the GUI will only show in the tile name field
