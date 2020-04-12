@@ -79,10 +79,6 @@ div.thing:hover{
     -webkit-box-shadow: 0px 0px 41px rgba(0, 0, 0, 0.70); 
 }
 
-div.name {
-    display: none;
-}
-
 div.thing.switch-thing, div.thing.switchlevel-thing, div.thing.bulb-thing {
     height: auto;
     width: auto;
@@ -101,7 +97,7 @@ div.temperature, div.overlay div.themode, div.shm, div.hsm {
 div.switch, div.bulb, div.light, div.switchlevel, div.momentary, div.motion, div.lock, 
 div.contact, div.presence, div.piston, div.valve, div.overlay div.door,
 div.overlay div.themode, 
-div.temperature-thing, div.thingname.temperature, div.isy {
+div.temperature-thing, div.isy {
     width: 120px;
 }
 
@@ -737,8 +733,8 @@ div.weather-thing div.overlay.temperature, div.weather-thing div.overlay.feelsLi
     display: inline;
     padding-right: 4px;
 }
-div.weather-thing div.overlay.name {
-    display: none;
+div.thing.weather-thing div.overlay.name, div.thing.weather-thing div.overlay.city {
+    display: block;
     position: relative;
 }
 
@@ -810,6 +806,12 @@ div.thing.image-thing {
     width: auto;
     height: auto;
 }
+div.thing.image-thing div.overlay.name,
+div.thing.video-thing div.overlay.name,
+div.thing.frame-thing div.overlay.name,
+div.thing.blank-thing div.overlay.name {
+    display: none;
+}
 
 /* presence styling */
 div.presence.present, div.custom.present {
@@ -852,19 +854,22 @@ div.lock.locked, div.lock.unlocked, div.lock.unknown {
     height: 146px;
 }
 /* locks */
-div.lock-thing div.overlay.name {
+div.thing.lock-thing div.overlay.name {
     display: block;
     position: absolute;
     border: none;
     background: none;
     left: 2px;
+    background-color: rgba(0, 0, 0, 0.01);
     color: rgba(255, 255, 255, 1);
 }
 
 div.overlay.name div.lock.name {
   display: block;
+  left: 2px;
   width: 24px;
   font-size: 10pt;
+  background-color: none;
 }
 div.overlay {
     width: 100%;
@@ -912,11 +917,16 @@ div.switchlevel.screen.power, div.switchlevel.screen.energy {
 
 /* these settings are for my Stereo and TV both controled via KuKuHarmony  */
 /* They are installed in HP using an Other tile */
+div.other-thing.pioneer div.thingname, div.other-thing.lg div.thingname {
+    display: block;
+    height: 32px;
+    background-color: rgba(50, 50, 50, 1);
+}
 div.other-thing.pioneer div.switch, div.other-thing.lg div.switch {
     height: 20px;
     background-color: rgba(50, 50, 50, 1);
 }
-div.other-thing.pioneer, div.other-thing.pioneer div.thingname, div.other-thing.lg, div.other-thing.lg div.thingname {
+div.other-thing.pioneer, div.other-thing.pioneer div.name, div.other-thing.lg, div.other-thing.lg div.name {
     width: 420px;
     padding-left: 0;
     padding-right: 0;
@@ -934,7 +944,10 @@ div.other-thing.pioneer div.overlay, div.other-thing.lg div.overlay {
 }
 div.other-thing div.overlay.healthStatus,
 div.other-thing.pioneer div.overlay.name, 
-div.other-thing.lg div.overlay.name 
+div.other-thing.lg div.overlay.name,
+div.other-thing.pioneer div.overlay._custom5, div.other-thing.lg div.overlay._custom5,
+div.other-thing.pioneer div.overlay._virtualOn, div.other-thing.lg div.overlay._virtualOn,
+div.other-thing.pioneer div.overlay._virtualOff, div.other-thing.lg div.overlay._virtualOff
 {
     display: none;
 }
@@ -978,7 +991,11 @@ div.switchlevel.event_1, div.bulb.event_1 {
     background-color: rgba(90,90,90,1);
     font-style: italic;
 }
-div.thingname {
+
+/* changed to use name instead of thingname */
+div.thing div.thingname {
+    display: none;
+/*
     background-color: rgba(0, 50, 100,1);
     font-size: 11pt;
     text-align: center;
@@ -987,17 +1004,34 @@ div.thingname {
     height: 30px;
     cursor: default;
     display: block;
+*/
 }
-div.thingname:hover {
+
+/* div.thingname:hover {
+    background-color: #5050a0; 
+    color: #cccccc;
+*/
+
+div.thing div.overlay.name div.name {
+    background-color: rgba(0, 50, 100,1);
+    font-size: 11pt;
+    text-align: center;
+    color: #ffffff;
+    border-bottom: 2px solid rgba(0,0,0,1);
+    /* width: 100%; */
+    height: 30px;
+    cursor: default;
+}
+div.thing div.overlay.name:hover {
     background-color: #5050a0; 
     color: #cccccc;
 }
-div.thermostat-thing div.thingname {
+
+div.thermostat-thing div.name {
     width: 120px;
 }
-
-div.music-thing div.thingname, div.audio-thing div.thingname {
-    width: 100%;
+div.thing.clock-thing div.overlay.name {
+    display: none;
 }
 
 /* set piston images for ISY run and runThen items */

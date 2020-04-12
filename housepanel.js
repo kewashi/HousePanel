@@ -4,6 +4,7 @@
  * Designed for use only with HousePanel for Hubitat and SmartThings
  * (c) Ken Washington 2017 - 2020
  * 
+ * 04/12/2020 - numerous updates related to version 2.250
  * 02/12/2020 - mods to work with Node.js server version
  * 01/02/2020 - updated to fix z-index bug so things show up on top properly
  * 03/26/2020 - major cleanup and optimization after code inspection
@@ -19,6 +20,7 @@ cm_Globals.options = null;
 cm_Globals.returnURL = "";
 cm_Globals.hubId = "all";
 cm_Globals.client = -1;
+cm_Globals.skipseconds = false;
 
 var modalStatus = 0;
 var modalWindows = {};
@@ -36,9 +38,8 @@ var reordered = false;
 // this way the app can be installed but won't control my home
 // end-users are welcome to use this but it is intended for development only
 // use the timers options to turn off polling
-var disablepub = false;
-var disablebtn = false;
-var LOGWEBSOCKET = true;
+cm_Globals.disablepub = false;
+cm_Globals.logwebsocket = false;
 
 Number.prototype.pad = function(size) {
     var s = String(this);
@@ -259,7 +260,7 @@ $(document).ready(function() {
 
     // finally we wait two seconds then setup page clicks and web sockets
     setTimeout(function() {
-        if ( pagename==="main" && !disablepub ) {
+        if ( pagename==="main" && !cm_Globals.disablepub ) {
             setupPage();
         }
     }, 1000);
@@ -484,7 +485,7 @@ function setupWebsocket()
                 }
             });
             
-            if ( LOGWEBSOCKET ) {
+            if ( cm_Globals.logwebsocket ) {
                 console.log("webSocket message from: ", webSocketUrl," bid= ",bid," name:",pname," client:",client," of: ",clientcount," type= ",thetype," subid= ",subid," value= ",pvalue);
             }
         } catch (err) {
@@ -510,7 +511,7 @@ function setupWebsocket()
             // this now works even if tile isn't on the panel because
             $('div.panel div.thing[bid="'+bid+'"][type="'+thetype+'"]').each(function() {
                 try {
-                    var aid = $(this).attr("id").substring(2);
+                    var aid = $(this).attr("aid");
                     updateTile(aid, pvalue);
                 } catch (e) {
                     console.log("Error updating tile of type: "+ thetype + " and id: " + bid + " with value: ", pvalue);
@@ -1137,11 +1138,6 @@ function setupDraggable() {
                                 if ( clk==="okay" ) {
                                     // add it to the system
                                     // the ajax call must return a valid "div" block for the dragged new thing
-                                    // get the last thing in the current room
-                                    // var lastthing = $("div.panel-"+panel+" div.thing").last();
-                                    // var cnt = $("div.panel div.thing").last().attr("id");
-                                    // cnt = parseInt(cnt.substring(2),10) + 1;
-
                                     $.post(cm_Globals.returnURL, 
                                         {useajax: "dragmake", id: bid, type: thingtype, value: panel},
                                         function (presult, pstatus) {
@@ -1522,12 +1518,12 @@ function setupButtons() {
     }
 
     // disable cancel auth button when page first loads
-    // and turn it on after 10 seconds which gives time for hubs to load
+    // and turn it on after a seconds which gives time for hubs to load
     if ( $("button.infobutton") ) {
         $("button.infobutton").addClass("disabled").prop("disabled", true);
         setTimeout(function() {
             $("button.infobutton").removeClass("disabled").prop("disabled", false);
-        }, 500);
+        }, 1000);
             
         $("button.infobutton").on('click', function() {
             // location.reload(true);
@@ -1537,7 +1533,7 @@ function setupButtons() {
         });
     }
 
-    if ( pagename==="main" && !disablebtn ) {
+    if ( pagename==="main" && !cm_Globals.disablepub ) {
 
         $("div.modeoptions").on("click","input.radioopts",function(evt){
             var opmode = $(this).attr("value");
@@ -2364,7 +2360,12 @@ function clockUpdater(tz) {
     setInterval(function() {
         // var old = new Date();
         // var utc = old.getTime() + (old.getTimezoneOffset() * 60000);
-        // var d = new Date(utc + (1000*tz));     
+        // var d = new Date(utc + (1000*tz)); 
+        
+        if ( cm_Globals.skipseconds ) {
+            return;
+        }
+
         var d = new Date();
         var hour24 = d.getHours();
         var hour = hour24;
@@ -2467,20 +2468,22 @@ function setupTimer(timerval, timertype, hubnum) {
                     // skip all this stuff if we dont return an object
                     if (pstatus==="success" && typeof presult==="object" ) {
 
-                        if ( LOGWEBSOCKET ) {
+                        if ( cm_Globals.logwebsocket ) {
                             var keys = Object.keys(presult);
                             console.log("pstatus = ", pstatus, " loaded ", keys.length, " things from server");
                         }
     
                         // go through all tiles and update
+                        // this uses our new aid field in all tiles
                         try {
                             $('div.panel div.thing').each(function() {
-                                var aid = $(this).attr("id");
+                                var aid = $(this).attr("aid");
                                 // skip the edit in place tile
-                                if ( aid.startsWith("t-") ) {
-                                    aid = aid.substring(2);
+                                if ( aid ) {
                                     var tileid = $(this).attr("tile");
                                     var strtype = $(this).attr("type");
+                                    var bid = $(this).attr("bid");
+                                    var idx = strtype + "|" + bid;
 
                                     var thevalue;
                                     try {
@@ -2504,8 +2507,10 @@ function setupTimer(timerval, timertype, hubnum) {
                                     // since doing it here messes up the websocket updates
                                     // I actually kept the audio refresh since it seems to work okay
                                     if ( thevalue && typeof thevalue==="object" ) {
-                                        if ( thevalue["name"] ) { delete thevalue["name"]; }
-                                        if ( thevalue["password"] ) { delete thevalue["password"]; }
+                                        if ( !thevalue["name"] && cm_Globals.allthings[idx] ) {
+                                            thevalue["name"] = cm_Globals.allthings[idx].name;
+                                        }
+                                        if ( typeof thevalue["password"]!=="undefined" ) { delete thevalue["password"]; }
                                         if ( strtype==="music" ) {
                                             if ( thevalue["trackDescription"] ) { delete thevalue["trackDescription"]; }
                                             if ( thevalue["trackImage"] ) { delete thevalue["trackImage"]; }
@@ -2907,10 +2912,10 @@ function processClick(that, thingname) {
                             var pos = {top: $(tile).position().top + 80, left: leftpos};
                             closeModal("modalpopup");
                             createModal("modalpopup", showstr, "body", false, pos, function(ui) {} );
-                    } else if ( pstatus==="success" && presult==="success" ) {
-                        console.log("Success: result will be pushed later. status: ", pstatus, " result: ", presult)
-                    } else {
-                        console.log("Error: making ajax POST call. status: ", pstatus, " result: ", presult);
+                        // } else if ( pstatus==="success" && presult==="success" ) {
+                        //     console.log("Success: result will be pushed later. status: ", pstatus, " result: ", presult)
+                        // } else {
+                        //     console.log("Error: making ajax POST call. status: ", pstatus, " result: ", presult);
                     }
                }, "json"
         );

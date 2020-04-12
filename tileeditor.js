@@ -284,8 +284,10 @@ function getCssRuleTarget(str_type, subid, thingindex, useall) {
             target+= "." + str_type + "-thing";
         }
     } else if ( subid==="head" ) {
-        target = "div.thingname";
-        if ( useall < 2 ) { target+= "." + str_type; }
+        target = "div.thing div.thingname";
+        if ( useall < 2 ) { 
+            target=  "div.thing." + str_type + "-thing div.thingname." + str_type; 
+        }
         if ( useall < 1 ) { 
             target+= '.t_'+thingindex;
             // target+= " span.n_"+thingindex;
@@ -872,8 +874,8 @@ function effectspicker(str_type, thingindex) {
         labelname = "Page Name:";
         name = thingindex;
     } else {
-        labelname = "Tile Name:";
-        var target = getCssRuleTarget(str_type, "head", thingindex);
+        labelname = "Set Custom Name Here:";
+        var target = getCssRuleTarget(str_type, "name", thingindex);
         name =  $(target).html();
     }
     // alert("Name = " + name);
@@ -1089,6 +1091,7 @@ function loadSubSelect(str_type, firstsub, thingindex) {
         } else {
             subcontent += "<option value='head'>Head Title</option>";
         }
+
         // var idsubs = "";
         var subid;
         // var firstsub = setsubid(str_type);
@@ -1218,22 +1221,18 @@ function updateNames(str_type, thingindex) {
 
     var newname = $("#editName").val();
     var oldname;
+    var target1 = getCssRuleTarget(str_type, "name", thingindex);
     if ( str_type==="page") {
         oldname = thingindex;
-        var target1 = getCssRuleTarget(str_type, "name", thingindex);
-        $(target1).html(newname);
     } else {
-        var target1 = getCssRuleTarget(str_type, "head", thingindex);
-        var target2 = getCssRuleTarget(str_type, "name", thingindex);
         oldname = $(target1).html();
-        $(target1).html(newname);
-        $(target2).html(newname);
     }
 
     if ( oldname === newname ) {
-        // console.log("Names match in updateNames, so doing nothing.");
+        console.log("Names match in updateNames, so doing nothing. name: ", newname);
         return;
     }
+    $(target1).html(newname);
 
     var returnURL = cm_Globals.returnURL;
     $.post(returnURL, 
@@ -1378,7 +1377,7 @@ function initColor(str_type, subid, thingindex) {
     var generic = getCssRuleTarget(str_type, subid, thingindex, 1);
     var icontarget = "#tileDisplay " + target;
     
-    // console.log ("initcolor: str_type= " + str_type + " subid= " + subid + " thingindex= " + thingindex + " target= " + target);
+    console.log ("initcolor: str_type= " + str_type + " subid= " + subid + " thingindex= " + thingindex + " target= " + target);
     priorIcon = $(target).css("background-image");
         
     // set the first onoff state
@@ -1978,31 +1977,50 @@ function initColor(str_type, subid, thingindex) {
     
     // set initial hidden status
     if ( subid!=="wholetile" ) {
-        var ish1;
-        var ish2;
-        var ish3;
-        var ish4;
+        var ish1 = "";
+        var ish2 = "";
+        var ish3 = "";
+        var ish4 = "";
+        var ish1_1 = "";
+        var ish2_1 = "";
+        var ish3_1 = "";
+        var ish4_1 = "";
         if ( subid==="head" ) {
             ish1 = $("div.thingname." + str_type).css("display");
-            ish2= $("div.thingname."+str_type+".t_"+thingindex).css("display");
-            ish3 = ish1;
-            ish4 = ish2;
+            ish2= $("div.thingname." + str_type + ".t_" + thingindex).css("display");
+            ish3= $("div.thing." + str_type + "-thing div.thingname." + str_type).css("display");
+            ish4= $("div.thing." + str_type + "-thing div.thingname." + str_type + ".t_" + thingindex).css("display");
         } else {
             // skip first check if subid is same as the type
-            ish1 = (str_type===subid) ? "" : $("div." + subid).css("display");
+            if ( str_type!==subid ) {
+                ish1 = $("div." + subid).css("display");
+            }
+            ish1_1 = $("div.thing." + str_type + "-thing div." + subid).css("display");
             
             // the other tests could all set the item to hidden
             ish2= $("div.overlay."+subid+".v_"+thingindex).css("display");
+            ish2_1= $("div.thing." + str_type + "-thing div.overlay." + subid + ".v_"+thingindex).css("display");
             ish3 = $("div.overlay." + subid).css("display");
+            ish3_1 = $("div.thing." + str_type + "-thing div.overlay." + subid).css("display");
             ish4 = $("div.overlay." + subid +".v_"+thingindex + " div." + subid + ".p_"+thingindex).css("display");
+            ish4_1 = $("div.thing." + str_type + "-thing div.overlay." + subid +".v_"+thingindex + " div." + subid + ".p_"+thingindex).css("display");
         }
         // console.log ("hidden check: ", subid, ish1, ish2, ish3, ish4);
-        if ( ish1 === "none" || ish2 === "none" || ish3 ==="none" || ish4==="none") {
+        if ( ish1 === "none" || ish1_1 === "none" || ish2 === "none" || ish2_1 ==="none" || ish3 ==="none" || ish3_1 ==="none" || ish4==="none" || ish4_1==="none") {
             $("#isHidden").prop("checked", true);
             defaultOverlay = "block";
         } else {
             $("#isHidden").prop("checked", false);
-            defaultOverlay = ish2 ? ish2 : (ish3 ? ish3 : "block");
+            defaultOverlay = "block";
+            if ( ish1!=="" )   { defaultOverlay = ish1; }
+            if ( ish1_1!=="" ) { defaultOverlay = ish1_1; }
+            if ( ish2!=="" )   { defaultOverlay = ish2; }
+            if ( ish2_1!=="" ) { defaultOverlay = ish2_1; }
+            if ( ish3!=="" )   { defaultOverlay = ish3; }
+            if ( ish3_1!=="" ) { defaultOverlay = ish3_1; }
+            if ( ish4!=="" )   { defaultOverlay = ish4; }
+            if ( ish4_1!=="" ) { defaultOverlay = ish4_1; }
+            // defaultOverlay = ish2 ? ish2 : (ish3 ? ish3 : "block");
         }
     }
     

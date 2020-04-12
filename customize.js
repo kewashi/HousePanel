@@ -123,7 +123,7 @@ function customizeTile(thingindex, aid, bid, str_type, hubnum) {
 
                 // grab the global list of all things and options
                 if ( !cm_Globals.allthings || !cm_Globals.options ) {
-                    console.log("Please try again in a few moments. HousePanel is setting up your server...");
+                    // console.log("Please try again in a few moments. HousePanel is setting up your server...");
                     return;
                 } else {
                     try {
@@ -216,6 +216,31 @@ function customInfoPanel() {
     return dh;
 }
 
+// this little gem will sort by up to three things
+function sortedSensors(one, two, three) {
+
+    if ( !one ) { one = "name"; }
+
+    // put sensors in an array so we can sort them
+    var sensors = Object.values(cm_Globals.allthings).sort( function(obja, objb) {
+        function test(a, b) {
+            if ( typeof a === "object" || typeof b === "object" ) { return 0; }
+            else if ( a===b ) { return 0 }
+            else if ( a > b ) { return 1; }
+            else { return -1; }
+        }
+        var check = test(obja[one], objb[one]);
+        if ( check===0 && two ) {
+            check = test(obja[two], objb[two]);
+            if ( check===0 && three ) {
+                check = test(obja[three], objb[three]);
+            }
+        }
+        return check;
+    });
+    return sensors;
+}
+
 function loadLinkPanel(thingindex) {
     
     // section for LINK types - Drop down list, ID display, Field list, and a test button
@@ -229,12 +254,15 @@ function loadLinkPanel(thingindex) {
     var results = "";
     var numthings = 0;
     var selected = "";
-    $.each(cm_Globals.allthings, function() {
-        var thingid = this["id"];
+
+    // create a sorted list here
+    var sensors = sortedSensors("name", "type", "hubnum");
+    for ( i in sensors ) {
+        var sensor = sensors[i];
+        var thingid = sensor["id"];
         if ( thingid !== thingindex ) {
-            var thingname = this["name"];
-            
-            var thingtype = this["type"];
+            var thingname = sensor["name"];
+            var thingtype = sensor["type"];
             var idx = thingtype + "|" + thingid;
             if ( idx === cm_Globals.currentidx ) {
                 selected = " selected";
@@ -244,7 +272,7 @@ function loadLinkPanel(thingindex) {
             results+= "<option value='" + idx + "'" + selected + ">" + thingname + " (" + thingtype + ")</option>";
             numthings++;
         }
-    });
+    }
     
     dh+= results ;
     dh+="</select></div>";
@@ -405,7 +433,7 @@ function loadLinkItem(idx, allowuser, sortval, sortup) {
         return;
     }
 
-    console.log("idx= ", idx, " loadLinkItem - thevalue= ", thevalue, " allowuser= ", allowuser);
+    // console.log("idx= ", idx, " loadLinkItem - thevalue= ", thevalue, " allowuser= ", allowuser);
     var subids = Object.keys(thevalue);
     
     var numthings = 0;
@@ -436,7 +464,7 @@ function loadLinkItem(idx, allowuser, sortval, sortup) {
     // first sort and make sure we get rid of dups
     if ( allowuser ) {
         var uid = "user_" + cm_Globals.id;
-        console.log("uid: ", uid, " subids: ", cm_Globals.options[uid]);
+        // console.log("uid: ", uid, " subids: ", cm_Globals.options[uid]);
         sortExistingFields(sortval, sortup);
         $.each(cm_Globals.options[uid], function(index, val) {
             var subid = val[2];
@@ -658,7 +686,7 @@ function sortUpdate(uid) {
         var swtype = cm_Globals.type;
         var idx = swtype + "|" + swid;
         var opts = cm_Globals.options[uid];
-        console.log("id= ", swid, " type= ", swtype, " opts= ", opts);
+        // console.log("id= ", swid, " type= ", swtype, " opts= ", opts);
         $.post(cm_Globals.returnURL, {useajax: "sortupdate", id: swid, type: swtype, value: opts, attr: uid},
             function (presult, pstatus) {
                 if (pstatus==="success" && typeof presult==="object" ) {
@@ -812,7 +840,7 @@ function handleBuiltin(subid) {
     var companion = "user_" + subid;
     cm_Globals.defaultclick = subid;
 
-    console.log("builtin handler: subid= ", subid, "subids: ", subids, " companion= ", companion);
+    // console.log("builtin handler: subid= ", subid, "subids: ", subids, " companion= ", companion);
 
     // put the field clicked on in the input box
     $("#cm_userfield").attr("value",subid);
@@ -933,7 +961,7 @@ function applyCustomField(action, subid) {
             {useajax: action, id: id, type: cm_Globals.type, value: customtype, attr: content, tile: tileid, subid: subid},
             function (presult, pstatus) {
                 if (pstatus==="success") {
-                    console.log (action + " performed successfully. presult: ", presult);
+                    // console.log (action + " performed successfully. presult: ", presult);
                     cm_Globals.reload = true;
 
                     // we get new data from server since it is much faster that way

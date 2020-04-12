@@ -473,7 +473,7 @@ table.showid td.thingname {
 }
 table.showid td.thingarr {
     text-align: left; 
-    width: 30%;
+    width: 40%;
     max-width: 250px;
     overflow-x: auto;
 }
@@ -484,12 +484,12 @@ table.showid td.infotype {
 table.showid td.infoid {
     text-align: left; 
     max-width: 150px;
-    width: 25%;  
+    width: 15%;  
 }
 table.showid td.hubid {
     text-align: left; 
     max-width: 100px;
-    width: 25%;  
+    width: 15%;  
 }
 table.showid td.infonum, table.showid th.infonum {
     border-right: 1px solid #999999;
@@ -1587,11 +1587,11 @@ div.weather.forecastToday, div.weather.forecastTonight, div.weather.forecastTomo
 }
 
 /* default weather name and city to not show */
-div.weather-thing div.overlay.name, div.weather-thing div.overlay.city {
+/* div.thing.weather-thing div.overlay.name, div.thing.weather-thing div.overlay.city {
     display: none;
     position: relative;
     color: rgba(255, 255, 255, 1);
-}
+} */
 /* weather styling */
 div.thing.weather-thing {
     background-color: rgba(0,0,0,0.01);

@@ -630,14 +630,18 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                     var thetype = content["type"];
                     var id = content["id"];
                     var idx = thetype + "|" + id;
+                    var origname = content["name"] || "";
 
                     // this is the proper place to load customizations
                     // and we have to do it for ISY too
                     var pvalue = getCustomTile(content.value, thetype, id);
+                    if ( !origname ) {
+                        origname = pvalue["name"];
+                    }
 
                     allthings[idx] = {
                         "id": id,
-                        "name": content["name"], 
+                        "name": origname, 
                         "hubnum": hubnum,
                         "type": thetype,
                         "hint": hubType, 
@@ -666,7 +670,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
         var idx = thetype + "|" + id;
         var pvalue = {name: "Variables"};
         pvalue = getCustomTile(pvalue, thetype, id);
-        allthings[idx] = {"id": id, "name": pvalue.name, "hubnum": hubnum, "type": thetype, "hint": "ISY variable", "refresh": "never", "value": pvalue };
+        allthings[idx] = {id: id, name: "Variables", hubnum: hubnum, type: thetype, hint: "ISY variable", refresh: "never", value: pvalue };
 
         // now read in any int and state variables
         curl_call(hubEndpt + "/vars/get/1", stheader, false, false, "GET", getIntVars);
@@ -819,6 +823,10 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                                         }
                                     }
                                     pvalue.status = proginfo.status;
+                                    
+                                    // call customizer
+                                    pvalue = getCustomTile(pvalue, thetype, progid);
+
                                     allthings[idx] = {
                                         "id": progid,
                                         "name": progname, 
@@ -875,13 +883,16 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
 
                     // this is the proper place to load customizations
                     pvalue = getCustomTile(pvalue, thetype, id);
+                    if ( !name ) {
+                        name = pvalue["name"];
+                    }
                     // console.log("post custom: ", pvalue);
 
                     // set bare minimum info
                     // this is updated below in the callback after getting node details
                     allthings[idx] = {
                         "id": id,
-                        "name": pvalue.name, 
+                        "name": name, 
                         "hubnum": hubnum,
                         "type": thetype, 
                         "hint": hint,
@@ -1748,6 +1759,7 @@ function getNewPage(cnt, roomtitle, kroom, things) {
     // the things list can be integers or arrays depending on drag/drop
     var idxkeys = Object.keys(GLB.options["index"]);
     var idxvals = Object.values(GLB.options["index"]);
+    var zcolor = 200;
     things.forEach(function(kindexarr) {
         
         // get the offsets and the tile id
@@ -1761,10 +1773,6 @@ function getNewPage(cnt, roomtitle, kroom, things) {
             zindex = kindexarr[3];
             customname = kindexarr[4];
         }
-        
-        // get the index into the main things list
-        
-        // thingid = array_search(kindex, GLB.options["index"]);
         var i = idxvals.findIndex(idx => idx === kindex);
         var thingid = idxkeys[i];
         
@@ -1772,9 +1780,20 @@ function getNewPage(cnt, roomtitle, kroom, things) {
         if (thingid && allthings[thingid]) {
             var thesensor = allthings[thingid];
 
-            // keep running count of things to use in javascript logic
-            cnt++;
-            $tc += makeThing(cnt, kindex, thesensor, roomtitle, postop, posleft, zindex, customname, false);
+            if ( typeof thesensor==="object" ) {
+
+                // adjust the zindex to show on top of others if there is a color field
+                // this starts at 199 and counts down to 100 assuming fewer than 100 color things on a page
+                if ( array_key_exists("color", thesensor.value) && zindex < 100 ) {
+                    zcolor--;
+                    zindex = zcolor;
+                    if ( zcolor < 100 ) { zcolor = 200; }
+                }
+
+                // keep running count of things to use in javascript logic
+                cnt++;
+                $tc += makeThing(cnt, kindex, thesensor, roomtitle, postop, posleft, zindex, customname, false);
+            }
         }
     });
 
@@ -1790,7 +1809,6 @@ function getNewPage(cnt, roomtitle, kroom, things) {
 function processName(thingname, thingtype) {
 
     // get rid of 's and split along white space
-    // but only for tiles that are not weather
     var subtype = "";
     var ignore2 = utils.getTypes();
     ignore2.push("panel");
@@ -1802,16 +1820,15 @@ function processName(thingname, thingtype) {
     subopts.forEach(function(str) {
         str= str.trim();
         var numcheck = +str;
-        if ( str.length>1 && ignore2.indexOf(str)===-1 && str!==thingtype && isNaN(numcheck) ) {
+        if ( str.length>1 && ignore2.indexOf(str)===-1 && str!==thingtype && isNaN(numcheck) &&
+             str.indexOf("::")===-1 && str.indexOf("://")===-1 && str.length<20 ) {
             if ( k < 3 ) {
                 subtype += " " + str;
                 k++;
             }
         }
     });
-    
-    
-    return [thingname, subtype];
+    return subtype;
 }
 
 // returns proper html to display an image, video, frame, or custom
@@ -2042,7 +2059,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     var thingtype = thesensor["type"];
     var bid = thesensor["id"];
     thingvalue = setValOrder(thingvalue);
-    var defname = thesensor["name"] || "Unknown";
+    // var defname = thesensor["name"] || "Unknown";
 
     // set type to hint if one is given
     // this is to support ISY nodes that all register as ISY types
@@ -2064,9 +2081,8 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
         refresh = thingvalue["refresh"];
     }
 
-    var pnames = processName(thesensor["name"], thingtype);
-    var thingname = pnames[0];
-    var subtype = pnames[1];
+    // fix any name that is custom
+    var subtype = processName(thingvalue["name"], thingtype);
     postop= parseInt(postop);
     posleft = parseInt(posleft);
     zindex = parseInt(zindex);
@@ -2076,20 +2092,17 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     }
 
     // set the custom name
-    if ( customname ) { 
-        thingvalue["name"] = customname;
-    } else if (!thingvalue["name"]) {
-        thingvalue["name"] = defname;
-    }
+    // if ( customname ) { 
+    //     thingvalue["name"] = customname;
+    // } else if (!thingvalue["name"]) {
+    //     thingvalue["name"] = defname;
+    // }
 
     // set the custom name
     // limit to 132 visual columns but show all for special tiles and custom names
     // now we use custom name in both places
-    thingname = thingvalue["name"];
-    var thingpr = thingname;
-    if ( !customname && thingname && thingname.length > 132 && !array_key_exists(thingtype, utils.getSpecials()) ) {
-        thingpr = thingname.substring(0,132) + " ...";
-    }
+    // var thingname = thingvalue["name"];
+    var thingname = thesensor["name"];
             
     // check if there is a color key - use to set color
     // no longer print this first since we need to include in custom logic
@@ -2098,9 +2111,9 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
         var cval = thingvalue["color"];
         if ( cval.match(/^#[abcdefABCDEF\d]{6}/) !== null ) {
             bgcolor = " style=\"background-color:"+cval+";\"";
-        // } else {
-        //     cval = " white";
-        //     bgcolor = " style=\"background-color:"+cval+";\"";
+        } else {
+            cval = "#FFFFFF";
+            bgcolor = " style=\"background-color:"+cval+";\"";
         }
     }
     
@@ -2123,20 +2136,19 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     }
     $tc += ">";
 
+
+    // same thingname field for each tile with the original name
+    $tc += "<div aid=\""+cnt+"\" type=\""+thingtype+"\" title=\""+thingname+"\" class=\"thingname "+thingtype+" t_"+kindex+"\" id=\"s-"+cnt+"\">";
+    $tc += thingname;
+    $tc += "</div>";
+
     // special handling for weather tiles
     // this allows for feels like and temperature to be side by side
     // and it also handles the inclusion of the icons for status
     if (thingtype==="weather") {
-        var weathername;
-        if ( customname ) {
-            weathername = customname;
-        } else {
-            if ( typeof thingpr==="undefined" ) { thingpr = "Weather "; }
-            weathername = thingpr + "<br>" + thingvalue["city"];
+        if ( !thingvalue["name"] ) {
+            thingvalue["name"] = thingname;
         }
-        $tc += "<div aid=\""+ cnt +"\" class=\"thingname " + thingtype + " t_" + kindex + "\" id=\"s-" + cnt + "\">";
-        $tc += weathername;
-        $tc += "</div>";
         $tc += putElement(kindex, cnt, 0, thingtype, thingvalue["name"], "name");
         $tc += putElement(kindex, cnt, 1, thingtype, thingvalue["city"], "city");
         $tc += "<div class=\"weather_temps\">";
@@ -2157,6 +2169,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
         for ( var tkey in thingvalue ) {
             if (tkey!=="temperature" &&
                 tkey!=="feelsLike" &&
+                tkey!=="name" &&
                 tkey!=="city" &&
                 tkey!=="weather" &&
                 tkey!=="weatherIcon" &&
@@ -2178,90 +2191,79 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
         };
         
     } else {
-
-        // handle special tiles
-        // don't think this should be here since we now handle this in addspecial
-        // thingvalue = getCustomTile(thingvalue, thingtype, bid);
-        // thingvalue = returnFile(thingvalue, thingtype);
-
         // unfortunately, this no longer works because Google changed how they return image searches
         // but fortunately the new Sonos audio devices return an image url that we now use
         //        if ( $thingtype==="music" ) {
         //            $thingvalue = getMusicArt($thingvalue);
         //        }
         
-        $tc += "<div aid=\""+cnt+"\" type=\""+thingtype+"\" title=\""+thingpr+"\" class=\"thingname "+thingtype+" t_"+kindex+"\" id=\"s-"+cnt+"\">";
-        $tc += thingpr;
-        $tc += "</div>";
-	
         // create a thing in a HTML page using special tags so javascript can manipulate it
         // multiple classes provided. One is the type of thing. "on" and "off" provided for state
         // for multiple attribute things we provide a separate item for each one
         // the first class tag is the type and a second class tag is for the state - either on/off or open/closed
         // ID is used to send over the groovy thing id number passed in as $bid
         // for multiple row ID's the prefix is a$j-$bid where $j is the jth row
-        if (typeof thingvalue === "object") {
-            var j = 0;
+
+        // removed this old check since things are now always objects
+        // if (typeof thingvalue === "object") {
+        var j = 0;
+        
+        // create on screen element for each key
+        // this includes a check for helper items created in tile customizer
+        for ( var tkey in thingvalue ) {
+            var helperkey = "user_" + tkey;
+            var tval = thingvalue[tkey];
+
+            // check value for "json" strings
+            try {
+                var jsontval = JSON.parse(tval);
+            } catch(jerr) {
+                jsontval = null;
+            }
             
-            // create on screen element for each key
-            // this includes a check for helper items created in tile customizer
-            for ( var tkey in thingvalue ) {
-                var helperkey = "user_" + tkey;
-                var tval = thingvalue[tkey];
+            // handle the new Sonos audio type which has a media type with details
+            // but even this is skipped if a user field was given to override it
+            if ( thingtype==="audio" && tkey==="audioTrackData" && jsontval && typeof jsontval==="object" && !array_key_exists(helperkey, thingvalue) ) {
+                var audiodata = jsontval;
+                $tc += putElement(kindex, cnt, j,   thingtype, audiodata["title"], "trackDescription", subtype, bgcolor);
+                $tc += putElement(kindex, cnt, j+1, thingtype, audiodata["artist"], "currentArtist", subtype, bgcolor);
+                $tc += putElement(kindex, cnt, j+2, thingtype, audiodata["album"], "currentAlbum", subtype, bgcolor);
+                $tc += putElement(kindex, cnt, j+3, thingtype, audiodata["albumArtUrl"], "trackImage", subtype, bgcolor);
+                $tc += putElement(kindex, cnt, j+4, thingtype, audiodata["mediaSource"], "mediaSource", subtype, bgcolor);
+                j = j+5;	
+            }
 
-                // check value for "json" strings
-                try {
-                    var jsontval = JSON.parse(tval);
-                } catch(jerr) {
-                    jsontval = null;
-                }
-                
-                // handle the new Sonos audio type which has a media type with details
-                // but even this is skipped if a user field was given to override it
-                if ( thingtype==="audio" && tkey==="audioTrackData" && jsontval && typeof jsontval==="object" && !array_key_exists(helperkey, thingvalue) ) {
-                    var audiodata = jsontval;
-                    $tc += putElement(kindex, cnt, j,   thingtype, audiodata["title"], "trackDescription", subtype, bgcolor);
-                    $tc += putElement(kindex, cnt, j+1, thingtype, audiodata["artist"], "currentArtist", subtype, bgcolor);
-                    $tc += putElement(kindex, cnt, j+2, thingtype, audiodata["album"], "currentAlbum", subtype, bgcolor);
-                    $tc += putElement(kindex, cnt, j+3, thingtype, audiodata["albumArtUrl"], "trackImage", subtype, bgcolor);
-                    $tc += putElement(kindex, cnt, j+4, thingtype, audiodata["mediaSource"], "mediaSource", subtype, bgcolor);
-                    j = j+5;	
-                }
-
-                // handle other cases where the value is an object like audio
-                else if ( jsontval && typeof jsontval==="object" && !array_key_exists(helperkey, thingvalue) ) {
-                    for (var jtkey in jsontval ) {
-                        var jtval = jsontval[jtkey];
-                        if ( jtval ) {
-                            $tc += putElement(kindex, cnt, j, thingtype, jtval, jtkey, subtype, bgcolor);
-                            j++;
-                        }
+            // handle other cases where the value is an object like audio
+            else if ( jsontval && typeof jsontval==="object" && !array_key_exists(helperkey, thingvalue) ) {
+                for (var jtkey in jsontval ) {
+                    var jtval = jsontval[jtkey];
+                    if ( jtval ) {
+                        $tc += putElement(kindex, cnt, j, thingtype, jtval, jtkey, subtype, bgcolor);
+                        j++;
                     }
-                }
-                
-                else if ( typeof tkey==="string" && tkey.substring(0,5)!=="user_" && (typeof tval==="string" || typeof tval==="number") ) { 
-                    
-                    // new logic for links - they all now follow the format ::LINK::code
-                    // print a hidden field for user web calls and links
-                    // this is what enables customization of any tile to happen
-                    // ::type::LINK::tval  or ::LINK::tval
-                    // this special element is not displayed and sits inside the overlay
-                    // we only process the non helpers and look for helpers in same list
-                    if (  array_key_exists(helperkey, thingvalue) && thingvalue[helperkey] && thingvalue[helperkey].substr(0,2)==="::" ) {
-                        var helperval = thingvalue[helperkey];
-                        $tc += putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor);
-                    } else {
-                        $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor);
-                    }
-
-                    j++;
                 }
             }
-				
-        } else {
-            $tc += putElement(kindex, cnt, 0, thingtype, thingvalue, thingtype, subtype);
+            
+            else if ( typeof tkey==="string" && tkey.substring(0,5)!=="user_" && (typeof tval==="string" || typeof tval==="number") ) { 
+                
+                // new logic for links - they all now follow the format ::LINK::code
+                // print a hidden field for user web calls and links
+                // this is what enables customization of any tile to happen
+                // ::type::LINK::tval  or ::LINK::tval
+                // this special element is not displayed and sits inside the overlay
+                // we only process the non helpers and look for helpers in same list
+                if (  array_key_exists(helperkey, thingvalue) && thingvalue[helperkey] && thingvalue[helperkey].substr(0,2)==="::" ) {
+                    var helperval = thingvalue[helperkey];
+                    $tc += putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor);
+                } else {
+                    $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor);
+                }
+
+                j++;
+            }
         }
     }
+
     $tc += "</div>";
     
     return $tc;
@@ -2507,24 +2509,14 @@ function getCustomCount(stype, defcount) {
     return customcnt;
 }
 
-function getCustomName(defname, idx) {
-    if ( !GLB.options.rooms || !GLB.options.things || !GLB.options.index ) {
-        return defname;
-    }
-
-    var rooms = GLB.options["rooms"];
-    var thingoptions = GLB.options["things"];
-    var tileid = GLB.options["index"][idx];
-    for (var room in rooms) {
-        if ( array_key_exists(room, thingoptions) ) {
-           var things = thingoptions[room];
-           for (var kindexarr in things) {
-                 // if our tile matches and there is a custom name, use it
-                if ( tileid===kindexarr[0] && kindexarr[4] && kindexarr[4]!=="" ) {
-                    return kindexarr[4];
-                }
-           }
-        }
+function getCustomName(defbase, idx, cnum) {
+    // make the default name start with a capital letter if we give a number
+    var defname;
+    if ( cnum && typeof cnum==="number" || typeof cnum==="string") {
+        defname = defbase.substr(0,1).toUpperCase() + defbase.substr(1);
+        defname = defname + cnum;
+    } else {
+        defname = defbase;
     }
     return defname;
 }
@@ -2662,8 +2654,6 @@ function getClock(clockid) {
         clockname = "Analog Clock";
         clockskin = "CoolClock:swissRail:72";
     }
-    // var clockname = getCustomName(clockname, "clock" + "|" + clockid);
-
     var d = new Date();
     var dates = getFormattedDate("M D, Y", d, clockid);
     var dateofmonth = dates.date;
@@ -2696,15 +2686,17 @@ function addSpecials() {
     // you will need to over-ride this with the tile customizer if you add custom fields
     var clockidd = "clockdigital";
     var dclock = getClock(clockidd);
+    var dname = dclock["name"];
     dclock = getCustomTile(dclock, "clock", clockidd);
-    allthings["clock|"+clockidd] = {"id" :  clockidd, "name" :  dclock["name"], 
+    allthings["clock|"+clockidd] = {"id" :  clockidd, "name" :  dname, 
         "hubnum" :  hubnum, "type" :  "clock", "refresh": "slow", "value" :  dclock};
 
     // add analog clock tile - no longer use dclock format settings by default
     var clockida = "clockanalog";
     var aclock = getClock(clockida);
+    var aname = aclock["name"];
     aclock = getCustomTile(aclock, "clock", clockida);
-    allthings["clock|"+clockida] = {"id" :  clockida, "name" :  aclock["name"], 
+    allthings["clock|"+clockida] = {"id" :  clockida, "name" :  aname, 
         "hubnum" :  hubnum, "type" :  "clock", "refresh": "slow", "value" :  aclock};
 
     // add special tiles based on type and user provided count
@@ -2725,11 +2717,14 @@ function addSpecials() {
                 var k = (i + 1).toString();
                 var fid = sid[0] + k;
                 var idx = stype + "|" + fid;
-                var fn = getCustomName(stype + k, idx);
+
+                var fn = getCustomName(stype, idx, k);
                 var ftile = {"name": fn};
                 ftile = getCustomTile(ftile, stype, fid);
                 ftile = returnFile(ftile, stype);
-                allthings[idx] = {"id":  fid, "name":  ftile["name"], "hubnum":  hubnum, 
+
+                // we now preserve the original name in the master array
+                allthings[idx] = {"id":  fid, "name": fn, "hubnum":  hubnum, 
                     "type": stype, "refresh": speed, "value":  ftile};
             }
         }
@@ -2743,7 +2738,8 @@ function addSpecials() {
                  "c__reauth": "Re-Auth","showid": "Show Info","toggletabs": "Toggle Tabs",
                  "showdoc": "Documentation",
                  "blackout": "Blackout","operate": "Operate","reorder": "Reorder","edit": "Edit"};
-    allthings["control|control_1"] = {"id":  "control_1", "name":  controlval["name"], "hubnum":  hubnum, 
+    controlval = getCustomTile(controlval, "control", "control_1");
+    allthings["control|control_1"] = {"id":  "control_1", "name": "Controller", "hubnum":  hubnum, 
                 "type":  "control", "refresh": "never", "value":  controlval};
 }
 
@@ -2774,10 +2770,11 @@ function getCustomTile(custom_val, customtype, customid) {
     for (var room in rooms) {
         if ( array_key_exists(room, thingoptions) ) {
             var things = thingoptions[room];
-            for (var kindexarr in things) {
+            for (var k in things) {
+                var kindexarr = things[k];
                 // only do this if we have custom names defined in rooms
                 if ( is_array(kindexarr) && kindexarr.length > 3 ) {
-                    var kindex = kindexarr[0];
+                    var kindex = parseInt(kindexarr[0]);
 
                     // if our tile matches and there is a custom name, use it
                     if ( kindex===tileid && kindexarr[4]!=="" ) {
@@ -2788,11 +2785,16 @@ function getCustomTile(custom_val, customtype, customid) {
             }
         }
     }
-    
-    if ( customname!=="" ) {
+
+    if ( customname!=="" || !custom_val["name"] ) {
         custom_val["name"] = customname;
     }
-    
+
+    // this is where we do a check for bad chars and remove them in names
+    // instead of in the processName function
+    var pattern = /[,;:!-\'\*\<\>\{\}\+\&\%]/g;
+    custom_val["name"] = custom_val["name"].replace(pattern,"");
+
     // see if a section for this id is in options file
     // this is where customizer updates are processed
     var lines = false;
@@ -2906,6 +2908,15 @@ function getCustomTile(custom_val, customtype, customid) {
             if ( array_key_exists("weekday", custom_val) ) {
                 custom_val["weekday"] = dates.week;
             }
+            custom_val["fmt_date"] = dates.fmt_date;
+        }
+        if ( array_key_exists("time", custom_val) && array_key_exists("fmt_time", custom_val) ) {
+            var times = getFormattedTime(custom_val["fmt_time"], null, customid);
+            custom_val["time"] = times.time;
+            if ( array_key_exists("tzone", custom_val) ) {
+                custom_val["tzone"] = times.timezone;
+            }
+            custom_val["fmt_time"] = times.fmt_time;
         }
     }
     return custom_val;
@@ -3254,7 +3265,12 @@ function processRules(bid, thetype, trigger, pvalue) {
                                     var ritems = ridx.split("|");
                                     rtype = ritems[0];
                                     rbid = ritems[1];
-                                    ifvalue = allthings[ridx]["value"][rulesubid];
+                                    try {
+                                        ifvalue = allthings[ridx]["value"][rulesubid];
+                                    } catch(e) {
+                                        console.log(e, " ridx= ", ridx);
+                                        ifvlaue = false;
+                                    }
                                 } else {
                                     ifvalue = false;
                                 }
@@ -4317,7 +4333,8 @@ function addThing(bid, thingtype, panel, flag) {
     var options = GLB.options;
     var tilenum = parseInt(options["index"][idx]);
     var thesensor = allthings[idx];
-    var tilename = thesensor["name"];
+    // new additions come in with the default name now
+    // var tilename = thesensor["name"];
     var cnt;
     
     // get max thing number for new tiles dragged here
@@ -4351,7 +4368,7 @@ function addThing(bid, thingtype, panel, flag) {
     }
     
     // add it to our system in the requested room/panel
-    options["things"][panel].push([tilenum, ypos, xpos, zindex, tilename]);
+    options["things"][panel].push([tilenum, ypos, xpos, zindex, ""]);
     
     // make a new tile based on the dragged information
     var thing = makeThing(cnt, tilenum, thesensor, panel, ypos, xpos, zindex, "", "");
@@ -4524,9 +4541,11 @@ function getInfoPage(returnURL, pathname) {
     
     $tc += "<br><br><h3>List of Authorized Things</h3>";
     $tc += "<table class=\"showid\">";
-    $tc += "<thead><tr><th class=\"thingname\">Name</th><th class=\"thingarr\">Value Array" + 
-        "</th><th class=\"infotype\">Type" + 
+    $tc += "<thead><tr><th class=\"thingname\">Name" + 
+        "</th><th class=\"infotype\">Nickname" + 
+        "</th><th class=\"thingarr\">Value Array" + 
         "</th><th class=\"infoid\">Thing id" +
+        "</th><th class=\"infotype\">Type" + 
         "</th><th class=\"hubid\">Hub" +
         "</th><th class=\"infonum\">Tile Num</th></tr></thead>";
 
@@ -4539,7 +4558,9 @@ function getInfoPage(returnURL, pathname) {
             for (var key in thing["value"] ) {
                 var val = thing["value"][key];
                 value += " ";
-                if ( array_key_exists(key, specialtiles) ) {
+                if ( key==="name" ) {
+                    continue;  // value = value;
+                } else if ( array_key_exists(key, specialtiles) ) {
                     value += key + "= <strong>embedded " + key + "</strong><br/>";
                 } else if ( thing["type"]==="custom" && typeof val==="object" ) { 
                     value += "Custom Array..."; 
@@ -4573,9 +4594,10 @@ function getInfoPage(returnURL, pathname) {
         }
         
         $tc += "<tr><td class=\"thingname\">" + thing["name"] +
+            "</td><td class=\"thingname\">" + thing.value.name +
             "</td><td class=\"thingarr\">" + value +
-            "</td><td class=\"infotype\">" + thing["type"] +
             "</td><td class=\"infoid\">" + thing["id"] +
+            "</td><td class=\"infotype\">" + thing["type"] +
             "</td><td class=\"hubid\">" + hubstr + 
             "</td><td class=\"infonum\">" + GLB.options["index"][idx] + "</td></tr>";
     }
@@ -4651,7 +4673,7 @@ function hubFilters(hubpick, ncols) {
     return $tc;
 }
 
-// this little gem will sort byup to three things
+// this little gem will sort by up to three things
 function sortedSensors(one, two, three) {
 
     if ( !one ) { one = "name"; }
@@ -4720,7 +4742,7 @@ function getCatalog(hubpick) {
 
         $tc += "<div id=\"" + cat + "\" bid=\"" + bid + "\" type=\"" + thingtype + "\" hubid=\"" + hubId + "\" ";
         $tc += "panel=\"catalog\" class=\"thing " + hide + "catalog-thing\">"; 
-        $tc += "<div class=\"thingname\">" + thingpr + "</div>";
+        $tc += "<div class=\"thingname\">" +  thingpr + "</div>";
         $tc += "<div class=\"thingtype\">" + thingtype + "</div>";
         $tc +="</div>";
         i++;
@@ -4883,6 +4905,7 @@ function getOptionsPage(pathname) {
         // if this sensor type and id mix is gone, skip this row
         
         var $thingname = $thesensor["name"];
+        var nickname = $thesensor.value["name"] || "";
         var $thetype = $thesensor["type"];
         var $hubnum = $thesensor["hubnum"];
         if ( $hubnum === -1 || $hubnum==="-1" ) {
@@ -4921,7 +4944,13 @@ function getOptionsPage(pathname) {
         }
         
         $tc+= "<td class=\"thingname\">";
-        $tc+= $thingname + "<span class=\"typeopt\"> (" + $thetype + ")</span>";
+        $tc+= $thingname + "<span class=\"typeopt\"> (" + $thetype + ")";
+        if ( nickname && nickname!==$thingname ) { 
+            $tc+= "<br>custom: " + nickname; 
+        } else {
+            $tc+= "<br>custom: none"; 
+        }
+        $tc+= "</span>";
         $tc+= "</td>";
         
         $tc+= "<td class=\"hubname\" hubId=\"" + $hubId + "\">";
@@ -5471,9 +5500,13 @@ function updateNames(type, tileid, newname) {
 
         // if the name is blank, reset it to original
         newname = newname.trim();
+        var resetname = false;
+        var idx = array_search(tileid, options["index"]);
         if ( newname==="" ) {
-            var idx = array_search(tileid, options["index"]);
             newname = allthings[idx]["name"];
+            resetname = true;
+        } else {
+            allthings[idx].value.name = newname;
         }
 
         for (var room in options["things"]) {
@@ -5485,8 +5518,9 @@ function updateNames(type, tileid, newname) {
             // or arrays that were not at least 4 elements long
             // the 4th element of the array is the custom name
             things.forEach(function(tiles, k) {
-                if ( is_array(tiles) && tiles.length>3 &&
-                     (parseInt(tiles[0]) === tileid) && tiles[4]!==newname  ) {
+                if ( is_array(tiles) && parseInt(tiles[0]) === tileid && 
+                     (resetname || (tiles.length>3 && tiles[4]!==newname))  ) {
+
                     oldname = tiles[4];
                     tiles[4] = newname;
 
@@ -5796,8 +5830,8 @@ function apiCall(body, protocol) {
                 var thing = allthings[idx];
                 
                 // load customizations
-                thing.value = getCustomTile(thing.value, swtype, swid);
-                allthings[idx] = thing;            
+                // thing.value = getCustomTile(thing.value, swtype, swid);
+                // allthings[idx] = thing;            
                 result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 99, "", api);
             }
             break;

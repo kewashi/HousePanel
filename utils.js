@@ -1,7 +1,13 @@
 'use strict';
 
-var devhistory =  ` 
-2.243      Continued cleanup and bug fixes
+const devhistory =  ` 
+2.250   Cleaned up handling of names and headers to hide headers by default
+            - headers now will always contain the original tile name from hub
+            - modified names in the GUI will only show in the tile name field
+            - because of this change, some old skins will need updating
+            - fixed color controls to always be on top
+            - removed old pre-Node history from this list
+2.243   Continued cleanup and bug fixes
             - change music icon to enable size changes in tile editor
             - included flag to completely neuter RULE engine for ISY
             - add "aid" to master and sibling tags to facilitate easier manipulation
@@ -10,53 +16,56 @@ var devhistory =  `
             - tidy up extra tag to exclude command:: items
             - add a getclock api call and use it to update clock from js
             - improved logic for clicking on passive items that do nothing
-2.242      Fix bug that prevented variable arrows from working
-2.241      Hub reauth push happens everywhere now and other bug fixes
+2.242   Fix bug that prevented variable arrows from working
+2.241   Hub reauth push happens everywhere now and other bug fixes
             - added flag to neuter all RULES capabilities
             - rtsp and other JSON object support returned from hubs
             - more bug fixes and tweaks
-2.230      POST action fix and other bug fixes
+2.230   POST action fix and other bug fixes
             - redesigned customcss save architecture to be more robust
             - fix tile editor to properly deal with header edits
             - bug fix in Mode changes implemented in 2.229 for ST and HE
             - visual changes to default housepanel skin for thermostats
-2.229      Fixed a few really nasty bugs impacting ST and HE hubs
+2.229   Fixed a few really nasty bugs impacting ST and HE hubs
             - equally gnarly bug fixed for ISY hub reading
             - fixed ISY thermostat editing features
             - more code cleanup in prep for pro transition
-2.228      Added sorting capabilities:
+2.228   Added sorting capabilities:
             - sort catalog listing and add scroll bars
             - sort options and show info pages by hub, name, and type
-2.227      Fix long-standing bug where new tiles had dup id's and got mixed
+2.227   Fix long-standing bug where new tiles had dup id's and got mixed
             - clean up hub treatment and fix bugs
-2.226      New ISY features and bug fixes
+2.226   New ISY features and bug fixes
             - suppoprt for ISY programs and state variables
             - fix readOptions to not read in so often
             - support rules acting upon variable values from ISY
             - only reload page of screen that is calling reload
             - numerous bug fixes
-2.225      Added both Int and State variable support
-2.224      Clean and speed up rules, add timer delay to rule syntax
-2.223      Fix bug in sorting user custom fields and change slider skin setting
-2.222      Found login bug and squashed it
-2.221      Ported over and improved powerful RULE engine feature
+2.225   Added both Int and State variable support
+2.224   Clean and speed up rules, add timer delay to rule syntax
+2.223   Fix bug in sorting user custom fields and change slider skin setting
+2.222   Found login bug and squashed it
+2.221   Ported over and improved powerful RULE engine feature
             - change how links work to be faster and more robust
             - remove button to remove hub since it doesn't work yet
-2.220      Fix startup bug so new hubs now work - and give up on npm installs
-2.216      Clean up when options file is read and sync npm version number
-2.215      Fix video embedded, provide arlo4.py, and enable ISY toggle for RULEs and api calls
-2.214      Enable moved tiles to always show on top of all others
-2.213      Relax login constraints to by default log everyone in
-2.212      Fix auth bug to properly set hubId and cleanup debug statements
-2.211      First public beta release
-2.210      Enable thermostat operation for ISY hub and more bug fixes
-2.206      Fix slider render bug and improve ISY status query
-2.205      Fix tile editor bug that now enables multi tiles
-2.204      Fix order of options table processing
-2.203      Added OAUTH flow and hub data entry screen
-2.202      Rules and Links implemented and numerous bug fixes - getting close...
-2.201      First nearly fully functional Node.js version
-2.200      Initial Node.js version release
+2.220   Fix startup bug so new hubs now work - and give up on npm installs
+2.216   Clean up when options file is read and sync npm version number
+2.215   Fix video embedded, provide arlo4.py, and enable ISY toggle for RULEs and api calls
+2.214   Enable moved tiles to always show on top of all others
+2.213   Relax login constraints to by default log everyone in
+2.212   Fix auth bug to properly set hubId and cleanup debug statements
+2.211   First public beta release
+2.210   Enable thermostat operation for ISY hub and more bug fixes
+2.206   Fix slider render bug and improve ISY status query
+2.205   Fix tile editor bug that now enables multi tiles
+2.204   Fix order of options table processing
+2.203   Added OAUTH flow and hub data entry screen
+2.202   Rules and Links implemented and numerous bug fixes - getting close...
+2.201   First nearly fully functional Node.js version
+2.200   Initial Node.js version release
+`;
+
+const oldhistory = `
 2.118      Fix bug that prevented user from changing custom tile count
 2.117      Load jquery locally and include files in the distro
 2.116      Tweaks to enable floor plan skins and bug fixes
@@ -397,7 +406,7 @@ var devhistory =  `
 0.0        Initial release
 `;
 
-var version = devhistory.substr(1,10).trim();
+var version = devhistory.substr(1,8).trim();
 
 exports.DEV = devhistory;
 exports.HPVERSION = version;
