@@ -3473,6 +3473,13 @@ function execRules(swtype, istart, testcommands, pvalue) {
                     } else if ( trigtype==="@" && array_key_exists(trigsubid, allthings[ridx]["value"]) ) {
                         rvalue = allthings[ridx]["value"][trigsubid];
                     }
+                    if ( array_key_exists(rsubid, allthings[ridx]["value"]) ) {
+                        allthings[ridx]["value"][rsubid] = rvalue;
+                        var companion = "user_"+rsubid;
+                        if ( array_key_exists(companion, allthings[ridx]["value"]) ) {
+                            allthings[ridx]["value"][companion] = "::TEXT::" + rvalue;
+                        }
+                    }
                 }
 
                 // fix up ISY hubs
@@ -3493,12 +3500,26 @@ function execRules(swtype, istart, testcommands, pvalue) {
                 //     console.log( (ddbg()), "RULE debug: exec step #", i, " hubid: ", hubid, " vals: ", rswid, rswtype, rvalue, rswattr, rsubid);
                 // }
                 if ( hub ) {
+
+                    // if target subid isn't there, create one
+                    // and adjust what gets sent to the hub call
+                    var linkinfo = false;
+                    if ( array_key_exists("user_" + rsubid, allthings[ridx]["value"]) || 
+                         !array_key_exists(rsubid, allthings[ridx]["value"]) ) {
+                        addCustom(rswid, rswtype, "TEXT", rvalue, rsubid);
+                        linkinfo = [rswid, rswtype, rsubid, rsubid, "TEXT"];
+                        if ( DEBUG11 ) {
+                            console.log("custom value: ", rvalue, " allthingval: ", allthings[ridx].value);
+                        }
+                    }
+
+                    // make the hub call now or delayed
                     if ( delay && delay > 0 ) {
                         setTimeout( function() {
-                            callHub(hub, rswid, rswtype, rvalue, rswattr, rsubid, false, false, true);
+                            callHub(hub, rswid, rswtype, rvalue, rswattr, rsubid, linkinfo, false, true);
                         }, delay);
                     } else {
-                        callHub(hub, rswid, rswtype, rvalue, rswattr, rsubid, false, false, true);
+                        callHub(hub, rswid, rswtype, rvalue, rswattr, rsubid, linkinfo, false, true);
                     }
                 }
             }
@@ -3688,7 +3709,27 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
     }
 
     var isyresp = {};
-    if ( hub["hubType"]==="SmartThings" || hub["hubType"]==="Hubitat" ) {
+    if ( linkinfo && is_array(linkinfo) && linkinfo.length>3 && linkinfo[4]==="TEXT" ) {
+        var idx = swtype + "|" + swid;
+        try {
+            result = allthings[idx].value;
+        } catch(e) {
+            result = "error - custom TEXT field not found for: " + idx;
+            console.log(result);
+            console.log(e);
+            return result;
+        }
+
+        if (result) {
+            pushClient(swid, swtype, subid, result, linkinfo, popup);
+            if ( ENABLERULES && !inrule && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
+                processRules(swid, swtype, subid, result);
+                // processLinks(swid, swtype, subid, pvalue);
+                GLB.rules[swid] = true;
+            }
+        }
+
+    } else if ( hub["hubType"]==="SmartThings" || hub["hubType"]==="Hubitat" ) {
         var host = endpt + "/doaction";
         var header = {"Authorization": "Bearer " + access_token};
         var nvpreq = {"swid": swid,  
@@ -3881,7 +3922,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                 if ( pvalue && array_key_exists("audioTrackData", pvalue) ) {
                     try {
                         var audiodata = JSON.parse(pvalue["audioTrackData"]);
-                        console.log("getHubResponse audiodata: ", audiodata);
+                        // console.log("getHubResponse audiodata: ", audiodata);
                         if ( audiodata ) {
                             pvalue["trackDescription"] = audiodata["title"] || "";
                             pvalue["currentArtist"] = audiodata["artist"] || "";
@@ -4232,7 +4273,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                         if ( testclick($linked_swtype, $realsubid) ) {
                             response = $linked_val;
                         } else {
-                            var linkinfo = [swid, swtype, subid, $realsubid];
+                            var linkinfo = [swid, swtype, subid, $realsubid, "LINK"];
                             response = callHub($lhub, $linked_swid, $linked_swtype, swval, swattr, $realsubid, linkinfo, false, false);
                         }
                     }
@@ -5825,7 +5866,8 @@ function pw_verify(pword, hash) {
     return (pw_hash(pword) === hash);
 }
 
-function addCustom(swid, swtype, swval, swattr, subid) {
+// the swval here is actually custom type
+function addCustom(swid, swtype, customtype, customval, subid) {
     var reserved = ["index","rooms","things","config","control","time","useroptions"];
     var options = GLB.options;
     var userid = "user_" + swid;
@@ -5845,13 +5887,13 @@ function addCustom(swid, swtype, swval, swattr, subid) {
     }
 
     // handle encryption
-    swattr = swattr.toString();
+    customval = customval.toString();
     subid = subid.toString();
     if ( subid==="password" ) {
-        swattr = pw_hash(swattr);
+        customval = pw_hash(customval);
     }
     
-    var newitem = [swval, swattr, subid];
+    var newitem = [customtype, customval, subid];
     var newoptitem = [];
     var doneit = false;
 

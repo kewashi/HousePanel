@@ -515,6 +515,7 @@ function setupWebsocket()
                     updateTile(aid, pvalue);
                 } catch (e) {
                     console.log("Error updating tile of type: "+ thetype + " and id: " + bid + " with value: ", pvalue);
+                    console.log(e);
                 }
             });
 
@@ -2172,7 +2173,7 @@ function updateTile(aid, presult, skiplink) {
         var dothis = $(targetid);
 
         // check for dups
-        if ( array_key_exists(key, dupcheck) ) {
+        if ( typeof dupcheck[key]!=="undefined" ) {
             dothis = false;
         }
 

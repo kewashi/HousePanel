@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.254   Allow rules to create and update custom TEXT fields
 2.253   Fix password bug and remove processLinks since rules are better
             - add option to subscribe and listen to polyglot MQTT events
 2.252   Added special custom fields "allon" and "alloff"
