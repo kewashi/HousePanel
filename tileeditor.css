@@ -766,7 +766,7 @@ div.formbutton a {
 
 /* tile editor stuff */
 
-#tileDialog {
+#tileDialog, #customDialog {
     display: block;
     background-color: rgba(20, 20, 20, 1);
     width: auto;
@@ -1859,4 +1859,8 @@ div.rtsp {
 img.trackImage {
     width: 120px;
     height: auto;
+}
+
+div.thing.switch-thing div.overlay.switch {
+    display: block;
 }

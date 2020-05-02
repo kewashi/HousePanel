@@ -314,6 +314,14 @@ div.switch.plug.on {
 div.switch.plug.off {
     background-image: url('icons/plugoff.png');
 }
+div.overlay.alloff div.alloff, div.overlay.allon div.allon.on, div.overlay.alloff div.alloff.on {
+    background-image: url('icons/switchon.png');
+    height: 80px;
+}
+div.overlay.allon div.allon, div.overlay.alloff div.alloff.off, div.overlay.allon div.allon.off {
+    background-image: url('icons/switchoff.png');
+    height: 80px;
+}
 /* enable this if you want to show levels for switches and bulbs */
 /* this will duplicate the switchlevel functionality */
 div.switch.level {
@@ -412,6 +420,9 @@ div.heatingSetpoint-up, div.coolingSetpoint-up {
 /* music styling */
 div.music.level, div.audio.volume {
     width: 99%;
+}
+div.audio-thing {
+    width: 180px;
 }
 
 div.audio-thing div.overlay._previousTrack,

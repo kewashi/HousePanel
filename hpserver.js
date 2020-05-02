@@ -20,6 +20,9 @@ const DEBUG15 = false;              // allthings and options dump
 const DEBUG16 = false;              // customtiles writing
 const DEBUG17 = false;              // push client
 
+// various control options
+const MQTTPOLY = false;             // subscribe to and log polyglot via MQTT
+const MQTTHP = false;               // subscribe to and log HP via MQTT
 const IGNOREPW = false;             // set this to true to accept any text as a valid password
 const DONATE = false;               // set this to true to enable donation section
 const ENABLERULES = true;           // set this to false to neuter all rules
@@ -36,6 +39,9 @@ var parser = require('fast-xml-parser');
 var xml2js = require('xml2js').parseString;
 var crypto = require('crypto');
 const UTIL = require('util');
+const mqtt = require('mqtt');
+const os = require('os');
+// const tls = require('tls');
 
 // load supporting modules
 var utils = require("./utils");
@@ -51,13 +57,6 @@ var allthings = {};
 // server variables
 var app;
 var applistening = false;
-
-var CRYPTSALT ='HP$by%KW';
-var BYPASSPW = false;
-
-function file_exists(fname) {
-    return fs.existsSync(fname);
-}
 
 function getUserName() {
     var uname;
@@ -120,7 +119,7 @@ function writeCustomCss(skin, str) {
     }
 
     // proceed only if there is a main css file in this skin folder
-    if ( skin && file_exists(skin + "/housepanel.css") ) {
+    if ( skin && fs.existsSync(skin + "/housepanel.css") ) {
         var d = new Date();
         var today = d.toLocaleString();
         var fixstr = "";
@@ -631,10 +630,29 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                     var id = content["id"];
                     var idx = thetype + "|" + id;
                     var origname = content["name"] || "";
+                    var pvalue = content["value"];
+
+                    // handle audio tiles
+                    if ( pvalue && thetype==="audio" && array_key_exists("audioTrackData", pvalue) ) {
+                        try {
+                            var audiodata = JSON.parse(pvalue["audioTrackData"]);
+                            if ( audiodata ) {
+                                pvalue["trackDescription"] = audiodata["title"] || "";
+                                pvalue["currentArtist"] = audiodata["artist"] || "";
+                                pvalue["currentAlbum"] = audiodata["album"] || "";
+                                pvalue["trackImage"] = audiodata["albumArtUrl"] || "";
+                                pvalue["mediaSource"] = audiodata["mediaSource"] || "";
+                            }
+                        } catch(jerr) {
+                            audiodata = null;
+                            console.log(jerr);
+                        }
+                        delete pvalue["audioTrackData"];
+                    }
 
                     // this is the proper place to load customizations
                     // and we have to do it for ISY too
-                    var pvalue = getCustomTile(content.value, thetype, id);
+                    var pvalue = getCustomTile(pvalue, thetype, id);
                     if ( !origname ) {
                         origname = pvalue["name"];
                     }
@@ -737,6 +755,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                     k++;
                 }
                 pvalue[vartype+"_"+k] = val10.toString();
+                pvalue["prec_"+vartype+"_"+k] = prec.toString();
                 k++;
             });
 
@@ -752,7 +771,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                 console.log( (ddbg()), "error retrieving ISY programs: ", err);
             } else {
 
-                // have to use the full parser here
+                // have to use the full parsing function here
                 // console.log("getting programs...", body);
                 xml2js(body, function(xmlerr, result) {
                     var thetype = "isy";
@@ -1198,6 +1217,7 @@ function setDefaults() {
     GLB.options.config["accucode"] = "329380";
     GLB.options.config["fcastcity"] = "ann-arbor";
     GLB.options.config["hubpick"] = "all";
+    GLB.options.config["polisyip"] = "localhost";
 
     var uname = "default";
     var skin = "skin-housepanel";
@@ -1908,26 +1928,26 @@ function returnFile(thingvalue, thingtype) {
     if ( grtypes ) {
 
         // first check names without extensions
-        if (file_exists(fn)) {
+        if (fs.existsSync(fn)) {
             $vn = fn;
             $fext = getext(fn);
-        } else if (file_exists("media/"+ fn)) {
+        } else if (fs.existsSync("media/"+ fn)) {
             $vn = "media/" + fn;
             $fext = getext(fn);
-        } else if (file_exists(skin + "/media/"+ fn)) {
+        } else if (fs.existsSync(skin + "/media/"+ fn)) {
             $vn = skin + "/media/" + fn;
             $fext = getext(fn);
         } else {
 
             // next check names with extensions and in media folders including skin
             grtypes.forEach(function($ext) {
-                if ( $vn==="" && file_exists(fn + $ext) ) {
+                if ( $vn==="" && fs.existsSync(fn + $ext) ) {
                     $vn = fn + $ext;
                     $fext = $ext;
-                } else if ( $vn==="" && file_exists("media/" + fn + $ext) ) {
+                } else if ( $vn==="" && fs.existsSync("media/" + fn + $ext) ) {
                     $vn = "media/" + fn + $ext;
                     $fext = $ext;
-                } else if ( $vn==="" && file_exists(skin + "/media/" + fn + $ext) ) {
+                } else if ( $vn==="" && fs.existsSync(skin + "/media/" + fn + $ext) ) {
                     $vn = skin + "/media/" + fn + $ext;
                     $fext = $ext;
                 }
@@ -2272,20 +2292,8 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                 jsontval = null;
             }
             
-            // handle the new Sonos audio type which has a media type with details
-            // but even this is skipped if a user field was given to override it
-            if ( thingtype==="audio" && tkey==="audioTrackData" && jsontval && typeof jsontval==="object" && !array_key_exists(helperkey, thingvalue) ) {
-                var audiodata = jsontval;
-                $tc += putElement(kindex, cnt, j,   thingtype, audiodata["title"], "trackDescription", subtype, bgcolor);
-                $tc += putElement(kindex, cnt, j+1, thingtype, audiodata["artist"], "currentArtist", subtype, bgcolor);
-                $tc += putElement(kindex, cnt, j+2, thingtype, audiodata["album"], "currentAlbum", subtype, bgcolor);
-                $tc += putElement(kindex, cnt, j+3, thingtype, audiodata["albumArtUrl"], "trackImage", subtype, bgcolor);
-                $tc += putElement(kindex, cnt, j+4, thingtype, audiodata["mediaSource"], "mediaSource", subtype, bgcolor);
-                j = j+5;	
-            }
-
             // handle other cases where the value is an object like audio
-            else if ( jsontval && typeof jsontval==="object" && !array_key_exists(helperkey, thingvalue) ) {
+            if ( jsontval && typeof jsontval==="object" && !array_key_exists(helperkey, thingvalue) ) {
                 for (var jtkey in jsontval ) {
                     var jtval = jsontval[jtkey];
                     if ( jtval ) {
@@ -2454,12 +2462,11 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         var extra;
         if ( tkey==="time" || tkey==="date" || tkey==="color" || typeof tval!=="string" || tval==="" ||
                    (tval.indexOf(" ")!==-1) ||
-                   (tkey.substr(0,6)==="event_") ||
-                   tkey==="trackDescription" || tkey==="currentArtist" || 
-                   tkey==="currentAlbum" || tkey==="trackImage" ||
+                   (tkey.substr(0,6)==="event_") || tkey.startsWith("_") ||
+                   tkey==="trackDescription" || tkey==="currentArtist" || tkey==="groupRole" ||
+                   tkey==="currentAlbum" || tkey==="trackImage" || tkey==="mediaSource" ||
                    tkey==="weatherIcon" || tkey==="forecastIcon" ||
                    !isNaN(+tval) || thingtype===tval ||
-                   (tval.substr(0,5)==="track") || 
                    (tval.substr(0,7)==="number_") || 
                    (tval.indexOf("://")!==-1) ||
                    (tval.indexOf("::")!==-1) || tval.length > 30 ) {
@@ -2469,7 +2476,7 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         }
         
         // fix track names for groups, empty, and super long
-        if (tkey==="trackDescription" || tkey==="track") {
+        if (tkey==="trackDescription") {
             tval = fixTrack(tval);
         // change this over to a css so we can style it if needed
         } else if (tkey==="trackImage") {
@@ -2484,6 +2491,11 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         } else if ( tval && typeof tval==="string" && tval.startsWith("rtsp:") && tval.length > 40 ) {
             extra = extra + " rtsp";
             // tval = "<div class=\"rtspwrap\">" + tval + "</div>";
+        }
+
+        // hide variable precisions
+        if ( thingtype==="isy" && tkey.startsWith("prec_") ) {
+            extra += " user_hidden";
         }
         
         // for music status show a play bar in front of it
@@ -2922,6 +2934,7 @@ function getCustomTile(custom_val, customtype, customid) {
                         // if ( array_key_exists(subid, pvalue) ) {
                         custom_val[companion] = "::" + calltype + "::" + idx;
                         custom_val[subid]= "LINK::" + content;
+                        // console.log( (ddbg()), "link debug: subid= ", subid, " custom_val: ", custom_val);
                             
                     // final cases are if link tile wasn't found
                     } else {
@@ -3045,7 +3058,7 @@ function processHubMessage(hubmsg) {
             // avoid against duplicate calls
             if ( ENABLERULES && subid && !GLB.rules[entry.id] && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
                 processRules(entry.id, entry.type, subid, entry['value']);
-                processLinks(entry.id, entry.type, subid, entry['value']);
+                // processLinks(entry.id, entry.type, subid, entry['value']);
                 GLB.rules[entry.id] = true;
             }
         }
@@ -3109,13 +3122,13 @@ function processIsyMessage(isymsg) {
 
                     pvalue = translateIsy(bid, control[0], uom, pvalue, newval, "");
                     var subid = mapIsy(control[0], uom);
-                    allthings[idx].value = pvalue;
+                    // allthings[idx].value = pvalue;
                     pushClient(bid, "isy", subid, pvalue, false, false);
 
                     // process rules and links
                     if ( ENABLERULES && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
                         processRules(bid, "isy", subid, pvalue);
-                        processLinks(bid, "isy", subid, pvalue);
+                        // processLinks(bid, "isy", subid, pvalue);
                         GLB.rules[bid] = true;
                     }
                     if ( DEBUG9 ) {
@@ -3155,7 +3168,7 @@ function processIsyMessage(isymsg) {
                         // process rules and links
                         if ( ENABLERULES && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
                             processRules(bid, "isy", subid, pvalue);
-                            processLinks(bid, "isy", subid, pvalue);
+                            // processLinks(bid, "isy", subid, pvalue);
                             GLB.rules[bid] = true;
                         }
                         if ( DEBUG9 ) {
@@ -3176,10 +3189,14 @@ function processRules(bid, thetype, trigger, pvalue) {
 
     // go through all things that could be links for this tile
     var userid = "user_" + bid;
+    var ifvalue = false;
+    var rbid = bid;
+    var rtype = thetype;
+    var ridx = thetype + "|" + bid;
 
-    if ( DEBUG11 ) {
-        console.log( (ddbg()), "RULE debug... userid: ", userid, " thetype: ", thetype, " trigger: ", trigger, " pvalue: ", pvalue);
-    }
+    // if ( DEBUG11 ) {
+    //     console.log( (ddbg()), "RULE debug... userid: ", userid, " thetype: ", thetype, " trigger: ", trigger, " pvalue: ", pvalue);
+    // }
 
     // if this tile has no rule, do nothing
     if ( !array_key_exists(userid, GLB.options) ) {
@@ -3198,7 +3215,8 @@ function processRules(bid, thetype, trigger, pvalue) {
     
     // rule structure
     // delay and attr are optional, but must give a delay to give an attr; just set it to 0 or false to skip delay
-    // you cannot safely mix the logic of "or" with the logic of "and"
+    // you cannot safely mix the logic of "or" with the logic of "and" but it sometimes works
+    // also note that below altpattern is the same as triggerpatern for now
     // if subid>=xx or num=subid=on or num=subid=off... , num=subid=value=delay, num=subid=value=delay=attr, ...
     // if subid>=xx and num=subid=on and num=subid=off... , num=subid=value=delay, num=subid=value=delay=attr, ...
     // for example...
@@ -3209,7 +3227,7 @@ function processRules(bid, thetype, trigger, pvalue) {
     const ifpattern = /(if)\s+(.*)/;
     const triggerpattern = /(\w+)\s*([=|!|<|>])(=?)\s*(\w+)/;
     const rulepattern = /(\d*)\s*=\s*(\w+)\s*([=|!|<|>])(=?)\s*(\w+)/;
-    const altpattern = /(\w+)\s*([=|!|<|>])(=?)\s*(\w+)/;
+    const altpattern =     /(\w+)\s*([=|!|<|>])(=?)\s*(\w+)/;
     
     // print some debug info
     var items = GLB.options[userid];
@@ -3249,6 +3267,12 @@ function processRules(bid, thetype, trigger, pvalue) {
                     // loop through each one and add to test
                     ruleset.forEach( function(rule) {
 
+                        var ruleparts = null;
+                        var ruletileid = null;
+                        var rulesubid = "";
+                        var rulevalue = "";
+                        var ruleop = "";
+                        var ruleop2 = "";
                         rule = rule.trim();
                         if ( DEBUG11 ) {
                             console.log( (ddbg()), "RULE debug: rule step#", rulenum, " rule: ", rule);
@@ -3265,13 +3289,15 @@ function processRules(bid, thetype, trigger, pvalue) {
                         // otherwise we are on an element so interpret the test
                         } else {
                             if ( rulenum===0 ) {
-                                var ruleparts = rule.match(triggerpattern);
-                                var ruletileid = tileid;
-                                var rulesubid = ruleparts[1] || "";
-                                var ruleop = ruleparts[2] || "";
-                                var ruleop2 = ruleparts[3];
-                                if ( ruleop2 ) { ruleop = ruleop + ruleop2; }
-                                var rulevalue = ruleparts[4] || "";
+                                ruleparts = rule.match(triggerpattern);
+                                if ( ruleparts ) {
+                                    ruletileid = tileid;
+                                    rulesubid = ruleparts[1] || "";
+                                    ruleop = ruleparts[2] || "";
+                                    ruleop2 = ruleparts[3];
+                                    if ( ruleop2 ) { ruleop = ruleop + ruleop2; }
+                                    rulevalue = ruleparts[4] || "";
+                                }
                             } else {
                                 ruleparts = rule.match(rulepattern);
                                 ruleop = "";
@@ -3305,30 +3331,31 @@ function processRules(bid, thetype, trigger, pvalue) {
                             // compute the test if this test part has the required elements
                             if ( ruletileid && ! isNaN(ruletileid) && ruleop && rulevalue ) {
 
-                                var ifvalue = false;
-                                var ridx;
-                                var rtype;
-                                var rbid;
-
                                 // find the tile index and proceed with activating the rule
-                                ridx = array_search(ruletileid, GLB.options["index"]);
-                                if ( ridx ) {
-                                    var ritems = ridx.split("|");
-                                    rtype = ritems[0];
-                                    rbid = ritems[1];
-                                    try {
-                                        ifvalue = allthings[ridx]["value"][rulesubid];
-                                    } catch(e) {
-                                        console.log(e, " ridx= ", ridx);
-                                        ifvlaue = false;
-                                    }
+                                if ( rulenum===0 && array_key_exists(rulesubid, pvalue) ) {
+                                    ifvalue = pvalue[rulesubid];
                                 } else {
-                                    ifvalue = false;
+                                    ridx = array_search(ruletileid, GLB.options["index"]);
+                                    if ( ridx ) {
+                                        var ritems = ridx.split("|");
+                                        rtype = ritems[0];
+                                        rbid = ritems[1];
+                                        try {
+                                            ifvalue = allthings[ridx]["value"][rulesubid];
+                                        } catch(e) {
+                                            // console.log(e, " ridx= ", ridx);
+                                            ifvlaue = false;
+                                        }
+                                    } else {
+                                        ifvalue = false;
+                                        rtype = "";
+                                        rbid = "";
+                                    }
                                 }
 
                                 // fix up ISY hubs
-                                if ( rtype==="isy" && rulevalue==="on" ) { rulevalue = "DON"; }
-                                if ( rtype==="isy" && rulevalue==="off" ) { rulevalue = "DOF"; }
+                                if ( rulesubid==="isy" && rulevalue==="on" ) { rulevalue = "DON"; }
+                                if ( rulesubid==="isy" && rulevalue==="off" ) { rulevalue = "DOF"; }
 
                                 if ( DEBUG11 ) {
                                     console.log( (ddbg()), "RULE debug: ridx: ", ridx, " rtype= ", rtype, " rbid= ", rbid, " ifvalue: ", ifvalue, "rulevalue: ", rulevalue, " ruletileid: ", ruletileid, " parts: ", ruleparts );
@@ -3385,7 +3412,7 @@ function processRules(bid, thetype, trigger, pvalue) {
 
             // execute the statements after if for the cases that pass the logic test above
             if ( isrule ) {
-                execRules(1, testcommands);
+                execRules(thetype, 1, testcommands, pvalue);
             }
 
         }
@@ -3396,7 +3423,7 @@ function processRules(bid, thetype, trigger, pvalue) {
 
 // this executes the rules in the list starting with either 0 or 1
 // rules without if statements start at 0, if RULES start at 1
-function execRules(istart, testcommands) {
+function execRules(swtype, istart, testcommands, pvalue) {
     // const actpattern = /(\d+)\s*=\s*(\w+)\s*=\s*(\w+)\s*=?\s*(.*)/;
 
     // perform all of the commands if we meet the if test
@@ -3437,29 +3464,41 @@ function execRules(istart, testcommands) {
                 var rswtype = idxitems[0];
                 var rswid = idxitems[1];
 
+                // handle requests for parameters of the trigger tile ($) or destination tile (@)
+                var trigtype = rvalue.substr(0,1);
+                if ( trigtype==="$" || trigtype==="@" ) {
+                    var trigsubid = rvalue.substr(1);
+                    if ( trigtype==="$" && array_key_exists(trigsubid, pvalue) ) {
+                        rvalue = pvalue[trigsubid];
+                    } else if ( trigtype==="@" && array_key_exists(trigsubid, allthings[ridx]["value"]) ) {
+                        rvalue = allthings[ridx]["value"][trigsubid];
+                    }
+                }
+
                 // fix up ISY hubs
                 if ( rswtype==="isy" && rvalue==="on" ) { rvalue = "DON"; }
                 if ( rswtype==="isy" && rvalue==="off" ) { rvalue = "DOF"; }
 
                 if ( rsubid==="level" || rsubid==="colorTemperature" ) {
                     rswattr= "level";
-                } else if ( rsubid==="switch") {
+                } else if ( rsubid==="switch" || swtype==="isy" || (swval!=="on" && swval!=="off") ) {
                     rswattr="";
-                } else if ( !rswattr ) {
-                    swattr= swtype + " p_" + rtileid + " " + rswval;
+                } else if ( !rswattr && rswtype!=="isy" ) {
+                    var swval = rvalue==="on" ? "off" : "on";
+                    rswattr= swtype + " p_" + rtileid + " " + swval;
                 }
                 var hubid = allthings[ridx]["hubnum"];
                 var hub = findHub(hubid);
                 // if ( DEBUG11 ) {
-                //     console.log( (ddbg()), "RULE debug: exec step #", i, " hubid: ", hubid, " hub: ", hub);
+                //     console.log( (ddbg()), "RULE debug: exec step #", i, " hubid: ", hubid, " vals: ", rswid, rswtype, rvalue, rswattr, rsubid);
                 // }
                 if ( hub ) {
                     if ( delay && delay > 0 ) {
                         setTimeout( function() {
-                            callHub(hub, rswid, rswtype, rvalue, rswattr, rsubid, false, false);
+                            callHub(hub, rswid, rswtype, rvalue, rswattr, rsubid, false, false, true);
                         }, delay);
                     } else {
-                        callHub(hub, rswid, rswtype, rvalue, rswattr, rsubid, false, false);
+                        callHub(hub, rswid, rswtype, rvalue, rswattr, rsubid, false, false, true);
                     }
                 }
             }
@@ -3470,90 +3509,90 @@ function execRules(istart, testcommands) {
 
 }
 
-function processLinks(bid, thetype, trigger, pvalue) {
+// function processLinks(bid, thetype, trigger, pvalue) {
 
-    // go through all things that could be links for this tile
-    var userid = "user_" + bid;
+//     // go through all things that could be links for this tile
+//     var userid = "user_" + bid;
 
-    // if this tile has no link, do nothing
-    if ( !array_key_exists(userid, GLB.options) ) {
-        return;
-    }
+//     // if this tile has no link, do nothing
+//     if ( !array_key_exists(userid, GLB.options) ) {
+//         return;
+//     }
 
-    // determine the type of trigger
-    var ontrigger = false;
-    if ( trigger==="motion" && (pvalue.motion ==="active" || pvalue.switch ==="DON") ) {
-        ontrigger = "on";
-    } else if ( trigger==="motion" && (pvalue.motion ==="inactive" || pvalue.switch ==="DOF") ) {
-        ontrigger = "off";
-    } else if ( trigger==="contact" && (pvalue.contact ==="open"  || pvalue.switch ==="DON") ) {
-        ontrigger = "on";
-    } else if ( trigger==="contact" && (pvalue.contact ==="closed" || pvalue.switch ==="DOF") ) {
-        ontrigger = "off";
-    } else if ( trigger==="switch" && (pvalue.switch ==="on" || pvalue.switch ==="DON") ) {
-        ontrigger = "on";
-    } else if ( trigger==="switch" && (pvalue.switch ==="off" || pvalue.switch ==="DOF") ) {
-        ontrigger = "off";
-    }
+//     // determine the type of trigger
+//     var ontrigger = false;
+//     if ( trigger==="motion" && (pvalue.motion ==="active" || pvalue.switch ==="DON") ) {
+//         ontrigger = "on";
+//     } else if ( trigger==="motion" && (pvalue.motion ==="inactive" || pvalue.switch ==="DOF") ) {
+//         ontrigger = "off";
+//     } else if ( trigger==="contact" && (pvalue.contact ==="open"  || pvalue.switch ==="DON") ) {
+//         ontrigger = "on";
+//     } else if ( trigger==="contact" && (pvalue.contact ==="closed" || pvalue.switch ==="DOF") ) {
+//         ontrigger = "off";
+//     } else if ( trigger==="switch" && (pvalue.switch ==="on" || pvalue.switch ==="DON") ) {
+//         ontrigger = "on";
+//     } else if ( trigger==="switch" && (pvalue.switch ==="off" || pvalue.switch ==="DOF") ) {
+//         ontrigger = "off";
+//     }
 
-    // debug info
-    var idx = thetype + "|" + bid;
-    if ( DEBUG12 ) {
-        console.log( (ddbg()), "linked trigger: ", trigger, " on trigger: ", ontrigger, " idx: ", idx, " pvalue: ", pvalue);
-    }
+//     // debug info
+//     var idx = thetype + "|" + bid;
+//     if ( DEBUG12 ) {
+//         console.log( (ddbg()), "linked trigger: ", trigger, " on trigger: ", ontrigger, " idx: ", idx, " pvalue: ", pvalue);
+//     }
 
-    if ( !ontrigger ) {
-        return;
-    }
+//     if ( !ontrigger ) {
+//         return;
+//     }
 
-    var items = GLB.options[userid];
-    var linkidx;
-    items.forEach( function(item) {
+//     var items = GLB.options[userid];
+//     var linkidx;
+//     items.forEach( function(item) {
 
-        // process only links
-        if ( item[0]==="LINK" ) {
-            var tilenum = parseInt(item[1]);
-            var linksubid = item[2];
+//         // process only links
+//         if ( item[0]==="LINK" ) {
+//             var tilenum = parseInt(item[1]);
+//             var linksubid = item[2];
 
-            // auto trigger any linked field that is a switch
-            // this has to start with the name switch
-            if ( isNaN(tilenum) || !linksubid.startsWith("switch") )  {
-                if ( DEBUG12 ) {
-                    console.log( (ddbg()), "warning - no action taken on linked tile because either a non-integer provided or the linked tile is not a switch. tilenum: ", item[1], " linksubid: ", linksubid);
-                }
-                linkidx = false;
-            } else {
-                if ( DEBUG12 ) {
-                    console.log( (ddbg()), "Processing LINK for tilenum: ", tilenum, " linksubid: ", linksubid);
-                }
-                linkidx = array_search(tilenum, GLB.options.index);
-            }
+//             // auto trigger any linked field that is a switch
+//             // this has to start with the name switch
+//             if ( isNaN(tilenum) || !linksubid.startsWith("switch") )  {
+//                 if ( DEBUG12 ) {
+//                     console.log( (ddbg()), "warning - no action taken on linked tile because either a non-integer provided or the linked tile is not a switch. tilenum: ", item[1], " linksubid: ", linksubid);
+//                 }
+//                 linkidx = false;
+//             } else {
+//                 if ( DEBUG12 ) {
+//                     console.log( (ddbg()), "Processing LINK for tilenum: ", tilenum, " linksubid: ", linksubid);
+//                 }
+//                 linkidx = array_search(tilenum, GLB.options.index);
+//             }
 
-            if ( linkidx!==false ) {
-                var linktype = allthings[linkidx]["type"];
+//             if ( linkidx!==false ) {
+//                 var linktype = allthings[linkidx]["type"];
 
-                // fix up isy devices
-                if ( linktype==="isy" && ontrigger==="on" ) { ontrigger = "DON"; }
-                if ( linktype==="isy" && ontrigger==="off" ) { ontrigger = "DOF"; }
+//                 // fix up isy devices
+//                 if ( linktype==="isy" && ontrigger==="on" ) { ontrigger = "DON"; }
+//                 if ( linktype==="isy" && ontrigger==="off" ) { ontrigger = "DOF"; }
 
-                var linkbid = allthings[linkidx]["id"];
-                var hubId = allthings[linkidx]["hubnum"];
-                var hub = findHub(hubId);
+//                 var linkbid = allthings[linkidx]["id"];
+//                 var hubId = allthings[linkidx]["hubnum"];
+//                 var hub = findHub(hubId);
 
-                // hub, swid, swtype, swval, swattr, subid, linkinfo, popup
-                callHub(hub, linkbid, linktype, ontrigger, "", "switch");
+//                 // hub, swid, swtype, swval, swattr, subid, linkinfo, popup
+//                 callHub(hub, linkbid, linktype, ontrigger, "", "switch", false, false, false);
 
-                // push to clients immediately
-                // Note: this isn't really needed since the call to hub also pushes status when done
-                // but we can do it here to create instant feedback
-                // pushClient(linkbid, linktype, "switch", {switch: ontrigger}, false, false);
-                pushClient(linkbid, linktype, linksubid, {switch: ontrigger}, false, false);
-            }
-        }
+//                 // push to clients immediately
+//                 // Note: this isn't really needed since the call to hub also pushes status when done
+//                 // but we can do it here to create instant feedback
+//                 // pushClient(linkbid, linktype, "switch", {switch: ontrigger}, false, false);
+//                 pushClient(linkbid, linktype, linksubid, {switch: ontrigger}, false, false);
+//             }
+//         }
 
-    });
+//     });
 
-}
+// }
 
 function pushClient(swid, swtype, subid, body, linkinfo, popup) {
     // send the new results to all clients
@@ -3581,13 +3620,13 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
         return;
     }
 
-    if ( pvalue["password"] ) { delete pvalue["password"]; }
+    // if ( pvalue["password"] ) { delete pvalue["password"]; }
         
-    // remove color for now until we get it fixed - but report it so I can inspect
-    if ( pvalue["color"] ) {
-        // console.log( (ddbg()), "webSocket color: ", pvalue.color);
-        delete( pvalue["color"] );
-    }
+    // // remove color for now until we get it fixed - but report it so I can inspect
+    // if ( pvalue["color"] ) {
+    //     // console.log( (ddbg()), "webSocket color: ", pvalue.color);
+    //     delete( pvalue["color"] );
+    // }
 
     // save the result to push to all clients
     entry["value"] = pvalue;
@@ -3615,11 +3654,17 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
                 // update the link that triggered if this was a link
                 // we do something similar on the client side to change
                 // all linked things that match this
-                if ( lidx && lsubid && lreal && lreal===thekey ) {
+                if ( lidx && lsubid && lreal && lreal===thekey && allthings[lidx] ) {
                     allthings[lidx]["value"][lsubid] = pvalue[thekey];
                 }
             }
         }
+    }
+
+    // send mqtt message
+    // eventually we can use MQTT on clients to receive this message instead of sendUTF below
+    if ( udclient && udclient.connected ) {
+        udclient.publish("housepanel/pushClient", JSON.stringify(entry));
     }
 
     // do a push to each client
@@ -3634,7 +3679,7 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
 
 }
 
-function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
+function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrule) {
     var access_token = hub["hubAccess"];
     var endpt = hub["hubEndpt"];
     var result = "success";
@@ -3740,26 +3785,46 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
             default:
 
                 // handle arrows for variable changes
-                if ( hint==="ISY variable" && subid.startsWith("int_") && (subid.endsWith("-up") || subid.endsWith("-dn")) ) {
+                if ( hint==="ISY variable" && subid.startsWith("int_") ) {
                     // get the real subid that the arrows are pointing toward
-                    var varnum = subid.substr(4, subid.length-7);
-                    var realsubid = subid.substr(0, subid.length-3);
                     var intvar = parseInt(swval);
-                    intvar = subid.endsWith("-up") ? intvar + 1 : intvar - 1;
+                    if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
+                        var varnum = subid.substr(4, subid.length-7);
+                        var realsubid = subid.substr(0, subid.length-3);
+                        intvar = subid.endsWith("-up") ? intvar + 1 : intvar - 1;
+                    } else {
+                        varnum = subid.substr(4);
+                        realsubid = subid;
+                    }
                     cmd = "/vars/set/1/" + varnum + "/" + intvar.toString();
                     isyresp[realsubid] = intvar.toString();
                     curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
 
-                } else if ( hint==="ISY variable" && subid.startsWith("state_") && (subid.endsWith("-up") || subid.endsWith("-dn")) ) {
+                } else if ( hint==="ISY variable" && subid.startsWith("state_") ) {
                     // get the real subid that the arrows are pointing toward
-                    // state_5-up  ==>  varnum = 5   realsubid = state_5
-                    var varnum = subid.substr(6, subid.length-9);
-                    var realsubid = subid.substr(0, subid.length-3);
                     var intvar = parseFloat(swval);
-                    intvar = subid.endsWith("-up") ? intvar + 1.0 : intvar - 1.0;
-                    cmd = "/vars/set/2/" + varnum + "/" + intvar.toString();
-                    isyresp[realsubid] = intvar.toString();
-                    curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+                    var prec = 0;
+                    if ( !isNaN(intvar) ) {
+                        if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
+                            var varnum = subid.substr(6, subid.length-9);
+                            var realsubid = subid.substr(0, subid.length-3);
+                            intvar = subid.endsWith("-up") ? intvar + 1 : intvar - 1;
+                        } else {
+                            varnum = subid.substr(6);
+                            realsubid = subid;
+
+                            // deal with precision values
+                            prec = parseInt(allthings[idx].value["prec_state_"+varnum]);
+                            if ( ! isNaN(prec) && prec > 0 ) {
+                                var pow10 = Math.pow(10,prec);
+                                intvar = Math.round(intvar*pow10) / pow10;
+                            }
+                        }
+                        // console.log("precision debug: ", prec, intvar, subid, varnum);
+                        cmd = "/vars/set/2/" + varnum + "/" + intvar.toString();
+                        isyresp[realsubid] = intvar.toString();
+                        curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+                    }
 
                 // run commands
                 } else if ( hint==="ISY program" ) {
@@ -3793,25 +3858,51 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
         return newval;
     }
 
-    async function getHubResponse(err, res, body) {
-        // var response = body;
+    function getHubResponse(err, res, body) {
+        var pvalue;
         if ( err ) {
-            console.log( (ddbg()), "error calling hub: ", err);
+            console.log( (ddbg()), "error calling ST or HE hub: ", err);
         } else {
-            if ( DEBUG7 ) {
-                console.log( (ddbg()), "doAction: ", swid, " type: ", swtype, " subid: ", subid, " body: ", body);
-            }
             // update all clients - this is actually not needed if your server is accessible to websocket updates
             // It is left here because my dev machine sometimes doesn't get websocket pushes
             // you can comment this if your server gets pushes reliable
             // leaving it here causes no harm other than processing the visual update twice
             if ( body ) {
-                pushClient(swid, swtype, subid, body, linkinfo, popup);
 
-                if ( ENABLERULES && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
-                    processRules(swid, swtype, subid, body);
-                    processLinks(swid, swtype, subid, body);
-                    GLB.rules[swid] = true;
+                // convert from json string
+                try {
+                    pvalue = JSON.parse(body);
+                } catch (ep) {
+                    pvalue = null;
+                    console.log( (ddbg()), "failed converting hub call return to JSON object. body: ", body);
+                }
+
+                // deal with audio tiles
+                if ( pvalue && array_key_exists("audioTrackData", pvalue) ) {
+                    try {
+                        var audiodata = JSON.parse(pvalue["audioTrackData"]);
+                        console.log("getHubResponse audiodata: ", audiodata);
+                        if ( audiodata ) {
+                            pvalue["trackDescription"] = audiodata["title"] || "";
+                            pvalue["currentArtist"] = audiodata["artist"] || "";
+                            pvalue["currentAlbum"] = audiodata["album"] || "";
+                            pvalue["trackImage"] = audiodata["albumArtUrl"] || "";
+                            pvalue["mediaSource"] = audiodata["mediaSource"] || "";
+                        }
+                    } catch(jerr) {
+                        audiodata = null;
+                        console.log(jerr);
+                    }
+                    delete pvalue["audioTrackData"];
+                }
+
+                if (pvalue) {
+                    pushClient(swid, swtype, subid, pvalue, linkinfo, popup);
+                    if ( ENABLERULES && !inrule && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
+                        processRules(swid, swtype, subid, pvalue);
+                        // processLinks(swid, swtype, subid, pvalue);
+                        GLB.rules[swid] = true;
+                    }
                 }
             }
         }
@@ -3841,9 +3932,9 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup) {
             if ( rres && rres.status.toString()==="200" ) {
                 pushClient(swid, swtype, subid, isyresp, linkinfo, popup);
 
-                if ( ENABLERULES && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
+                if ( ENABLERULES && !inrule && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
                     processRules(swid, swtype, subid, isyresp);
-                    processLinks(swid, swtype, subid, isyresp);
+                    // processLinks(swid, swtype, subid, isyresp);
                     GLB.rules[swid] = true;
                 }
             }
@@ -3868,15 +3959,33 @@ function queryHub(hub, swid, swtype, popup) {
         curl_call(endpt + cmd, header, false, false, "GET", getNodeQueryResponse);
     }
     
-    async function getQueryResponse(err, res, body) {
+    async function getQueryResponse(err, res, pvalue) {
         if ( err ) {
             console.log( (ddbg()), "error requesting hub node query: ", err);
         } else {
             if ( DEBUG5 ) {
-                console.log( (ddbg()), "doQuery: ", swid, " type: ", swtype, " value: ", body);
+                console.log( (ddbg()), "doQuery: ", swid, " type: ", swtype, " value: ", pvalue);
             }
-            if ( body ) {
-                pushClient(swid, swtype, "none", body, null, popup);
+            if ( pvalue ) {
+
+                // deal with audio tiles
+                if ( array_key_exists("audioTrackData", pvalue) ) {
+                    try {
+                        var audiodata = JSON.parse(pvalue["audioTrackData"]);
+                        if ( audiodata ) {
+                            pvalue["trackDescription"] = audiodata["title"] || "";
+                            pvalue["currentArtist"] = audiodata["artist"] || "";
+                            pvalue["currentAlbum"] = audiodata["album"] || "";
+                            pvalue["trackImage"] = audiodata["albumArtUrl"] || "";
+                            pvalue["mediaSource"] = audiodata["mediaSource"] || "";
+                        }
+                    } catch(jerr) {
+                        audiodata = null;
+                    }
+                    delete pvalue["audioTrackData"];
+                }
+
+                pushClient(swid, swtype, "none", pvalue, null, popup);
             }
         }
     }
@@ -3885,8 +3994,7 @@ function queryHub(hub, swid, swtype, popup) {
         if ( err ) {
             console.log( (ddbg()), "error requesting ISY node query: ", err);
         } else {
-            var result = parser.parse(body);
-
+            // var result = parser.parse(body);
             xml2js(body, async function(xmlerr, result) {
                 try {
                     if ( result ) {
@@ -4112,6 +4220,11 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                         }
                     }
                     
+                    if ( DEBUG12 ) {
+                        console.log( (ddbg()),"linked_hubnum: ", $linked_hubnum, " linked_type: ", $linked_swtype,
+                                               " linked_id: ", $linked_swid, " linked_val: ", $linked_val, 
+                                               " realsubid: ", $realsubid );
+                    }
                     // make the action call on the linked thing
                     // the hub callback now handles the linked resposnes properly
                     // if link is to something static, show it
@@ -4120,7 +4233,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                             response = $linked_val;
                         } else {
                             var linkinfo = [swid, swtype, subid, $realsubid];
-                            response = callHub($lhub, $linked_swid, $linked_swtype, swval, swattr, $realsubid, linkinfo, false);
+                            response = callHub($lhub, $linked_swid, $linked_swtype, swval, swattr, $realsubid, linkinfo, false, false);
                         }
                     }
                 }
@@ -4151,7 +4264,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                         if ( DEBUG11 ) {
                             console.log( (ddbg()), "RULE execution: commands: ", testcommands );
                         }
-                        execRules(istart, testcommands);
+                        execRules(swtype, istart, testcommands, allthings[idx]["value"]);
                     }
                     response = "success";
                 } else {
@@ -4160,22 +4273,22 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                 break;
 
             case "HUB":
-                response = callHub(hub, swid, swtype, swval, swattr, subid, false, false);
+                response = callHub(hub, swid, swtype, swval, swattr, subid, false, false, false);
 
                 // process rules and links instantly in case the webSocket doesn't work
                 // this also makes the rules run much quicker
                 // only harm or side effect is the rule will be executed twice
-                if ( response==="success" && ENABLERULES && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
-                    var pvalue = clone(allthings[idx]["value"]);
-                    if ( !subid.endsWith("-up") && !subid.endsWith("-dn") ) {
-                        pvalue[subid] = swval;
-                    }
-                    if ( ENABLERULES ) {
-                        processRules(swid, swtype, subid, pvalue);
-                        processLinks(swid, swtype, subid, pvalue);
-                        GLB.rules[swid] = true;
-                    }
-                }
+                // if ( response==="success" && ENABLERULES && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
+                //     var pvalue = clone(allthings[idx]["value"]);
+                //     if ( !subid.endsWith("-up") && !subid.endsWith("-dn") ) {
+                //         pvalue[subid] = swval;
+                //     }
+                //     if ( ENABLERULES ) {
+                //         processRules(swid, swtype, subid, pvalue);
+                //         // processLinks(swid, swtype, subid, pvalue);
+                //         GLB.rules[swid] = true;
+                //     }
+                // }
                 break;
 
             default:
@@ -4221,8 +4334,9 @@ function doQuery(hubid, swid, swtype, tileid, protocol) {
             rtype = swid;
         }
         result = {};
+        var res;
         for (var idx in (allthings || {}) ) {
-            var res = allthings[idx];
+            res = allthings[idx];
             var refresh = "normal";
             if ( array_key_exists("refresh", res) ) {
                 refresh = res["refresh"];
@@ -4232,10 +4346,33 @@ function doQuery(hubid, swid, swtype, tileid, protocol) {
             }
             if ( refresh===rtype ) {
                 var item = GLB.options["index"][idx];
-                res = getCustomTile(res, res.type, res.id);
-                res = returnFile(res, res.type);
                 result[item] = res;
             }
+        }
+
+        for ( var i=0; i < result.length; i++ ) {
+            res = result[i];
+
+            // deal with audio tiles
+            if ( res.type==="audio" && array_key_exists("audioTrackData", res.value) ) {
+                try {
+                    var audiodata = JSON.parse(res.value["audioTrackData"]);
+                    if ( audiodata ){
+                        res.value["trackDescription"] = audiodata["title"];
+                        res.value["currentArtist"] = audiodata["artist"];
+                        res.value["currentAlbum"] = audiodata["album"];
+                        res.value["trackImage"] = audiodata["albumArtUrl"];
+                        res.value["mediaSource"] = audiodata["mediaSource"];
+                    }
+                } catch(jerr) {
+                    audiodata = null;
+                }
+                delete res.value["audioTrackData"];
+            }
+
+            res = getCustomTile(res, res.type, res.id);
+            result[i] = returnFile(res, res.type);
+            
         }
     } else {
         if ( (swid==="none" || swtype==="none" || !swtype || !swid || swid==="0") && tileid )  {
@@ -4805,7 +4942,7 @@ function getCatalog(hubpick) {
 
 // this used to create input blocks for auth page
 // it was modified for use now on the options page
-function tsk($timezone, $skin, $uname, $port, $webSocketServerPort, $fast_timer, $slow_timer) {
+function tsk($timezone, $skin, $uname, $port, $webSocketServerPort, $fast_timer, $slow_timer, polisyip) {
 
     var $tc= "";
     $tc += "<form id=\"userpw\" class=\"options\" name=\"userpw\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
@@ -4828,6 +4965,9 @@ function tsk($timezone, $skin, $uname, $port, $webSocketServerPort, $fast_timer,
 
     $tc += "<div><label class=\"startupinp\">Slow Timer: </label>";
     $tc += "<input id=\"newslow_timer\" class=\"startupinp\" name=\"slow_timer\" width=\"20\" type=\"text\" value=\"" + $slow_timer + "\"/></div>"; 
+
+    $tc += "<div><label class=\"startupinp\">Polisy box IP: </label>";
+    $tc += "<input id=\"newpolisyip\" class=\"startupinp\" name=\"polisyip\" width=\"30\" type=\"text\" value=\"" + polisyip + "\"/></div>"; 
 
     $tc += "<div><label for=\"uname\" class=\"startupinp\">Username: </label>";
     $tc += "<input id=\"uname\" class=\"startupinp\" name=\"uname\" width=\"20\" type=\"text\" value=\"" + $uname + "\"/></div>"; 
@@ -4864,6 +5004,7 @@ function getOptionsPage(pathname) {
     var $ruleoptions = configoptions["rules"];
     var $timezone = configoptions["timezone"];
     var $uname = getUserName();
+    var polisyip = configoptions["polisyip"] || "localhost";
 
     var hubpick = "all";
     if ( configoptions["hubpick"] ) {
@@ -4882,7 +5023,7 @@ function getOptionsPage(pathname) {
     $tc += utils.hidden("pagename", "options");
 
     $tc += hubFilters(hubpick, 7);
-    $tc += tsk($timezone, skin, $uname, $port, $webSocketServerPort, $fast_timer, $slow_timer);
+    $tc += tsk($timezone, skin, $uname, $port, $webSocketServerPort, $fast_timer, $slow_timer, polisyip);
 
     $tc += "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + retpage + "\"  method=\"POST\">";
 
@@ -4910,8 +5051,8 @@ function getOptionsPage(pathname) {
     $tc += "</div>";
 
     var fcastcity = configoptions["fcastcity"] || "ann-arbor";
-    var fcastregion = configoptions["fcastregion"];
-    var fcastcode = configoptions["fcastcode"];      // ann-arbor code is 42d28n83d74
+    var fcastregion = configoptions["fcastregion"] || "";
+    var fcastcode = configoptions["fcastcode"] || "";   //  ann-arbor code is 42d28n83d74
     var $accucity = configoptions["accucity"];
     var $accuregion = configoptions["accuregion"];
     var $accucode = configoptions["accucode"];      // ann-arbor-mi code is 329380
@@ -5252,6 +5393,7 @@ function saveUserPw(body) {
     var oldhash = "";
     var hash = "";
     var defskin;
+    var polisyip = GLB.options.config["polisyip"] || "localhost";
     if ( GLB.options.config["skin"] ) {
         defskin = GLB.options.config["skin"];
     } else {
@@ -5309,6 +5451,12 @@ function saveUserPw(body) {
                 slow_timer = 0;
             }
             GLB.options.config["slow_timer"] = slow_timer;
+        } else if ( key==="polisyip" ) {
+            var newip = val.trim();
+            if ( newip ) {
+                polisyip = newip;
+            }
+            result.uname = uname;
         } else if ( key==="uname" ) {
             uname = val.trim();
             if ( uname==="" ) {
@@ -5357,6 +5505,7 @@ function saveUserPw(body) {
     // save the skin in my user specific setting
     GLB.options.config["pword"][uname] = [hash, skin];
     GLB.options.config["skin"] = skin;
+    GLB.options.config["polisyip"] = polisyip;
 
     GLB.pwcrypt = hash;
 
@@ -5364,7 +5513,7 @@ function saveUserPw(body) {
     result.hash = hash;
     result.skin = skin;
     if ( DEBUG3 ) {
-        console.log( (ddbg()), "saveuserpw processed: ", result, " uname: ", uname, " oldpw: ", oldhash, " newpw: ", hash);
+        console.log( (ddbg()), "saveuserpw processed: ", result, " uname: ", uname, " oldpw: ", oldhash, " newpw: ", hash, " polisyip: ", polisyip);
     }
 
     // write options to file
@@ -5799,8 +5948,7 @@ function delCustom(swid, swtype, swval, swattr, subid) {
 }
 
 function apiCall(body, protocol) {
-    // readOptions("apiCall");
-    if ( DEBUG2 || DEBUG8 ) {
+    if ( DEBUG8 ) {
         console.log( (ddbg()), protocol + " api call, body: ", UTIL.inspect(body, false, null, true) );
     }
     var hubs = GLB.options.config["hubs"];
@@ -5819,6 +5967,11 @@ function apiCall(body, protocol) {
     var command = body["command"] || "";
     var linkval = body["linkval"] || "";
 
+    // send mqtt message
+    if ( udclient && udclient.connected ) {
+        udclient.publish("housepanel/apiCall", JSON.stringify(body, null, 1));
+    }
+ 
     if ( hubs && hubs.length ) {
         var defhub = hubs[0]["hubId"];
     } else {
@@ -6779,7 +6932,7 @@ if ( app && applistening ) {
         // the first initialize type tells Node.js to update elements
         if ( req.body['msgtype'] === "initialize" ) {
             res.json('hub info updated');
-            if ( DEBUG2 || DEBUG8 ) {
+            if ( DEBUG2 ) {
                 console.log( (ddbg()), "New hub authorized; updating things in hpserver.");
             }
             readOptions();
@@ -6792,7 +6945,9 @@ if ( app && applistening ) {
                 console.log( (ddbg()), "Received update msg from hub: ", req.body["hubid"], " body: ", req.body);
             }
             var msg = processHubMessage(req.body);
-            console.log( (ddbg()), msg );
+            if ( DEBUG17 ) {
+                console.log( (ddbg()), msg );
+            }
             res.json(msg);
 
         // handle all api calls upon the server from js client and external api calls here
@@ -6812,3 +6967,85 @@ if ( app && applistening ) {
     setupSockets();
 }
 
+// set up a MQTT connections to Polisy broker to listen in on Polyglot messages
+// also use this to send debug notices about HousePanel to myself
+// setup mqtt client
+var udclient = null;
+var polisyip = GLB.options.config["polisyip"] || "";
+
+// console.log("hostname: ", os.hostname(), " platform: ", os.platform() );
+var hostname;
+if ( os.hostname()==="polisy" && os.platform()==="freebsd" ) {
+    hostname = "localhost";
+} else if ( polisyip ) {
+    hostname = polisyip;
+} else {
+    hostname = null;
+}
+
+if ( hostname && fs.existsSync("ssl/polyglot.crt") && fs.existsSync("ssl/client.crt") && fs.existsSync("ssl/client_private.key") ) {
+    var ca = fs.readFileSync("ssl/polyglot.crt");
+    var cert = fs.readFileSync("ssl/client.crt");
+    var key = fs.readFileSync("ssl/client_private.key");
+    var udopts = {host: hostname, port: "1883",
+                ca: ca, cert: cert, key: key,
+                checkServerIdentity: () => { return null; },
+                rejectUnauthorized: false};
+    udclient = mqtt.connect("mqtts://192.168.11.32", udopts);
+}
+
+if ( udclient ) {
+    udclient.on("message", function(topic, msg) {
+        if ( topic.startsWith("udi/polyglot/frontend/nodeservers") ) {
+            try {
+                var frontend = JSON.parse(msg.toString());
+                console.log( (ddbg()), topic,  " ", frontend.nodeservers.length + " nodeservers");
+                frontend.nodeservers.forEach( function(node) {
+                    console.log("slot: ", node.profileNum, " name: ", node.name, " file: ", node.homeDir + node.executable);
+                });
+            } catch(e) {
+                console.log("error - trying to decipher MQTT message from polyglot frontend", e);
+            }
+        } else {
+            if ( topic.startsWith("housepanel/") ) {
+                console.log( (ddbg()), topic, "msg: ", msg.toString() );
+            } else if ( topic.startsWith("udi/polyglot/") ) {
+                var str = JSON.parse(msg.toString());
+                console.log( (ddbg()), topic, "msg: ", JSON.stringify(str, null, 1) );
+            } else {
+                console.log("mqtt topic: ", topic, " msg: ", msg.toString() );
+            }
+        }
+    });
+
+    udclient.on("error", function(err) {
+        console.log("UDI MQTT error: ", err);
+    });
+
+    udclient.on("connect", function() {
+        if ( MQTTPOLY ) {
+            udclient.subscribe("udi/#", {qos: 0}, function(err, granted) {
+                if ( !err ) {
+                    console.log("MQTT subscribed to: ", granted );
+                    udclient.publish("udi", "UDI mqtt setup and listening...");
+                } else {
+                    console.log("UDI MQTT error subscribing to udi topic: ", err);
+                }
+            });
+        }
+
+        // lets also subscribe to our own HP publishing calls
+        if ( MQTTHP ) {
+            udclient.subscribe("housepanel/#", {qos: 0}, function(err, granted) {
+                if ( !err ) {
+                    console.log("MQTT subscribed to: ", granted );
+                    udclient.publish("housepanel", "HousePanel mqtt setup and listening...");
+                } else {
+                    console.log("MQTT error subscribing to housepanel topic: ", err);
+                }
+            });
+        }
+
+        console.log("UDI mqtt status: ", udclient.connected);
+    });
+}

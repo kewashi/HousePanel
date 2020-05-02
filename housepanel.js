@@ -125,9 +125,8 @@ function clone(obj) {
 // don't need the reload feature for Node since we do this every time page loads
 // which happens every time after reading all the things from a hub
 function getAllthings() {
-        var swattr = "none";
         $.post(cm_Globals.returnURL, 
-            {useajax: "getthings", id: "none", type: "none", attr: swattr},
+            {useajax: "getthings", id: "none", type: "none", attr: ""},
             function (presult, pstatus) {
                 if (pstatus==="success" && typeof presult==="object" ) {
                     var keys = Object.keys(presult);
@@ -422,7 +421,7 @@ function setupWebsocket()
     // this contains a single device object
     // this is where pushClient is processed for hpserver.js
     wsSocket.onmessage = function (evt) {
-        var reservedcap = ["name", "DeviceWatch-DeviceStatus", "DeviceWatch-Enroll", "checkInterval", "healthStatus"];
+        var reservedcap = ["name", "password", "color", "DeviceWatch-DeviceStatus", "DeviceWatch-Enroll", "checkInterval", "healthStatus"];
         try {
             var presult = JSON.parse(evt.data);
             // console.log("pushClient: ", presult);
@@ -497,16 +496,17 @@ function setupWebsocket()
         if ( bid!==null && thetype && pvalue && typeof pvalue==="object" ) {
         
             // remove color for now until we get it fixed
-            if ( pvalue["color"] ) {
-                delete( pvalue["color"] );
-            }
+            // if ( pvalue["color"] ) {
+            //     delete( pvalue["color"] );
+            // }
 
             // change not present to absent for presence tiles
             // it was an early bad design decision to alter ST's value that I'm now stuck with
             if ( pvalue["presence"] && pvalue["presence"] ==="not present" ) {
                 pvalue["presence"] = "absent";
             }
-        
+
+            // console.log("websocket tile update. id: ", bid, " type: ", thetype, " pvalue: ", pvalue);
             // update all the tiles that match this type and id
             // this now works even if tile isn't on the panel because
             $('div.panel div.thing[bid="'+bid+'"][type="'+thetype+'"]').each(function() {
@@ -823,7 +823,7 @@ function setupSliders() {
             var command = "";
             var linktype = thetype;
             var linkval = "";
-            if ( usertile && $(usertile).attr("command") ) {
+            if ( usertile && usertile.length>0 && $(usertile).attr("command") ) {
                 command = $(usertile).attr("command");    // command type
                 if ( !thevalue ) {
                     thevalue = $(usertile).attr("value");      // raw user provided val
@@ -874,7 +874,7 @@ function setupSliders() {
             var command = "";
             var linktype = thetype;
             var linkval = "";
-            if ( usertile ) {
+            if ( usertile && usertile.length>0 ) {
                 command = $(usertile).attr("command");    // command type
                 if ( !thevalue ) {
                     thevalue = $(usertile).attr("value");      // raw user provided val
@@ -2114,17 +2114,18 @@ function fixTrack(tval) {
 // update all the subitems of any given specific tile
 // note that some sub-items can update the values of other subitems
 // this is exactly what happens in music tiles when you hit next and prev song
-function updateTile(aid, presult) {
+// third parameter will skip links - but this is not used for now
+function updateTile(aid, presult, skiplink) {
 
     // do something for each tile item returned by ajax call
     var isclock = false;
     var nativeimg = false;
-    var oldvalue = "";
     
     // handle audio devices
     if ( presult["audioTrackData"] ) {
+        var oldtrack = "";
         if ( $("#a-"+aid+"-trackDescription") ) {
-            oldvalue = $("#a-"+aid+"-trackDescription").html();
+            oldtrack = $("#a-"+aid+"-trackDescription").html();
         }
         var audiodata = JSON.parse(presult["audioTrackData"]);
         presult["trackDescription"] = audiodata["title"] || "None";
@@ -2133,7 +2134,25 @@ function updateTile(aid, presult) {
         presult["trackImage"] = audiodata["albumArtUrl"];
         presult["mediaSource"] = audiodata["mediaSource"];
         delete presult["audioTrackData"];
-        // console.log("audio track changed from: ["+oldvalue+"] to: ["+ presult["trackDescription"] +"]");
+        if ( oldtrack !== presult["trackDescription"] ) {
+            console.log("audio track changed from: ["+oldtrack+"] to: ["+ presult["trackDescription"] +"]");
+        }
+    }
+    if ( presult["title"] && presult["trackDescription"] ) {
+        presult["trackDescription"] = presult["title"];
+        delete presult["title"];
+    }
+    if ( presult["artist"] && presult["currentArtist"] ) {
+        presult["currentArtist"] = presult["artist"];
+        delete presult["artist"];
+    }
+    if ( presult["album"] && presult["currentAlbum"] ) {
+        presult["currentAlbum"] = presult["album"];
+        delete presult["album"];
+    }
+    if ( presult["albumArtUrl"] && presult["trackImage"] ) {
+        presult["trackImage"] = presult["albumArtUrl"];
+        delete presult["albumArtUrl"];
     }
     
     // handle native track images - including audio devices above
@@ -2145,18 +2164,29 @@ function updateTile(aid, presult) {
             nativeimg = true;
         }
     }
-    
-    $.each( presult, function( key, value ) {
-        var targetid = '#a-'+aid+'-'+key;
 
-        // only take action if this key is found in this tile
-        if ($(targetid)) {
+    var dupcheck = {};
+    $.each( presult, function( key, value ) {
+
+        var targetid = '#a-'+aid+'-'+key;
+        var dothis = $(targetid);
+
+        // check for dups
+        if ( array_key_exists(key, dupcheck) ) {
+            dothis = false;
+        }
+
+        if ( skiplink && dothis && dothis.siblings("div.user_hidden").length > 0  ) {
+            if ( dothis.siblings("div.user_hidden").attr("command")==="LINK" ) {
+                dothis = false;
+            }
+        }
+
+        // only take action if this key is found in this tile and not a dup
+        if ( dothis ) {
+            dothis[key] = true;
             var oldvalue = $(targetid).html();
             var oldclass = $(targetid).attr("class");
-
-        //    if ( key==="level") {
-        //        alert(" aid="+aid+" key="+key+" targetid="+targetid+" value="+value+" oldvalue="+oldvalue+" oldclass= "+oldclass);
-        //    }
 
             // remove the old class type and replace it if they are both
             // single word text fields like open/closed/on/off
@@ -2502,10 +2532,10 @@ function setupTimer(timerval, timertype, hubnum) {
                                         thevalue = thevalue.value;
                                     }
                                     
-                                    // do not update names because they are never updated on groovy
-                                    // also skip updating music and audio album art if using websockets 
+                                    // if the user provided name is blank set it to master name
+                                    // also skip updating music and audio album art for old music tiles 
                                     // since doing it here messes up the websocket updates
-                                    // I actually kept the audio refresh since it seems to work okay
+                                    // I actually kept the new audio refresh since it seems to work okay
                                     if ( thevalue && typeof thevalue==="object" ) {
                                         if ( !thevalue["name"] && cm_Globals.allthings[idx] ) {
                                             thevalue["name"] = cm_Globals.allthings[idx].name;
@@ -2517,9 +2547,12 @@ function setupTimer(timerval, timertype, hubnum) {
                                             if ( thevalue["currentArtist"] ) { delete thevalue["currentArtist"]; }
                                             if ( thevalue["currentAlbum"] ) { delete thevalue["currentAlbum"]; }
                                         }
-                                        // if ( strtype==="audio" && thevalue["audioTrackData"] ) {
-                                        //     delete thevalue["audioTrackData"];
-                                        // }
+                                        if ( thevalue["allon"] ) {
+                                            delete thevalue["allon"];
+                                        }
+                                        if ( thevalue["alloff"] ) {
+                                            delete thevalue["alloff"];
+                                        }
                                         updateTile(aid, thevalue); 
                                     }
                                 }
@@ -2689,6 +2722,47 @@ function checkPassword(tile, thingname, pw, yesaction) {
     });
 }
 
+function stripOnoff(thevalue) {
+    var newvalue = thevalue.toLowerCase();
+    if ( newvalue==="on" || newvalue==="off" ) {
+        return " ";
+    } else if ( newvalue.endsWith("on") ) {
+        thevalue = thevalue.substr(0, thevalue.length-2);
+    } else if ( newvalue.endsWith("off") ) {
+        thevalue = thevalue.substr(0, thevalue.length-3);
+    }
+    if ( thevalue.substr(-1)!==" " && thevalue.substr(-1)!=="_" && thevalue.substr(-1)!=="-" && thevalue.substr(-1)!=="|" ) {
+        thevalue+= " ";
+    }
+    return thevalue;
+}
+
+function addOnoff(targetid, subid, thevalue) {
+    thevalue = stripOnoff(thevalue);
+    if ( $(targetid).hasClass("on") ) {
+        $(targetid).removeClass("on");
+        $(targetid).addClass("off");
+        $(targetid).html(thevalue+"On");
+        thevalue = "off";
+    } else if ( $(targetid).hasClass("off") )  {
+        $(targetid).removeClass("off");
+        $(targetid).addClass("on");
+        $(targetid).html(thevalue+"Off");
+        thevalue = "on";
+    } else {
+        if ( subid==="allon") {
+            $(targetid).addClass("on");
+            $(targetid).html(thevalue+"Off");
+            thevalue = "on";
+        } else {
+            $(targetid).addClass("off");
+            $(targetid).html(thevalue+"On");
+            thevalue = "off";
+        }
+    }
+    return thevalue;
+}
+
 function processClick(that, thingname) {
     var aid = $(that).attr("aid");
     var theattr = $(that).attr("class");
@@ -2736,7 +2810,7 @@ function processClick(that, thingname) {
     var usertile = $(that).siblings(".user_hidden");
     var userval = "";
     
-    if ( usertile && $(usertile).attr("command") ) {
+    if ( usertile && usertile.length>0 && $(usertile).attr("command") ) {
         command = $(usertile).attr("command");    // command type
         // alert("Command = " + command);
         
@@ -2758,7 +2832,7 @@ function processClick(that, thingname) {
         // this is enabled by the settings above for command, linkval, and linktype
     }
 
-    var ispassive = (subid==="custom" || subid==="temperature" || subid==="battery" || command==="TEXT" ||
+    var ispassive = (subid==="custom" || subid==="temperature" || subid==="battery" || (command==="TEXT" && subid!=="allon" && subid!=="alloff") ||
         subid==="presence" || subid==="motion" || subid==="contact" || 
         subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" ||
         subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid==="custom");
@@ -2800,12 +2874,39 @@ function processClick(that, thingname) {
                 }
             }, "json");
 
-    // for clicking on the video link simply reload the video which forces a replay
-    // } else if (     (thetype==="video"  && ispassive)
-    //              || (thetype==="frame"  && ispassive)
-    //              || (thetype==="image"  && ispassive)
-    //              || (thetype==="blank"  && ispassive)
-    //              || (thetype==="custom" && ispassive) ) {
+    } else if ( command==="TEXT" && (subid==="allon" || subid==="alloff") ) {
+        var panel = $(tile).attr("panel");
+        thevalue = addOnoff(targetid, subid, thevalue);
+        $('div[panel="' + panel + '"] div.overlay div.switch').each(function() {
+            aid = $(this).attr("aid");
+            tile = '#t-'+aid;
+            thetype = $(tile).attr("type");
+            bid = $(tile).attr("bid");
+            hubnum = $(tile).attr("hub");
+
+            var sib = $(this).siblings("div.user_hidden");
+            if ( sib && sib.length > 0 ) {
+                command = sib.attr("command");
+                linkval = sib.attr("linkval");
+            } else {
+                command = "";
+                linkval = "";
+            }
+            // force use of command mode by setting attr to blank
+            theattr = "";  // $(this).attr("class");
+            if ( thevalue==="on" && thetype==="ISY" ) {
+                thevalue = "DON";
+            }
+            else if ( thevalue==="off" || thetype==="ISY" ) {
+                thevalue = "DOF";
+            }
+            console.log(subid, "clicked. bid: ", bid, " type: ", thetype, " value: ", thevalue, 
+                               " attr: ", theattr, " hubnum: ", hubnum, " command: ", command, " linkval: ", linkval );
+            $.post(cm_Globals.returnURL, 
+                {useajax: ajaxcall, id: bid, type: thetype, value: thevalue, 
+                 attr: theattr, subid: "switch", hubid: hubnum, command: command, linkval: linkval} );
+        });
+
     } else if ( ispassive ) {
         console.log("Refreshing tile of passive clicked on element: ", subid, " tile type: ", thetype);
         $(targetid).html(thevalue);
@@ -2849,8 +2950,7 @@ function processClick(that, thingname) {
         // however, I still inverted the ST and HE values to support future update
         // where I might just look at thevalue for these hubs types as it should be
         // the attr action was a terrible workaround put in a much earlier version
-        if ( (thetype==="switch" || thetype==="switchlevel" || thetype==="bulb" || thetype==="light" ) &&
-             (thevalue==="on" || thevalue==="off")  ) {
+        if ( (subid==="switch") && (thevalue==="on" || thevalue==="off")  ) {
             thevalue = thevalue==="on" ? "off" : "on";
         }
         else if ( thetype==="isy" && (thevalue==="DON" || thevalue==="DOF" )  ) {

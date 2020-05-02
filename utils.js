@@ -1,6 +1,10 @@
 'use strict';
 
 const devhistory =  ` 
+2.253   Fix password bug and remove processLinks since rules are better
+            - add option to subscribe and listen to polyglot MQTT events
+2.252   Added special custom fields "allon" and "alloff"
+            - this turns all lights on or off on any given page
 2.251   Fixed frame cap bug by renaming frame#.html to Frame#.html
             - added ability to create Frame1.html file is code is known
 2.250   Cleaned up handling of names and headers to hide headers by default

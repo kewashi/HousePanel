@@ -1977,51 +1977,49 @@ function initColor(str_type, subid, thingindex) {
     
     // set initial hidden status
     if ( subid!=="wholetile" ) {
-        var ish1 = "";
-        var ish2 = "";
-        var ish3 = "";
-        var ish4 = "";
-        var ish1_1 = "";
-        var ish2_1 = "";
-        var ish3_1 = "";
-        var ish4_1 = "";
+        var ish = [];
+        for ( var i = 0; i< 18; i++) {
+            ish.push("");
+        }
         if ( subid==="head" ) {
-            ish1 = $("div.thingname." + str_type).css("display");
-            ish2= $("div.thingname." + str_type + ".t_" + thingindex).css("display");
-            ish3= $("div.thing." + str_type + "-thing div.thingname." + str_type).css("display");
-            ish4= $("div.thing." + str_type + "-thing div.thingname." + str_type + ".t_" + thingindex).css("display");
+            ish[0] = $("div.thingname." + str_type).css("display");
+            ish[1]= $("div.thingname." + str_type + ".t_" + thingindex).css("display");
+            ish[2]= $("div.thing." + str_type + "-thing div.thingname." + str_type).css("display");
+            ish[3]= $("div.thing." + str_type + "-thing div.thingname." + str_type + ".t_" + thingindex).css("display");
         } else {
-            // skip first check if subid is same as the type
-            if ( str_type!==subid ) {
-                ish1 = $("div." + subid).css("display");
+
+            ish[0]  = $("div.overlay." + subid).css("display");
+            ish[1]  = $("div.overlay." + subid  + " div." + subid).css("display");
+            ish[2]  = $("div.overlay." + subid  + " div." + subid + ".p_"+thingindex).css("display");
+            ish[3]  = $("div.overlay." + subid + ".v_"+thingindex).css("display");
+            ish[4]  = $("div.overlay." + subid + ".v_"+thingindex  + " div." + subid).css("display");
+            ish[5]  = $("div.overlay." + subid + ".v_"+thingindex  + " div." + subid + ".p_"+thingindex).css("display");
+
+            ish[6]  = $("div.thing div.overlay." + subid).css("display");
+            ish[7]  = $("div.thing div.overlay." + subid  + " div." + subid).css("display");
+            ish[8]  = $("div.thing div.overlay." + subid  + " div." + subid + ".p_"+thingindex).css("display");
+            ish[9]  = $("div.thing div.overlay." + subid + ".v_"+thingindex).css("display");
+            ish[10] = $("div.thing div.overlay." + subid + ".v_"+thingindex  + " div." + subid).css("display");
+            ish[11] = $("div.thing div.overlay." + subid + ".v_"+thingindex  + " div." + subid + ".p_"+thingindex).css("display");
+
+            ish[12] = $("div.thing." + str_type + "-thing div.overlay." + subid).css("display");
+            ish[13] = $("div.thing." + str_type + "-thing div.overlay." + subid + " div." + subid).css("display");
+            ish[14] = $("div.thing." + str_type + "-thing div.overlay." + subid + " div." + subid + ".p_"+thingindex).css("display");
+            ish[15] = $("div.thing." + str_type + "-thing div.overlay." + subid + ".v_"+thingindex).css("display");
+            ish[16] = $("div.thing." + str_type + "-thing div.overlay." + subid + ".v_"+thingindex  + " div." + subid).css("display");
+            ish[17] = $("div.thing." + str_type + "-thing div.overlay." + subid + ".v_"+thingindex  + " div." + subid + ".p_"+thingindex).css("display");
+        }
+        // console.log ("hidden check: ", str_type, subid, ish1, ish2, ish3, ish4, ish1_1, ish2_1, ish3_1, ish4_1);
+        var ishidden = false;
+        defaultOverlay = "block";
+        for ( var i = 0; i< ish.length; i++) {
+            if ( ish[i] && ish[i]==="none" ) {
+                ishidden= true;
+                defaultOverlay = ish[i];
             }
-            ish1_1 = $("div.thing." + str_type + "-thing div." + subid).css("display");
-            
-            // the other tests could all set the item to hidden
-            ish2= $("div.overlay."+subid+".v_"+thingindex).css("display");
-            ish2_1= $("div.thing." + str_type + "-thing div.overlay." + subid + ".v_"+thingindex).css("display");
-            ish3 = $("div.overlay." + subid).css("display");
-            ish3_1 = $("div.thing." + str_type + "-thing div.overlay." + subid).css("display");
-            ish4 = $("div.overlay." + subid +".v_"+thingindex + " div." + subid + ".p_"+thingindex).css("display");
-            ish4_1 = $("div.thing." + str_type + "-thing div.overlay." + subid +".v_"+thingindex + " div." + subid + ".p_"+thingindex).css("display");
         }
-        // console.log ("hidden check: ", subid, ish1, ish2, ish3, ish4);
-        if ( ish1 === "none" || ish1_1 === "none" || ish2 === "none" || ish2_1 ==="none" || ish3 ==="none" || ish3_1 ==="none" || ish4==="none" || ish4_1==="none") {
-            $("#isHidden").prop("checked", true);
-            defaultOverlay = "block";
-        } else {
-            $("#isHidden").prop("checked", false);
-            defaultOverlay = "block";
-            if ( ish1!=="" )   { defaultOverlay = ish1; }
-            if ( ish1_1!=="" ) { defaultOverlay = ish1_1; }
-            if ( ish2!=="" )   { defaultOverlay = ish2; }
-            if ( ish2_1!=="" ) { defaultOverlay = ish2_1; }
-            if ( ish3!=="" )   { defaultOverlay = ish3; }
-            if ( ish3_1!=="" ) { defaultOverlay = ish3_1; }
-            if ( ish4!=="" )   { defaultOverlay = ish4; }
-            if ( ish4_1!=="" ) { defaultOverlay = ish4_1; }
-            // defaultOverlay = ish2 ? ish2 : (ish3 ? ish3 : "block");
-        }
+        console.log("hidden info: ", ishidden, ish);
+        $("#isHidden").prop("checked", ishidden);
     }
     
 }
