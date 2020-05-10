@@ -1,7 +1,17 @@
 'use strict';
 
 const devhistory =  ` 
+2.255   Important GUI editor upgrade supporting sorted and free form tiles
+            - reorder now will only reorder those tiles not moved
+            - and moved tiles will keep their absolute location now
+            - many other bug fixes - better websocket calls
+            - limit power tile updates from dominating the network
+            - fix bug that now puts all color panels on top
+            - clean up previously messed up custom tile name logic
+            - add page specific formatting in the tile editor
 2.254   Allow rules to create and update custom TEXT fields
+            - improved the way audio tiles update
+            - added ability to put reference other values in rules
 2.253   Fix password bug and remove processLinks since rules are better
             - add option to subscribe and listen to polyglot MQTT events
 2.252   Added special custom fields "allon" and "alloff"

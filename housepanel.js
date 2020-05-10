@@ -321,8 +321,8 @@ function setupUserOpts() {
             } else {
                 timerval = 0;
             }
-            console.log("Timer for hub: ", hub.hubName," = ", timerval);
             if ( timerval >= 1000 ) {
+                console.log("Timer for hub: ", hub.hubName," = ", timerval);
                 setupTimer(timerval, "all", hubId);
             }
         });
@@ -521,16 +521,19 @@ function setupWebsocket()
 
             // handle links - loop through all tiles that have a link to see if they match
             // because this link shadow field has the real subid triggered we dont have to check subid below
-            // console.log("subid= ", subid);
-            $('div.panel div[command="' + "LINK" + '"][subid="' + subid + '"]').each(function() {
+            if ( subid==="trackImage" ) {
+                console.log("subid= ", subid, " pvalue: ", pvalue);
+            }
+            $('div.panel div[command="LINK"][subid="' + subid + '"]').each(function() {
 
                 // get the id to see if it is the thing being updated
                 var linkedtile = $(this).attr("linkval");
                 var src = $("div.thing.p_"+linkedtile);
                 var lbid = src.attr("bid");
+                var thisbid = $(this).attr("linkbid");
 
                 // if we have a match, update the sibling field
-                if ( lbid === bid ) {
+                if ( lbid === thisbid ) {
                     var sibling = $(this).next();
                     var oldvalue = sibling.html();
                     var oldclass = $(sibling).attr("class");
@@ -543,10 +546,17 @@ function setupWebsocket()
                     }
 
                     // swap out the class and change value
-                    if ( oldclass && oldvalue && value &&
-                         subid!=="name" && subid!=="trackImage" && subid!=="color" && subid!=='ERR' &&
+                    // this should match logic in hpserver.js in putElement routine
+                    if ( oldclass && oldvalue && value && typeof value==="string" &&
+                         subid!=="name" && subid!=="trackImage" && subid!=="color" && subid!=='ERR' && subid!=="date" && subid!=="time" &&
+                         !subid.startsWith("_") && subid.substr(0,6)!=="event_" &&
                          subid!=="trackDescription" && subid!=="mediaSource" &&
-                         subid!=="currentArtist" && subid!=="currentAlbum" &&
+                         subid!=="currentArtist" && subid!=="currentAlbum" && subid!=="groupRole" &&
+                         value.indexOf(" ")===-1 && oldvalue.indexOf(" ")===-1 &&
+                         value.substr(0,7)!=="number_" &&
+                         value.indexOf("://")===-1 &&
+                         value.indexOf("::")===-1 &&
+                         value.length < 30 &&
                          $.isNumeric(value)===false && 
                          $.isNumeric(oldvalue)===false &&
                          oldclass.indexOf(oldvalue)>=0 ) 
@@ -620,7 +630,7 @@ function getMaxZindex(panel) {
             if ( !isNaN(zindex) && zindex > zmax && zindex < 999) { zmax = zindex; }
         }
     });
-    console.log("zmax = ", zmax);
+    // console.log("zmax = ", zmax);
     if ( zmax >= 998 ) {
         zmax = 1;
     }
@@ -687,8 +697,21 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
             if ( !isNaN(pos.left) && !isNaN(pos.top) ) {
                 styleinfo += " left: " + pos.left + "px; top: " + pos.top + "px;";
             }
-            if ( pos.width && pos.height ) {
-                styleinfo += " width: " + pos.width + "px; height: " + pos.height + "px;";
+            if ( pos.height ) {
+                if ( typeof pos.height === "string" ) {
+                    var hstr = pos.height + ";";
+                } else {
+                    hstr = pos.height.toString() + "px;";
+                }
+                styleinfo += " height: " + hstr;
+            }
+            if ( pos.width ) {
+                if ( typeof pos.width === "string" ) {
+                    var wstr = pos.width + ";";
+                } else {
+                    wstr = pos.width.toString() + "px;";
+                }
+                styleinfo += " width: " + wstr;
             }
             if ( pos.border ) {
                 styleinfo += " border: " + pos.border + ";";
@@ -701,6 +724,9 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
             }
             if ( pos.zindex ) {
                 styleinfo += " z-index: " + pos.zindex + ";";
+            }
+            if ( pos["z-index"] ) {
+                styleinfo += " z-index: " + pos["z-index"] + ";";
             }
             styleinfo += "\"";
         }
@@ -939,13 +965,22 @@ function cancelPagemove() {
     if ( $("#roomtabs").sortable("instance") ) {
         $("#roomtabs").sortable("destroy");
     }
-}
+    $("div.sortnum").each(function() {
+        $(this).remove();
+     });
+ }
 
 function setupPagemove() {
+        
+    // loop through each thing in this room and number it
+    var num = 0;
+    $("#roomtabs li.ui-tab").each(function(){
+        num++;
+        addSortNumber(this, num.toString(), "li");
+    });
     
     // make the room tabs sortable
     // the change function does a post to make it permanent
-    var ajaxcall = "pageorder";
     $("#roomtabs").sortable({
         axis: "x", 
         items: "> li",
@@ -960,16 +995,17 @@ function setupPagemove() {
             // get the new list of pages in order
             // fix nasty bug to correct room tab move
             $("#roomtabs >li.ui-tab").each(function() {
-                var pagename = $(this).text();
+                var pagename = $(this).children().first().text();
                 pages[pagename] = k;
                 k++;
+                updateSortNumber(this, k.toString());
             });
             console.log("reordering " + k + " rooms: ", pages);
             $.post(cm_Globals.returnURL, 
-                {useajax: ajaxcall, id: "none", type: "rooms", value: pages, attr: "none"},
+                {useajax: "setorder", id: "none", type: "rooms", value: pages, attr: "none"},
                 function (presult, pstatus) {
                     if (pstatus==="success" && typeof presult==="object" ) {
-                        console.log( "pageorder" + ": POST returned: ", presult );
+                        console.log( "setorder POST returned: ", presult );
                     } else {
                         console.log( "pstatus: ", pstatus, " presult: ", presult);
                     }
@@ -985,43 +1021,50 @@ function setupSortable() {
     reordered = false;
     $("div.panel").each( function() {
         var roomtitle = $(this).attr("title");
+        console.log("setup sortable: ", roomtitle);
         
         // loop through each thing in this room and number it
         var num = 0;
-        $("div.thing[panel="+roomtitle+"]").each(function(){
+        $("div.thing[panel="+roomtitle+"][style*='relative']").each(function(){
             num++;
-            addSortNumber(this, num.toString());
+            addSortNumber(this, num.toString(), "div");
         });
     });
 
-    var ajaxcall = "pageorder";
     $("div.panel").sortable({
         containment: "parent",
         scroll: true,
-        items: "> div",
+        items: "> div[style*='relative']",                  // only select non absolute things
         delay: 50,
         grid: [1, 1],
         stop: function(evt, ui) {
             var roomtitle = $(ui.item).attr("panel");
-            var things = [];
+            var tilenums = [];
             var num = 0;
-            $("div.thing[panel="+roomtitle+"]").each(function(){
+            $("div.thing[panel="+roomtitle+"][style*='relative']").each(function(){
                 // get tile name and number
-                var tilename = $(this).find(".thingname").text();
+                // var tilename = $(this).find(".thingname").text();
                 var tile = $(this).attr("tile");
-                things.push([tile, tilename]);
+                tilenums.push(tile);
                 num++;
                 
                 // update the sorting numbers to show new order
                 updateSortNumber(this, num.toString());
             });
-            reordered = true;
-            console.log("reordering " + num + " tiles: ", things);
+
+            // now add on the tiles that are absolute
+            $("div.thing[panel="+roomtitle+"][style*='absolute']").each(function(){
+                var tile = $(this).attr("tile");
+                tilenums.push(tile);
+            });
+
+            console.log("reordering " + num + " tiles out of " + tilenums.length, " tiles: ", tilenums);
             $.post(cm_Globals.returnURL, 
-                {useajax: "pageorder", id: "none", type: "things", value: things, attr: roomtitle},
+                {useajax: "setorder", id: "none", type: "things", value: tilenums, attr: roomtitle},
                 function (presult, pstatus) {
                     if (pstatus==="success" && typeof presult==="object" ) {
-                        console.log(ajaxcall + ": POST returned: ", presult );
+                        console.log("setorder POST returned: ", presult );
+                        // reordered = true;
                     } else {
                         console.log( "pstatus: ", pstatus, " presult: ", presult);
                     }
@@ -1031,7 +1074,7 @@ function setupSortable() {
     });
 }
 
-function addSortNumber(thetile, num) {
+function addSortNumber(thetile, num, div) {
    var sortdiv = "<div class=\"sortnum\">" + num + "</div>";
    $(thetile).append(sortdiv);
 }
@@ -1040,39 +1083,66 @@ function updateSortNumber(thetile, num) {
    $(thetile).children(".sortnum").html(num);
 }
 
-var startPos = {top: 0, left: 0, zindex: 0};
-function thingDraggable(thing, snap) {
-    var snapgrid = false;
-    if ( snap ) {
-        snapgrid = [10, 10];
-    }
-    thing.draggable({
-        revert: "invalid",
-        // containment: "#dragregion",
-        start: function(evt, ui) {
-            startPos.left = $(evt.target).css("left");
-            startPos.top = $(evt.target).css("top");
-            startPos.zindex = $(evt.target).css("z-index");
-            
-            // while dragging make sure we are on top
-            $(evt.target).css("z-index", 999);
-        },
-        stop: function(evt, ui) {
-            
-            // fix invalid tiles
-            if ( isNaN(startPos.zindex) || startPos.zindex > 998 ) {
-                startPos.zindex = 2;
-                $(evt.target).css( {"z-index": startPos.zindex.toString()} );
-        }
-        },
-        grid: snapgrid
-    });
-}
 
 function setupDraggable() {
-
-    // get the catalog content and insert after main tabs content
+    var startPos = {top: 0, left: 0, "z-index": 0, position: "relative"};
     var hubpick = cm_Globals.hubId;
+    var delx;
+    var dely;
+
+    function thingDraggable(thing, snap, catpanel) {
+        var snapgrid = false;
+    
+        if ( snap ) {
+            snapgrid = [10, 10];
+        }
+        var panel = catpanel;
+        thing.draggable({
+            revert: "invalid",
+    
+            start: function(evt, ui) {
+    
+                // get the panel name - if the target is in catalog we have to do more work
+                if ( catpanel ) {
+                    panel = catpanel;
+                } else if ( $(evt.target).attr("panel") ) {
+                    panel = $(evt.target).attr("panel");
+                } else {
+                    var panelid = getCookie("defaultTab");
+                    panel = $("#"+panelid).text();
+                }
+                startPos["z-index"] = $(evt.target).css("z-index");
+                
+                // while dragging make sure we are on top
+                $(evt.target).css("z-index", 999);
+    
+                // set relative for new things and absolute for moving existing things
+                if ( $(evt.target).hasClass("catalog-thing") ) {
+                    startPos.left = 0;
+                    startPos.top = 0;
+                    delx = 0;
+                    dely = 0;
+                    startPos.position = "relative";
+                } else {
+                    startPos.left = parseInt($(evt.target).position().left);
+                    startPos.top  = parseInt($(evt.target).position().top);
+                    delx = evt.pageX - startPos.left;
+                    dely = evt.pageY - startPos.top;
+                    // $(evt.target).css({"position":startPos.position, "left": startPos.left, "top": startPos.top} );
+                    startPos.position = "absolute";
+                }
+    
+                console.log("start... left: " + startPos.left + " top: "+ startPos.top, " panel: ", panel, delx, dely);
+            },
+            stop: function(evt, ui) {
+                // var thing = ui.draggable;
+                console.log("Stopped dragging: ", $(evt.target).attr("type") );
+            },
+            grid: snapgrid
+        });
+    }
+    
+    // get the catalog content and insert after main tabs content
     var xhr = $.post(cm_Globals.returnURL, 
         {useajax: "getcatalog", id: 0, type: "catalog", value: "none", attr: hubpick},
         function (presult, pstatus) {
@@ -1099,7 +1169,7 @@ function setupDraggable() {
 
         // the active things on a panel
         var snap = $("#mode_Snap").prop("checked");
-        thingDraggable( $("div.panel div.thing"), snap );
+        thingDraggable( $("div.panel div.thing"), snap, null );
     
         // enable dropping things from the catalog into panel
         // and movement of existing things around on the panel itself
@@ -1120,10 +1190,6 @@ function setupDraggable() {
                 var thingtype = $(thing).attr("type");
                 var thingname = $(thing).find(".thingname").text();
 
-                var pagex = evt.pageX;
-                var pagey = evt.pageY;
-                // var thingname = $("span.orignal.n_"+tile).html();
-
                 // handle new tile creation
                 if ( thing.hasClass("catalog-thing") ) {
                     // get panel of active page - have to do this the hard way
@@ -1133,24 +1199,24 @@ function setupDraggable() {
                             var clickid = $(this).attr("aria-labelledby");
                             var panel = $("#"+clickid).text();
                             var lastthing = $("div.panel-"+panel+" div.thing").last();
-                            var pos = {left: pagex, top: pagey};
-                            createModal("modaladd","Add: "+ thingname + " of Type: "+thingtype+" to Room: "+panel+"?<br />Are you sure?","body", true, pos, function(ui, content) {
+                            pos = {position: "absolute", top: evt.pageY, left: evt.pageX, width: 300, height: "auto"};
+                            var zmax = getMaxZindex(panel);
+                            startPos["z-index"] = zmax.toString();
+                            createModal("modaladd","Add: "+ thingname + " of Type: "+thingtype+" to Room: "+panel+"?<br /><br />Are you sure?", "body", true, pos, function(ui, content) {
                                 var clk = $(ui).attr("name");
                                 if ( clk==="okay" ) {
                                     // add it to the system
                                     // the ajax call must return a valid "div" block for the dragged new thing
                                     $.post(cm_Globals.returnURL, 
-                                        {useajax: "dragmake", id: bid, type: thingtype, value: panel},
+                                        {useajax: "addthing", id: bid, type: thingtype, value: panel, attr: startPos},
                                         function (presult, pstatus) {
                                             if (pstatus==="success" && !presult.startsWith("error")) {
-                                                console.log( "Added " + thingname + " of type " + thingtype + " and bid= " + bid + " to room " + panel);
+                                                console.log( "Added " + thingname + " of type " + thingtype + " and bid= " + bid + " to room " + panel, " pos: ", startPos);
                                                 lastthing.after(presult);
                                                 var newthing = lastthing.next();
-                                                var zmax = getMaxZindex(panel) + 1;
-                                                // var zmax = 2;
-                                                $(newthing).css( {"z-index": zmax.toString()} );
+                                                $(newthing).css( startPos );
                                                 var snap = $("#mode_Snap").prop("checked");
-                                                thingDraggable( newthing, snap );
+                                                thingDraggable( newthing, snap, panel );
                                                 setupPage();
                                                 setupSliders();
                                                 setupColors();
@@ -1165,32 +1231,34 @@ function setupDraggable() {
                     });
                 // otherwise this is an existing thing we are moving
                 } else {
-                    var dragthing = {};
-                    dragthing["id"] = $(thing).attr("id");
-                    dragthing["tile"] = tile;
-                    dragthing["panel"] = $(thing).attr("panel");
-                    var customname = $("div." + thingtype + ".name.p_"+tile).html();
-                    if ( !customname ) { customname = thingname; }
-                    dragthing["custom"] = customname;
-                    
-                    // make this sit on top
-                    var zmax = getMaxZindex(dragthing["panel"]) + 1;
-                    dragthing["zindex"] = zmax;
-                    $(thing).css( {"z-index": zmax.toString()} );
-                    // $(thing).attr("style", "left: "+ui.position.left+"px; top: "+ui.position.top+"px; z-index: "+zmax);
+
+                    // var lastthing = $("div.panel-"+panel+" div.thing").last();
+                    // startPos.left = $(evt.target).css("left");
+                    // startPos.top = $(evt.target).css("top");
+                    startPos.left = evt.pageX - delx;   // parseInt($(evt.target).offset().left);
+                    startPos.top  = evt.pageY - dely;   // parseInt($(evt.target).offset().top);
+                    var panel = $(thing).attr("panel");
+                    $(thing).css( startPos["z-index"] );
+                    var zmax = getMaxZindex(panel);
+                    startPos["z-index"] = zmax.toString();
+
+                    // revert back to relative if we dragged close to zero
+                    if ( startPos.left < 0 || startPos.top < 0 ) {
+                        startPos.left = 0;
+                        startPos.top = 0;
+                        startPos.position = "relative";
+                    }
+
+                    $(thing).css(startPos);
                     
                     // now post back to housepanel to save the position
                     // also send the dragthing object to get panel name and tile pid index
                     if ( ! $("#catalog").hasClass("ui-droppable-hover") ) {
-                        console.log( "Moving " + customname + " to top: "+ ui.position.top + ", left: " + ui.position.left + ", z-index: " + zmax);
+                        console.log( "Moving tile #" + tile + " to position: ", startPos);
                         $.post(cm_Globals.returnURL, 
-                               {useajax: "dragdrop", id: bid, type: thingtype, value: dragthing, attr: ui.position},
+                               {useajax: "setposition", id: bid, type: thingtype, value: panel, attr: startPos, tile: tile},
                             function (presult, pstatus) {
-                                if (pstatus==="success" ) {
-                                    console.log("success - result: ", presult," position: ", ui.position );
-                                } else {
-                                    console.log("pstatus: ", pstatus, " presult: ", presult," position: ", ui.position );
-                                }
+                                console.log("pstatus: ", pstatus, " presult: ", presult);
                             }
                         );
                     }
@@ -1242,8 +1310,8 @@ function setupDraggable() {
                     } else {
                         // $("#"+id).data('draggable').options.revert();
                         try {
-                            $(thing).css("position","relative").css("left",startPos.left).css("top",startPos.top);
-                            $(thing).css( {"z-index": startPos.zindex.toString()} );
+                            $(thing).css("position","absolute").css("left",startPos.left).css("top",startPos.top);
+                            $(thing).css( {"z-index": startPos["z-index"].toString()} );
                         } catch(e) { 
                             console.log("Drag/drop error. Please share this with @kewashi on the ST or HE Community Forum: ", e); 
                         }
@@ -1385,7 +1453,6 @@ function execButton(buttonid) {
             cancelPagemove();
         }
         setupDraggable();
-        setupPagemove();
         addEditLink();
         $("#mode_Edit").prop("checked",true);
         priorOpmode = "DragDrop";
@@ -1740,11 +1807,17 @@ function addEditLink() {
         var tile = $(thing).attr("tile");
         var strhtml = $(thing).html();
         var thingclass = $(thing).attr("class");
+        var pagename = $(thing).attr("panel")
         var bid = $(thing).attr("bid");
         var hubnum = $(thing).attr("hub");
         var hub = getHub(hubnum);
         var hubName = "None";
         var hubType = "SmartThings";
+        try {
+            var customname = $("#a-"+aid+"-name").text();
+        } catch(e) {
+            customname = $("#s-"+aid).text();
+        }
         if ( hub ) {
             hubName = hub.hubName;
             hubType = hub.hubType;
@@ -1752,7 +1825,7 @@ function addEditLink() {
 
         // replace all the id tags to avoid dynamic updates
         strhtml = strhtml.replace(/ id="/g, " id=\"x_");
-        editTile(str_type, tile, aid, bid, thingclass, hubnum, hubName, hubType, strhtml);
+        editTile(pagename, str_type, tile, aid, bid, thingclass, hubnum, hubName, hubType, customname, strhtml);
     });
     
     $("div.cmzlink").on("click",function(evt) {
@@ -1851,7 +1924,7 @@ function addEditLink() {
     $("#roomtabs div.editpage").on("click",function(evt) {
         var roomnum = $(evt.target).attr("roomnum");
         var roomname = $(evt.target).attr("roomname");
-        editTile("page", roomname, 0, 0, "", roomnum, "None", "None");
+        editTile(roomname, "page", roomname, 0, 0, "", roomnum, "None", "None", roomname);
     });
    
     $("#addpage").off("click");
@@ -2954,7 +3027,7 @@ function processClick(that, thingname) {
         if ( (subid==="switch") && (thevalue==="on" || thevalue==="off")  ) {
             thevalue = thevalue==="on" ? "off" : "on";
         }
-        else if ( thetype==="isy" && (thevalue==="DON" || thevalue==="DOF" )  ) {
+        else if ( thetype==="isy" && subid==="switch" && (thevalue==="DON" || thevalue==="DOF" )  ) {
             thevalue = thevalue==="DON" ? "DOF" : "DON";
         }
         console.log("URL: ", cm_Globals.returnURL," ", ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" hub= " + hubnum + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);

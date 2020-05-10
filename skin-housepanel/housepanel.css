@@ -362,16 +362,14 @@ div.colorTemperature-val, div.hue-val, div.saturation-val {
 }
 
 /* momentary styling */
-div.momentary.off {
+div.overlay.momentary div.momentary.off {
     background-image: url('icons/3dbutton.png');
-    background-color: rgba(0,51,204,0.6);
     color: rgba(255, 255, 255, 0.01);
     height: 112px;
     background-size: 90px;
 }
-div.momentary.on {
+div.overlay.momentary div.momentary.on {
     background-image: url('icons/3dbuttonpush.png');
-    background-color: rgba(0,51,204,0.6);
     color: rgba(255, 255, 255, 0.01);
     height: 112px;
     background-size: 90px;
@@ -421,8 +419,11 @@ div.heatingSetpoint-up, div.coolingSetpoint-up {
 div.music.level, div.audio.volume {
     width: 99%;
 }
-div.audio-thing {
+/* this width is set assuming only one of the volume groups is visible */
+div.thing.audio-thing {
+    background-color: rgba(0, 102, 102, 1);
     width: 180px;
+    height: auto;
 }
 
 div.audio-thing div.overlay._previousTrack,
@@ -432,8 +433,8 @@ div.audio-thing div.overlay._stop,
 div.audio-thing div.overlay._nextTrack,
 div.audio-thing div.overlay._muteGroup,
 div.audio-thing div.overlay._unmuteGroup,
-div.audio-thing div.overlay._groupVolumeUp,
-div.audio-thing div.overlay._groupVolumeDown
+div.audio-thing div.overlay._volumeUp,
+div.audio-thing div.overlay._volumeDown
 {
     display: inline;
 }
@@ -441,13 +442,9 @@ div.audio-thing div.overlay._rewind,
 div.audio-thing div.overlay._fastForward,
 div.audio-thing div.overlay._mute,
 div.audio-thing div.overlay._unmute,
-div.audio-thing div.overlay._volumeUp,
-div.audio-thing div.overlay._volumeDown {
+div.audio-thing div.overlay._groupVolumeUp,
+div.audio-thing div.overlay._groupVolumeDown {
     display: none;
-}
-
-div.audio-thing div.overlay._volumeUp {
-    margin-left: 40px;
 }
 
 div.music-previous, div.music-pause, div.music-stop, div.music-play, div.music-next,
@@ -482,7 +479,7 @@ div.music-stop, div.audio._stop {
 div.music-play, div.audio._play {
     background-image: url("media/play.png");
 }
-div.music-previous, div.audio.previousTrack {
+div.music-previous, div.audio._previousTrack {
     background-image: url("media/prev.png");
 }
 div.music-next, div.audio._nextTrack {
@@ -640,11 +637,6 @@ div.thing.temperature-thing {
 div.thing.music-thing {
     background-color: rgba(80,0,50,0.6);
     width: 180px;
-    height: auto;
-}
-div.thing.audio-thing {
-    background-color: rgba(0, 102, 102, 1);
-    width: auto;
     height: auto;
 }
 /* use italic serif font for music titles and a custom size */

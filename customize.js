@@ -53,7 +53,13 @@ function customizeTile(thingindex, aid, bid, str_type, hubnum) {
     cm_Globals.hubnum = hubnum;
     cm_Globals.reload = false;
     cm_Globals.thingidx = str_type + "|" + bid;
-    
+    try {
+        var customname = $("#a-"+aid+"-name").text();
+    } catch(e) {
+        customname = $("#s-"+aid).text();
+    }
+    cm_Globals.customname = customname;
+
     // start of dialog
     var dh = "<div id='customizeDialog' class='tileDialog'>";
     try {
@@ -999,13 +1005,14 @@ function showPreview() {
     var str_type = cm_Globals.type;
     var tileid = cm_Globals.thingindex;
     var uid = "user_" + bid;
-    var swattr = "none";
+    var swattr = cm_Globals.customname;
+    var swval = "";
     if ( cm_Globals.options[uid] ) {
-        swattr = cm_Globals.options[uid];
+        swval = cm_Globals.options[uid];
     }
     
     $.post(cm_Globals.returnURL, 
-        {useajax: "wysiwyg", id: bid, type: str_type, tile: tileid, value: "", attr: swattr},
+        {useajax: "wysiwyg", id: bid, type: str_type, tile: tileid, value: swval, attr: swattr},
         function (presult, pstatus) {
             if (pstatus==="success" ) {
                 $("#cm_preview").html(presult);

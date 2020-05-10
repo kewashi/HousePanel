@@ -866,8 +866,12 @@ div.sortnum {
     background-color: rgba(230, 240, 240, 1);
     border: 2px solid black; 
     color: black;
-    font-weight: bold;
+    font-style: normal; font-weight: bold; font-size: 16px;
     right: 2px;
+    text-align: center;
+}
+li div.sortnum {
+    top: 2px;
 }
 
 div.wholetile {

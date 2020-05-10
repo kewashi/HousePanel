@@ -19,6 +19,7 @@ const DEBUG14 = false;              // tile link details
 const DEBUG15 = false;              // allthings and options dump
 const DEBUG16 = false;              // customtiles writing
 const DEBUG17 = false;              // push client
+const DEBUG18 = false;               // ST and HE hub messages
 
 // various control options
 const MQTTPOLY = false;             // subscribe to and log polyglot via MQTT
@@ -60,12 +61,12 @@ var applistening = false;
 
 function getUserName() {
     var uname;
-    if ( typeof GLB.options!=="undefined" && GLB.options["config"] && array_key_exists("uname", GLB.options["config"]) ) {
+    if ( typeof GLB.options!=="undefined" && typeof GLB.options["config"]!=="undefined" && array_key_exists("uname", GLB.options["config"]) ) {
         uname = GLB.options["config"]["uname"];
         if ( !uname ) { uname = "default"; }
     } else {
         uname = "default";
-        if ( typeof GLB.options!=="undefined" && GLB.options["config"] ) {
+        if ( typeof GLB.options!=="undefined" && typeof GLB.options["config"]!=="undefined" ) {
             GLB.options["config"]["uname"] = uname;
         }
     }
@@ -634,20 +635,21 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
 
                     // handle audio tiles
                     if ( pvalue && thetype==="audio" && array_key_exists("audioTrackData", pvalue) ) {
-                        try {
-                            var audiodata = JSON.parse(pvalue["audioTrackData"]);
-                            if ( audiodata ) {
-                                pvalue["trackDescription"] = audiodata["title"] || "";
-                                pvalue["currentArtist"] = audiodata["artist"] || "";
-                                pvalue["currentAlbum"] = audiodata["album"] || "";
-                                pvalue["trackImage"] = audiodata["albumArtUrl"] || "";
-                                pvalue["mediaSource"] = audiodata["mediaSource"] || "";
-                            }
-                        } catch(jerr) {
-                            audiodata = null;
-                            console.log(jerr);
-                        }
-                        delete pvalue["audioTrackData"];
+                        pvalue = translateAudio(pvalue);
+                        // try {
+                        //     var audiodata = JSON.parse(pvalue["audioTrackData"]);
+                        //     if ( audiodata ) {
+                        //         pvalue["trackDescription"] = audiodata["title"] || "";
+                        //         pvalue["currentArtist"] = audiodata["artist"] || "";
+                        //         pvalue["currentAlbum"] = audiodata["album"] || "";
+                        //         pvalue["trackImage"] = audiodata["albumArtUrl"] || "";
+                        //         pvalue["mediaSource"] = audiodata["mediaSource"] || "";
+                        //     }
+                        // } catch(jerr) {
+                        //     audiodata = null;
+                        //     console.log(jerr);
+                        // }
+                        // delete pvalue["audioTrackData"];
                     }
 
                     // this is the proper place to load customizations
@@ -1707,6 +1709,27 @@ function array_search(needle, arr) {
     return key;
 }
 
+function tile_search(tileid, tiles) {
+    var thetile = false;
+    tileid = parseInt(tileid);
+    var found = false;
+    if ( !isNaN(tileid) ) {
+        tiles.forEach(function(tile) {
+            var checktile = parseInt(tile[0]);
+            if ( !isNaN(checktile) && checktile === tileid ) {
+                thetile = tile;
+                // if already found then this is a dup so set position to zero
+                if (found) {
+                    thetile[1] = 0;
+                    thetile[2] = 0;
+                }
+                found = true;
+            }
+        });
+    }
+    return thetile;
+}
+
 function in_array(needle, arr) {
     if ( !is_object(arr) ) {
         return false;
@@ -1785,14 +1808,21 @@ function getNewPage(cnt, roomtitle, kroom, things) {
         
         // get the offsets and the tile id
         var kindex = parseInt(kindexarr[0]);
-        var postop = kindexarr[1];
-        var posleft = kindexarr[2];
+        var postop = parseInt(kindexarr[1]);
+        var posleft = parseInt(kindexarr[2]);
+        if ( postop < 0 || posleft < 0 ) {
+            postop = 0;
+            posleft = 0;
+        }
         var zindex = 1;
         var customname = "";
 
         if ( kindexarr.length > 3 ) {
             zindex = kindexarr[3];
             customname = kindexarr[4];
+            if ( typeof customname !== "string" ) {
+                customname = "";
+            }
         }
         var i = idxvals.findIndex(idx => idx === kindex);
         var thingid = idxkeys[i];
@@ -1805,7 +1835,9 @@ function getNewPage(cnt, roomtitle, kroom, things) {
 
                 // adjust the zindex to show on top of others if there is a color field
                 // this starts at 199 and counts down to 100 assuming fewer than 100 color things on a page
-                if ( array_key_exists("color", thesensor.value) && zindex < 100 ) {
+                // but only do this for relative placement tiles
+                // we handle color separately for dragged tiles
+                if ( array_key_exists("color", thesensor.value) && zindex < 100 && posleft===0 && postop===0 ) {
                     zcolor--;
                     zindex = zcolor;
                     if ( zcolor < 100 ) { zcolor = 200; }
@@ -1814,6 +1846,7 @@ function getNewPage(cnt, roomtitle, kroom, things) {
                 // keep running count of things to use in javascript logic
                 cnt++;
                 $tc += makeThing(cnt, kindex, thesensor, roomtitle, postop, posleft, zindex, customname, false);
+                // console.log(roomtitle, cnt, postop, posleft, customname);
             }
         }
     });
@@ -1829,27 +1862,39 @@ function getNewPage(cnt, roomtitle, kroom, things) {
 // function to search for triggers in the name to include as classes to style
 function processName(thingname, thingtype) {
 
+    // this is where we do a check for bad chars and remove them in names
+    var pattern = /[,;:!-\'\*\<\>\{\}\+\&\%]/g;
+    try {
+        thingname = thingname.replace(pattern,"");
+    } catch(e) {
+        console.log(thingname, "error: ", e);
+    }
+
     // get rid of 's and split along white space
     var subtype = "";
     var ignore2 = utils.getTypes();
     ignore2.push("panel");
-    var lowname = thingname.toLowerCase();
-    var pattern = /[,;:!-\'\*\<\>\{\}\+\&\%]/g;
-    var s1 = lowname.replace(pattern,"");
-    var subopts = s1.split(" ");
-    var k = 0;
-    subopts.forEach(function(str) {
-        str= str.trim();
-        var numcheck = +str;
-        if ( str.length>1 && ignore2.indexOf(str)===-1 && str!==thingtype && isNaN(numcheck) &&
-             str.indexOf("::")===-1 && str.indexOf("://")===-1 && str.length<20 ) {
-            if ( k < 3 ) {
-                subtype += " " + str;
-                k++;
+
+    try {
+        var lowname = thingname.toLowerCase();
+        var subopts = lowname.split(" ");
+        var k = 0;
+        subopts.forEach(function(str) {
+            str= str.trim();
+            var numcheck = +str;
+            if ( str.length>1 && ignore2.indexOf(str)===-1 && str!==thingtype && isNaN(numcheck) &&
+                str.indexOf("::")===-1 && str.indexOf("://")===-1 && str.length<20 ) {
+                if ( k < 3 ) {
+                    subtype += " " + str;
+                    k++;
+                }
             }
-        }
-    });
-    return subtype;
+        });
+    } catch (e) {
+        console.log(e);
+        subtype = "";
+    }
+    return [thingname, subtype];
 }
 
 // returns proper html to display an image, video, frame, or custom
@@ -2110,18 +2155,23 @@ function getWeatherIcon(num) {
 // removes dup words from a string
 function uniqueWords(str) {
     var arr = str.split(" ");
-    var newarr = [];
+    var newstr = "";
     arr.forEach(function(word) {
         word = word.trim();
-        if ( !newarr.includes(word) ) {
-            newarr.push(word);
+        if ( word && !newstr.includes(word) ) {
+            if ( newstr==="" ) {
+                newstr+= word;
+            } else {
+                newstr+= " " + word;
+            }
         }
     });
-    var newstr = newarr.join(" ");
     return newstr;
 }
 
 function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, customname, wysiwyg) {
+    const audiomap = {"title": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
+                      "albumArtUrl": "trackImage", "mediaSource": "mediaSource"};
     var $tc = "";
 
     var thingvalue = thesensor["value"];
@@ -2152,8 +2202,17 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
         refresh = thingvalue["refresh"];
     }
 
-    // fix any name that is custom
-    var subtype = processName(thingvalue["name"], thingtype);
+    // set the custom name
+    var subtype = "";
+    if ( array_key_exists("name", thingvalue) ) { 
+        if ( customname ) {
+            thingvalue["name"] = customname;
+        }
+        var pnames = processName(thingvalue["name"], thingtype);
+        thingvalue["name"] = pnames[0];
+        subtype = pnames[1];
+    }
+
     postop= parseInt(postop);
     posleft = parseInt(posleft);
     zindex = parseInt(zindex);
@@ -2161,13 +2220,6 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     if ( wysiwyg ) {
         idtag = wysiwyg;
     }
-
-    // set the custom name
-    // if ( customname ) { 
-    //     thingvalue["name"] = customname;
-    // } else if (!thingvalue["name"]) {
-    //     thingvalue["name"] = defname;
-    // }
 
     // set the custom name
     // limit to 132 visual columns but show all for special tiles and custom names
@@ -2191,20 +2243,27 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     // wrap thing in generic thing class and specific type for css handling
     $tc=   "<div id=\""+idtag+"\" aid=\""+cnt+"\" hub=\""+hubnum+"\" tile=\""+kindex+"\" bid=\""+bid+"\" type=\""+thingtype+"\" ";
     
-    // get the class setting - this is set up to make the p_ last
-    // we also use the unique function to remove dups
+    // set up the class setting
     var classstr = "thing " + thingtype+"-thing" + subtype;
     if ( hint ) {
         classstr += " " + hint.replace(/\./g,"_");
     }
     classstr += " p_"+kindex;
-    // classstr = uniqueWords(classstr);
+
+    // add the panel name to the class
+    // this allows styling to be page dependent or applied everywhere
+    classstr = panelname + " " + classstr;
+    classstr = uniqueWords(classstr);
 
     $tc += "panel=\""+panelname+"\" class=\""+classstr+"\" ";
     $tc += "refresh=\""+refresh+"\"";
-    if ( (postop!==0 && posleft!==0) || zindex>1 ) {
-        $tc += " style=\"position: relative; left: "+posleft+"px; top: "+postop+"px; z-index: "+zindex+";\"";
+    var pos = "absolute";
+    if ( wysiwyg || (postop===0 && posleft===0) ) {
+        pos = "relative";
+        posleft = 0;
+        postop = 0;
     }
+    $tc += " style=\"position: "+pos+"; left: "+posleft+"px; top: "+postop+"px; z-index: "+zindex+";\"";
     $tc += ">";
 
 
@@ -2296,7 +2355,14 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
             if ( jsontval && typeof jsontval==="object" && !array_key_exists(helperkey, thingvalue) ) {
                 for (var jtkey in jsontval ) {
                     var jtval = jsontval[jtkey];
-                    if ( jtval ) {
+
+                    // handle audio track keys
+                    if ( tkey==="audioTrackData" && array_key_exists(jtkey, audiomap) ) {
+                        jtkey = audiomap[jtkey];
+                    }
+
+                    // skip adding an object element if it duplicates an existing one
+                    if ( jtval && !array_key_exists(jtkey, thingvalue) ) {
                         $tc += putElement(kindex, cnt, j, thingtype, jtval, jtkey, subtype, bgcolor);
                         j++;
                     }
@@ -2308,7 +2374,6 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                 // new logic for links - they all now follow the format ::LINK::code
                 // print a hidden field for user web calls and links
                 // this is what enables customization of any tile to happen
-                // ::type::LINK::tval  or ::LINK::tval
                 // this special element is not displayed and sits inside the overlay
                 // we only process the non helpers and look for helpers in same list
                 if (  array_key_exists(helperkey, thingvalue) && thingvalue[helperkey] && thingvalue[helperkey].substr(0,2)==="::" ) {
@@ -2829,34 +2894,41 @@ function getCustomTile(custom_val, customtype, customid) {
     
     // get custom tile name if it was defined in tile editor and stored
     // in the room array
-    var customname= "";
-    for (var room in rooms) {
-        if ( array_key_exists(room, thingoptions) ) {
-            var things = thingoptions[room];
-            for (var k in things) {
-                var kindexarr = things[k];
-                // only do this if we have custom names defined in rooms
-                if ( is_array(kindexarr) && kindexarr.length > 3 ) {
-                    var kindex = parseInt(kindexarr[0]);
+    // var customname= "";
+    // for (var room in rooms) {
+    //     if ( array_key_exists(room, thingoptions) ) {
+    //         var things = thingoptions[room];
+    //         for (var k in things) {
+    //             var kindexarr = things[k];
+    //             // only do this if we have custom names defined in rooms
+    //             if ( is_array(kindexarr) && kindexarr.length > 3 ) {
+    //                 var kindex = parseInt(kindexarr[0]);
 
-                    // if our tile matches and there is a custom name, use it
-                    if ( kindex===tileid && kindexarr[4]!=="" ) {
-                        customname = kindexarr[4];
-                        break;
-                    }
-                }
-            }
-        }
-    }
+    //                 // if our tile matches and there is a custom name, use it
+    //                 if ( kindex===tileid && kindexarr[4]!=="" ) {
+    //                     customname = "";  // kindexarr[4];
+    //                     break;
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 
-    if ( customname!=="" || !custom_val["name"] ) {
-        custom_val["name"] = customname;
-    }
+    // // this is where we do a check for bad chars and remove them in names
+    // var pattern = /[,;:!-\'\*\<\>\{\}\+\&\%]/g;
+    // if ( customname ) {
+    //     console.log(customname);
+    //     try {
+    //         customname = customname.replace(pattern,"");
+    //     } catch(e) {
+    //         console.log(e);
+    //         customname = "";
+    //     }
+    // }
 
-    // this is where we do a check for bad chars and remove them in names
-    // instead of in the processName function
-    var pattern = /[,;:!-\'\*\<\>\{\}\+\&\%]/g;
-    custom_val["name"] = custom_val["name"].replace(pattern,"");
+    // if ( customname!=="" || !custom_val["name"] ) {
+    //     custom_val["name"] = customname;
+    // }
 
     // see if a section for this id is in options file
     // this is where customizer updates are processed
@@ -3049,7 +3121,7 @@ function processHubMessage(hubmsg) {
             cnt = cnt + 1;
             entry['value'][subid] = hubmsg['change_value'];
             if ( entry['value']['trackData'] ) { delete entry['value']['trackData']; }
-            if ( DEBUG2 ) {
+            if ( DEBUG18 ) {
                 console.log( (ddbg()), 'Updating tile #' + entry['id'],' from trigger:', hubmsg['change_attribute'] );
             }
             pushClient(entry.id, entry.type, subid, entry['value'])
@@ -3258,7 +3330,7 @@ function processRules(bid, thetype, trigger, pvalue) {
                 if ( iftest[1]==="if" && rulestr ) {
 
                     // get the rule set
-                    var ruleset = rulestr.split(" ");
+                    var ruleset = rulestr.split(/\s+/);
                     var doand = true;
                     if ( DEBUG11 ) {
                         console.log( (ddbg()), "RULE debug: rulestr: ", rulestr, " rulseset: ", ruleset);
@@ -3332,7 +3404,10 @@ function processRules(bid, thetype, trigger, pvalue) {
                             if ( ruletileid && ! isNaN(ruletileid) && ruleop && rulevalue ) {
 
                                 // find the tile index and proceed with activating the rule
-                                if ( rulenum===0 && array_key_exists(rulesubid, pvalue) ) {
+                                if ( ruletileid===tileid && array_key_exists(rulesubid, pvalue) ) {
+                                    rtype = thetype;
+                                    rbid = bid;
+                                    ridx = thetype + "|" + bid;
                                     ifvalue = pvalue[rulesubid];
                                 } else {
                                     ridx = array_search(ruletileid, GLB.options["index"]);
@@ -3354,22 +3429,22 @@ function processRules(bid, thetype, trigger, pvalue) {
                                 }
 
                                 // fix up ISY hubs
-                                if ( rulesubid==="isy" && rulevalue==="on" ) { rulevalue = "DON"; }
-                                if ( rulesubid==="isy" && rulevalue==="off" ) { rulevalue = "DOF"; }
+                                if ( rtype==="isy" && rulevalue==="on" ) { rulevalue = "DON"; }
+                                if ( rtype==="isy" && rulevalue==="off" ) { rulevalue = "DOF"; }
 
                                 if ( DEBUG11 ) {
                                     console.log( (ddbg()), "RULE debug: ridx: ", ridx, " rtype= ", rtype, " rbid= ", rbid, " ifvalue: ", ifvalue, "rulevalue: ", rulevalue, " ruletileid: ", ruletileid, " parts: ", ruleparts );
                                 }
 
-                                    // get the rule check if the requested subid is recognized
+                                // get the rule check if the requested subid is recognized
                                 if ( ifvalue!==false ) {
 
-                                    if ( isNaN(parseInt(ifvalue)) && isNaN(parseInt(rulevalue)) ) {
+                                    if ( isNaN(parseFloat(ifvalue)) || isNaN(parseFloat(rulevalue)) ) {
                                         var num1 = ifvalue;
                                         var num2 = rulevalue;
                                     } else {
-                                        num1 = parseInt(ifvalue);
-                                        num2 = parseInt(rulevalue);
+                                        num1 = parseFloat(ifvalue);
+                                        num2 = parseFloat(rulevalue);
                                     }
 
                                     var ismatch = ( 
@@ -3391,8 +3466,8 @@ function processRules(bid, thetype, trigger, pvalue) {
                                     console.log("error - invalid RULE syntax: ", rule, " parts: ", ruleparts);
                                 }
                             } else {
-                                if ( typeof ruletileid!=="undefined" ) {
-                                    console.log("error - invalid RULE syntax: ", rule, " Target tile not found. tile #", ruletileid);
+                                if ( DEBUG11 ) {
+                                    console.log("error - invalid RULE syntax: ", rule);
                                 }
                                 ruleparts = false;
                             }
@@ -3901,6 +3976,9 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
 
     function getHubResponse(err, res, body) {
         var pvalue;
+        if ( swtype==="power" ) {
+            console.log("ST or HE returned: ", body);
+        }
         if ( err ) {
             console.log( (ddbg()), "error calling ST or HE hub: ", err);
         } else {
@@ -3920,21 +3998,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
 
                 // deal with audio tiles
                 if ( pvalue && array_key_exists("audioTrackData", pvalue) ) {
-                    try {
-                        var audiodata = JSON.parse(pvalue["audioTrackData"]);
-                        // console.log("getHubResponse audiodata: ", audiodata);
-                        if ( audiodata ) {
-                            pvalue["trackDescription"] = audiodata["title"] || "";
-                            pvalue["currentArtist"] = audiodata["artist"] || "";
-                            pvalue["currentAlbum"] = audiodata["album"] || "";
-                            pvalue["trackImage"] = audiodata["albumArtUrl"] || "";
-                            pvalue["mediaSource"] = audiodata["mediaSource"] || "";
-                        }
-                    } catch(jerr) {
-                        audiodata = null;
-                        console.log(jerr);
-                    }
-                    delete pvalue["audioTrackData"];
+                    pvalue = translateAudio(pvalue);
                 }
 
                 if (pvalue) {
@@ -4008,22 +4072,9 @@ function queryHub(hub, swid, swtype, popup) {
                 console.log( (ddbg()), "doQuery: ", swid, " type: ", swtype, " value: ", pvalue);
             }
             if ( pvalue ) {
-
                 // deal with audio tiles
                 if ( array_key_exists("audioTrackData", pvalue) ) {
-                    try {
-                        var audiodata = JSON.parse(pvalue["audioTrackData"]);
-                        if ( audiodata ) {
-                            pvalue["trackDescription"] = audiodata["title"] || "";
-                            pvalue["currentArtist"] = audiodata["artist"] || "";
-                            pvalue["currentAlbum"] = audiodata["album"] || "";
-                            pvalue["trackImage"] = audiodata["albumArtUrl"] || "";
-                            pvalue["mediaSource"] = audiodata["mediaSource"] || "";
-                        }
-                    } catch(jerr) {
-                        audiodata = null;
-                    }
-                    delete pvalue["audioTrackData"];
+                    pvalue = translateAudio(pvalue);
                 }
 
                 pushClient(swid, swtype, "none", pvalue, null, popup);
@@ -4057,6 +4108,33 @@ function queryHub(hub, swid, swtype, popup) {
         }
 
     }
+}
+
+function translateAudio(pvalue) {
+    // map of audio fields used in multiple places
+    const audiomap = {"title": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
+                      "albumArtUrl": "trackImage", "mediaSource": "mediaSource"};
+
+    try {
+        var audiodata = JSON.parse(pvalue["audioTrackData"]);
+        if ( audiodata ) {
+            for  (var jtkey in audiodata) {
+                var atkey = audiomap[jtkey];
+                pvalue[atkey] = audiodata[jtkey] || "";
+            }
+            // pvalue["trackDescription"] = audiodata["title"] || "";
+            // pvalue["currentArtist"] = audiodata["artist"] || "";
+            // pvalue["currentAlbum"] = audiodata["album"] || "";
+            // pvalue["trackImage"] = audiodata["albumArtUrl"] || "";
+            // pvalue["mediaSource"] = audiodata["mediaSource"] || "";
+        }
+    } catch(jerr) {
+        audiodata = null;
+        console.log(jerr);
+    }
+
+    delete pvalue["audioTrackData"];
+    return pvalue;
 }
 
 function findHub(hubid) {
@@ -4314,6 +4392,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                 break;
 
             case "HUB":
+                console.log( (ddbg()), "calling hub: ", hub.hubId, hub.hubName, swid, swtype, swval, swattr, subid);
                 response = callHub(hub, swid, swtype, swval, swattr, subid, false, false, false);
 
                 // process rules and links instantly in case the webSocket doesn't work
@@ -4396,23 +4475,12 @@ function doQuery(hubid, swid, swtype, tileid, protocol) {
 
             // deal with audio tiles
             if ( res.type==="audio" && array_key_exists("audioTrackData", res.value) ) {
-                try {
-                    var audiodata = JSON.parse(res.value["audioTrackData"]);
-                    if ( audiodata ){
-                        res.value["trackDescription"] = audiodata["title"];
-                        res.value["currentArtist"] = audiodata["artist"];
-                        res.value["currentAlbum"] = audiodata["album"];
-                        res.value["trackImage"] = audiodata["albumArtUrl"];
-                        res.value["mediaSource"] = audiodata["mediaSource"];
-                    }
-                } catch(jerr) {
-                    audiodata = null;
-                }
-                delete res.value["audioTrackData"];
+                res.value = translateAudio(res.value);
             }
 
-            res = getCustomTile(res, res.type, res.id);
-            result[i] = returnFile(res, res.type);
+            res.value = getCustomTile(res.value, res.type, res.id);
+            res.value = returnFile(res.value, res.type);
+            result[i] = res;
             
         }
     } else {
@@ -4470,20 +4538,43 @@ function setOrder(swid, swtype, swval, swattr) {
                     options["rooms"][roomname] = roomid;
                 }
                 updated = true;
-                result = "success"; // options["rooms"];
+                result = options["rooms"];
+                // console.log("room sort result: ", options["rooms"]);
                 break;
 
+            // we no longer use name from the gui since we have the real name here
+            // reordering doesn't work properly for duplicate tiles on a page
+            // if detected then all duplicates will be set to relative and home positions
             case "things":
                 if (array_key_exists(swattr, options["rooms"])) {
+                    var oldarr = GLB.options["things"][swattr];
                     options["things"][swattr] = [];
-                    swval.forEach(function(valarr) {
+                    var zindex = 1;
+                    swval.forEach(function(val) {
+                        var oldtile = tile_search(val, oldarr);
+                        var newthing = [oldtile[0], oldtile[1], oldtile[2], zindex, oldtile[4]];
+                        zindex++;
+                        if ( newthing ) {
+                            options["things"][swattr].push(newthing);
+                        }
+                    });
+                    updated = true;
+                    result = options["things"][swattr];
+                }
+                break;
+
+            case "reset":
+                if (array_key_exists(swattr, options["rooms"])) {
+                    var oldarr = clone(options["things"][swattr]);
+                    options["things"][swattr] = [];
+                    oldarr.forEach(function(valarr) {
                         var val = parseInt(valarr[0]);
-                        var vname = valarr[1];
+                        var vname = valarr[4];
                         var newthing = [val,0,0,1,vname];
                         options["things"][swattr].push(newthing);
                     });
                     updated = true;
-                    result = "success"; // options["things"][swattr];
+                    result = options["things"][swattr];
                 }
                 break;
                 
@@ -4500,13 +4591,12 @@ function setOrder(swid, swtype, swval, swattr) {
     return result;
 }
 
-function setPosition(swid, swtype, swval, swattr) {
+function setPosition(swid, swtype, panel, swattr, tile) {
     
     var updated = false;
     var options = GLB.options;
-    var panel = swval["panel"];
-    var tile = parseInt(swval["tile"]);
-    readOptions("setPosition");
+    tile = parseInt(tile);
+    // readOptions("setPosition");
     
     // first find which index this tile is
     // note that this code will not work if a tile is duplicated on a page
@@ -4516,46 +4606,37 @@ function setPosition(swid, swtype, swval, swattr) {
     // $i = array_search($tile, options["things"][$panel]);
     var moved = false;
     var idx;
-    for ( var i in options["things"][panel]) {
-        var arr = options["things"][panel][i];
-        if ( is_array(arr) ) {
-            idx = parseInt(arr[0]);
-        } else {
-            idx = parseInt(arr);
-        }
-        if ( tile === idx) {
-            moved = i;
-            updated = true;
-            break;
-        }
-    }
+    var oldname = "";
 
-    if ( updated && moved!==false ) {
+    var thetile = tile_search(tile, options.things[panel]);
+    if ( thetile ) {
+
         // change the room index to an array of tile, top, left
         // now we also save zindex and a tile custom name
         var top = parseInt(swattr["top"]);
         var left = parseInt(swattr["left"]);
-        var zindex = parseInt(swval["zindex"]);
-        var customname = "";
-        if ( array_key_exists("custom", swval) ) {
-            customname = swval["custom"];
-        }
-        var newtile = [tile, top, left, zindex, customname];
-        options["things"][panel][moved] = newtile;
+        var zindex = parseInt(swattr["z-index"]);
+
+        // change the tile directly in the master array
+        thetile[1] = top;
+        thetile[2] = left;
+        thetile[3] = zindex;
+
+        // var newtile = [thetile[0], top, left, zindex, thetile[4]];
+        // options["things"][panel][moved] = newtile;
         writeOptions(options);
-        var result = "success";
         if ( DEBUG6 ) {
             console.log( (ddbg()), "new tile position for tile: ", tile," to: (", top, ",", left, ",", zindex, ")");
         }
     } else {
-        result = "error";
+        thetile = "error";
         console.log( (ddbg()), "error - position for tile: ", tile," was not found to change");
     }
-    return result;
+    return thetile;
     
 }
 
-function addThing(bid, thingtype, panel, flag) {
+function addThing(bid, thingtype, panel, pos, flag) {
     
     // readOptions("addThing");
     var idx = thingtype + "|" + bid;
@@ -4580,22 +4661,24 @@ function addThing(bid, thingtype, panel, flag) {
             cnt = 0;
         }
     }
-    var lastid = options["things"][panel].length - 1;
-    var lastitem = options["things"][panel][lastid];
+    // var lastid = options["things"][panel].length - 1;
+    // var lastitem = options["things"][panel][lastid];
 
-    var ypos = parseInt(lastitem[1]);
-    var xpos = parseInt(lastitem[2]);
-    var zindex = 1;
-    if ( lastitem.length > 3 ) {
-        zindex = parseInt(lastitem[3]);
-    }
+    var ypos = pos.top;        // parseInt(lastitem[1]);
+    var xpos = pos.left;       // parseInt(lastitem[2]);
+    var zindex = pos["z-index"];   //  parseInt(lastitem[3]);
 
-    // protect against off screen values
-    if ( xpos < -400 || xpos > 400 || ypos < -400 || ypos > 400 ) {
+    // protect against invalid positions
+    if ( xpos<0 || xpos > 1200 || ypos<0 || ypos>1200 ) {
         xpos = 0;
         ypos = 0;
     }
-    
+
+    // protect against out of bounds zindex values
+    if ( zindex < 0 || zindex > 499 ) {
+        zindex = 1;
+    }
+
     // add it to our system in the requested room/panel
     options["things"][panel].push([tilenum, ypos, xpos, zindex, ""]);
     
@@ -5386,7 +5469,6 @@ function mainPage(proto, hostname, pathname) {
     $tc += "</div>";
 
     $tc += utils.getFooter();
-        
     return $tc;
 }
 
@@ -6083,13 +6165,14 @@ function apiCall(body, protocol) {
         case "wysiwyg2":
             // if we sorted the user fields in the customizer, save them
             if ( protocol==="POST" ) {
-                if ( is_array(swattr) ) {
-                    GLB.options["user_" + swid] = swattr;
+                if ( swval && is_array(swval) ) {
+                    GLB.options["user_" + swid] = swval;
                     writeOptions(GLB.options);
                 }
                 var idx = swtype + "|" + swid;
                 var thing = allthings[idx];
-                result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 99, "", api);
+                var customname = swattr;
+                result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 500, customname, api);
             } else {
                 result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
             }
@@ -6101,33 +6184,37 @@ function apiCall(body, protocol) {
                 var faketile = {"panel": "panel", "name": swval, "tab": "Tab Inactive", "tabon": "Tab Selected"};
                 var thing = { "id": "r_" + swid, "name": swval, 
                               "hubnum": "-1", "type": "page", "value": faketile};
-                result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 99, "", api);
+                result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 500, "", api);
             } else {
                 var idx = swtype + "|" + swid;
                 var thing = allthings[idx];
+                var customname = swattr;
                 
                 // load customizations
                 // thing.value = getCustomTile(thing.value, swtype, swid);
                 // allthings[idx] = thing;            
-                result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 99, "", api);
+                result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 500, customname, api);
             }
             break;
 
         case "pageorder":
+        case "setorder":
             result = setOrder(swid, swtype, swval, swattr);
             break;
 
         case "dragdrop":
+        case "setposition":
             if ( protocol==="POST" ) {
-                result = setPosition(swid, swtype, swval, swattr);
+                result = setPosition(swid, swtype, swval, swattr, tileid);
             } else {
                 result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
             }
             break;
 
         case "dragmake":
+        case "addthing":
             if ( protocol==="POST" ) {
-                result = addThing(swid, swtype, swval, "auto");
+                result = addThing(swid, swtype, swval, swattr, "auto");
             } else {
                 result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
             }
@@ -6863,7 +6950,15 @@ if ( app && applistening ) {
                 // otherwise, comment it out
                 // GLB.newuser = true;
 
-                GLB.pwcrypt===config["pword"][uname][0];
+                if (IGNOREPW || GLB.pwcrypt===true ) {
+                    GLB.pwcrypt===true;
+                } else {
+                    try {
+                        GLB.pwcrypt===config["pword"][uname][0];
+                    } catch (e) {
+                        GLB.pwcrypt = true;
+                    }
+                }
                 if ( DEBUG2 ) {
                     console.log( (ddbg()), "login accepted. uname = ", uname, " pwcrypt = ", GLB.pwcrypt);
                 }
@@ -6874,7 +6969,7 @@ if ( app && applistening ) {
                 $tc = mainPage(req.protocol, req.headers.host, req.path);
 
             } else {
-                console.log( (ddbg()), "login rejected. uname= ", uname, " pwcrypt= ", GLB.pwcrypt, " configpw= ", GLB.options.config["pword"][uname][0]);
+                console.log( (ddbg()), "login rejected. uname= ", uname, " pwcrypt= ", GLB.pwcrypt);
                 $tc = getLoginPage();
             }
             res.send($tc);

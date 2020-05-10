@@ -14,8 +14,8 @@ var defaultOverlay = "block";
 var tileCount = 0;
 
 // popup dialog box now uses createModal
-//        editTile("page", roomname, 0, 0, "", roomnum, "None");
-function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, hubName, hubType, htmlcontent) {  
+//       editTile(roomname, "page", roomname,     0,   0,   "",        roomnum, "None",  "None");
+function editTile(pagename, str_type, thingindex, aid, bid, thingclass, hubnum, hubName, hubType, customname, htmlcontent) {  
     // var returnURL;
     // try {
     //     returnURL = $("input[name='returnURL']").val();
@@ -31,6 +31,11 @@ function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, hubName, h
     et_Globals.hubnum = hubnum;
     et_Globals.hubName = hubName || "None";
     et_Globals.hubType = hubType || "None";
+    et_Globals.pagename = pagename;
+    et_Globals.usepagename = false;
+    if ( pagename.toLowerCase() === "floorplan" || pagename.toLowerCase()==="floor_plan" ) {
+        et_Globals.usepagename = true;
+    }
 
     // save the sheet upon entry for cancel handling
     savedSheet = document.getElementById('customtiles').sheet;
@@ -69,7 +74,7 @@ function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, hubName, h
     var jqxhr = null;
     if ( str_type==="page" ) {
         jqxhr = $.post(returnURL, 
-            {useajax: "wysiwyg", id: hubnum, type: 'page', tile: thingindex, value: thingindex, attr: ''},
+            {useajax: "wysiwyg", id: hubnum, type: 'page', tile: thingindex, value: thingindex, attr: customname},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;
@@ -85,7 +90,7 @@ function editTile(str_type, thingindex, aid, bid, thingclass, hubnum, hubName, h
         // put placeholder and populate after Ajax finishes retrieving true wysiwyg content
         // this is actually no longer used but left code here in case I want to use it later
         jqxhr = $.post(returnURL, 
-            {useajax: "wysiwyg", id: bid, type: str_type, tile: thingindex, value: '', attr: ''},
+            {useajax: "wysiwyg", id: bid, type: str_type, tile: thingindex, value: '', attr: customname},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;
@@ -328,10 +333,10 @@ function getCssRuleTarget(str_type, subid, thingindex, useall) {
         // target += " div.overlay";
         if ( subid.startsWith("music-") ) {
             target += " div.overlay.music-controls";
-//        } else if ( subid==="forecastIcon" || subid==="weatherIcon" )  {
-//            target += " div.weather_icons";
-//        } else if ( subid==="feelsLike" || (str_type==="weather" && subid==="temperature") )  {
-//            target += " div.weather_temps";
+        //        } else if ( subid==="forecastIcon" || subid==="weatherIcon" )  {
+        //            target += " div.weather_icons";
+        //        } else if ( subid==="feelsLike" || (str_type==="weather" && subid==="temperature") )  {
+        //            target += " div.weather_temps";
         } else if ( subid.endsWith("-dn") || subid.endsWith("-up") ) {
             target += " div.overlay." + subid.substring(0,subid.length-3);
         } else {
@@ -373,6 +378,13 @@ function getCssRuleTarget(str_type, subid, thingindex, useall) {
 
         // if ( on==="." ) { on= ""; }
         target = target + on;
+    }
+
+    // make this work only for this page if that option is selected
+    // the target will always start with "div." so we strip off the div
+    if ( str_type!=="page" && et_Globals.pagename && et_Globals.usepagename ) {
+        target = "div." + et_Globals.pagename + target.substr(3);
+        console.log(target);
     }
 
     return target;
@@ -1698,7 +1710,7 @@ function initColor(str_type, subid, thingindex) {
         var inverted = "<div class='editSection_input autochk'><input type='checkbox' id='invertIcon'><label class=\"iconChecks\" for=\"invertIcon\">Invert Element?</label></div>";
         inverted += "<div class='editSection_input'><input type='checkbox' id='absPlace'><label class=\"iconChecks\" for=\"absPlace\">Absolute Loc?</label></div>";
         inverted += "<div class='editSection_input'><input type='checkbox' id='inlineOpt'><label class=\"iconChecks\" for=\"inlineOpt\">Inline?</label></div>";
-        // inverted += "<div class='editSection_input'><input type='checkbox' id='fastPoll'><label class=\"iconChecks\" for=\"fastPoll\">Fast Poll?</label></div>";
+        inverted += "<div class='editSection_input'><input type='checkbox' id='thisPage'><label class=\"iconChecks\" for=\"thisPage\">This Page?</label></div>";
 
         var border = "<div class='editSection_input'><label>Border Type:</label>";
         border += "<select name=\"borderType\" id=\"borderType\" class=\"ddlDialog\">";
@@ -1974,6 +1986,19 @@ function initColor(str_type, subid, thingindex) {
     } else {
         $("#iconcenter").prop("checked", true);
     }
+    
+    // set the initial pagename box
+    if ( et_Globals.usepagename ) {
+        $("#thisPage").prop("checked",true);
+    } else {
+        $("#thisPage").prop("checked",false);
+    }
+    
+    // activate this page option check box
+    $("#thisPage").off('change');
+    $("#thisPage").on('change', function (event) {
+        et_Globals.usepagename = $("#thisPage").prop("checked");
+    });
     
     // set initial hidden status
     if ( subid!=="wholetile" ) {

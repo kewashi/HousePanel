@@ -17,6 +17,7 @@
  * it displays and enables interaction with switches, dimmers, locks, etc
  * 
  * Revision history:
+ * 05/10/2020 - tidy up switch reg, power reporting, and add patch for audio
  * 04/09/2020 - mode change fix from 03/29 update
  * 04/02/2020 - fix bug in mode and return only one now
  * 03/29/2020 - clean up mode and fix hub pushes to be more reliable
@@ -211,6 +212,7 @@ def initialize() {
     state.tz = settings?.timezone ?: "America/Detroit"
     state.prefix = settings?.hubprefix ?: getPrefix()
     state.dateFormat = settings?.dateformat ?: "M/dd h:mm"
+    state.powervals = [test: "test"]
 
     configureHub();
     if ( state.usepistons ) {
@@ -413,7 +415,7 @@ def getMusic(swid, item=null) {
 
 def getAudio(swid, item=null) {
     def raw = getThing(myaudios, swid, item)
-    logger(raw, "info" )
+    logger(raw, "debug" )
     
     // lets put it in the desired order
     // "groupVolumeUp", "groupVolumeDown", "muteGroup", "unmuteGroup",
@@ -424,9 +426,9 @@ def getAudio(swid, item=null) {
         playbackStatus: raw.playbackStatus,
         // _mute: raw._mute, _unmute: raw._unmute, 
         _muteGroup: raw._muteGroup, _unmuteGroup: raw._unmuteGroup, 
-        //_volumeUp: raw._volumeUp, _volumeDown: raw._volumeDown,
+        _volumeUp: raw._volumeUp, _volumeDown: raw._volumeDown,
         _groupVolumeUp: raw._groupVolumeUp, _groupVolumeDown: raw._groupVolumeDown,
-        volume: raw.volume, 
+        volume: raw.volume,
         mute: raw.mute, groupRole: raw.groupRole]
     
     return resp
@@ -516,7 +518,14 @@ def getOther(swid, item=null) {
 }
 
 def getPower(swid, item=null) {
-    getThing(mypowers, swid, item)
+    def resp = getThing(mypowers, swid, item)
+    try {
+        state.powervals[swid] = Float.valueOf(resp.power)
+    } catch (e) {
+        state.powervals[swid] = 0.0
+    }
+    logger("in getPower powervals = ${state.powervals[swid]} power = ${resp.power}". "debug")
+    return resp
 }
 
 def getMyMode(swid, item=null) {
@@ -702,6 +711,7 @@ def logStepAndIncrement(step)
 // used up front or whenever we need to re-read all things
 def getAllThings() {
 
+    state.powervals = [test: "test"]
     def resp = []
     def run = 1
     run = logStepAndIncrement(run)
@@ -782,7 +792,7 @@ def getModes(resp) {
             resp << [name: val.name, id: modeid, value: val, type: "mode"]
         }
     } catch (e) {
-        log.info e
+        log.debug e
     }
     return resp
 }
@@ -970,7 +980,9 @@ def getOthers(resp) {
             def multivalue = getThing(myothers, thatid, it)
             resp << [name: it.displayName, id: thatid, value: multivalue, type: "other"]
         }
-    } catch (e) {}
+    } catch (e) {
+        log.error e
+    }
     return resp
 }
 
@@ -979,11 +991,12 @@ def getPowers(resp) {
         def n  = mypowers ? mypowers.size() : 0
         if ( n > 0 ) { logger("Number of selected power things = ${n}","debug"); }
         mypowers?.each {
-            def thatid = it.id;
-            def multivalue = getThing(mypowers, thatid, it)
-            resp << [name: it.displayName, id: thatid, value: multivalue, type: "power"]
+            def multivalue = getPower(it.id, it)
+            resp << [name: it.displayName, id: it.id, value: multivalue, type: "power"]
         }
-    } catch (e) {}
+    } catch (e) {
+        log.error e
+    }
     return resp
 }
 
@@ -1149,6 +1162,11 @@ def doAction() {
       case "other" :
         cmdresult = setOther(swid, cmd, swattr, subid)
         break
+        
+      case "power":
+        cmdresult = getPower(swid)
+        break
+
     }
     logger("doAction results: " + cmdresult.toString() , "debug");
     return cmdresult
@@ -1327,6 +1345,8 @@ def setMotion(swid, cmd, swattr, subid) {
         }
         resp = [motion: newsw]
         resp = addBattery(resp, item)
+    } else if (item) {
+        resp = getMotion(item)
     }
     return resp
 }
@@ -1387,6 +1407,22 @@ def setAudio(swid, cmd, swattr, subid) {
         } else if ( (subid=="_unmute" || subid=="mute") && swattr.contains(" muted" ) ) {
             item.unmute()
             resp["mute"] = "unmuted"
+
+        // handle volume and group volume up specially because their cmd ops don't work
+        // down odly enough works but I put it here too just to make them consistent
+        // note that this workaround only changes this item not the whole group
+        } else if ( subid=="_groupVolumeUp" || subid=="_volumeUp" ) {
+            def grpvol = item.currentValue("volume")
+            grpvol = (grpvol > 95) ? 100 : grpvol + 5
+            item.setVolume(grpvol)
+            resp["volume"] = grpvol
+
+        } else if ( subid=="_groupVolumeDown" || subid=="_volumeDown" ) {
+            def grpvol = item.currentValue("volume")
+            grpvol = (grpvol < 5) ? 0 : grpvol - 5
+            item.setVolume(grpvol)
+            resp["volume"] = grpvol
+
         } else if ( subid=="volume" ) {
             def newvol = item.currentValue("volume")
             try {
@@ -1400,13 +1436,13 @@ def setAudio(swid, cmd, swattr, subid) {
             if ( item.hasCommand(subid) ) {
                 item."$subid"()
                 resp = getAudio(swid, item)
-                resp = getAudio(swid, item)
+                // resp = getAudio(swid, item)
             }
         }
         else if ( item.hasCommand(cmd) ) {
             item."$cmd"()
             resp = getAudio(swid, item)
-            resp = getAudio(swid, item)
+            // resp = getAudio(swid, item)
         }
     }
     return resp
@@ -2203,17 +2239,20 @@ def setRoutine(swid, cmd, swattr, subid) {
 }
 
 def registerAll() {
-    runIn(2, "registerLights", [overwrite: true])
-    runIn(4, "registerBulbs", [overwrite: true])
-    runIn(6, "registerDoors", [overwrite: true])
-    runIn(8, "registerMotions", [overwrite: true])
-    runIn(10, "registerOthers", [overwrite: true])
-    runIn(12, "registerThermostats", [overwrite: true])
-    runIn(14, "registerTracks", [overwrite: true])
-    runIn(16, "registerMusics", [overwrite: true])
-    runIn(18, "registerAudios", [overwrite: true])
-    runIn(10, "registerSlows", [overwrite: true])
-    runIn(20, "registerLocations", [overwrite: true])
+    runIn(2, "registerLights1", [overwrite: true])
+    runIn(4, "registerLights2", [overwrite: true])
+    runIn(6, "registerLights3", [overwrite: true])
+    runIn(8, "registerLights4", [overwrite: true])
+    runIn(10, "registerBulbs", [overwrite: true])
+    runIn(12, "registerDoors", [overwrite: true])
+    runIn(14, "registerMotions", [overwrite: true])
+    runIn(16, "registerOthers", [overwrite: true])
+    runIn(18, "registerThermostats", [overwrite: true])
+    runIn(20, "registerTracks", [overwrite: true])
+    runIn(30, "registerMusics", [overwrite: true])
+    runIn(40, "registerAudios", [overwrite: true])
+    runIn(50, "registerLocations", [overwrite: true])
+    runIn(60, "registerSlows", [overwrite: true])
 }
 
 def registerLocations() {
@@ -2229,10 +2268,31 @@ def registerLocations() {
 }
 
 def registerLights() {
+	// log.info "registered lights"
     registerCapabilities(myswitches,"switch")
     registerCapabilities(mydimmers,"switch")
     registerCapabilities(mydimmers,"level")
     registerCapabilities(mylights,"switch")
+}
+
+def registerLights1() {
+	// log.info "registered lights1"
+    registerCapabilities(myswitches,"switch")
+}
+
+def registerLights2() {
+	// log.info "registered lights2"
+    registerCapabilities(mydimmers,"switch")
+}
+
+def registerLights3() {
+	// log.info "registered lights3"
+    registerCapabilities(mydimmers,"level")
+}
+
+def registerLights4() {
+//    log.info "registered lights4"
+   registerCapabilities(mylights,"switch")
 }
 
 def registerBulbs() {
@@ -2305,15 +2365,39 @@ def changeHandler(evt) {
     def deviceName = evt?.displayName
     def attr = evt?.name
     def value = evt?.value
+    def skip = false
 
-    // handle special case of hsm
-//    if ( attr=="hsmStatus " || attr=="alarmSystemStatus" ) {
-//        deviceid = "alarmSystemStatus_${location.id}"
-//        attr = "alarmSystemStatus"
-//    }
+    // handle power changes to skip if not changed by at least 15%
+    // this value was set by trial and error for my particular plug
+    if ( attr=="power" ) {
+        try {
+            // log.info state.powervals
+            def delta = 0.0
+            def oldpower = state.powervals[deviceid]
+            state.powervals[deviceid] = Float.valueOf(value)
+            if ( oldpower==0.0 && state.powervals[deviceid] < 1.0 ) {
+                skip = true
+            } else if ( oldpower==0.0 ) {
+                skip = false
+            } else {
+                delta = (state.powervals[deviceid]- oldpower) / oldpower 
+                if ( delta < 0.0 ) {
+                    delta = 0.0 - delta
+                }
+                skip = (delta < 0.15)
+            }
+            logger("delta = ${delta} skip = ${skip}", "debug")
+            
+        } catch (e) {
+            skip= false
+            log.debug "skip forced to false due to error"
+            log.debug e
+        }
+    }
+
     
-    log.info "Sending ${src} Event ( ${deviceName}, ${deviceid}, ${attr}, ${value} ) to HousePanel clients  log = ${state.loggingLevelIDE}"
-    if (state.directIP && state.directPort && deviceName && deviceid && attr && value) {
+    // log.info "Sending ${src} Event ( ${deviceName}, ${deviceid}, ${attr}, ${value} ) to HousePanel clients  log = ${state.loggingLevelIDE}"
+    if ( !skip && state.directIP && state.directPort && deviceName && deviceid && attr && value) {
 
         // fix bulbs
         if ( (mybulbs?.find {it.id == deviceid}) && (attr=="hue" || attr=="saturation" || attr=="level" || attr=="color") ) {
@@ -2341,7 +2425,7 @@ def modeChangeHandler(evt) {
     // send group of hub actions for mode changes
     def themode = evt.value
     if (themode && state.directIP && state.directPort) {
-        // logger("Sending new mode= ${themode} to HousePanel clients", "info")
+        logger("Sending new mode= ${themode} to HousePanel clients", "info")
         // def vals = ["m1x1","m1x2","m2x1","m2x2"]
         def vals = ["mode"]
         vals.each {
