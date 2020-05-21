@@ -79,9 +79,13 @@ div.thing:hover{
     -webkit-box-shadow: 0px 0px 41px rgba(0, 0, 0, 0.70); 
 }
 
-div.thing.switch-thing, div.thing.switchlevel-thing, div.thing.bulb-thing {
+div.thing.switch-thing, div.thing.switchlevel-thing, div.thing.bulb-thing, 
+div.thing.momentary-thing, div.thing.motion-thing, div.thing.valve-thing,
+div.thing.contact-thing, div.thing.mode-thing, div.thing.shm-thing,
+div.thing.presence-thing, div.thing.hsm-thing, div.thing.piston-thing,
+div.thing.light-thing, div.thing.lock-thing, div.thing.door-thing, div.thing.isy-thing {
     height: auto;
-    width: auto;
+    width: 120px;
 }
 
 /* styling defaults without state or specific thing subtypes */
@@ -94,12 +98,12 @@ div.temperature, div.overlay div.themode, div.shm, div.hsm {
     cursor: default;
 }
 
-div.switch, div.bulb, div.light, div.switchlevel, div.momentary, div.motion, div.lock, 
+/* div.switch, div.bulb, div.light, div.switchlevel, div.momentary, div.motion, div.lock, 
 div.contact, div.presence, div.piston, div.valve, div.overlay div.door,
 div.overlay div.themode, 
 div.temperature-thing, div.isy {
     width: 120px;
-}
+} */
 
 div.shm-thing div.overlay div.shm.state, div.hsm-thing div.overlay div.hsm.state {
     width: 140px;
@@ -355,6 +359,7 @@ div.switchlevel.colorTemperature, div.switchlevel.hue, div.switchlevel.saturatio
 }
 div.switchlevel.level, div.bulb.level, div.music.level, div.audio.volume, div.audio.groupVolume {
     height: 4px;
+    width: 99%;
 }
 div.colorTemperature-val, div.hue-val, div.saturation-val {
     background-color: #ffffff;
@@ -415,10 +420,6 @@ div.heatingSetpoint-up, div.coolingSetpoint-up {
     box-shadow: 0px 1px 2px rgba(0,0,0,0.8);
 }
 
-/* music styling */
-div.music.level, div.audio.volume {
-    width: 99%;
-}
 /* this width is set assuming only one of the volume groups is visible */
 div.thing.audio-thing {
     background-color: rgba(0, 102, 102, 1);
@@ -739,6 +740,7 @@ div.weather-thing div.overlay.temperature, div.weather-thing div.overlay.feelsLi
 div.thing.weather-thing div.overlay.name, div.thing.weather-thing div.overlay.city {
     display: block;
     position: relative;
+    width: 100%;
 }
 
 /* clock styling */

@@ -225,17 +225,19 @@ $(document).ready(function() {
     }
     
     // load things and options
-    getAllthings();
-    getOptions(true);
-    initWebsocket();
-    
-    // disable return key
-    $("body").off("keypress");
-    $("body").on("keypress", function(e) {
-        if ( e.keyCode===13  ){
-            return false;
-        }
-    });
+    if ( pagename!=="login" ) {
+        getAllthings();
+        getOptions(true);
+        initWebsocket();
+        
+        // disable return key
+        $("body").off("keypress");
+        $("body").on("keypress", function(e) {
+            if ( e.keyCode===13  ){
+                return false;
+            }
+        });
+    }
 
     // handle button setup for all pages
     setupButtons();
@@ -421,7 +423,7 @@ function setupWebsocket()
     // this contains a single device object
     // this is where pushClient is processed for hpserver.js
     wsSocket.onmessage = function (evt) {
-        var reservedcap = ["name", "password", "color", "DeviceWatch-DeviceStatus", "DeviceWatch-Enroll", "checkInterval", "healthStatus"];
+        var reservedcap = ["name", "password", "DeviceWatch-DeviceStatus", "DeviceWatch-Enroll", "checkInterval", "healthStatus"];
         try {
             var presult = JSON.parse(evt.data);
             // console.log("pushClient: ", presult);
@@ -495,11 +497,6 @@ function setupWebsocket()
         // check if we have valid info for this update item
         if ( bid!==null && thetype && pvalue && typeof pvalue==="object" ) {
         
-            // remove color for now until we get it fixed
-            // if ( pvalue["color"] ) {
-            //     delete( pvalue["color"] );
-            // }
-
             // change not present to absent for presence tiles
             // it was an early bad design decision to alter ST's value that I'm now stuck with
             if ( pvalue["presence"] && pvalue["presence"] ==="not present" ) {
@@ -556,6 +553,7 @@ function setupWebsocket()
                          value.substr(0,7)!=="number_" &&
                          value.indexOf("://")===-1 &&
                          value.indexOf("::")===-1 &&
+                         value.indexOf("rgb(")===-1 &&
                          value.length < 30 &&
                          $.isNumeric(value)===false && 
                          $.isNumeric(oldvalue)===false &&
@@ -788,41 +786,40 @@ function setupColors() {
     
    $("div.overlay.color >div.color").each( function() {
         var that = $(this);
+        var aid = that.attr("aid");
         var defcolor = that.html();
         if ( !defcolor ) {
             defcolor = "#FFFFFF";
         }
+        $(this).attr("value", defcolor);
         $(this).minicolors({
             position: "bottom left",
             defaultValue: defcolor,
             theme: 'default',
             change: function(hex) {
                 try {
+                    var oldhex = that.html();
                     that.html(hex);
-                    var aid = that.attr("aid");
-                    that.css({"background-color": hex});
-                    var huetag = $("#a-"+aid+"-hue");
-                    var sattag = $("#a-"+aid+"-saturation");
-                    if ( huetag.length ) { huetag.css({"background-color": hex}); }
-                    if ( sattag.length ) { sattag.css({"background-color": hex}); }
+                    that.attr("value", hex);
+                    // close picker if something changed
+                    // that.minicolors('hide');
                 } catch(e) {}
             },
             hide: function() {
                 var newcolor = $(this).minicolors("rgbObject");
                 var hsl = rgb2hsv( newcolor.r, newcolor.g, newcolor.b );
                 var hslstr = "hsl("+hsl.hue.pad(3)+","+hsl.saturation.pad(3)+","+hsl.level.pad(3)+")";
-                var aid = that.attr("aid");
                 var tile = '#t-'+aid;
                 var bid = $(tile).attr("bid");
                 var hubnum = $(tile).attr("hub");
                 var thetype = $(tile).attr("type");
-                var ajaxcall = "doaction";
-                console.log(ajaxcall + ": id= "+bid+" type= "+ thetype+ " color= "+ hslstr);
+                // console.log("doaction: id= "+bid+" type= "+ thetype+ " color= "+ hslstr);
                 $.post(cm_Globals.returnURL, 
-                       {useajax: ajaxcall, id: bid, type: thetype, value: hslstr, attr: "color", hubid: hubnum} );
+                       {useajax: "doaction", id: bid, type: thetype, value: hslstr, attr: "color", hubid: hubnum} );
             }
         });
-    });   
+    });
+
 }
 
 function setupSliders() {
@@ -1021,7 +1018,7 @@ function setupSortable() {
     reordered = false;
     $("div.panel").each( function() {
         var roomtitle = $(this).attr("title");
-        console.log("setup sortable: ", roomtitle);
+        // console.log("setup sortable: ", roomtitle);
         
         // loop through each thing in this room and number it
         var num = 0;
@@ -1085,7 +1082,7 @@ function updateSortNumber(thetile, num) {
 
 
 function setupDraggable() {
-    var startPos = {top: 0, left: 0, "z-index": 0, position: "relative"};
+    var startPos = {top: 0, left: 0, "z-index": 0, position: "relative", priorStart: "relative"};
     var hubpick = cm_Globals.hubId;
     var delx;
     var dely;
@@ -1111,7 +1108,7 @@ function setupDraggable() {
                     var panelid = getCookie("defaultTab");
                     panel = $("#"+panelid).text();
                 }
-                startPos["z-index"] = $(evt.target).css("z-index");
+                startPos["z-index"] = parseInt($(evt.target).css("z-index"));
                 
                 // while dragging make sure we are on top
                 $(evt.target).css("z-index", 999);
@@ -1123,20 +1120,22 @@ function setupDraggable() {
                     delx = 0;
                     dely = 0;
                     startPos.position = "relative";
+                    startPos.priorStart = "relative";
                 } else {
                     startPos.left = parseInt($(evt.target).position().left);
                     startPos.top  = parseInt($(evt.target).position().top);
                     delx = evt.pageX - startPos.left;
                     dely = evt.pageY - startPos.top;
                     // $(evt.target).css({"position":startPos.position, "left": startPos.left, "top": startPos.top} );
+                    startPos.priorStart = $(evt.target).css("position");
                     startPos.position = "absolute";
                 }
     
-                console.log("start... left: " + startPos.left + " top: "+ startPos.top, " panel: ", panel, delx, dely);
+                // console.log("start... left: " + startPos.left + " top: "+ startPos.top, " panel: ", panel, delx, dely);
             },
             stop: function(evt, ui) {
                 // var thing = ui.draggable;
-                console.log("Stopped dragging: ", $(evt.target).attr("type") );
+                // console.log("Stopped dragging: ", $(evt.target).attr("type") );
             },
             grid: snapgrid
         });
@@ -1201,7 +1200,7 @@ function setupDraggable() {
                             var lastthing = $("div.panel-"+panel+" div.thing").last();
                             pos = {position: "absolute", top: evt.pageY, left: evt.pageX, width: 300, height: "auto"};
                             var zmax = getMaxZindex(panel);
-                            startPos["z-index"] = zmax.toString();
+                            startPos["z-index"] = zmax;
                             createModal("modaladd","Add: "+ thingname + " of Type: "+thingtype+" to Room: "+panel+"?<br /><br />Are you sure?", "body", true, pos, function(ui, content) {
                                 var clk = $(ui).attr("name");
                                 if ( clk==="okay" ) {
@@ -1238,15 +1237,20 @@ function setupDraggable() {
                     startPos.left = evt.pageX - delx;   // parseInt($(evt.target).offset().left);
                     startPos.top  = evt.pageY - dely;   // parseInt($(evt.target).offset().top);
                     var panel = $(thing).attr("panel");
-                    $(thing).css( startPos["z-index"] );
-                    var zmax = getMaxZindex(panel);
-                    startPos["z-index"] = zmax.toString();
+                    $(thing).css("z-index", startPos["z-index"] );
 
-                    // revert back to relative if we dragged close to zero
+                    // revert back to relative if we dragged outside panel to left or top
                     if ( startPos.left < 0 || startPos.top < 0 ) {
                         startPos.left = 0;
                         startPos.top = 0;
                         startPos.position = "relative";
+                    } else {
+                        var zmax = getMaxZindex(panel);
+                        var thisz = startPos["z-index"];
+                        if ( zmax > thisz ) {
+                            zmax++;
+                        }
+                        startPos["z-index"] = zmax;
                     }
 
                     $(thing).css(startPos);
@@ -1306,12 +1310,16 @@ function setupDraggable() {
                             }
                         );
 
-                    // even though we did a successful drop, revert to original place
+                    // this isn't a clone so we have to revert to original place
                     } else {
                         // $("#"+id).data('draggable').options.revert();
                         try {
-                            $(thing).css("position","absolute").css("left",startPos.left).css("top",startPos.top);
-                            $(thing).css( {"z-index": startPos["z-index"].toString()} );
+                            $(thing).css("position", startPos.priorStart);
+                            if ( startPos.priorStart === "relative" ) {
+                                startPos.left = 0;
+                                startPos.top = 0;
+                            }
+                            $(thing).css("left", startPos.left). css("top",startPos.top).css("z-index", startPos["z-index"] );
                         } catch(e) { 
                             console.log("Drag/drop error. Please share this with @kewashi on the ST or HE Community Forum: ", e); 
                         }
@@ -1358,6 +1366,7 @@ function dynoPost(ajaxcall, body, id, type, value, attr, reload, callback) {
         $.post(cm_Globals.returnURL, body, callback);
 
     } else {
+        console.log(cm_Globals);
         $.post(cm_Globals.returnURL, body,
             function (presult, pstatus) {
                 if ( isreload && pstatus==="success" ) {
@@ -1369,8 +1378,7 @@ function dynoPost(ajaxcall, body, id, type, value, attr, reload, callback) {
                     }, delay);
 
                 } else {
-                    console.log("dyno POST: ", pstatus, " body: ", body, " presult: ", presult);
-
+                    // console.log("dyno POST: ", pstatus, " body: ", body, " presult: ", presult);
                     // clear blinking interval if requested
                     if ( typeof type!=="undefined" && type==="::blink::" & typeof value!=="undefined" ) {
                         clearInterval(value);
@@ -1417,6 +1425,7 @@ function execButton(buttonid) {
 
     } else if ( buttonid==="dologin") {
         var genobj = formToObject("loginform");
+        // alert("logging in");
         dynoPost("dologin", genobj, true);
 
     } else if ( buttonid === "blackout") {
@@ -1480,8 +1489,8 @@ function execButton(buttonid) {
         console.log("snap mode: ",snap);
 
     } else if ( buttonid==="refreshpage" ) {
-        var pstyle = "position: absolute; background-color: red; color: white; font-weight: bold; font-size: 32px; left: 400px; top: 300px; width: 400px; height: 200px; margin-top: 50px;";
-        createModal("info", "Screen will refresh in<br/>10 seconds...","body", false, {style: pstyle});
+        var pstyle = "position: absolute; background-color: black; color: white; font-weight: bold; font-size: 32px; left: 400px; top: 300px; width: 350px; height: 150px; margin-top: 50px;";
+        createModal("info", "Screen will refresh in<br/>5 seconds...","body", false, {style: pstyle});
         dynoPost(buttonid);
 
     } else if ( buttonid==="refactor" ) {
@@ -2291,11 +2300,21 @@ function updateTile(aid, presult, skiplink) {
                 // disable putting values in the slot
                 value = false;
                 oldvalue = false;
-            // TODO: make color values work by setting the mini colors circle
+
+            // we now make color values work by setting the mini colors circle
             } else if ( key==="color") {
-//                alert("updating color: "+value);
                 $(targetid).html(value);
-//                setupColors();
+                $(targetid).attr("value", value);
+                $(targetid).minicolors('value', {color: value});
+                oldvalue = "";
+
+                // var rgb = $(targetid).minicolors('rgbString');
+                // console.log( "new color rgb: ", rgb);
+                // var swatch = $(targetid).find("span.minicolors-swatch-color");
+                // if ( swatch ) {
+                //     swatch.attr("style","background-color: "+rgb+";");
+                // }
+                
             // special case for numbers for KuKu Harmony things
             } else if ( key.startsWith("_number_") && value.startsWith("number_") ) {
                 value = value.substring(7);
@@ -2330,7 +2349,7 @@ function updateTile(aid, presult, skiplink) {
                 
             // add status of things to the class and remove old status
             } else if ( oldclass && oldvalue && value &&
-                    key!=="name" && key!=="trackImage" && key!=="color" &&
+                    key!=="name" && key!=="trackImage" && 
                     key!=="trackDescription" && key!=="mediaSource" &&
                     key!=="currentArtist" && key!=="currentAlbum" &&
                     $.isNumeric(value)===false && 
@@ -2606,26 +2625,20 @@ function setupTimer(timerval, timertype, hubnum) {
                                         thevalue = thevalue.value;
                                     }
                                     
-                                    // if the user provided name is blank set it to master name
+                                    // don't update names here via timer since we can't get user values
                                     // also skip updating music and audio album art for old music tiles 
                                     // since doing it here messes up the websocket updates
                                     // I actually kept the new audio refresh since it seems to work okay
                                     if ( thevalue && typeof thevalue==="object" ) {
-                                        if ( !thevalue["name"] && cm_Globals.allthings[idx] ) {
-                                            thevalue["name"] = cm_Globals.allthings[idx].name;
-                                        }
+                                        if ( typeof thevalue["name"]!=="undefined" ) { delete thevalue["name"]; }
                                         if ( typeof thevalue["password"]!=="undefined" ) { delete thevalue["password"]; }
+                                        if ( typeof thevalue["allon"]!=="undefined" ) { delete thevalue["allon"]; }
+                                        if ( typeof thevalue["alloff"]!=="undefined" ) { delete thevalue["alloff"]; }
                                         if ( strtype==="music" ) {
                                             if ( thevalue["trackDescription"] ) { delete thevalue["trackDescription"]; }
                                             if ( thevalue["trackImage"] ) { delete thevalue["trackImage"]; }
                                             if ( thevalue["currentArtist"] ) { delete thevalue["currentArtist"]; }
                                             if ( thevalue["currentAlbum"] ) { delete thevalue["currentAlbum"]; }
-                                        }
-                                        if ( thevalue["allon"] ) {
-                                            delete thevalue["allon"];
-                                        }
-                                        if ( thevalue["alloff"] ) {
-                                            delete thevalue["alloff"];
                                         }
                                         updateTile(aid, thevalue); 
                                     }
@@ -2951,7 +2964,7 @@ function processClick(that, thingname) {
     } else if ( command==="TEXT" && (subid==="allon" || subid==="alloff") ) {
         var panel = $(tile).attr("panel");
         thevalue = addOnoff(targetid, subid, thevalue);
-        $('div[panel="' + panel + '"] div.overlay div.switch').each(function() {
+        $('div[panel="' + panel + '"] div.overlay.switch div').each(function() {
             aid = $(this).attr("aid");
             tile = '#t-'+aid;
             thetype = $(tile).attr("type");

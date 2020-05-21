@@ -281,7 +281,13 @@ function getCssRuleTarget(str_type, subid, thingindex, useall) {
             target = null;
         }
         // console.log("page subid= ", subid," target= ", target);
-        
+    } else if ( str_type==="overlay" ) {
+
+        target = "div.overlay." + subid;
+        if ( useall < 1 ) {
+            target+= ".v_" + thingindex;
+        }
+
     // if a tile isn't specified we default to changing all things
     } else if ( thingindex===null || typeof thingindex==="undefined " || thingindex==="all" ) {
         target = "div.thing";
@@ -303,17 +309,6 @@ function getCssRuleTarget(str_type, subid, thingindex, useall) {
         target = "div.thing";
         if ( useall < 2 ) { target+= "." + str_type + "-thing"; }
         if ( useall < 1 ) { target+= '.p_'+thingindex; }
-    
-    } else if ( subid==="overlay" ) {
-        target = "div.overlay";
-        if ( useall < 2 ) {
-            if ( subid.startsWith("music-") ) {
-                target+= ".music-controls";
-            } else {
-                target+= "." + subid;
-            }
-        }
-        if ( useall < 1 ) { target+= '.v_'+thingindex; }
     
     // main handling of type with subid specific case
     // starts just like overlay but adds all the specific subid stuff
@@ -530,18 +525,18 @@ function initDialogBinds(str_type, thingindex) {
         } else {
             addCSSRule(getCssRuleTarget(str_type, 'wholetile', thingindex), rule);
             addCSSRule(getCssRuleTarget(str_type, 'head', thingindex), rule);
-            if ( str_type==="switchlevel" || str_type==="bulb" ) {
-                addCSSRule("div.overlay.level.v_"+thingindex+" .ui-slider", rule);
-            }
+            // if ( str_type==="switchlevel" || str_type==="bulb" ) {
+            //     addCSSRule("div.overlay.level.v_"+thingindex+" .ui-slider", rule);
+            // }
         }
         
         // handle special case of thermostats that need to have widths fixed
-        if ( str_type === "thermostat" ) {
-            var midsize = newsize - 64;
-            rule = "width: " + midsize.toString() + "px;";
-            addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.heatingSetpoint", rule);
-            addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.coolingSetpoint", rule);
-        }
+        // if ( str_type === "thermostat" ) {
+        //     var midsize = newsize - 64;
+        //     rule = "width: " + midsize.toString() + "px;";
+        //     addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.heatingSetpoint", rule);
+        //     addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.coolingSetpoint", rule);
+        // }
         event.stopPropagation;
     });
 
@@ -574,12 +569,12 @@ function initDialogBinds(str_type, thingindex) {
     
     $("#autoTileWidth").on('change', function(event) {
         var rule;
-        var midrule;
+        // var midrule;
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
         if($("#autoTileWidth").is(':checked')) {
             rule = "width: auto;";
-            midrule = "width: 72px;";
+            // midrule = "width: 72px;";
             $("#tileWidth").prop("disabled", true);
             $("#tileWidth").css("background-color","gray");
         } else {
@@ -592,21 +587,21 @@ function initDialogBinds(str_type, thingindex) {
             $("#tileWidth").prop("disabled", false);
             $("#tileWidth").css("background-color","white");
             var midsize = newsize - 64;
-            midrule = "width: " + midsize.toString() + "px;";
+            // midrule = "width: " + midsize.toString() + "px;";
         }
         if ( str_type==="page" ) {
             addCSSRule(getCssRuleTarget(str_type, 'panel', thingindex), rule);
         } else {
             addCSSRule(getCssRuleTarget(str_type, 'wholetile', thingindex), rule);
-            if ( str_type==="switchlevel" || str_type==="bulb" ) {
-                addCSSRule("div.overlay.level.v_"+thingindex+" .ui-slider", rule);
-            }
+            // if ( str_type==="switchlevel" || str_type==="bulb" ) {
+            //     addCSSRule("div.overlay.level.v_"+thingindex+" .ui-slider", rule);
+            // }
         }
         
-        if ( str_type === "thermostat" ) {
-            addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.heatingSetpoint", midrule);
-            addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.coolingSetpoint", midrule);
-        }
+        // if ( str_type === "thermostat" ) {
+        //     addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.heatingSetpoint", midrule);
+        //     addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.coolingSetpoint", midrule);
+        // }
         event.stopPropagation;
     });
 
@@ -1361,7 +1356,8 @@ function checkboxHandler(idselect, onaction, offaction, overlay) {
         var thingindex = $("#tileDialog").attr("thingindex");
         var subid = $("#subidTarget").html();
         var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
-        var overlayTarget = "div.overlay." + subid + ".v_" + thingindex;
+        var overlayTarget = getCssRuleTarget("overlay", subid, thingindex);
+        // var overlayTarget = "div.overlay." + subid + ".v_" + thingindex;
         // alert(cssRuleTarget);
         if($(idselect).is(':checked')){
             // alert("overlay= "+overlay+" overlayTarget= "+overlayTarget+" action= "+onaction);
@@ -1821,8 +1817,6 @@ function initColor(str_type, subid, thingindex) {
         } else {
             fontstr+= "font-weight: normal; ";
         }
-        
-        // alert("Changing font effect target= " + target + " to: "+fontstr);
         addCSSRule(cssRuleTarget, fontstr);
         event.stopPropagation;
     });
@@ -1834,8 +1828,6 @@ function initColor(str_type, subid, thingindex) {
         var subid = $("#subidTarget").html();
         var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
         var borderstyle = $(this).val();
-        
-        // alert("Changing border effect of target " + target + " to: "+borderstyle);
         if ( borderstyle!=="" ) {
             addCSSRule(cssRuleTarget, borderstyle);
         }
@@ -1851,7 +1843,6 @@ function initColor(str_type, subid, thingindex) {
         var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
         var fontsize = $(this).val();
         var fontstr= "font-size: " + fontsize;
-        // console.log("Changing font. Target= " + cssRuleTarget + " to: "+fontstr);
         addCSSRule(cssRuleTarget, fontstr);
         event.stopPropagation;
     });
@@ -1865,7 +1856,6 @@ function initColor(str_type, subid, thingindex) {
         var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
         var aligneffect = $(this).val();
         var fontstr= "text-align: " + aligneffect;
-        // console.log("Changing alignment. Target= " + cssRuleTarget + " to: "+fontstr);
         addCSSRule(cssRuleTarget, fontstr);
         event.stopPropagation;
     });
@@ -1879,7 +1869,6 @@ function initColor(str_type, subid, thingindex) {
         var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
         var aligneffect = $(this).val();
         var fontstr= "background-position-x: " + aligneffect;
-        // console.log("Changing alignment. Target= " + cssRuleTarget + " to: "+fontstr);
         addCSSRule(cssRuleTarget, fontstr);
         event.stopPropagation;
     });
@@ -1890,43 +1879,57 @@ function initColor(str_type, subid, thingindex) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
         var subid = $("#subidTarget").html();
-        var onoff = getOnOff(str_type, subid);
-        var strCaller = $($(event.target)).attr("target");
+        // var onoff = getOnOff(str_type, subid);
+        // var strCaller = $($(event.target)).attr("target");
         var ischecked = $(event.target).prop("checked");
         var displayset = "none";
-        var displayovl = "none";
-        
         if ( !ischecked ) {
             displayset = $("#inlineOpt").prop("checked") ? "inline-block" : "block";
-            displayovl = defaultOverlay;
         }
-        addCSSRule("div.overlay."+subid+".v_"+thingindex, "display: " + displayovl + ";", true);
-        var tailoff = false;
-        onoff.forEach( function(flag, idx, arr) {
-            if ( !tailoff && flag!=="" && strCaller.endsWith("."+flag) ) {
-                strCaller = strCaller.slice(0,strCaller.length - flag.length - 1);
-                tailoff = true;
-            }
-        });
-        addCSSRule(strCaller, "display: " + displayset + ";", false);
-        onoff.forEach( function(flag, idx, arr) {
-            if ( flag!=="" ) {
-                addCSSRule(strCaller + "." + flag, "display: " + displayset + ";", false);
-            }
-        });
-        // console.log("hidden debug: ",strCaller);
+
+        var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
+        var rule = "display: " + displayset + ";";
+        addCSSRule(cssRuleTarget, rule);
+
+        // // get all the different types to set
+        // var ish = getish(str_type, thingindex, subid);
+        // for ( var i = 0; i< ish.length; i++) {
+        //     if ( $(ish[i]) && $(ish[i]).css("display")!==displayset ) {
+        //         var rule = "display: " + displayset + ";";
+        //         // addCSSRule(ish[i], rule, true);
+        //         console.log("sim css: ", ish[i], rule, true);
+
+        //         // handle all the on/off variants
+        //         onoff.forEach( function(flag) {
+        //             if ( flag!=="" ) {
+        //                 var status = $(ish[i]).css("display");
+        //                 // addCSSRule(ish[i] + "." + flag, "display: " + displayset + ";", true);
+        //                 console.log("sim css: ", ish[i] + "." + flag, rule, true);
+        //             }
+        //         });
+
+        //     }
+        // }
+
+        // var overlayTarget = getCssRuleTarget("overlay", subid, thingindex);
+        // var rule =  "display: " + displayovl + ";";
+        // addCSSRule(overlayTarget, rule, true);
+
+        // var tailoff = false;
+        // onoff.forEach( function(flag, idx, arr) {
+        //     if ( !tailoff && flag!=="" && strCaller.endsWith("."+flag) ) {
+        //         strCaller = strCaller.slice(0,strCaller.length - flag.length - 1);
+        //         tailoff = true;
+        //     }
+        // });
+        // addCSSRule(strCaller, "display: " + displayset + ";", false);
+        // onoff.forEach( function(flag, idx, arr) {
+        //     if ( flag!=="" ) {
+        //         addCSSRule(strCaller + "." + flag, "display: " + displayset + ";", false);
+        //     }
+        // });
         event.stopPropagation;
     });	
-    
-    // disable the Hidden button if this is a wholetile edit
-    if ( subid==="wholetile" ) {
-        $("#isHidden").prop("checked", false);
-        $("#isHidden").prop("disabled", true);
-        $("#isHidden").css("background-color","gray");
-    } else {
-        $("#isHidden").prop("disabled", false);
-        $("#isHidden").css("background-color","white");
-    }
     
     // $("#editReset").off('change');
     $("#editReset").on('click', function (event) {
@@ -2001,52 +2004,68 @@ function initColor(str_type, subid, thingindex) {
     });
     
     // set initial hidden status
-    if ( subid!=="wholetile" ) {
-        var ish = [];
-        for ( var i = 0; i< 18; i++) {
-            ish.push("");
-        }
-        if ( subid==="head" ) {
-            ish[0] = $("div.thingname." + str_type).css("display");
-            ish[1]= $("div.thingname." + str_type + ".t_" + thingindex).css("display");
-            ish[2]= $("div.thing." + str_type + "-thing div.thingname." + str_type).css("display");
-            ish[3]= $("div.thing." + str_type + "-thing div.thingname." + str_type + ".t_" + thingindex).css("display");
-        } else {
-
-            ish[0]  = $("div.overlay." + subid).css("display");
-            ish[1]  = $("div.overlay." + subid  + " div." + subid).css("display");
-            ish[2]  = $("div.overlay." + subid  + " div." + subid + ".p_"+thingindex).css("display");
-            ish[3]  = $("div.overlay." + subid + ".v_"+thingindex).css("display");
-            ish[4]  = $("div.overlay." + subid + ".v_"+thingindex  + " div." + subid).css("display");
-            ish[5]  = $("div.overlay." + subid + ".v_"+thingindex  + " div." + subid + ".p_"+thingindex).css("display");
-
-            ish[6]  = $("div.thing div.overlay." + subid).css("display");
-            ish[7]  = $("div.thing div.overlay." + subid  + " div." + subid).css("display");
-            ish[8]  = $("div.thing div.overlay." + subid  + " div." + subid + ".p_"+thingindex).css("display");
-            ish[9]  = $("div.thing div.overlay." + subid + ".v_"+thingindex).css("display");
-            ish[10] = $("div.thing div.overlay." + subid + ".v_"+thingindex  + " div." + subid).css("display");
-            ish[11] = $("div.thing div.overlay." + subid + ".v_"+thingindex  + " div." + subid + ".p_"+thingindex).css("display");
-
-            ish[12] = $("div.thing." + str_type + "-thing div.overlay." + subid).css("display");
-            ish[13] = $("div.thing." + str_type + "-thing div.overlay." + subid + " div." + subid).css("display");
-            ish[14] = $("div.thing." + str_type + "-thing div.overlay." + subid + " div." + subid + ".p_"+thingindex).css("display");
-            ish[15] = $("div.thing." + str_type + "-thing div.overlay." + subid + ".v_"+thingindex).css("display");
-            ish[16] = $("div.thing." + str_type + "-thing div.overlay." + subid + ".v_"+thingindex  + " div." + subid).css("display");
-            ish[17] = $("div.thing." + str_type + "-thing div.overlay." + subid + ".v_"+thingindex  + " div." + subid + ".p_"+thingindex).css("display");
-        }
-        // console.log ("hidden check: ", str_type, subid, ish1, ish2, ish3, ish4, ish1_1, ish2_1, ish3_1, ish4_1);
+    if ( subid==="wholetile" ) {
+        $("#isHidden").prop("checked", false);
+        $("#isHidden").prop("disabled", true);
+        $("#isHidden").css("background-color","gray");
+    } else {
+        $("#isHidden").prop("disabled", false);
+        $("#isHidden").css("background-color","white");
+        var ish = getish(str_type, thingindex, subid);
         var ishidden = false;
-        defaultOverlay = "block";
         for ( var i = 0; i< ish.length; i++) {
-            if ( ish[i] && ish[i]==="none" ) {
+            if (  $(ish[i]) && $(ish[i]).css("display")==="none" ) {
                 ishidden= true;
-                defaultOverlay = ish[i];
+                var status = $(ish[i]).css("display");
+                console.log("hidden #", i, ": ", status);
             }
         }
-        console.log("hidden info: ", ishidden, ish);
+        console.log("hidden info: ", ishidden);
         $("#isHidden").prop("checked", ishidden);
     }
     
+}
+
+// returns an array of valid triggers for checking hidden status
+function getish(str_type, thingindex, subid) {
+    var ish = [];
+
+    // make this work only for this page if that option is selected
+    if ( str_type!=="page" && et_Globals.pagename && et_Globals.usepagename ) {
+        var divstr = "div." + et_Globals.pagename + ".";
+    } else {
+        divstr = "div.";
+    }
+
+    if ( subid==="head" ) {
+        ish[0] = divstr + "thingname." + str_type;
+        ish[1] = divstr + "thingname." + str_type + ".t_" + thingindex;
+        ish[2] = divstr + "thing." + str_type + "-thing div.thingname." + str_type;
+        ish[3] = divstr + "thing." + str_type + "-thing div.thingname." + str_type + ".t_" + thingindex;
+    } else {
+
+        ish[0]  = divstr + "overlay." + subid;
+        ish[1]  = divstr + "overlay." + subid  + " div." + subid;
+        ish[2]  = divstr + "overlay." + subid  + " div." + subid + ".p_"+thingindex;
+        ish[3]  = divstr + "overlay." + subid + ".v_"+thingindex;
+        ish[4]  = divstr + "overlay." + subid + ".v_"+thingindex  + " div." + subid;
+        ish[5]  = divstr + "overlay." + subid + ".v_"+thingindex  + " div." + subid + ".p_"+thingindex;
+
+        ish[6]  = divstr + "thing div.overlay." + subid;
+        ish[7]  = divstr + "thing div.overlay." + subid  + " div." + subid;
+        ish[8]  = divstr + "thing div.overlay." + subid  + " div." + subid + ".p_"+thingindex;
+        ish[9]  = divstr + "thing div.overlay." + subid + ".v_"+thingindex;
+        ish[10] = divstr + "thing div.overlay." + subid + ".v_"+thingindex  + " div." + subid;
+        ish[11] = divstr + "thing div.overlay." + subid + ".v_"+thingindex  + " div." + subid + ".p_"+thingindex;
+
+        ish[12] = divstr + "thing." + str_type + "-thing div.overlay." + subid;
+        ish[13] = divstr + "thing." + str_type + "-thing div.overlay." + subid + " div." + subid;
+        ish[14] = divstr + "thing." + str_type + "-thing div.overlay." + subid + " div." + subid + ".p_"+thingindex;
+        ish[15] = divstr + "thing." + str_type + "-thing div.overlay." + subid + ".v_"+thingindex;
+        ish[16] = divstr + "thing." + str_type + "-thing div.overlay." + subid + ".v_"+thingindex  + " div." + subid;
+        ish[17] = divstr + "thing." + str_type + "-thing div.overlay." + subid + ".v_"+thingindex  + " div." + subid + ".p_"+thingindex;
+    }
+    return ish;
 }
     
 // main routine that sets the color of items
@@ -2220,21 +2239,17 @@ function updateSize(str_type, subid, thingindex) {
         $("#bgSize").prop("disabled", true);
         $("#bgSize").css("background-color","gray");
         addCSSRule(cssRuleTarget, "background-size: cover;");
-        // addCSSRule(cssRuleTarget, "height: auto;");
     } else {
         $("#bgSize").prop("disabled", false);
         $("#bgSize").css("background-color","white");
         var iconsize = $("#bgSize").val();
         var rule;
-        // var iconsize = 80; // $(cssRuleTarget).height();
         iconsize = parseInt( iconsize );
         if ( isNaN(iconsize) || iconsize <= 0 ) {
             if ( subid.startsWith("music") ) {
                 rule = "40px;"
             } else if ( str_type==="page" ) {
                 rule = "cover;";
-            // } else if ( str_type==="page" && (subid==="tab" || subid==="tabon") ) {
-            //     rule = "cover;";
             } else {
                 iconsize = 80;
                 rule = iconsize.toString() + "px;";
@@ -2244,42 +2259,47 @@ function updateSize(str_type, subid, thingindex) {
         }
         addCSSRule(cssRuleTarget, "background-size: " + rule);
         addCSSRule(cssRuleTarget, "background-repeat: no-repeat;");
-        // addCSSRule(cssRuleTarget, "height: " + rule);
     }
 }
 
-function addCSSRule(selector, rules, resetFlag){
+// removed the old addRule support since older browsers won't work with HP anyway
+function addCSSRule(selectarray, selectrule, resetFlag){
     //Searching of the selector matching cssRules
     // alert("Adding rules: " + rules);
-    cm_Globals.reload = true;
-    
+    if ( typeof selectorarray !== "object" ) {
+        if ( ! typeof selectrule === "string" || ! typeof selectarray==="string") {
+            return;
+        }
+        selectarray = {"0": [selectarray, selectrule]};
+    }
+   
     var sheet = document.getElementById('customtiles').sheet; // returns an Array-like StyleSheetList
-    var index = -1;
-    for(var i=sheet.cssRules.length; i--;){
-        var current_style = sheet.cssRules[i];
-        if(current_style.selectorText === selector){
-            //Append the new rules to the current content of the cssRule;
-            if( !resetFlag ){
-                rules=current_style.style.cssText + rules;			
+
+    // process every rule
+    $.each(selectarray, function(k, val) {
+        var selector = val[0];
+        var rules = val[1];
+        var index = -1;
+        for(var i=sheet.cssRules.length; i--;){
+            var current_style = sheet.cssRules[i];
+            if(current_style.selectorText === selector){
+                //Append the new rules to the current content of the cssRule;
+                if( !resetFlag ){
+                    rules=current_style.style.cssText + rules;			
+                }
+                sheet.deleteRule(i);
+                index=i;
             }
-            sheet.deleteRule(i);
-            index=i;
         }
-    }
-    if(sheet.insertRule){
-        if(index > -1) {
-            sheet.insertRule(selector + "{" + rules + "}", index);		  
-        } else {
-            sheet.insertRule(selector + "{" + rules + "}");			  
-        }
-    }
-    else{
-        if(index > -1) {
-            sheet.addRule(selector, rules, index);	  
-        } else {
-            sheet.addRule(selector, rules);	  
-        }
-    }
+
+        try {
+            if(index > -1) {
+                sheet.insertRule(selector + "{" + rules + "}", index);		  
+            } else {
+                sheet.insertRule(selector + "{" + rules + "}", 0);			  
+            }
+        } catch (e) {}
+    });
 }
 
 function resetCSSRules(str_type, subid, thingindex){

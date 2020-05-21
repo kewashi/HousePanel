@@ -1,6 +1,12 @@
 'use strict';
 
 const devhistory =  ` 
+2.260   Fix long-standing bug for user login issues
+            - add support for album art for legacy music tiles used by Hubitat
+            - finally... fix color updates from hub refreshes to work properly
+            - harden logic for hidden tiles in the editor
+            - usual array of miscellaneous bug fixes
+            - update groovy file to procee hub updates more reliably
 2.255   Important GUI editor upgrade supporting sorted and free form tiles
             - reorder now will only reorder those tiles not moved
             - and moved tiles will keep their absolute location now

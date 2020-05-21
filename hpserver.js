@@ -19,7 +19,7 @@ const DEBUG14 = false;              // tile link details
 const DEBUG15 = false;              // allthings and options dump
 const DEBUG16 = false;              // customtiles writing
 const DEBUG17 = false;              // push client
-const DEBUG18 = false;               // ST and HE hub messages
+const DEBUG18 = false;              // ST and HE hub messages
 
 // various control options
 const MQTTPOLY = false;             // subscribe to and log polyglot via MQTT
@@ -2152,6 +2152,45 @@ function getWeatherIcon(num) {
     return iconstr;
 }
 
+function interpreAccuWeather() {
+
+/*
+[temperature:55.0, humidity:79, 
+    zip:null, 
+    localSunrise:6:12AM, 
+    localSunset:8:52PM, 
+    cloudCover:100, realFeel:54.0, windSpeed:6.9, windGusts:7.6, windDirection:ENE, uvIndex:1, 
+    summary:
+        UV Index...........1(of 9)
+        Humidity.............79%
+        Wind Speed...6.9 MPH
+        Wind Gusts....7.6 MPH
+        Wind Direction........ENE
+        Sunrise...........6:12AM
+        Sunset...........8:52PM, 
+    theDate:Saturday, May 16, 2020
+    updated at 9:17 AM ↻,
+    weatherIcon:7, 
+    forecast:{"1hr":{"precipitation":0.0,"temperature":59.0,"realFeel":58.0},"2hr":{"precipitation":0.0,"temperature":60.0,"realFeel":61.0},"3hr":{"precipitation":0.0,"temperature":61.0,"realFeel":64.0},"4hr":{"precipitation":0.0,"temperature":63.0,"realFeel":66.0},"5hr":{"precipitation":0.0,"temperature":64.0,"realFeel":69.0},"6hr":{"precipitation":0.0,"temperature":65.0,"realFeel":67.0},"7hr":{"precipitation":0.0,"temperature":66.0,"realFeel":68.0},"8hr":{"precipitation":0.0,"temperature":68.0,"realFeel":68.0},"9hr":{"precipitation":0.0,"temperature":66.0,"realFeel":66.0},"10hr":{"precipitation":0.0,"temperature":65.0,"realFeel":64.0},"11hr":{"precipitation":0.0,"temperature":63.0,"realFeel":61.0},"12hr":{"precipitation":0.0,"temperature":61.0,"realFeel":58.0}}, 
+    time1hr:
+Saturday
+10:00 AM
+, 
+summary1hr:59.0°
+RealFeel® 58.0°, 
+icon1hr:7, precip1hr:0.0, time2hr:
+Saturday
+11:00 AM
+, summary2hr:60.0°
+RealFeel® 61.0°, icon2hr:4, precip2hr:0.0, time3hr:
+Saturday
+12:00 PM
+, summary3hr:61.0°
+RealFeel® 64.0°, icon3hr:4, precip3hr:0.0, alert:, aStatus:off]
+
+*/
+}
+
 // removes dup words from a string
 function uniqueWords(str) {
     var arr = str.split(" ");
@@ -2172,6 +2211,30 @@ function uniqueWords(str) {
 function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, customname, wysiwyg) {
     const audiomap = {"title": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
                       "albumArtUrl": "trackImage", "mediaSource": "mediaSource"};
+    const musicmap = {"name": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
+                      "status": "status", "trackMetaData": "trackImage", "trackImage":"trackImage", "metaData":"trackImage",
+                      "trackNumber":"", "music":"", "trackUri":"", "uri":"", "transportUri":"", "enqueuedUri":"",
+                      "audioSource": "mediaSource"};
+    const mantemp = {"temperature":"", "feelsLike":"", "name":"", "city":"", "weather":"", 
+                     "weatherIcon":"", "forecastIcon":"","alertKeys":""};
+    /*
+        {"audioSource":"Sonos Q","station":null,"name":"Feel Like Makin\u2019 Love",
+        "artist":"Larry Coryell","album":"Sketches Of Coryell","trackNumber":"1",
+        "status":"playing","level":"35","mute":"unmuted",
+        "uri":"x-rincon-queue:RINCON_B8E93798ABDE01400#vli",
+        "trackUri":"x-sonos-spotify:spotify:track:4exYKBIdbzOy7qRedYnYYI?sid=12&flags=0&sn=7",
+        "transportUri":"x-rincon-queue:RINCON_B8E93798ABDE01400#vli",
+        "enqueuedUri":"x-rincon-cpcontainer:00040000spotify%3aalbum%3a55ErdDg54WTAEySb0r7yzb",
+        "metaData":"This Is Larry Coryell<\\/dc:title>object.container.playlistContainer<\\/upnp:class>SA_RINCON3079_X_#Svc3079-0-Token<\\/desc><\\/upnp:albumArtURI><\\/item><\\/DIDL-Lite>",
+        "trackMetaData":"x-sonos-spotify:spotify:track:4exYKBIdbzOy7qRedYnYYI?sid=12&flags=0&sn=7
+                    <\\/res>https:\\/\\/i.scdn.co\\/image\\/ab67616d0000b27333c6e0cbfb0b169671e7945e
+                    <\\/upnp:albumArtURI>object.item.audioItem.musicTrack<\\/upnp:class>Feel Like Makin\u2019 Love
+                    <\\/dc:title>Larry Coryell
+                    <\\/dc:creator>Sketches Of Coryell<\\/upnp:album><\\/item><\\/DIDL-Lite>"}    
+        // for the album art, search for >https:\\/\\/i.scdn.co\\/image\\/ab67616d0000b27333c6e0cbfb0b169671e7945e<
+        // and replace \\/ with / in the string and remove the first and last chars
+    */
+
     var $tc = "";
 
     var thingvalue = thesensor["value"];
@@ -2275,7 +2338,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     // special handling for weather tiles
     // this allows for feels like and temperature to be side by side
     // and it also handles the inclusion of the icons for status
-    if (thingtype==="weather") {
+    if (thingtype==="weather" && array_key_exists("feelsLike", thingvalue)) {
         if ( !thingvalue["name"] ) {
             thingvalue["name"] = thingname;
         }
@@ -2297,16 +2360,8 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
         
         var j = 6;
         for ( var tkey in thingvalue ) {
-            if (tkey!=="temperature" &&
-                tkey!=="feelsLike" &&
-                tkey!=="name" &&
-                tkey!=="city" &&
-                tkey!=="weather" &&
-                tkey!=="weatherIcon" &&
-                tkey!=="forecastIcon" &&
-                tkey!=="alertKeys" && 
-                typeof tkey==="string" && tkey.substring(0,5)!=="user_" ) 
-            {
+            tkey = tkey.toString();
+            if ( !array_key_exists(tkey, mantemp) && tkey.substring(0,5)!=="user_" ) {
                 var helperkey = "user_" + tkey;
                 var tval = thingvalue[tkey];
                 // $tc += putElement(kindex, cnt, j, thingtype, tval, tkey);
@@ -2321,12 +2376,6 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
         };
         
     } else {
-        // unfortunately, this no longer works because Google changed how they return image searches
-        // but fortunately the new Sonos audio devices return an image url that we now use
-        //        if ( $thingtype==="music" ) {
-        //            $thingvalue = getMusicArt($thingvalue);
-        //        }
-        
         // create a thing in a HTML page using special tags so javascript can manipulate it
         // multiple classes provided. One is the type of thing. "on" and "off" provided for state
         // for multiple attribute things we provide a separate item for each one
@@ -2351,25 +2400,54 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                 jsontval = null;
             }
             
-            // handle other cases where the value is an object like audio
+            // handle other cases where the value is an object like audio or music tiles
             if ( jsontval && typeof jsontval==="object" && !array_key_exists(helperkey, thingvalue) ) {
+
                 for (var jtkey in jsontval ) {
                     var jtval = jsontval[jtkey];
+                    // console.log("Object field extraction: jtkey: ", jtkey, " jtval: ", jtval, " tkey: ", tkey);
 
                     // handle audio track keys
                     if ( tkey==="audioTrackData" && array_key_exists(jtkey, audiomap) ) {
                         jtkey = audiomap[jtkey];
                     }
 
+                    // handle legacy Sonos music tiles here - still used by Hubitat
+                    // this interprets direct https image tags
+                    // the image URI can be in multiple fields per the above mapping
+                    else if ( tkey==="trackData" && array_key_exists(jtkey, musicmap) ) {
+                        jtkey = musicmap[jtkey];
+
+                        // fix up field that holds the trackImage
+                        // >https:\\/\\/i.scdn.co\\/image\\/ab67616d0000b27333c6e0cbfb0b169671e7945e<  1<
+                        if ( (jtkey==="trackImage" ) && jtval.indexOf("http")!==-1 ) {
+                            var j1 = jtval.indexOf(">http") + 1;
+                            var j2 = jtval.indexOf("<", j1+1);
+                            if ( j1===-1 || j2===-1) {
+                                jtval = "Unknown";
+                            } else {
+                                jtval = jtval.substring(j1, j2);
+                                jtval = jtval.replace(/\\/g,"");
+                            }
+                            // console.log("Legacy music trackImage: ", j1, j2, jtval);
+
+                        // a known value that is muted
+                        // all other values will shine through with translation
+                        // but dont let track images shine through if https not found
+                        } else if ( !jtkey || jtkey==="trackImage" ) {
+                            jtval = "";
+                        }
+                    }
+
                     // skip adding an object element if it duplicates an existing one
-                    if ( jtval && !array_key_exists(jtkey, thingvalue) ) {
+                    if ( jtkey && jtval && !array_key_exists(jtkey, thingvalue) ) {
                         $tc += putElement(kindex, cnt, j, thingtype, jtval, jtkey, subtype, bgcolor);
                         j++;
                     }
                 }
             }
             
-            else if ( typeof tkey==="string" && tkey.substring(0,5)!=="user_" && (typeof tval==="string" || typeof tval==="number") ) { 
+            else if ( tkey.substring(0,5)!=="user_" && (typeof tval==="string" || typeof tval==="number") ) { 
                 
                 // new logic for links - they all now follow the format ::LINK::code
                 // print a hidden field for user web calls and links
@@ -3718,12 +3796,6 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
 
     // if ( pvalue["password"] ) { delete pvalue["password"]; }
         
-    // // remove color for now until we get it fixed - but report it so I can inspect
-    // if ( pvalue["color"] ) {
-    //     // console.log( (ddbg()), "webSocket color: ", pvalue.color);
-    //     delete( pvalue["color"] );
-    // }
-
     // save the result to push to all clients
     entry["value"] = pvalue;
     if ( DEBUG14 ) {
@@ -4392,8 +4464,8 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                 break;
 
             case "HUB":
-                console.log( (ddbg()), "calling hub: ", hub.hubId, hub.hubName, swid, swtype, swval, swattr, subid);
                 response = callHub(hub, swid, swtype, swval, swattr, subid, false, false, false);
+                console.log( (ddbg()), "calling hub: ", hub.hubId, hub.hubName, swid, swtype, swval, swattr, subid, " response: ", response);
 
                 // process rules and links instantly in case the webSocket doesn't work
                 // this also makes the rules run much quicker
@@ -5345,7 +5417,7 @@ function getOptionsPage(pathname) {
 }
 
 // renders the main page
-function mainPage(proto, hostname, pathname) {
+function mainPage(hostname, pathname) {
     var $tc = "";
     var thingoptions = GLB.options["things"];
     var roomoptions = GLB.options["rooms"];
@@ -5357,7 +5429,6 @@ function mainPage(proto, hostname, pathname) {
     } else {
         kioskmode = false;
     }
-    GLB.returnURL = proto + "://" + hostname
     console.log(  "\n****************************************************************",
                   "\nServing page at: ", GLB.returnURL,
                   "\n****************************************************************");
@@ -6421,6 +6492,14 @@ function apiCall(body, protocol) {
                         GLB.pwcrypt = false;
                     }
                     result = "success";
+                // name does exist so create it and log in
+                } else {
+                    var skin = getSkin();
+                    pwords[uname] = [pword, skin];
+                    GLB.pwcrypt = pword;
+                    GLB.options["config"]["pword"] = pwords;
+                    writeOptions(GLB.options, true);
+                    result = "success";
                 }
             } else {
                 result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
@@ -6912,6 +6991,7 @@ if ( app && applistening ) {
     app.get('*', function (req, res) {
         
         var $tc;
+        GLB.returnURL = req.protocol + "://" + req.headers.host;
 
         if ( req.path==="/" || typeof req.path==="undefined" || req.path==="/undefined" || req.path==="undefined" ) {
 
@@ -6966,7 +7046,7 @@ if ( app && applistening ) {
                     console.log("allthings before render: \n", UTIL.inspect(allthings, false, null, false) );
                     console.log("options before render: \n", UTIL.inspect(GLB.options, false, null, false) );
                 }
-                $tc = mainPage(req.protocol, req.headers.host, req.path);
+                $tc = mainPage(req.headers.host, req.path);
 
             } else {
                 console.log( (ddbg()), "login rejected. uname= ", uname, " pwcrypt= ", GLB.pwcrypt);
@@ -7056,9 +7136,9 @@ if ( app && applistening ) {
     });
 
     // *********************************************************************************************
-    // these are server treatments for processing updates
-    // from SmartThings and Hubitat hubs
-    // this is done in the "changeHandler" function
+    // POST api calls are handled here including those sent from ST and HE hubs
+    // to process changes made outside of HP
+    // from SmartThings and Hubitat hubs this is done in the "changeHandler" function
     // found in the HousePanel.groovy application with this line
     //     postHub(state.directIP, state.directPort, "update", deviceName, deviceid, attr, value)
     // *********************************************************************************************
@@ -7078,12 +7158,9 @@ if ( app && applistening ) {
         // handle callbacks from ST and HE here
         // for ISY this is done via websockets above
         } else if ( req.body['msgtype'] === "update" ) {
-            if ( DEBUG2 ) {
-                console.log( (ddbg()), "Received update msg from hub: ", req.body["hubid"], " body: ", req.body);
-            }
             var msg = processHubMessage(req.body);
-            if ( DEBUG17 ) {
-                console.log( (ddbg()), msg );
+            if ( DEBUG18 ) {
+                console.log( (ddbg()), "Received update msg from hub: ", req.body["hubid"], " body: ", req.body, " msg: ", msg);
             }
             res.json(msg);
 

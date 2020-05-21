@@ -1368,19 +1368,19 @@ div.clock-thing.analog div.clock.tzone {
 }
 
 /* do not display these items */
-div.checkInterval, div.switchlevel.checkInterval, div.switchlevel.indicatorStatus, 
-div.switch.checkInterval, div.motion.checkInterval, div.switch.indicatorStatus, 
-div.contact.checkInterval,
+div.overlay._indicatorWhenOn, div.overlay._indicatorWhenOff, div.overlay._indicatorNever, 
+div.overlay.indicatorStatus, div.overlay._checkInterval,
 div.switch.colorTemperature, div.lock.checkInterval,
 div.lock.codeChanged, div.lock.lockCodes, div.lock.scanCodes,
 div.lock.codeReport, div.lock.maxCodes, div.lock.maxCodeLength,
 div.lock.minCodeLength, div.lock.codeLength,
 div.thing div.thingname.blank, div.thing div.thingname.clock, div.thing div.thingname.video,
-div.thing div.thingname.image, div.thing div.thingname.routine, div.thing div.overlay.healthStatus,
+div.thing div.thingname.image, div.thing div.thingname.routine, div.overlay.healthStatus,
 div.thing.frame-thing div.overlay.status,
 div.valve.switch, div.valve.contact, div.valve.stopWatering, div.valve.log,
 div.clock.tzone, div.thingname.mode, div.bulb.colorMode, div.light.colorMode,
-div.illuminance-thing .overlay.temperature 
+div.illuminance-thing div.overlay.temperature,
+div.overlay.occupancy
 {
     display:none;
 }
