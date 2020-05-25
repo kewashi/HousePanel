@@ -1,7 +1,12 @@
 'use strict';
 
 const devhistory =  ` 
-2.260   Fix long-standing bug for user login issues
+2.270   Rewrote login and username module to work as designed in old PHP version
+            - with this upgrade user logins have their own config setup
+            - this also implements encrypted cookies for more security
+            - fixed color light bug for user in ST (thanks)
+            - Accuweather tile icon fix
+2.260   Fix long-standing bug for user login issues (didn't work)
             - add support for album art for legacy music tiles used by Hubitat
             - finally... fix color updates from hub refreshes to work properly
             - harden logic for hidden tiles in the editor
@@ -442,8 +447,10 @@ exports.hidden = function hidden(pname, pvalue, id) {
     return inpstr;
 }
 
-exports.getHeader = function getHeader(skin) {
+exports.getHeader = function getHeader(skin, islogin) {
     
+    var skip = ( typeof islogin !== "undefined" && islogin ) ;
+
     var $tc = '<!DOCTYPE html>';
     $tc += '<html><head><title>HousePanel</title>';
     $tc += '<meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">';
@@ -467,35 +474,40 @@ exports.getHeader = function getHeader(skin) {
     // include hack from touchpunch.furf.com to enable touch punch through for tablets
     $tc += '<script src="jquery.ui.touch-punch.min.js"></script>';
     
-    // minicolors library
-    $tc += '<script src="jquery.minicolors.min.js"></script>';
-    $tc += '<link rel="stylesheet" href="jquery.minicolors.css">';
+    if ( !skip ) {
+        // minicolors library
+        $tc += '<script src="jquery.minicolors.min.js"></script>';
+        $tc += '<link rel="stylesheet" href="jquery.minicolors.css">';
 
-    // analog clock support
-    $tc += '<!--[if IE]><script type="text/javascript" src="excanvas.js"></script><![endif]-->';
-    $tc += '<script type="text/javascript" src="coolclock.js"></script>';
+        // analog clock support
+        $tc += '<!--[if IE]><script type="text/javascript" src="excanvas.js"></script><![endif]-->';
+        $tc += '<script type="text/javascript" src="coolclock.js"></script>';
+    }
     
     // load main script file
     $tc += '<script type="text/javascript" src="housepanel.js"></script>';  
-    
-    // check for valid skin folder
-    if (!skin) {
-        skin = "skin-housepanel";
-    }
     
     // load tile editor fixed css file with cutomization helpers
     $tc += "<script type='text/javascript' src='tileeditor.js'></script>";
     $tc += "<link id='tileeditor' rel='stylesheet' type='text/css' href='tileeditor.css'>";	
 
-    // load tile customizer
-    $tc += '<script type="text/javascript" src="customize.js"></script>';
+    if ( !skip ) {
 
-    // load the main css file
-    $tc += "<link rel=\"stylesheet\" type=\"text/css\" href=\"" + skin + "/housepanel.css\">";
+        // load tile customizer
+        $tc += '<script type="text/javascript" src="customize.js"></script>';
+        
+        // check for valid skin folder
+        if (!skin) {
+            skin = "skin-housepanel";
+        }
 
-    // load the custom tile sheet if it exists
-    // replaced logic to make customizations skin specific
-    $tc += "<link id=\"customtiles\" rel=\"stylesheet\" type=\"text/css\" href=\"" + skin + "/customtiles.css\">";
+        // load the main css file
+        $tc += "<link rel=\"stylesheet\" type=\"text/css\" href=\"" + skin + "/housepanel.css\">";
+
+        // load the custom tile sheet if it exists
+        // replaced logic to make customizations skin specific
+        $tc += "<link id=\"customtiles\" rel=\"stylesheet\" type=\"text/css\" href=\"" + skin + "/customtiles.css\">";
+    }
     
     // begin creating the main page
     $tc += '</head><body>';

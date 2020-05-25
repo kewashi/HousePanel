@@ -519,7 +519,7 @@ div.thing.thermostat-thing{
 
 /* round temperature value inside a thermostat */
 div.overlay.temperature div.temperature,
-div.weather.temperature, div.weather.feelsLike {
+div.weather.temperature, div.weather.feelsLike, div.weather.realFeel {
     display: inline-block;
     background-color: #006666;
     color: #ffffee;
@@ -681,8 +681,10 @@ div.thing.weather-thing {
     text-align: center;
     height: auto;
 }
-div.overlay.temperature div.weather.temperature, div.overlay.feelsLike div.weather.feelsLike {
-    display: inline-block;
+div.overlay.temperature div.weather.temperature, 
+div.overlay.feelsLike div.weather.feelsLike,
+div.overlay.realFeel div.weather.realFeel {
+        display: inline-block;
     width: 118px;
     background-color: #006666;
     color: #ffffee;

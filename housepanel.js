@@ -50,7 +50,7 @@ Number.prototype.pad = function(size) {
 function setCookie(cname, cvalue, exdays) {
     if ( !exdays ) exdays = 30;
     var d = new Date();
-    d.setTime(d.getTime() + (exdays*24*60*60*1000));
+    d.setTime(d.getTime() + (exdays*24*3600*1000));
     var expires = "expires="+ d.toUTCString();
     document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
 }
@@ -214,7 +214,7 @@ $(document).ready(function() {
                 $("#"+defaultTab).click();
             } catch (e) {
                 defaultTab = $("#roomtabs").children().first().attr("aria-labelledby");
-                setCookie('defaultTab', defaultTab, 30);
+                setCookie('defaultTab', defaultTab, 365);
                 try {
                     $("#"+defaultTab).click();
                 } catch (f) {
@@ -499,9 +499,10 @@ function setupWebsocket()
         
             // change not present to absent for presence tiles
             // it was an early bad design decision to alter ST's value that I'm now stuck with
-            if ( pvalue["presence"] && pvalue["presence"] ==="not present" ) {
-                pvalue["presence"] = "absent";
-            }
+            // nope ... removed it
+            // if ( pvalue["presence"] && pvalue["presence"] ==="not present" ) {
+            //     pvalue["presence"] = "absent";
+            // }
 
             // console.log("websocket tile update. id: ", bid, " type: ", thetype, " pvalue: ", pvalue);
             // update all the tiles that match this type and id
@@ -538,9 +539,9 @@ function setupWebsocket()
 
                     // change not present to absent for presence tiles
                     // it was an early bad design decision to alter ST's value that I'm now stuck with
-                    if ( subid==="presence" && value==="not present" ) {
-                        value = "absent";
-                    }
+                    // if ( subid==="presence" && value==="not present" ) {
+                    //     value = "absent";
+                    // }
 
                     // swap out the class and change value
                     // this should match logic in hpserver.js in putElement routine
@@ -1400,6 +1401,7 @@ function execButton(buttonid) {
 
         // save our username and password info
         // this is in the tsk function
+
         var uobj = formToObject("userpw");
         dynoPost("saveuserpw", uobj);
 
@@ -1425,8 +1427,19 @@ function execButton(buttonid) {
 
     } else if ( buttonid==="dologin") {
         var genobj = formToObject("loginform");
-        // alert("logging in");
-        dynoPost("dologin", genobj, true);
+        // function dynoPost(ajaxcall, body, id, type, value, attr, reload, callback) {
+        dynoPost("dologin", genobj, false, false, false, false, false, function(presult, pstatus) {
+            if ( presult==="error" ) {
+                console.log("login not successful for username: ", uname);
+            } else {
+                var uname = presult.uname;
+                console.log("successful login. username: ", uname);
+            }
+
+            setTimeout( function() {
+                window.location.href = cm_Globals.returnURL;
+            }, 1000);
+        });
 
     } else if ( buttonid === "blackout") {
         // blank out screen with a black box size of the window and pause timers
@@ -1917,7 +1930,7 @@ function addEditLink() {
                             var defaultTab = getCookie( 'defaultTab' );
                             if ( defaultTab === clickid ) {
                                 defaultTab = $("#roomtabs").children().first().attr("aria-labelledby");
-                                setCookie('defaultTab', defaultTab, 30);
+                                setCookie('defaultTab', defaultTab, 365);
                             }
                         } else {
                             console.log(presult);
@@ -2265,6 +2278,11 @@ function updateTile(aid, presult, skiplink) {
             }
         }
 
+        // skip objects
+        if ( dothis && ( typeof value==="object" || ( typeof value==="string" && value.startsWith("{") ) ) ) {
+            dothis = false;
+        }
+
         // only take action if this key is found in this tile and not a dup
         if ( dothis ) {
             dothis[key] = true;
@@ -2280,9 +2298,10 @@ function updateTile(aid, presult, skiplink) {
                 var powmod = parseInt(value);
                 powmod = powmod - (powmod % 10);
                 value = "<div style=\"width: " + powmod.toString() + "%\" class=\"ovbLevel L" + powmod.toString() + "\"></div>";
-            // handle weather icons
+
+            // handle weather icons that were not converted
             // updated to address new integer indexing method in ST
-            } else if ( key==="weatherIcon" || key==="forecastIcon") {
+            } else if ( (key==="weatherIcon" || key==="forecastIcon") && !isNaN(+value) ) {
                 var icondigit = parseInt(value,10);
                 var iconimg;
                 if ( Number.isNaN(icondigit) ) {
@@ -2388,7 +2407,7 @@ function setupTabclick() {
         // save this tab for default next time
         var defaultTab = $(this).attr("id");
         if ( defaultTab ) {
-            setCookie( 'defaultTab', defaultTab, 30 );
+            setCookie( 'defaultTab', defaultTab, 365 );
         }
     });
 }
@@ -2640,6 +2659,7 @@ function setupTimer(timerval, timertype, hubnum) {
                                             if ( thevalue["currentArtist"] ) { delete thevalue["currentArtist"]; }
                                             if ( thevalue["currentAlbum"] ) { delete thevalue["currentAlbum"]; }
                                         }
+                                        if ( strtype==="weather" && thevalue[forecast] ) { delete thevalue["forecast"]; }
                                         updateTile(aid, thevalue); 
                                     }
                                 }
@@ -2869,6 +2889,12 @@ function processClick(that, thingname) {
         targetid = '#a-'+aid+'-'+subid;
     }
 
+    // get the username for this click since it is easier than processing the cookie
+    // cookies will be used as a fallback just in case
+    var ujq = $("#infoname");
+    var uname = ujq ? ujq.text() : "";
+    // alert("uname = " + uname);
+
     // all hubs now use the same doaction call name
     var ajaxcall = "doaction";
     var thevalue = $(targetid).html();
@@ -2940,7 +2966,7 @@ function processClick(that, thingname) {
         };
 
         $.post(cm_Globals.returnURL, 
-            {useajax: ajaxcall, id: bid, type: thetype, value: thevalue, 
+            {useajax: ajaxcall, id: bid, type: thetype, value: thevalue, uname: uname,
                 attr: subid, subid: subid, hubid: hubnum},
             function(presult, pstatus) {
                 if (pstatus==="success") {
@@ -2990,7 +3016,7 @@ function processClick(that, thingname) {
             console.log(subid, "clicked. bid: ", bid, " type: ", thetype, " value: ", thevalue, 
                                " attr: ", theattr, " hubnum: ", hubnum, " command: ", command, " linkval: ", linkval );
             $.post(cm_Globals.returnURL, 
-                {useajax: ajaxcall, id: bid, type: thetype, value: thevalue, 
+                {useajax: ajaxcall, id: bid, type: thetype, value: thevalue, uname: uname,
                  attr: theattr, subid: "switch", hubid: hubnum, command: command, linkval: linkval} );
         });
 
@@ -3054,7 +3080,7 @@ function processClick(that, thingname) {
         // values returned from actions are pushed in another place now
         // alert("API call: " + ajaxcall + " bid: " + bid + " type: " + thetype + " value: " + thevalue);
         $.post(cm_Globals.returnURL, 
-               {useajax: ajaxcall, id: bid, type: thetype, value: thevalue, 
+               {useajax: ajaxcall, id: bid, type: thetype, value: thevalue, uname: uname, 
                 attr: theattr, subid: subid, hubid: hubnum, command: command, linkval: linkval},
                function (presult, pstatus) {
                     if (pstatus==="success" && typeof presult==="object" ) {
