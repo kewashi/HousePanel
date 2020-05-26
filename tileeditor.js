@@ -2020,7 +2020,7 @@ function initColor(str_type, subid, thingindex) {
                 console.log("hidden #", i, ": ", status);
             }
         }
-        console.log("hidden info: ", ishidden);
+        // console.log("hidden info: ", ishidden);
         $("#isHidden").prop("checked", ishidden);
     }
     

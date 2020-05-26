@@ -1329,7 +1329,7 @@ function getLoginPage(uname) {
     $tc += utils.hidden("type", "none");
     $tc += "<div>";
     $tc += "<label for=\"uname\" class=\"startupinp\">Username: </label>";
-    $tc += "<input id=\"uname\" name=\"uname\" width=\"20\" type=\"text\" value=\"\"/>"; 
+    $tc += "<input id=\"uname\" name=\"uname\" width=\"20\" type=\"text\" value=\"" + uname + "\"/>"; 
     $tc += "<br /><br />";
     $tc += "<label for=\"pword\" class=\"startupinp\">Password: </label>";
     $tc += "<input id=\"pword\" name=\"pword\" width=\"40\" type=\"password\" value=\"\"/>"; 
@@ -6352,9 +6352,7 @@ function apiCall(body, protocol, req, res) {
         case "refactor":
             if ( protocol==="POST" ) {
                 // TODO: this does not yet work so it was removed from menu
-                // note really needed any more - it just renumbers tiles
-                // the same effect can be had by deleting your hmoptions.cfg file
-                // but this will remove all customizations. This routine attempted to save them but it isn't working right now
+                // note really needed any more given how reorder and absolute positioning now works
                 // refactorOptions(uname);
                 result = "success";
             } else {
@@ -6389,7 +6387,8 @@ function apiCall(body, protocol, req, res) {
                 if ( uid && array_key_exists(uid, GLB.options) && swval && is_array(swval) ) {
                     GLB.options[uid] = swval;
                     allthings[idx]["value"] = getCustomTile(allthings[idx]["value"], swtype, swid);
-                    writeRoomThings(GLB.options, uname);
+                    writeOptions(GLB.options);
+                    // writeRoomThings(GLB.options, uname);
                     result = allthings[idx]["value"];
                 } else {
                     result = "error - invalid request to update user Options";

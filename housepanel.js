@@ -224,6 +224,41 @@ $(document).ready(function() {
         }
     }
     
+    // create key bindings for the login screen
+    if ( pagename==="login" ) {
+        var unamere = /^\D\S{3,}$/;      // start with a letter and be four long at least
+        // $("#uname").val("default");
+        $("#uname").focus();
+        $("#loginform").on("keydown", function() {
+            if ( e.which===27  ){
+                $("#uname").val("");
+                $("#pword").val("");
+            }
+        });
+
+        $("#uname").on("keydown",function(e) {
+            var unameval = $("#uname").val();
+            if ( e.which===13 || e.which===9  ){
+                var msg = checkInpval("username", unameval, unamere);
+                if ( msg ) {
+                    $("#uname").focus();
+                    alert(msg);
+                } else {
+                    $("#pword").val("");
+                    $("#pword").focus();
+                }
+                // e.stopPropagation();
+            }
+        });
+
+        $("#pword").on("keydown",function(e) {
+            if ( e.which===13 ){
+                execButton("dologin");
+                e.stopPropagation();
+            }
+        });
+    }
+
     // load things and options
     if ( pagename!=="login" ) {
         getAllthings();
@@ -267,6 +302,18 @@ $(document).ready(function() {
     }, 1000);
 
 });
+
+function checkLogin() {
+    var pwordre = /^\S{6,}$/;        // start with anything but no white space and at least 6 digits 
+    var pwordval = $("#pword").val();
+    var msg = checkInpval("password", pwordval, pwordre);
+    if ( pwordval!=="" && msg ) {
+        $("#pword").focus();
+        alert(msg);
+        return false;
+    }
+    return true;
+}
 
 function getHub(hubnum) {
     var ahub = null;
@@ -1426,6 +1473,9 @@ function execButton(buttonid) {
         $("#filteroptions")[0].reset();
 
     } else if ( buttonid==="dologin") {
+
+        if ( !checkLogin() ) { return; }
+
         var genobj = formToObject("loginform");
         // function dynoPost(ajaxcall, body, id, type, value, attr, reload, callback) {
         dynoPost("dologin", genobj, false, false, false, false, false, function(presult, pstatus) {
@@ -1521,6 +1571,14 @@ function updateFilters() {
     dynoPost("filteroptions", fobj);
 }
 
+function checkInpval(field, val, regexp) {
+    var errs = "";
+    if ( !regexp.test(val) ) {
+        errs = "field: " + field + "= " + val + " is not a valid entry";
+    }
+    return errs;
+}
+
 function checkInputs() {
 
     var port = $("input[name='port']").val().trim();
@@ -1532,50 +1590,30 @@ function checkInputs() {
 
     var errs = {};
     var isgood = true;
-    var intre = /^\d{1,}$/;         // only digits allowed and must be more than 1024
+    var intre = /^\d{1,6}$/;         // only up to 6 digits allowed
     var unamere = /^\D\S{3,}$/;      // start with a letter and be four long at least
     var pwordre = /^\S{6,}$/;        // start with anything but no white space and at least 6 digits 
 
-    if ( port ) {
-        var i = parseInt(port, 10);
-        if ( !intre.test(port) || (i > 0 && i < 1024) || i > 65535 ) {
-            errs.port = " " + port + ", Must be 0 or an integer between 1024 and 65535";
-            isgood = false;
-        }
-    }
-    if ( webSocketServerPort ) {
-        var j = parseInt(webSocketServerPort, 10);
-        if ( !intre.test(webSocketServerPort)  || (j > 0 && j < 1024) || j > 65535 ) {
-            errs.webSocketServerPort = " " + webSocketServerPort + ", Must be 0 or an integer between 1024 and 65535";
-            isgood = false;
-        }
-    }
-
-    if ( !intre.test(fast_timer) ) {
-        errs.fast_timer = " " + fast_timer + ", must be an integer; enter 0 to disable";
-        isgood = false;
-    }
-    if ( !intre.test(slow_timer) ) {
-        errs.slow_timer = " " + slow_timer + ", must be an integer; enter 0 to disable";
-        isgood = false;
-    }
-    if ( uname!=="admin" && uname!=="default" && !unamere.test(uname) ) {
-        errs.uname = " " + uname + ", must begin with a letter and be at least 3 characters long";
-        isgood = false;
-    }
-    if ( pword!=="" && !pwordre.test(pword) ) {
-        errs.pword = ", must be blank or at least 6 characters long";
-        isgood = false;
-    }
+    errs.webSocketServerPort = checkInpval("webSocketServerPort", webSocketServerPort, intre);
+    errs.port = checkInpval("port", port, intre);
+    errs.fast_timer = checkInpval("fast_timer", fast_timer, intre);
+    errs.slow_timer = checkInpval("slow_timer", slow_timer, intre);
+    errs.uname = checkInpval("username", uname, unamere);
+    errs.pword = pword==="" ? "" : checkInpval("password", pword, pwordre);
 
     // show all errors
-    if ( !isgood ) {
-        var str = "";
-        $.each(errs, function(key, val) {
+    var str = "";
+    $.each(errs, function(key, val) {
+        if ( val ) {
             str = str + "Invalid " + key + val + "\n"; 
-        });
+        }
+    });
+
+    if ( str ) {
         alert(str);
+        isgood = false;
     }
+
     return isgood;
 }
 
@@ -1625,9 +1663,14 @@ function setupButtons() {
 
     if ( pagename==="main" && !cm_Globals.disablepub ) {
 
+        // prevent mode from changing when editing a tile
         $("div.modeoptions").on("click","input.radioopts",function(evt){
-            var opmode = $(this).attr("value");
-            execButton(opmode);
+            if ( modalStatus === 0  ) {
+                var opmode = $(this).attr("value");
+                execButton(opmode);
+            } else {
+                console.log("warning: attempted to change operating mode while a dialog box is open.");
+            }
             evt.stopPropagation();
         });
         
@@ -2659,7 +2702,7 @@ function setupTimer(timerval, timertype, hubnum) {
                                             if ( thevalue["currentArtist"] ) { delete thevalue["currentArtist"]; }
                                             if ( thevalue["currentAlbum"] ) { delete thevalue["currentAlbum"]; }
                                         }
-                                        if ( strtype==="weather" && thevalue[forecast] ) { delete thevalue["forecast"]; }
+                                        if ( strtype==="weather" && thevalue["forecast"] ) { delete thevalue["forecast"]; }
                                         updateTile(aid, thevalue); 
                                     }
                                 }
