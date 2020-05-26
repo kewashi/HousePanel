@@ -25,7 +25,7 @@ const DEBUG18 = false;              // ST and HE hub messages
 const MQTTPOLY = false;             // subscribe to and log polyglot via MQTT
 const MQTTHP = false;               // subscribe to and log HP via MQTT
 const IGNOREPW = false;             // set this to true to accept any text as a valid password
-const DONATE = false;               // set this to true to enable donation section
+const DONATE = true;                // set this to true to enable donation section
 const ENABLERULES = true;           // set this to false to neuter all rules
 
 // websocket and http servers
@@ -42,7 +42,7 @@ var crypto = require('crypto');
 const UTIL = require('util');
 const mqtt = require('mqtt');
 const os = require('os');
-// const tls = require('tls');
+var cookieParser = require('cookie-parser');
 
 const defaultrooms = {
     "Kitchen": "clock|kitchen|sink|pantry|dinette" ,
@@ -54,10 +54,8 @@ const defaultrooms = {
     "Music": "clock|sonos|music|tv|television|alexa|echo|stereo|bose|samsung|pioneer"
 };
 
-
 // load supporting modules
 var utils = require("./utils");
-var cookieParser = require('cookie-parser');
 
 // global variables are all part of GLB object plus clients and allthings
 var GLB = {};
@@ -3671,20 +3669,19 @@ function execRules(swtype, istart, testcommands, pvalue) {
                 // }
                 if ( hub ) {
 
-                    // if target subid isn't there, create one for every user
-                    // and adjust what gets sent to the hub call
+                    // if target subid isn't there, create one 
                     var linkinfo = false;
-                    if ( array_key_exists("user_" + rsubid, allthings[ridx]["value"]) || 
-                         !array_key_exists(rsubid, allthings[ridx]["value"]) ) {
+                    if ( !rsubid.startsWith("int_") && rsubid.startsWith("state_") && 
+                            ( array_key_exists("user_" + rsubid, allthings[ridx]["value"]) || 
+                              !array_key_exists(rsubid, allthings[ridx]["value"])             ) ) {
                         try {
-                            var pwords = GLB.options.config.pword;
-                            for ( var uname in pwords ) {
-                                addCustom(uname, rswid, rswtype, "TEXT", rvalue, rsubid);
-                            }
-                        } catch (e) {}
-                        linkinfo = [rswid, rswtype, rsubid, rsubid, "TEXT"];
+                            addCustom("default", rswid, rswtype, "TEXT", rvalue, rsubid);
+                            linkinfo = [rswid, rswtype, rsubid, rsubid, "TEXT"];
+                        } catch (e) {
+                            linkinfo = false;
+                        }
                         if ( DEBUG11 ) {
-                            console.log("custom value: ", rvalue, " allthingval: ", allthings[ridx].value);
+                            console.log("custom value: ", rvalue, " allthing value: ", allthings[ridx].value);
                         }
                     }
 
@@ -4890,6 +4887,16 @@ function getInfoPage(uname, returnURL, pathname) {
     $tc += utils.getHeader(skin, true);
     $tc += "<h3>" + utils.APPNAME + " Information Display</h3>";
 
+    if ( DONATE===true ) {
+        $tc += '<br /><h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
+            <br /><div><form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank"> \
+            <input type="hidden" name="cmd" value="_s-xclick"> \
+            <input type="hidden" name="hosted_button_id" value="XS7MHW7XPYJA4"> \
+            <input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!"> \
+            <img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1"> \
+            </form></div>';
+    }
+
     $tc += "<form>";
     $tc += utils.hidden("returnURL", returnURL);
     $tc += utils.hidden("pathname", pathname);
@@ -4897,8 +4904,7 @@ function getInfoPage(uname, returnURL, pathname) {
     $tc += "</form>";
     $tc += "<div class=\"infopage\">";
     $tc += "<div class='bold'>Site url = " + returnURL + "</div>";
-    $tc += '<span id="infoname">' + uname + "</span><span> - V" + utils.HPVERSION + '</span>';
-    $tc += "<div class='bold'>Current user = " + "<span id='infoname'>" + uname + "</span></div>";
+    $tc += "<div id='infoname' class='bold'>Current user = " + uname + "</div>";
     $tc += "<div class='bold'>Skin folder = " + skin + "</div>";
     $tc += "<div class='bold'>" + hubs.length + " Hubs active</div>";
     $tc += "<hr />";
@@ -6033,19 +6039,18 @@ function pw_verify(pword, hash) {
 // the swval here is actually custom type
 function addCustom(uname, swid, swtype, customtype, customval, subid) {
     var reserved = ["index","rooms","things","config","control","time","useroptions"];
-    var options = GLB.options;
     var userid = "user_" + swid;
 
     // legacy custom types
-    if ( array_key_exists(swid, options) && 
+    if ( array_key_exists(swid, GLB.options) && 
             !in_array (swid, reserved) && 
-            !array_key_exists(userid, options) ) {
+            !array_key_exists(userid, GLB.options) ) {
         userid = swid;
     }
 
     var oldcustoms;
-    if ( array_key_exists(userid, options) ) {
-        oldcustoms = clone(options[userid]);
+    if ( array_key_exists(userid, GLB.options) ) {
+        oldcustoms = clone(GLB.options[userid]);
     } else {
         oldcustoms = [];
     }
@@ -6076,8 +6081,9 @@ function addCustom(uname, swid, swtype, customtype, customval, subid) {
         newoptitem.push(newitem);
     }
 
-    options[userid] = newoptitem;
-    writeRoomThings(options, uname);
+    GLB.options[userid] = newoptitem;
+    writeOptions(GLB.options);
+    // writeRoomThings(options, uname);
     var idx = swtype + "|" + swid;
     
     // make the new custom field using the updated options above
@@ -6126,8 +6132,8 @@ function delCustom(uname, swid, swtype, swval, swattr, subid) {
         } else {
             GLB.options[userid] = lines;
         }
-
-        writeRoomThings(GLB.options, uname);
+        writeOptions(GLB.options);
+        // writeRoomThings(GLB.options, uname);
     }
     
     var idx = swtype + "|" + swid;
@@ -6547,7 +6553,6 @@ function apiCall(body, protocol, req, res) {
             if ( protocol==="POST" ) {
                 result = {}
                 result.value = addCustom(uname, swid, swtype, swval, swattr, subid);
-                // readOptions("addcustom", req.cookies);
                 result.options = GLB.options;
                 result.things = allthings;
             } else {
@@ -6559,7 +6564,6 @@ function apiCall(body, protocol, req, res) {
             if ( protocol==="POST" ) {
                 result = {}
                 result.value = delCustom(uname, swid, swtype, swval, swattr, subid);
-                // readOptions("delcustom", req.cookies);
                 result.options = GLB.options;
                 result.things = allthings;
             } else {
@@ -6567,24 +6571,6 @@ function apiCall(body, protocol, req, res) {
             }
             break;
 
-        case "updcustom":
-            if ( protocol==="POST" ) {
-                result = {}
-                // tile customizer has updated the list of options
-                // this api call is used to update things so we stay in sync
-                // readOptions("updcustom", req.cookies);
-                result.options = GLB.options;
-                var idx = swtype + "|" + swid;
-                var pvalue = allthings[idx].value;
-                pvalue = getCustomTile(pvalue, swtype, swid);
-                pvalue = returnFile(pvalue, swtype);
-                allthings[idx]["value"] = pvalue;
-                result.things = allthings;
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-            break;
-                
         case "icons":
         case "geticons":
             result = getIcons(uname, swval, swattr);

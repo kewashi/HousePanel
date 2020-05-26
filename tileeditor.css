@@ -133,13 +133,13 @@ div.greetingopts div.hubopt {
     width: auto; height: 22px; padding-top: 0px;
     text-align: left; 
 }
-#infoname {
+div.showversion #infoname {
     color: white;
     background-color: none;
     cursor: pointer;
     font-size: 14pt;
 }
-#infoname:hover {
+div.showversion #infoname:hover {
     color: black;
     background-color: white;
 }

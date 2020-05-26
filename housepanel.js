@@ -1367,7 +1367,7 @@ function dynoPost(ajaxcall, body, id, type, value, attr, reload, callback) {
         $.post(cm_Globals.returnURL, body, callback);
 
     } else {
-        console.log(cm_Globals);
+        // console.log(cm_Globals);
         $.post(cm_Globals.returnURL, body,
             function (presult, pstatus) {
                 if ( isreload && pstatus==="success" ) {

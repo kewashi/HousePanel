@@ -1,6 +1,8 @@
 'use strict';
 
 const devhistory =  ` 
+2.271   Bug fixes to the last update - minor but important if using customizer
+            - restored the donate option since I am staying in hobby mode
 2.270   Rewrote login and username module to work as designed in old PHP version
             - with this upgrade user logins have their own config setup
             - this also implements encrypted cookies for more security
