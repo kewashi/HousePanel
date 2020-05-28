@@ -2,6 +2,9 @@
 
 const devhistory =  ` 
 2.272   Login convenience features - return key and error checking
+            - update tile editor to allow multiple tile options
+            - upgrade rules to properly make TEXT fields when needed
+            - bug fixes as usual
 2.271   Bug fixes to the last update - minor but important if using customizer
             - restored the donate option since I am staying in hobby mode
 2.270   Rewrote login and username module to work as designed in old PHP version

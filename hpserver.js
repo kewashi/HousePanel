@@ -2486,7 +2486,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
 
                         // fix up field that holds the trackImage
                         // >https:\\/\\/i.scdn.co\\/image\\/ab67616d0000b27333c6e0cbfb0b169671e7945e<  1<
-                        if ( (jtkey==="trackImage" ) && jtval.indexOf("http")!==-1 ) {
+                        if ( (jtkey==="trackImage" ) && typeof jtval==="string" && jtval.indexOf("http")!==-1 ) {
                             var j1 = jtval.indexOf(">http") + 1;
                             var j2 = jtval.indexOf("<", j1+1);
                             if ( j1===-1 || j2===-1) {
@@ -3631,8 +3631,11 @@ function execRules(swtype, istart, testcommands, pvalue) {
                 var idxitems = ridx.split("|");
                 var rswtype = idxitems[0];
                 var rswid = idxitems[1];
+                var hubid = allthings[ridx]["hubnum"];
+                var hub = findHub(hubid);
 
                 // handle requests for parameters of the trigger tile ($) or destination tile (@)
+                // disable hub calls for this type of rule
                 var trigtype = rvalue.substr(0,1);
                 if ( trigtype==="$" || trigtype==="@" ) {
                     var trigsubid = rvalue.substr(1);
@@ -3641,50 +3644,46 @@ function execRules(swtype, istart, testcommands, pvalue) {
                     } else if ( trigtype==="@" && array_key_exists(trigsubid, allthings[ridx]["value"]) ) {
                         rvalue = allthings[ridx]["value"][trigsubid];
                     }
-                    if ( array_key_exists(rsubid, allthings[ridx]["value"]) ) {
-                        allthings[ridx]["value"][rsubid] = rvalue;
-                        var companion = "user_"+rsubid;
-                        if ( array_key_exists(companion, allthings[ridx]["value"]) ) {
-                            allthings[ridx]["value"][companion] = "::TEXT::" + rvalue;
-                        }
-                    }
                 }
 
                 // fix up ISY hubs
                 if ( rswtype==="isy" && rvalue==="on" ) { rvalue = "DON"; }
                 if ( rswtype==="isy" && rvalue==="off" ) { rvalue = "DOF"; }
 
-                if ( rsubid==="level" || rsubid==="colorTemperature" ) {
-                    rswattr= "level";
-                } else if ( rsubid==="switch" || swtype==="isy" || (swval!=="on" && swval!=="off") ) {
-                    rswattr="";
-                } else if ( !rswattr && rswtype!=="isy" ) {
-                    var swval = rvalue==="on" ? "off" : "on";
-                    rswattr= swtype + " p_" + rtileid + " " + swval;
-                }
-                var hubid = allthings[ridx]["hubnum"];
-                var hub = findHub(hubid);
-                // if ( DEBUG11 ) {
-                //     console.log( (ddbg()), "RULE debug: exec step #", i, " hubid: ", hubid, " vals: ", rswid, rswtype, rvalue, rswattr, rsubid);
-                // }
-                if ( hub ) {
-
-                    // if target subid isn't there, create one 
-                    var linkinfo = false;
-                    if ( !rsubid.startsWith("int_") && rsubid.startsWith("state_") && 
-                            ( array_key_exists("user_" + rsubid, allthings[ridx]["value"]) || 
-                              !array_key_exists(rsubid, allthings[ridx]["value"])             ) ) {
-                        try {
-                            addCustom("default", rswid, rswtype, "TEXT", rvalue, rsubid);
-                            linkinfo = [rswid, rswtype, rsubid, rsubid, "TEXT"];
-                        } catch (e) {
-                            linkinfo = false;
-                        }
-                        if ( DEBUG11 ) {
-                            console.log("custom value: ", rvalue, " allthing value: ", allthings[ridx].value);
-                        }
+                // set the destination to the value which would typically be overwritten by hub call
+                // if the destination is a link force the link to a TEXT type to neuter other types
+                var linkinfo = false;
+                if ( array_key_exists(rsubid, allthings[ridx]["value"]) ) {
+                    allthings[ridx]["value"][rsubid] = rvalue;
+                    var companion = "user_"+rsubid;
+                    if ( array_key_exists(companion, allthings[ridx]["value"]) ) {
+                        allthings[ridx]["value"][companion] = "::TEXT::" + rvalue;
+                        linkinfo = [rswid, rswtype, rsubid, rsubid, "TEXT"];
                     }
+                // if destination subid isn't found make a user TEXT field
+                } else {
+                    addCustom("default", rswid, rswtype, "TEXT", rvalue, rsubid);
+                    linkinfo = [rswid, rswtype, rsubid, rsubid, "TEXT"];
+                    console.log((ddbg()), " new custom field: ", rsubid, " created in tile: ", allthings[ridx].value);
 
+                    // restart all clients to show the newly created field
+                    // this only happens the first time the rule is triggered
+                    pushClient("reload", "/");
+                }
+
+                // handle level sliders and the funky attr values for other tiles
+                if ( linkinfo==="" ) {
+                    if ( rsubid==="level" || rsubid==="colorTemperature" ) {
+                        rswattr= "level";
+                    } else if ( rsubid==="switch" || swtype==="isy" || (swval!=="on" && swval!=="off") ) {
+                        rswattr="";
+                    } else if ( !rswattr && rswtype!=="isy" ) {
+                        var swval = rvalue==="on" ? "off" : "on";
+                        rswattr= swtype + " p_" + rtileid + " " + swval;
+                    }
+                }
+
+                if ( hub ) {
                     // make the hub call now or delayed
                     if ( delay && delay > 0 ) {
                         setTimeout( function() {
@@ -3867,6 +3866,8 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
 }
 
 function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrule) {
+    if ( !hub ) { return false; }
+    
     var access_token = hub["hubAccess"];
     var endpt = hub["hubEndpt"];
     var result = "success";
@@ -4233,7 +4234,7 @@ function translateAudio(pvalue) {
 }
 
 function findHub(hubid) {
-    var hub =  GLB.options.config["hubs"][0];
+    var hub = false;
     for (var h in  GLB.options.config["hubs"]) {
         var ahub =  GLB.options.config["hubs"][h];
         if ( ahub["hubId"]===hubid ) { hub = ahub; }
@@ -4265,28 +4266,28 @@ function updateHubs(newhub, oldid) {
     return found;
 }
 
+function testclick(clktype, clkid) {
+    var test = false;
+    if ( clkid.startsWith("_") || clkid.endsWith("-up") || clkid.endsWith("-dn") ) {
+        return test;
+    }
+
+    if (  clktype==="contact" || clktype==="presence" || clktype==="motion" || clktype==="weather" || clktype==="clock" ||
+          (clktype==="isy" && clkid.startsWith("int_")) ||
+          (clktype==="isy" && clkid.startsWith("state_")) ||
+          clkid==="temperature" || clkid==="name" || clkid==="contact" || clkid==="battery" ||
+          clkid==="date" || clkid==="time" || clkid==="weekday" || clkid==="tzone" ||
+          clkid==="heatingSetpoint" || clkid==="coolingSetpoint" ||
+          clkid==="presence" || clkid==="motion" || clkid.startsWith("event_") )  {
+        test = true;
+    }
+    return test;
+}
+
 function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, linkval, protocol) {
 
     var response = {};
     var idx;
-
-    function testclick(clktype, clkid) {
-        var test = false;
-        if ( clkid.startsWith("_") || clkid.endsWith("-up") || clkid.endsWith("-dn") ) {
-            return test;
-        }
-
-        if (  clktype==="contact" || clktype==="presence" || clktype==="motion" || clktype==="weather" || clktype==="clock" ||
-              (clktype==="isy" && clkid.startsWith("int_")) ||
-              (clktype==="isy" && clkid.startsWith("state_")) ||
-              clkid==="temperature" || clkid==="name" || clkid==="contact" || clkid==="battery" ||
-              clkid==="date" || clkid==="time" || clkid==="weekday" || clkid==="tzone" ||
-              clkid==="heatingSetpoint" || clkid==="coolingSetpoint" ||
-              clkid==="presence" || clkid==="motion" || clkid.startsWith("event_") )  {
-            test = true;
-        }
-        return test;
-    }
 
     // reset rules
     resetRules();

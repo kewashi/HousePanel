@@ -921,7 +921,7 @@ input[type="button"]#wholetile {
     margin: 0px 5px 5px 5px;  /* top, right, bottom, left */
     float: left;
     width: 255px;
-    max-height: 470px;
+    max-height: 510px;
     overflow-x: hidden;
     background-color: rgba(170, 170, 170, 1);
 }
@@ -933,10 +933,10 @@ input[type="button"]#wholetile {
     margin-top: 0px;
 }
 #editSection {
-    width: 200px;
+    width: 215px;
 }
 #colorpicker {
-    width: 250px;
+    width: 225px;
 }
 
 .editSection_input {
@@ -1301,7 +1301,8 @@ div.thing.catalog-thing div.thingtype {
     color: rgba(0,0,0,1);
 }
 
-div.overlay.trackData, div.overlay.switch div.music.switch {
+div.overlay.trackData, div.overlay.switch div.music.switch,
+div.music-thing div.overlay.volume {
     display: none;
 }
 

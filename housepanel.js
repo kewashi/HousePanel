@@ -4,11 +4,6 @@
  * Designed for use only with HousePanel for Hubitat and SmartThings
  * (c) Ken Washington 2017 - 2020
  * 
- * 04/12/2020 - numerous updates related to version 2.250
- * 02/12/2020 - mods to work with Node.js server version
- * 01/02/2020 - updated to fix z-index bug so things show up on top properly
- * 03/26/2020 - major cleanup and optimization after code inspection
- * 
  */
 
 // globals array used everywhere now

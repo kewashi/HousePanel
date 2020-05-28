@@ -32,9 +32,10 @@ function editTile(pagename, str_type, thingindex, aid, bid, thingclass, hubnum, 
     et_Globals.hubName = hubName || "None";
     et_Globals.hubType = hubType || "None";
     et_Globals.pagename = pagename;
-    et_Globals.usepagename = false;
-    if ( pagename.toLowerCase() === "floorplan" || pagename.toLowerCase()==="floor_plan" ) {
-        et_Globals.usepagename = true;
+    if ( str_type==="page" ) {
+        et_Globals.wholetarget = getCssRuleTarget(str_type, "name", thingindex, "thistile");
+    } else {
+        et_Globals.wholetarget = getCssRuleTarget(str_type, "wholetile", thingindex, "thitile");
     }
 
     // save the sheet upon entry for cancel handling
@@ -200,8 +201,10 @@ function getOnOff(str_type, subid) {
         onoff = ["on","off"];
     } else if ( subid.startsWith("contact" ) || subid.startsWith("door" ) || subid.startsWith("valve" ) ) {
         onoff = ["open","closed"];
+    } else if ( subid.startsWith("door" ) ) {
+        onoff = ["open","closed", "opening", "closing"];
     } else if ( subid.startsWith("lock" ) ) {
-        onoff = ["locked","unlocked"];
+        onoff = ["locked","unlocked","unknown"];
     } else if ( subid.startsWith("motion") ) {
         onoff = ["active","inactive"];
     } else if ( subid.startsWith("pistonName" ) ) {
@@ -237,107 +240,104 @@ function getOnOff(str_type, subid) {
     return onoff;
 }
 
-function getCssRuleTarget(str_type, subid, thingindex, useall) {
+function getCssRuleTarget(str_type, subid, thingindex, userscope) {
 
     // get the scope to use
-    var scope = $("#scopeEffect").val();
-
-    // if ( subid==="head" ) {
-    //     useall= 0
-    if ( !useall && scope=== "alltypes") { 
-        useall= 1; 
-    } else if ( !useall && scope=== "alltiles") { 
-        useall= 2; 
-    } else if ( useall && useall!==1 && useall!==2 )  { 
-        useall= 0; 
+    var scope;
+    if ( userscope ) { 
+        scope = userscope; 
     } else {
-        useall= 0;
+        scope = $("#scopeEffect").val();
     }
-    
+
+    function getScope() {
+        // start with alltile and allpage assumptions
+        var tg = "div.thing";
+        // add on assumption for the next four options
+        if ( scope==="typetile" || scope==="typepage" || scope==="thistile" || scope==="thispage" || scope==="overlay" ) { 
+            tg+= "." + str_type + "-thing"; 
+        }
+        // finally if we are asking for a specific tile add that specifier
+        if ( scope==="thistile" || scope==="thispage" ) { 
+            tg+= '.p_'+thingindex; 
+        }
+        return tg;
+    }
+
     var target = "";
 
     if ( str_type==="page" ) {
         
         if ( subid==="tab" ) {
             target = "li.ui-tabs-tab.ui-state-default";
-            if ( useall===0 ) { target+= '.tab-'+thingindex; }
+            if ( scope==="thistile" ) { target+= '.tab-'+thingindex; }
             // target+= ",.tab-" +thingindex + ">a.ui-tabs-anchor";
 
         } else if ( subid==="tabon" ) {
             target = "li.ui-tabs-tab.ui-state-default.ui-tabs-active";
-            if ( useall===0 ) { target+= '.tab-'+thingindex; }
+            if ( scope==="thistile" ) { target+= '.tab-'+thingindex; }
             // target+= ",.tab-" +thingindex + ">a.ui-tabs-anchor";
 
         } else if ( subid==="panel" ) {
             target = "#dragregion div.panel";
-            if ( useall===0 ) { target+= '.panel-'+ thingindex; }
+            if ( scope==="thistile" ) { target+= '.panel-'+ thingindex; }
 
         } else if ( subid==="name" ) {
             target = "li.ui-tabs-tab.ui-state-default";
-            if ( useall===0 ) { target+= '.tab-'+thingindex; }
+            if ( scope==="thistile" ) { target+= '.tab-'+thingindex; }
             target = target + " a.ui-tabs-anchor";
 
         } else {
             target = null;
         }
-        // console.log("page subid= ", subid," target= ", target);
-    } else if ( str_type==="overlay" ) {
+        // console.log("page= ", thingindex," target= ", target);\
 
-        target = "div.overlay." + subid;
-        if ( useall < 1 ) {
-            target+= ".v_" + thingindex;
+    } else if ( scope==="overlay" ) {
+        target = getScope();
+        
+        // handle music controls special case
+        if ( subid.startsWith("music-") ) {
+            target+= " div.overlay.music-controls";
+        } else if ( subid.endsWith("-dn") || subid.endsWith("-up") ) {
+            target+= " div.overlay." + subid.substring(0,subid.length-3);
+        } else {
+            target+= " div.overlay." + subid;
         }
+        target+= '.v_'+thingindex;
 
-    // if a tile isn't specified we default to changing all things
-    } else if ( thingindex===null || typeof thingindex==="undefined " || thingindex==="all" ) {
-        target = "div.thing";
-        if ( str_type && useall < 2 ) {
-            target+= "." + str_type + "-thing";
-        }
     } else if ( subid==="head" ) {
-        target = "div.thing div.thingname";
-        if ( useall < 2 ) { 
-            target=  "div.thing." + str_type + "-thing div.thingname." + str_type; 
+        target = getScope();
+
+        target += " div.thingname";
+        if ( scope==="typetile" || scope==="typepage" || scope==="thistile" || scope==="thispage" ) { 
+            target +=  "." + str_type; 
         }
-        if ( useall < 1 ) { 
+        if ( scope==="thistile" || scope==="thispage" ) { 
             target+= '.t_'+thingindex;
-            // target+= " span.n_"+thingindex;
         }
 
     // handle special case when whole tile is being requested
     } else if ( subid==="wholetile" ) {
-        target = "div.thing";
-        if ( useall < 2 ) { target+= "." + str_type + "-thing"; }
-        if ( useall < 1 ) { target+= '.p_'+thingindex; }
+        target = getScope();
     
     // main handling of type with subid specific case
     // starts just like overlay but adds all the specific subid stuff
     } else {
-
-        // handle music controls special case
-        // target = "div." + str_type + "-thing div.overlay";
-        if ( useall===2 ) {
-            target = "div.thing";
-        } else if ( useall===1 ) {
-            target = "div.thing." + str_type + "-thing";
-        } else {
-            target = "div.thing." + str_type + "-thing." + "p_" + thingindex;
-        }
+        target = getScope();
         
-        // set the overlay wrapper
-        // target += " div.overlay";
+        // handle music controls special case
         if ( subid.startsWith("music-") ) {
-            target += " div.overlay.music-controls";
-        //        } else if ( subid==="forecastIcon" || subid==="weatherIcon" )  {
-        //            target += " div.weather_icons";
-        //        } else if ( subid==="feelsLike" || (str_type==="weather" && subid==="temperature") )  {
-        //            target += " div.weather_temps";
+            target+= " div.overlay.music-controls";
         } else if ( subid.endsWith("-dn") || subid.endsWith("-up") ) {
-            target += " div.overlay." + subid.substring(0,subid.length-3);
+            target+= " div.overlay." + subid.substring(0,subid.length-3);
         } else {
-            target += " div.overlay." + subid;
+            target+= " div.overlay." + subid;
         }
-        if ( useall === 0 ) { target+= '.v_'+thingindex; }
+
+        // narrow down to this tile if requested
+        if (scope==="thistile" || scope==="thispage" ) {
+            target+= '.v_'+thingindex;
+        }
 
         // for everything other than levels, set the subid target
         // levels use the overlay layer only
@@ -345,20 +345,18 @@ function getCssRuleTarget(str_type, subid, thingindex, useall) {
         // edit... changed to only use the subid since that is all we need
         //         this enables custom tile editing to work properly
         //         since the str_type can be any linked item for those
-        if ( subid!=="level" && subid!=="head" ) {
-            if ( useall===2 ){
-                target+= " div";
-            } else {
-                target+= " div." + subid;
+        if ( subid!=="level" && subid!=="volume" ) {
+            target+= " div." + subid;
+            if ( scope==="thistile" || scope==="thispage" ) {
+                target+= '.p_'+thingindex;
             }
-            if ( useall === 0 ) target+= '.p_'+thingindex;
         }
 
         // get the on/off state
         // set the target to determine on/off status
         // we always use the very specific target to this tile
-        if ( subid==="name" || subid==="track" || subid==="weekday" || 
-             subid==="color" || subid==="level" || 
+        if ( subid==="name" || subid==="track" || subid==="weekday" || subid.startsWith("music-") ||
+             subid==="color" || subid==="level" || subid==="volume" ||
              subid==="cool" || subid==="heat" || subid==="stream" ) {
             on = "";
         } else {
@@ -377,18 +375,18 @@ function getCssRuleTarget(str_type, subid, thingindex, useall) {
 
     // make this work only for this page if that option is selected
     // the target will always start with "div." so we strip off the div
-    if ( str_type!=="page" && et_Globals.pagename && et_Globals.usepagename ) {
+    if ( et_Globals.pagename && str_type!=="page" && scope==="thispage" || scope=="typepage" || scope==="allpage" ) {
         target = "div." + et_Globals.pagename + target.substr(3);
-        console.log(target);
     }
+
+    // debug print of how we got the target
+    console.log("csstarget: type= ", str_type, " subid= ", subid, " tile= ", thingindex, " scope= ", scope, " target: ", target);
 
     return target;
 }
 
 function toggleTile(target, str_type, subid) {
-    // var target = "#tileDialog " + getCssRuleTarget(str_type, subid, thingindex);
     var swval = $(target).html();
-    // console.log("toggleTile: target= ", target, " tile type= "+str_type+" subid= "+subid + " swval= ", swval);
     $('#onoffTarget').html("");
     
     // activate the icon click to use this
@@ -443,7 +441,6 @@ function initDialogBinds(str_type, thingindex) {
             priorIcon = $(cssRuleTarget).css("background-image");
             addCSSRule(cssRuleTarget, "background-image: none" + strEffect + ";");
         } else {
-            // removeCSSRule(cssRuleTarget, thingindex, "background-image:");
             if ( priorIcon!=="none" ) {
                 addCSSRule(cssRuleTarget, "background-image: " + priorIcon + strEffect + ";");
             }
@@ -453,7 +450,6 @@ function initDialogBinds(str_type, thingindex) {
     // new button to process the name change
     $("#processName").on("click", function (event) {
         updateNames(str_type, thingindex);
-        cm_Globals.reload = true;
         event.stopPropagation;
     });
 
@@ -849,27 +845,28 @@ function editSection(str_type, thingindex) {
 
 function getScope(str_type, ftime) {
     var dh = "";
-    if ( ftime ) {
-        if ( str_type==="page" ) {
-            dh += "<option id=\"tscope1\" value=\"thistile\" selected>This page</option>";
-            dh += "<option id=\"tscope2\" value=\"alltypes\">All pages</option>";
-            dh += "<option id=\"tscope3\" value=\"alltiles\">All pages</option>";
-        } else {
-            dh += "<option id=\"tscope1\" value=\"thistile\" selected>This " + str_type + " tile</option>";
-            dh += "<option id=\"tscope2\" value=\"alltypes\">All " + str_type + " tiles</option>";
-            dh += "<option id=\"tscope3\" value=\"alltiles\">All tiles</option>";
-        }
+    dh += "<div class='colorgroup'><label>Effect Scope:</label>";
+    dh += "<select name=\"scopeEffect\" id=\"scopeEffect\" class=\"ddlDialog\">";
+    if ( str_type==="page" ) {
+        dh += "<option value=\"thistile\" selected>This page</option>";
+        dh += "<option value=\"alltile\">All pages</option>";
     } else {
-        if ( str_type==="page" ) {
-            $("#tscope1").text("This page");
-            $("#tscope2").text("All pages");
-            $("#tscope3").text("All pages");
+        if ( et_Globals.pagename==="floorplan" ) {
+            var seltile = "";
+            var selpage = " selected";
         } else {
-            $("#tscope1").text("This " + str_type + " tile");
-            $("#tscope2").text("All " + str_type + " tiles");
-            $("#tscope3").text("All tiles");
+            seltile = " selected";
+            selpage = "";
         }
+        dh += "<option value=\"thistile\"" + seltile + ">This tile, All pages</option>";       // old mode 0
+        dh += "<option value=\"thispage\"" + selpage + ">This tile, This page</option>";       // old mode 0 w/ floorplan
+        dh += "<option value=\"typetile\">All " + str_type + " tiles, All pages</option>";     // old mode 1
+        dh += "<option value=\"typepage\">All " + str_type + " tiles, This page</option>";     // new mode
+        dh += "<option value=\"alltile\">All tiles, All pages</option>";                       // old mode 2
+        dh += "<option value=\"allpage\">All tiles This page</option>";                        // new mode
     }
+    dh += "</select>";
+    dh += "</div>";
     return dh;
 }
 
@@ -882,7 +879,7 @@ function effectspicker(str_type, thingindex) {
         name = thingindex;
     } else {
         labelname = "Set Custom Name Here:";
-        var target = getCssRuleTarget(str_type, "name", thingindex);
+        var target = getCssRuleTarget(str_type, "name", thingindex, "thistile");
         name =  $(target).html();
     }
     // alert("Name = " + name);
@@ -892,11 +889,7 @@ function effectspicker(str_type, thingindex) {
     dh += "<div class='colorgroup'><button id='processName' type='button'>Save Name</button></div>";
         
     //Effects
-    dh += "<div class='colorgroup'><label>Effect Scope:</label>";
-    dh += "<select name=\"scopeEffect\" id=\"scopeEffect\" class=\"ddlDialog\">";
     dh += getScope(str_type, true);
-    dh += "</select>";
-    dh += "</div>";
     return dh;    
 }
 
@@ -904,7 +897,7 @@ function sizepicker(str_type, thingindex) {
     var dh = "";
 
     var subid = setsubid(str_type);
-    var target = getCssRuleTarget(str_type, subid, thingindex);  // "div.thing";
+    var target = getCssRuleTarget(str_type, subid, thingindex);
     var size = $(target).css("background-size");
     // alert("old size: " + size);
     size = parseInt(size);
@@ -1067,6 +1060,7 @@ function setupClicks(str_type, thingindex) {
         var thingindex = $("#tileDialog").attr("thingindex");
         var subid = $("#subidTarget").html();
         initColor(str_type, subid, thingindex);
+        initDialogBinds(str_type, thingindex);
         event.stopPropagation();
     });
     
@@ -1239,7 +1233,7 @@ function updateNames(str_type, thingindex) {
         console.log("Names match in updateNames, so doing nothing. name: ", newname);
         return;
     }
-    $(target1).html(newname);
+    // $(target1).html(newname);
 
     var returnURL = cm_Globals.returnURL;
     $.post(returnURL, 
@@ -1251,6 +1245,7 @@ function updateNames(str_type, thingindex) {
                 }
                 // console.log(presult);
                 cm_Globals.reload = true;
+                $(target1).html(newname);
             } else {
                 console.log("error - failed to update names. pstatus: ", pstatus," presult: ", presult);
             }
@@ -1356,9 +1351,8 @@ function checkboxHandler(idselect, onaction, offaction, overlay) {
         var thingindex = $("#tileDialog").attr("thingindex");
         var subid = $("#subidTarget").html();
         var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
-        var overlayTarget = getCssRuleTarget("overlay", subid, thingindex);
+        var overlayTarget = getCssRuleTarget("wholetile", subid, thingindex);
         // var overlayTarget = "div.overlay." + subid + ".v_" + thingindex;
-        // alert(cssRuleTarget);
         if($(idselect).is(':checked')){
             // alert("overlay= "+overlay+" overlayTarget= "+overlayTarget+" action= "+onaction);
             if (overlay) {
@@ -1381,11 +1375,17 @@ function initColor(str_type, subid, thingindex) {
     var onstart;
 
     // selected background color
-    var target = getCssRuleTarget(str_type, subid, thingindex, 0);
-    var generic = getCssRuleTarget(str_type, subid, thingindex, 1);
+    // TODO - generalize this
+    var scope = $("#scopeEffect").val();
+    var target = getCssRuleTarget(str_type, subid, thingindex, scope);
+    if ( scope==="thistile" ) {
+        var generic = target;
+    } else {
+        generic = getCssRuleTarget(str_type, subid, thingindex, "thistile");
+    }
     var icontarget = "#tileDisplay " + target;
     
-    console.log ("initcolor: str_type= " + str_type + " subid= " + subid + " thingindex= " + thingindex + " target= " + target);
+    // console.log ("initcolor: str_type= " + str_type + " subid= " + subid + " thingindex= " + thingindex + " target= " + target);
     priorIcon = $(target).css("background-image");
         
     // set the first onoff state
@@ -1431,14 +1431,8 @@ function initColor(str_type, subid, thingindex) {
     }
 
     // set the Overall Tile Size parameters
-    var wholetarget;
-    if ( str_type==="page" ) {
-        wholetarget = getCssRuleTarget(str_type, "name", thingindex, 0);
-    } else {
-        wholetarget = getCssRuleTarget(str_type, "wholetile", thingindex, 0);
-    }
-    var tilewidth = $(wholetarget).css("width");
-    var tileheight = $(wholetarget).css("height");
+    var tilewidth = $(et_Globals.wholetarget).css("width");
+    var tileheight = $(et_Globals.wholetarget).css("height");
 
     if ( tileheight==="auto" || tileheight==="cover" ) {
         $("#autoTileHeight").prop("checked", true);
@@ -1518,7 +1512,7 @@ function initColor(str_type, subid, thingindex) {
         }
     }
 
-// set the padding
+    // set the padding
     var ptop = parseInt($(target).css("padding-top"));
     var pleft = parseInt($(target).css("padding-left"));
     if ( str_type==="panel" || subid==="wholetile" ) {
@@ -1529,9 +1523,10 @@ function initColor(str_type, subid, thingindex) {
     if ( !pleft || isNaN(pleft) ) { pleft = 0; }
     $("#topPadding").val(ptop);
     $("#leftPadding").val(pleft);
-// -----------------------------------------------------------------------
-// far left side of the screen
-// -----------------------------------------------------------------------
+
+    // -----------------------------------------------------------------------
+    // far left side of the screen
+    // -----------------------------------------------------------------------
     var dh= "";
     // dh += "<button id='editReset' type='button'>Reset</button>";
     dh += "<div class='colorgroup'><label>Feature Selected:</label>";
@@ -1539,16 +1534,6 @@ function initColor(str_type, subid, thingindex) {
     var subonoff = $('#onoffTarget').html();
     dh += "<div id='onoffTarget' class='dlgtext'>" + subonoff + "</div>";
     dh += "</div>";
-    
-    // $("#editReset").off('change');
-    $("#editReset").on('click', function (event) {
-        var str_type = $("#tileDialog").attr("str_type");
-        var thingindex = $("#tileDialog").attr("thingindex");
-        // alert("Reset type= "+str_type+" thingindex= "+thingindex);
-        var subid = $("#subidTarget").html();
-        resetCSSRules(str_type, subid, thingindex);
-        event.stopPropagation;
-    });
 
     onstart = $(target).css("background-color");
     if ( !onstart || onstart==="rgba(0, 0, 0, 0)" ) {
@@ -1706,7 +1691,6 @@ function initColor(str_type, subid, thingindex) {
         var inverted = "<div class='editSection_input autochk'><input type='checkbox' id='invertIcon'><label class=\"iconChecks\" for=\"invertIcon\">Invert Element?</label></div>";
         inverted += "<div class='editSection_input'><input type='checkbox' id='absPlace'><label class=\"iconChecks\" for=\"absPlace\">Absolute Loc?</label></div>";
         inverted += "<div class='editSection_input'><input type='checkbox' id='inlineOpt'><label class=\"iconChecks\" for=\"inlineOpt\">Inline?</label></div>";
-        inverted += "<div class='editSection_input'><input type='checkbox' id='thisPage'><label class=\"iconChecks\" for=\"thisPage\">This Page?</label></div>";
 
         var border = "<div class='editSection_input'><label>Border Type:</label>";
         border += "<select name=\"borderType\" id=\"borderType\" class=\"ddlDialog\">";
@@ -1891,47 +1875,12 @@ function initColor(str_type, subid, thingindex) {
         var rule = "display: " + displayset + ";";
         addCSSRule(cssRuleTarget, rule);
 
-        // // get all the different types to set
-        // var ish = getish(str_type, thingindex, subid);
-        // for ( var i = 0; i< ish.length; i++) {
-        //     if ( $(ish[i]) && $(ish[i]).css("display")!==displayset ) {
-        //         var rule = "display: " + displayset + ";";
-        //         // addCSSRule(ish[i], rule, true);
-        //         console.log("sim css: ", ish[i], rule, true);
-
-        //         // handle all the on/off variants
-        //         onoff.forEach( function(flag) {
-        //             if ( flag!=="" ) {
-        //                 var status = $(ish[i]).css("display");
-        //                 // addCSSRule(ish[i] + "." + flag, "display: " + displayset + ";", true);
-        //                 console.log("sim css: ", ish[i] + "." + flag, rule, true);
-        //             }
-        //         });
-
-        //     }
-        // }
-
-        // var overlayTarget = getCssRuleTarget("overlay", subid, thingindex);
-        // var rule =  "display: " + displayovl + ";";
-        // addCSSRule(overlayTarget, rule, true);
-
-        // var tailoff = false;
-        // onoff.forEach( function(flag, idx, arr) {
-        //     if ( !tailoff && flag!=="" && strCaller.endsWith("."+flag) ) {
-        //         strCaller = strCaller.slice(0,strCaller.length - flag.length - 1);
-        //         tailoff = true;
-        //     }
-        // });
-        // addCSSRule(strCaller, "display: " + displayset + ";", false);
-        // onoff.forEach( function(flag, idx, arr) {
-        //     if ( flag!=="" ) {
-        //         addCSSRule(strCaller + "." + flag, "display: " + displayset + ";", false);
-        //     }
-        // });
+        // also add the overlay rule
+        cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex, "overlay");
+        addCSSRule(cssRuleTarget, rule);
         event.stopPropagation;
     });	
     
-    // $("#editReset").off('change');
     $("#editReset").on('click', function (event) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
@@ -1990,19 +1939,6 @@ function initColor(str_type, subid, thingindex) {
         $("#iconcenter").prop("checked", true);
     }
     
-    // set the initial pagename box
-    if ( et_Globals.usepagename ) {
-        $("#thisPage").prop("checked",true);
-    } else {
-        $("#thisPage").prop("checked",false);
-    }
-    
-    // activate this page option check box
-    $("#thisPage").off('change');
-    $("#thisPage").on('change', function (event) {
-        et_Globals.usepagename = $("#thisPage").prop("checked");
-    });
-    
     // set initial hidden status
     if ( subid==="wholetile" ) {
         $("#isHidden").prop("checked", false);
@@ -2011,13 +1947,15 @@ function initColor(str_type, subid, thingindex) {
     } else {
         $("#isHidden").prop("disabled", false);
         $("#isHidden").css("background-color","white");
+        var ishdefault = getCssRuleTarget(str_type, subid, thingindex, "overlay");
         var ish = getish(str_type, thingindex, subid);
-        var ishidden = false;
+        // var ishidden = false;
+        var ishidden = ($(ishdefault).css("display")==="none");
         for ( var i = 0; i< ish.length; i++) {
             if (  $(ish[i]) && $(ish[i]).css("display")==="none" ) {
                 ishidden= true;
                 var status = $(ish[i]).css("display");
-                console.log("hidden #", i, ": ", status);
+                // console.log("hidden #", i, ": ", status);
             }
         }
         // console.log("hidden info: ", ishidden);
@@ -2030,8 +1968,10 @@ function initColor(str_type, subid, thingindex) {
 function getish(str_type, thingindex, subid) {
     var ish = [];
 
+    var scope = $("#scopeEffect").val();
+
     // make this work only for this page if that option is selected
-    if ( str_type!=="page" && et_Globals.pagename && et_Globals.usepagename ) {
+    if ( str_type!=="page" && et_Globals.pagename && ( scope==="thispage" || scope==="typepage" || scope==="allpage" ) ) {
         var divstr = "div." + et_Globals.pagename + ".";
     } else {
         divstr = "div.";
@@ -2274,6 +2214,7 @@ function addCSSRule(selectarray, selectrule, resetFlag){
     }
    
     var sheet = document.getElementById('customtiles').sheet; // returns an Array-like StyleSheetList
+    // cm_Globals.reload = true;
 
     // process every rule
     $.each(selectarray, function(k, val) {
@@ -2309,7 +2250,7 @@ function resetCSSRules(str_type, subid, thingindex){
         ruletypes.forEach( function(rule, idx, arr) {
             var subtarget = getCssRuleTarget(str_type, rule, thingindex);
             if ( subtarget ) {
-                removeCSSRule(subtarget, thingindex, null, 0);
+                removeCSSRule(subtarget, thingindex, null);
             }
         });
 
@@ -2319,32 +2260,20 @@ function resetCSSRules(str_type, subid, thingindex){
             onoff.forEach( function(rule, idx, arr) {
                 var subtarget = getCssRuleTarget(str_type, rule, thingindex);
                 if ( subtarget ) {
-                    removeCSSRule(subtarget, thingindex, null, 0);
+                    removeCSSRule(subtarget, thingindex, null);
                 }
             });
         }
 }
 
-function removeCSSRule(strMatchSelector, thingindex, target, ignoreall){
+function removeCSSRule(strMatchSelector, thingindex, target){
     var scope = $("#scopeEffect").val();
-    var useall = 0;
-    
-    if ( ignoreall ) {
-        if ( ignoreall===0 || ignoreall===1 || ignoreall===2 ) {
-            useall = ignoreall;
-        }
-    } else {
-        if ( scope=== "alltypes") { useall= 1; }
-        else if ( scope=== "alltiles") { useall= 2; }
-        else { useall = 0; }
-    }
-    
     var sheet = document.getElementById('customtiles').sheet; // returns an Array-like StyleSheetList
     //Searching of the selector matching cssRules
     // console.log("Remove rule: " + strMatchSelector );
     for (var i=sheet.cssRules.length; i--;) {
         var current_style = sheet.cssRules[i];
-        if ( useall===2 || ( thingindex && current_style.selectorText.indexOf("_"+thingindex) !== -1 ) || 
+        if ( scope==="alltile" || scope==="allpage" || ( thingindex && current_style.selectorText.indexOf("_"+thingindex) !== -1 ) || 
              (current_style.selectorText === strMatchSelector &&
                ( !target || current_style.style.cssText.indexOf(target) !== -1 ) ) ) {
             sheet.deleteRule (i);
