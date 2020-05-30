@@ -17,6 +17,7 @@
  * it displays and enables interaction with switches, dimmers, locks, etc
  * 
  * Revision history:
+ * 05/29/2020 - added button and actuator support, remove depracated Lights type
  * 05/17/2020 - overhaul the way we do push notices via registration
  * 05/10/2020 - tidy up switch reg, power reporting, and add patch for audio
  * 04/09/2020 - mode change fix from 03/29 update
@@ -81,13 +82,12 @@
  * 
  */
 
-public static String version() { return "V2.255" }
 public static String handle() { return "HousePanel" }
 definition(
     name: "${handle()}",
     namespace: "kewashi",
     author: "Kenneth Washington",
-    description: "Tap here to install ${handle()} ${version()} - a highly customizable dashboard smart app. ",
+    description: "Tap here to install ${handle()} - a highly customizable smarthome dashboard. ",
     category: "Convenience",
     iconUrl: "https://s3.amazonaws.com/kewpublicicon/smartthings/hpicon1x.png",
     iconX2Url: "https://s3.amazonaws.com/kewpublicicon/smartthings/hpicon2x.png",
@@ -96,83 +96,107 @@ definition(
 
 
 preferences {
-    section("HousePanel Configuration") {
-        paragraph "Welcome to HousePanel. Below you will authorize your things for HousePanel."
-        paragraph "prefix to uniquely identify certain tiles for this hub. " +
-                  "If left blank, hub type will determine prefix; e.g., st_ for SmartThings or h_ for Hubitat"
-        input (name: "hubprefix", type: "text", multiple: false, title: "Hub Prefix:", required: false, defaultValue: "st_")
-        paragraph "Set Hubitat Cloud Calls option to True if your HousePanel app is NOT on your local LAN. " +
-                  "When this is true the cloud URL will be shown for use in HousePanel. When calls are through the Cloud endpoint " +
-                  "actions will be slower than local installations. This only applies to Hubitat. SmartThings always uses Cloud calls."
-        input (name: "cloudcalls", type: "bool", title: "Cloud Calls", defaultValue: false, required: false, displayDuringSetup: true)
-        paragraph "Enable Pistons? You must have WebCore installed for this to work. Beta feature for Hubitat hubs."
-        input (name: "usepistons", type: "bool", multiple: false, title: "Use Pistons?", required: false, defaultValue: false)
-        paragraph "Timezone and Format for event time fields; e.g., America/Detroit, Europe/London, or America/Los_Angeles"
-        input (name: "timezone", type: "text", multiple: false, title: "Timezone Name:", required: false, defaultValue: "America/Detroit")
-        input (name: "dateformat", type: "text", multiple: false, title: "Date Format:", required: false, defaultValue: "M/dd h:mm")
-        paragraph "Specify these parameters to enable direct and instant hub pushes when things change in your home."
-        input "webSocketHost", "text", title: "Host IP", defaultValue: "192.168.11.20", required: false
-        input "webSocketPort", "text", title: "Port", defaultValue: "19234", required: false
-        paragraph "The Alt IP and Port values are used to send hub pushes to two distinct installations of HousePanel. " +
-                  "If left blank a secondary hub push will not occur. Only use this if you are hosting two versions of HP " +
-                  "that both need to stay in sync with your smart home hubs."
-        input "webSocketHost2", "text", title: "Alt Host IP", defaultValue: "192.168.11.186", required: false
-        input "webSocketPort2", "text", title: "Alt Port", defaultValue: "3080", required: false
-    }
-    section("Lights and Switches") {
-        input "myswitches", "capability.switch", multiple: true, required: false, title: "Switches"
-        input "mydimmers", "capability.switchLevel", hideWhenEmpty: true, multiple: true, required: false, title: "Dimmers"
-        input "mymomentaries", "capability.momentary", hideWhenEmpty: true, multiple: true, required: false, title: "Momentary Buttons"
-        input "mylights", "capability.light", hideWhenEmpty: true, multiple: true, required: false, title: "Lights"
-        input "mybulbs", "capability.colorControl", hideWhenEmpty: true, multiple: true, required: false, title: "Bulbs"
-    }
-    section ("Motion and Presence") {
-    	input "mypresences", "capability.presenceSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Presence"
-    	input "mymotions", "capability.motionSensor", multiple: true, required: false, title: "Motion"
-    }
-    section ("Door and Contact Sensors") {
-    	input "mycontacts", "capability.contactSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Contact Sensors"
-    	input "mydoors", "capability.doorControl", hideWhenEmpty: true, multiple: true, required: false, title: "Doors"
-    	input "mylocks", "capability.lock", hideWhenEmpty: true, multiple: true, required: false, title: "Locks"
-    }
-    section ("Thermostat & Environment") {
-    	input "mythermostats", "capability.thermostat", hideWhenEmpty: true, multiple: true, required: false, title: "Thermostats"
-    	input "mytemperatures", "capability.temperatureMeasurement", hideWhenEmpty: true, multiple: true, required: false, title: "Temperature Measures"
-    	input "myilluminances", "capability.illuminanceMeasurement", hideWhenEmpty: true, multiple: true, required: false, title: "Illuminances"
-    	input "myweathers", "device.smartweatherStationTile", hideWhenEmpty: true, title: "Weather tile", multiple: true, required: false
-    	input "myaccuweathers", "device.accuweatherDevice", hideWhenEmpty: true, title: "AccuWeather tile", multiple: true, required: false
-    }
-    section ("Water, Sprinklers & Smoke") {
-    	input "mywaters", "capability.waterSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Water Sensors"
-    	input "myvalves", "capability.valve", hideWhenEmpty: true, multiple: true, required: false, title: "Sprinklers"
-    	input "mysmokes", "capability.smokeDetector", hideWhenEmpty: true, multiple: true, required: false, title: "Smoke Detectors"
-    }
-    section ("Music & Other Sensors") {
-        paragraph "Any thing can be added as an Other sensor. Other sensors bring in ALL fields supported by the device handler."
-    	input "mymusics", "capability.musicPlayer", hideWhenEmpty: true, multiple: true, required: false, title: "Music Players (legacy)"
-    	input "myaudios", "capability.audioNotification", hideWhenEmpty: true, multiple: true, required: false, title: "Audio Devices"
-        input "mypowers", "capability.powerMeter", multiple: true, required: false, title: "Power Meters"
-    	input "myothers", "capability.sensor", multiple: true, required: false, title: "Other and Virtual Sensors"
-    }
-    section("Logging") {
-        input (
-            name: "configLogLevel",
-            title: "IDE Live Logging Level:\nMessages with this level and higher will be logged to the IDE.",
-            type: "enum",
-            options: [
-                "0" : "None",
-                "1" : "Error",
-                "2" : "Warning",
-                "3" : "Info",
-                "4" : "Debug",
-                "5" : "Trace"
-            ],
-            defaultValue: "3",
-            displayDuringSetup: true,
-            required: false
-        )
-    }   
+    page(name: "setupPage")
+    page(name: "devicePage")
+    page(name: "morePage")
+}
 
+def setupPage() {
+    dynamicPage (name: "setupPage", title: "HousePanel Options Configuration", nextPage:"devicePage", uninstall: true) {
+        section {
+            paragraph "Prefix to uniquely identify certain tiles for this hub"
+            input (name: "hubprefix", type: "text", multiple: false, title: "Hub Prefix:", required: false, defaultValue: "st_")
+            if ( isHubitat() ) {
+                paragraph "Set Hubitat Cloud Calls option to True if your HousePanel app is NOT on your local LAN. " +
+                        "When this is true the cloud URL will be shown for use in HousePanel. When calls are through the Cloud endpoint " +
+                        "actions will be slower than local installations. This only applies to Hubitat. SmartThings always uses Cloud calls."
+                input (name: "cloudcalls", type: "bool", title: "Cloud Calls", defaultValue: false, required: false, displayDuringSetup: true, submitOnChange: true)
+            }
+            paragraph "Enable Pistons? You must have WebCore installed for this to work. Beta feature for Hubitat hubs."
+            input (name: "usepistons", type: "bool", multiple: false, title: "Use Pistons?", required: false, defaultValue: false)
+            paragraph "Timezone and Format for event time fields; e.g., America/Detroit, Europe/London, or America/Los_Angeles"
+            input (name: "timezone", type: "text", multiple: false, title: "Timezone Name:", required: false, defaultValue: "America/Detroit")
+            input (name: "dateformat", type: "text", multiple: false, title: "Date Format:", required: false, defaultValue: "M/dd h:mm")
+            paragraph "Specify these parameters to enable direct and instant hub pushes when things change in your home."
+            input (name: "webSocketHost", type: "text", title: "Host IP", defaultValue: "", required: false, submitOnChange: true)
+            if ( webSocketHost ) {
+                input "webSocketPort", "text", title: "Port", defaultValue: "3080", required: false
+                paragraph "The Alt IP and Port values are used to send hub pushes to two distinct installations of HousePanel. " +
+                        "If left blank a secondary hub push will not occur. Only use this if you are hosting two versions of HP " +
+                        "that both need to stay in sync with your smart home hubs."
+                input "webSocketHost2", "text", title: "Alt Host IP", defaultValue: "", required: false
+                input "webSocketPort2", "text", title: "Alt Port", defaultValue: "3082", required: false
+            }
+            input (
+                name: "configLogLevel",
+                title: "IDE Live Logging Level:\nMessages with this level and higher will be logged to the IDE.",
+                type: "enum",
+                options: [
+                    "0" : "None",
+                    "1" : "Error",
+                    "2" : "Warning",
+                    "3" : "Info",
+                    "4" : "Debug",
+                    "5" : "Trace"
+                ],
+                defaultValue: "3",
+                displayDuringSetup: true,
+                required: false
+            )
+        }
+    }
+}
+
+def devicePage() {
+
+    dynamicPage(name: "devicePage", title: "Select Devices for HousePanel", nextPage:"morePage", uninstall: true) {
+        section("Switches and Dimmers") {
+            input "myswitches", "capability.switch", multiple: true, required: false, title: "Switches"
+            input "mydimmers", "capability.switchLevel", hideWhenEmpty: true, multiple: true, required: false, title: "Switch Level Dimmers"
+            input "mymomentaries", "capability.momentary", hideWhenEmpty: true, multiple: true, required: false, title: "Momentary Switches"
+            input "mybuttons", "capability.button", hideWhenEmpty: true, multiple: true, required: false, title: "Buttons"
+            input "mybulbs", "capability.colorControl", hideWhenEmpty: true, multiple: true, required: false, title: "Color Control Bulbs"
+            input "mypowers", "capability.powerMeter", multiple: true, required: false, title: "Power Meters"
+            // input "mylights", "capability.light", hideWhenEmpty: true, multiple: true, required: false, title: "Lights"
+        }
+        section ("Motion and Presence") {
+            input "mypresences", "capability.presenceSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Presence"
+            input "mymotions", "capability.motionSensor", multiple: true, required: false, title: "Motion"
+        }
+        section ("Door and Contact Sensors") {
+            input "mycontacts", "capability.contactSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Contact Sensors"
+            input "mydoors", "capability.doorControl", hideWhenEmpty: true, multiple: true, required: false, title: "Garage Doors"
+            input "mylocks", "capability.lock", hideWhenEmpty: true, multiple: true, required: false, title: "Locks"
+        }
+        section ("Thermostat & Weather") {
+            input "mythermostats", "capability.thermostat", hideWhenEmpty: true, multiple: true, required: false, title: "Thermostats"
+            input "mytemperatures", "capability.temperatureMeasurement", hideWhenEmpty: true, multiple: true, required: false, title: "Temperature Measures"
+            input "myilluminances", "capability.illuminanceMeasurement", hideWhenEmpty: true, multiple: true, required: false, title: "Illuminance Measurements"
+            input "myweathers", "device.smartweatherStationTile", hideWhenEmpty: true, multiple: true, required: false, title: "Weather tile"
+            input "myaccuweathers", "device.accuweatherDevice", hideWhenEmpty: true, multiple: true, required: false, title: "AccuWeather tile"
+        }
+    }
+}
+
+def morePage() {
+    dynamicPage(name: "morePage", title: "Select Additional Devices for HousePanel", install: true, uninstall: true) {
+
+        section ("Water, Valve (Sprinkler), and Smoke") {
+            input "mywaters", "capability.waterSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Water Sensors"
+            input "myvalves", "capability.valve", hideWhenEmpty: true, multiple: true, required: false, title: "Sprinklers"
+            input "mysmokes", "capability.smokeDetector", hideWhenEmpty: true, multiple: true, required: false, title: "Smoke Detectors"
+        }
+        section ("Music & Audio") {
+            paragraph "Music things use the legacy Sonos device handler. Audio things use the new Audio handler that works with multiple audio device types including Sonos."
+            input "mymusics", "capability.musicPlayer", hideWhenEmpty: true, multiple: true, required: false, title: "Music Players"
+            input "myaudios", "capability.audioNotification", hideWhenEmpty: true, multiple: true, required: false, title: "Audio Devices"
+        }
+        section ("All Other Sensors") {
+            paragraph "Any thing can be added as an Other sensor. Other sensors and actuators bring in ALL fields supported by the device handler."
+            input "myothers", "capability.sensor", multiple: true, required: false, title: "Which Other Sensors"
+            input "myactuators", "capability.actuator", multiple: true, required: false, title: "Which Other Actuators"
+        }
+    }   
 }
 
 mappings {
@@ -208,9 +232,9 @@ def initialize() {
     def hubtype = getPlatform()
     state.usepistons = settings?.usepistons ?: false
     state.directIP = settings?.webSocketHost ?: ""
-    state.directPort = settings?.webSocketPort ?: "19234"
+    state.directPort = settings?.webSocketPort ?: "3080"
     state.directIP2 = settings?.webSocketHost2 ?: ""
-    state.directPort2 = settings?.webSocketPort2 ?: "3080"
+    state.directPort2 = settings?.webSocketPort2 ?: "3082"
     state.tz = settings?.timezone ?: "America/Detroit"
     state.prefix = settings?.hubprefix ?: getPrefix()
     state.dateFormat = settings?.dateformat ?: "M/dd h:mm"
@@ -267,7 +291,7 @@ def configureHub() {
     } else {
         // state.hubid = app.id
         state.hubid = hubUID
-        if ( cloudcalls ) {
+        if ( settings?.cloudcalls ) {
             hubip = "https://oauth.cloud.hubitat.com";
             endpt = "${hubip}/${hubUID}/apps/${app.id}/"
             logger("Cloud installation was requested and is reflected in the hubip and endpt info", "info")
@@ -344,9 +368,9 @@ def getBulb(swid, item=null) {
     getThing(mybulbs, swid, item)
 }
 
-def getLight(swid, item=null) {
-    getThing(mylights, swid, item)
-}
+// def getLight(swid, item=null) {
+//     getThing(mylights, swid, item)
+// }
 
 // handle momentary devices as push buttons
 def getMomentary(swid, item=null) {
@@ -363,6 +387,14 @@ def getMomentary(swid, item=null) {
         resp = addHistory(resp, item)
     }
     return resp
+}
+
+def getActuator(swid, item=null) {
+    getThing(myactuators, swid, item)
+}
+
+def getButton(swid, item=null) {
+    getThing(mybuttons, swid, item)
 }
 
 def getDimmer(swid, item=null) {
@@ -443,7 +475,7 @@ def getAudio(swid, item=null) {
 // this was updated to use the real key names so that push updates work
 // note -changes were also made in housepanel.php and elsewhere to support this
 def getThermostat(swid, item=null) {
-    item = item? item : mythermostats.find {it.id == swid }
+    item = item ? item : mythermostats.find {it.id == swid }
     def resp = false
     if ( item ) {
         resp = [name: item.displayName, 
@@ -521,6 +553,7 @@ def getWeather(swid, item=null) {
     if ( !resp ) {
         resp = getDevice(myaccuweathers, swid, item)
     }
+    return resp
 }
 
 def getOther(swid, item=null) {
@@ -743,7 +776,9 @@ def getAllThings() {
     run = logStepAndIncrement(run)
     resp = getMomentaries(resp)
     run = logStepAndIncrement(run)
-    resp = getLights(resp)
+    resp = getButtons(resp)
+    // run = logStepAndIncrement(run)
+    // resp = getLights(resp)
     run = logStepAndIncrement(run)
     resp = getBulbs(resp)
     run = logStepAndIncrement(run)
@@ -790,6 +825,8 @@ def getAllThings() {
     }
     run = logStepAndIncrement(run)
     resp = getOthers(resp)
+    run = logStepAndIncrement(run)
+    resp = getActuators(resp)
     run = logStepAndIncrement(run)
     resp = getPowers(resp)
 
@@ -865,9 +902,9 @@ def getBulbs(resp) {
     getThings(resp, mybulbs, "bulb")
 }
 
-def getLights(resp) {
-    getThings(resp, mylights, "light")
-}
+// def getLights(resp) {
+//     getThings(resp, mylights, "light")
+// }
 
 def getDimmers(resp) {
     getThings(resp, mydimmers, "switchlevel")
@@ -881,10 +918,18 @@ def getContacts(resp) {
     getThings(resp, mycontacts, "contact")
 }
 
+def getButtons(resp) {
+    getThings(resp, mybuttons, "button")
+}
+
+def getActuators(resp) {
+    getThings(resp, myactuators, "actuator")
+}
+
 def getMomentaries(resp) {
     try {
         mymomentaries?.each {
-            if ( it.hasCapability("Switch") ) {
+            if ( it.hasCapability("Switch") || it.hasCommand("push") ) {
                 def val = getMomentary(it.id, it)
                 resp << [name: it.displayName, id: it.id, value: val, type: "momentary" ]
             }
@@ -1028,9 +1073,10 @@ def autoType(swid) {
     def swtype
     if ( mydimmers?.find {it.id == swid } ) { swtype= "switchlevel" }
     else if ( mymomentaries?.find {it.id == swid } ) { swtype= "momentary" }
-    else if ( mylights?.find {it.id == swid } ) { swtype= "light" }
+    // else if ( mylights?.find {it.id == swid } ) { swtype= "light" }
     else if ( mybulbs?.find {it.id == swid } ) { swtype= "bulb" }
     else if ( myswitches?.find {it.id == swid } ) { swtype= "switch" }
+    else if ( mybuttons?.find {it.id == swid } ) { swtype= "button" }
     else if ( mylocks?.find {it.id == swid } ) { swtype= "lock" }
     else if ( mymusics?.find {it.id == swid } ) { swtype= "music" }
     else if ( myaudios?.find {it.id == swid } ) { swtype= "audio" }
@@ -1047,6 +1093,7 @@ def autoType(swid) {
     else if ( mysmokes?.find {it.id == swid } ) { swtype= "smoke" }
     else if ( mytemperatures?.find {it.id == swid } ) { swtype= "temperature" }
     else if ( myothers?.find {it.id == swid } ) { swtype= "other" }
+    else if ( myactuators?.find {it.id == swid } ) { swtype= "actuator" }
     else if ( mypowers?.find {it.id == swid } ) { swtype= "power" }
     else if ( swid=="${state.prefix}shm" ) { swtype= "shm" }
     else if ( swid=="${state.prefix}hsm" ) { swtype= "hsm" }
@@ -1054,34 +1101,6 @@ def autoType(swid) {
     else if ( state.usepistons && webCoRE_list().find {it.id == swid} ) { swtype= "piston" }
     else { swtype = "" }
     return swtype
-}
-
-def itemFromId(swid) {
-    def item = 
-        mydimmers?.find {it.id == swid } ||
-        mymomentaries?.find {it.id == swid } ||
-        mylights?.find {it.id == swid } ||
-        mybulbs?.find {it.id == swid } ||
-        myswitches?.find {it.id == swid } ||
-        mylocks?.find {it.id == swid } ||
-        mymusics?.find {it.id == swid } ||
-        myaudios?.find {it.id == swid } ||
-        mythermostats?.find {it.id == swid} ||
-        mypresences?.find {it.id == swid } ||
-        myweathers?.find {it.id == swid } ||
-        myaccuweathers?.find {it.id == swid } ||
-        mymotions?.find {it.id == swid } ||
-        mydoors?.find {it.id == swid } ||
-        mycontacts?.find {it.id == swid } ||
-        mywaters?.find {it.id == swid } ||
-        myvalves?.find {it.id == swid } ||
-        myilluminances?.find {it.id == swid } ||
-        mysmokes?.find {it.id == swid } ||
-        mytemperatures?.find {it.id == swid } ||
-        myothers?.find {it.id == swid } ||
-        mypowers?.find {it.id == swid } || null
-        
-    return item
 }
 
 // this performs ajax action for clickable tiles
@@ -1179,7 +1198,16 @@ def doAction() {
       case "water" :
         cmdresult = setWater(swid, cmd, swattr, subid)
         break
-        
+
+      case "button":
+        cmdresult = setButton(swid, cmd, swattr, subid)
+        break
+
+      case "actuator":
+        def item = myactuators.find {it.id == swid }
+        cmdresult = setOther(swid, cmd, swattr, subid, item)
+        break
+
       case "other" :
         cmdresult = setOther(swid, cmd, swattr, subid)
         break
@@ -1215,10 +1243,18 @@ def doQuery() {
         cmdresult = getAllThings()
         break
 
+    case "actuator" :
+        cmdresult = getActuator(swid)
+        break
+
     case "audio" :
         cmdresult = getAudio(swid)
         break
          
+    case "button" :
+    	cmdresult = getButton(swid)
+        break
+        
     case "switch" :
         cmdresult = getSwitch(swid)
         break
@@ -1381,16 +1417,36 @@ def setBulb(swid, cmd, swattr, subid) {
 }
 
 // treat just like bulbs - note: light types are deprecated
-def setLight(swid, cmd, swattr, subid) {
-    def resp = setGenericLight(mylights, swid, cmd, swattr, subid)
+// def setLight(swid, cmd, swattr, subid) {
+//     def resp = setGenericLight(mylights, swid, cmd, swattr, subid)
+//     return resp
+// }
+
+def setButton(swid, cmd, swattr, subid) {
+    def item  = mybuttons.find {it.id == swid }
+    def resp = false
+    if ( item ) {
+        if (cmd=="pushed" || cmd=="held") {
+            resp =  [button: cmd]
+
+            // emulate event callback
+            postHub(state.directIP, state.directPort, "update", item.displayName, swid, "button", resp)
+            if (state.directIP2) {
+                postHub(state.directIP2, state.directPort2, "update", item.displayName, swid, "button", resp)
+            }
+
+        } else {
+            resp = item
+        }
+    }
     return resp
 }
 
 // other types have actions starting with _ 
 // and we accommodate switches and api calls with valid cmd values
-def setOther(swid, cmd, attr, subid ) {
+def setOther(swid, cmd, attr, subid, item=null ) {
     def resp = false
-    def item  = myothers.find {it.id == swid }
+    item  = item ? item : myothers.find {it.id == swid }
     def lightflags = ["switch","level","hue","saturation","colorTemperature"]
     
     if ( item ) {
@@ -1403,11 +1459,23 @@ def setOther(swid, cmd, attr, subid ) {
                 resp = getOther(swid, item)
             }
         }
-        else if ( lightflags.contains(subid) ) {
+        else if ( lightflags.contains(subid) && item.hasAttribute("switch") ) {
             resp = setGenericLight(myothers, swid, cmd, swattr, subid)
         }
         else if ( item.hasCommand(cmd) ) {
             item."$cmd"()
+            resp = getOther(swid, item)
+
+        } else if ( item.hasAttribute("button") && (cmd=="pushed" || cmd=="held") ) {
+            resp = [button: cmd]
+
+            // emulate event callback
+            postHub(state.directIP, state.directPort, "update", item.displayName, item.id, "button", resp)
+            if (state.directIP2) {
+                postHub(state.directIP2, state.directPort2, "update", item.displayName, item.id, "button", resp)
+            }
+
+        } else {
             resp = getOther(swid, item)
         }
     }
@@ -2270,10 +2338,10 @@ def setRoutine(swid, cmd, swattr, subid) {
 }
 
 def registerAll() {
-    List mydevices = ["myswitches", "mydimmers", "mybulbs", "mylights", "mypresences",
+    List mydevices = ["myswitches", "mydimmers", "mybulbs", "mypresences", "mybuttons",
                       "mymotions", "mycontacts", "mydoors", "mylocks", "mythermostats",
                       "mytemperatures", "myilluminances", "myweathers", "myaccuweathers",
-                      "mywaters", "mysmokes", "mymusics", "myaudios", "mypowers", "myothers"]
+                      "mywaters", "mysmokes", "mymusics", "myaudios", "mypowers", "myothers", "myactuators"]
 
     // register mode changes
     registerLocations()
@@ -2309,9 +2377,9 @@ def register_mydimmers() {
 def register_mybulbs() {
     registerChangeHandler(settings?.mybulbs)
 }
-def register_mylights() {
-    registerChangeHandler(settings?.mylights)
-}
+// def register_mylights() {
+//     registerChangeHandler(settings?.mylights)
+// }
 def register_mypresences() {
     registerChangeHandler(settings?.mypresences)
 }
@@ -2359,6 +2427,9 @@ def register_myothers() {
 }
 def register_myaccuweathers() {
     registerChangeHandler(settings?.myaccuweathers)
+}
+def register_mybuttons() {
+    registerChangeHandler(settings?.mybuttons)
 }
 
 def registerCapabilities(devices, capability) {
@@ -2467,7 +2538,7 @@ def modeChangeHandler(evt) {
 
 def postHub(ip, port, msgtype, name, id, attr, value) {
 
-    log.info "HousePanel postHub to IP= ${ip} port= ${port} msgtype= ${msgtype} name= ${name} id= ${id} attr= ${attr} value= ${value} ST= ${isST()}"
+    log.info "HousePanel postHub ${msgtype} to IP= ${ip}:${port} name= ${name} attr= ${attr} value= ${value}"
     
     if ( msgtype && ip && port ) {
         // Send Using the Direct Mechanism

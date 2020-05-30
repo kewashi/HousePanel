@@ -1,6 +1,8 @@
 'use strict';
 
 const devhistory =  ` 
+2.273   Added buttons and actuators
+            - upgrades to the RULE engine to handle timer overlaps and buttons
 2.272   Login convenience features - return key and error checking
             - update tile editor to allow multiple tile options
             - upgrade rules to properly make TEXT fields when needed
@@ -544,7 +546,7 @@ exports.getSpecials = function getSpecials() {
 
 exports.getTypes = function getTypes() {
     var thingtypes = [
-        "routine","switch", "light", "switchlevel", "bulb", "momentary","contact",
+        "actuator", "button", "routine","switch", "light", "switchlevel", "bulb", "momentary","contact",
         "motion", "lock", "thermostat", "temperature", "music", "audio", "valve",
         "door", "illuminance", "smoke", "water", "isy",
         "weather", "presence", "mode", "shm", "hsm", "piston", "other",

@@ -698,7 +698,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
             }    
 
             // configure returned array with the "id"
-            if (jsonbody && typeof jsonbody === "object") {
+            if (jsonbody && is_array(jsonbody) ) {
                 jsonbody.forEach(function(content) {
                     var thetype = content["type"];
                     var id = content["id"];
@@ -2469,6 +2469,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
             // handle other cases where the value is an object like audio or music tiles
             if ( jsontval && typeof jsontval==="object" && !array_key_exists(helperkey, thingvalue) ) {
 
+                var isarr = is_array(jsontval);
                 for (var jtkey in jsontval ) {
                     var jtval = jsontval[jtkey];
                     // console.log("Object field extraction: jtkey: ", jtkey, " jtval: ", jtval, " tkey: ", tkey);
@@ -2503,6 +2504,12 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                         } else if ( !jtkey || jtkey==="trackImage" ) {
                             jtval = "";
                         }
+                    }
+
+                    // expand arrays onto the base
+                    // for example, this happens for buttons reporting acceptable values
+                    if ( isarr ) {
+                        jtkey = tkey + "_" + jtkey.toString();
                     }
 
                     // skip adding an object element if it duplicates an existing one
@@ -3199,44 +3206,53 @@ function processHubMessage(hubmsg) {
     // this uses the format defined in the HousePanel.groovy file
     // that was also used in the old housepanel.push app
     var subid = hubmsg['change_attribute'];
-    for (var idx in allthings) {
+    if ( ENABLERULES && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
+        for (var idx in allthings) {
 
-        var entry = allthings[idx];
-        // deal with presence tiles
-        if ( subid==="presence" && hubmsg['change_value']==="not present" ) {
-            hubmsg['change_value'] = "absent";
-        }
-        if ( entry.id === hubmsg['change_device'].toString() &&
-             subid!=='trackData' &&
-             entry['value'][subid] !== hubmsg['change_value'] )
-        {
-            cnt = cnt + 1;
-            entry['value'][subid] = hubmsg['change_value'];
-            if ( entry['value']['trackData'] ) { delete entry['value']['trackData']; }
-            if ( entry.type==="weather" && is_object(entry.value.forecast) ) { delete entry.value.forecast; }
-            if ( DEBUG18 ) {
-                console.log( (ddbg()), 'Updating tile #' + entry['id'],' from trigger:', hubmsg['change_attribute'] );
+            var entry = allthings[idx];
+            // deal with presence tiles
+            if ( subid==="presence" && hubmsg['change_value']==="not present" ) {
+                hubmsg['change_value'] = "absent";
             }
-            pushClient(entry.id, entry.type, subid, entry['value'])
 
-            // process rules and links
-            // avoid against duplicate calls
-            if ( ENABLERULES && subid && !GLB.rules[entry.id] && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
-                processRules(entry.id, entry.type, subid, entry['value']);
-                // processLinks(entry.id, entry.type, subid, entry['value']);
-                GLB.rules[entry.id] = true;
+            // removed the logic that skips rule if state is already set as wanted
+            // because it could be a button or a momentary or a timer rule in mid cycle
+            // if timer rule in mid cycle this starts the cycle fresh again
+            // (entry['value'][subid] !== hubmsg['change_value'] || entry.type==="button"  )
+            if ( entry.id === hubmsg['change_device'].toString() && subid!=='trackData' ) {
+                cnt = cnt + 1;
+                entry['value'][subid] = hubmsg['change_value'];
+                if ( entry['value']['trackData'] ) { delete entry['value']['trackData']; }
+                if ( entry.type==="weather" && is_object(entry.value.forecast) ) { delete entry.value.forecast; }
+                pushClient(entry.id, entry.type, subid, entry['value'])
+
+                // process rules
+                processRules(entry.id, entry.type, subid, entry['value'], "processMsg");
             }
         }
     }
-    resetRules();
+    // resetRules();
     return 'pushed new status info to ' + cnt + ' tiles';
 }
 
 function resetRules() {
-    if ( GLB.rules ) {
-        delete GLB.rules;
-    }
     GLB.rules = {};
+    if ( DEBUG11 ) {
+        console.log( (ddbg()), "reset dup flag... ");
+    }
+}
+
+function resetRuleTimers() {
+    for (var delhash in GLB.ruledelay) {
+        try {
+            clearTimeout(GLB.ruledelay[delhash]);
+            delete GLB.ruledelay[delhash];
+        } catch(e) { }
+    }
+    GLB.ruledelay = {};
+    if ( DEBUG11 ) {
+        console.log( (ddbg()), "reset RULE timers");
+    }
 }
 
 // this function handles processing of all websocket calls from ISY
@@ -3291,10 +3307,9 @@ function processIsyMessage(isymsg) {
                     pushClient(bid, "isy", subid, pvalue, false, false);
 
                     // process rules and links
-                    if ( ENABLERULES && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
-                        processRules(bid, "isy", subid, pvalue);
-                        // processLinks(bid, "isy", subid, pvalue);
-                        GLB.rules[bid] = true;
+                    if ( ENABLERULES && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
+                        processRules(bid, "isy", subid, pvalue, "processMsg");
+                        // GLB.rules[subid] = true;
                     }
                     if ( DEBUG9 ) {
                         console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " uom: ", uom, " newval: ", newval, " value: ", pvalue);
@@ -3331,10 +3346,9 @@ function processIsyMessage(isymsg) {
                         pushClient(bid, "isy", subid, pvalue, false, false);
 
                         // process rules and links
-                        if ( ENABLERULES && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
-                            processRules(bid, "isy", subid, pvalue);
-                            // processLinks(bid, "isy", subid, pvalue);
-                            GLB.rules[bid] = true;
+                        if ( ENABLERULES && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
+                            processRules(bid, "isy", subid, pvalue, "processMsg");
+                            // GLB.rules[subid] = true;
                         }
                         if ( DEBUG9 ) {
                             console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " newval: ", newval, " pvalue: ", pvalue);
@@ -3350,7 +3364,7 @@ function processIsyMessage(isymsg) {
     });
 }
 
-function processRules(bid, thetype, trigger, pvalue) {
+function processRules(bid, thetype, trigger, pvalue, rulecaller) {
 
     // go through all things that could be links for this tile
     var userid = "user_" + bid;
@@ -3385,7 +3399,7 @@ function processRules(bid, thetype, trigger, pvalue) {
     // if subid>=xx or num=subid=on or num=subid=off... , num=subid=value=delay, num=subid=value=delay=attr, ...
     // if subid>=xx and num=subid=on and num=subid=off... , num=subid=value=delay, num=subid=value=delay=attr, ...
     // for example...
-    // user_custome_1 : [ [RULE, "if switch==on and 167=switch==on, 28=switch=on, 12=switch=on=none=2", myrule, 1], 
+    // user_custome_1 : [ [RULE, "if switch==on and 167=switch==on, 28=switch=on, 12=switch=on=2", myrule, 1], 
     //                    [RULE, "if state==away or 42=presence==absent", 19=thermostatMode=heat, 19=heatingSetpoint=72, 14=lock=lock, rule2, 2] ]
 
     const regsplit = /[,;]/;
@@ -3580,7 +3594,7 @@ function processRules(bid, thetype, trigger, pvalue) {
 
             // execute the statements after if for the cases that pass the logic test above
             if ( isrule ) {
-                execRules(thetype, 1, testcommands, pvalue);
+                execRules(rulecaller, item[1], thetype, 1, testcommands, pvalue);
             }
 
         }
@@ -3591,10 +3605,42 @@ function processRules(bid, thetype, trigger, pvalue) {
 
 // this executes the rules in the list starting with either 0 or 1
 // rules without if statements start at 0, if RULES start at 1
-function execRules(swtype, istart, testcommands, pvalue) {
-    // const actpattern = /(\d+)\s*=\s*(\w+)\s*=\s*(\w+)\s*=?\s*(.*)/;
+function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
+    // get a unique has for this rule to use for managing timers and gathering stats
+    // we also use this to prevent dup rules within the same doAction cycle
+    var itemhash = pw_hash(item,'md5');
+
+    console.log((ddbg()), "RULE item: ", item, " hash: ", itemhash, " caller: ", rulecaller);
+
+    if ( ! GLB.rules ) {
+        GLB.rules = {};
+    }
+    if ( ! GLB.ruledelay ) {
+        GLB.ruledelay = {};
+    }
+    
+    if ( !array_key_exists(itemhash, GLB.rules) ) {
+        GLB.rules[itemhash] = false;
+    }
+
+    // prevent this rule from running more than once in a single doAction cycle
+    if (rulecaller==="callHub") {
+        GLB.rules[itemhash] = true;
+        if ( DEBUG11 ) {
+            console.log( (ddbg()), "setting dup flag...");
+        }
+    } else if ( GLB.rules[itemhash] ) {
+        if ( DEBUG11 ) {
+            console.log( (ddbg()), "skipping dup rule...");
+        }
+        // immediately clear so we only skip this once
+        // if a future event comes along for same rule, we do it
+        GLB.rules[itemhash] = false;
+        return;
+    }
 
     // perform all of the commands if we meet the if test
+    // const actpattern = /(\d+)\s*=\s*(\w+)\s*=\s*(\w+)\s*=?\s*(.*)/;
     for (var i= istart; i<testcommands.length; i++) {
         var autostr = testcommands[i];
 
@@ -3606,10 +3652,10 @@ function execRules(swtype, istart, testcommands, pvalue) {
         autoexec.unshift(" ");
         var len = autoexec.length;
 
-        if ( len >= 4 ) {
+        if ( len >= 3 ) {
             var rtileid = parseInt(autoexec[1].trim());
             var rsubid = autoexec[2].trim();
-            var rvalue = autoexec[3].trim();
+            var rvalue = len > 3 ? autoexec[3].trim() : "on" ;
             var delay = len > 4 ? autoexec[4] : false;
             if ( delay ) {
                 delay = parseInt( delay.trim() );
@@ -3620,9 +3666,16 @@ function execRules(swtype, istart, testcommands, pvalue) {
                 }
             }
             var rswattr = len > 5 ? autoexec[5].trim() : "";
+            var ridx = false;
 
-            // find the tile index and proceed with activating the rule
-            var ridx = array_search(rtileid, GLB.options["index"]);
+            // check for a stop all other timer rules command
+            // this is done by entering 0=__delay as a rule segment
+            if ( rtileid===0 && rsubid==="__delay" ) {
+                resetRuleTimers();
+            } else {
+                // find the tile index and proceed with activating the rule
+                ridx = array_search(rtileid, GLB.options["index"]);
+            }
             if ( DEBUG11 ) {
                 console.log( (ddbg()), "RULE debug: exec step #", i, " rtileid: ", rtileid, " rsubid: ", rsubid, " rvalue: ", rvalue, " rswattr: ", rswattr, " ridx: ", ridx, " delay: ", delay);
             }
@@ -3684,11 +3737,32 @@ function execRules(swtype, istart, testcommands, pvalue) {
                 }
 
                 if ( hub ) {
+                    var thandle;
+
+                    // look for this rule being in a timer and if found, clear timer
+                    if ( array_key_exists(itemhash, GLB.ruledelay) ) {
+                        thandle = GLB.ruledelay[itemhash];
+                        if ( DEBUG11 ) {
+                            console.log("clearing timer handle: ", itemhash);
+                        }
+                        try {
+                            clearTimeout(thandle);
+                            delete GLB.ruledelay[itemhash];
+                        } catch(e) { }
+                    }
+
                     // make the hub call now or delayed
+                    // if delayed we store the handle in our rules array so that
+                    // should the same rule come along again we cancel this one first
+                    // this way delay light on and off will stay on if trigger keeps happening
                     if ( delay && delay > 0 ) {
-                        setTimeout( function() {
+                        thandle = setTimeout( function() {
                             callHub(hub, rswid, rswtype, rvalue, rswattr, rsubid, linkinfo, false, true);
                         }, delay);
+                        GLB.ruledelay[itemhash] = thandle;
+                        if ( DEBUG11 ) {
+                            console.log("setting timer handle: ", itemhash);
+                        }
                     } else {
                         callHub(hub, rswid, rswtype, rvalue, rswattr, rsubid, linkinfo, false, true);
                     }
@@ -3700,91 +3774,6 @@ function execRules(swtype, istart, testcommands, pvalue) {
     }
 
 }
-
-// function processLinks(bid, thetype, trigger, pvalue) {
-
-//     // go through all things that could be links for this tile
-//     var userid = "user_" + bid;
-
-//     // if this tile has no link, do nothing
-//     if ( !array_key_exists(userid, GLB.options) ) {
-//         return;
-//     }
-
-//     // determine the type of trigger
-//     var ontrigger = false;
-//     if ( trigger==="motion" && (pvalue.motion ==="active" || pvalue.switch ==="DON") ) {
-//         ontrigger = "on";
-//     } else if ( trigger==="motion" && (pvalue.motion ==="inactive" || pvalue.switch ==="DOF") ) {
-//         ontrigger = "off";
-//     } else if ( trigger==="contact" && (pvalue.contact ==="open"  || pvalue.switch ==="DON") ) {
-//         ontrigger = "on";
-//     } else if ( trigger==="contact" && (pvalue.contact ==="closed" || pvalue.switch ==="DOF") ) {
-//         ontrigger = "off";
-//     } else if ( trigger==="switch" && (pvalue.switch ==="on" || pvalue.switch ==="DON") ) {
-//         ontrigger = "on";
-//     } else if ( trigger==="switch" && (pvalue.switch ==="off" || pvalue.switch ==="DOF") ) {
-//         ontrigger = "off";
-//     }
-
-//     // debug info
-//     var idx = thetype + "|" + bid;
-//     if ( DEBUG12 ) {
-//         console.log( (ddbg()), "linked trigger: ", trigger, " on trigger: ", ontrigger, " idx: ", idx, " pvalue: ", pvalue);
-//     }
-
-//     if ( !ontrigger ) {
-//         return;
-//     }
-
-//     var items = GLB.options[userid];
-//     var linkidx;
-//     items.forEach( function(item) {
-
-//         // process only links
-//         if ( item[0]==="LINK" ) {
-//             var tilenum = parseInt(item[1]);
-//             var linksubid = item[2];
-
-//             // auto trigger any linked field that is a switch
-//             // this has to start with the name switch
-//             if ( isNaN(tilenum) || !linksubid.startsWith("switch") )  {
-//                 if ( DEBUG12 ) {
-//                     console.log( (ddbg()), "warning - no action taken on linked tile because either a non-integer provided or the linked tile is not a switch. tilenum: ", item[1], " linksubid: ", linksubid);
-//                 }
-//                 linkidx = false;
-//             } else {
-//                 if ( DEBUG12 ) {
-//                     console.log( (ddbg()), "Processing LINK for tilenum: ", tilenum, " linksubid: ", linksubid);
-//                 }
-//                 linkidx = array_search(tilenum, GLB.options.index);
-//             }
-
-//             if ( linkidx!==false ) {
-//                 var linktype = allthings[linkidx]["type"];
-
-//                 // fix up isy devices
-//                 if ( linktype==="isy" && ontrigger==="on" ) { ontrigger = "DON"; }
-//                 if ( linktype==="isy" && ontrigger==="off" ) { ontrigger = "DOF"; }
-
-//                 var linkbid = allthings[linkidx]["id"];
-//                 var hubId = allthings[linkidx]["hubnum"];
-//                 var hub = findHub(hubId);
-
-//                 // hub, swid, swtype, swval, swattr, subid, linkinfo, popup
-//                 callHub(hub, linkbid, linktype, ontrigger, "", "switch", false, false, false);
-
-//                 // push to clients immediately
-//                 // Note: this isn't really needed since the call to hub also pushes status when done
-//                 // but we can do it here to create instant feedback
-//                 // pushClient(linkbid, linktype, "switch", {switch: ontrigger}, false, false);
-//                 pushClient(linkbid, linktype, linksubid, {switch: ontrigger}, false, false);
-//             }
-//         }
-
-//     });
-
-// }
 
 function pushClient(swid, swtype, subid, body, linkinfo, popup) {
     // send the new results to all clients
@@ -3889,10 +3878,9 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
 
         if (result) {
             pushClient(swid, swtype, subid, result, linkinfo, popup);
-            if ( ENABLERULES && !inrule && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
-                processRules(swid, swtype, subid, result);
-                // processLinks(swid, swtype, subid, pvalue);
-                GLB.rules[swid] = true;
+            if ( ENABLERULES && !inrule && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
+                processRules(swid, swtype, subid, result, "callHub");
+                // GLB.rules[subid] = true;
             }
         }
 
@@ -4068,9 +4056,8 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
 
     function getHubResponse(err, res, body) {
         var pvalue;
-        if ( swtype==="power" ) {
-            console.log("ST or HE returned: ", body);
-        }
+        var idx = swtype + "|" + swid;
+        console.log((ddbg()), "ST or HE hub call returned: ", body);
         if ( err ) {
             console.log( (ddbg()), "error calling ST or HE hub: ", err);
         } else {
@@ -4095,10 +4082,9 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
 
                 if (pvalue) {
                     pushClient(swid, swtype, subid, pvalue, linkinfo, popup);
-                    if ( ENABLERULES && !inrule && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
-                        processRules(swid, swtype, subid, pvalue);
-                        // processLinks(swid, swtype, subid, pvalue);
-                        GLB.rules[swid] = true;
+                    if ( ENABLERULES && !inrule && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
+                        processRules(swid, swtype, subid, pvalue, "callHub");
+                        // GLB.rules[subid] = true;
                     }
                 }
             }
@@ -4129,10 +4115,10 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
             if ( rres && rres.status.toString()==="200" ) {
                 pushClient(swid, swtype, subid, isyresp, linkinfo, popup);
 
-                if ( ENABLERULES && !inrule && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
-                    processRules(swid, swtype, subid, isyresp);
-                    // processLinks(swid, swtype, subid, isyresp);
-                    GLB.rules[swid] = true;
+                if ( ENABLERULES && !inrule && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
+                    var idx = "isy|" + swid;
+                    processRules(swid, "isy", subid, isyresp, "callHub");
+                    // GLB.rules[subid] = true;
                 }
             }
         }
@@ -4459,15 +4445,6 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                 // rewrite the rule to use data in options array
                 // no need to pass it around in the tile as with old php version
                 if ( ENABLERULES ) {
-                    // var linksubid = "user_" + swid;
-                    // var allrules = GLB.options[linksubid];
-                    // linkval = false;
-                    // allrules.forEach(function(ruleset) {
-                    //     if ( linkval===false && ruleset[0]==="RULE" && ruleset[2]===subid ){
-                    //         linkval = ruleset[1];
-                    //     }  
-                    // });
-
                     // get the execution statements and call them all here
                     const regsplit = /[,;]/;
                     if ( linkval ) {
@@ -4479,7 +4456,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                         if ( DEBUG11 ) {
                             console.log( (ddbg()), "RULE execution: commands: ", testcommands );
                         }
-                        execRules(swtype, istart, testcommands, allthings[idx]["value"]);
+                        execRules("callHub", linkval, swtype, istart, testcommands, allthings[idx]["value"]);
                     }
                     response = "success";
                 } else {
@@ -4490,21 +4467,6 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
             case "HUB":
                 response = callHub(hub, swid, swtype, swval, swattr, subid, false, false, false);
                 console.log( (ddbg()), "calling hub: ", hub.hubId, hub.hubName, swid, swtype, swval, swattr, subid, " response: ", response);
-
-                // process rules and links instantly in case the webSocket doesn't work
-                // this also makes the rules run much quicker
-                // only harm or side effect is the rule will be executed twice
-                // if ( response==="success" && ENABLERULES && subid && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
-                //     var pvalue = clone(allthings[idx]["value"]);
-                //     if ( !subid.endsWith("-up") && !subid.endsWith("-dn") ) {
-                //         pvalue[subid] = swval;
-                //     }
-                //     if ( ENABLERULES ) {
-                //         processRules(swid, swtype, subid, pvalue);
-                //         // processLinks(swid, swtype, subid, pvalue);
-                //         GLB.rules[swid] = true;
-                //     }
-                // }
                 break;
 
             default:
@@ -6019,22 +5981,22 @@ function getIcons(uname, icondir, category) {
     return $tc;
 }
 
-function pw_hash(pword) {
-
+function pw_hash(pword, algo) {
+    if (!algo) { algo = "sha256"; }
     var hash;
     if ( typeof pword !== "string"  || !pword || !pword.trim() ) {
         hash = "";
     } else {
         pword = pword.trim();
-        var thehash = crypto.createHash("sha256");
+        var thehash = crypto.createHash(algo);
         thehash.update(pword);
         hash = thehash.digest('hex');
     }
     return hash;
 }
 
-function pw_verify(pword, hash) {
-    return (pw_hash(pword) === hash);
+function pw_verify(pword, hash, algo) {
+    return (pw_hash(pword, algo) === hash);
 }
 
 // the swval here is actually custom type
@@ -6922,9 +6884,6 @@ var d = new Date();
 var hpcode = d.getTime();
 GLB.hpcode = hpcode.toString();
 
-// setup rule dup avoider
-resetRules();
-
 // read the basic config info
 readOptions("startup");
 if ( DEBUG4 ) {
@@ -6965,6 +6924,8 @@ try {
 // client pages are refreshed when each hub is done reading
 if ( app && applistening ) {
     getAllThings(true);
+    resetRules();
+    resetRuleTimers();
 
     // handler functions for HousePanel
     // this is where we render the baseline web page for the dashboard

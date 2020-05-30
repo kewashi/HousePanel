@@ -199,6 +199,9 @@ function getOnOff(str_type, subid) {
         }
     } else if ( (str_type==="momentary") && subid.startsWith("momentary" ) ) {
         onoff = ["on","off"];
+    } else if ( str_type==="button" && subid.startsWith("button") ) {
+        onoff = ["pushed","held"];
+        // alert("subid = " + subid);
     } else if ( subid.startsWith("contact" ) || subid.startsWith("door" ) || subid.startsWith("valve" ) ) {
         onoff = ["open","closed"];
     } else if ( subid.startsWith("door" ) ) {
