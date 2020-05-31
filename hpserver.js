@@ -337,7 +337,10 @@ function readRoomThings(caller, uname) {
             readRoomThings(caller, "default");
             writeRoomThings(GLB.options, uname);
         } else {
-
+            var d = new Date();
+            var timeval = d.getTime();
+            timeval = timeval.toString();
+        
             // this format is now in real json format and includes user_ tiles
             // add a signature key to flag this format
             var customopt = {};
@@ -346,7 +349,7 @@ function readRoomThings(caller, uname) {
             // if there are no rooms, create a default setup
             if ( !GLB.options.rooms || utils.count(GLB.options.rooms)===0 ||
                  !GLB.options.things || utils.count(GLB.options.things)===0 ) {
-                setupDefaultRooms(uname);
+                setupDefaultRooms();
             }
 
             for (var key in GLB.options) {
@@ -1250,7 +1253,7 @@ function updateOptions(reloadpath) {
     }
 }
 
-function setupDefaultRooms(uname) {
+function setupDefaultRooms() {
     // make a default options array based on the old logic
     // protocol for the options array is an array of room names
     // where each item is an array with the first element being the order number
@@ -4272,7 +4275,7 @@ function testclick(clktype, clkid) {
 
 function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, linkval, protocol) {
 
-    var response = {};
+    var response = "error";
     var idx;
 
     // reset rules
@@ -4351,8 +4354,8 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
         switch(command) {
 
             case "POST":
+            case "GET":
             case "PUT":
-            case "URL":
                 // var posturl = decodeURIComponent(linkval);
                 var posturl = linkval;
                 var isparm = posturl.indexOf("?");
@@ -4373,16 +4376,18 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                     console.log( (ddbg()), command + " call: ", posturl, " parms: ", jsonobj);
                 }
                 curl_call(posturl, null, jsonobj, false, command, urlCallback);
+                response = "success";
                 break;
 
-            case "GET":
-                // var posturl = decodeURIComponent(linkval);
-                var posturl = linkval;
-                if ( DEBUG7 ) {
-                    console.log( (ddbg()), command + " call: ", posturl);
-                }
-                curl_call(posturl, null, jsonobj, false, command, urlCallback);
-                break;
+            // case "GET":
+            //     // var posturl = decodeURIComponent(linkval);
+            //     var posturl = linkval;
+            //     if ( DEBUG7 ) {
+            //         console.log( (ddbg()), command + " call: ", posturl);
+            //     }
+            //     curl_call(posturl, null, jsonobj, false, command, urlCallback);
+            //     response = "success";
+            //     break;
             
             // converted this over to getting the custom text out of the options
             // this allows me to avoid lugging around the custom text in the sibling helper
@@ -4482,17 +4487,19 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
             webresposne[command] = command + ": error";
         } else if ( typeof body === "object" ) {
             // add any fields returned as an object
-            for ( var bkey in body ) {
-                if ( typeof body[bkey]==="string" ) {
-                    webresponse[bkey] = body[bkey]
-                } else if ( typeof body[bkey]==="object" ) {
-                    webresponse[bkey] = JSON.stringify(body[bkey]);
-                }
-            }
-            pushClient(swid, swtype, subid, webresponse);
+            // for ( var bkey in body ) {
+            //     if ( typeof body[bkey]==="string" ) {
+            //         webresponse[bkey] = body[bkey]
+            //     } else if ( typeof body[bkey]==="object" ) {
+            //         webresponse[bkey] = JSON.stringify(body[bkey]);
+            //     }
+            // }
+            console.log( (ddbg()), "URL callback returned: ", UTIL.inspect(body, false, null, false));
+            // pushClient(swid, swtype, subid, webresponse);
         } else if ( typeof body === "string" && body!=="" && body!=="success" ) {
-            webresponse[command] = body;
-            pushClient(swid, swtype, subid, webresponse);
+            // webresponse[command] = body;
+            // pushClient(swid, swtype, subid, webresponse);
+            console.log( (ddbg()), "URL callback returned: ", body);
         }
         if ( DEBUG13 ) {
             console.log( (ddbg()), "URL callback response: ", UTIL.inspect(body, false, null, false) );
@@ -6949,6 +6956,17 @@ if ( app && applistening ) {
         var pword;
         var checkpw;
 
+        // set the global variable so other functions can return here
+        var queryobj = req.query || {};
+        var isquery = (utils.count(queryobj) > 0);
+
+        if ( isquery ) {
+            $tc = apiCall(queryobj, "GET", req, res);
+            res.send($tc);
+            res.end();
+            return;
+        }
+
         // handle new users
         if ( GLB.newuser ) {
             uname = "default";
@@ -7125,7 +7143,7 @@ if ( app && applistening ) {
     });
     
     app.put('*', function(req, res) {
-        console.log( (ddbg()), "PUT api calls not yet supported. requested put: ", req.path);
+        console.log( (ddbg()), "PUT api calls are not supported. Use POST instead. Requested put: ", req.path);
         res.end();
     });
 

@@ -2304,6 +2304,11 @@ function updateTile(aid, presult, skiplink) {
 
         var targetid = '#a-'+aid+'-'+key;
         var dothis = $(targetid);
+        
+        // replace newlines with breaks for proper html rendering
+        if ( typeof value==="string" && value.indexOf("\n")!==-1 ) {
+            value = value.replace(/\n/g, "<br>");
+        }
 
         // check for dups
         if ( typeof dupcheck[key]!=="undefined" ) {
@@ -2963,8 +2968,6 @@ function processClick(that, thingname) {
     
     if ( usertile && usertile.length>0 && $(usertile).attr("command") ) {
         command = $(usertile).attr("command");    // command type
-        // alert("Command = " + command);
-        
         linkval = $(usertile).attr("linkval");    // urlencooded val
         linktype = $(usertile).attr("linktype");  // type of tile linked to
 
@@ -2972,9 +2975,14 @@ function processClick(that, thingname) {
         // remove the http requirement to support Android stuff
         // this places extra burden on users to avoid doing stupid stuff
         if ( command==="URL" ) {
-            var userval = $(usertile).attr("value");      // raw user provided val
-            if ( userval ) {
+            var userval = $(usertile).attr("linkval");      // raw user provided val
+            try {
+                if ( !userval ) {
+                    throw "URL value is empty";
+                }
                 window.open(userval,'_blank');
+            } catch(e) {
+                console.log("user provided URL failed to open: ", e);
             }
             return;
         }
@@ -2993,7 +3001,8 @@ function processClick(that, thingname) {
     // and skip if this is a custom action since it could be anything
     // also, for momentary buttons we don't do any tile updating
     // other than visually pushing the button by changing the class for 1.5 seconds
-    if ( command==="" && ( (thetype==="momentary" && subid==="momentary") || (thetype==="piston" && subid.startsWith("piston")) ) ) {
+    if ( command==="" && ( (thetype==="momentary" && subid==="momentary") || 
+                           (thetype==="piston" && subid.startsWith("piston") ) ) ) {
         console.log(ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" hub Id= " + hubnum + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
         var tarclass = $(targetid).attr("class");
         // define a class with method to reset momentary button
@@ -3023,7 +3032,8 @@ function processClick(that, thingname) {
                     }
                     setTimeout(function(){classarray.myMethod();}, 1500);
                 }
-            }, "json");
+            }, 
+        "json");
 
     } else if ( command==="TEXT" && (subid==="allon" || subid==="alloff") ) {
         var panel = $(tile).attr("panel");
@@ -3101,9 +3111,13 @@ function processClick(that, thingname) {
         // however, I still inverted the ST and HE values to support future update
         // where I might just look at thevalue for these hubs types as it should be
         // the attr action was a terrible workaround put in a much earlier version
+        // we also convert any click on button tiles into a pushed call if it was held before
         if ( (subid==="switch") && (thevalue==="on" || thevalue==="off")  ) {
             thevalue = thevalue==="on" ? "off" : "on";
+        } else if ( subid==="button" && thevalue==="held" ) {
+            thevalue = "pushed";
         }
+
         else if ( thetype==="isy" && subid==="switch" && (thevalue==="DON" || thevalue==="DOF" )  ) {
             thevalue = thevalue==="DON" ? "DOF" : "DON";
         }
@@ -3120,55 +3134,58 @@ function processClick(that, thingname) {
         $.post(cm_Globals.returnURL, 
                {useajax: ajaxcall, id: bid, type: thetype, value: thevalue, uname: uname, 
                 attr: theattr, subid: subid, hubid: hubnum, command: command, linkval: linkval},
-               function (presult, pstatus) {
-                    if (pstatus==="success" && typeof presult==="object" ) {
-                            var showstr = "";
-                            console.log("doaction query result: ", presult);
-                            $.each(presult, function(s, v) {
-                                if ( s && v && s!=="password" && !s.startsWith("user_") ) {
-                                    // first try to parse as json string
-                                    try {
-                                        var jsontval = JSON.parse(v);
-                                    } catch(jerr) {
-                                        jsontval = null;
-                                    }
-                                    if ( jsontval && typeof jsontval==="object" ) {
-                                        for (var jtkey in jsontval ) {
-                                            var jtval = jsontval[jtkey];
-                                            if ( jtval ) {
-                                                if ( jtval.length > 12 ) {
-                                                    showstr = showstr + jtkey + ": " + jtval.substr(0,10) + "...<br>";
-                                                } else {
-                                                    showstr = showstr + jtkey + ": " + jtval + "<br>";
-                                                }
+            function (presult, pstatus) {
+                if (pstatus==="success") {
+
+                    if ( typeof presult==="object" ) {
+                        var showstr = "";
+                        console.log("doaction query result: ", presult);
+                        $.each(presult, function(s, v) {
+                            if ( s && v && s!=="password" && !s.startsWith("user_") ) {
+                                // first try to parse as json string
+                                try {
+                                    var jsontval = JSON.parse(v);
+                                } catch(jerr) {
+                                    jsontval = null;
+                                }
+                                if ( jsontval && typeof jsontval==="object" ) {
+                                    for (var jtkey in jsontval ) {
+                                        var jtval = jsontval[jtkey];
+                                        if ( jtval ) {
+                                            if ( jtval.length > 12 ) {
+                                                showstr = showstr + jtkey + ": " + jtval.substr(0,10) + "...<br>";
+                                            } else {
+                                                showstr = showstr + jtkey + ": " + jtval + "<br>";
                                             }
                                         }
+                                    }
+                                } else {
+                                    if ( typeof v !== "string" ) {
+                                        v = v.toString();
+                                    }
+                                    if ( v.length > 12 ) {
+                                        showstr = showstr + s + ": " + v.substr(0,10) + "...<br>";
                                     } else {
-                                        if ( typeof v !== "string" ) {
-                                            v = v.toString();
-                                        }
-                                        if ( v.length > 12 ) {
-                                            showstr = showstr + s + ": " + v.substr(0,10) + "...<br>";
-                                        } else {
-                                            showstr = showstr + s + ": " + v + "<br>";
-                                        }
+                                        showstr = showstr + s + ": " + v + "<br>";
                                     }
                                 }
-                            });
-                            var winwidth = $("#dragregion").innerWidth();
-                            var leftpos = $(tile).position().left + 5;
-                            if ( leftpos + 220 > winwidth ) {
-                                leftpos = leftpos - 110;
                             }
-                            var pos = {top: $(tile).position().top + 80, left: leftpos};
-                            closeModal("modalpopup");
-                            createModal("modalpopup", showstr, "body", false, pos, function(ui) {} );
-                        // } else if ( pstatus==="success" && presult==="success" ) {
-                        //     console.log("Success: result will be pushed later. status: ", pstatus, " result: ", presult)
-                        // } else {
-                        //     console.log("Error: making ajax POST call. status: ", pstatus, " result: ", presult);
+                        });
+                        var winwidth = $("#dragregion").innerWidth();
+                        var leftpos = $(tile).position().left + 5;
+                        if ( leftpos + 220 > winwidth ) {
+                            leftpos = leftpos - 110;
+                        }
+                        var pos = {top: $(tile).position().top + 80, left: leftpos};
+                        closeModal("modalpopup");
+                        createModal("modalpopup", showstr, "body", false, pos, function(ui) {} );
+                    } else if ( presult==="success" ) {
+                        console.log("Success: result will be pushed later.");
+                    } else {
+                        console.log("Unrecognized return from POST call. result: ", presult);
                     }
-               }, "json"
+                }
+            }, "json"
         );
 
     } 

@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.274   Fix new user bug in readRoomThings function - thanks @ross1
 2.273   Added buttons and actuators
             - upgrades to the RULE engine to handle timer overlaps and buttons
 2.272   Login convenience features - return key and error checking
