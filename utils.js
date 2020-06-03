@@ -2,6 +2,7 @@
 
 const devhistory =  ` 
 2.275   Fix brain fart bug that only impacted new users - thanks again @ross1
+            - obscure bug fix for push client calls for linked fields
 2.274   Fix new user bug in readRoomThings function - thanks @ross1
 2.273   Added buttons and actuators
             - upgrades to the RULE engine to handle timer overlaps and buttons

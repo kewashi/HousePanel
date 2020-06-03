@@ -3410,6 +3410,7 @@ function processIsyMessage(isymsg) {
                     pvalue = translateIsy(bid, control[0], uom, pvalue, newval, "");
                     var subid = mapIsy(control[0], uom);
                     // allthings[idx].value = pvalue;
+                    console.log("ISY msg... bid: ", bid, " subid: ", subid, " pvalue: ", pvalue);
                     pushClient(bid, "isy", subid, pvalue, false, false);
 
                     // process rules and links

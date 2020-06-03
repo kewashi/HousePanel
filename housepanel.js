@@ -561,10 +561,10 @@ function setupWebsocket()
 
             // handle links - loop through all tiles that have a link to see if they match
             // because this link shadow field has the real subid triggered we dont have to check subid below
-            if ( subid==="trackImage" ) {
-                console.log("subid= ", subid, " pvalue: ", pvalue);
-            }
-            $('div.panel div[command="LINK"][subid="' + subid + '"]').each(function() {
+            // if ( subid==="trackImage" ) {
+            //     console.log("subid= ", subid, " pvalue: ", pvalue);
+            // }
+            $('div.panel div[command="LINK"][linkbid="' + bid + '"][subid="' + subid + '"]').each(function() {
 
                 // get the id to see if it is the thing being updated
                 var linkedtile = $(this).attr("linkval");
