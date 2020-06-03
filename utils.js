@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.275   Fix brain fart bug that only impacted new users - thanks again @ross1
 2.274   Fix new user bug in readRoomThings function - thanks @ross1
 2.273   Added buttons and actuators
             - upgrades to the RULE engine to handle timer overlaps and buttons
@@ -526,49 +527,6 @@ exports.getHeader = function getHeader(skin, islogin) {
 
 exports.getFooter = function getFooter() {
     return "</div></body></html>";
-}
-
-// define the default setup of custom tiles
-// first element is the id name
-// next two are the default sizes for making the tile
-// the next parameter is the default number of tiles
-// last parameter is the refresh flag indicator
-exports.getSpecials = function getSpecials() {
-    var obj =
-        {
-            "video":  ["vid",480,240, 4, "normal"], 
-            "frame":  ["frame",480,212, 4, "slow"],
-            "image":  ["img",480,240, 4, "normal"],
-            "blank":  ["blank",120,150, 2, "never"],
-            "custom": ["custom_",120,150, 8, "normal"]
-        };
-    return obj;
-}
-
-exports.getTypes = function getTypes() {
-    var thingtypes = [
-        "actuator", "button", "routine","switch", "light", "switchlevel", "bulb", "momentary","contact",
-        "motion", "lock", "thermostat", "temperature", "music", "audio", "valve",
-        "door", "illuminance", "smoke", "water", "isy",
-        "weather", "presence", "mode", "shm", "hsm", "piston", "other",
-        "clock", "blank", "image", "frame", "video", "custom", "control", "power"
-    ];
-    thingtypes.sort();
-    return thingtypes;
-}
-
-// returns the maximum index from the options
-exports.getMaxIndex = function(optindex) {
-    var maxindex = 0;
-    if ( typeof optindex==="object" ) {
-        for ( var key in optindex ) {
-            var value = parseInt(optindex[key]);
-            if ( !isNaN(value) ) {
-                maxindex = ( value > maxindex ) ? value : maxindex;
-            }
-        }
-    }
-    return maxindex;
 }
 
 exports.count = function count(obj) {

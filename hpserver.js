@@ -74,26 +74,14 @@ function setCookie(res, thevar, theval, days) {
     res.cookie(thevar, theval, {expire: timeexp});
 }
 
-// this has to get user name from specific client not the server
-// this way each client can be logged in as a unique user
+// get user from cookie
 function getUserName(cookies) {
-    var uname;
+    var uname = "";
 
     if ( is_object(cookies) && typeof cookies.uname!=="undefined"  ) {
         uname = decodeUser(cookies.uname);
-        if ( uname ) {
-            // console.log("Setting user from cookies; uname: ", uname, " cookies: ", cookies);
-            GLB.options["config"]["uname"] = uname;
-            return uname;
-        }
-    }
-    
-    if ( typeof GLB.options!=="undefined" && typeof GLB.options["config"]!=="undefined" && array_key_exists("uname", GLB.options["config"]) ) {
-        uname = GLB.options["config"]["uname"];
-        console.log((ddbg()), "*** warning *** Setting user from options file; uname: ", uname);
-    } else {
-        uname = "default";
-        console.log((ddbg()), "*** warning *** Setting user to default");
+        if ( !uname ) { uname = "default"; }
+        GLB.options["config"]["uname"] = uname;
     }
     return uname;
 }
@@ -113,6 +101,18 @@ function decodeUser(unamehash) {
         }
     }
     return uname;
+}
+
+function getTypes() {
+    var thingtypes = [
+        "actuator", "button", "routine","switch", "switchlevel", "bulb", "momentary", "contact",
+        "motion", "lock", "thermostat", "temperature", "music", "audio", "valve",
+        "door", "illuminance", "smoke", "water", "isy",
+        "weather", "presence", "mode", "shm", "hsm", "piston", "other",
+        "clock", "blank", "image", "frame", "video", "custom", "control", "power"
+    ];
+    thingtypes.sort();
+    return thingtypes;
 }
 
 // get the active user and skin
@@ -224,12 +224,70 @@ function readOptions(caller) {
             }
         }
 
-        if ( !array_key_exists("config", GLB.options) ) {
-            throw "configuration settings were not found in " + fname + " configuration file.";
-        }
     } catch(e) {
         console.log( (ddbg()), e); 
         setDefaults();
+        rewrite = true;
+    }
+
+    if ( !array_key_exists("config", GLB.options) ) {
+        GLB.options.config = {};
+        rewrite = true;
+    }
+    if ( !array_key_exists("specialtiles", GLB.options.config) ) {
+        GLB.options.config["specialtiles"] = {"video": 4, "frame": 4, "image": 4, "blank": 4, "custom": 8};
+        rewrite = true;
+    }
+    if ( !array_key_exists("port", GLB.options.config) ) {
+        GLB.options.config.port = 3080;
+        rewrite = true;
+    }
+    if ( !array_key_exists("kiosk", GLB.options.config) ) {
+        GLB.options.config.port = "false";
+        rewrite = true;
+    }
+    if ( !array_key_exists("webSocketServerPort", GLB.options.config) ) {
+        GLB.options.config.webSocketServerPort = 1380;
+        rewrite = true;
+    }
+    if ( !array_key_exists("fast_timer", GLB.options.config) ) {
+        GLB.options.config.fast_timer = "0";
+        rewrite = true;
+    }
+    if ( !array_key_exists("slow_timer", GLB.options.config) ) {
+        GLB.options.config.slow_timer = "300000";
+        rewrite = true;
+    }
+    if ( !array_key_exists("accucity", GLB.options.config) ) {
+        GLB.options.config.accucity = "ann-arbor-mi";
+        rewrite = true;
+    }
+    if ( !array_key_exists("accuregion", GLB.options.config) ) {
+        GLB.options.config.accuregion = "us";
+        rewrite = true;
+    }
+    if ( !array_key_exists("accucode", GLB.options.config) ) {
+        GLB.options.config.accucode = "329380";
+        rewrite = true;
+    }
+    if ( !array_key_exists("fcastcity", GLB.options.config) ) {
+        GLB.options.config.fcastcity = "ann-arbor";
+        rewrite = true;
+    }
+    if ( !array_key_exists("rules", GLB.options.config) ) {
+        GLB.options.config.rules = "true";
+        rewrite = true;
+    }
+    if ( !array_key_exists("hubpick", GLB.options.config) ) {
+        GLB.options.config.hubpick = "all";
+        rewrite = true;
+    }
+    if ( !array_key_exists("polisyip", GLB.options.config) ) {
+        GLB.options.config.polisyip = "localhost";
+        rewrite = true;
+    }
+    if ( !array_key_exists("uname", GLB.options.config) ) {
+        GLB.options.config.uname = "default";
         rewrite = true;
     }
 
@@ -257,11 +315,11 @@ function readOptions(caller) {
     try {
         var webSocketServerPort = parseInt(GLB.options["config"]["webSocketServerPort"]);
         if ( !webSocketServerPort || isNaN(webSocketServerPort) ) {
-            webSocketServerPort = 1338;
+            webSocketServerPort = 1380;
             rewrite = true;
         }
     } catch(e) {
-        webSocketServerPort = 1338;
+        webSocketServerPort = 1380;
         rewrite = true;
     }
     GLB.options["config"]["webSocketServerPort"] = webSocketServerPort;
@@ -282,7 +340,7 @@ function readOptions(caller) {
     }
 
     if ( !array_key_exists("useroptions", GLB.options) ) {
-        GLB.options["useroptions"]= utils.getTypes();
+        GLB.options["useroptions"]= getTypes();
         rewrite = true;
     }
 
@@ -360,7 +418,6 @@ function readRoomThings(caller, uname) {
             var str_customopt = JSON.stringify(customopt, null, 1);
             fs.writeFileSync(customfname, str_customopt);
         }
-
 
     } else {
 
@@ -648,6 +705,7 @@ function getAllThings(reload) {
 
     // add the special tiles
     addSpecials();
+    updateOptions(false);
 
     // get all things from all configured servers
     var hubs = GLB.options.config["hubs"];
@@ -1034,11 +1092,11 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                 });
 
                 // update things and reload page after handling all tiles
-                // wait five seconds just to give variables and programs some room
+                // wait ten seconds just to give variables and programs some room
                 if ( reload && reloadpath ) {
                     setTimeout( function() {
                         updateOptions(reloadpath);
-                    }, 5000);
+                    }, 10000);
                 }
             }
         }
@@ -1207,21 +1265,42 @@ function setIsyFields(nodeid, value, props) {
     }
 }
 
+// returns the maximum index from the options
+function getMaxIndex() {
+    var optindex = GLB.index;
+    var maxindex = 0;
+    if ( typeof optindex==="object" ) {
+        for ( var key in optindex ) {
+            var value = parseInt(optindex[key]);
+            if ( !isNaN(value) ) {
+                maxindex = ( value > maxindex ) ? value : maxindex;
+            }
+        }
+    }
+    return maxindex;
+}
+
 // updates the global options array with new things found on hub
 function updateOptions(reloadpath) {
 
-    if ( ! GLB.options ) {
-        return;
-    }
     var update = false;
+    if ( !GLB.options ) {
+        GLB.options = {};
+        update = true;
+    }
+    
+    if ( !array_key_exists("index", GLB.options )) {
+        GLB.options.index = {};
+        update = true;
+    }
    
     // make all the user options visible by default
     if ( !array_key_exists("useroptions", GLB.options )) {
-        GLB.options["useroptions"] = utils.getTypes();
+        GLB.options["useroptions"] = getTypes();
     }
 
     // find the largest index number for a sensor in our index
-    var cnt = utils.getMaxIndex(GLB.options["index"]) + 1;
+    var cnt = getMaxIndex() + 1;
 
     // update the index with latest sensor information
     for (var thingid in allthings) {
@@ -1235,9 +1314,9 @@ function updateOptions(reloadpath) {
     }
     
     // save the options file
-    if ( update && reloadpath!==false) {
+    if ( update ) {
         // make exactly the right number of special tiles
-        var specialtiles = utils.getSpecials();
+        var specialtiles = getSpecials();
         for (var stype in specialtiles) {
             var sid = specialtiles[stype];
             var customcnt = getCustomCount(stype, sid[3]);
@@ -1292,9 +1371,28 @@ function setupDefaultRooms() {
     }
 }
 
+function getSpecials() {
+    // GLB.options.config["specialtiles"] = {"video": 4, "frame": 4, "image": 4, "blank": 4, "custom": 8};
+    GLB.options.config["specialtiles"] = {};
+    var obj = {
+        "video":  ["vid",480,240, 4, "normal"], 
+        "frame":  ["frame",480,212, 4, "slow"],
+        "image":  ["img",480,240, 4, "normal"],
+        "blank":  ["blank",120,150, 2, "never"],
+        "custom": ["custom_",120,150, 8, "normal"]
+    };
+
+    for ( var key in obj ) {
+        GLB.options.config["specialtiles"][key] = obj[key][3];
+    }
+
+    return obj;
+   
+}
+
 // set defaults here
 function setDefaults() {
-     
+
     GLB.options = {};
     GLB.options.config = {};
     GLB.options.config["port"] = "3080";
@@ -1305,7 +1403,7 @@ function setDefaults() {
     GLB.options.config["specialtiles"] = {"video": 4, "frame": 4, "image": 4, "blank": 4, "custom": 8};
     GLB.options.config["fast_timer"] = "0";
     GLB.options.config["slow_timer"] = "300000";
-    GLB.options.config["rules"] = "false";
+    GLB.options.config["rules"] = "true";
     GLB.options.config["accucity"] = "ann-arbor-mi";
     GLB.options.config["accuregion"] = "us";
     GLB.options.config["accucode"] = "329380";
@@ -1315,7 +1413,12 @@ function setDefaults() {
     GLB.options.config["uname"] = "default";
     GLB.options.config["pword"] = {};
     GLB.options.config["pword"]["default"] = ["", "skin-housepanel"];
-    GLB.options["useroptions"] = utils.getTypes();
+    GLB.options["useroptions"] = getTypes();
+
+    // new user setup includes ading special tiles
+    allthings = {};
+    addSpecials();
+    updateOptions(false);
 }
 
 function getLoginPage(uname) {
@@ -1560,7 +1663,7 @@ function getAuthPage(uname, hostname, hpcode) {
 
 function createSpecialIndex(customcnt, stype, spid) {
     var oldindex = clone(GLB.options["index"]);
-    var maxindex = utils.getMaxIndex(GLB.options["index"]);
+    var maxindex = getMaxIndex();
 
     if ( !array_key_exists("specialtiles", GLB.options["config"]) ) {
         GLB.options["config"]["specialtiles"] = {};
@@ -1898,7 +2001,7 @@ function processName(thingname, thingtype) {
 
     // get rid of 's and split along white space
     var subtype = "";
-    var ignore2 = utils.getTypes();
+    var ignore2 = getTypes();
     ignore2.push("panel");
 
     try {
@@ -1929,7 +2032,7 @@ function processName(thingname, thingtype) {
 function returnFile(thingvalue, thingtype) {
 
     // do nothing if this isn't a special tile
-    var specialtiles = utils.getSpecials();
+    var specialtiles = getSpecials();
     if ( !array_key_exists(thingtype, specialtiles) ) {
         return thingvalue;
     }
@@ -2984,7 +3087,7 @@ function addSpecials() {
     // putting this here allows them to be handled just like other modifiable tiles
     // these tiles all refresh fast except first 4 frames that are reserved for weather
     // renamed accuweather to forecast2 for simplicity sake and to make sorting work
-    var specialtiles = utils.getSpecials();
+    var specialtiles = getSpecials();
     for (var stype in specialtiles) {
         var sid = specialtiles[stype];
         var speed = sid[4] || "normal";
@@ -4297,7 +4400,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
     } else {
         idx = swtype + "|" + swid;
     }
-    var specialtiles = utils.getSpecials();
+    var specialtiles = getSpecials();
 
     // handle clocks to return current time always
     if ( (typeof command==="undefined" || !command) && swid==="clockdigital") {
@@ -4850,7 +4953,7 @@ function getInfoPage(uname, returnURL, pathname) {
 
     var configoptions = GLB.options["config"];
     var hubs = configoptions["hubs"];
-    var specialtiles = utils.getSpecials();
+    var specialtiles = getSpecials();
     
     var $tc = "";
     var skin = getSkin(uname);
@@ -4997,7 +5100,7 @@ function hubFilters(hubpick, ncols) {
     var $useroptions = options["useroptions"];
     var configoptions = options["config"];
     var $hubs = configoptions["hubs"];
-    var $thingtypes = utils.getTypes();
+    var $thingtypes = getTypes();
 
     var retpage = GLB.returnURL;
     var $tc = "";
@@ -5182,8 +5285,8 @@ function tsk($timezone, $skin, $uname, $port, $webSocketServerPort, $fast_timer,
 
 function getOptionsPage(uname, pathname) {
     var retpage = GLB.returnURL;
-    var $thingtypes = utils.getTypes();
-    var specialtiles = utils.getSpecials();
+    var $thingtypes = getTypes();
+    var specialtiles = getSpecials();
 
     var options = GLB.options;
     var $roomoptions = options["rooms"];
@@ -5708,7 +5811,7 @@ function processOptions(uname, optarray) {
         console.log( (ddbg()), "Process Options - Before Processing");
         console.log( (ddbg()), UTIL.inspect(GLB.options, false, null, false));
     }
-    var specialtiles = utils.getSpecials();
+    var specialtiles = getSpecials();
     var options = clone(GLB.options);
 
     // start with a blank slate
@@ -6148,6 +6251,15 @@ function apiCall(body, protocol, req, res) {
 
     // get the user name from GUI first and cookies next and last used
     var uname = body["uname"] || getUserName(req.cookies);
+    if ( !uname ) {
+        if ( typeof GLB.options!=="undefined" && typeof GLB.options["config"]!=="undefined" && array_key_exists("uname", GLB.options["config"]) ) {
+            uname = GLB.options["config"]["uname"];
+            console.log((ddbg()), "*** warning *** using user= [" + uname + "] from options file for API call");
+        } else {
+            uname = "default";
+            console.log((ddbg()), "*** warning *** using user= [default] for API call");
+        }
+    }
 
     // if this is a different user than what is loaded then load up our user
     // this shouldn't happen too often unless there are people pushing panels at same time
@@ -6893,6 +7005,8 @@ GLB.hpcode = hpcode.toString();
 
 // read the basic config info
 readOptions("startup");
+readRoomThings("startup", "default");
+
 if ( DEBUG4 ) {
     console.log( (ddbg()), "Options: ", UTIL.inspect(GLB.options, false, null, false));
 }
@@ -6953,7 +7067,6 @@ if ( app && applistening ) {
         var $tc;
         GLB.returnURL = req.protocol + "://" + req.headers.host;
         var uname;
-        var pword;
         var checkpw;
 
         // set the global variable so other functions can return here
@@ -6968,38 +7081,31 @@ if ( app && applistening ) {
         }
 
         // handle new users
-        if ( GLB.newuser ) {
+        if ( GLB.newuser || !GLB.options.config || !GLB.options.config["pword"] ) {
+
             uname = "default";
-            pword = "";
             checkpw = true;
             setCookie(res, "uname", pw_hash(uname));
             GLB.options.config["pword"] = {};
-            GLB.options.config["pword"][uname] = [pword, "skin-housepanel"];
+            GLB.options.config["pword"][uname] = ["", "skin-housepanel"];
             GLB.options.config["uname"] = uname;
             writeOptions(GLB.options);
+            writeRoomThings(GLB.options, uname);
             GLB.newuser = true;
         } else {
         
             // first check for a valid login
-            if ( req.cookies && array_key_exists("uname", req.cookies) ) {
-                var codeuser = req.cookies["uname"];
-                uname = decodeUser(codeuser);
-                if ( uname ) {
-                    pword = GLB.options.config["pword"][uname][0];
-                    checkpw = true;
-                } else {
-                    pword = "";
-                    checkpw = false;
-                }
+            uname = getUserName(req.cookies);
+            if ( uname && GLB.options.config["pword"][uname] ) {
+                checkpw = true;
             } else {
                 uname = "default";
-                codeuser = "";
-                pword = "";
                 checkpw = false;
             }
+
         }
         if ( DEBUG3 ) {
-            console.log("pw check: uname=["+uname+"]", " codeuser: ", codeuser, " pword= ["+pword+"]", " checkpw= ["+checkpw+"]");
+            console.log("pw check: uname=["+uname+"]", " codeuser: ", codeuser, " checkpw= ["+checkpw+"]");
         }
 
         if ( !IGNOREPW && !checkpw ) {
