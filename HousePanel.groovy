@@ -17,6 +17,7 @@
  * it displays and enables interaction with switches, dimmers, locks, etc
  * 
  * Revision history:
+ * 06/09/2020 - remove dynamic pages since they mess up OAUTH from HP side
  * 05/29/2020 - added button and actuator support, remove depracated Lights type
  * 05/17/2020 - overhaul the way we do push notices via registration
  * 05/10/2020 - tidy up switch reg, power reporting, and add patch for audio
@@ -94,63 +95,36 @@ definition(
     iconX3Url: "https://s3.amazonaws.com/kewpublicicon/smartthings/hpicon3x.png",
     oauth: [displayName: "HousePanel", displayLink: ""])
 
-
 preferences {
-    page(name: "setupPage")
-    page(name: "devicePage")
-    page(name: "morePage")
-}
-
-def setupPage() {
-    dynamicPage (name: "setupPage", title: "HousePanel Options Configuration", nextPage:"devicePage", uninstall: true) {
-        section {
-            paragraph "Prefix to uniquely identify certain tiles for this hub"
-            input (name: "hubprefix", type: "text", multiple: false, title: "Hub Prefix:", required: false, defaultValue: "st_")
-            if ( isHubitat() ) {
-                paragraph "Set Hubitat Cloud Calls option to True if your HousePanel app is NOT on your local LAN. " +
-                        "When this is true the cloud URL will be shown for use in HousePanel. When calls are through the Cloud endpoint " +
-                        "actions will be slower than local installations. This only applies to Hubitat. SmartThings always uses Cloud calls."
-                input (name: "cloudcalls", type: "bool", title: "Cloud Calls", defaultValue: false, required: false, displayDuringSetup: true, submitOnChange: true)
-            }
-            paragraph "Enable Pistons? You must have WebCore installed for this to work. Beta feature for Hubitat hubs."
-            input (name: "usepistons", type: "bool", multiple: false, title: "Use Pistons?", required: false, defaultValue: false)
-            paragraph "Timezone and Format for event time fields; e.g., America/Detroit, Europe/London, or America/Los_Angeles"
-            input (name: "timezone", type: "text", multiple: false, title: "Timezone Name:", required: false, defaultValue: "America/Detroit")
-            input (name: "dateformat", type: "text", multiple: false, title: "Date Format:", required: false, defaultValue: "M/dd h:mm")
-            paragraph "Specify these parameters to enable direct and instant hub pushes when things change in your home."
-            input (name: "webSocketHost", type: "text", title: "Host IP", defaultValue: "", required: false, submitOnChange: true)
-            if ( webSocketHost ) {
-                input "webSocketPort", "text", title: "Port", defaultValue: "3080", required: false
-                paragraph "The Alt IP and Port values are used to send hub pushes to two distinct installations of HousePanel. " +
-                        "If left blank a secondary hub push will not occur. Only use this if you are hosting two versions of HP " +
-                        "that both need to stay in sync with your smart home hubs."
-                input "webSocketHost2", "text", title: "Alt Host IP", defaultValue: "", required: false
-                input "webSocketPort2", "text", title: "Alt Port", defaultValue: "3082", required: false
-            }
-            input (
-                name: "configLogLevel",
-                title: "IDE Live Logging Level:\nMessages with this level and higher will be logged to the IDE.",
-                type: "enum",
-                options: [
-                    "0" : "None",
-                    "1" : "Error",
-                    "2" : "Warning",
-                    "3" : "Info",
-                    "4" : "Debug",
-                    "5" : "Trace"
-                ],
-                defaultValue: "3",
-                displayDuringSetup: true,
-                required: false
-            )
-        }
+    section("HousePanel Configuration") {
+        paragraph "Welcome to HousePanel. Below you will authorize your things for HousePanel."
+        paragraph "prefix to uniquely identify certain tiles for this hub. " +
+                  "If left blank, hub type will determine prefix; e.g., st_ for SmartThings or h_ for Hubitat"
+        input (name: "hubprefix", type: "text", multiple: false, title: "Hub Prefix:", required: false, defaultValue: "st_")
+        paragraph "Enable Pistons? You must have WebCore installed for this to work. Beta feature for Hubitat hubs."
+        input (name: "usepistons", type: "bool", multiple: false, title: "Use Pistons?", required: false, defaultValue: false)
+        paragraph "Timezone and Format for event time fields; e.g., America/Detroit, Europe/London, or America/Los_Angeles"
+        input (name: "timezone", type: "text", multiple: false, title: "Timezone Name:", required: false, defaultValue: "America/Detroit")
+        input (name: "dateformat", type: "text", multiple: false, title: "Date Format:", required: false, defaultValue: "M/dd h:mm")
+        paragraph "Specify these parameters to enable your panel to stay in sync with things when they change in your home."
+        input "webSocketHost", "text", title: "Host IP", defaultValue: "192.168.11.32", required: false
+        input "webSocketPort", "text", title: "Port", defaultValue: "3080", required: false
+        paragraph "The Alt Host IP and Port values are used to send hub pushes to two distinct installations of HousePanel. " +
+                  "If left blank a secondary hub push will not occur. Only use this if you are hosting two versions of HP " +
+                  "that both need to stay in sync with your smart home hubs."
+        input "webSocketHost2", "text", title: "Alt Host IP", defaultValue: "192.168.11.20", required: false
+        input "webSocketPort2", "text", title: "Alt Port", defaultValue: "3180", required: false
+        input (
+            name: "configLogLevel",
+            title: "IDE Live Logging Level:\nMessages with this level and higher will be logged to the IDE.",
+            type: "enum",
+            options: ["0" : "None", "1" : "Error", "2" : "Warning", "3" : "Info", "4" : "Debug", "5" : "Trace"],
+            defaultValue: "3",
+            displayDuringSetup: true,
+            required: false
+        )
     }
-}
-
-def devicePage() {
-
-    dynamicPage(name: "devicePage", title: "Select Devices for HousePanel", nextPage:"morePage", uninstall: true) {
-        section("Switches and Dimmers") {
+    section("Switches and Dimmers") {
             input "myswitches", "capability.switch", multiple: true, required: false, title: "Switches"
             input "mydimmers", "capability.switchLevel", hideWhenEmpty: true, multiple: true, required: false, title: "Switch Level Dimmers"
             input "mymomentaries", "capability.momentary", hideWhenEmpty: true, multiple: true, required: false, title: "Momentary Switches"
@@ -158,45 +132,38 @@ def devicePage() {
             input "mybulbs", "capability.colorControl", hideWhenEmpty: true, multiple: true, required: false, title: "Color Control Bulbs"
             input "mypowers", "capability.powerMeter", multiple: true, required: false, title: "Power Meters"
             // input "mylights", "capability.light", hideWhenEmpty: true, multiple: true, required: false, title: "Lights"
-        }
-        section ("Motion and Presence") {
+    }
+    section ("Motion and Presence") {
             input "mypresences", "capability.presenceSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Presence"
             input "mymotions", "capability.motionSensor", multiple: true, required: false, title: "Motion"
-        }
-        section ("Door and Contact Sensors") {
+    }
+    section ("Door and Contact Sensors") {
             input "mycontacts", "capability.contactSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Contact Sensors"
             input "mydoors", "capability.doorControl", hideWhenEmpty: true, multiple: true, required: false, title: "Garage Doors"
             input "mylocks", "capability.lock", hideWhenEmpty: true, multiple: true, required: false, title: "Locks"
-        }
-        section ("Thermostat & Weather") {
+    }
+    section ("Thermostat & Weather") {
             input "mythermostats", "capability.thermostat", hideWhenEmpty: true, multiple: true, required: false, title: "Thermostats"
             input "mytemperatures", "capability.temperatureMeasurement", hideWhenEmpty: true, multiple: true, required: false, title: "Temperature Measures"
             input "myilluminances", "capability.illuminanceMeasurement", hideWhenEmpty: true, multiple: true, required: false, title: "Illuminance Measurements"
             input "myweathers", "device.smartweatherStationTile", hideWhenEmpty: true, multiple: true, required: false, title: "Weather tile"
             input "myaccuweathers", "device.accuweatherDevice", hideWhenEmpty: true, multiple: true, required: false, title: "AccuWeather tile"
-        }
     }
-}
-
-def morePage() {
-    dynamicPage(name: "morePage", title: "Select Additional Devices for HousePanel", install: true, uninstall: true) {
-
-        section ("Water, Valve (Sprinkler), and Smoke") {
+    section ("Water, Sprinklers & Smoke") {
             input "mywaters", "capability.waterSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Water Sensors"
             input "myvalves", "capability.valve", hideWhenEmpty: true, multiple: true, required: false, title: "Sprinklers"
             input "mysmokes", "capability.smokeDetector", hideWhenEmpty: true, multiple: true, required: false, title: "Smoke Detectors"
-        }
-        section ("Music & Audio") {
+    }
+    section ("Music & Autio") {
             paragraph "Music things use the legacy Sonos device handler. Audio things use the new Audio handler that works with multiple audio device types including Sonos."
             input "mymusics", "capability.musicPlayer", hideWhenEmpty: true, multiple: true, required: false, title: "Music Players"
             input "myaudios", "capability.audioNotification", hideWhenEmpty: true, multiple: true, required: false, title: "Audio Devices"
-        }
-        section ("All Other Sensors") {
+    }
+    section ("All Other Sensors") {
             paragraph "Any thing can be added as an Other sensor. Other sensors and actuators bring in ALL fields supported by the device handler."
             input "myothers", "capability.sensor", multiple: true, required: false, title: "Which Other Sensors"
             input "myactuators", "capability.actuator", multiple: true, required: false, title: "Which Other Actuators"
-        }
-    }   
+    }
 }
 
 mappings {
@@ -234,7 +201,7 @@ def initialize() {
     state.directIP = settings?.webSocketHost ?: ""
     state.directPort = settings?.webSocketPort ?: "3080"
     state.directIP2 = settings?.webSocketHost2 ?: ""
-    state.directPort2 = settings?.webSocketPort2 ?: "3082"
+    state.directPort2 = settings?.webSocketPort2 ?: "3180"
     state.tz = settings?.timezone ?: "America/Detroit"
     state.prefix = settings?.hubprefix ?: getPrefix()
     state.dateFormat = settings?.dateformat ?: "M/dd h:mm"
@@ -280,6 +247,8 @@ def configureHub() {
     def hubid
     def hubip
     def endpt
+    def cloudhubip
+    def cloudendpt
     
     def firmware = hub?.firmwareVersionString ?: "unknown"
 
@@ -289,18 +258,15 @@ def configureHub() {
         logger("You must go through the OAUTH flow to obtain a proper SmartThings AccessToken", "info")
         logger("You must go through the OAUTH flow to obtain a proper SmartThings EndPoint", "info")
     } else {
-        // state.hubid = app.id
         state.hubid = hubUID
-        if ( settings?.cloudcalls ) {
-            hubip = "https://oauth.cloud.hubitat.com";
-            endpt = "${hubip}/${hubUID}/apps/${app.id}/"
-            logger("Cloud installation was requested and is reflected in the hubip and endpt info", "info")
-        } else {
-            hubip = hub.localIP
-            endpt = "${hubip}/apps/api/${app.id}/"
-        }
+        cloudhubip = "https://oauth.cloud.hubitat.com";
+        cloudendpt = "${cloudhubip}/${hubUID}/apps/${app.id}/"
+        hubip = hub.localIP
+        endpt = "${hubip}/apps/api/${app.id}/"
         logger("Hubitat AccessToken = ${state.accessToken}", "info")
         logger("Hubitat EndPoint = ${endpt}", "info")
+        logger("Hubitat Cloud Hub = ${cloudhubip}", "info")
+        logger("Hubitat Cloud EndPoint = ${cloudendpt}", "info")
     }
     
     logger("Use this information on the Auth page of HousePanel.", "info")
@@ -2294,7 +2260,7 @@ def setMusic(swid, cmd, swattr, subid) {
             item.stop()
             resp['status'] = newsw
             // resp['trackDescription'] = ""
-        } else if ( subid=="music-pause" || swattr.contains( "music-pause") ) {
+        } else if ( subid=="music-pause" || swattr.contains(" music-pause") ) {
             newsw = "paused"
             item.pause()
             resp['status'] = newsw

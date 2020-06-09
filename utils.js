@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.277   Remove dynamic pages in groovy file that messes up OAUTH from HP side
 2.276   Serious bugfix for new users doing OAUTH flow
 2.275   Fix brain fart bug that only impacted new users - thanks again @ross1
             - obscure bug fix for push client calls for linked fields
