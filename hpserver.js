@@ -426,9 +426,6 @@ function readRoomThings(caller, uname) {
         var str1 = str.replace("\r","");
         var str2 = str1.replace("\n","");
         var opts = JSON.parse(str2);
-        if ( DEBUG2 ) {
-            console.log( (ddbg()), caller, " Rooms: ", opts.rooms, " things: ", UTIL.inspect(opts.things, false, null, false) );
-        }
     
         // protect against missing room array - use default list
         if ( !opts.rooms ) {
@@ -540,6 +537,9 @@ function getHubInfo(hub, token, endpt, clientId, clientSecret) {
     var namehost = endpt + "/gethubinfo";
     var header = {"Authorization": "Bearer " + token};
     var nvpreq = {"scope": "app", "client_id": encodeURI(clientId), "client_secret": encodeURI(clientSecret)};
+    if ( DEBUG2 ) {
+        console.log( (ddbg()), "getting name info from hub: ", namehost, " nvpreq: ", nvpreq);
+    }
     curl_call(namehost, header, nvpreq, false, "POST", nameidCallback);
 
     function nameidCallback(err, res, body) {
@@ -579,14 +579,13 @@ function getHubInfo(hub, token, endpt, clientId, clientSecret) {
         GLB.defhub = hubId;
 
         // update this hub
-        updateHubs(hub, hubId);
+        // updateHubs(hub, hubId);
         writeOptions(GLB.options);
 
         // retrieve all devices and go back to reauth page
+        // getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret, hubName, reload, reloadpath) {
         getDevices(hubId, hubType, token, endpt, clientId, clientSecret, hubName, true, "/reauth");
     }
-    return "success";
-
 }
 
 function getAccessToken(code, hub) {
@@ -599,13 +598,12 @@ function getAccessToken(code, hub) {
     var hubHost = hub["hubHost"];
     var clientId = hub["clientId"];
     var clientSecret = hub["clientSecret"];
-    var hubnum = GLB.defhub;
     var redirect = GLB.returnURL + "/oauth";
 
     // make the call to get the token
     var tokenhost = hubHost + "/oauth/token";
     var header = {'Content-Type' : "application/x-www-form-urlencoded"};
-    var nvpreq = {"grant_type": "authorization_code", "code": encodeURI(code), "client_id": encodeURI(clientId), 
+    var nvpreq = {"grant_type": "authorization_code", "code": code, "client_id": encodeURI(clientId), 
                   "client_secret": encodeURI(clientSecret), "redirect_uri": encodeURI(redirect)};
     if ( DEBUG2 ) {
         console.log( (ddbg()), "calling with nvpreq: ", nvpreq);
@@ -614,7 +612,7 @@ function getAccessToken(code, hub) {
     curl_call(tokenhost, header, nvpreq, false, "POST", tokenCallback);
 
     // callback from the token request
-    async function tokenCallback(err, res, body) {
+    function tokenCallback(err, res, body) {
         // save the access token
         var jsonbody = JSON.parse(body);
         if ( DEBUG2 ) {
@@ -622,7 +620,8 @@ function getAccessToken(code, hub) {
         }
 
         if ( jsonbody["error"] ) {
-            console.log( (ddbg()), "Token error authorizing hub: ", hubName, " error: ", err, " ", jsonbody["error"]);
+            console.log( (ddbg()), "Token error authorizing hub: ", hubName, " error: ", jsonbody["error"]);
+            console.log( (ddbg()), "calling params: ", nvpreq );
             GLB.defhub = "-1";
             pushClient("reload", "/reauth");
         } else if ( typeof jsonbody==="object" && array_key_exists("access_token", jsonbody) ) {
@@ -637,8 +636,12 @@ function getAccessToken(code, hub) {
                     console.log( (ddbg()), "Invalid hub type: ", hubType, " in access token request call");
                     GLB.defhub = "-1";
                     pushClient("reload", "/reauth");
+                    return;
                 }
 
+                if ( DEBUG2 ) {
+                    console.log( (ddbg()), "getting endpoints next using token: ", token);
+                }
                 header = {"Authorization": "Bearer " + token};
                 curl_call(ephost, header, false, false, "GET", endptCallback);
             }
@@ -649,7 +652,7 @@ function getAccessToken(code, hub) {
         }
     }        
     
-    async function endptCallback(err, res, body) {
+    function endptCallback(err, res, body) {
         var jsonbody;
         var endpt;
         try {
@@ -671,6 +674,9 @@ function getAccessToken(code, hub) {
         }
 
         if ( token && endpt ) {
+            if ( DEBUG2 ) {
+                console.log( (ddbg()),"token and endpt: ", token, endpt);
+            }
             getHubInfo(hub, token, endpt, clientId, clientSecret);
 
         } else {
@@ -701,7 +707,7 @@ function fixISYid(id) {
 
 function getAllThings(reload) {
     
-    allthings = {};
+    // allthings = {};
 
     // add the special tiles
     addSpecials();
@@ -794,9 +800,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                     };
                 });
             }
-            if ( reload && reloadpath ) {
-                updateOptions(reloadpath);
-            }
+            updateOptions(reload, reloadpath);
         }
     }
 
@@ -807,6 +811,8 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
         var stheader = {"Authorization": "Basic " + base64};
 
         // now read in any int and state variables
+        var vidx = "isy|vars";
+        if ( allthings[vidx] ) { delete allthings[vidx]; }
         curl_call(hubEndpt + "/vars/get/1", stheader, false, false, "GET", getIntVars);
         curl_call(hubEndpt + "/vars/get/2", stheader, false, false, "GET", getStateVars);
 
@@ -833,6 +839,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
         
                 // console.log("getting int variables...", body);
                 getISY_Vars(body, "int");
+                updateOptions(false, reloadpath);
             }
         }
         
@@ -853,6 +860,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
         
                 // console.log("getting state variables...", body);
                 getISY_Vars(body, "state");
+                updateOptions(false, reloadpath);
             }
         }
 
@@ -862,7 +870,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
             var idx = thetype + "|" + id;
 
             var result = parser.parse(body);
-            if (DEBUG2) {
+            if (DEBUG7) {
                 console.log( (ddbg()), vartype, "variables: ", UTIL.inspect(result, false, null, false) );
             }
 
@@ -891,7 +899,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
             });
 
             allthings[idx]["value"] = pvalue;
-            if ( DEBUG2 ) {
+            if ( DEBUG7 ) {
                 console.log( (ddbg()), "New variable value: ", pvalue);
             }
         }
@@ -926,19 +934,19 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                             programlist.forEach(function(prog) {
                                 var proginfo = prog["$"];
                                 var isfolder = proginfo.folder;
-                                if ( DEBUG2 ) {
+                                if ( DEBUG7 ) {
                                     console.log( (ddbg()), "Program details: ", UTIL.inspect(prog, false, null, false) );
                                 }
 
                                 // if we have a folder don't add it
                                 if ( isfolder==="true" ) {
-                                    if ( DEBUG2 ) {
+                                    if ( DEBUG7 ) {
                                         console.log( (ddbg()), "Program ", prog.name, " is a folder. id: ", proginfo.id, " Status: ", proginfo.status);
                                     }
 
                                 // create tile for programs that are not folders
                                 } else {
-                                    if ( DEBUG2 ) {
+                                    if ( DEBUG7 ) {
                                         console.log( (ddbg()), "Program ", prog.name, " id: ", proginfo.id, " Status: ", proginfo.status, " Last run: ", prog.lastRunTime );
                                     }
                                     var progid = "prog_" + proginfo.id;
@@ -994,7 +1002,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                         console.log(e);
                     }
                 });
-
+                updateOptions(false, reloadpath);
             }
 
         }
@@ -1092,12 +1100,9 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                 });
 
                 // update things and reload page after handling all tiles
-                // wait ten seconds just to give variables and programs some room
-                if ( reload && reloadpath ) {
-                    setTimeout( function() {
-                        updateOptions(reloadpath);
-                    }, 10000);
-                }
+                setTimeout( function() {
+                    updateOptions(reload, reloadpath);
+                }, 5000);
             }
         }
     }
@@ -1281,7 +1286,7 @@ function getMaxIndex() {
 }
 
 // updates the global options array with new things found on hub
-function updateOptions(reloadpath) {
+function updateOptions(reload, reloadpath) {
 
     var update = false;
     if ( !GLB.options ) {
@@ -1327,7 +1332,7 @@ function updateOptions(reloadpath) {
     }
 
     // signal clients to reload
-    if ( reloadpath !== false ) {
+    if ( reload && reloadpath) {
         pushClient("reload", reloadpath);
     }
 }
@@ -1447,9 +1452,10 @@ function getLoginPage(uname) {
     return $tc;
 }
 
-function getAuthPage(uname, hostname, hpcode) {
+function getAuthPage(uname, hostname, pathname, rmsg) {
     var $tc = "";
     var skin = getSkin(uname);
+    if ( !rmsg ) { rmsg = ""; }
     $tc += utils.getHeader(skin);
     $tc += "<h2>" + utils.APPNAME + " Hub Authorization</h2>";
 
@@ -1525,19 +1531,10 @@ function getAuthPage(uname, hostname, hpcode) {
                   "hubTimer": 0, "hubAccess": "", "hubEndpt": ""};
     authhubs.push(newhub);
 
-    var webSocketUrl = "";
-    if ( config.webSocketServerPort && !isNaN(parseInt(config.webSocketServerPort)) ) {
-        var icolon = hostname.indexOf(":");
-        if ( icolon >= 0 ) {
-            webSocketUrl = "ws://" + hostname.substr(0, icolon);
-        } else {
-            webSocketUrl = "ws://" + hostname;
-        }
-        webSocketUrl = webSocketUrl + ":" + config.webSocketServerPort;
-    }
-    
-    $tc += utils.hidden("returnURL", GLB.returnURL);
+    var webSocketUrl = getSocketUrl(hostname);
     $tc += utils.hidden("pagename", "auth");
+    $tc += utils.hidden("returnURL", GLB.returnURL);
+    $tc += utils.hidden("pathname", pathname);
     $tc += utils.hidden("webSocketUrl", webSocketUrl);
     $tc += "<div class=\"greetingopts\">";
     $tc += "<h3><span class=\"startupinp\">Last update: " + lastedit + "</span></h3>";
@@ -1547,7 +1544,7 @@ function getAuthPage(uname, hostname, hpcode) {
     if ( DEBUG2 ) {
         console.log( (ddbg()), "Hub auth default hub: ", GLB.defhub);
     }
-    if ( GLB.defhub && GLB.defhub!=="-1" ) {
+    if ( GLB.defhub && GLB.defhub.toString() !== "-1" ) {
         var defhub = GLB.defhub;
         for ( var idx in allthings) {
             var thing = allthings[idx];
@@ -1558,7 +1555,7 @@ function getAuthPage(uname, hostname, hpcode) {
         var ntc= "Hub with hubId= " + defhub + " was authorized and " + numnewthings + " devices were retrieved.";
     } else {
         defhub = authhubs[0]["hubId"];
-        ntc = "";
+        ntc = rmsg;
     }
 
     $tc += "<div id=\"newthingcount\">" + ntc + "</div>";
@@ -1596,7 +1593,7 @@ function getAuthPage(uname, hostname, hpcode) {
         // for each hub make a section with its own form that comes back here as a post
         $tc +="<div id=\"authhub_" + hubId + "\" hubid=\"" + hubId + "\" hubtype=\"" + hubType + "\" class=\"" + hubclass + "\">";
         $tc += "<form id=\"hubform_" + hubId + "\" class=\"houseauth\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
-        $tc += utils.hidden("doauthorize", hpcode);
+        // $tc += utils.hidden("doauthorize", hpcode);
 
         // we use this div below to grab the hub type dynamically chosen
         $tc += "<div id=\"hubdiv_" + hubId + "\"><label class=\"startupinp\">Hub Type: </label>";
@@ -3117,7 +3114,7 @@ function addSpecials() {
     // this tile cannot be customized by the user due to its unique nature
     // but it can be visually styled just like any other tile
     var controlval = {"name": "Controller", "showoptions": "Options","refreshpage": "Refresh","c__refactor": "Reset",
-                 "c__reauth": "Re-Auth","showid": "Show Info","toggletabs": "Toggle Tabs",
+                 "c__userauth": "Re-Auth","showid": "Show Info","toggletabs": "Toggle Tabs",
                  "showdoc": "Documentation",
                  "blackout": "Blackout","operate": "Operate","reorder": "Reorder","edit": "Edit"};
     controlval = getCustomTile(controlval, "control", "control_1");
@@ -3409,8 +3406,6 @@ function processIsyMessage(isymsg) {
 
                     pvalue = translateIsy(bid, control[0], uom, pvalue, newval, "");
                     var subid = mapIsy(control[0], uom);
-                    // allthings[idx].value = pvalue;
-                    console.log("ISY msg... bid: ", bid, " subid: ", subid, " pvalue: ", pvalue);
                     pushClient(bid, "isy", subid, pvalue, false, false);
 
                     // process rules and links
@@ -3717,7 +3712,9 @@ function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
     // we also use this to prevent dup rules within the same doAction cycle
     var itemhash = pw_hash(item,'md5');
 
-    console.log((ddbg()), "RULE item: ", item, " hash: ", itemhash, " caller: ", rulecaller);
+    if ( DEBUG11 ) {
+        console.log((ddbg()), "RULE item: ", item, " hash: ", itemhash, " caller: ", rulecaller);
+    }
 
     if ( ! GLB.rules ) {
         GLB.rules = {};
@@ -3828,7 +3825,7 @@ function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
 
                     // restart all clients to show the newly created field
                     // this only happens the first time the rule is triggered
-                    pushClient("reload", "/");
+                    // pushClient("reload", "/");
                 }
 
                 // handle level sliders and the funky attr values for other tiles
@@ -4163,8 +4160,8 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
 
     function getHubResponse(err, res, body) {
         var pvalue;
-        var idx = swtype + "|" + swid;
-        console.log((ddbg()), "ST or HE hub call returned: ", body);
+        // var idx = swtype + "|" + swid;
+        console.log((ddbg()), hub.hubType, " hub: ", hub.hubName, " call returned: ", body);
         if ( err ) {
             console.log( (ddbg()), "error calling ST or HE hub: ", err);
         } else {
@@ -4206,9 +4203,10 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
         } else {
             var result = parser.parse(body);
             var rres = result.RestResponse;
-            if ( DEBUG7 ) {
-                console.log( (ddbg()), "ISY doAction: ", " isyresp: ", isyresp, " swid: ", swid, " type: ", swtype, " subid: ", subid, " cmd: ", cmd, " body: ", body);
-            }
+            console.log((ddbg()), hub.hubType, " hub: ", hub.hubName, " call returned: ", body);
+            // if ( DEBUG7 ) {
+            //     console.log( (ddbg()), "ISY doAction: ", " isyresp: ", isyresp, " swid: ", swid, " type: ", swtype, " subid: ", subid, " cmd: ", cmd, " body: ", body);
+            // }
             // update all clients - this is actually not needed if your server is accessible to websocket updates
             // because ISY will push state updates via a websocket
             // and that will process a similar pushClient but for only those things that change
@@ -5098,14 +5096,13 @@ function getInfoPage(uname, returnURL, pathname) {
 
 function hubFilters(hubpick, ncols) {
     var options = GLB.options;
-    var $useroptions = options["useroptions"];
+    var useroptions = options["useroptions"];
     var configoptions = options["config"];
     var $hubs = configoptions["hubs"];
-    var $thingtypes = getTypes();
+    var thingtypes = getTypes();
 
-    var retpage = GLB.returnURL;
     var $tc = "";
-    $tc+= "<form id=\"filteroptions\" class=\"options\" name=\"filteroptions\" action=\"" + retpage + "\"  method=\"POST\">";
+    $tc+= "<form id=\"filteroptions\" class=\"options\" name=\"filteroptions\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
     
     // if more than one hub then let user pick which one to show
     var hubpick = "all";
@@ -5141,16 +5138,16 @@ function hubFilters(hubpick, ncols) {
 
     $tc+= "<table class=\"useroptions\"><tr>";
     var $i= 0;
-    for (var $iopt in $thingtypes) {
-        var $opt = $thingtypes[$iopt];
+    for (var $iopt in thingtypes) {
+        var $opt = thingtypes[$iopt];
         $i++;
-        if ( in_array($opt, $useroptions ) ) {
+        if ( in_array($opt, useroptions ) ) {
             $tc+= "<td><input id=\"cbx_" + $i + "\" type=\"checkbox\" name=\"useroptions[]\" value=\"" + $opt + "\" checked=\"1\">";
         } else {
             $tc+= "<td><input id=\"cbx_" + $i + "\" type=\"checkbox\" name=\"useroptions[]\" value=\"" + $opt + "\">";
         }
         $tc+= "<label for=\"cbx_" + $i + "\" class=\"optname\">" + $opt + "</label></td>";
-        if ( $i % ncols == 0 && $i < utils.count($thingtypes) ) {
+        if ( $i % ncols == 0 && $i < utils.count(thingtypes) ) {
             $tc+= "</tr><tr>";
         }
     }
@@ -5284,16 +5281,28 @@ function tsk($timezone, $skin, $uname, $port, $webSocketServerPort, $fast_timer,
     
 }
 
-function getOptionsPage(uname, pathname) {
-    var retpage = GLB.returnURL;
-    var $thingtypes = getTypes();
-    var specialtiles = getSpecials();
+function getSocketUrl(hostname) {
+    var webSocketUrl = "";
+    var configoptions = GLB.options.config;
+    if ( configoptions.webSocketServerPort && !isNaN(parseInt(configoptions.webSocketServerPort)) ) {
+        var icolon = hostname.indexOf(":");
+        if ( icolon >= 0 ) {
+            webSocketUrl = "ws://" + hostname.substr(0, icolon);
+        } else {
+            webSocketUrl = "ws://" + hostname;
+        }
+        webSocketUrl = webSocketUrl + ":" + configoptions.webSocketServerPort;
+    }
+    return webSocketUrl;
+}
 
+function getOptionsPage(uname, hostname, pathname) {
+    var specialtiles = getSpecials();
     var options = GLB.options;
-    var $roomoptions = options["rooms"];
-    var $thingoptions = options["things"];
+    var roomoptions = options["rooms"];
+    var thingoptions = options["things"];
     var indexoptions = options["index"];
-    var $useroptions = options["useroptions"];
+    var useroptions = options["useroptions"];
     var configoptions = options["config"];
     var skin = getSkin(uname);
     var $port = configoptions["port"];
@@ -5303,7 +5312,6 @@ function getOptionsPage(uname, pathname) {
     var $kioskoptions = configoptions["kiosk"];
     var $ruleoptions = configoptions["rules"];
     var $timezone = configoptions["timezone"];
-    var $uname = uname;
     var polisyip = configoptions["polisyip"] || "localhost";
 
     var hubpick = "all";
@@ -5314,18 +5322,18 @@ function getOptionsPage(uname, pathname) {
     var $tc = "";
     $tc += utils.getHeader(skin);
     $tc += "<h3>" + utils.APPNAME + " Options</h3>";
-    $tc += "<div class=\"formbutton formauto\"><a href=\"" + retpage + "\">Cancel and Return to HousePanel</a></div>";
+    $tc += "<div class=\"formbutton formauto\"><a href=\"" + GLB.returnURL + "\">Cancel and Return to HousePanel</a></div>";
     
-    // $tc += "<div id=\"optionstable\" class=\"optionstable\">";
-
-    $tc += utils.hidden("returnURL", retpage);
-    $tc += utils.hidden("pathname", pathname);
+    var webSocketUrl = getSocketUrl(hostname);
     $tc += utils.hidden("pagename", "options");
+    $tc += utils.hidden("returnURL", GLB.returnURL);
+    $tc += utils.hidden("pathname", pathname);
+    $tc += utils.hidden("webSocketUrl", webSocketUrl);
 
     $tc += hubFilters(hubpick, 7);
-    $tc += tsk($timezone, skin, $uname, $port, $webSocketServerPort, $fast_timer, $slow_timer, polisyip);
+    $tc += tsk($timezone, skin, uname, $port, $webSocketServerPort, $fast_timer, $slow_timer, polisyip);
 
-    $tc += "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + retpage + "\"  method=\"POST\">";
+    $tc += "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
 
     $tc += "<div class=\"filteroption\">";
     $tc += "Specify number of special tiles: ";
@@ -5382,9 +5390,8 @@ function getOptionsPage(uname, pathname) {
     $tc += "<th class=\"hubname\">Hub</th>";
    
     // list the room names in the proper order
-    // for ($k=0; $k < count($roomoptions); $k++) {
-    for (var $roomname in $roomoptions) {
-        $tc+= "<th class=\"roomname\">" + $roomname;
+    for (var roomname in roomoptions) {
+        $tc+= "<th class=\"roomname\">" + roomname;
         $tc+= "</th>";
     }
     $tc += "</tr></thead>";
@@ -5442,7 +5449,7 @@ function getOptionsPage(uname, pathname) {
             $special = "";
         }
         var $odd = $evenodd = false;
-        if (in_array($thetype, $useroptions)) {
+        if (in_array($thetype, useroptions)) {
             $evenodd = !$evenodd;
             $evenodd ? $odd = " odd" : $odd = "";
             $tc+= "<tr type=\"" + $thetype + "\" tile=\"" + $thingindex + "\" class=\"showrow" + $odd + $special + "\">";
@@ -5466,14 +5473,11 @@ function getOptionsPage(uname, pathname) {
 
         // loop through all the rooms
         // this addresses room bug
-        for ( var $roomname in $roomoptions ) {
+        for ( var roomname in roomoptions ) {
             
             // get the name of this room for this column
-            // $roomname = array_search($k, $roomoptions);
-            // $roomlist = array_keys($roomoptions, $k);
-            // $roomname = $roomlist[0];
-            if ( array_key_exists($roomname, $thingoptions) ) {
-                var $things = $thingoptions[$roomname];
+            if ( array_key_exists(roomname, thingoptions) ) {
+                var $things = thingoptions[roomname];
                                 
                 // now check for whether this thing is in this room
                 $tc+= "<td>";
@@ -5494,9 +5498,9 @@ function getOptionsPage(uname, pathname) {
                 }
                 
                 if ( $ischecked ) {
-                    $tc+= "<input type=\"checkbox\" name=\"" + $roomname + "[]\" value=\"" + $thingindex + "\" checked=\"1\" >";
+                    $tc+= "<input type=\"checkbox\" name=\"" + roomname + "[]\" value=\"" + $thingindex + "\" checked=\"1\" >";
                 } else {
-                    $tc+= "<input type=\"checkbox\" name=\"" + $roomname + "[]\" value=\"" + $thingindex + "\" >";
+                    $tc+= "<input type=\"checkbox\" name=\"" + roomname + "[]\" value=\"" + $thingindex + "\" >";
                 }
                 $tc+= "</td>";
             }
@@ -5592,31 +5596,20 @@ function mainPage(uname, hostname, pathname) {
     $tc += "</div>";
 
     // set the websock servername as same as hosted page but different port
-    var webSocketUrl = "";
-    if ( config.webSocketServerPort && !isNaN(parseInt(config.webSocketServerPort)) ) {
-        var icolon = hostname.indexOf(":");
-        if ( icolon >= 0 ) {
-            webSocketUrl = "ws://" + hostname.substr(0, icolon);
-        } else {
-            webSocketUrl = "ws://" + hostname;
-        }
-        webSocketUrl = webSocketUrl + ":" + config.webSocketServerPort;
-    }
+    var webSocketUrl = getSocketUrl(hostname);
     
     // include form with useful data for js operation
     $tc += "<form id='kioskform'>";
-    $tc += utils.hidden("pagename", "main");
-    var erstr =  ENABLERULES ? "true" : "false"
-    $tc += utils.hidden("enablerules", erstr);
+    // var erstr =  ENABLERULES ? "true" : "false"
+    // $tc += utils.hidden("enablerules", erstr);
 
     // save the socket address for use on js side
-    // var webSocketUrl = config.webSocketServerPort ? ("ws://" + serverName + ":" + config.webSocketServerPort) : "";
-    $tc += utils.hidden("webSocketUrl", webSocketUrl);
-
     // save Node.js address for use on the js side
+    $tc += utils.hidden("pagename", "main");
     $tc += utils.hidden("returnURL", GLB.returnURL);
     $tc += utils.hidden("pathname", pathname);
-    $tc += utils.hidden("skinid", skin, "skinid");
+    $tc += utils.hidden("webSocketUrl", webSocketUrl);
+    // $tc += utils.hidden("skinid", skin, "skinid");
 
     // show user buttons if we are not in kiosk mode
     if ( !kioskmode ) {
@@ -5624,7 +5617,7 @@ function mainPage(uname, hostname, pathname) {
         $tc +='<div id="showoptions" class="formbutton">Options</div>';
         $tc +='<div id="refreshpage" class="formbutton">Refresh</div>';
         // $tc +='<div id="refactor" class="formbutton confirm">Refactor</div>';
-        $tc +='<div id="reauth" class="formbutton confirm">Hub Auth</div>';
+        $tc +='<div id="userauth" class="formbutton confirm">Hub Auth</div>';
         $tc +='<div id="showid" class="formbutton">Show Info</div>';
         $tc +='<div id="toggletabs" class="formbutton">Hide Tabs</div>';
         $tc +='<div id="blackout" class="formbutton">Blackout</div>';
@@ -5655,28 +5648,23 @@ function saveFilters(body) {
     if ( DEBUG4 ) {
         console.log( (ddbg()), "filters save request: ", body);
     }
-    var rewrite = false;
     var result = {};
 
     if ( body.useroptions ) {
         GLB.options["useroptions"] = body.useroptions;
         result.useroptions = body.useroptions;
-        rewrite = true;
     }
 
     if ( typeof body.huboptpick !== "undefined" ) {
         GLB.options["config"]["hubpick"] = body.huboptpick;
         result.huboptpick = body.huboptpick;
-        rewrite = true;
     }
 
-    if ( rewrite ) {
-        writeOptions(GLB.options);
-    }
     return result;
 }
 
-function saveUserPw(body, uname) {
+// process username and password edits on Options page and Login page
+function saveUserPw(res, body, uname) {
     if ( DEBUG3 ) {
         console.log( (ddbg()), "password save request: ", body, " uname: ", uname);
     }
@@ -5750,26 +5738,14 @@ function saveUserPw(body, uname) {
                 uname = olduname;
             }
         } else if ( key==="pword" ) {
-            val = val.trim();
-            if ( val!=="" ) {
-                hash = pw_hash(val);
-            } else {
-                hash = "";
-            }
+            hash = pw_hash(val.trim());
         }
     }
-
-    // now that we have all the new facts, set up password field
-    // process username and password settings and save in skin specific loc
-    // includes logic to bundle the skin with this user so that
-    // now each user can use their own skin if they want
-
     // if password field is blank and user name is the same, keep old password
     if ( olduname===uname && hash==="" ) {
         hash = oldhash;
     }
 
-    // 
     // set the skin and replace the custom file with that skin's version
     // but first check to make sure it is a valid name
     if ( !fs.existsSync(skin + "/housepanel.css") ) {
@@ -5792,15 +5768,18 @@ function saveUserPw(body, uname) {
 
     // set some return values
     result.uname = uname;
+    result.hashname = pw_hash(uname);
     result.pword = hash;
     result.skin = skin;
     if ( DEBUG3 ) {
         console.log( (ddbg()), "saveuserpw processed: ", result, " uname: ", uname, " oldpw: ", oldhash, " newpw: ", hash, " polisyip: ", polisyip);
     }
 
-    // write options to file
-    writeOptions(GLB.options);
-    writeRoomThings(GLB.options, uname);
+    // load the new room settings
+    if ( uname!== olduname ) {
+        setCookie(res, "uname", result.hashname);
+        readRoomThings("saveUserPw", uname);
+    }
 
     return result;
 }
@@ -5812,34 +5791,35 @@ function processOptions(uname, optarray) {
         console.log( (ddbg()), "Process Options - Before Processing");
         console.log( (ddbg()), UTIL.inspect(GLB.options, false, null, false));
     }
-    var specialtiles = getSpecials();
+    // save existing uname options
+    writeRoomThings(GLB.options, uname);
     var options = clone(GLB.options);
 
     // start with a blank slate
     options["things"] = {};
-    for( var $room in GLB.options["rooms"]) {
-        options["things"][$room] = [];  // clone(GLB.options["things"][$roomname]);
+    for( var room in GLB.options["rooms"]) {
+        options["things"][room] = [];
     }
 
-    // var $oldoptions = clone(GLB.options);
+    var specialtiles = getSpecials();
     var configoptions = options["config"];
-    var $roomnames = Object.keys(options["rooms"]);
+    var roomnames = Object.keys(options["rooms"]);
     if ( !is_object(configoptions["specialtiles"]) ) {
         configoptions["specialtiles"] = {};
     }
 
     // // use clock instead of blank for default only tile
-    var $onlytile = GLB.options["index"]["clock|clockdigital"];
-    var onlyarr = [$onlytile,0,0,1,""];
+    var onlytile = GLB.options["index"]["clock|clockdigital"];
+    var onlyarr = [onlytile,0,0,1,""];
 
     // // checkbox items simply will not be there if not selected
     configoptions["kiosk"] = "false";
     configoptions["rules"] = "false";
 
     // force all three to be given for change to happen
-    var $city = "";
-    var $region = "";
-    var $code = "";
+    var city = "";
+    var region = "";
+    var code = "";
     var fcastcity = "";
     var fcastregion = "";
     var fcastcode = "";
@@ -5847,7 +5827,7 @@ function processOptions(uname, optarray) {
     // // get all the rooms checkboxes and reconstruct list of active things
     // // note that the list of checkboxes can come in any random order
     for (var key in optarray) {
-        var $val = optarray[key];
+        var val = optarray[key];
 
         //skip the returns from the submit button and the flag
         if (key==="options" || key==="api" || key==="useajax" ) {
@@ -5857,92 +5837,66 @@ function processOptions(uname, optarray) {
         } else if ( key==="rules") {
             configoptions["rules"] = ENABLERULES ? "true" : "false";
         } else if ( key==="accucity" ) {
-            $city = $val.trim();
+            city = val.trim();
         } else if ( key==="accuregion" ) {
-            $region = $val.trim();
+            region = val.trim();
         } else if ( key==="accucode" ) {
-            $code = $val.trim();
+            code = val.trim();
         } else if ( key==="fcastcity" ) {
-            fcastcity = $val.trim();
+            fcastcity = val.trim();
         } else if ( key==="fcastregion" ) {
-            fcastregion = $val.trim();
+            fcastregion = val.trim();
         } else if ( key==="fcastcode" ) {
-            fcastcode = $val.trim();
+            fcastcode = val.trim();
         
         // handle user selected special tile count
         } else if ( key.substr(0,4)==="cnt_" ) {
-            var $stype = key.substr(4);
-            if ( array_key_exists($stype, specialtiles) ) {
-                var $spid = specialtiles[$stype][0];
-                var $customcnt = parseInt($val);
-                createSpecialIndex($customcnt, $stype, $spid);
+            var stype = key.substr(4);
+            if ( array_key_exists(stype, specialtiles) ) {
+                var spid = specialtiles[stype][0];
+                var customcnt = parseInt(val);
+                createSpecialIndex(customcnt, stype, spid);
                 configoptions["specialtiles"] = clone(GLB.options["config"]["specialtiles"]);
                 
             }
         
         // made this more robust by checking room name being valid
-        } else if ( in_array(key, $roomnames) && is_array($val) ) {
-            var $roomname = key;
+        } else if ( in_array(key, roomnames) && is_array(val) ) {
+            var roomname = key;
             
-            // first save the existing order of tiles if still there
-            // this will preserve user drag and drop positions
-            // but if a tile is removed then all tiles after it will be
-            // shown shifted as a result
-            var $lasttop = 0;
-            var $lastleft = 0;
-            var $lastz = 1;
-
             // first put all existing tiles in the room
             // this retains the existing order
-            GLB.options["things"][$roomname].forEach(function(newtile) {
+            GLB.options["things"][roomname].forEach(function(newtile) {
                 var tnum = parseInt(newtile[0]);
-                var rnum = array_search(tnum, $val);
+                var rnum = array_search(tnum, val);
                 if ( rnum!==false ) {
-                    options["things"][$roomname].push(newtile);
+                    options["things"][roomname].push(newtile);
                 }
             });
-
-            // get the index offset of last existing tile
-            if ( options["things"][$roomname].length > 0 ) {
-                var lastitem = options["things"][$roomname].length -1;
-                var arr = options["things"][$roomname][lastitem];
-                $lasttop = arr[1];
-                $lastleft = arr[2];
-                $lastz = arr[3];
-
-                // set position to next to last one unless it is moved a lot
-                // the 400 distance is subjective but works in most cases
-                if ( $lasttop < -400 || $lasttop > 400 || $lastleft < -400 || $lastleft > 400 ) {
-                    $lasttop = 0;
-                    $lastleft = 0; 
-                }
-            }
 
             // add any new ones that were not there before
-            $val.forEach(function($tilestr) {
-                var tilenum = parseInt($tilestr);
-                if ( inroom(tilenum, GLB.options["things"][$roomname]) === false ) {
-                    var newtile = [tilenum,$lasttop,$lastleft, $lastz, ""];
-                    options["things"][$roomname].push(newtile);
+            val.forEach(function(tilestr) {
+                var tilenum = parseInt(tilestr);
+                if ( inroom(tilenum, GLB.options["things"][roomname]) === false ) {
+                    var arrtile = [tilenum, 0, 0, 1, ""];
+                    options["things"][roomname].push(arrtile);
                 }
             });
 
-            var rmnum = options["rooms"][$roomname];
             // put a clock in a room if it is empty
-            if ( options["things"][$roomname].length === 0  ) {
-                options["things"][$roomname].push(onlyarr);
+            if ( options["things"][roomname].length === 0  ) {
+                options["things"][roomname].push(onlyarr);
             }
         }
     }
     
     // everything from this point on is after processing the options table
     // start by handling the weather
-    if ( $city && $region && $code ) {
-        configoptions["accucity"] = $city;
-        configoptions["accuregion"] = $region;
-        configoptions["accucode"] = $code;
-        writeAccuWeather($city, $region, $code);
-
+    if ( city && region && code ) {
+        configoptions["accucity"] = city;
+        configoptions["accuregion"] = region;
+        configoptions["accucode"] = code;
+        writeAccuWeather(city, region, code);
     }
     if ( fcastcity && fcastcode ) {
         configoptions["fcastcity"] = fcastcity;
@@ -5956,13 +5910,12 @@ function processOptions(uname, optarray) {
     
     if (DEBUG4) {
         console.log( (ddbg()), "Process Options - After Processing");
-        console.log( (ddbg()), UTIL.inspect(GLB.options, false, null, false));
+        console.log( (ddbg()), UTIL.inspect(options, false, null, false));
     }
 
-    // write options to file
+    // save options
     GLB.options = clone(options);
-    writeOptions(GLB.options);
-    writeRoomThings(GLB.options, uname);
+    return "success";
 }
 
 function changePageName(uname, oldname, newname) {
@@ -6274,17 +6227,11 @@ function apiCall(body, protocol, req, res) {
         udclient.publish("housepanel/apiCall", JSON.stringify(body, null, 1));
     }
  
-    if ( hubs && hubs.length ) {
-        GLB.defhub = hubs[0]["hubId"];
-    } else {
-        GLB.defhub = "-1";
-    }
     var hubid = body["hubid"] || "auto";
     if ( body["hubnum"] ) {
         var hubnum = parseInt(body["hubnum"]);
         if ( !isNaN(hubnum) && hubnum >=0 && hubnum < hubs.length ) {
             hubid = hubs[hubnum]["hubId"];
-            GLB.defhub = hubid;
         } else {
             hubid = "auto";
         }
@@ -6488,6 +6435,7 @@ function apiCall(body, protocol, req, res) {
         case "things":
             result = clone(allthings);
             if ( swattr==="reload" ) {
+                allthings = {};
                 getAllThings(true);
             }
             break;
@@ -6500,14 +6448,32 @@ function apiCall(body, protocol, req, res) {
         case "filteroptions":
             if ( protocol==="POST" ) {
                 result = saveFilters(body);
+                console.log("Filters: ", result);
+                writeOptions(GLB.options);
             } else {
                 result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
             }
         break;
 
         case "saveuserpw":
+        case "userpw":
             if ( protocol==="POST" ) {
-                result = saveUserPw(body, uname);
+                result = saveUserPw(res, body, uname);
+                console.log("User pw: ", result);
+                writeOptions(GLB.options);
+            } else {
+                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+            }
+            break;
+
+        case "saveoptions":
+            if ( protocol==="POST" ) {
+                result = processOptions(uname, body);
+                console.log("Process options: ", result, GLB.options);
+                if ( result === "success" ) {
+                    writeOptions(GLB.options);
+                    writeRoomThings(GLB.options, uname);
+                }
             } else {
                 result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
             }
@@ -6539,15 +6505,6 @@ function apiCall(body, protocol, req, res) {
                         writeCustomCss(getSkin(uname), GLB.newcss);
                     }
                 }
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-            break;
-
-        case "saveoptions":
-            if ( protocol==="POST" ) {
-                processOptions(uname, body);
-                result = "success";
             } else {
                 result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
             }
@@ -6684,7 +6641,9 @@ function apiCall(body, protocol, req, res) {
                 // if user provides hub access info, use it
                 // for ISY hubs we know the endpoint as /rest so use it
                 if ( body.hubType==="ISY" ) {
+                    body.userAccess = body.clientId + ":" + body.clientSecret;
                     body.userEndpt = hub["hubHost"] + "/rest";
+                    hub["userAccess"] = body.userAccess;
                     hub["userEndpt"] = body.userEndpt;
                 }
 
@@ -6693,16 +6652,13 @@ function apiCall(body, protocol, req, res) {
                     hub["hubName"] = hub["hubType"];
                 }
 
-                if ( body.userEndpt ) {
+                if ( body.userAccess && body.userEndpt ) {
                     // remove trailing slash if it is there
                     if ( body.userEndpt.substr(-1) === "/" ) {
                         body.userEndpt = body.userEndpt.substr(0, body.userEndpt.length -1);
+                        hub["userEndpt"] = body.userEndpt;
                     }
-                    hub["hubEndpt"] = body.userEndpt;
                     if (body.hubType==="ISY") {
-                        body.userAccess = body.clientId + ":" + body.clientSecret;
-                        hub["userAccess"] = body.userAccess;
-                        hub["hubAccess"] = body.userAccess;
 
                         // get the number of ISY hubs already configured
                         // if the id is given this means the hub exists
@@ -6731,10 +6687,9 @@ function apiCall(body, protocol, req, res) {
                         }
 
                     }
-                }
 
-                if ( body.userAccess && body.hubType!=="ISY" ) {
                     hub["hubAccess"] = body.userAccess;
+                    hub["hubEndpt"] = body.userEndpt;
                 }
 
                 // update existing or add a new hub
@@ -6763,16 +6718,16 @@ function apiCall(body, protocol, req, res) {
                     // this forces page reload with all the new stuff
                     // notice the reference to /reauth in the call to get Devices
                     // this makes the final read redirect back to reauth page
-                    var accesstoken  = hub["hubAccess"];
-                    var hubEndpt = hub["hubEndpt"];
+                    var accesstoken  = hub["userAccess"];
+                    var hubEndpt = hub["userEndpt"];
 
                     // for ISY we can go right to getting devices
                     // for ST and HE we need to use getHubInfo to first get hubId and hubName
                     // and then we call devices from there given the async nature of Node
-                    // this is much like what happens in the getAccessToken function in the OAUTH flow
+                    // this is much like what happens in the OAUTH flow
                     // console.log("hubType= ", hubType);
                     if ( hubType==="ISY" ) {
-                        // console.log("get devices...");
+                        console.log("getting ISY devices...");
                         getDevices(hubnum, hubType, accesstoken, hubEndpt, clientId, clientSecret, hubName, true, "/reauth");
                     } else {
                         getHubInfo(hub, accesstoken, hubEndpt, clientId, clientSecret);
@@ -6832,7 +6787,7 @@ function apiCall(body, protocol, req, res) {
                 break;
 
         case "reload":
-            pushClient("reload", "/");
+            // pushClient("reload", "/");
             break;
 
         case "reset":
@@ -7045,6 +7000,7 @@ try {
 // retrieve all nodes/things
 // client pages are refreshed when each hub is done reading
 if ( app && applistening ) {
+    allthings = {};
     getAllThings(true);
     resetRules();
     resetRuleTimers();
@@ -7065,25 +7021,13 @@ if ( app && applistening ) {
 
     app.get('*', function (req, res) {
         
-        var $tc;
+        var $tc = "";
         GLB.returnURL = req.protocol + "://" + req.headers.host;
         var uname;
         var checkpw;
 
-        // set the global variable so other functions can return here
-        var queryobj = req.query || {};
-        var isquery = (utils.count(queryobj) > 0);
-
-        if ( isquery ) {
-            $tc = apiCall(queryobj, "GET", req, res);
-            res.send($tc);
-            res.end();
-            return;
-        }
-
         // handle new users
         if ( GLB.newuser || !GLB.options.config || !GLB.options.config["pword"] ) {
-
             uname = "default";
             checkpw = true;
             setCookie(res, "uname", pw_hash(uname));
@@ -7094,7 +7038,26 @@ if ( app && applistening ) {
             writeRoomThings(GLB.options, uname);
             GLB.newuser = true;
         } else {
-        
+            uname = getUserName(req.cookies);
+            GLB.newuser = false;
+        }
+
+        if ( DEBUG3 ) {
+            console.log("pw check: uname=["+uname+"]", " codeuser: ", codeuser, " checkpw= ["+checkpw+"]");
+        }
+
+        // if ( !IGNOREPW && !checkpw ) {
+        //     $tc = getLoginPage(uname);
+        //     res.send($tc);
+        //     res.end();
+
+        if ( req.path==="/" || typeof req.path==="undefined" || req.path==="/undefined" || req.path==="undefined" ) {
+
+            // set the global variable so other functions can return here
+            var queryobj = req.query || {};
+            var isquery = (utils.count(queryobj) > 0);
+            GLB.defhub = "-1";
+
             // first check for a valid login
             uname = getUserName(req.cookies);
             if ( uname && GLB.options.config["pword"][uname] ) {
@@ -7103,22 +7066,6 @@ if ( app && applistening ) {
                 uname = "default";
                 checkpw = false;
             }
-
-        }
-        if ( DEBUG3 ) {
-            console.log("pw check: uname=["+uname+"]", " codeuser: ", codeuser, " checkpw= ["+checkpw+"]");
-        }
-
-        if ( !IGNOREPW && !checkpw ) {
-            $tc = getLoginPage(uname);
-            res.send($tc);
-            res.end();
-
-        } else if ( req.path==="/" || typeof req.path==="undefined" || req.path==="/undefined" || req.path==="undefined" ) {
-
-            // set the global variable so other functions can return here
-            var queryobj = req.query || {};
-            var isquery = (utils.count(queryobj) > 0);
 
             // allow user to manually reset things with this code
             // the hub auth flow is handled with the /reauth path later below
@@ -7135,10 +7082,6 @@ if ( app && applistening ) {
                 pushClient("reload", "/logout");
                 $tc = "Logging out all clients...";
 
-            // handle user provided get api calls
-            } else if ( isquery ) {
-                $tc = apiCall(queryobj, "GET", req, res);
-
             // display the main page if user is in our database
             // don't check password here because it is checked at login
             // and the cookie is set which means all is okay
@@ -7146,17 +7089,13 @@ if ( app && applistening ) {
             // know the login was not successful
             // however it can be bypassed with the IGNOREPW constant
             // but actually that is also checked in the login so not really needed here too
-            } else if ( IGNOREPW || GLB.newuser || array_key_exists(uname, GLB.options.config["pword"]) ) {
-                // reset for next refresh
-                GLB.defhub = "-1";
+            } else if ( IGNOREPW || GLB.newuser || checkpw ) {
                 
                 // set this to always see new user welcome message
                 // otherwise, comment it out
                 // GLB.newuser = true;
-                if ( DEBUG2 ) {
-                    console.log( (ddbg()), "login accepted. uname = ", uname);
-                }
                 if ( DEBUG15 ) {
+                    console.log((ddbg()), "login accepted. uname = ", uname);
                     console.log((ddbg()), "allthings before render: \n", UTIL.inspect(allthings, false, null, false) );
                     console.log((ddbg()), "options before render: \n", UTIL.inspect(GLB.options, false, null, false) );
                 }
@@ -7179,12 +7118,11 @@ if ( app && applistening ) {
 
         } else if ( req.path==="/showoptions") {
             readRoomThings("main", uname);
-            $tc = getOptionsPage(uname, req.path);
+            $tc = getOptionsPage(uname, req.headers.host, req.path);
             res.send($tc);
             res.end();
 
         } else if ( req.path==="/logout") {
-            // readOptions();
             // clear the cookie to force repeat of login page
             res.clearCookie("uname");
             uname = "default";
@@ -7193,39 +7131,52 @@ if ( app && applistening ) {
             res.end();
 
         } else if ( req.path==="/reauth") {
-            // readOptions();
-            d = new Date();
-            hpcode = d.getTime();
-            GLB.hpcode = hpcode.toString();
-            var $tc = getAuthPage(uname, req.headers.host, GLB.hpcode);
+            var $tc = getAuthPage(uname, req.headers.host, req.path, "");
+            res.send($tc);
+            res.end();
+
+        } else if ( req.path==="/userauth") {
+            GLB.defhub = "-1";
+            var $tc = getAuthPage(uname, req.headers.host, "/reauth", "");
             res.send($tc);
             res.end();
 
         } else if ( req.path==="/oauth") {
-            var queryobj = req.query || {};
-            if ( queryobj["code"] ) {
+            if ( req.query && req.query["code"] ) {
                 var hubnum = GLB.defhub;
                 var hub = findHub(hubnum);
+                if ( hub ) {
+                    var rmsg = "Retrieving devices from Hub: " + hub.hubName;
+                    console.log( (ddbg()), "Getting access token for hub: ", hub);
 
-                // get token, endpt, and retrieve devices
-                // this goes through a series of callbacks
-                // and ends with a pushClient to update the auth page
-                getAccessToken(queryobj["code"], hub);
+                    // get token, endpt, and retrieve devices
+                    // this goes through a series of callbacks
+                    // and ends with a pushClient to update the auth page
+                    getAccessToken(req.query["code"], hub);
+                } else {
+                    console.log( (ddbg()), "error - hub not found during authorization flow");
+                    GLB.defhub = "-1";
+                    rmsg = "";
+                }
             } else {
                 GLB.defhub = "-1";
+                rmsg = "";
             }
-            d = new Date();
-            hpcode = d.getTime();
-            GLB.hpcode = hpcode.toString();
-            var $tc = getAuthPage(uname, req.headers.host, GLB.hpcode);
+            var $tc = getAuthPage(uname, req.headers.host, "/reauth", rmsg);
+
             res.send($tc);
             res.end();
 
         } else if ( req.path==="/reset") {
             readOptions("reset");
+            allthings = {};
             getAllThings(true);
             res.send("Resetting...");
             res.end();
+
+            // handle user provided get api calls
+        } else if ( isquery ) {
+            $tc = apiCall(queryobj, "GET", req, res);
 
         } else {
             var file = path.join(dir, req.path.replace(/\/$/, '/index.html'));
@@ -7323,7 +7274,7 @@ if ( hostname && fs.existsSync("ssl/polyglot.crt") && fs.existsSync("ssl/client.
                 ca: ca, cert: cert, key: key,
                 checkServerIdentity: () => { return null; },
                 rejectUnauthorized: false};
-    udclient = mqtt.connect("mqtts://192.168.11.32", udopts);
+    udclient = mqtt.connect("mqtts://" + polisyip, udopts);
 }
 
 if ( udclient ) {

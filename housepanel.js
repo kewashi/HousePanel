@@ -23,9 +23,9 @@ var priorOpmode = "Operate";
 var pagename = "main";
 
 // set a global socket variable to manage two-way handshake
-var wsSocket = null;
-var webSocketUrl = null;
-var wsinterval = null;
+// var wsSocket = null;
+// var webSocketUrl = null;
+// var wsinterval = null;
 var reordered = false;
 
 // set this global variable to true to disable actions
@@ -218,6 +218,15 @@ $(document).ready(function() {
             }
         }
     }
+
+    // auth page is displayed until reload with updated info so blink
+    if ( pagename==="auth" ) {
+        if ( $("#newthingcount") && $("#newthingcount").html().startsWith("Retrieving") ) {
+            var blinkauth = setInterval(function() {
+                $("#newthingcount").fadeTo(400, 0.1 ).fadeTo(400, 1);
+            }, 1000);
+        }
+    }
     
     // create key bindings for the login screen
     if ( pagename==="login" ) {
@@ -402,48 +411,26 @@ function setupUserOpts() {
 
 function initWebsocket() {
 
-    // get the webSocket info and the timers
+    // get the webSocket info
     try {
-        webSocketUrl = $("input[name='webSocketUrl']").val();
+        var webSocketUrl = $("input[name='webSocketUrl']").val();
     } catch(err) {
-        console.log("Error attempting to retrieve webSocket URL. err: ", err);
         webSocketUrl = null;
     }
     
-    // periodically check for socket open and if not open reopen
+    // set up socket
     if ( webSocketUrl ) {
-        wsSocketCheck();
-        wsinterval = setInterval(wsSocketCheck, 60000);
+        setupWebsocket(webSocketUrl);
     }
 
-}
-
-// check to make sure we always have a websocket
-function wsSocketCheck() {
-    if ( webSocketUrl!==null && ( wsSocket === null || wsSocket.readyState===3 )  ) {
-        setupWebsocket();
-    }
-    
-    if ( !webSocketUrl && wsinterval ) {
-        cancelInterval(wsinterval);
-    }
-}
-
-// send a message over to our web socket
-// this can be any message for future use
-function wsSocketSend(msg) {
-    if ( webSocketUrl && wsSocket && wsSocket.readyState===1 ) {
-        if ( typeof msg === "object" ) {
-            msg = JSON.stringify(msg);
-        }
-        wsSocket.send(msg);
-    }
 }
 
 // new routine to set up and handle websockets
 // only need to do this once - I have no clue why it was done the other way before
-function setupWebsocket()
+function setupWebsocket(webSocketUrl)
 {
+    var wsSocket = null;
+
     try {
         console.log("Creating webSocket for: ", webSocketUrl);
         wsSocket = new WebSocket(webSocketUrl);
@@ -484,7 +471,6 @@ function setupWebsocket()
                     var reloadpage =  cm_Globals.returnURL;
                     window.location.href = reloadpage;
 
-                // otherwise a redirect to a specific page is only done on the requesting tablet
                 } else {
                     if ( thetype.substr(0,1)!=="/" ) {
                         thetype = "/" + thetype;
@@ -497,26 +483,26 @@ function setupWebsocket()
 
             // handle popups returned from a query
             // this currently is not used but could be later
-            if ( presult.popup ) {
-                var showstr = "";
-                $.each(pvalue, function(s, v) {
-                    if ( s!=="password" && !s.startsWith("user_") ) {
-                        var txt = v.toString();
-                        txt = txt.replace(/<.*?>/g,'');
-                        showstr = showstr + s + ": " + txt + "<br>";
-                    }
-                });
-                var winwidth = $("#dragregion").innerWidth();
-                var tile = $('div.thing[bid="'+bid+'"][type="'+thetype+'"]');
-                var leftpos = $(tile).position().left + 5;
-                if ( leftpos + 220 > winwidth ) {
-                    leftpos = leftpos - 110;
-                }
-                var pos = {top: $(tile).position().top + 80, left: leftpos};
-                // console.log("popup pos: ", pos, " winwidth: ", winwidth);
-                createModal("modalpopup", showstr, "body", false, pos, function(ui) {
-                });
-            }
+            // if ( presult.popup ) {
+            //     var showstr = "";
+            //     $.each(pvalue, function(s, v) {
+            //         if ( s!=="password" && !s.startsWith("user_") ) {
+            //             var txt = v.toString();
+            //             txt = txt.replace(/<.*?>/g,'');
+            //             showstr = showstr + s + ": " + txt + "<br>";
+            //         }
+            //     });
+            //     var winwidth = $("#dragregion").innerWidth();
+            //     var tile = $('div.thing[bid="'+bid+'"][type="'+thetype+'"]');
+            //     var leftpos = $(tile).position().left + 5;
+            //     if ( leftpos + 220 > winwidth ) {
+            //         leftpos = leftpos - 110;
+            //     }
+            //     var pos = {top: $(tile).position().top + 80, left: leftpos};
+            //     // console.log("popup pos: ", pos, " winwidth: ", winwidth);
+            //     createModal("modalpopup", showstr, "body", false, pos, function(ui) {
+            //     });
+            // }
 
             // grab name and subid for console log
             var pname = pvalue["name"] ? pvalue["name"] : "";
@@ -614,7 +600,7 @@ function setupWebsocket()
     // if this socket connection closes then try to reconnect
     wsSocket.onclose = function(){
         console.log("webSocket connection closed for: ", webSocketUrl);
-        wsSocket = null;
+        // initWebsocket();
     };
 }
 
@@ -1141,7 +1127,7 @@ function setupDraggable() {
             revert: "invalid",
     
             start: function(evt, ui) {
-    
+
                 // get the panel name - if the target is in catalog we have to do more work
                 if ( catpanel ) {
                     panel = catpanel;
@@ -1154,7 +1140,10 @@ function setupDraggable() {
                 startPos["z-index"] = parseInt($(evt.target).css("z-index"));
                 
                 // while dragging make sure we are on top
-                $(evt.target).css("z-index", 999);
+                // unless dragging won't be productive due to open dialog
+                if (  modalStatus===0 ) {
+                    $(evt.target).css("z-index", 999);
+                }
     
                 // set relative for new things and absolute for moving existing things
                 if ( $(evt.target).hasClass("catalog-thing") ) {
@@ -1323,7 +1312,14 @@ function setupDraggable() {
 
         // enable dropping things from panel into catalog to remove
         $("#catalog").droppable({
-            accept: "div.panel div.thing",
+            // accept: "div.panel div.thing",
+            accept: function(thing) {
+                var accepting = false;
+                if ( thing.hasClass("thing") && thing.attr("panel")!=="catalog" && modalStatus===0 ) {
+                    accepting = true;
+                }
+                return accepting;
+            },
             tolerance: "fit",
             drop: function(evt, ui) {
                 var thing = ui.draggable;
@@ -1375,57 +1371,44 @@ function setupDraggable() {
 }
 
 // make the post call back to main server
-function dynoPost(ajaxcall, body, id, type, value, attr, reload, callback) {
-    var isreload;
-    var delay = 1000;
+function dynoPost(ajaxcall, body, callback) {
+    var isreload = false;
+    var delay = false;
 
     // if body is not given or is not an object then use all other values
     // to set the object to pass to post call with last one being a reload flag
-    if ( typeof body !== "object" ) { 
-        id = typeof id!=="undefined" ? id : "0";
-        type = typeof type!=="undefined" ? type : "none";
-        value = typeof value!=="undefined" ? value : "none";
-        attr = typeof attr!=="undefined" ? attr : "none";
-        isreload = typeof reload!=="undefined" ? reload : false;
-        body = {api: ajaxcall, id: id, type: type, value: value, attr: attr};
-
-    // if a body object is given then next parameter is treated as a reload flag
-    // and everything after that is ignored
-    } else {
+    if ( typeof body === "object" ) { 
         body["api"] = ajaxcall;
-        if ( typeof id === "undefined" ) {
-            isreload = false;
-            callback = false;
-        } else {
-            isreload = id;
-            if ( typeof type !== "undefined" && !isNaN(parseInt(type)) ) {
-                delay = parseInt(type);
+        if ( body.reload ) {
+            isreload = true;
+            var d = parseInt(body.reload);
+            if ( !isNaN(d) ) {
+                delay = d;
             }
         }
-        isreload = typeof id!=="undefined" ? id : false;
+    } else {
+        body = {api: ajaxcall, id: "none", type: "none"};
     }
 
     if ( callback && typeof callback==="function" ) {
         $.post(cm_Globals.returnURL, body, callback);
 
     } else {
-        // console.log(cm_Globals);
         $.post(cm_Globals.returnURL, body,
             function (presult, pstatus) {
-                if ( isreload && pstatus==="success" ) {
-
-                    // window.location.href = cm_Globals.returnURL;
-                    // don't reload right away... wait one second
-                    setTimeout( function() {
+                if ( isreload ) {
+                    if ( delay ) {
+                        setTimeout( function() {
+                            window.location.href = cm_Globals.returnURL;
+                        }, delay);
+                    } else {
                         window.location.href = cm_Globals.returnURL;
-                    }, delay);
-
-                } else {
-                    // console.log("dyno POST: ", pstatus, " body: ", body, " presult: ", presult);
-                    // clear blinking interval if requested
-                    if ( typeof type!=="undefined" && type==="::blink::" & typeof value!=="undefined" ) {
-                        clearInterval(value);
                     }
+                }
+
+                // clear blinking interval if requested
+                else if ( typeof presult === "object" && presult.blink ) {
+                    clearInterval(presult.blink);
                 }
             }
         );
@@ -1439,24 +1422,35 @@ function execButton(buttonid) {
         if ( !checkInputs() ) { return; }
 
         var fobj = formToObject("filteroptions");
-        dynoPost("filteroptions", fobj);
-
-        // save our username and password info
-        // this is in the tsk function
-
         var uobj = formToObject("userpw");
-        dynoPost("saveuserpw", uobj);
+        var oobj = formToObject("optionspage");
+        // var obj = Object.assign(uobj, oobj);
 
-        // next save our form - this is done asynchronously
-        // when done the server will push a signal to clients to reload
-        var obj = formToObject("optionspage");
-        dynoPost("saveoptions", obj, true);
-        // pause 2 seconds to let save take hold then reload
-        // the callback doesn't seem to work
-        // setTimeout( function() {
-        //     window.location.href = cm_Globals.returnURL;
-        // }, 2000);
-        // window.location.href = cm_Globals.returnURL;
+        try {
+            dynoPost("filteroptions", fobj, function(presult, pstatus) {
+                if ( typeof presult==="object" ) {
+                    console.log("processed filteroptions page.", presult);
+                    dynoPost("saveuserpw", uobj, function(presult, pstatus) {
+                        if ( typeof presult==="object" ) {
+                            console.log("processed saveuserpw page.", presult);
+                            dynoPost("saveoptions", oobj, function(presult, pstatus) {
+                                if ( presult==="success" ) {
+                                    window.location.href = cm_Globals.returnURL;
+                                } else {
+                                    throw "Problem with saving room and thing options";
+                                }
+                            });
+                        } else {
+                            throw "Problem with saving username or password";
+                        }
+                    });
+                } else {
+                    throw "Problem with saving filters";
+                }
+            });
+        } catch (e) {
+            console.log("Failed to properly save Options page. ", e);
+        }
 
     } else if ( buttonid==="optCancel" ) {
         // do nothing but reload the main page
@@ -1472,18 +1466,13 @@ function execButton(buttonid) {
         if ( !checkLogin() ) { return; }
 
         var genobj = formToObject("loginform");
-        // function dynoPost(ajaxcall, body, id, type, value, attr, reload, callback) {
-        dynoPost("dologin", genobj, false, false, false, false, false, function(presult, pstatus) {
+        dynoPost("dologin", genobj, function(presult, pstatus) {
             if ( presult==="error" ) {
-                console.log("login not successful for username: ", uname);
+                console.log("login not successful");
             } else {
-                var uname = presult.uname;
-                console.log("successful login. username: ", uname);
+                console.log("login successful. ", presult);
             }
-
-            setTimeout( function() {
-                window.location.href = cm_Globals.returnURL;
-            }, 1000);
+            window.location.href = cm_Globals.returnURL;
         });
 
     } else if ( buttonid === "blackout") {
@@ -1547,13 +1536,12 @@ function execButton(buttonid) {
         console.log("snap mode: ",snap);
 
     } else if ( buttonid==="refreshpage" ) {
-        var pstyle = "position: absolute; background-color: black; color: white; font-weight: bold; font-size: 32px; left: 400px; top: 300px; width: 350px; height: 150px; margin-top: 50px;";
-        createModal("info", "Screen will refresh in<br/>5 seconds...","body", false, {style: pstyle});
+        var pstyle = "position: absolute; background-color: blue; color: white; font-weight: bold; font-size: 32px; left: 300px; top: 300px; width: 600px; height: 100px; margin-top: 50px;";
+        createModal("info", "Screen may reload multiple times...","body", false, {style: pstyle});
         dynoPost(buttonid);
 
     } else if ( buttonid==="refactor" ) {
         alert("This feature is not yet available.");
-        // dynoPost(buttonid);
 
     // default is to call main node app with the id as a path
     } else {
@@ -1744,47 +1732,31 @@ function setupButtons() {
             // others return a request to start an OATH redirection flow
             formData["api"] = "hubauth";
             $.post(cm_Globals.returnURL, formData,  function(presult, pstatus) {
-                console.log("dynoPost hubauth: ", presult);
+                console.log("hubauth: ", presult);
 
                 if ( pstatus==="success" && typeof presult==="object") {
                     var obj = presult;
                     if ( obj.action === "things" ) {
                         // tell user we are authorizing hub...
                         $("#newthingcount").html("Authorizing " + obj.hubType + " hub: " + obj.hubName).fadeTo(400, 0.1 ).fadeTo(400, 1.0);
-                        var blinkauth = setInterval(function() {
+                        setInterval(function() {
                             $("#newthingcount").fadeTo(400, 0.1 ).fadeTo(400, 1);
                         }, 1000);
-
                     }
 
                     // if oauth flow then start the process
                     else if ( obj.action === "oauth" ) {
-                        $("#newthingcount").html("Redirecting to OAUTH page");
+                        // $("#newthingcount").html("Redirecting to OAUTH page");
                         var nvpreq= "response_type=code&client_id=" + encodeURI(obj.clientId) + "&scope=app&redirect_uri=" + encodeURI(obj.url);
                         var location = obj.host + "/oauth/authorize?" + nvpreq;
+                        // alert("Ready to redirect to location: " + location);
                         window.location.href = location;
+
                     }
                 }
             });
+            evt.stopPropagation();
         });
-
-        // disable cancel auth button when page first loads
-        // and turn it on after 10 seconds which gives time for hubs to load
-        // $("#cancelauth").addClass("disabled").prop("disabled", true);
-        // setTimeout(function() {
-        //     $("#cancelauth").removeClass("disabled").prop("disabled", false);
-        // }, 2000);
-
-        // // send user to options page if first time
-        // // user is done authorizing so make an API call to clean up
-        // // and then return to the main app
-        // $("#cancelauth").click(function(evt) {
-        //     // send a post to server to tell it to reload all the screens
-        //     $.post(cm_Globals.returnURL, 
-        //         {useajax: "reload", id: 0, type: "none"} );
-        //     // window.location.href = cm_Globals.returnURL + "/showoptions";
-        //     evt.stopPropagation(); 
-        // });
         
         // TODO - test and activate this feature
         $("input.hubdel").click(function(evt) {
@@ -1819,7 +1791,7 @@ function setupButtons() {
                                 console.log( ntc );
                                 
                                 // send message over to Node.js to update elements
-                                wsSocketSend("update");
+                                // wsSocketSend("update");
                             } else {
                                 if ( $("#newthingcount") ) {
                                     $("#newthingcount").html(presult);
@@ -2904,7 +2876,7 @@ function addOnoff(targetid, subid, thevalue) {
             $(targetid).addClass("on");
             $(targetid).html(thevalue+"Off");
             thevalue = "on";
-        } else {
+        } else if (subid==="alloff" ) {
             $(targetid).addClass("off");
             $(targetid).html(thevalue+"On");
             thevalue = "off";
