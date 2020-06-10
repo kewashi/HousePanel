@@ -1272,7 +1272,7 @@ function setIsyFields(nodeid, value, props) {
 
 // returns the maximum index from the options
 function getMaxIndex() {
-    var optindex = GLB.index;
+    var optindex = GLB.options.index;
     var maxindex = 0;
     if ( typeof optindex==="object" ) {
         for ( var key in optindex ) {
@@ -5600,8 +5600,8 @@ function mainPage(uname, hostname, pathname) {
     
     // include form with useful data for js operation
     $tc += "<form id='kioskform'>";
-    // var erstr =  ENABLERULES ? "true" : "false"
-    // $tc += utils.hidden("enablerules", erstr);
+    var erstr =  ENABLERULES ? "true" : "false"
+    $tc += utils.hidden("enablerules", erstr);
 
     // save the socket address for use on js side
     // save Node.js address for use on the js side
