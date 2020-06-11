@@ -5609,7 +5609,7 @@ function mainPage(uname, hostname, pathname) {
     $tc += utils.hidden("returnURL", GLB.returnURL);
     $tc += utils.hidden("pathname", pathname);
     $tc += utils.hidden("webSocketUrl", webSocketUrl);
-    // $tc += utils.hidden("skinid", skin, "skinid");
+    $tc += utils.hidden("skinid", skin, "skinid");
 
     // show user buttons if we are not in kiosk mode
     if ( !kioskmode ) {

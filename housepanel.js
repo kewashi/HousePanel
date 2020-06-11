@@ -2003,8 +2003,6 @@ function delEditLink() {
     $("div.addpage").each(function() {
        $(this).remove();
     });
-    // hide the skin and 
-    // $("div.skinoption").hide();
     
     // closeModal();
 }
