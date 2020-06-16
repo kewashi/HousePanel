@@ -2973,7 +2973,6 @@ function processClick(that, thingname) {
     // other than visually pushing the button by changing the class for 1.5 seconds
     if ( command==="" && ( (thetype==="momentary" && subid==="momentary") || 
                            (thetype==="piston" && subid.startsWith("piston") ) ) ) {
-        console.log(ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" hub Id= " + hubnum + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
         var tarclass = $(targetid).attr("class");
         // define a class with method to reset momentary button
         var classarray = [$(targetid), tarclass, thevalue];
@@ -2981,6 +2980,11 @@ function processClick(that, thingname) {
             this[0].attr("class", this[1]);
             this[0].html(this[2]);
         };
+
+        if ( thevalue==="on" || thevalue==="off" ) {
+            thevalue = thevalue==="on" ? "off" : "on";
+        }
+        console.log(ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" hub Id= " + hubnum + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
 
         $.post(cm_Globals.returnURL, 
             {useajax: ajaxcall, id: bid, type: thetype, value: thevalue, uname: uname,

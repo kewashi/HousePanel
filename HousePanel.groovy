@@ -17,6 +17,8 @@
  * it displays and enables interaction with switches, dimmers, locks, etc
  * 
  * Revision history:
+ * 06/16/2020 - fix mode and momentary buttons that I broke in a prior update
+ * 06/12/2020 - add toggle as a command for all light types
  * 06/09/2020 - remove dynamic pages since they mess up OAUTH from HP side
  * 05/29/2020 - added button and actuator support, remove depracated Lights type
  * 05/17/2020 - overhaul the way we do push notices via registration
@@ -214,8 +216,7 @@ def initialize() {
     state.loggingLevelIDE = settings.configLogLevel?.toInteger() ?: 3
     logger("Installed ${hubtype} hub with settings: ${settings} ", "info")
     
-    if (state.directIP)
-    {
+    if (state.directIP) {
         postHub(state.directIP, state.directPort, "initialize", "", "", "", "")
         if ( state.directIP2 ) {
             postHub(state.directIP2, state.directPort2, "initialize", "", "", "", "")
@@ -292,7 +293,7 @@ def addHistory(resp, item) {
             def priorval = ""
             def tz = TimeZone.getTimeZone( state.tz ?: "America/Detroit" )
             thestates.each {
-                if ( it.value!=priorval ) {
+                if ( it.value!=priorval && it.value?.length()<120 ) {
                     i++
                     def evtvalue = it.value + " " + it.date.format(state.dateFormat ?: "M/dd h:mm", tz)
                     resp.put("event_${i}", evtvalue )
@@ -1493,13 +1494,13 @@ def setAudio(swid, cmd, swattr, subid) {
             if ( item.hasCommand(subid) ) {
                 item."$subid"()
                 resp = getAudio(swid, item)
-                // resp = getAudio(swid, item)
+                resp = getAudio(swid, item)
             }
         }
         else if ( item.hasCommand(cmd) ) {
             item."$cmd"()
             resp = getAudio(swid, item)
-            // resp = getAudio(swid, item)
+            resp = getAudio(swid, item)
         }
     }
     return resp
@@ -1896,6 +1897,8 @@ def setGenericLight(mythings, swid, cmd, swattr, subid) {
         default:
             if (cmd=="on" || cmd=="off" || cmd=="flash") {
                 newonoff = cmd
+            } else if (cmd=="toggle") {
+                newonoff = newonoff=="off" ? "on" : "off"
             } else if (subid.startsWith("_")) {
                 cmd = subid.substring(1)
                 if ( item.hasCommand(cmd) ) {
@@ -1977,8 +1980,12 @@ def setMomentary(swid, cmd, swattr, subid) {
     logcaller("setMomentary", swid, cmd, swattr, subid)
     def resp = false
     def item  = mymomentaries?.find {it.id == swid }
-    if (item && (subid=="switch" || cmd=="push" || subid=="_push") ) {
-        item.push()
+    if ( item ) {
+        if ( (subid=="momentary" || subid=="_push") && item.hasCommand("push") ) {
+            item.push()
+        } else if ( subid=="switch" && item.hasCommand(cmd) ) {
+            item."$cmd"()
+        }
         resp = getMomentary(swid, item)
     }
     return resp
@@ -2488,14 +2495,13 @@ def modeChangeHandler(evt) {
     // modified to simplify modes to only deal with one tile
     // send group of hub actions for mode changes
     def themode = evt?.value
-    def deviceid = evt?.deviceId
     def deviceName = evt?.displayName
     def attr = evt?.name
-    if (themode && deviceid && deviceName && attr && state?.directIP && state?.directPort) {
-        logger("Sending new mode= ${themode} with id= ${deviceid} to HousePanel clients", "info")
-        // def modeid = "${state.prefix}mode"
-        // def modename = "Mode ${deviceid}"
-        postHub(state.directIP, state.directPort, "update", deviceName, deviceid, attr, themode)
+    logger("New mode= ${themode} with attr= ${attr} and name= ${deviceName} to HousePanel clients", "info")
+    if (themode && deviceName && state?.directIP && state?.directPort) {
+        def modeid = "${state.prefix}mode"
+        logger("Sending new mode= ${themode} with id= ${modeid} to HousePanel clients", "info")
+        postHub(state.directIP, state.directPort, "update", deviceName, modeid, "themode", themode)
         if (state.directIP2) {
             postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, attr, themode)
         }

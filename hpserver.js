@@ -707,7 +707,7 @@ function fixISYid(id) {
 
 function getAllThings(reload) {
     
-    // allthings = {};
+    allthings = {};
 
     // add the special tiles
     addSpecials();
@@ -778,8 +778,10 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                         pvalue["presence"] = "absent";
                     }
                     // handle audio tiles
-                    if ( pvalue && thetype==="audio" && array_key_exists("audioTrackData", pvalue) ) {
+                    if ( thetype==="audio" ) {
                         pvalue = translateAudio(pvalue);
+                    } else if ( thetype==="music" ) {
+                        pvalue = translateMusic(pvalue);
                     }
 
                     // this is the proper place to load customizations
@@ -787,6 +789,10 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                     var pvalue = getCustomTile(pvalue, thetype, id);
                     if ( !origname ) {
                         origname = pvalue["name"];
+                    }
+
+                    if ( thetype==="weather" ) {
+                        pvalue = interpretWeather(origname, pvalue);
                     }
 
                     allthings[idx] = {
@@ -2307,9 +2313,16 @@ function getWeatherIcon(num, accu) {
 
 function interpretWeather(name, pvalue) {
 
+    if ( !pvalue || typeof pvalue!=="object" ) {
+        console.log("weather debug: ", pvalue);
+        return pvalue;
+    }
+
     if ( !name.startsWith("Accu") ) {
-        pvalue["weatherIcon"] = getWeatherIcon(pvalue["weatherIcon"]);
-        pvalue["forecastIcon"] = getWeatherIcon(pvalue["forecastIcon"]);
+        if ( pvalue && pvalue.weatherIcon ) {
+            pvalue["weatherIcon"] = getWeatherIcon(pvalue["weatherIcon"]);
+            pvalue["forecastIcon"] = getWeatherIcon(pvalue["forecastIcon"]);
+        }
         return pvalue;
     }
 
@@ -2395,12 +2408,12 @@ function uniqueWords(str) {
 }
 
 function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, customname, wysiwyg) {
-    const audiomap = {"title": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
-                      "albumArtUrl": "trackImage", "mediaSource": "mediaSource"};
-    const musicmap = {"name": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
-                      "status": "status", "trackMetaData": "trackImage", "trackImage":"trackImage", "metaData":"trackImage",
-                      "trackNumber":"", "music":"", "trackUri":"", "uri":"", "transportUri":"", "enqueuedUri":"",
-                      "audioSource": "mediaSource"};
+    // const audiomap = {"title": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
+    //                   "albumArtUrl": "trackImage", "mediaSource": "mediaSource"};
+    // const musicmap = {"name": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
+    //                   "status": "status", "trackMetaData": "trackImage", "trackImage":"trackImage", "metaData":"trackImage",
+    //                   "trackNumber":"", "music":"", "trackUri":"", "uri":"", "transportUri":"", "enqueuedUri":"",
+    //                   "audioSource": "mediaSource"};
     const mantemp = {"temperature":"", "feelsLike":"", "name":"", "city":"", "weather":"", 
                      "weatherIcon":"", "forecastIcon":"","alertKeys":""};
     var $tc = "";
@@ -2501,7 +2514,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     // this allows for feels like and temperature to be side by side
     // and it also handles the inclusion of the icons for status
     if (thingtype==="weather" && !thingname.startsWith("Accu") ) {
-        thingvalue = interpretWeather(thingname, thingvalue);
+        // thingvalue = interpretWeather(thingname, thingvalue);
         if ( !thingvalue["name"] ) {
             thingvalue["name"] = thingname;
         }
@@ -2541,9 +2554,9 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     } else {
 
         // fix up AccuWeather
-        if ( thingtype==="weather" && thingname.startsWith("Accu") ) {
-            thingvalue = interpretWeather(thingname, thingvalue);
-        } 
+        // if ( thingtype==="weather" && thingname.startsWith("Accu") ) {
+        //     thingvalue = interpretWeather(thingname, thingvalue);
+        // } 
         
         // create a thing in a HTML page using special tags so javascript can manipulate it
         // multiple classes provided. One is the type of thing. "on" and "off" provided for state
@@ -2577,37 +2590,37 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                     var jtval = jsontval[jtkey];
                     // console.log("Object field extraction: jtkey: ", jtkey, " jtval: ", jtval, " tkey: ", tkey);
 
-                    // handle audio track keys
-                    if ( tkey==="audioTrackData" && array_key_exists(jtkey, audiomap) ) {
-                        jtkey = audiomap[jtkey];
-                    }
+                    // // handle audio track keys
+                    // if ( tkey==="audioTrackData" && array_key_exists(jtkey, audiomap) ) {
+                    //     jtkey = audiomap[jtkey];
+                    // }
 
-                    // handle legacy Sonos music tiles here - still used by Hubitat
-                    // this interprets direct https image tags
-                    // the image URI can be in multiple fields per the above mapping
-                    else if ( tkey==="trackData" && array_key_exists(jtkey, musicmap) ) {
-                        jtkey = musicmap[jtkey];
+                    // // handle legacy Sonos music tiles here - still used by Hubitat
+                    // // this interprets direct https image tags
+                    // // the image URI can be in multiple fields per the above mapping
+                    // else if ( tkey==="trackData" && array_key_exists(jtkey, musicmap) ) {
+                    //     jtkey = musicmap[jtkey];
 
-                        // fix up field that holds the trackImage
-                        // >https:\\/\\/i.scdn.co\\/image\\/ab67616d0000b27333c6e0cbfb0b169671e7945e<  1<
-                        if ( (jtkey==="trackImage" ) && typeof jtval==="string" && jtval.indexOf("http")!==-1 ) {
-                            var j1 = jtval.indexOf(">http") + 1;
-                            var j2 = jtval.indexOf("<", j1+1);
-                            if ( j1===-1 || j2===-1) {
-                                jtval = "Unknown";
-                            } else {
-                                jtval = jtval.substring(j1, j2);
-                                jtval = jtval.replace(/\\/g,"");
-                            }
-                            // console.log("Legacy music trackImage: ", j1, j2, jtval);
+                    //     // fix up field that holds the trackImage
+                    //     // >https:\\/\\/i.scdn.co\\/image\\/ab67616d0000b27333c6e0cbfb0b169671e7945e<  1<
+                    //     if ( (jtkey==="trackImage" ) && typeof jtval==="string" && jtval.indexOf("http")!==-1 ) {
+                    //         var j1 = jtval.indexOf(">http") + 1;
+                    //         var j2 = jtval.indexOf("<", j1+1);
+                    //         if ( j1===-1 || j2===-1) {
+                    //             jtval = "Unknown";
+                    //         } else {
+                    //             jtval = jtval.substring(j1, j2);
+                    //             jtval = jtval.replace(/\\/g,"");
+                    //         }
+                    //         // console.log("Legacy music trackImage: ", j1, j2, jtval);
 
-                        // a known value that is muted
-                        // all other values will shine through with translation
-                        // but dont let track images shine through if https not found
-                        } else if ( !jtkey || jtkey==="trackImage" ) {
-                            jtval = "";
-                        }
-                    }
+                    //     // a known value that is muted
+                    //     // all other values will shine through with translation
+                    //     // but dont let track images shine through if https not found
+                    //     } else if ( !jtkey || jtkey==="trackImage" ) {
+                    //         jtval = "";
+                    //     }
+                    // }
 
                     // expand arrays onto the base
                     // for example, this happens for buttons reporting acceptable values
@@ -3309,27 +3322,42 @@ function processHubMessage(hubmsg) {
     // this uses the format defined in the HousePanel.groovy file
     // that was also used in the old housepanel.push app
     var subid = hubmsg['change_attribute'];
-    if ( ENABLERULES && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
-        for (var idx in allthings) {
+    for (var idx in allthings) {
 
-            var entry = allthings[idx];
-            // deal with presence tiles
-            if ( subid==="presence" && hubmsg['change_value']==="not present" ) {
-                hubmsg['change_value'] = "absent";
+        var entry = allthings[idx];
+        // deal with presence tiles
+        if ( subid==="presence" && hubmsg['change_value']==="not present" ) {
+            hubmsg['change_value'] = "absent";
+        }
+
+        // removed the logic that skips rule if state is already set as wanted
+        // because it could be a button or a momentary or a timer rule in mid cycle
+        // if timer rule in mid cycle this starts the cycle fresh again
+        // (entry['value'][subid] !== hubmsg['change_value'] || entry.type==="button"  )
+        if ( entry.id === hubmsg['change_device'].toString() ) {
+            cnt = cnt + 1;
+            entry['value'][subid] = hubmsg['change_value'];
+
+            // handle special audio updates
+            if ( subid==="audioTrackData" ) {
+                entry['value'] = translateAudio(entry['value']);
+                console.log( "push audio debug: ", subid, hubmsg['change_value'], entry['value']);
+            } else if ( subid==="trackData" ) {
+                entry['value'] = translateMusic(entry['value']);
+                // console.log( "push music debug: ", subid, hubmsg['change_value'], entry['value']);
+            } else if ( subid==="forecast" && is_object(entry.value.forecast) ) {
+                var origname = entry.name || entry.value.name;
+                entry['value'] = interpretWeather(origname, entry['value']);
             }
 
-            // removed the logic that skips rule if state is already set as wanted
-            // because it could be a button or a momentary or a timer rule in mid cycle
-            // if timer rule in mid cycle this starts the cycle fresh again
-            // (entry['value'][subid] !== hubmsg['change_value'] || entry.type==="button"  )
-            if ( entry.id === hubmsg['change_device'].toString() && subid!=='trackData' ) {
-                cnt = cnt + 1;
-                entry['value'][subid] = hubmsg['change_value'];
-                if ( entry['value']['trackData'] ) { delete entry['value']['trackData']; }
-                if ( entry.type==="weather" && is_object(entry.value.forecast) ) { delete entry.value.forecast; }
-                pushClient(entry.id, entry.type, subid, entry['value'])
+            // if ( entry['value']['trackData'] ) { delete entry['value']['trackData']; }
+            // if ( entry.type==="weather" && is_object(entry.value.forecast) ) { delete entry.value.forecast; }
 
-                // process rules
+
+            pushClient(entry.id, entry.type, subid, entry['value'])
+
+            // process rules
+            if ( ENABLERULES && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
                 processRules(entry.id, entry.type, subid, entry['value'], "processMsg");
             }
         }
@@ -3899,7 +3927,7 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
     } else if ( typeof body === "string") {
         pvalue = JSON.parse(body);
     } else if ( typeof body === "object") {
-        pvalue = body;
+        pvalue = clone(body);
     } else {
         console.log( (ddbg()), "warning - unrecognized body in hub push update: ", body);
         return;
@@ -3964,13 +3992,13 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
     var access_token = hub["hubAccess"];
     var endpt = hub["hubEndpt"];
     var result = "success";
+    var idx = swtype + "|" + swid;
     if ( DEBUG7 ) {
         console.log( (ddbg()), "callHub: access: ", access_token, " endpt: ", endpt, " swval: ", swval, " subid: ", subid, " attr: ", swattr);
     }
 
     var isyresp = {};
     if ( linkinfo && is_array(linkinfo) && linkinfo.length>3 && linkinfo[4]==="TEXT" ) {
-        var idx = swtype + "|" + swid;
         try {
             result = allthings[idx].value;
         } catch(e) {
@@ -4006,7 +4034,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
         var base64 = buff.toString('base64');
         var isyheader = {"Authorization": "Basic " + base64};
         var cmd;
-        var idx = "isy|" + swid;
+        // var idx = "isy|" + swid;
         var hint = allthings[idx].hint;
 
         // fix up isy devices
@@ -4161,7 +4189,9 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
     function getHubResponse(err, res, body) {
         var pvalue;
         // var idx = swtype + "|" + swid;
-        console.log((ddbg()), hub.hubType, " hub: ", hub.hubName, " call returned: ", body);
+        if ( DEBUG18 ) {
+            console.log((ddbg()), hub.hubType, " hub: ", hub.hubName, " trigger: ", subid, " call returned: ", body);
+        }
         if ( err ) {
             console.log( (ddbg()), "error calling ST or HE hub: ", err);
         } else {
@@ -4180,8 +4210,13 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                 }
 
                 // deal with audio tiles
-                if ( pvalue && array_key_exists("audioTrackData", pvalue) ) {
+                if ( swtype==="audio" ) {
                     pvalue = translateAudio(pvalue);
+                } else if ( swtype==="music" ) {
+                    pvalue = translateMusic(pvalue);
+                } else if ( swtype==="weather" && is_object(pvalue.forecast) ) {
+                    var origname = allthings[idx].name;
+                    pvalue = interpretWeather(origname, pvalue);
                 }
 
                 if (pvalue) {
@@ -4234,6 +4269,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
 function queryHub(hub, swid, swtype, popup) {
     var access_token = hub["hubAccess"];
     var endpt = hub["hubEndpt"];
+    var idx = swtype + "|" + swid;
     if ( hub["hubType"]==="SmartThings" || hub["hubType"]==="Hubitat" ) {
         var host = endpt + "/doquery";
         var header = {"Authorization": "Bearer " + access_token};
@@ -4260,8 +4296,13 @@ function queryHub(hub, swid, swtype, popup) {
                     pvalue["presence"] = "absent";
                 }
                 // deal with audio tiles
-                if ( array_key_exists("audioTrackData", pvalue) ) {
+                if ( swtype==="audio" ) {
                     pvalue = translateAudio(pvalue);
+                } else if ( swtype==="music" ) {
+                    pvalue = translateMusic(pvalue);
+                } else if ( swtype==="weather" && is_object(pvalue.forecast) ) {
+                    var origname = allthings[idx].name;
+                    pvalue = interpretWeather(origname, pvalue);
                 }
 
                 pushClient(swid, swtype, "none", pvalue, null, popup);
@@ -4297,31 +4338,100 @@ function queryHub(hub, swid, swtype, popup) {
     }
 }
 
-function translateAudio(pvalue) {
+function translateAudio(pvalue, specialkey, audiomap) {
     // map of audio fields used in multiple places
-    const audiomap = {"title": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
-                      "albumArtUrl": "trackImage", "mediaSource": "mediaSource"};
-
-    try {
-        var audiodata = JSON.parse(pvalue["audioTrackData"]);
-        if ( audiodata ) {
-            for  (var jtkey in audiodata) {
-                var atkey = audiomap[jtkey];
-                pvalue[atkey] = audiodata[jtkey] || "";
-            }
-            // pvalue["trackDescription"] = audiodata["title"] || "";
-            // pvalue["currentArtist"] = audiodata["artist"] || "";
-            // pvalue["currentAlbum"] = audiodata["album"] || "";
-            // pvalue["trackImage"] = audiodata["albumArtUrl"] || "";
-            // pvalue["mediaSource"] = audiodata["mediaSource"] || "";
-        }
-    } catch(jerr) {
-        audiodata = null;
-        console.log(jerr);
+    if ( !specialkey ) {
+        specialkey = "audioTrackData";
     }
 
-    delete pvalue["audioTrackData"];
+    if ( !audiomap ) {
+        audiomap = {"title": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
+                    "albumArtUrl": "trackImage", "mediaSource": "mediaSource"};
+    }
+
+    try {
+    
+        // if ( typeof pvalue==="string" ) {
+        //     pvalue = JSON.parse(pvalue);
+        // }
+
+        // console.log("translate pre result: ", pvalue);
+        if ( pvalue && array_key_exists(specialkey, pvalue) ) {
+            if ( typeof pvalue[specialkey]==="string" ) {
+                var audiodata = JSON.parse(pvalue[specialkey]);
+            } else if ( typeof pvalue[specialkey]==="object" ) {
+                audiodata = pvalue[specialkey];
+            } else {
+                throw "Unknown format in translateAudio";
+            }
+            // console.log("translate step 2 result: ", audiodata);
+            for  (var jtkey in audiodata) {
+                if ( array_key_exists(jtkey, audiomap) ) {
+                    var atkey = audiomap[jtkey];
+                    if ( atkey ) {
+                        pvalue[atkey] = audiodata[jtkey] || "";
+                    }
+                } else {
+                    pvalue[jtkey] = audiodata[jtkey];
+                }
+            }
+            delete pvalue[specialkey];
+        }
+    } catch(jerr) {
+        console.log(jerr);
+    }
+    // console.log("translate post result: ", pvalue);
     return pvalue;
+}
+
+function translateMusic(pvalue) {
+    var audiomap = {"name": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
+                    "status": "status", "trackMetaData": "trackImage", "trackImage":"trackImage", "metaData":"",
+                    "trackNumber":"", "music":"", "trackUri":"", "uri":"", "transportUri":"", "enqueuedUri":"",
+                    "audioSource": "mediaSource"};
+    var musicmap = {"artist": "currentArtist", "album": "currentAlbum",
+                    "status": "status", "trackMetaData": "", "metaData":"",
+                    "trackNumber":"trackNumber", "music":"", "trackUri":"", "uri":"", "transportUri":"", "enqueuedUri":"",
+                    "audioSource": "mediaSource"};
+
+    var nvalue = {};
+    for  (var jtkey in pvalue) {
+        if ( array_key_exists(jtkey, musicmap) ) {
+            var atkey = musicmap[jtkey];
+            if ( atkey ) {
+                nvalue[atkey] = pvalue[jtkey] || "";
+            }
+        } else {
+            nvalue[jtkey] = pvalue[jtkey];
+        }
+    }
+
+    // if there is a trackData field then use that to overwrite stuff
+    if ( array_key_exists("trackData", pvalue) ) {
+        nvalue = translateAudio(nvalue, "trackData", audiomap);
+    }
+
+    // get image from the string - this usually works but not always
+    if ( array_key_exists("trackImage", nvalue) ) {
+        var jtval = nvalue["trackImage"];
+        if  ( typeof jtval==="string" && jtval.indexOf("http")!==-1 ) {
+            var j1 = jtval.indexOf(">http") + 1;
+            var j2 = jtval.indexOf("<", j1+1);
+            if ( j1===-1 || j2===-1) {
+                jtval = "";
+            } else {
+                jtval = jtval.substring(j1, j2);
+                jtval = jtval.replace(/\\/g,"");
+            }
+            nvalue["trackImage"] = jtval;
+        // } else {
+        //     nvalue["trackImage"] = "";
+        }
+    }
+
+    // console.log("Legacy music trackImage: ", j1, j2, jtval);
+    console.log("translate music post result: ", nvalue);
+    return nvalue;
 }
 
 function findHub(hubid) {
@@ -4641,8 +4751,10 @@ function doQuery(hubid, swid, swtype, tileid, protocol) {
             res = result[i];
 
             // deal with audio tiles
-            if ( res.type==="audio" && array_key_exists("audioTrackData", res.value) ) {
+            if ( res.type==="audio" ) {
                 res.value = translateAudio(res.value);
+            } else if ( res.type==="music" ) {
+                res.value = translateMusic(res.value);
             // deal with accuweather
             } else if ( res.type==="weather" ) {
                 res.value = interpretWeather(res.name, res.value);
