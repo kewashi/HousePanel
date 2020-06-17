@@ -3844,7 +3844,9 @@ function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
                     if ( array_key_exists(companion, allthings[ridx]["value"]) ) {
                         allthings[ridx]["value"][companion] = "::TEXT::" + rvalue;
                         linkinfo = [rswid, rswtype, rsubid, rsubid, "TEXT"];
+                        pushClient(rswid, rswtype, rsubid, allthings[ridx]["value"])
                     }
+
                 // if destination subid isn't found make a user TEXT field
                 } else {
                     addCustom("default", rswid, rswtype, "TEXT", rvalue, rsubid);
@@ -3860,6 +3862,8 @@ function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
                 if ( linkinfo==="" ) {
                     if ( rsubid==="level" || rsubid==="colorTemperature" ) {
                         rswattr= "level";
+                    } else if ( rsubid==="volume") {
+                        rswattr= "volume";
                     } else if ( rsubid==="switch" || swtype==="isy" || (swval!=="on" && swval!=="off") ) {
                         rswattr="";
                     } else if ( !rswattr && rswtype!=="isy" ) {

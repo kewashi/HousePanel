@@ -824,7 +824,7 @@ div.editpage, div.delpage, div.addpage {
     cursor: pointer;
 }
 div.editpage, div.editlink {
-    background-color: rgba(255, 255, 255, 0.01);
+    border: none;
     background-image: url("media/editgear.png");
     background-size: 32px;
     left: 0px;
@@ -839,7 +839,7 @@ div.cmzlink {
 }
 div.editlink, div.dellink, div.cmzlink {
     top: 12px;
-    width: 28px; height: 28px;
+    width: 24px; height: 24px;
 }
 div.editlink {
     width: 32px; height: 32px;

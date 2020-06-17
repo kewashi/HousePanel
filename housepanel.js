@@ -242,7 +242,7 @@ $(document).ready(function() {
 
         $("#uname").on("keydown",function(e) {
             var unameval = $("#uname").val();
-            if ( e.which===13 || e.which===9  ){
+            if ( e.which===13 ){
                 var msg = checkInpval("username", unameval, unamere);
                 if ( msg ) {
                     $("#uname").focus();
@@ -298,7 +298,7 @@ $(document).ready(function() {
         cancelPagemove();
     }
 
-    // finally we wait two seconds then setup page clicks and web sockets
+    // finally we wait one second then setup page clicks and web sockets
     setTimeout(function() {
         if ( pagename==="main" && !cm_Globals.disablepub ) {
             setupPage();
@@ -887,14 +887,8 @@ function setupSliders() {
             
             console.log(ajaxcall + ": id= "+bid+" type= "+linktype+ " value= " + thevalue + " subid= " + subid + " command= " + command + " linkval: ", linkval);
             
-            // handle music volume different than lights
-            var updwait = 100;
-            if ( thetype === "music") {
-                updwait = 1000;
-            }
-
             $.post(cm_Globals.returnURL, 
-                {useajax: ajaxcall, id: bid, type: linktype, value: thevalue, attr: "level", 
+                {useajax: ajaxcall, id: bid, type: linktype, value: thevalue, attr: subid, 
                  subid: subid, hubid: hubnum, command: command, linkval: linkval} );
         }
     });
@@ -2327,7 +2321,8 @@ function updateTile(aid, presult, skiplink) {
                     iconimg = "media/weather/" + iconstr + ".png";
                 }
                 value = "<img src=\"" + iconimg + "\" alt=\"" + iconstr + "\" width=\"80\" height=\"80\">";
-            } else if ( (key === "level" || key === "colorTemperature" || key==="volume" || key==="groupVolume") && $(targetid).slider ) {
+            } else if ( (key === "level" || key === "colorTemperature" || key==="volume") && $(targetid).slider ) {
+                console.log("aid= ", aid, " targetid= ", targetid);
                 $(targetid).slider("value", value);
                 // disable putting values in the slot
                 value = false;
