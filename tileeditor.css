@@ -1815,7 +1815,7 @@ div.isy.GV1, div.isy.GV2, div.isy.GV3, div.isy.GV4, div.isy.GV5, div.isy.GV6,
 div.isy.GV7, div.isy.GV8, div.isy.GV9, div.isy.GV10, div.isy.GV11, div.isy.GV12 {
     display: none;
 }
-div.level-dn, div.switchlevel-dn, div.isy.variable-dn,
+div.level-dn, div.switchlevel-dn, div.arrow-dn,
 div.colorTemperature-dn, div.hue-dn, div.saturation-dn,
 div.heatingSetpoint-dn, div.coolingSetpoint-dn {
     color: rgba(255, 255, 255, 0.01);
@@ -1826,7 +1826,7 @@ div.heatingSetpoint-dn, div.coolingSetpoint-dn {
     display: inline-block;
 }
 
-div.heat-up, div.cool-up, div.level-up, div.switchlevel-up, div.isy.variable-up,
+div.heat-up, div.cool-up, div.level-up, div.switchlevel-up, div.arrow-up,
 div.colorTemperature-up, div.hue-up, div.saturation-up,
 div.heatingSetpoint-up, div.coolingSetpoint-up {
     color: rgba(255, 255, 255, 0.01);
@@ -1836,13 +1836,14 @@ div.heatingSetpoint-up, div.coolingSetpoint-up {
     cursor: pointer;
     display: inline-block;
 }
-div.overlay.variables div.variable {
+div.overlay div.arrow {
+    display: inline-block;
+    vertical-align: top;
+}
+div.overlay.variables div.arrow {
     width: 50px;
     display: inline-block;
-}
-div.overlay.variables div.variable-up, div.overlay.variables div.variable-dn {
-    width: 32px;
-    display: inline-block;
+    vertical-align: top;
 }
 
 /* turn off ISY program date fields by default */

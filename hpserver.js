@@ -773,6 +773,11 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                     var origname = content["name"] || "";
                     var pvalue = content["value"];
 
+                    // if a name isn't there use master name
+                    if ( !pvalue.name ) {
+                        pvalue.name = origname;
+                    }
+
                     // deal with presence tiles
                     if ( thetype==="presence" && pvalue["presence"]==="not present" ) {
                         pvalue["presence"] = "absent";
@@ -2761,20 +2766,20 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
          (tkey.startsWith("int_") && thingtype==="isy") ||
          (tkey.startsWith("state_") && thingtype==="isy") ) {
 
-        var modvar;
-        if ( tkey.startsWith("int_") || tkey.startsWith("state_") ) {
-            modvar = tkey + " variable";
-        } else {
-            modvar = tkey;
-        }
+        var modvar = tkey;
+        // if ( tkey.startsWith("int_") || tkey.startsWith("state_") ) {
+        //     modvar = tkey + " variable";
+        // } else {
+        //     modvar = tkey;
+        // }
 
         // fix thermostats to have proper consistent tags
         // this is supported by changes in the .js file and .css file
         $tc += "<div class=\"overlay " + tkey + " " + subtype + " v_" + kindex + "\">";
         if (sibling) { $tc += sibling; }
-        $tc += aidi + " subid=\"" + tkey + "-dn\" title=\"" + thingtype + " down\" class=\"" + thingtype + " " + modvar + "-dn " + pkindex + "\"></div>";
-        $tc += aidi + " subid=\"" + tkey + "\" title=\"" + thingtype + " " + tkey + "\" class=\"" + thingtype + " " + modvar + pkindex + "\"" + colorval + " id=\"" + aitkey + "\">" + tval + "</div>";
-        $tc += aidi + " subid=\"" + tkey + "-up\" title=\"" + thingtype + " up\" class=\"" + thingtype + " " + modvar + "-up " + pkindex + "\"></div>";
+        $tc += aidi + " subid=\"" + tkey + "-dn\" title=\"" + thingtype + " down\" class=\"" + thingtype + " arrow-dn " + modvar + "-dn " + pkindex + "\"></div>";
+        $tc += aidi + " subid=\"" + tkey + "\" title=\"" + thingtype + " " + tkey + "\" class=\"" + thingtype + " arrow " + modvar + pkindex + "\"" + colorval + " id=\"" + aitkey + "\">" + tval + "</div>";
+        $tc += aidi + " subid=\"" + tkey + "-up\" title=\"" + thingtype + " up\" class=\"" + thingtype + " arrow-up " + modvar + "-up " + pkindex + "\"></div>";
         $tc += "</div>";
     
     
@@ -3879,7 +3884,7 @@ function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
                     if ( array_key_exists(itemhash, GLB.ruledelay) ) {
                         thandle = GLB.ruledelay[itemhash];
                         if ( DEBUG11 ) {
-                            console.log("clearing timer handle: ", itemhash);
+                            console.log( (ddbg()), "clearing timer handle: ", itemhash);
                         }
                         try {
                             clearTimeout(thandle);
@@ -3893,14 +3898,22 @@ function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
                     // this way delay light on and off will stay on if trigger keeps happening
                     if ( delay && delay > 0 ) {
                         thandle = setTimeout( function() {
-                            callHub(hub, rswid, rswtype, rvalue, rswattr, rsubid, linkinfo, false, true);
+                            try {
+                                callHub(hub, rswid, rswtype, rvalue, rswattr, rsubid, linkinfo, false, true);
+                            } catch (e) {
+                                console.log( (ddbg()), "error calling hub from rule: ", rswid, rswtype, rvalue, rswattr, rsubid, " error: ", e);
+                            }
                         }, delay);
                         GLB.ruledelay[itemhash] = thandle;
                         if ( DEBUG11 ) {
-                            console.log("setting timer handle: ", itemhash);
+                            console.log( (ddbg()), "setting timer handle: ", itemhash);
                         }
                     } else {
-                        callHub(hub, rswid, rswtype, rvalue, rswattr, rsubid, linkinfo, false, true);
+                        try {
+                            callHub(hub, rswid, rswtype, rvalue, rswattr, rsubid, linkinfo, false, true);
+                        } catch (e) {
+                            console.log( (ddbg()), "error calling hub from rule: ", rswid, rswtype, rvalue, rswattr, rsubid, " error: ", e);
+                        }
                     }
                 }
             }
@@ -4194,7 +4207,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
         var pvalue;
         // var idx = swtype + "|" + swid;
         if ( DEBUG18 ) {
-            console.log((ddbg()), hub.hubType, " hub: ", hub.hubName, " trigger: ", subid, " call returned: ", body);
+            console.log((ddbg()), hub.hubType, " hub: ", hub.hubName, " trigger: ", subid, " rule: ", inrule, " call returned: ", body);
         }
         if ( err ) {
             console.log( (ddbg()), "error calling ST or HE hub: ", err);
@@ -4234,18 +4247,14 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
         }
     }
 
-    // I don't think I need to used this because the ISY pushes a webSocket that I use
+    // I don't think I need to use this because the ISY pushes a webSocket that I use
     // to do the same thing in the processIsyMessage function
-    async function getNodeResponse(err, res, body) {
+    function getNodeResponse(err, res, body) {
         if ( err ) {
             console.log( (ddbg()), "error calling ISY node: ", err);
         } else {
             var result = parser.parse(body);
-            var rres = result.RestResponse;
-            console.log((ddbg()), hub.hubType, " hub: ", hub.hubName, " call returned: ", body);
-            // if ( DEBUG7 ) {
-            //     console.log( (ddbg()), "ISY doAction: ", " isyresp: ", isyresp, " swid: ", swid, " type: ", swtype, " subid: ", subid, " cmd: ", cmd, " body: ", body);
-            // }
+            console.log((ddbg()), hub.hubType, " hub: ", hub.hubName, " trigger: ", subid, " rule: ", inrule, " call returned: ", result);
             // update all clients - this is actually not needed if your server is accessible to websocket updates
             // because ISY will push state updates via a websocket
             // and that will process a similar pushClient but for only those things that change
@@ -4254,17 +4263,17 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
             // leaving it here causes no harm other than processing the visual update twice
             // ....
             // I no longer process rules here because it does cause harm by running rules twice
-            // but I still push client to get immediate response and because callback sometimes fails
             // var idx = swtype + "|" + swid;
-            if ( rres && rres.status.toString()==="200" ) {
-                pushClient(swid, swtype, subid, isyresp, linkinfo, popup);
+            // var rres = result.RestResponse;
+            // if ( rres && rres.status.toString()==="200" ) {
+            //     pushClient(swid, swtype, subid, isyresp, linkinfo, popup);
 
-                if ( ENABLERULES && !inrule && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
-                    var idx = "isy|" + swid;
-                    processRules(swid, "isy", subid, isyresp, "callHub");
-                    // GLB.rules[subid] = true;
-                }
-            }
+            //     if ( ENABLERULES && !inrule && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
+            //         var idx = "isy|" + swid;
+            //         processRules(swid, "isy", subid, isyresp, "callHub");
+            //         // GLB.rules[subid] = true;
+            //     }
+            // }
         }
     }
 
@@ -4434,7 +4443,7 @@ function translateMusic(pvalue) {
     }
 
     // console.log("Legacy music trackImage: ", j1, j2, jtval);
-    console.log("translate music post result: ", nvalue);
+    // console.log("translate music post result: ", nvalue);
     return nvalue;
 }
 
@@ -4655,7 +4664,11 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                             response = $linked_val;
                         } else {
                             var linkinfo = [swid, swtype, subid, $realsubid, "LINK"];
-                            response = callHub($lhub, $linked_swid, $linked_swtype, swval, swattr, $realsubid, linkinfo, false, false);
+                            try {
+                                response = callHub($lhub, $linked_swid, $linked_swtype, swval, swattr, $realsubid, linkinfo, false, false);
+                            } catch (e) {
+                                console.log( (ddbg()), "error calling hub: ", $lhub.hubId, $lhub.hubName, $linked_swid, $linked_swtype, swval, swattr, $realsubid, linkinfo, " error: ", e);
+                            }
                         }
                     }
                 }
@@ -4686,8 +4699,12 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                 break;
 
             case "HUB":
-                response = callHub(hub, swid, swtype, swval, swattr, subid, false, false, false);
-                console.log( (ddbg()), "calling hub: ", hub.hubId, hub.hubName, swid, swtype, swval, swattr, subid, " response: ", response);
+                try {
+                    response = callHub(hub, swid, swtype, swval, swattr, subid, false, false, false);
+                    console.log( (ddbg()), "calling hub: ", hub.hubId, hub.hubName, swid, swtype, swval, swattr, subid, " response: ", response);
+                } catch (e) {
+                    console.log( (ddbg()), "error calling hub: ", hub.hubId, hub.hubName, swid, swtype, swval, swattr, subid, " error: ", e);
+                }
                 break;
 
             default:
@@ -5168,9 +5185,9 @@ function getInfoPage(uname, returnURL, pathname) {
                     value += "Custom Array..."; 
                 } else if ( typeof val==="object" ) {
                     value += key + "=" + JSON.stringify(val);
-                } else if ( typeof val === "string" && val.length > 128 ) {
-                    val = val.substr(0,124) + " ...";
-                    value += key + "=" + val + "<br/>";
+                // } else if ( typeof val === "string" && val.length > 128 ) {
+                //     val = val.substr(0,124) + " ...";
+                //     value += key + "=" + val + "<br/>";
                 } else if ( typeof val==="string" ) {
                     value += key + "=" + val;
                 } else {
@@ -5179,9 +5196,9 @@ function getInfoPage(uname, returnURL, pathname) {
             }
         } else {
             value = thing["value"];
-            if ( value.length > 128 ) {
-                value = value.substr(0,124) + " ...";
-            }
+            // if ( value.length > 128 ) {
+            //     value = value.substr(0,124) + " ...";
+            // }
         }
         // limit size of the field shown
         
