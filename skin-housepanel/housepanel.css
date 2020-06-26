@@ -519,7 +519,10 @@ div.thing.thermostat-thing{
 
 /* round temperature value inside a thermostat */
 div.overlay.temperature div.temperature,
-div.weather.temperature, div.weather.feelsLike, div.weather.realFeel {
+div.overlay.realFeel div.realFeel,
+div.overlay.DEWPT div.DEWPT,
+div.overlay.feelsLike div.feelsLike
+{
     display: inline-block;
     background-color: #006666;
     color: #ffffee;
@@ -563,7 +566,7 @@ div.overlay div.thermostatOperatingState::before {
 div.overlay div.humidity::before {
     content: "Humidity: ";
 }
-div.overlay div.humidity::after {
+div.weather-thing div.overlay div.humidity::after {
     content: "%";
 }
 
@@ -702,8 +705,10 @@ div.overlay.realFeel div.weather.realFeel {
     -webkit-border-radius: 50%;
     -moz-border-radius: 50%;
 }
-div.overlay.feelsLike div.feelsLike::before,
-div.custom.feelsLike::before {
+div.overlay.switch div.isy.climacell.switch {
+    display: none;
+}
+div.overlay.feelsLike div.feelsLike::before {
     content: "~ ";
     font-size: 8pt;
 }

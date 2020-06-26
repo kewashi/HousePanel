@@ -42,13 +42,49 @@ Number.prototype.pad = function(size) {
     return s;
 }
 
-function setCookie(cname, cvalue, exdays) {
-    if ( !exdays ) exdays = 30;
-    var d = new Date();
-    d.setTime(d.getTime() + (exdays*24*3600*1000));
-    var expires = "expires="+ d.toUTCString();
-    document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
-}
+// function setCookie(cname, cvalue, exdays) {
+//     if ( !exdays ) exdays = 30;
+//     var d = new Date();
+//     d.setTime(d.getTime() + (exdays*24*3600*1000));
+//     var expires = "expires="+ d.toUTCString();
+//     document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
+// }
+
+function setCookie(name, value, options={path: "/", expires: 365, SameSite: "lax" } ) {
+
+    if ( typeof options !== "object" ) {
+        options={path: "/", expires: 365, SameSite: "strict" } 
+    }
+    if ( !options.path ) {
+        options.path = "/";
+    }
+    if ( !options.expires || typeof options.expires!=="number" ) {
+        options.expires = 365;
+    }
+    if ( !options.SameSite ) {
+        options.SameSite = "strict";
+    }
+  
+    if (options.expires instanceof Date) {
+        options.expires = options.expires.toUTCString();
+    } else if ( options.expires instanceof Number) {
+        var d = new Date();
+        d.setTime(d.getTime() + (options.expires*24*3600*1000));
+        options.expires = d.toUTCString();
+    }
+
+    let updatedCookie = encodeURIComponent(name) + "=" + encodeURIComponent(value);
+  
+    for (let optionKey in options) {
+      updatedCookie += "; " + optionKey;
+      let optionValue = options[optionKey];
+      if (optionValue !== true) {
+        updatedCookie += "=" + optionValue;
+      }
+    }
+  
+    document.cookie = updatedCookie;
+  }
 
 function getCookie(cname) {
     var name = cname + "=";
@@ -209,7 +245,7 @@ $(document).ready(function() {
                 $("#"+defaultTab).click();
             } catch (e) {
                 defaultTab = $("#roomtabs").children().first().attr("aria-labelledby");
-                setCookie('defaultTab', defaultTab, 365);
+                setCookie('defaultTab', defaultTab);
                 try {
                     $("#"+defaultTab).click();
                 } catch (f) {
@@ -290,20 +326,20 @@ $(document).ready(function() {
     // handle interactions for main page
     // note that setupFilters will be called when entering edit mode
     if ( pagename==="main" ) {
-        setupSliders();
         setupTabclick();
-        setupColors();
         cancelDraggable();
         cancelSortable();
         cancelPagemove();
-    }
 
-    // finally we wait one second then setup page clicks and web sockets
-    setTimeout(function() {
-        if ( pagename==="main" && !cm_Globals.disablepub ) {
-            setupPage();
+        // finally we wait one second then setup page clicks and web sockets
+        if ( !cm_Globals.disablepub ) {
+            setTimeout(function() { 
+                setupPage(); 
+                setupSliders();
+                setupColors();
+            }, 200);
         }
-    }, 1000);
+    }
 
 });
 
@@ -345,8 +381,6 @@ function setupUserOpts() {
     if ( !options || !options.config ) {
         console.log("error - valid options file not found.");
         return;
-    } else {
-        console.log("options config: ", options.config);
     }
     var config = options.config;
     
@@ -462,6 +496,7 @@ function setupWebsocket(webSocketUrl)
             var client = parseInt(presult.client);
             var clientcount = presult.clientcount;
             var subid = presult.trigger;
+            var idx = thetype + "|" + bid;
 
             // reload page if signalled from server
             if ( bid==="reload" ) {
@@ -533,6 +568,12 @@ function setupWebsocket(webSocketUrl)
             // }
 
             // console.log("websocket tile update. id: ", bid, " type: ", thetype, " pvalue: ", pvalue);
+
+            // update the global allthings array
+            for ( var psubid in pvalue ) {
+                cm_Globals.allthings[idx]["value"][psubid] = pvalue[psubid];
+            }
+
             // update all the tiles that match this type and id
             // this now works even if tile isn't on the panel because
             $('div.panel div.thing[bid="'+bid+'"][type="'+thetype+'"]').each(function() {
@@ -657,7 +698,6 @@ function getMaxZindex(panel) {
             if ( !isNaN(zindex) && zindex > zmax && zindex < 999) { zmax = zindex; }
         }
     });
-    // console.log("zmax = ", zmax);
     if ( zmax >= 998 ) {
         zmax = 1;
     }
@@ -704,7 +744,6 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
             postype = "relative";
         }
     } else {
-//        alert("default body");
         // console.log("modaltag body: ", modaltag);
         modalhook = $("body");
         postype = "absolute";
@@ -885,7 +924,7 @@ function setupSliders() {
                 linktype = $(usertile).attr("linktype");  // type of tile linked to
             }
             
-            console.log(ajaxcall + ": id= "+bid+" type= "+linktype+ " value= " + thevalue + " subid= " + subid + " command= " + command + " linkval: ", linkval);
+            // console.log(ajaxcall + ": id= "+bid+" type= "+linktype+ " value= " + thevalue + " subid= " + subid + " command= " + command + " linkval: ", linkval);
             
             $.post(cm_Globals.returnURL, 
                 {useajax: ajaxcall, id: bid, type: linktype, value: thevalue, attr: subid, 
@@ -930,7 +969,7 @@ function setupSliders() {
                 linktype = $(usertile).attr("linktype");  // type of tile linked to
             }
             
-            console.log(ajaxcall + ": command= " + command + " id= "+bid+" type= "+linktype+ " value= " + thevalue + " subid= " + subid + " command= " + command + " linkval: ", linkval);
+            // console.log(ajaxcall + ": command= " + command + " id= "+bid+" type= "+linktype+ " value= " + thevalue + " subid= " + subid + " command= " + command + " linkval: ", linkval);
             
             $.post(cm_Globals.returnURL, 
                 {useajax: ajaxcall, id: bid, type: thetype, value: parseInt(ui.value), 
@@ -1020,7 +1059,7 @@ function setupPagemove() {
                 k++;
                 updateSortNumber(this, k.toString());
             });
-            console.log("reordering " + k + " rooms: ", pages);
+            // console.log("reordering " + k + " rooms: ", pages);
             $.post(cm_Globals.returnURL, 
                 {useajax: "setorder", id: "none", type: "rooms", value: pages, attr: "none"},
                 function (presult, pstatus) {
@@ -1078,7 +1117,7 @@ function setupSortable() {
                 tilenums.push(tile);
             });
 
-            console.log("reordering " + num + " tiles out of " + tilenums.length, " tiles: ", tilenums);
+            // console.log("reordering " + num + " tiles out of " + tilenums.length, " tiles: ", tilenums);
             $.post(cm_Globals.returnURL, 
                 {useajax: "setorder", id: "none", type: "things", value: tilenums, attr: roomtitle},
                 function (presult, pstatus) {
@@ -1236,7 +1275,7 @@ function setupDraggable() {
                                         {useajax: "addthing", id: bid, type: thingtype, value: panel, attr: startPos},
                                         function (presult, pstatus) {
                                             if (pstatus==="success" && !presult.startsWith("error")) {
-                                                console.log( "Added " + thingname + " of type " + thingtype + " and bid= " + bid + " to room " + panel, " pos: ", startPos);
+                                                // console.log( "Added " + thingname + " of type " + thingtype + " and bid= " + bid + " to room " + panel, " pos: ", startPos);
                                                 lastthing.after(presult);
                                                 var newthing = lastthing.next();
                                                 $(newthing).css( startPos );
@@ -1284,12 +1323,9 @@ function setupDraggable() {
                     // now post back to housepanel to save the position
                     // also send the dragthing object to get panel name and tile pid index
                     if ( ! $("#catalog").hasClass("ui-droppable-hover") ) {
-                        console.log( "Moving tile #" + tile + " to position: ", startPos);
+                        // console.log( "Moving tile #" + tile + " to position: ", startPos);
                         $.post(cm_Globals.returnURL, 
-                               {useajax: "setposition", id: bid, type: thingtype, value: panel, attr: startPos, tile: tile},
-                            function (presult, pstatus) {
-                                console.log("pstatus: ", pstatus, " presult: ", presult);
-                            }
+                               {useajax: "setposition", id: bid, type: thingtype, value: panel, attr: startPos, tile: tile}
                         );
                     }
 
@@ -1423,10 +1459,10 @@ function execButton(buttonid) {
         try {
             dynoPost("filteroptions", fobj, function(presult, pstatus) {
                 if ( typeof presult==="object" ) {
-                    console.log("processed filteroptions page.", presult);
+                    // console.log("processed filteroptions page.", presult);
                     dynoPost("saveuserpw", uobj, function(presult, pstatus) {
                         if ( typeof presult==="object" ) {
-                            console.log("processed saveuserpw page.", presult);
+                            // console.log("processed saveuserpw page.", presult);
                             dynoPost("saveoptions", oobj, function(presult, pstatus) {
                                 if ( presult==="success" ) {
                                     window.location.href = cm_Globals.returnURL;
@@ -1461,11 +1497,6 @@ function execButton(buttonid) {
 
         var genobj = formToObject("loginform");
         dynoPost("dologin", genobj, function(presult, pstatus) {
-            if ( presult==="error" ) {
-                console.log("login not successful");
-            } else {
-                console.log("login successful. ", presult);
-            }
             window.location.href = cm_Globals.returnURL;
         });
 
@@ -1527,7 +1558,7 @@ function execButton(buttonid) {
         priorOpmode = "Operate";
     } else if ( buttonid==="snap" ) {
         var snap = $("#mode_Snap").prop("checked");
-        console.log("snap mode: ",snap);
+        // console.log("snap mode: ",snap);
 
     } else if ( buttonid==="refreshpage" ) {
         var pstyle = "position: absolute; background-color: blue; color: white; font-weight: bold; font-size: 32px; left: 300px; top: 300px; width: 600px; height: 100px; margin-top: 50px;";
@@ -1726,7 +1757,7 @@ function setupButtons() {
             // others return a request to start an OATH redirection flow
             formData["api"] = "hubauth";
             $.post(cm_Globals.returnURL, formData,  function(presult, pstatus) {
-                console.log("hubauth: ", presult);
+                // console.log("hubauth: ", presult);
 
                 if ( pstatus==="success" && typeof presult==="object") {
                     var obj = presult;
@@ -1934,7 +1965,7 @@ function addEditLink() {
                             var defaultTab = getCookie( 'defaultTab' );
                             if ( defaultTab === clickid ) {
                                 defaultTab = $("#roomtabs").children().first().attr("aria-labelledby");
-                                setCookie('defaultTab', defaultTab, 365);
+                                setCookie('defaultTab', defaultTab);
                             }
                         } else {
                             console.log(presult);
@@ -2232,9 +2263,9 @@ function updateTile(aid, presult, skiplink) {
         presult["trackImage"] = audiodata["albumArtUrl"];
         presult["mediaSource"] = audiodata["mediaSource"];
         delete presult["audioTrackData"];
-        if ( oldtrack !== presult["trackDescription"] ) {
-            console.log("audio track changed from: ["+oldtrack+"] to: ["+ presult["trackDescription"] +"]");
-        }
+        // if ( oldtrack !== presult["trackDescription"] ) {
+        //     console.log("audio track changed from: ["+oldtrack+"] to: ["+ presult["trackDescription"] +"]");
+        // }
     }
     if ( presult["title"] && presult["trackDescription"] ) {
         presult["trackDescription"] = presult["title"];
@@ -2322,7 +2353,7 @@ function updateTile(aid, presult, skiplink) {
                 }
                 value = "<img src=\"" + iconimg + "\" alt=\"" + iconstr + "\" width=\"80\" height=\"80\">";
             } else if ( (key === "level" || key === "colorTemperature" || key==="volume") && $(targetid).slider ) {
-                console.log("aid= ", aid, " targetid= ", targetid);
+                // console.log("aid= ", aid, " targetid= ", targetid);
                 $(targetid).slider("value", value);
                 // disable putting values in the slot
                 value = false;
@@ -2371,7 +2402,7 @@ function updateTile(aid, presult, skiplink) {
                 // if ( (forceit || (value!==oldvalue)) && !value.startsWith("Grouped with") ) {
                 if ( value!==oldvalue ) {
                     value = value.trim();
-                    console.log("music track changed from: [" + oldvalue + "] to: [" + value + "]");
+                    // console.log("music track changed from: [" + oldvalue + "] to: [" + value + "]");
                 }
                 
             // add status of things to the class and remove old status
@@ -2415,7 +2446,7 @@ function setupTabclick() {
         // save this tab for default next time
         var defaultTab = $(this).attr("id");
         if ( defaultTab ) {
-            setCookie( 'defaultTab', defaultTab, 365 );
+            setCookie( 'defaultTab', defaultTab );
         }
     });
 }
@@ -2433,7 +2464,7 @@ function clockUpdater(tz) {
             {useajax: "getclock", id: "clockdigital", type: "none"},
             function (presult, pstatus) {
                 if ( pstatus==="success" && typeof presult==="object" ) {
-                    console.log("Updating digital clocks with: ", presult);
+                    // console.log("Updating digital clocks with: ", presult);
 
                     // remove time items since we don't want to mess up the second updater
                     delete presult["time"];
@@ -2469,7 +2500,7 @@ function clockUpdater(tz) {
             {useajax: "getclock", id: "clockanalog", type: "none"},
             function (presult, pstatus) {
                 if ( pstatus==="success" && typeof presult==="object" ) {
-                    console.log("Updating analog clocks with: ", presult);
+                    // console.log("Updating analog clocks with: ", presult);
 
                     // remove time items since we don't want to mess up the second updater
                     delete presult["time"];
@@ -2799,7 +2830,7 @@ function checkPassword(tile, thingname, pw, yesaction) {
         var clk = $(ui).attr("name");
         if ( clk==="okay" ) {
             if ( pw==="" ) {
-                console.log("Tile action confirmed for tile [" + thingname + "]");
+                // console.log("Tile action confirmed for tile [" + thingname + "]");
                 yesaction(tile, thingname);
             } else {
                 userpw = $("#userpw").val();
@@ -2807,7 +2838,7 @@ function checkPassword(tile, thingname, pw, yesaction) {
                     {useajax: "pwhash", id: "none", type: "verify", value: userpw, attr: pw},
                     function (presult, pstatus) {
                         if ( pstatus==="success" && presult==="success" ) {
-                            console.log("Protected tile [" + thingname + "] access granted.");
+                            // console.log("Protected tile [" + thingname + "] access granted.");
                             yesaction(tile, thingname);
                         } else {
                             console.log("Protected tile [" + thingname + "] access denied.");
@@ -3030,15 +3061,15 @@ function processClick(that, thingname) {
             else if ( thevalue==="off" || thetype==="ISY" ) {
                 thevalue = "DOF";
             }
-            console.log(subid, "clicked. bid: ", bid, " type: ", thetype, " value: ", thevalue, 
-                               " attr: ", theattr, " hubnum: ", hubnum, " command: ", command, " linkval: ", linkval );
+            // console.log(subid, "clicked. bid: ", bid, " type: ", thetype, " value: ", thevalue, 
+            //                    " attr: ", theattr, " hubnum: ", hubnum, " command: ", command, " linkval: ", linkval );
             $.post(cm_Globals.returnURL, 
                 {useajax: ajaxcall, id: bid, type: thetype, value: thevalue, uname: uname,
                  attr: theattr, subid: "switch", hubid: hubnum, command: command, linkval: linkval} );
         });
 
     } else if ( ispassive ) {
-        console.log("Refreshing tile of passive clicked on element: ", subid, " tile type: ", thetype);
+        // console.log("Refreshing tile of passive clicked on element: ", subid, " tile type: ", thetype);
         $(targetid).html(thevalue);
 
         // open all images that are graphics files in a new window
@@ -3108,7 +3139,7 @@ function processClick(that, thingname) {
 
                     if ( typeof presult==="object" ) {
                         var showstr = "";
-                        console.log("doaction query result: ", presult);
+                        // console.log("doaction query result: ", presult);
                         $.each(presult, function(s, v) {
                             if ( s && v && s!=="password" && !s.startsWith("user_") ) {
                                 // first try to parse as json string

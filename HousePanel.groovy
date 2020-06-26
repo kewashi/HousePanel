@@ -217,9 +217,9 @@ def initialize() {
     logger("Installed ${hubtype} hub with settings: ${settings} ", "info")
     
     if (state.directIP) {
-        postHub(state.directIP, state.directPort, "initialize", "", "", "", "")
+        postHub(state.directIP, state.directPort, "initialize", "", "", "", "", "")
         if ( state.directIP2 ) {
-            postHub(state.directIP2, state.directPort2, "initialize", "", "", "", "")
+            postHub(state.directIP2, state.directPort2, "initialize", "", "", "", "", "")
         }
         registerAll()
     }
@@ -1059,9 +1059,9 @@ def autoType(swid) {
     else if ( myilluminances?.find {it.id == swid } ) { swtype= "illuminance" }
     else if ( mysmokes?.find {it.id == swid } ) { swtype= "smoke" }
     else if ( mytemperatures?.find {it.id == swid } ) { swtype= "temperature" }
+    else if ( mypowers?.find {it.id == swid } ) { swtype= "power" }
     else if ( myothers?.find {it.id == swid } ) { swtype= "other" }
     else if ( myactuators?.find {it.id == swid } ) { swtype= "actuator" }
-    else if ( mypowers?.find {it.id == swid } ) { swtype= "power" }
     else if ( swid=="${state.prefix}shm" ) { swtype= "shm" }
     else if ( swid=="${state.prefix}hsm" ) { swtype= "hsm" }
     else if ( swid=="${state.prefix}m1x1" || swid=="${state.prefix}m1x2" || swid=="${state.prefix}m2x1" || swid=="${state.prefix}m2x2" || swid=="${state.prefix}mode" ) { swtype= "mode" }
@@ -1397,9 +1397,9 @@ def setButton(swid, cmd, swattr, subid) {
             resp =  [button: cmd]
 
             // emulate event callback
-            postHub(state.directIP, state.directPort, "update", item.displayName, swid, "button", resp)
+            postHub(state.directIP, state.directPort, "update", item.displayName, swid, "button", "button", resp)
             if (state.directIP2) {
-                postHub(state.directIP2, state.directPort2, "update", item.displayName, swid, "button", resp)
+                postHub(state.directIP2, state.directPort2, "update", item.displayName, swid, "button", "button", resp)
             }
 
         } else {
@@ -1437,9 +1437,9 @@ def setOther(swid, cmd, attr, subid, item=null ) {
             resp = [button: cmd]
 
             // emulate event callback
-            postHub(state.directIP, state.directPort, "update", item.displayName, item.id, "button", resp)
+            postHub(state.directIP, state.directPort, "update", item.displayName, item.id, "button", "button", resp)
             if (state.directIP2) {
-                postHub(state.directIP2, state.directPort2, "update", item.displayName, item.id, "button", resp)
+                postHub(state.directIP2, state.directPort2, "update", item.displayName, item.id, "button", "button", resp)
             }
 
         } else {
@@ -2431,6 +2431,9 @@ def changeHandler(evt) {
     def attr = evt?.name
     def value = evt?.value
     def skip = false
+    
+    def devtype = autoType(deviceid)
+    logger("handling id = ${deviceid} type = ${devtype}", "debug")
 
     // handle power changes to skip if not changed by at least 15%
     // this value was set by trial and error for my particular plug
@@ -2474,9 +2477,9 @@ def changeHandler(evt) {
             def color = hsv2rgb(h, s, v)
 
             // make the original attribute change
-            postHub(state.directIP, state.directPort, "update", deviceName, deviceid, attr, value)
+            postHub(state.directIP, state.directPort, "update", deviceName, deviceid, attr, "bulb", value)
             if (state.directIP2) {
-                postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, attr, value)
+                postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, attr, "bulb", value)
             }
 
             // set it to change color based on attribute change
@@ -2484,9 +2487,9 @@ def changeHandler(evt) {
             attr = "color"
             value = color
         }
-        postHub(state.directIP, state.directPort, "update", deviceName, deviceid, attr, value)
+        postHub(state.directIP, state.directPort, "update", deviceName, deviceid, attr, devtype, value)
         if (state.directIP2) {
-            postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, attr, value)
+            postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, attr, devtype, value)
         }
     }
 }
@@ -2501,16 +2504,16 @@ def modeChangeHandler(evt) {
     if (themode && deviceName && state?.directIP && state?.directPort) {
         def modeid = "${state.prefix}mode"
         logger("Sending new mode= ${themode} with id= ${modeid} to HousePanel clients", "info")
-        postHub(state.directIP, state.directPort, "update", deviceName, modeid, "themode", themode)
+        postHub(state.directIP, state.directPort, "update", deviceName, modeid, "themode", "mode", themode)
         if (state.directIP2) {
-            postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, attr, themode)
+            postHub(state.directIP2, state.directPort2, "update", deviceName, modeid, "themode", "mode", themode)
         }
     }
 }
 
-def postHub(ip, port, msgtype, name, id, attr, value) {
+def postHub(ip, port, msgtype, name, id, attr, type, value) {
 
-    log.info "HousePanel postHub ${msgtype} to IP= ${ip}:${port} name= ${name} attr= ${attr} value= ${value}"
+    log.info "HousePanel postHub ${msgtype} to IP= ${ip}:${port} name= ${name} attr= ${attr} type= ${type} value= ${value}"
     
     if ( msgtype && ip && port ) {
         // Send Using the Direct Mechanism
@@ -2531,6 +2534,7 @@ def postHub(ip, port, msgtype, name, id, attr, value) {
                 change_name: name,
                 change_device: id,
                 change_attribute: attr,
+                change_type: type,
                 change_value: value
             ]
         ]

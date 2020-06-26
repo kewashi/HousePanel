@@ -1,11 +1,18 @@
 'use strict';
 
 const devhistory =  ` 
+2.300   Update order of items in a tile
+            - fix bug in setting cookie so it sustains over sessions
+            - weather tile bugfix on updates
+            - clean up excess debug console statements
+            - bugfix mode updates
+            - support climacell tiles in default skin
 2.280   Fix momentary buttons and mode handler in groovy file for ST and HE
             - update music and audio image art handling to be more robust
             - clean up gear icon for editing
             - rule engine bugfix for attribute results pushed into subid
             - error checking for rule driven hub calls and clean up ISY calls
+            - stability fixes 
 2.279   Bugfix for icons in tile editor not showing up
 2.278   Urgent bugfix that caused wrong and duplicate tile numbers for new things
 2.277   Remove dynamic pages in groovy file that messes up OAUTH from HP side

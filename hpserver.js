@@ -70,8 +70,12 @@ var app;
 var applistening = false;
 
 function setCookie(res, thevar, theval, days) {
-    var timeexp = (days * 24 * 3600 * 1000) + Date.now();
-    res.cookie(thevar, theval, {expire: timeexp});
+    var options = {SameSite: "lax"};
+    if ( !days ) {
+        days = 365;
+    }
+    options.maxAge = days*24*3600*1000;
+    res.cookie(thevar, theval, options);
 }
 
 // get user from cookie
@@ -797,7 +801,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                     }
 
                     if ( thetype==="weather" ) {
-                        pvalue = interpretWeather(origname, pvalue);
+                        pvalue = translateWeather(origname, pvalue);
                     }
 
                     allthings[idx] = {
@@ -1123,7 +1127,7 @@ function mapIsy(isyid, uom) {
     const idmap = {"ST": "switch", "OL": "onlevel", "SETLVL": "level", "BATLVL": "battery", "CV": "voltage", "TPW": "power",
                    "CLISPH": "heatingSetpoint", "CLISPC": "coolingSetpoint", "CLIHUM": "humidity", "LUMIN": "illuminance", 
                    "CLIMD": "thermostatMode", "CLIHCS": "thermostatState", "CLIFS": "thermostatFanMode",
-                   "CLIFRS": "thermostatOperatingState", "CLISMD": "thermostatHold"};
+                   "CLIFRS": "thermostatOperatingState", "CLISMD": "thermostatHold", "CLITEMP":"temperature"};
     var id = isyid;
     if ( array_key_exists(isyid, idmap) ) {
         id = idmap[isyid];
@@ -1174,11 +1178,11 @@ function translateIsy(nodeid, objid, uom, value, val, formatted) {
                 val = (formatted==="Off" || val==="0") ? "DOF" : "DON";
                 newvalue[subid] = val;
 
-            } else if ( uom==="17" ) {
-                if ( typeof formatted==="undefined" || formatted==="" ) {
-                    formatted = val + "°F";
-                }
-                newvalue["temperature"]= formatted;
+            // } else if ( uom==="17" ) {
+            //     if ( typeof formatted==="undefined" || formatted==="" ) {
+            //         formatted = val + "°F";
+            //     }
+            //     newvalue["temperature"]= formatted;
 
             } else {
                 val = (formatted==="Off" || val==="0" ? "DOF" : "DON");
@@ -1205,10 +1209,10 @@ function translateIsy(nodeid, objid, uom, value, val, formatted) {
             newvalue["level"] = val;
             break;
 
-        case "CLIHUM":
-        case "BATLVL":
-            newvalue[subid] = val;
-            break;
+        // case "CLIHUM":
+        // case "BATLVL":
+        //     newvalue[subid] = val;
+        //     break;
 
         case "CLISPC":
         case "CLISPH":
@@ -1252,6 +1256,9 @@ function translateIsy(nodeid, objid, uom, value, val, formatted) {
         
         default:
             newvalue[subid] = formatted ? formatted : val;
+            if ( newvalue[subid].substr(-1)==="F" || newvalue[subid].substr(-1)==="C" ) {
+                newvalue[subid] = parseInt(newvalue[subid].substr(0, newvalue[subid].length-2)).toString();
+            }
             break;
 
     }
@@ -2296,12 +2303,19 @@ function writeForecastWidget(city, region, code) {
 }
 
 function getWeatherIcon(num, accu) {
-    if ( !num || num==="na" || isNaN(+num) ) {
-        var iconstr = "media/weather/na.png";
+    var iconimg;
+    var iconstr;
+    if ( typeof num === "string" && num.startsWith("<img") ) {
+        iconstr = num;
+    } else if ( !num || isNaN(+num) ) {
+        iconstr = false;
     // accuweather's icons
+    } else if ( num==="na" ) {
+        iconimg = "media/weather/na.png";
+        iconstr = "<img src=\"" + iconimg + "\" alt=\"na\" width=\"80\" height=\"80\">";
     } else if ( accu ) {
         num = num.toString() + ".svg";
-        var iconimg = "https://accuweather.com/images/weathericons/" + num;
+        iconimg = "https://accuweather.com/images/weathericons/" + num;
         iconstr = "<img src=\"" + iconimg + "\" alt=\"" + num + "\" width=\"80\" height=\"80\">";
     } else {
         num = num.toString();
@@ -2310,34 +2324,49 @@ function getWeatherIcon(num, accu) {
         }
         // uncomment this to use ST's copy. Default is to use local copy
         // so everything stays local
-        var iconimg = "media/weather/" + num + ".png";
+        iconimg = "media/weather/" + num + ".png";
         iconstr = "<img src=\"" + iconimg + "\" alt=\"" + num + "\" width=\"80\" height=\"80\">";
     }
     return iconstr;
 }
 
-function interpretWeather(name, pvalue) {
+function translateWeather(name, pvalue) {
 
     if ( !pvalue || typeof pvalue!=="object" ) {
         console.log("weather debug: ", pvalue);
         return pvalue;
     }
 
-    if ( !name.startsWith("Accu") ) {
-        if ( pvalue && pvalue.weatherIcon ) {
-            pvalue["weatherIcon"] = getWeatherIcon(pvalue["weatherIcon"]);
-            pvalue["forecastIcon"] = getWeatherIcon(pvalue["forecastIcon"]);
+    if ( !pvalue.realFeel ) {
+        if ( pvalue && pvalue.weatherIcon && pvalue.forecastIcon ) {
+            var wicon = getWeatherIcon(pvalue["weatherIcon"]);
+            if ( wicon===false ) {
+                delete pvalue["weatherIcon"];
+            } else {
+                pvalue["weatherIcon"] = wicon;
+            }
+            var ficon = getWeatherIcon(pvalue["forecastIcon"]);
+            if ( ficon===false ) {
+                delete pvalue["forecastIcon"];
+            } else {
+                pvalue["forecastIcon"] = ficon;
+            }
         }
         return pvalue;
     }
 
     // the rest of this function fixes up the accuWeather tile
+    // console.log("weather debug: ", pvalue);
     var newvalue = {};
     newvalue.name = name;
     newvalue.temperature = pvalue.temperature;
     newvalue.realFeel = pvalue.realFeel;
     newvalue.weatherIcon = getWeatherIcon(pvalue.weatherIcon, true);
-    // don't include these because they are inthe summary below
+    if ( newvalue.weatherIcon===false ) {
+        delete newvalue.weatherIcon;
+    }
+
+    // don't include these because they are in the summary below
     // ----------------------------------------------------------
     // newvalue.cloudCover = pvalue.cloudCover;
     // newvalue.humidity = pvalue.humidity;
@@ -2423,10 +2452,17 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                      "weatherIcon":"", "forecastIcon":"","alertKeys":""};
     var $tc = "";
 
+    // if ( thingvalue.name === "House Builtin" ) {
+    //     console.log("pre sort: ", thingvalue);
+    // }
+    thesensor["value"] = setValOrder(thesensor["value"]);
+    // if ( thingvalue.name === "House Builtin" ) {
+    //     console.log("post sort: ", thingvalue);
+    // }
+
     var thingvalue = thesensor["value"];
     var thingtype = thesensor["type"];
     var bid = thesensor["id"];
-    thingvalue = setValOrder(thingvalue);
 
     // set type to hint if one is given
     // this is to support ISY nodes that all register as ISY types
@@ -2518,8 +2554,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     // special handling for weather tiles
     // this allows for feels like and temperature to be side by side
     // and it also handles the inclusion of the icons for status
-    if (thingtype==="weather" && !thingname.startsWith("Accu") ) {
-        // thingvalue = interpretWeather(thingname, thingvalue);
+    if (thingtype==="weather" && array_key_exists("feelsLike", thingvalue) ) {
         if ( !thingvalue["name"] ) {
             thingvalue["name"] = thingname;
         }
@@ -2532,8 +2567,6 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
         
         // use new weather icon mapping
         $tc += "<div class=\"weather_icons\">";
-        // var wiconstr = getWeatherIcon(thingvalue["weatherIcon"]);
-        // var ficonstr = getWeatherIcon(thingvalue["forecastIcon"]);
         $tc += putElement(kindex, cnt, 4, thingtype, thingvalue["weatherIcon"], "weatherIcon");
         $tc += putElement(kindex, cnt, 5, thingtype, thingvalue["forecastIcon"], "forecastIcon");
         $tc += "</div>";
@@ -2558,11 +2591,6 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
         
     } else {
 
-        // fix up AccuWeather
-        // if ( thingtype==="weather" && thingname.startsWith("Accu") ) {
-        //     thingvalue = interpretWeather(thingname, thingvalue);
-        // } 
-        
         // create a thing in a HTML page using special tags so javascript can manipulate it
         // multiple classes provided. One is the type of thing. "on" and "off" provided for state
         // for multiple attribute things we provide a separate item for each one
@@ -3274,38 +3302,45 @@ function getCustomTile(custom_val, customtype, customid) {
     return custom_val;
 }
 
-// this little gem makes sure levels are always at the end of a tile
-// and it puts all user created fields at the end of tile too
+// this little gem makes sure items are in the proper order
 function setValOrder(val) {
+    const order = {"name": 1, "battery": 2, "color": 3, "switch": 7, "momentary": 7, "presence": 7,
+                   "contact": 8, "door": 8, "motion": 9, "themode": 10, 
+                   "trackDescription": 11, "trackImage": 12, "currentAlbum": 13, 
+                   "mediaSource": 14, "currentArtist": 15, "playbackStatus": 16, 
+                   "_muteGroup": 17, "_unmuteGroup": 18, "_volumeDown": 19, "_volumeUp": 20, 
+                   "_previousTrack": 21, "_pause": 22, "_play": 23, "_stop": 24, "_nextTrack": 25,
+                   "level": 150, "volume": 151, "colorTemperature": 152,
+                   "allon": 41, "alloff": 42 };
 
+    function getComp(vala) {
+        var comp;
+        if ( array_key_exists(vala, order) ) {
+            comp = order[vala];
+        } else if ( vala.startsWith("_") ) {
+            comp = 50;
+        } else if ( vala.startsWith("user_") ) {
+            comp = 70;
+        } else if ( vala.startsWith("event_") ) {
+            comp = 100;
+        } else if ( vala==="level" || vala==="volume" ) {
+            comp = 150;
+        } else {
+            comp = 30;
+        }
+        return comp;
+    }
+
+    // leave user fields unsorted
+    // but sort all others based on type of subid
     var keys = Object.keys(val).sort( function(vala, valb) {
 
-        // look for a companion
-        var compa = array_key_exists("user_"+vala, val);
-        var compb = array_key_exists("user_"+valb, val);
-
-        // put all companions at the end
-
-        if ( vala===valb ) {
-            return 0;
-        } else if ( vala==="level" || vala==="colorTemperature" ) {
-            return 1;
-        } else if ( valb==="level" || valb==="colorTemperature" ) {
-            return -1;
-        } else if ( vala.startsWith("user_") && valb.startsWith("user_") ) {
-            return 0;
-        } else if ( vala.startsWith("user_") ) {
-            return 1
-        } else if ( valb.startsWith("user_") ) {
-            return -1
-        } else if ( compa && compb ) {
-            return 0;
-        } else if ( compa ) {
-            return 1;
-        } else if ( compb ) {
-            return -1;
+        var compa = array_key_exists("user_"+vala, val) ? 70 : getComp(vala);
+        var compb = array_key_exists("user_"+valb, val) ? 70 : getComp(valb);
+        if ( compa===30 && compb===30 ) {
+            return vala - valb;
         } else {
-            return 0;
+            return compa - compb;
         }
     });
 
@@ -3327,32 +3362,35 @@ function processHubMessage(hubmsg) {
     // this uses the format defined in the HousePanel.groovy file
     // that was also used in the old housepanel.push app
     var subid = hubmsg['change_attribute'];
+    var companion = "user_"+subid;
+    var hubmsgid = hubmsg['change_device'].toString();
+    // var strtype = hubmsg['chnage_type'] || "";
+
+    // deal with presence tiles
+    if ( subid==="presence" && hubmsg['change_value']==="not present" ) {
+        hubmsg['change_value'] = "absent";
+    }
+
     for (var idx in allthings) {
 
         var entry = allthings[idx];
-        // deal with presence tiles
-        if ( subid==="presence" && hubmsg['change_value']==="not present" ) {
-            hubmsg['change_value'] = "absent";
-        }
 
         // removed the logic that skips rule if state is already set as wanted
         // because it could be a button or a momentary or a timer rule in mid cycle
         // if timer rule in mid cycle this starts the cycle fresh again
         // (entry['value'][subid] !== hubmsg['change_value'] || entry.type==="button"  )
-        if ( entry.id === hubmsg['change_device'].toString() ) {
-            cnt = cnt + 1;
+        if ( entry.id === hubmsgid ) {
+            cnt++;
             entry['value'][subid] = hubmsg['change_value'];
 
             // handle special audio updates
-            if ( subid==="audioTrackData" ) {
+            if ( entry.type==="audio" || subid==="audioTrackData" ) {
                 entry['value'] = translateAudio(entry['value']);
-                console.log( "push audio debug: ", subid, hubmsg['change_value'], entry['value']);
-            } else if ( subid==="trackData" ) {
+            } else if ( entry.type==="music" || subid==="trackData" ) {
                 entry['value'] = translateMusic(entry['value']);
-                // console.log( "push music debug: ", subid, hubmsg['change_value'], entry['value']);
-            } else if ( subid==="forecast" && is_object(entry.value.forecast) ) {
+            } else if ( entry.type==="weather" ) {
                 var origname = entry.name || entry.value.name;
-                entry['value'] = interpretWeather(origname, entry['value']);
+                entry['value'] = translateWeather(origname, entry['value']);
             }
 
             // if ( entry['value']['trackData'] ) { delete entry['value']['trackData']; }
@@ -3364,6 +3402,36 @@ function processHubMessage(hubmsg) {
             // process rules
             if ( ENABLERULES && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
                 processRules(entry.id, entry.type, subid, entry['value'], "processMsg");
+            }
+
+        // handle links
+        // this code replaces the pushclient handler on js side that used to do links
+        // it is faster here and more robust and allows rules to be tied in as well
+        } else if ( array_key_exists(companion, entry.value) ) {
+            var helperval = entry.value[companion];
+            var ipos = helperval.indexOf("::",2);
+            var command = helperval.substring(2, ipos);
+            var lidx = helperval.substring(ipos+2);
+            var lidxitems = lidx.split("|");
+            // var linktype = lidxitems[0];
+            var linkbid = lidxitems[1];
+
+        
+            // get info for links but skip if the link had an error
+            console.log("processhub link debug. companion=",companion,"helper=",helperval,"command=",command,
+                        "lidx=",lidx,"idx=", idx,"linkbid=",linkbid,"hubmsgid=",hubmsgid);
+            if ( command==="LINK" && linkbid === hubmsgid ) {
+                cnt++;
+                entry['value'][subid] = hubmsg['change_value'];
+                var idxitems = idx.split("|");
+                var targetobj = {};
+                targetobj[subid] = entry.value[subid];
+                pushClient(idxitems[1], idxitems[0], subid, targetobj);
+
+                // process rules
+                if ( ENABLERULES && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
+                    processRules(idxitems[1], idxitems[0], subid, targetobj, "processMsg");
+                }
             }
         }
     }
@@ -4233,7 +4301,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                     pvalue = translateMusic(pvalue);
                 } else if ( swtype==="weather" && is_object(pvalue.forecast) ) {
                     var origname = allthings[idx].name;
-                    pvalue = interpretWeather(origname, pvalue);
+                    pvalue = translateWeather(origname, pvalue);
                 }
 
                 if (pvalue) {
@@ -4313,9 +4381,9 @@ function queryHub(hub, swid, swtype, popup) {
                     pvalue = translateAudio(pvalue);
                 } else if ( swtype==="music" ) {
                     pvalue = translateMusic(pvalue);
-                } else if ( swtype==="weather" && is_object(pvalue.forecast) ) {
+                } else if ( swtype==="weather" ) {
                     var origname = allthings[idx].name;
-                    pvalue = interpretWeather(origname, pvalue);
+                    pvalue = translateWeather(origname, pvalue);
                 }
 
                 pushClient(swid, swtype, "none", pvalue, null, popup);
@@ -4778,7 +4846,7 @@ function doQuery(hubid, swid, swtype, tileid, protocol) {
                 res.value = translateMusic(res.value);
             // deal with accuweather
             } else if ( res.type==="weather" ) {
-                res.value = interpretWeather(res.name, res.value);
+                res.value = translateWeather(res.name, res.value);
             }
 
             res.value = getCustomTile(res.value, res.type, res.id);
