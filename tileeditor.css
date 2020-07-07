@@ -812,7 +812,7 @@ div.editheader {
     display: none;
 }
 
-div.editlink, div.cmzlink, div.dellink, div.sortnum,
+div.editlink, div.cmzlink, div.dellink, div.sortnum, div.tilenum,
 div.editpage, div.delpage, div.addpage {
     border: 1px solid white; 
     border-radius: 50%;
@@ -830,12 +830,12 @@ div.editpage, div.editlink {
     left: 0px;
 }
 div.delpage, div.dellink {
-    background-color: rgba(255, 0, 0, 0.6);
+    background-color: rgba(255, 0, 0, 1);
     right: 0px;
 }
 
 div.cmzlink {
-    background-color: rgba(0, 0, 192, 0.6);
+    background-color: rgba(0, 0, 192, 1);
 }
 div.editlink, div.dellink, div.cmzlink {
     top: 12px;
@@ -846,6 +846,9 @@ div.editlink {
 }
 div.cmzlink {
     top: 50px;
+    width: 34px;
+    height: 23px;
+    padding-top: 5px;
 }
 div.addpage {
     font-size: 14px;

@@ -33,6 +33,7 @@ var webSocketServer = require('websocket').server;
 var webSocketClient = require('websocket').client;
 var path = require('path');
 var http = require('http');
+var https = require('https');
 var fs = require('fs');
 var express = require('express');
 var bodyParser = require('body-parser');
@@ -43,6 +44,8 @@ const UTIL = require('util');
 const mqtt = require('mqtt');
 const os = require('os');
 var cookieParser = require('cookie-parser');
+
+// const SmartApp   = require('@smartthings/smartapp');
 
 const defaultrooms = {
     "Kitchen": "clock|kitchen|sink|pantry|dinette" ,
@@ -247,7 +250,11 @@ function readOptions(caller) {
         rewrite = true;
     }
     if ( !array_key_exists("kiosk", GLB.options.config) ) {
-        GLB.options.config.port = "false";
+        GLB.options.config.kiosk = "false";
+        rewrite = true;
+    }
+    if ( !array_key_exists("blackout", GLB.options.config) ) {
+        GLB.options.config.blackout = "false";
         rewrite = true;
     }
     if ( !array_key_exists("webSocketServerPort", GLB.options.config) ) {
@@ -1420,6 +1427,7 @@ function setDefaults() {
     GLB.options.config = {};
     GLB.options.config["port"] = "3080";
     GLB.options.config["kiosk"] = "false";
+    GLB.options.config["blackout"] = "false";
     GLB.options.config["webSocketServerPort"] = "1380";
     GLB.options.config["timezone"] = "America/Detroit";
     GLB.options.config["hubs"] = [];
@@ -3398,11 +3406,7 @@ function processHubMessage(hubmsg) {
 
 
             pushClient(entry.id, entry.type, subid, entry['value'])
-
-            // process rules
-            if ( ENABLERULES && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
-                processRules(entry.id, entry.type, subid, entry['value'], "processMsg");
-            }
+            processRules(entry.id, entry.type, subid, entry['value'], "processMsg");
 
         // handle links
         // this code replaces the pushclient handler on js side that used to do links
@@ -3427,11 +3431,7 @@ function processHubMessage(hubmsg) {
                 var targetobj = {};
                 targetobj[subid] = entry.value[subid];
                 pushClient(idxitems[1], idxitems[0], subid, targetobj);
-
-                // process rules
-                if ( ENABLERULES && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
-                    processRules(idxitems[1], idxitems[0], subid, targetobj, "processMsg");
-                }
+                processRules(idxitems[1], idxitems[0], subid, targetobj, "processMsg");
             }
         }
     }
@@ -3508,12 +3508,7 @@ function processIsyMessage(isymsg) {
                     pvalue = translateIsy(bid, control[0], uom, pvalue, newval, "");
                     var subid = mapIsy(control[0], uom);
                     pushClient(bid, "isy", subid, pvalue, false, false);
-
-                    // process rules and links
-                    if ( ENABLERULES && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
-                        processRules(bid, "isy", subid, pvalue, "processMsg");
-                        // GLB.rules[subid] = true;
-                    }
+                    processRules(bid, "isy", subid, pvalue, "processMsg");
                     if ( DEBUG9 ) {
                         console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " uom: ", uom, " newval: ", newval, " value: ", pvalue);
                     }
@@ -3547,12 +3542,7 @@ function processIsyMessage(isymsg) {
                         pvalue[subid] = newval.toString();
                         allthings[idx]["value"] = pvalue;
                         pushClient(bid, "isy", subid, pvalue, false, false);
-
-                        // process rules and links
-                        if ( ENABLERULES && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
-                            processRules(bid, "isy", subid, pvalue, "processMsg");
-                            // GLB.rules[subid] = true;
-                        }
+                        processRules(bid, "isy", subid, pvalue, "processMsg");
                         if ( DEBUG9 ) {
                             console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " newval: ", newval, " pvalue: ", pvalue);
                         }
@@ -3568,6 +3558,10 @@ function processIsyMessage(isymsg) {
 }
 
 function processRules(bid, thetype, trigger, pvalue, rulecaller) {
+
+    if ( !ENABLERULES || (GLB.options.config["rules"] !=="true" && GLB.options.config["rules"] !==true) ) {
+        return;
+    }
 
     // go through all things that could be links for this tile
     var userid = "user_" + bid;
@@ -3641,13 +3635,28 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
 
                     // get the rule set
                     var ruleset = rulestr.split(/\s+/);
+                    var newset = [];
+                    var theword = "";
+                    ruleset.forEach(function(aword) {
+                        aword = aword.trim();
+                        if ( aword.toLowerCase()==="or" || aword.toLowerCase()==="and" ) {
+                            newset.push(theword);
+                            newset.push(aword.toLowerCase());
+                            theword = "";
+                        } else {
+                            theword = theword + aword;
+                        }
+                    }) 
+                    newset.push(theword);
+
+
                     var doand = true;
                     if ( DEBUG11 ) {
                         console.log( (ddbg()), "RULE debug: rulestr: ", rulestr, " rulseset: ", ruleset);
                     }
     
                     // loop through each one and add to test
-                    ruleset.forEach( function(rule) {
+                    newset.forEach( function(rule) {
 
                         var ruleparts = null;
                         var ruletileid = null;
@@ -3670,7 +3679,17 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
 
                         // otherwise we are on an element so interpret the test
                         } else {
-                            if ( rulenum===0 ) {
+                            ruleparts = rule.match(rulepattern);
+                            // first check for format with a tile ID number
+                            if ( ruleparts ) {
+                                ruletileid = parseInt(ruleparts[1]);
+                                rulesubid = ruleparts[2] || "";
+                                ruleop = ruleparts[3] || "";
+                                ruleop2 = ruleparts[4];
+                                if ( ruleop2 ) { ruleop = ruleop + ruleop2; }
+                                rulevalue = ruleparts[5] || "";
+                            // if id number not given then assume this tile ID
+                            } else {
                                 ruleparts = rule.match(triggerpattern);
                                 if ( ruleparts ) {
                                     ruletileid = tileid;
@@ -3680,33 +3699,9 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
                                     if ( ruleop2 ) { ruleop = ruleop + ruleop2; }
                                     rulevalue = ruleparts[4] || "";
                                 }
-                            } else {
-                                ruleparts = rule.match(rulepattern);
-                                ruleop = "";
-                                if ( ruleparts ) {
-                                    ruletileid = parseInt(ruleparts[1]);
-                                    rulesubid = ruleparts[2] || "";
-                                    ruleop = ruleparts[3] || "";
-                                    ruleop2 = ruleparts[4];
-                                    if ( ruleop2 ) { ruleop = ruleop + ruleop2; }
-                                    rulevalue = ruleparts[5] || "";
-                                } else {
-                                    ruleparts = rule.match(altpattern);
-                                    if ( ruleparts ) {
-                                        ruletileid = tileid;
-                                        rulesubid = ruleparts[1] || "";
-                                        ruleop = ruleparts[2] || "";
-                                        ruleop2 = ruleparts[3];
-                                        if ( ruleop2 ) { ruleop = ruleop + ruleop2; }
-                                        rulevalue = ruleparts[4] || "";
-                                    }
-                                }
-                                if ( DEBUG11 ) {
-                                    console.log( (ddbg()), "rule: ", rule, " ruleparts: ", ruleparts);
-                                }
                             }
                             if ( DEBUG11 ) {
-                                console.log( (ddbg()), "RULE debug: ruletileid: ", ruletileid, " rulesubid: ", rulesubid, 
+                                console.log( (ddbg()), "RULE debug: ruleparts: ", ruleparts, " ruletileid: ", ruletileid, " rulesubid: ", rulesubid, 
                                                        " ruleop: ", ruleop, " rulevalue: ", rulevalue, " before: ", doand, " rule: ", rule, " isrule: ", isrule);
                             }
     
@@ -3747,12 +3742,23 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
                                 }
 
                                 // get the rule check if the requested subid is recognized
+                                // we handle numbers, dates, and times differently than strings
                                 if ( ifvalue!==false ) {
 
-                                    if ( isNaN(parseFloat(ifvalue)) || isNaN(parseFloat(rulevalue)) ) {
-                                        var num1 = ifvalue;
-                                        var num2 = rulevalue;
-                                    } else {
+                                    var num1 = ifvalue;
+                                    var num2 = rulevalue;
+                                    if ( rulesubid==="date") {
+                                        var d1 = new Date(ifvalue);
+                                        var d2 = new Date(rulevalue);
+                                        num1 = d1.getTime();
+                                        num2 = d2.getTime();
+                                    } else if ( rulesubid==="time") {
+                                        var today = new Date();
+                                        var d1 = new Date(today.toDateString() + " " + ifvalue);
+                                        var d2 = new Date(today.toDateString() + " " + rulevalue);
+                                        num1 = d1.getTime();
+                                        num2 = d2.getTime();
+                                    } else if ( !isNaN(parseFloat(ifvalue)) && !isNaN(parseFloat(rulevalue)) ) {
                                         num1 = parseFloat(ifvalue);
                                         num2 = parseFloat(rulevalue);
                                     }
@@ -3785,7 +3791,7 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
 
                         // report state of test
                         if ( DEBUG11 ) {
-                            console.log( (ddbg()), "RULE debug: after: ", doand, " ", rule, " isrule: ", isrule);
+                            console.log( (ddbg()), "RULE debug: and=true, or=false: ", doand, " ", rule, " after isrule: ", isrule);
                         }
                         rulenum++;
             
@@ -4095,10 +4101,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
 
         if (result) {
             pushClient(swid, swtype, subid, result, linkinfo, popup);
-            if ( ENABLERULES && !inrule && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
-                processRules(swid, swtype, subid, result, "callHub");
-                // GLB.rules[subid] = true;
-            }
+            processRules(swid, swtype, subid, result, "callHub");
         }
 
     } else if ( hub["hubType"]==="SmartThings" || hub["hubType"]==="Hubitat" ) {
@@ -4306,10 +4309,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
 
                 if (pvalue) {
                     pushClient(swid, swtype, subid, pvalue, linkinfo, popup);
-                    if ( ENABLERULES && !inrule && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
-                        processRules(swid, swtype, subid, pvalue, "callHub");
-                        // GLB.rules[subid] = true;
-                    }
+                    processRules(swid, swtype, subid, pvalue, "callHub");
                 }
             }
         }
@@ -4335,12 +4335,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
             // var rres = result.RestResponse;
             // if ( rres && rres.status.toString()==="200" ) {
             //     pushClient(swid, swtype, subid, isyresp, linkinfo, popup);
-
-            //     if ( ENABLERULES && !inrule && (GLB.options.config["rules"] ==="true" || GLB.options.config["rules"] ===true) ) {
-            //         var idx = "isy|" + swid;
-            //         processRules(swid, "isy", subid, isyresp, "callHub");
-            //         // GLB.rules[subid] = true;
-            //     }
+            //     processRules(swid, "isy", subid, isyresp, "callHub");
             // }
         }
     }
@@ -4387,6 +4382,11 @@ function queryHub(hub, swid, swtype, popup) {
                 }
 
                 pushClient(swid, swtype, "none", pvalue, null, popup);
+
+                // force processing of rules for weather and clocks on a query
+                if ( swtype==="weather" || swtype==="clock" ) {
+                    processRules(swid, swtype, "timer", pvalue, "doQuery");
+                }
             }
         }
     }
@@ -5511,6 +5511,7 @@ function getOptionsPage(uname, hostname, pathname) {
     var $fast_timer = configoptions["fast_timer"];
     var $slow_timer = configoptions["slow_timer"];
     var $kioskoptions = configoptions["kiosk"];
+    var $blackout = configoptions["blackout"];
     var $ruleoptions = configoptions["rules"];
     var $timezone = configoptions["timezone"];
     var polisyip = configoptions["polisyip"] || "localhost";
@@ -5537,7 +5538,7 @@ function getOptionsPage(uname, hostname, pathname) {
     $tc += "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
 
     $tc += "<div class=\"filteroption\">";
-    $tc += "Specify number of special tiles: ";
+    $tc += "Specify number of special tiles: <br/>";
     for (var $stype in specialtiles) {
         var sid = specialtiles[$stype];
         var $customcnt = getCustomCount($stype, sid[3]);
@@ -5549,11 +5550,14 @@ function getOptionsPage(uname, hostname, pathname) {
 
     $tc += "<div class=\"filteroption\">";
     $tc += "Other options: <br/>";
-    $tc += "<label for=\"kioskid\" class=\"kioskoption\">Kiosk Mode: </label>";    
+    $tc += "<br/><label for=\"kioskid\" class=\"kioskoption\">Kiosk Mode: </label>";    
     var $kstr = ($kioskoptions===true || $kioskoptions==="true" || $kioskoptions==="1" || $kioskoptions==="yes") ? "checked" : "";
     $tc+= "<input id=\"kioskid\" width=\"24\" type=\"checkbox\" name=\"kiosk\"  value=\"" + $kioskoptions + "\" " + $kstr + "/>";
+    $tc += "<br/><label for=\"clrblackid\" class=\"kioskoption\">Blackout on Night Mode: </label>";    
+    $kstr = ($blackout===true || $blackout==="true") ? "checked" : "";
+    $tc+= "<input id=\"clrblackid\" width=\"24\" type=\"checkbox\" name=\"clrblackid\"  value=\"" + $blackout + "\" " + $kstr + "/>";
     if ( ENABLERULES ) {
-        $tc += "<label for=\"ruleid\" class=\"kioskoption\">Enable Rules? </label>";
+        $tc += "<br/><label for=\"ruleid\" class=\"kioskoption\">Enable Rules? </label>";
         var $rstr = ($ruleoptions===true || $ruleoptions==="true" || $ruleoptions==="1" || $ruleoptions==="yes") ? "checked" : "";
         $tc += "<input id=\"ruleid\" width=\"24\" type=\"checkbox\" name=\"rules\"  value=\"" + $ruleoptions + "\" " + $rstr + "/>";
     }
@@ -5665,6 +5669,7 @@ function getOptionsPage(uname, hostname, pathname) {
         } else {
             $tc+= "<br>custom: none"; 
         }
+        $tc+= " (tile #" + $thingindex + ")";
         $tc+= "</span>";
         $tc+= "</td>";
         
@@ -5733,7 +5738,7 @@ function mainPage(uname, hostname, pathname) {
     var config = GLB.options.config;
     var skin = getSkin(uname);
     var kioskmode = GLB.options.config["kiosk"];
-    if ( kioskmode === "true" || kioskmode===1 || kioskmode==="yes" ) {
+    if ( kioskmode===true || kioskmode==="true" || kioskmode===1 || kioskmode==="yes" ) {
         kioskmode = true;
     } else {
         kioskmode = false;
@@ -6016,6 +6021,7 @@ function processOptions(uname, optarray) {
     // // checkbox items simply will not be there if not selected
     configoptions["kiosk"] = "false";
     configoptions["rules"] = "false";
+    configoptions["blackout"] = "false";
 
     // force all three to be given for change to happen
     var city = "";
@@ -6035,6 +6041,8 @@ function processOptions(uname, optarray) {
             continue;
         } else if ( key==="kiosk") {
             configoptions["kiosk"] = "true";
+        } else if ( key==="blackout") {
+            configoptions["blackout"] = "true";
         } else if ( key==="rules") {
             configoptions["rules"] = ENABLERULES ? "true" : "false";
         } else if ( key==="accucity" ) {
@@ -6649,7 +6657,7 @@ function apiCall(body, protocol, req, res) {
         case "filteroptions":
             if ( protocol==="POST" ) {
                 result = saveFilters(body);
-                console.log("Filters: ", result);
+                // console.log("Filters: ", result);
                 writeOptions(GLB.options);
             } else {
                 result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
@@ -6660,7 +6668,7 @@ function apiCall(body, protocol, req, res) {
         case "userpw":
             if ( protocol==="POST" ) {
                 result = saveUserPw(res, body, uname);
-                console.log("User pw: ", result);
+                // console.log("User pw: ", result);
                 writeOptions(GLB.options);
             } else {
                 result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
@@ -7186,10 +7194,31 @@ try {
     app.use(express.static(dir));
     app.use(cookieParser());
 
+    var httpServer = http.createServer(app);
+
     // list on the port
-    app.listen(port, function () {
-        console.log((ddbg()), "HousePanel server is running at location: ", dir, " on port: ", port);
+    httpServer.listen(port, function () {
+        console.log((ddbg()), "HousePanel insecure server is running at location: ", dir, " on port: ", port);
     });
+    if ( fs.existsSync("client-1.local.key") && fs.existsSync("client-1.local.crt") ) {
+        try {
+            var intport = parseInt(port);
+            if ( isNaN(intport) || intport < 3000 ) {
+                var s_port = 3843;
+            } else {
+                s_port = intport - (intport % 100) + 43;
+            }
+            var key = fs.readFileSync("client-1.local.key");
+            var crt = fs.readFileSync("client-1.local.crt");
+            var credentials = {ca: crt, key: key, cert: crt};
+            var httpsServer = https.createServer(credentials, app);
+            httpsServer.listen(s_port, function () {
+                console.log((ddbg()), "HousePanel secure server is running on port: ", s_port);
+            });
+        } catch (e) {
+            console.log((ddbg(), "Error attempting to start secure server", e));
+        }
+    }
     applistening = true;
     
 } catch (e) {

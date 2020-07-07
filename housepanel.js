@@ -575,7 +575,7 @@ function setupWebsocket(webSocketUrl)
             }
 
             // update all the tiles that match this type and id
-            // this now works even if tile isn't on the panel because
+            // this now works even if tile isn't on the panel
             $('div.panel div.thing[bid="'+bid+'"][type="'+thetype+'"]').each(function() {
                 try {
                     var aid = $(this).attr("aid");
@@ -635,6 +635,18 @@ function setupWebsocket(webSocketUrl)
                     $(sibling).html( value );
                 }
             });
+
+            // blank screen if night mode set
+            if ( thetype==="mode" && subid==="themode" ) {
+                if ( pvalue[subid]==="Night" ) {
+                    execButton("blackout");
+                } else if ( $("#blankme") ) {
+                    $("#blankme").off("click");
+                    $("#blankme").remove(); 
+                    priorOpmode = "Operate";
+                }
+            }
+
         }
     };
     
@@ -1511,6 +1523,7 @@ function execButton(buttonid) {
                             "left":"0px", "top":"0px", "z-index":"9999" } );
 
         // clicking anywhere will restore the window to normal
+        $("#blankme").off("click");
         $("#blankme").on("click", function(evt) {
             $("#blankme").remove(); 
             priorOpmode = "Operate";
@@ -1558,7 +1571,7 @@ function execButton(buttonid) {
         priorOpmode = "Operate";
     } else if ( buttonid==="snap" ) {
         var snap = $("#mode_Snap").prop("checked");
-        // console.log("snap mode: ",snap);
+        console.log("Tile movement snap mode: ",snap);
 
     } else if ( buttonid==="refreshpage" ) {
         var pstyle = "position: absolute; background-color: blue; color: white; font-weight: bold; font-size: 32px; left: 300px; top: 300px; width: 600px; height: 100px; margin-top: 50px;";
@@ -1840,8 +1853,9 @@ function addEditLink() {
     // add links to edit and delete this tile
     $("div.panel > div.thing").each(function() {
         var editdiv = "<div class=\"editlink\" aid=" + $(this).attr("id") + "> </div>";
-        var cmzdiv = "<div class=\"cmzlink\" aid=" + $(this).attr("id") + "> </div>";
+        var cmzdiv = "<div class=\"cmzlink\" aid=" + $(this).attr("id") + ">" + $(this).attr("tile")  + "</div>";
         var deldiv = "<div class=\"dellink\" aid=" + $(this).attr("id") + "> </div>";
+        // var numdiv = "<div class=\"tilenum\" aid=" + $(this).attr("id") + ">" + $(this).attr("tile")  + "</div>";
         $(this).append(cmzdiv).append(editdiv).append(deldiv);
     });
     
@@ -2019,6 +2033,9 @@ function delEditLink() {
     $("div.dellink").each(function() {
        $(this).remove();
     });
+    // $("div.tilenum").each(function() {
+    //     $(this).remove();
+    //  });
     $("div.editpage").each(function() {
        $(this).remove();
     });
@@ -2736,8 +2753,6 @@ function setupPage() {
         var subid = $(this).attr("subid");
         var id = $(this).attr("id");
 
-        // alert("Clicked... id = " + id + " aid= " + aid + " subid= " + subid + " priorMode= " + priorOpmode);
-        
         // avoid doing click if the target was the title bar
         // also skip sliders tied to subid === level or colorTemperature
         if ( ( typeof aid==="undefined" ) || 
@@ -2792,8 +2807,6 @@ function setupPage() {
             }
         }
 
-        // alert("Clicked... id = " + id + " aid= " + aid + " subid= " + subid + " priorMode= " + priorOpmode + " pw= " + pw);
-            
         // now ask user to provide a password to activate this tile
         // or if an empty password is given this becomes a confirm box
         // the dynamically created dialog box includes an input string if pw given
@@ -2945,13 +2958,6 @@ function processClick(that, thingname) {
         thevalue = $("#a-"+aid+"-temperature").html();
     }
 
-    // handle music commands (which need to get subid command) and
-    var ismusic = false;
-    if ( subid.startsWith("music-" ) ) {
-        thevalue = subid.substring(6);
-        ismusic = true;
-    }
-    
     // handle linked tiles by looking for sibling
     // there is only one sibling for each of the music controls
     // check for companion sibling element for handling customizations

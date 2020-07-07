@@ -1,6 +1,11 @@
 'use strict';
 
 const devhistory =  ` 
+2.301   Rules bugfix to address spaces when writing logic statements
+            - trigger rule for weather and clock tiles upon timer read
+            - initial setup of machinery to convert to new ST SPI system
+            - add Tile # on options page and inside blue circles when editing
+            - auto blackout page when entering night mode
 2.300   Update order of items in a tile
             - fix bug in setting cookie so it sustains over sessions
             - weather tile bugfix on updates
