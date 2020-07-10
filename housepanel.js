@@ -3041,6 +3041,7 @@ function processClick(that, thingname) {
             }, 
         "json");
 
+    // process user provided allon or alloff fields that turn all lights on or off
     } else if ( command==="TEXT" && (subid==="allon" || subid==="alloff") ) {
         var panel = $(tile).attr("panel");
         thevalue = addOnoff(targetid, subid, thevalue);
@@ -3050,6 +3051,7 @@ function processClick(that, thingname) {
             thetype = $(tile).attr("type");
             bid = $(tile).attr("bid");
             hubnum = $(tile).attr("hub");
+            var val = thevalue;
 
             var sib = $(this).siblings("div.user_hidden");
             if ( sib && sib.length > 0 ) {
@@ -3061,17 +3063,27 @@ function processClick(that, thingname) {
             }
             // force use of command mode by setting attr to blank
             theattr = "";  // $(this).attr("class");
-            if ( thevalue==="on" && thetype==="ISY" ) {
-                thevalue = "DON";
-            }
-            else if ( thevalue==="off" || thetype==="ISY" ) {
-                thevalue = "DOF";
+
+            // for ISY only process if uom_switch is 100 which means a light
+            // and fix use of on/off to DON/DOF
+            var uomid = "#a-" + aid + "-uom_switch";
+            if ( thetype==="ISY" ) {
+                if ( $(uomid) && $(uomid).html() !== "100" ) {
+                    val = false;
+                } else if ( val==="on" ) {
+                    val = "DON";
+                }
+                else if ( val==="off" ) {
+                    val = "DOF";
+                }
             }
             // console.log(subid, "clicked. bid: ", bid, " type: ", thetype, " value: ", thevalue, 
             //                    " attr: ", theattr, " hubnum: ", hubnum, " command: ", command, " linkval: ", linkval );
-            $.post(cm_Globals.returnURL, 
-                {useajax: ajaxcall, id: bid, type: thetype, value: thevalue, uname: uname,
-                 attr: theattr, subid: "switch", hubid: hubnum, command: command, linkval: linkval} );
+            if ( val ) {
+                $.post(cm_Globals.returnURL, 
+                    {useajax: ajaxcall, id: bid, type: thetype, value: val, uname: uname,
+                     attr: theattr, subid: "switch", hubid: hubnum, command: command, linkval: linkval} );
+            }
         });
 
     } else if ( ispassive ) {

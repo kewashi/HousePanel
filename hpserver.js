@@ -986,8 +986,9 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                                         progname = "Program " + progname;
                                     }
 
-                                    var progcommands = "run|runThen|runElse|stop|enable|disable";
-                                    var progarr = progcommands.split("|");
+                                    // var progcommands = "run|runThen|runElse|stop|enable|disable";
+                                    // var progarr = progcommands.split("|");
+                                    var progarr = ["run","runThen","runElse","stop","enable","disable"];
                                     pvalue = {name: progname};
                                     progarr.forEach(function(command) {
                                         pvalue[command] = command;
@@ -4244,8 +4245,9 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
 
                 // run commands
                 } else if ( hint==="ISY program" ) {
-                    var progcommands = "run|runThen|runElse|stop|enable|disable";
-                    var progarr = progcommands.split("|");
+                    // var progcommands = "run|runThen|runElse|stop|enable|disable";
+                    // var progarr = progcommands.split("|");
+                    var progarr = ["run","runThen","runElse","stop","enable","disable"];
                     var progid = allthings[idx].id;
                     progid = progid.substr(5);
                     if ( progarr.includes(subid) ) {
