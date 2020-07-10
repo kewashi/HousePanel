@@ -3405,8 +3405,9 @@ function processHubMessage(hubmsg) {
             // if ( entry['value']['trackData'] ) { delete entry['value']['trackData']; }
             // if ( entry.type==="weather" && is_object(entry.value.forecast) ) { delete entry.value.forecast; }
 
-
-            pushClient(entry.id, entry.type, subid, entry['value'])
+            if ( ! array_key_exists("skip_push", hubmsg) ) {
+                pushClient(entry.id, entry.type, subid, entry['value'])
+            }
             processRules(entry.id, entry.type, subid, entry['value'], "processMsg");
 
         // handle links
@@ -3644,6 +3645,8 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
                             newset.push(theword);
                             newset.push(aword.toLowerCase());
                             theword = "";
+                        } else if ( aword.toLowerCase()==="am" || aword.toLowerCase()==="pm" ) {
+                            theword = theword + " " + aword;
                         } else {
                             theword = theword + aword;
                         }
@@ -6984,6 +6987,10 @@ function apiCall(body, protocol, req, res) {
                     allthings[idx]["value"][rsubid] = rvalue;
                 }
             }
+
+            // process rules
+            processRules(swid, "clock", "time", result, "getclock");
+
             break;
 
         case "cancelauth":

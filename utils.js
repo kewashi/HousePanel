@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.302   Add trigger for clock every minute so time can be a trigger
 2.301   Rules bugfix to address spaces when writing logic statements
             - trigger rule for weather and clock tiles upon timer read
             - add Tile # on options page and inside blue circles when editing

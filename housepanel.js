@@ -2470,7 +2470,7 @@ function setupTabclick() {
 
 function clockUpdater(tz) {
 
-    // update the date every half hour
+    // update the clocks and process clock rules once every minute
     setInterval(function() {
         // var old = new Date();
         // var utc = old.getTime() + (old.getTimezoneOffset() * 60000);
@@ -2478,7 +2478,7 @@ function clockUpdater(tz) {
 
         // call server to get updated digital clocks
         $.post(cm_Globals.returnURL, 
-            {useajax: "getclock", id: "clockdigital", type: "none"},
+            {useajax: "getclock", id: "clockdigital", type: "clock"},
             function (presult, pstatus) {
                 if ( pstatus==="success" && typeof presult==="object" ) {
                     // console.log("Updating digital clocks with: ", presult);
@@ -2514,7 +2514,7 @@ function clockUpdater(tz) {
 
         // call server to get updated analog clocks
         $.post(cm_Globals.returnURL, 
-            {useajax: "getclock", id: "clockanalog", type: "none"},
+            {useajax: "getclock", id: "clockanalog", type: "clock"},
             function (presult, pstatus) {
                 if ( pstatus==="success" && typeof presult==="object" ) {
                     // console.log("Updating analog clocks with: ", presult);
@@ -2550,9 +2550,9 @@ function clockUpdater(tz) {
             }
         );
 
-    }, 1800000 );
+    }, 60000 );
 
-    // update the time fields every second
+    // update digital clock time fields every second
     // this includes all linked fields
     // this is also where we take care of all the time formatting
     setInterval(function() {
@@ -2599,6 +2599,8 @@ function clockUpdater(tz) {
         // this skips the wysiwyg items in edit boxes
         // include format if provided by user in a sibling field
         $("div.panel div.clock.time").each(function() {
+            var idx = "clock|clockdigital";
+            var idxa = "clock|clockanalog";
             if ( $(this).parent().siblings("div.overlay.fmt_time").length > 0 ) {
                 var timestr = $(this).parent().siblings("div.overlay.fmt_time").children("div.fmt_time").html();
                 timestr = timestr.replace("g",hour24);
@@ -2617,6 +2619,12 @@ function clockUpdater(tz) {
                     timestr = timestr.replace("A","AM");
                 }
                 $(this).html(timestr);
+
+                // save in allthing array
+                // console.log("updating time: ", timestr);
+                cm_Globals.allthings[idx]["value"]["time"] = timestr;
+                cm_Globals.allthings[idxa]["value"]["time"] = timestr;
+
             // take care of linked times that don't have their own formatting string
             // one can of course add a unique formatting string to any linked time item
             // in which case the linked time will use its own formatting
@@ -2635,6 +2643,11 @@ function clockUpdater(tz) {
                     timestr+= " AM";
                 }
                 $(this).html(timestr);
+
+                // save in allthing array
+                // console.log("updating default time: ", timestr);
+                cm_Globals.allthings[idx]["value"]["time"] = timestr;
+                cm_Globals.allthings[idxa]["value"]["time"] = timestr;
             }
         });
     }, 1000);
@@ -3102,6 +3115,19 @@ function processClick(that, thingname) {
             var idx = thetype + "|" + bid;
             var thing= cm_Globals.allthings[idx];
             var value = thing.value;
+
+            // make post call emulating refresh from hub to force rule execution
+            // note we include field that signals to skip any value updates
+            var body = {
+                msgtype: "update", 
+                hubid: hubnum,
+                change_device: bid,
+                change_attribute: subid,
+                change_value: value[subid],
+                skip_push: true 
+            };
+            $.post(cm_Globals.returnURL, body);
+ 
             var showstr = "";
             $.each(value, function(s, v) {
                 if ( v && s!=="password" && !s.startsWith("user_") ) {
