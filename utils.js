@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.303   bugfix for buttons and rules and anythign else returning array values
 2.302   Add trigger for clock every minute so time can be a trigger
 2.301   Rules bugfix to address spaces when writing logic statements
             - trigger rule for weather and clock tiles upon timer read

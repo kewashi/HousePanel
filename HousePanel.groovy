@@ -1,7 +1,7 @@
 /**
  *  HousePanel
  *
- *  Copyright 2016 to 2019 Kenneth Washington
+ *  Copyright 2016 to 2020 by Kenneth Washington
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -12,11 +12,11 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- * This app started life displaying the history of various ssmartthings
- * but it has morphed into a full blown smart panel web application
- * it displays and enables interaction with switches, dimmers, locks, etc
+ * This is a SmartThings and Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history:
+ * 07/10/2020 - fix button rule callback to send scalar instead of object
+ *            - remove all manual log.info and log.debug and user logger everywhere
  * 06/16/2020 - fix mode and momentary buttons that I broke in a prior update
  * 06/12/2020 - add toggle as a command for all light types
  * 06/09/2020 - remove dynamic pages since they mess up OAUTH from HP side
@@ -413,7 +413,6 @@ def getMusic(swid, item=null) {
     //     resp = addBattery(resp, item)
     //     resp = addHistory(resp, item)
     // }
-    // log.debug resp
     return resp
 }
 
@@ -1393,18 +1392,24 @@ def setButton(swid, cmd, swattr, subid) {
     def item  = mybuttons.find {it.id == swid }
     def resp = false
     if ( item ) {
-        if (cmd=="pushed" || cmd=="held") {
-            resp =  [button: cmd]
+        if (cmd) {
+            resp  = [button:  cmd]
 
             // emulate event callback
-            postHub(state.directIP, state.directPort, "update", item.displayName, swid, "button", "button", resp)
+            postHub(state.directIP, state.directPort, "update", item.displayName, swid, "button", "button", cmd)
             if (state.directIP2) {
-                postHub(state.directIP2, state.directPort2, "update", item.displayName, swid, "button", "button", resp)
+                postHub(state.directIP2, state.directPort2, "update", item.displayName, swid, "button", "button", cmd)
             }
-
-        } else {
-            resp = item
         }
+
+        // if trigger was not button invoke it too
+        // if ( subid!="button") {
+        //     resp[subid] = cmd;            
+        //     postHub(state.directIP, state.directPort, "update", item.displayName, swid, subid, "button", cmd)
+        //     if (state.directIP2) {
+        //         postHub(state.directIP2, state.directPort2, "update", item.displayName, swid, subid, "button", cmd)
+        //     }
+        // }
     }
     return resp
 }
@@ -1433,14 +1438,21 @@ def setOther(swid, cmd, attr, subid, item=null ) {
             item."$cmd"()
             resp = getOther(swid, item)
 
-        } else if ( item.hasAttribute("button") && (cmd=="pushed" || cmd=="held") ) {
+        } else if ( item.hasAttribute("button") && cmd ) {
             resp = [button: cmd]
-
             // emulate event callback
-            postHub(state.directIP, state.directPort, "update", item.displayName, item.id, "button", "button", resp)
+            postHub(state.directIP, state.directPort, "update", item.displayName, item.id, "button", "button", cmd)
             if (state.directIP2) {
-                postHub(state.directIP2, state.directPort2, "update", item.displayName, item.id, "button", "button", resp)
+                postHub(state.directIP2, state.directPort2, "update", item.displayName, item.id, "button", "button", cmd)
             }
+            // if trigger was not button invoke it too
+            // if ( subid!="button") {
+            //     resp[subid] = cmd;            
+            //     postHub(state.directIP, state.directPort, "update", item.displayName, swid, subid, "button", cmd)
+            //     if (state.directIP2) {
+            //         postHub(state.directIP2, state.directPort2, "update", item.displayName, swid, subid, "button", cmd)
+            //     }
+            // }
 
         } else {
             resp = getOther(swid, item)
@@ -2458,7 +2470,6 @@ def changeHandler(evt) {
             
         } catch (e) {
             skip= false
-            log.debug "skip forced to false due to error"
             log.debug e
         }
     }
@@ -2483,7 +2494,7 @@ def changeHandler(evt) {
             }
 
             // set it to change color based on attribute change
-            log.debug "color of device ${deviceName} changed to ${color} by the ${attr} attribute changing to ${value}"
+            logger("color of device ${deviceName} changed to ${color} by the ${attr} attribute changing to ${value}", "debug")
             attr = "color"
             value = color
         }
@@ -2513,7 +2524,7 @@ def modeChangeHandler(evt) {
 
 def postHub(ip, port, msgtype, name, id, attr, type, value) {
 
-    log.info "HousePanel postHub ${msgtype} to IP= ${ip}:${port} name= ${name} attr= ${attr} type= ${type} value= ${value}"
+    logger("HousePanel postHub ${msgtype} to IP= ${ip}:${port} name= ${name} attr= ${attr} type= ${type} value= ${value}", "info")
     
     if ( msgtype && ip && port ) {
         // Send Using the Direct Mechanism

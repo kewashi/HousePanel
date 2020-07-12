@@ -516,28 +516,22 @@ function setupWebsocket(webSocketUrl)
                 return;
             }
 
-            // handle popups returned from a query
-            // this currently is not used but could be later
-            // if ( presult.popup ) {
-            //     var showstr = "";
-            //     $.each(pvalue, function(s, v) {
-            //         if ( s!=="password" && !s.startsWith("user_") ) {
-            //             var txt = v.toString();
-            //             txt = txt.replace(/<.*?>/g,'');
-            //             showstr = showstr + s + ": " + txt + "<br>";
-            //         }
-            //     });
-            //     var winwidth = $("#dragregion").innerWidth();
-            //     var tile = $('div.thing[bid="'+bid+'"][type="'+thetype+'"]');
-            //     var leftpos = $(tile).position().left + 5;
-            //     if ( leftpos + 220 > winwidth ) {
-            //         leftpos = leftpos - 110;
-            //     }
-            //     var pos = {top: $(tile).position().top + 80, left: leftpos};
-            //     // console.log("popup pos: ", pos, " winwidth: ", winwidth);
-            //     createModal("modalpopup", showstr, "body", false, pos, function(ui) {
-            //     });
-            // }
+            // expand objects if returned
+            // update the global allthings array
+            for ( var psubid in pvalue ) {
+                try {
+                    var jsontval = JSON.parse(pvalue[psubid]);
+                } catch (jerr) {
+                    jsontval = null;
+                }
+                if ( jsontval && typeof jsontval==="object" ) {
+                    for (var jtkey in jsontval ) {
+                        var jindex = psubid + "_" + jtkey.toString();
+                        pvalue[jindex] = jsontval[jtkey];
+                    }
+                    delete pvalue[psubid];
+                }
+            }
 
             // grab name and subid for console log
             var pname = pvalue["name"] ? pvalue["name"] : "";

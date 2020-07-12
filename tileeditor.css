@@ -1644,10 +1644,13 @@ div.weather.windVector::before {
 div.weather.humidity::before {
     content: "Humidity: ";
 }
+div.weather.cloudCover::before {
+    content: "Clouds: ";
+}
 div.weather.percentPrecip::before {
     content: "Rain: ";
 }
-div.weather.humidity::after, div.weather.percentPrecip::after {
+div.weather.humidity::after, div.weather.cloudCover::after, div.weather.percentPrecip::after {
     content: "%";
 }
 div.weather.illuminance::before {

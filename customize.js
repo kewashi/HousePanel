@@ -440,31 +440,66 @@ function loadLinkItem(idx, allowuser, sortval, sortup) {
     }
 
     // console.log("idx= ", idx, " loadLinkItem - thevalue= ", thevalue, " allowuser= ", allowuser);
-    var subids = Object.keys(thevalue);
-    
+    var initialsubids = Object.keys(thevalue);
+    var subids = [];
     var numthings = 0;
     var results = "";
     var firstitem = (sortval===false) ? "" : sortval;
+    var companion;
 
     // first load the native items
-    $.each(subids, function(index, val) {
-        var subid = val;
+    for ( var tkey in thevalue ) {
+        companion = "user_" + tkey;
+        var tval = thevalue[tkey];
+
         // skip user configuration items
-        if ( !subid.startsWith("user_") ) {
-            
-            // check to see if this subid has a user ride-along
-            // which tells us it is a customized item
-            var companion = "user_" + subid;
-            if ( !subids.includes(companion) ) { 
-                results+= "<option value='" + subid + "'>" + subid + "</option>";
-                numthings++;
+        if ( !tkey.startsWith("user_") && !initialsubids.includes(companion)) {
+
+            // check value for "json" strings
+            // to handle objects and arrays
+            try {
+                var jsontval = JSON.parse(tval);
+            } catch (jerr) {
+                jsontval = null;
             }
-            
-            if ( !firstitem  ) {
-                firstitem = subid;
+
+            if ( jsontval && typeof jsontval==="object" ) {
+
+                // var isarr = Array.isArray(jsontval);
+                for (var jtkey in jsontval ) {
+                    // var jtval = jsontval[jtkey];
+
+                    // expand arrays and objects onto the base
+                    // need to include objects so we can retrieve the original info
+                    // shouldn't be needed for known types that do objects like audio and weather
+                    // but if something unknown comes in we need to handle it
+                    // arrays are also handled by adding the index to the base
+                    // for example, this happens for buttons reporting acceptable values
+                    jtkey = tkey + "_" + jtkey.toString();
+                    companion = "user_" + jtkey;
+
+                    // skip adding an object element if it duplicates an existing one
+                    if ( !subids.includes(jtkey) && !initialsubids.includes(companion) ) {
+                        results+= "<option value='" + jtkey + "'>" + jtkey + "</option>";
+                        subids.push(jtkey);
+                        numthings++;
+                        if ( !firstitem  ) {
+                            firstitem = jtkey;
+                        }
+                    }
+                }
+
+            } else if ( !subids.includes(tkey) ){
+
+                results+= "<option value='" + tkey + "'>" + tkey + "</option>";
+                subids.push(tkey);
+                numthings++;
+                if ( !firstitem  ) {
+                    firstitem = tkey;
+                }
             }
         }
-    });
+    }
     
     // now load the custom fields
     // first sort and make sure we get rid of dups
@@ -474,10 +509,11 @@ function loadLinkItem(idx, allowuser, sortval, sortup) {
         sortExistingFields(sortval, sortup);
         $.each(cm_Globals.options[uid], function(index, val) {
             var subid = val[2];
-            // if ( !subid.startsWith("user_") && subids.includes(subid) && subids.includes("user_" + subid) ) {
             results+= "<option value='" + subid + "'>" + subid + "<span class='reddot'> *</span></option>";
             numthings++;
-            // }
+            if ( !firstitem  ) {
+                firstitem = subid;
+            }
         });
     }
     
@@ -846,13 +882,36 @@ function handleBuiltin(subid) {
     var companion = "user_" + subid;
     cm_Globals.defaultclick = subid;
 
-    // console.log("builtin handler: subid= ", subid, "subids: ", subids, " companion= ", companion);
-
     // put the field clicked on in the input box
     $("#cm_userfield").attr("value",subid);
     $("#cm_userfield").val(subid);
 
-    var cmtext = value[subid];
+    // check for an object
+    var cmtext;
+    if ( typeof(value[subid])==="undefined" ) {
+        var ipos = subid.indexOf("_");
+        if ( ipos===-1 ) {
+            cmtext = "unknown";
+        } else {
+            var subid1 = subid.substr(0, ipos);
+            var subid2 = subid.substr(ipos+1);
+            try {
+                var jsontval = JSON.parse(value[subid1]);
+            } catch (jerr) {
+                jsontval = null;
+            }
+    
+            if ( typeof jsontval==="object" ) {
+                cmtext = jsontval[subid2];
+                // alert("cmtext = " + cmtext + " subid1= " + subid1 + " value: " + value[subid1]);
+            } else {
+                cmtext = "unknown";
+            }
+        }
+    } else {
+        cmtext = value[subid];
+    }
+
     var helpers = ["","TEXT",cmtext];
     var cmtype = "TEXT";
     if ( subids.includes(companion) ) {
@@ -911,8 +970,8 @@ function handleBuiltin(subid) {
         $("#cm_delButton").addClass("disabled").prop("disabled", true);
         $("#cm_upfield").addClass("disabled").prop("disabled",true);
         $("#cm_dnfield").addClass("disabled").prop("disabled",true);
-        $("#cm_text").val(value[subid]);
-        cm_Globals.usertext = value[subid];
+        $("#cm_text").val(cmtext);
+        cm_Globals.usertext = cmtext;
     }
 
     // change button label to Add or Replace based on existing or not

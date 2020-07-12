@@ -2630,39 +2630,6 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                 var isarr = is_array(jsontval);
                 for (var jtkey in jsontval ) {
                     var jtval = jsontval[jtkey];
-                    // console.log("Object field extraction: jtkey: ", jtkey, " jtval: ", jtval, " tkey: ", tkey);
-
-                    // // handle audio track keys
-                    // if ( tkey==="audioTrackData" && array_key_exists(jtkey, audiomap) ) {
-                    //     jtkey = audiomap[jtkey];
-                    // }
-
-                    // // handle legacy Sonos music tiles here - still used by Hubitat
-                    // // this interprets direct https image tags
-                    // // the image URI can be in multiple fields per the above mapping
-                    // else if ( tkey==="trackData" && array_key_exists(jtkey, musicmap) ) {
-                    //     jtkey = musicmap[jtkey];
-
-                    //     // fix up field that holds the trackImage
-                    //     // >https:\\/\\/i.scdn.co\\/image\\/ab67616d0000b27333c6e0cbfb0b169671e7945e<  1<
-                    //     if ( (jtkey==="trackImage" ) && typeof jtval==="string" && jtval.indexOf("http")!==-1 ) {
-                    //         var j1 = jtval.indexOf(">http") + 1;
-                    //         var j2 = jtval.indexOf("<", j1+1);
-                    //         if ( j1===-1 || j2===-1) {
-                    //             jtval = "Unknown";
-                    //         } else {
-                    //             jtval = jtval.substring(j1, j2);
-                    //             jtval = jtval.replace(/\\/g,"");
-                    //         }
-                    //         // console.log("Legacy music trackImage: ", j1, j2, jtval);
-
-                    //     // a known value that is muted
-                    //     // all other values will shine through with translation
-                    //     // but dont let track images shine through if https not found
-                    //     } else if ( !jtkey || jtkey==="trackImage" ) {
-                    //         jtval = "";
-                    //     }
-                    // }
 
                     // expand arrays onto the base
                     // for example, this happens for buttons reporting acceptable values
@@ -3915,8 +3882,12 @@ function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
                 }
 
                 // fix up ISY hubs
-                if ( rswtype==="isy" && rvalue==="on" ) { rvalue = "DON"; }
-                if ( rswtype==="isy" && rvalue==="off" ) { rvalue = "DOF"; }
+                if ( rswtype==="isy" && array_key_exists(rsubid, allthings[ridx]["value"]) ) {
+                    var curvalue = allthings[ridx]["value"][rsubid];
+                    if ( rvalue==="on" || (rvalue==="toggle" && curvalue==="DOF") ) { rvalue = "DON"; }
+                    if ( rvalue==="off" || (rvalue==="toggle" && curvalue==="DON") ) { rvalue = "DOF"; }
+                } 
+
 
                 // set the destination to the value which would typically be overwritten by hub call
                 // if the destination is a link force the link to a TEXT type to neuter other types
