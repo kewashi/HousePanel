@@ -2387,48 +2387,58 @@ function translateWeather(name, pvalue) {
 
     // fix the summary string to work with the web
     var summaryStr = pvalue.summary;
+    var forecastStr = "";
     if ( typeof summaryStr === "string" ) {
         newvalue.summary = summaryStr.replace(/\n/g, "<br/>");
     }
 
     // make the visual forcast block
-    var forecast = JSON.parse(pvalue.forecast);
+    try {
+        var forecast = JSON.parse(pvalue.forecast);
+    } catch(e) {
+        if ( typeof pvalue.forecast === "string" ) {
+            forecastStr = pvalue.forecast.replace(/\n/g, "<br/>");
+        }
+        forecast = null;
+    }
     // console.log("AccuWeather forecast: ", forecast);
-    var forecastStr = "<table class='accuweather'>";
-    forecastStr += "<tr>";
-    forecastStr += "<th class='hr'>Time</th>";
-    forecastStr += "<th class='temperature'>Temp</th>";
-    // forecastStr += "<th class='realFeel'>Feels</th>";
-    forecastStr += "<th class='precipitation'>Icon</th>";
-    forecastStr += "</tr>";
-
-    var hr = 1;
-    var thishr = hr.toString().trim()+"hr"
-    // console.log(thishr, forecast[thishr]);
-    while ( hr <= 3 && typeof forecast[thishr] === "object" ) {
+    if ( forecast ) {
+        forecastStr = "<table class='accuweather'>";
         forecastStr += "<tr>";
-        // see if we have icons and times
-        if (pvalue["time"+thishr]) {
-            var words = pvalue["time"+thishr].split("\n");
-            var timestr = words[1].substr(0,3) + " " + words[2];
-            // console.log(words);
-            forecastStr += "<td class='hr'>" + timestr + "</td>";
-        } else {
-            forecastStr += "<td class='hr'>" + hr + " Hr</td>";
-        }
-        forecastStr += "<td class='temperature'>" + forecast[thishr].temperature + "</td>";
-        // forecastStr += "<td class='realFeel'>" + forecast[thishr].realFeel + "</td>";
-        if (pvalue["icon"+thishr]) {
-            forecastStr += "<td class='weatherIcon'>" + getWeatherIcon(pvalue["icon"+thishr], true) + "</td>";
-        } else {
-            forecastStr += "<td class='weatherIcon'>" + getWeatherIcon("na") + "</td>";
-        }
+        forecastStr += "<th class='hr'>Time</th>";
+        forecastStr += "<th class='temperature'>Temp</th>";
+        // forecastStr += "<th class='realFeel'>Feels</th>";
+        forecastStr += "<th class='precipitation'>Icon</th>";
         forecastStr += "</tr>";
 
-        hr++;
-        thishr = hr.toString()+"hr";
+        var hr = 1;
+        var thishr = hr.toString().trim()+"hr"
+        // console.log(thishr, forecast[thishr]);
+        while ( hr <= 3 && typeof forecast[thishr] === "object" ) {
+            forecastStr += "<tr>";
+            // see if we have icons and times
+            if (pvalue["time"+thishr]) {
+                var words = pvalue["time"+thishr].split("\n");
+                var timestr = words[1].substr(0,3) + " " + words[2];
+                // console.log(words);
+                forecastStr += "<td class='hr'>" + timestr + "</td>";
+            } else {
+                forecastStr += "<td class='hr'>" + hr + " Hr</td>";
+            }
+            forecastStr += "<td class='temperature'>" + forecast[thishr].temperature + "</td>";
+            // forecastStr += "<td class='realFeel'>" + forecast[thishr].realFeel + "</td>";
+            if (pvalue["icon"+thishr]) {
+                forecastStr += "<td class='weatherIcon'>" + getWeatherIcon(pvalue["icon"+thishr], true) + "</td>";
+            } else {
+                forecastStr += "<td class='weatherIcon'>" + getWeatherIcon("na") + "</td>";
+            }
+            forecastStr += "</tr>";
+
+            hr++;
+            thishr = hr.toString()+"hr";
+        }
+        forecastStr += "</table>";
     }
-    forecastStr += "</table>";
     newvalue.forecast = forecastStr;
     return newvalue;
 }
@@ -3391,8 +3401,10 @@ function processHubMessage(hubmsg) {
 
         
             // get info for links but skip if the link had an error
-            console.log("processhub link debug. companion=",companion,"helper=",helperval,"command=",command,
-                        "lidx=",lidx,"idx=", idx,"linkbid=",linkbid,"hubmsgid=",hubmsgid);
+            if ( DEBUG12 ) {
+                console.log("processhub link debug. companion=",companion,"helper=",helperval,"command=",command,
+                            "lidx=",lidx,"idx=", idx,"linkbid=",linkbid,"hubmsgid=",hubmsgid);
+            }
             if ( command==="LINK" && linkbid === hubmsgid ) {
                 cnt++;
                 entry['value'][subid] = hubmsg['change_value'];
@@ -3561,18 +3573,19 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
     // rule structure
     // delay and attr are optional, but must give a delay to give an attr; just set it to 0 or false to skip delay
     // you cannot safely mix the logic of "or" with the logic of "and" but it sometimes works
-    // also note that below altpattern is the same as triggerpatern for now
+    // for example if an "or" is given at the end it will be a logical or of everything in front of it
+    // likewise if an "and" is given at the end it will be a logic and of everything in front of it
+    // so you can mix and and or if you use the non dominant logic statement only once at the end
     // if subid>=xx or num=subid=on or num=subid=off... , num=subid=value=delay, num=subid=value=delay=attr, ...
     // if subid>=xx and num=subid=on and num=subid=off... , num=subid=value=delay, num=subid=value=delay=attr, ...
     // for example...
     // user_custome_1 : [ [RULE, "if switch==on and 167=switch==on, 28=switch=on, 12=switch=on=2", myrule, 1], 
     //                    [RULE, "if state==away or 42=presence==absent", 19=thermostatMode=heat, 19=heatingSetpoint=72, 14=lock=lock, rule2, 2] ]
-
     const regsplit = /[,;]/;
     const ifpattern = /(if)\s+(.*)/;
     const triggerpattern = /(\w+)\s*([=|!|<|>])(=?)\s*(\w+)/;
-    const rulepattern = /(\d*)\s*=\s*(\w+)\s*([=|!|<|>])(=?)\s*(\w+)/;
-    const altpattern =     /(\w+)\s*([=|!|<|>])(=?)\s*(\w+)/;
+    // const rulepattern = /(\d*)\s*=\s*(\w+)\s*([=|!|<|>])(=?)\s*(\w+)/;
+    const rulepattern = /(\d*)\s*=\s*(\w+)\s*([=|!|<|>])(=?)\s*(.+)/;
     
     // print some debug info
     var items = GLB.options[userid];
@@ -3723,12 +3736,18 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
                                         var d2 = new Date(rulevalue);
                                         num1 = d1.getTime();
                                         num2 = d2.getTime();
+                                        if ( DEBUG11 ) {
+                                            console.log((ddbg()), "ruleop=", ruleop," ifvalue=",ifvalue," rulevalue= ",rulevalue," d1=",d1," d2=",d2," num1=",num1," num2=",num2);
+                                        }
                                     } else if ( rulesubid==="time") {
                                         var today = new Date();
                                         var d1 = new Date(today.toDateString() + " " + ifvalue);
                                         var d2 = new Date(today.toDateString() + " " + rulevalue);
                                         num1 = d1.getTime();
                                         num2 = d2.getTime();
+                                        if ( DEBUG11 ) {
+                                            console.log((ddbg()), "ruleop=", ruleop," ifvalue=",ifvalue," rulevalue= ",rulevalue," d1=",d1," d2=",d2," num1=",num1," num2=",num2);
+                                        }
                                     } else if ( !isNaN(parseFloat(ifvalue)) && !isNaN(parseFloat(rulevalue)) ) {
                                         num1 = parseFloat(ifvalue);
                                         num2 = parseFloat(rulevalue);
@@ -4296,9 +4315,9 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
     function getNodeResponse(err, res, body) {
         if ( err ) {
             console.log( (ddbg()), "error calling ISY node: ", err);
-        } else {
-            var result = parser.parse(body);
-            console.log((ddbg()), hub.hubType, " hub: ", hub.hubName, " trigger: ", subid, " rule: ", inrule, " call returned: ", result);
+            // } else {
+            // var result = parser.parse(body);
+            // console.log((ddbg()), hub.hubType, " hub: ", hub.hubName, " trigger: ", subid, " rule: ", inrule, " call returned: ", result);
             // update all clients - this is actually not needed if your server is accessible to websocket updates
             // because ISY will push state updates via a websocket
             // and that will process a similar pushClient but for only those things that change
