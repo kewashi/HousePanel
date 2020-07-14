@@ -15,6 +15,7 @@
  * This is a SmartThings and Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history:
+ * 07/13/2020 - fix bug in setOther where an invalid attr was passed - thanks @phil_c
  * 07/10/2020 - fix button rule callback to send scalar instead of object
  *            - remove all manual log.info and log.debug and user logger everywhere
  * 06/16/2020 - fix mode and momentary buttons that I broke in a prior update
@@ -1416,7 +1417,7 @@ def setButton(swid, cmd, swattr, subid) {
 
 // other types have actions starting with _ 
 // and we accommodate switches and api calls with valid cmd values
-def setOther(swid, cmd, attr, subid, item=null ) {
+def setOther(swid, cmd, swattr, subid, item=null ) {
     def resp = false
     item  = item ? item : myothers.find {it.id == swid }
     def lightflags = ["switch","level","hue","saturation","colorTemperature"]

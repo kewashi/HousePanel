@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.305   Bugfix for "other" types in groovy file that used wrong attr variable
 2.304   Rule engine bugfix for tests that contain special chars like time (9:00)
             - fix Accuweather refresh for forecast tables
 2.303   bugfix for buttons and rules and anythign else returning array values
