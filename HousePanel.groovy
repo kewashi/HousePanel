@@ -15,6 +15,8 @@
  * This is a SmartThings and Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history:
+ * 07/18/2020 - include level for others and actuators so window shades work
+                also fix bug to include actuators in the event handler logic
  * 07/13/2020 - fix bug in setOther where an invalid attr was passed - thanks @phil_c
  * 07/10/2020 - fix button rule callback to send scalar instead of object
  *            - remove all manual log.info and log.debug and user logger everywhere
@@ -127,7 +129,7 @@ preferences {
             required: false
         )
     }
-    section("Switches and Dimmers") {
+    section("Switches, Dimmers and Buttons") {
             input "myswitches", "capability.switch", multiple: true, required: false, title: "Switches"
             input "mydimmers", "capability.switchLevel", hideWhenEmpty: true, multiple: true, required: false, title: "Switch Level Dimmers"
             input "mymomentaries", "capability.momentary", hideWhenEmpty: true, multiple: true, required: false, title: "Momentary Switches"
@@ -140,30 +142,30 @@ preferences {
             input "mypresences", "capability.presenceSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Presence"
             input "mymotions", "capability.motionSensor", multiple: true, required: false, title: "Motion"
     }
-    section ("Door and Contact Sensors") {
+    section ("Doors, Contacts, and Locks") {
             input "mycontacts", "capability.contactSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Contact Sensors"
             input "mydoors", "capability.doorControl", hideWhenEmpty: true, multiple: true, required: false, title: "Garage Doors"
             input "mylocks", "capability.lock", hideWhenEmpty: true, multiple: true, required: false, title: "Locks"
     }
-    section ("Thermostat & Weather") {
+    section ("Thermostats and Weather") {
             input "mythermostats", "capability.thermostat", hideWhenEmpty: true, multiple: true, required: false, title: "Thermostats"
             input "mytemperatures", "capability.temperatureMeasurement", hideWhenEmpty: true, multiple: true, required: false, title: "Temperature Measures"
             input "myilluminances", "capability.illuminanceMeasurement", hideWhenEmpty: true, multiple: true, required: false, title: "Illuminance Measurements"
             input "myweathers", "device.smartweatherStationTile", hideWhenEmpty: true, multiple: true, required: false, title: "Weather tile"
             input "myaccuweathers", "device.accuweatherDevice", hideWhenEmpty: true, multiple: true, required: false, title: "AccuWeather tile"
     }
-    section ("Water, Sprinklers & Smoke") {
+    section ("Water, Sprinklers and Smoke") {
             input "mywaters", "capability.waterSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Water Sensors"
             input "myvalves", "capability.valve", hideWhenEmpty: true, multiple: true, required: false, title: "Sprinklers"
             input "mysmokes", "capability.smokeDetector", hideWhenEmpty: true, multiple: true, required: false, title: "Smoke Detectors"
     }
-    section ("Music & Autio") {
+    section ("Music and Audio") {
             paragraph "Music things use the legacy Sonos device handler. Audio things use the new Audio handler that works with multiple audio device types including Sonos."
             input "mymusics", "capability.musicPlayer", hideWhenEmpty: true, multiple: true, required: false, title: "Music Players"
             input "myaudios", "capability.audioNotification", hideWhenEmpty: true, multiple: true, required: false, title: "Audio Devices"
     }
-    section ("All Other Sensors") {
-            paragraph "Any thing can be added as an Other sensor. Other sensors and actuators bring in ALL fields supported by the device handler."
+    section ("Other Sensors and Actuators") {
+            paragraph "Any thing can be added as an Other sensor or actuator. Other sensors and actuators bring in ALL fields and commands supported by the device."
             input "myothers", "capability.sensor", multiple: true, required: false, title: "Which Other Sensors"
             input "myactuators", "capability.actuator", multiple: true, required: false, title: "Which Other Actuators"
     }
@@ -1419,6 +1421,7 @@ def setButton(swid, cmd, swattr, subid) {
 // and we accommodate switches and api calls with valid cmd values
 def setOther(swid, cmd, swattr, subid, item=null ) {
     def resp = false
+    def newsw
     item  = item ? item : myothers.find {it.id == swid }
     def lightflags = ["switch","level","hue","saturation","colorTemperature"]
     
@@ -1434,6 +1437,22 @@ def setOther(swid, cmd, swattr, subid, item=null ) {
         }
         else if ( lightflags.contains(subid) && item.hasAttribute("switch") ) {
             resp = setGenericLight(myothers, swid, cmd, swattr, subid)
+        }
+        else if ( subid=="level" && cmd.isNumber()  && item.hasAttribute("level") ) {
+            newsw = cmd.toInteger()
+            newsw = (newsw > 100) ? 100 : newsw
+            newsw = (newsw < 0) ? 0 : newsw
+            item.setLevel(newsw)
+            resp = [:]
+            resp.put("level", newsw)
+
+            if ( item.hasAttribute("hue") && item.hasAttribute("saturation") ) {
+                def h = item.currentValue("hue").toInteger()
+                def s = item.currentValue("saturation").toInteger()
+                newcolor = hsv2rgb(h, s, newsw)
+                resp.put("color", newcolor)
+            }
+
         }
         else if ( item.hasCommand(cmd) ) {
             item."$cmd"()
@@ -2411,6 +2430,9 @@ def register_mypowers() {
 def register_myothers() {
     registerChangeHandler(settings?.myothers)
 }
+def register_myactuators() {
+    registerChangeHandler(settings?.myactuators)
+}
 def register_myaccuweathers() {
     registerChangeHandler(settings?.myaccuweathers)
 }
@@ -2512,7 +2534,7 @@ def modeChangeHandler(evt) {
     def themode = evt?.value
     def deviceName = evt?.displayName
     def attr = evt?.name
-    logger("New mode= ${themode} with attr= ${attr} and name= ${deviceName} to HousePanel clients", "info")
+    logger("New mode= ${themode} with attr= ${attr} and name= ${deviceName} to HousePanel clients", "debug")
     if (themode && deviceName && state?.directIP && state?.directPort) {
         def modeid = "${state.prefix}mode"
         logger("Sending new mode= ${themode} with id= ${modeid} to HousePanel clients", "info")

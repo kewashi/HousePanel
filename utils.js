@@ -1,6 +1,10 @@
 'use strict';
 
 const devhistory =  ` 
+2.306   Add ability to click on visual fields in Tile Customizer
+            - include level logic for actuators for window shades
+            - fix bug to now include actuators in event handler logic
+            - add closing and opening garage icons and fix logic in editor
 2.305   Bugfix for "other" types in groovy file that used wrong attr variable
 2.304   Rule engine bugfix for tests that contain special chars like time (9:00)
             - fix Accuweather refresh for forecast tables

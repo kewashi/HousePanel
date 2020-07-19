@@ -3,7 +3,7 @@
  * Original version by @nitwit on SmartThings forum
  * heavily modified by Ken Washington @kewashi on the forum
  * 
- * Designed for use only with HousePanel for Hubitat and SmartThings
+ * Designed for use only with HousePanel for Hubitat, SmartThings, and ISY
  * (c) Ken Washington 2017 - 2020
  * 
  */
@@ -79,19 +79,17 @@ function editTile(pagename, str_type, thingindex, aid, bid, thingclass, hubnum, 
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;
-                    // console.log("page wysiwyg: ", htmlcontent);
                 }
             }
         );
         
     } else if ( htmlcontent ) {
-        // dialog_html += "<div class=\"" + thingclass + "\" id='wysiwyg'>" + htmlcontent + "</div>";
-        htmlcontent = "<div class=\"" + thingclass + "\" id='wysiwyg'>" + htmlcontent + "</div>";
+        htmlcontent = "<div class=\"" + thingclass + "\" id='te_wysiwyg'>" + htmlcontent + "</div>";
     } else {
-        // put placeholder and populate after Ajax finishes retrieving true wysiwyg content
+        // put placeholder and populate after Ajax finishes retrieving true content
         // this is actually no longer used but left code here in case I want to use it later
         jqxhr = $.post(returnURL, 
-            {useajax: "wysiwyg", id: bid, type: str_type, tile: thingindex, value: '', attr: customname},
+            {useajax: "wysiwyg", id: bid, type: str_type, tile: thingindex, value: "te_wysiwyg", attr: customname},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;
@@ -202,7 +200,7 @@ function getOnOff(str_type, subid) {
     } else if ( str_type==="button" && subid.startsWith("button") ) {
         onoff = ["pushed","held"];
         // alert("subid = " + subid);
-    } else if ( subid.startsWith("contact" ) || subid.startsWith("door" ) || subid.startsWith("valve" ) ) {
+    } else if ( subid.startsWith("contact" ) || subid.startsWith("valve" ) ) {
         onoff = ["open","closed"];
     } else if ( subid.startsWith("door" ) ) {
         onoff = ["open","closed", "opening", "closing"];
@@ -210,6 +208,8 @@ function getOnOff(str_type, subid) {
         onoff = ["locked","unlocked","unknown"];
     } else if ( subid.startsWith("motion") ) {
         onoff = ["active","inactive"];
+    } else if ( subid.startsWith("windowShade") ) {
+        onoff = ["open","closed","partially open"];
     } else if ( subid.startsWith("pistonName" ) ) {
         onoff = ["firing","idle"];
     } else if ( subid.startsWith("thermostatFanMode" ) ) {
@@ -235,7 +235,7 @@ function getOnOff(str_type, subid) {
     } else if ( subid.startsWith("musicmute" ) || (str_type==="audio" && subid.startsWith("mute")) ) {
         onoff = ["muted","unmuted"];
     } else if ( subid.startsWith("presence" ) ) {
-        onoff = ["present","absent"];
+        onoff = ["absent","present"];
     } else if ( subid.startsWith("state" ) ) {
         onoff = ["Away","Home","Night","Disarmed"];
     }
@@ -400,7 +400,6 @@ function toggleTile(target, str_type, subid) {
             var oldsub = onoff[i];
             if ( $(target).hasClass(oldsub) ) { 
                 $(target).removeClass(oldsub); 
-                // console.log("Removing attribute (" + oldsub + ") from wysiwyg display for tile: " + str_type + " swval = " + swval);
             }
             if ( oldsub === swval ) {
                 newsub = i+1;
@@ -408,7 +407,6 @@ function toggleTile(target, str_type, subid) {
                 $(target).addClass( onoff[newsub] ); 
                 $(target).html( onoff[newsub] );
                 $('#onoffTarget').html(onoff[newsub]);
-                // console.log("Adding attribute (" + onoff[newsub] + ") to wysiwyg display for tile: " + str_type);
                 break;
             }
         }
@@ -950,11 +948,11 @@ function sizepicker(str_type, thingindex) {
     dh += "<div class='sizeText'>Overall Tile Size</div>";
     dh += "<div class='editSection_input'>";
     dh += "<label for='tileHeight'>Tile H: </label>";
-    dh += "<input size='8' type=\"number\" min='10' max='1200' step='10' id=\"tileHeight\" value=\"" + th + "\"/>";
+    dh += "<input size='8' type=\"number\" min='10' max='1600' step='10' id=\"tileHeight\" value=\"" + th + "\"/>";
     dh += "</div>";
     dh += "<div class='editSection_input autochk'>";
     dh += "<label for='tileWidth'>Tile W: </label>";
-    dh += "<input size='8' type=\"number\" min='10' max='1200' step='10' id=\"tileWidth\" value=\"" + tw + "\"/>";
+    dh += "<input size='8' type=\"number\" min='10' max='1600' step='10' id=\"tileWidth\" value=\"" + tw + "\"/>";
     dh += "</div>";
     dh += "<div class='editSection_input autochk'><input type='checkbox' id='autoTileHeight'><label class=\"iconChecks\" for=\"autoTileHeight\">Auto H?</label></div>";
     dh += "<div class='editSection_input autochk'><input type='checkbox' id='autoTileWidth'><label class=\"iconChecks\" for=\"autoTileWidth\">Auto W?</label></div>";
@@ -962,12 +960,12 @@ function sizepicker(str_type, thingindex) {
     dh += "<div class='sizeText'><p>Item Size & Position:</p></div>";
     dh += "<div class='editSection_input autochk'>";
     dh += "<label for='editHeight'>Item H: </label>";
-    dh += "<input size='4' type=\"number\" min='5' max='1200' step='5' id=\"editHeight\" value=\"" + h + "\"/>";
+    dh += "<input size='4' type=\"number\" min='5' max='1600' step='5' id=\"editHeight\" value=\"" + h + "\"/>";
     dh += "</div>";
     dh += "<div>";
     dh += "<div class='editSection_input autochk'>";
     dh += "<label for='editWidth'>Item W: </label>";
-    dh += "<input size='4' type=\"number\" min='5' max='1200' step='5' id=\"editWidth\" value=\"" + w + "\"/>";
+    dh += "<input size='4' type=\"number\" min='5' max='1600' step='5' id=\"editWidth\" value=\"" + w + "\"/>";
     dh += "</div>";
     dh += "</div>";
     dh += "<div class='editSection_input autochk'><input type='checkbox' id='autoHeight'><label class=\"iconChecks\" for=\"autoHeight\">Auto H?</label></div>";
@@ -986,10 +984,10 @@ function sizepicker(str_type, thingindex) {
     if ( !pleft || isNaN(pleft) ) { pleft = 0; }
     dh += "<div class='editSection_input'>";
     dh += "<label for='topPadding'>Top Padding:</label>\t";
-    dh += "<input size='4' type=\"number\" min='0' max='100' step='5' id=\"topPadding\" value=\"" + ptop + "\"/>";
+    dh += "<input size='4' type=\"number\" min='0' max='1600' step='5' id=\"topPadding\" value=\"" + ptop + "\"/>";
     dh += "</div>";    dh += "<div class='editSection_input'>";
     dh += "<label for='leftPadding'>Left Padding:</label>\t";
-    dh += "<input size='4' type=\"number\" min='0' max='100' step='5' id=\"leftPadding\" value=\"" + pleft + "\"/>";
+    dh += "<input size='4' type=\"number\" min='0' max='1600' step='5' id=\"leftPadding\" value=\"" + pleft + "\"/>";
     dh += "</div>";
     
     return dh;
@@ -1023,7 +1021,7 @@ function setupClicks(str_type, thingindex) {
     getIcons(str_type, thingindex);	
             
     var trigger = "div"; // div." + str_type + ".p_"+thingindex;
-    $("#wysiwyg").on('click', trigger, function(event) {
+    $("#te_wysiwyg").on('click', trigger, function(event) {
         // load up our silent tags
         $("#tileDialog").attr("str_type",str_type);
         $("#tileDialog").attr("thingindex",thingindex);
@@ -1189,7 +1187,6 @@ function setsubid(str_type) {
             subid = "time";
             break;
             
-        case "presence":
         case "momentary":
         case "door":
         case "contact":
@@ -1200,10 +1197,6 @@ function setsubid(str_type) {
         case "shm":
         case "hsm":
             subid = "state";
-            break;
-            
-        case "blank":
-            subid = "size";
             break;
             
         case "mode":
@@ -2217,7 +2210,7 @@ function addCSSRule(selectarray, selectrule, resetFlag){
     }
    
     var sheet = document.getElementById('customtiles').sheet; // returns an Array-like StyleSheetList
-    // cm_Globals.reload = true;
+    cm_Globals.reload = true;
 
     // process every rule
     $.each(selectarray, function(k, val) {

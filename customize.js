@@ -293,7 +293,6 @@ function loadLinkPanel(thingindex) {
     dh += "<div class='cm_group'>";
         dh+= "<div><label for='cm_preview'>Preview:</label></div>";
         dh+= "<div class='cm_preview' id='cm_preview'></div>";
-        dh+= actionButtons();
     dh+= "</div>";
     
     var infotext = "The \"LINK\" option enables you to " +
@@ -319,11 +318,10 @@ function loadServicePanel(servicetype) {
     dh+= "<input class='cm_text' id='cm_text' type='url' value='" + content + "'></div>";
     dh+= "</div>";
     
-    // preview button and panel
+    // preview panel
     dh += "<div class='cm_group'>";
         dh+= "<div><label for='cm_preview'>Preview:</label></div>";
         dh+= "<div class='cm_preview' id='cm_preview'></div>";
-        dh+= actionButtons();
     dh+= "</div>";
     
     var infotext = "The \"" + servicetype + "\" option enables you to " +
@@ -346,11 +344,10 @@ function loadTextPanel() {
     dh+= "<input class='cm_text' id='cm_text' type='text' value='" + content + "'></div>";
     dh+= "</div>";
     
-    // preview button and panel
+    // preview panel
     dh += "<div class='cm_group'>";
         dh+= "<div><label for='cm_preview'>Preview:</label></div>";
         dh+= "<div class='cm_preview' id='cm_preview'></div>";
-        dh+= actionButtons();
     dh+= "</div>";
     
     var infotext = "The \"" + servicetype + "\" option enables you to " +
@@ -373,11 +370,10 @@ function loadRulePanel() {
     dh+= "<input class='cm_text' id='cm_text' type='text' value='" + content + "'></div>";
     dh+= "</div>";
     
-    // preview button and panel
+    // preview panel
     dh += "<div class='cm_group'>";
         dh+= "<div><label for='cm_preview'>Preview:</label></div>";
         dh+= "<div class='cm_preview' id='cm_preview'></div>";
-        dh+= actionButtons();
     dh+= "</div>";
     
     var infotext = "The \"" + servicetype + "\" option enables you to " +
@@ -397,13 +393,14 @@ function loadUrlPanel() {
     var content = cm_Globals.usertext;
     var dh = "";
     dh+= "<div id='cm_dynoText'>";
-    dh+= "<div class='cm_group'><div><label for='cm_text'>Web Page URL</label></div>";
+    dh+= "<div class='cm_group'><div><label for='cm_text'>Web Page URL: </label></div>";
     dh+= "<input class='cm_text' id='cm_text' type='url' value='" + content + "'></div>";
+    dh+= "</div>";
     
-    // preview button only
-    // URL has no preview panel since the test opens a new window
+    // preview panel
     dh += "<div class='cm_group'>";
-    dh+= actionButtons();
+    dh+= "<div><label for='cm_preview'>Preview:</label></div>";
+    dh+= "<div class='cm_preview' id='cm_preview'></div>";
     dh+= "</div>";
     
     var infotext = "The \"" + servicetype + "\" option enables you to " +
@@ -414,15 +411,6 @@ function loadUrlPanel() {
         "shown on the left side of this dialog box. You can mix and match this with any other addition.";
     $("#cm_dynoInfo").html(infotext);
     
-    return dh;
-}
-
-// removed the test button since we always preview added items
-function actionButtons() {
-    var dh= "";
-//    dh+= "<div>";
-//    dh+= "<button class='cm_button' id='cm_testButton'>Test</button>";
-//    dh+= "</div>";
     return dh;
 }
 
@@ -947,7 +935,10 @@ function handleBuiltin(subid) {
         $("#cm_text").val(cmtext);
         cm_Globals.usertext = cmtext;
         var content;
-        if (cmtype==="POST" || cmtype==="GET" || cmtype==="POST" || cmtype==="PUT") {
+        if (cmtype==="POST" || cmtype==="GET" || cmtype==="PUT") {
+            content = loadServicePanel(cmtype);
+            $("#cm_dynoContent").html(content);
+        } else if ( cmtype==="URL") {
             content = loadUrlPanel();
             $("#cm_dynoContent").html(content);
         } else if ( ENABLERULES && cmtype==="RULE") {
@@ -1065,17 +1056,33 @@ function showPreview() {
     var tileid = cm_Globals.thingindex;
     var uid = "user_" + bid;
     var swattr = cm_Globals.customname;
-    var swval = "";
-    if ( cm_Globals.options[uid] ) {
-        swval = cm_Globals.options[uid];
-    }
+    // var swval = "";
+    // if ( cm_Globals.options[uid] ) {
+    //     swval = cm_Globals.options[uid];
+    // }
     
     $.post(cm_Globals.returnURL, 
-        {useajax: "wysiwyg", id: bid, type: str_type, tile: tileid, value: swval, attr: swattr},
+        {useajax: "wysiwyg", id: bid, type: str_type, tile: tileid, value: "tc_wysiwyg", attr: swattr},
         function (presult, pstatus) {
             if (pstatus==="success" ) {
                 $("#cm_preview").html(presult);
 
+                // activate click on items
+                $("#tc_wysiwyg").off('click');
+                $("#tc_wysiwyg").on('click', function(event) {
+                    var subid = $(event.target).attr("subid");
+                    // console.log("subid= ", subid);
+                    if ( typeof subid!=="undefined" ) {
+                        // find the item and select it
+                        try {
+                            $("#cm_builtinfields > option[value='" + subid + "']").prop('selected',true).click();
+                        } catch(e) {}
+                        // $("#cm_userfield").html(subid);
+                        // handleBuiltin(subid);
+                    }
+                    event.stopPropagation();
+                });
+            
                 var slidertag = "#cm_preview div.overlay.level >div.level";
                 if ( $(slidertag) ) {
                     $(slidertag).slider({

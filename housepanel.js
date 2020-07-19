@@ -42,14 +42,6 @@ Number.prototype.pad = function(size) {
     return s;
 }
 
-// function setCookie(cname, cvalue, exdays) {
-//     if ( !exdays ) exdays = 30;
-//     var d = new Date();
-//     d.setTime(d.getTime() + (exdays*24*3600*1000));
-//     var expires = "expires="+ d.toUTCString();
-//     document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
-// }
-
 function setCookie(name, value, options={path: "/", expires: 365, SameSite: "lax" } ) {
 
     if ( typeof options !== "object" ) {
@@ -500,6 +492,11 @@ function setupWebsocket(webSocketUrl)
 
             // reload page if signalled from server
             if ( bid==="reload" ) {
+
+                // skip reload if we are asleep
+                if ( priorOpmode === "Sleep" ) {
+                    return;
+                }
 
                 // reload all screens if that is requested
                 if ( typeof thetype==="undefined" || thetype==="" || thetype==="/" || thetype==="reload" || thetype==="/reload" ) {
@@ -2775,9 +2772,6 @@ function setupPage() {
         
         // handle special control type tiles that perform javascript actions
         // if we are not in operate mode only do this if click is on operate
-        // this is the only type tile that cannot be customized
-        // which means it also cannot be password protected
-        // TODO - change this in the future
         if ( thetype==="control" && (priorOpmode==="Operate" || subid==="operate") ) {
             if ( $(this).hasClass("confirm") ) {
                 var pos = {top: 100, left: 100};

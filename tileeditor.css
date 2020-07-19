@@ -801,14 +801,7 @@ div.editheader {
 .modalshow {
     display: block;
 }
-#wysiwyg, #wysiwyg2 {
-    display: inline-block;
-    margin-left: 5px;
-}
-#wysiwyg div.editlink, #wysiwyg div.dellink, #wysiwyg div.cmzlink {
-    display: none;
-}
-#wysiwyg2 div.editlink, #wysiwyg2 div.dellink, #wysiwyg2 div.cmzlink {
+div.modalbox div.editlink, div.modalbox div.dellink, div.modalbox div.cmzlink {
     display: none;
 }
 

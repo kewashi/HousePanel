@@ -2806,13 +2806,20 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         $tc += "</div>";
     } else {
         // add state of thing as a class if it isn't a number and is a single word
+        // or two words separated by a space
         // also prevent dates and times from being added
         // also do not include any music album or artist names in the class
-        // and finally if the value is complex with spaces or other characters, skip
+        // and finally if the value is complex with spaces or numbers, skip
         // also skip links and rules and anything longer than 30 characters
         var extra;
-        if ( tkey==="time" || tkey==="date" || tkey==="color" || typeof tval!=="string" || tval==="" ||
-                   (tval.indexOf(" ")!==-1) ||
+        if ( typeof tval==="string" && tval.indexOf(" ") !== -1 ) {
+            var tvalwords = tval.split(" ");
+            if ( tvalwords.length===2 ) {
+                extra = tvalwords[0] + "_" + tvalwords[1];
+            } else {
+                extra = "";
+            }
+        } else if ( tkey==="time" || tkey==="date" || tkey==="color" || typeof tval!=="string" || tval==="" ||
                    (tkey.substr(0,6)==="event_") || tkey.startsWith("_") ||
                    tkey==="trackDescription" || tkey==="currentArtist" || tkey==="groupRole" ||
                    tkey==="currentAlbum" || tkey==="trackImage" || tkey==="mediaSource" ||
@@ -6492,29 +6499,13 @@ function apiCall(body, protocol, req, res) {
             result = {"state": "active", "hubs": activehubs, "clients": clients.length, "things": thingcount, "username": username};
             break;
 
-        case "wysiwyg2":
-            // if we sorted the user fields in the customizer, save them
-            if ( protocol==="POST" ) {
-                if ( swval && is_array(swval) ) {
-                    GLB.options["user_" + swid] = swval;
-                    writeRoomThings(GLB.options, uname);
-                }
-                var idx = swtype + "|" + swid;
-                var thing = allthings[idx];
-                var customname = swattr;
-                result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 500, customname, api);
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-            break;
-
         case "wysiwyg":
             if ( swtype==="page" ) {
                 // make the fake tile for the room for editing purposes
                 var faketile = {"panel": "panel", "name": swval, "tab": "Tab Inactive", "tabon": "Tab Selected"};
                 var thing = { "id": "r_" + swid, "name": swval, 
                               "hubnum": "-1", "type": "page", "value": faketile};
-                result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 500, "", api);
+                result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 500, "", "te_wysiwyg");
             } else {
                 var idx = swtype + "|" + swid;
                 var thing = allthings[idx];
@@ -6523,7 +6514,7 @@ function apiCall(body, protocol, req, res) {
                 // load customizations
                 // thing.value = getCustomTile(thing.value, swtype, swid);
                 // allthings[idx] = thing;            
-                result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 500, customname, api);
+                result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 500, customname, swval);
             }
             break;
 
