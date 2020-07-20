@@ -2724,6 +2724,14 @@ function putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, s
                 }
             }
 
+            // look for width and height and replace if there
+            if ( linktileval["width"] ) {
+                twidth = linktileval["width"];
+            }
+            if ( linktileval["height"] ) {
+                theight = linktileval["height"];
+            }
+
             // save the value in our main array for user queries and api calls
             // note that all screen refreshes will come here again and update it
             // but we skip this for non permanent things being made for visual sake
@@ -2736,7 +2744,7 @@ function putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, s
     } else if ( command==="URL" || command==="POST" || command==="PUT" || command==="GET" ) {
         linkval = decodeURI(linkval);
     } else {
-        // neuter out linkvalsince we no longer use it
+        // neuter out linkval since we no longer use it
         linkval = linkval || "dum";
     }
 
