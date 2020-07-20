@@ -1,7 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
-2.307   Tile editor bugfix for tiles with spaces in names
+2.309   Tile editor bugfix for tiles with spaces in names
             - fix width and height for images in music/audio tiles
             - return refresh command and read commands for devices
 2.306   Add ability to click on visual fields in Tile Customizer
