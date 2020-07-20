@@ -628,10 +628,26 @@ def getDevice(mydevices, swid, item=null) {
                     def attval = item.currentValue(attname)
                     resp.put(attname,attval)
                 } catch (e) {
-                    logger("Attempt to read device for ${swid} failed ${e}", "error")
+                    logger("Attempt to read device attribute for ${swid} failed ${e}", "error")
                 }
             }
     	}
+
+        def reserved = ignoredCommands()
+        item.supportedCommands.each { comm ->
+            try {
+                def comname = comm?.getName()
+                def args = comm?.getArguments()
+                def arglen = args?.size()
+                logger("Command for ${swid} = $comname with $arglen args = $args ", "trace")
+                if ( arglen==0 && !reserved.contains(comname) ) {
+                    resp.put( "_"+comname, comname )
+                }
+            } catch (ex) {
+                logger("Attempt to read device command for ${swid} failed ${ex}", "error")
+            }
+        }
+        resp = addHistory(resp, item)
     }
     return resp
 }
@@ -654,7 +670,7 @@ def ignoredCommands() {
     // "groupVolumeUp", "groupVolumeDown", "muteGroup", "unmuteGroup",
     // "indicatorWhenOn","indicatorWhenOff","indicatorNever",
     def ignore = ["setLevel","setHue","setSaturation","setColorTemperature","setColor","setAdjustedColor",
-                  "enrollResponse","stopLevelChange","poll","ping","configure","refresh",
+                  "enrollResponse","stopLevelChange","poll","ping","configure",
                   "reloadAllCodes","unlockWithTimeout","markDeviceOnline","markDeviceOffline"
                   ]
     return ignore

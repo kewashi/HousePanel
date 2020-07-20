@@ -2597,7 +2597,6 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
             if ( !array_key_exists(tkey, mantemp) && tkey.substring(0,5)!=="user_" ) {
                 var helperkey = "user_" + tkey;
                 var tval = thingvalue[tkey];
-                // $tc += putElement(kindex, cnt, j, thingtype, tval, tkey);
                 if (  array_key_exists(helperkey, thingvalue) && thingvalue[helperkey] && thingvalue[helperkey].substr(0,2)==="::" ) {
                     var helperval = thingvalue[helperkey];
                     $tc += putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor);
@@ -2620,6 +2619,16 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
         // removed this old check since things are now always objects
         // if (typeof thingvalue === "object") {
         var j = 0;
+
+        // get width and height for images if given
+        var twidth = null;
+        var theight = null;
+        if ( array_key_exists("width", thingvalue) ) {
+            twidth = thingvalue["width"];
+        }
+        if ( array_key_exists("height", thingvalue) ) {
+            theight = thingvalue["height"];
+        }
         
         // create on screen element for each key
         // this includes a check for helper items created in tile customizer
@@ -2649,7 +2658,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
 
                     // skip adding an object element if it duplicates an existing one
                     if ( jtkey && jtval && !array_key_exists(jtkey, thingvalue) ) {
-                        $tc += putElement(kindex, cnt, j, thingtype, jtval, jtkey, subtype, bgcolor);
+                        $tc += putElement(kindex, cnt, j, thingtype, jtval, jtkey, subtype, bgcolor, null, null, twidth, theight);
                         j++;
                     }
                 }
@@ -2664,9 +2673,9 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                 // we only process the non helpers and look for helpers in same list
                 if (  array_key_exists(helperkey, thingvalue) && thingvalue[helperkey] && thingvalue[helperkey].substr(0,2)==="::" ) {
                     var helperval = thingvalue[helperkey];
-                    $tc += putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor);
+                    $tc += putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, twidth, theight);
                 } else {
-                    $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor);
+                    $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, null, null, twidth, theight);
                 }
 
                 j++;
@@ -2681,7 +2690,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
 
 // compare this logic with how siblings are defined
 // in the getCustomTile function
-function putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor) {
+function putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, twidth, theight) {
 
     var linktype = thingtype;
     var linkbid = bid;
@@ -2738,7 +2747,7 @@ function putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, s
     if ( DEBUG10 ) {
         console.log( (ddbg()), "bid: ", bid, " helperval: ", helperval, " sibling: ", sibling);
     }
-    var $tc = putElement(kindex, cnt, j, linktype, tval, tkey, subtype, bgcolor, sibling, realsubid);
+    var $tc = putElement(kindex, cnt, j, linktype, tval, tkey, subtype, bgcolor, sibling, realsubid, twidth, theight);
     return $tc;
 }
 
@@ -2751,7 +2760,7 @@ function fixTrack(tval) {
     return tval;
 }
 
-function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibling, realsubid) {
+function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibling, realsubid, twidth, theight) {
     var $tc = "";
     var aitkey = "a-" + i + "-" + tkey;
     var pkindex = " p_" + kindex;
@@ -2815,7 +2824,7 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         if ( typeof tval==="string" && tval.indexOf(" ") !== -1 ) {
             var tvalwords = tval.split(" ");
             if ( tvalwords.length===2 ) {
-                extra = tvalwords[0] + "_" + tvalwords[1];
+                extra = " " + tvalwords[0] + "_" + tvalwords[1];
             } else {
                 extra = "";
             }
@@ -2839,8 +2848,11 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         // change this over to a css so we can style it if needed
         } else if (tkey==="trackImage") {
             if ( tval.substr(0,4) === "http" ) {
-                // tval = "<img width='120' height='120' src='" + tval + "'>";
-                tval = "<img class='trackImage' src='" + tval + "'>";
+                if ( twidth && theight ) {
+                    tval = "<img width='" + twidth + "' height='" + theight + "' src='" + tval + "'>";
+                } else {
+                    tval = "<img class='trackImage' src='" + tval + "'>";
+                }
             }
         } else if ( tkey === "battery") {
             var powmod = parseInt(tval);
@@ -3609,7 +3621,6 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
         if ( item[0]==="RULE" ) {
             var linkval = item[1].trim();
             var isrule = false;
-            var rulenum = 0;
 
             // split the test line between commas and semi-colons
             var testcommands = linkval.split(regsplit);
@@ -3647,6 +3658,9 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
                     }
     
                     // loop through each one and add to test
+                    var rulenum = 0;
+                    var priorand = false;
+                    var firstlogical = false;
                     newset.forEach( function(rule) {
 
                         var ruleparts = null;
@@ -3661,8 +3675,12 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
                         }
     
                         // set rule mode based on word - if it is "and" then use and logic
+                        // the firstlogical parameter is used to allow mixing of and and or to some degree
+                        // it allows logical "or" to follow some and strings by using just the first item
+                        // if one then switches back to and then firstlogical will save the most recent and status for the next or
                         if ( rule==="and" ) {
                             doand = true;
+                            priorand = true;
 
                         // if the separator word is "or" then use or logic
                         } else if ( rule==="or" ) {
@@ -3715,7 +3733,7 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
                                             ifvalue = allthings[ridx]["value"][rulesubid];
                                         } catch(e) {
                                             // console.log(e, " ridx= ", ridx);
-                                            ifvlaue = false;
+                                            ifvalue = false;
                                         }
                                     } else {
                                         ifvalue = false;
@@ -3770,13 +3788,22 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
                                     );
 
                                     // apply and/or logic to the final rule determination
-                                    if ( doand ) {
-                                        isrule = rulenum===0 ? ismatch : isrule && ismatch;
+                                    if ( rulenum===0 ) {
+                                        isrule = ismatch;
+                                        firstlogical = ismatch;
+                                    } else if ( doand ) {
+                                        isrule = isrule && ismatch;
                                     } else {
-                                        isrule = rulenum===0 ? ismatch : isrule || ismatch;
+                                        if ( priorand ) {
+                                            isrule = firstlogical || ismatch;
+                                            firstlogical = isrule;
+                                        } else {
+                                            isrule = isrule || ismatch;
+                                        }
                                     }
                                 } else {
                                     console.log("error - invalid RULE syntax: ", rule, " parts: ", ruleparts);
+                                    isrule = false;
                                 }
                             } else {
                                 if ( DEBUG11 ) {

@@ -1694,9 +1694,16 @@ div.thing.control-thing div.overlay:hover {
 }
 
 div.thing.frame-thing div.frame.width, 
-div.thing.frame-thing div.frame.height {
+div.thing.frame-thing div.frame.height,
+div.thing.audio-thing div.audio.width,
+div.thing.audio-thing div.audio.height {
     display: none;
 }
+
+div.overlay._refresh {
+    display: none;
+}
+
 div.thing div.user_hidden {
     display: none;
 }

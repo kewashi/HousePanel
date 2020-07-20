@@ -29,7 +29,11 @@ function editTile(pagename, str_type, thingindex, aid, bid, thingclass, hubnum, 
         et_Globals.id = bid;
     }
     et_Globals.hubnum = hubnum;
-    et_Globals.hubName = hubName || "None";
+    if ( !hubName || !hubnum || hubName==="None" || hubnum==="-1" ) {
+        et_Globals.hubName = "None";
+    } else {
+        et_Globals.hubName = hubName;
+    }
     et_Globals.hubType = hubType || "None";
     et_Globals.pagename = pagename;
     if ( str_type==="page" ) {
@@ -47,17 +51,12 @@ function editTile(pagename, str_type, thingindex, aid, bid, thingclass, hubnum, 
 	
     // header
     if ( str_type==="page" ) {
-        dialog_html += "<div class='editheader' id='editheader'>Editing Page#" + hubnum + 
+        dialog_html += "<div class='editheader' id='editheader'>Editing Page#" + et_Globals.hubnum + 
                    " Name: " + thingindex + "</div>";
         
     } else {
-        if ( hubName==="None" || hubnum==="-1" ) {
-            var hubstr = "";
-        } else {
-            hubstr = " From hub: " + hubName;
-        }
         dialog_html += "<div class='editheader' id='editheader'>Editing Tile #" + thingindex + 
-                   " of Type: " + str_type + hubstr + "</div>";
+                   " of Type: " + str_type + "</div>";
     }
 
     // option on the left side - colors and options
@@ -1023,33 +1022,39 @@ function setupClicks(str_type, thingindex) {
     var trigger = "div"; // div." + str_type + ".p_"+thingindex;
     $("#te_wysiwyg").on('click', trigger, function(event) {
         // load up our silent tags
+        var subid = $(event.target).attr("subid");
+        var aid = $(event.target).attr("aid");
+        var ustr_type = $("#t-"+aid).attr("type");
+        var uthingindex = $("#t-"+aid).attr("tile");
+
+        if ( ustr_type && uthingindex ) {
+            str_type = ustr_type;
+            thingindex = uthingindex;
+        }
+
         $("#tileDialog").attr("str_type",str_type);
         $("#tileDialog").attr("thingindex",thingindex);
-        var subid = $(event.target).attr("subid");
-        if ( !subid || subid===undefined ) {
-            if ( $(event.target).hasClass("thingname") ) {
-                subid = "head";
-            } else {
-                subid = (str_type==="page") ? "panel" : "wholetile";
-            }
+        if ( !subid ) {
+            subid = (str_type==="page") ? "panel" : "wholetile";
         }
         
         // update everything to reflect current tile
         toggleTile(event.target, str_type, subid);
-        // alert("target= " + event.target.toString() + " type= " + str_type + " subid= " + subid);
         initColor(str_type, subid, thingindex);
         initDialogBinds(str_type, thingindex);
         loadSubSelect(str_type, subid, thingindex);
         
         var newtitle;
         if ( str_type==="page" ) {
-            newtitle = "Editing Page with Name: " + thingindex;
+            newtitle = "Editing Page#" + et_Globals.hubnum + " Name: " + thingindex;
             $("#labelName").html("Page Name:");
         } else {
             newtitle = "Editing Tile #" + thingindex + " of Type: " + str_type;
             $("#labelName").html("Tile Name:");
+            if ( tileCount > 1 ) {
+                newtitle+= " (editing " + tileCount + " items)";
+            }
         }
-        newtitle+= " (editing " + tileCount + " items)";
         $("#editheader").html(newtitle);
         
         event.stopPropagation();
@@ -1078,7 +1083,7 @@ function loadSubSelect(str_type, firstsub, thingindex) {
         subcontent += "<option value='tab'>Tab Inactive</option>";
         subcontent += "<option value='tabon'>Tab Active</option>";
     } else {
-        subcontent += "<div class='editInfo'><button class='cm_button' id='cm_activateCustomize'>Customize</button></div>";
+        // subcontent += "<div class='editInfo'><button class='cm_button' id='cm_activateCustomize'>Customize</button></div>";
         subcontent += "<div class='editInfo'>Select Feature:</div>";
         subcontent += "<select id='subidselect' name='subselect'>";
     
@@ -1149,13 +1154,13 @@ function loadSubSelect(str_type, firstsub, thingindex) {
         event.stopPropagation();
     });
     
-    if ( str_type !== "page" ) {
-        $("#cm_activateCustomize").off('click');
-        $("#cm_activateCustomize").on('click', function(event) {
-            customizeTile(thingindex, et_Globals.aid, et_Globals.id, str_type, et_Globals.hubnum);
-            event.stopPropagation();
-        });
-    }
+    // if ( str_type !== "page" ) {
+    //     $("#cm_activateCustomize").off('click');
+    //     $("#cm_activateCustomize").on('click', function(event) {
+    //         customizeTile(thingindex, et_Globals.aid, et_Globals.id, str_type, et_Globals.hubnum);
+    //         event.stopPropagation();
+    //     });
+    // }
 }
 
 function setsubid(str_type) {

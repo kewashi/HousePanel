@@ -2295,9 +2295,14 @@ function updateTile(aid, presult, skiplink) {
     // handle native track images - including audio devices above
     if ( presult["trackImage"] ) {
         var trackImage = presult["trackImage"].trim();
+        if ( $("#a-"+aid+"-width") &&  $("#a-"+aid+"-width").html() && $("#a-"+aid+"-height") && $("#a-"+aid+"-height").html() ) {
+            var wstr = " width='" + $("#a-"+aid+"-width").html() + "' height= '" + $("#a-"+aid+"-height").html() + "' ";
+        } else {
+            wstr = " class='trackImage'";
+        }
+        // alert("aid= " + aid + " image width info: " + wstr );
         if ( trackImage.startsWith("http") ) {
-            // presult["trackImage"] = "<img height=\"120\" width=\"120\" src=\"" + trackImage + "\">";
-            presult["trackImage"] = "<img class='trackImage' src='" + trackImage + "'>";
+            presult["trackImage"] = "<img" + wstr + "src='" + trackImage + "'>";
             nativeimg = true;
         }
     }
@@ -2995,7 +3000,7 @@ function processClick(that, thingname) {
     }
 
     var ispassive = (subid==="custom" || subid==="temperature" || subid==="battery" || (command==="TEXT" && subid!=="allon" && subid!=="alloff") ||
-        subid==="presence" || subid==="motion" || subid==="contact" || 
+        subid==="presence" || subid==="motion" || subid==="contact" ||
         subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" ||
         subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid==="custom");
 

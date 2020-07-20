@@ -1,6 +1,9 @@
 'use strict';
 
 const devhistory =  ` 
+2.307   Tile editor bugfix for tiles with spaces in names
+            - fix width and height for images in music/audio tiles
+            - return refresh command and read commands for devices
 2.306   Add ability to click on visual fields in Tile Customizer
             - include level logic for actuators for window shades
             - fix bug to now include actuators in event handler logic
