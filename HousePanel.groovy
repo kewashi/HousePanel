@@ -15,6 +15,7 @@
  * This is a SmartThings and Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history:
+ * 07/20/2020 - add a status field for device items using getStatus() - thanks @phil_c
  * 07/18/2020 - include level for others and actuators so window shades work
                 also fix bug to include actuators in the event handler logic
  * 07/13/2020 - fix bug in setOther where an invalid attr was passed - thanks @phil_c
@@ -305,6 +306,13 @@ def addHistory(resp, item) {
             }
         } catch (e) {
             logger("Cannot retrieve history for device ${item.displayName}", "info")
+        }
+
+        // also add in a status
+        try {
+            resp.put("status", item.getStatus())
+        } catch(e) {
+            log.error e
         }
     }
     return resp
@@ -655,11 +663,11 @@ def getDevice(mydevices, swid, item=null) {
 def ignoredAttributes() {
     // thanks to the authors of HomeBridge for this list
     def ignore = [
-        'DeviceWatch-DeviceStatus', 'DeviceWatch-Enroll', 'checkInterval', 'devTypeVer', 'dayPowerAvg', 'apiStatus', 'yearCost', 'yearUsage','monthUsage', 'monthEst', 'weekCost', 'todayUsage',
+        'DeviceWatch-DeviceStatus', 'DeviceWatch-Enroll', 'checkInterval', 'healthStatus', 'devTypeVer', 'dayPowerAvg', 'apiStatus', 'yearCost', 'yearUsage','monthUsage', 'monthEst', 'weekCost', 'todayUsage',
         'supportedPlaybackCommands', 'groupPrimaryDeviceId', 'groupId', 'supportedTrackControlCommands', 'presets',
         'maxCodeLength', 'maxCodes', 'readingUpdated', 'maxEnergyReading', 'monthCost', 'maxPowerReading', 'minPowerReading', 'monthCost', 'weekUsage', 'minEnergyReading',
         'codeReport', 'scanCodes', 'verticalAccuracy', 'horizontalAccuracyMetric', 'altitudeMetric', 'latitude', 'distanceMetric', 'closestPlaceDistanceMetric',
-        'closestPlaceDistance', 'leavingPlace', 'currentPlace', 'codeChanged', 'codeLength', 'lockCodes', 'healthStatus', 'horizontalAccuracy', 'bearing', 'speedMetric',
+        'closestPlaceDistance', 'leavingPlace', 'currentPlace', 'codeChanged', 'codeLength', 'lockCodes', 'horizontalAccuracy', 'bearing', 'speedMetric',
         'speed', 'verticalAccuracyMetric', 'altitude', 'indicatorStatus', 'todayCost', 'longitude', 'distance', 'previousPlace','closestPlace', 'places', 'minCodeLength',
         'arrivingAtPlace', 'lastUpdatedDt'
     ]
@@ -668,7 +676,7 @@ def ignoredAttributes() {
 
 def ignoredCommands() {
     // "groupVolumeUp", "groupVolumeDown", "muteGroup", "unmuteGroup",
-    // "indicatorWhenOn","indicatorWhenOff","indicatorNever",
+    // "indicatorWhenOn","indicatorWhenOff","indicatorNever", "stopLevelChange",
     def ignore = ["setLevel","setHue","setSaturation","setColorTemperature","setColor","setAdjustedColor",
                   "enrollResponse","stopLevelChange","poll","ping","configure",
                   "reloadAllCodes","unlockWithTimeout","markDeviceOnline","markDeviceOffline"
@@ -1200,6 +1208,13 @@ def doAction() {
       case "power":
         cmdresult = getPower(swid)
         break
+
+      case "weather":
+        def item = myweathers.find {it.id == swid }
+        if ( cmd && item?.hasCommand(cmd) ) {
+            item."$cmd"()
+        }
+        cmdresult = getWeather(swid)
 
     }
     logger("doAction results: " + cmdresult.toString() , "debug");

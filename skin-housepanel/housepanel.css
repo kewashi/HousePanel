@@ -866,23 +866,26 @@ div.lock.locked, div.lock.unlocked, div.lock.unknown {
     height: 146px;
 }
 /* locks */
-div.thing.lock-thing div.overlay.name {
+div.thing.lock-thing div.overlay.name div.lock.name {
     display: block;
     position: absolute;
     border: none;
     background: none;
-    left: 2px;
-    background-color: rgba(0, 0, 0, 0.01);
+    left: 18px;
+    width: 24px;
+    font-size: 14px;
+    background-color: none;
     color: rgba(255, 255, 255, 1);
 }
 
-div.overlay.name div.lock.name {
+/* div.overlay.name div.lock.name {
   display: block;
   left: 2px;
   width: 24px;
   font-size: 10pt;
   background-color: none;
-}
+} */
+
 div.overlay {
     width: 100%;
     display: block;

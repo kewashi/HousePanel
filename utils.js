@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.310   Add a status field that is styled with little dots
 2.309   Tile editor bugfix for tiles with spaces in names
             - fix width and height for images in music/audio tiles
             - return refresh command and read commands for devices

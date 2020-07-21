@@ -1876,3 +1876,22 @@ img.trackImage {
 div.thing.switch-thing div.overlay.switch {
     display: block;
 }
+
+div.thing div.status.ONLINE,
+div.thing div.status.ACTIVE,
+div.thing div.status.INACTIVE {
+    position: absolute;
+    cursor: default;
+    border-radius: 50%;
+    width: 8px; height: 8px;
+    color: rgba(255, 255, 255, 0.01);
+    background-color: rgb(33, 231, 33);
+    z-index: 51; 
+    top: 5px; left: 5px;
+}
+div.thing div.status.ACTIVE {
+    background-color: rgb(19, 99, 248);
+}
+div.thing div.status.INACTIVE {
+    background-color: rgb(231, 25, 25);
+}

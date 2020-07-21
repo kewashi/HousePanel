@@ -3000,7 +3000,7 @@ function processClick(that, thingname) {
     }
 
     var ispassive = (subid==="custom" || subid==="temperature" || subid==="battery" || (command==="TEXT" && subid!=="allon" && subid!=="alloff") ||
-        subid==="presence" || subid==="motion" || subid==="contact" ||
+        subid==="presence" || subid==="motion" || subid==="contact" || subid==="status" ||
         subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" ||
         subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid==="custom");
 

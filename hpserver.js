@@ -3913,7 +3913,7 @@ function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
 
             // check for a stop all other timer rules command
             // this is done by entering 0=__delay as a rule segment
-            if ( rtileid===0 && rsubid==="__delay" ) {
+            if ( rsubid==="__delay" ) {
                 resetRuleTimers();
             } else {
                 // find the tile index and proceed with activating the rule

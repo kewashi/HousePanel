@@ -237,6 +237,8 @@ function getOnOff(str_type, subid) {
         onoff = ["absent","present"];
     } else if ( subid.startsWith("state" ) ) {
         onoff = ["Away","Home","Night","Disarmed"];
+    } else if ( subid.startsWith("themode" ) ) {
+        onoff = ["Away","Home","Night", ""];
     }
     
     return onoff;
