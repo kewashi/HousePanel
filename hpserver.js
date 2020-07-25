@@ -2577,6 +2577,11 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
         if ( !thingvalue["name"] ) {
             thingvalue["name"] = thingname;
         }
+
+        // fix icons just in case
+        var tempicon = getWeatherIcon(thingvalue["weatherIcon"], false);
+        var feelicon = getWeatherIcon(thingvalue["forecastIcon"], false);
+        
         $tc += putElement(kindex, cnt, 0, thingtype, thingvalue["name"], "name");
         $tc += putElement(kindex, cnt, 1, thingtype, thingvalue["city"], "city");
         $tc += "<div class=\"weather_temps\">";
@@ -2586,8 +2591,8 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
         
         // use new weather icon mapping
         $tc += "<div class=\"weather_icons\">";
-        $tc += putElement(kindex, cnt, 4, thingtype, thingvalue["weatherIcon"], "weatherIcon");
-        $tc += putElement(kindex, cnt, 5, thingtype, thingvalue["forecastIcon"], "forecastIcon");
+        $tc += putElement(kindex, cnt, 4, thingtype, tempicon, "weatherIcon");
+        $tc += putElement(kindex, cnt, 5, thingtype, feelicon, "forecastIcon");
         $tc += "</div>";
         // $tc += putElement(kindex, cnt, 6, thingtype, "Sunrise: " + thingvalue["localSunrise"] + " Sunset: " + thingvalue["localSunset"], "sunriseset");
         
@@ -2643,7 +2648,14 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                 jsontval = null;
             }
             
+            // skip special audio and music tiles
+            if ( tkey==="audioTrackData" || tkey==="trackData" || tkey==="forecast" ) {
+                jsontval = null;
+                tval = null;
+            }
+
             // handle other cases where the value is an object like audio or music tiles
+            // but audio, music, and weather and handled elsewhere so don't do it again here
             if ( jsontval && typeof jsontval==="object" && !array_key_exists(helperkey, thingvalue) ) {
 
                 var isarr = is_array(jsontval);
@@ -2663,7 +2675,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                     }
                 }
             }
-            
+
             else if ( tkey.substring(0,5)!=="user_" && (typeof tval==="string" || typeof tval==="number") ) { 
                 
                 // new logic for links - they all now follow the format ::LINK::code
@@ -3368,14 +3380,18 @@ function setValOrder(val) {
 function processHubMessage(hubmsg) {
     // loop through all things for this hub
     // remove music trackData field that we don't know how to handle
+    var audiomap = {"name": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
+                    "status": "status", "trackMetaData": "trackImage", "trackImage":"trackImage", "metaData":"",
+                    "trackNumber":"", "music":"", "trackUri":"", "uri":"", "transportUri":"", "enqueuedUri":"",
+                    "audioSource": "mediaSource"};
     var cnt = 0;
+    var idx;
 
     // push info to all things that match
     // we don't know the thing types so we have to check all things
     // this uses the format defined in the HousePanel.groovy file
     // that was also used in the old housepanel.push app
     var subid = hubmsg['change_attribute'];
-    var companion = "user_"+subid;
     var hubmsgid = hubmsg['change_device'].toString();
     // var strtype = hubmsg['chnage_type'] || "";
 
@@ -3384,7 +3400,32 @@ function processHubMessage(hubmsg) {
         hubmsg['change_value'] = "absent";
     }
 
-    for (var idx in allthings) {
+    // get any custom size parameters for linked tiles
+    var triggeridx = hubmsg['change_type'] + "|" + hubmsgid;
+    var customwidth = false;
+    var customheight = false;
+    if ( array_key_exists("user_width", allthings[triggeridx]["value"]) ) {
+        customwidth = allthings[triggeridx]["value"]["user_width"];
+        if (customwidth.startsWith("::TEXT::")) {
+            customwidth = customwidth.substr(8);
+        } else {
+            customwidth = false;
+        }
+    }
+    if ( array_key_exists("user_height", allthings[triggeridx]["value"]) ) {
+        customheight = allthings[triggeridx]["value"]["user_height"];
+        if (customheight.startsWith("::TEXT::")) {
+            customheight = customheight.substr(8);
+        } else {
+            customheight = false;
+        }
+    }
+
+    if ( DEBUG12 ) {
+        console.log("processhub - hubmsgid: ", hubmsgid, "\nmessage: ", hubmsg, " sizes: width: ", customwidth, " height: ", customheight);
+    }
+
+    for (idx in allthings) {
 
         var entry = allthings[idx];
 
@@ -3397,52 +3438,103 @@ function processHubMessage(hubmsg) {
             entry['value'][subid] = hubmsg['change_value'];
 
             // handle special audio updates
-            if ( entry.type==="audio" || subid==="audioTrackData" ) {
+            if ( entry.type==="audio" && hubmsg['change_type']==="audio" ) { // } && array_key_exists("audioTrackData",subid) ) {
                 entry['value'] = translateAudio(entry['value']);
-            } else if ( entry.type==="music" || subid==="trackData" ) {
+            } else if ( entry.type==="music" && hubmsg['change_type']==="music" ) { // } && array_key_exists("trackData",subid) ) {
                 entry['value'] = translateMusic(entry['value']);
-            } else if ( entry.type==="weather" ) {
+            } else if ( entry.type==="weather" && hubmsg['change_type']==="weather" ) {
                 var origname = entry.name || entry.value.name;
                 entry['value'] = translateWeather(origname, entry['value']);
             }
 
-            // if ( entry['value']['trackData'] ) { delete entry['value']['trackData']; }
-            // if ( entry.type==="weather" && is_object(entry.value.forecast) ) { delete entry.value.forecast; }
-
+            // avoid pushing client if this is a passive updater
             if ( ! array_key_exists("skip_push", hubmsg) ) {
                 pushClient(entry.id, entry.type, subid, entry['value'])
             }
             processRules(entry.id, entry.type, subid, entry['value'], "processMsg");
-
-        // handle links
-        // this code replaces the pushclient handler on js side that used to do links
-        // it is faster here and more robust and allows rules to be tied in as well
-        } else if ( array_key_exists(companion, entry.value) ) {
-            var helperval = entry.value[companion];
-            var ipos = helperval.indexOf("::",2);
-            var command = helperval.substring(2, ipos);
-            var lidx = helperval.substring(ipos+2);
-            var lidxitems = lidx.split("|");
-            // var linktype = lidxitems[0];
-            var linkbid = lidxitems[1];
-
-        
-            // get info for links but skip if the link had an error
-            if ( DEBUG12 ) {
-                console.log("processhub link debug. companion=",companion,"helper=",helperval,"command=",command,
-                            "lidx=",lidx,"idx=", idx,"linkbid=",linkbid,"hubmsgid=",hubmsgid);
-            }
-            if ( command==="LINK" && linkbid === hubmsgid ) {
-                cnt++;
-                entry['value'][subid] = hubmsg['change_value'];
-                var idxitems = idx.split("|");
-                var targetobj = {};
-                targetobj[subid] = entry.value[subid];
-                pushClient(idxitems[1], idxitems[0], subid, targetobj);
-                processRules(idxitems[1], idxitems[0], subid, targetobj, "processMsg");
-            }
         }
     }
+
+    // now handle links including checking for triggers that have objects tied to them
+    // this happens for audio and music tiles and maybe others in the future
+    var newval;
+    try {
+        newval = JSON.parse(hubmsg['change_value']);
+    } catch (e) { 
+        newval = null;
+    }
+
+    if ( newval && hubmsg['change_type']==="audio" && subid==="audioTrackData" ) {
+        newval = translateAudio(newval, false);
+    } else if ( newval && hubmsg['change_type']==="music" && subid==="trackData" ) {
+        newval = translateAudio(newval, false, audiomap);
+    } else if ( newval && hubmsg['change_type']==="weather" && subid==="forecast" ) {
+        var origname = hubmsg['change_name'];
+        newval = translateWeather(origname, newval);
+    } else {
+        newval = {};
+        newval[subid] = hubmsg['change_value'];
+    }
+    console.log("hubmsg: ", hubmsg, " newval: ", newval);
+
+    if ( typeof newval === "object" ) {
+
+        // loop through each field of the object
+        // or the only item if this is a simple link
+        for ( var obj_subid in newval ) {
+            var companion = "user_"+obj_subid;
+
+            // check every tile for a link that matches this companion field
+            for (idx in allthings) {
+                var entry = allthings[idx];
+
+                // this code replaces the pushclient handler on js side that used to do links
+                // it is faster here and more robust and allows rules to be tied in as we
+                if ( array_key_exists(companion, entry.value) ) {
+                    var helperval = entry.value[companion];
+                    var ipos = helperval.indexOf("::",2);
+                    var command = helperval.substring(2, ipos);
+                    var lidx = helperval.substring(ipos+2);
+                    var lidxitems = lidx.split("|");
+                    var linktype = lidxitems[0];
+                    var linkbid = lidxitems[1];
+
+                    // get info for links but skip if the link had an error
+                    if ( DEBUG12 ) {
+                        console.log("processhub link debug. companion=",companion," helper=",helperval," command=",command,
+                                    " lidx=",lidx," linktype=",linktype," linkbid=",linkbid);
+                    }
+                    if ( command==="LINK" && linkbid === hubmsgid ) {
+                        cnt++;
+                        entry['value'][obj_subid] = newval[obj_subid];
+
+                        var idxitems = idx.split("|");
+                        var targetobj = {};
+                        targetobj[obj_subid] = newval[obj_subid];
+
+                        // add size info if available
+                        if (customwidth ) {
+                            targetobj["width"] = customwidth;
+                        }
+
+                        if (customheight) {
+                            targetobj["height"] = customheight;
+                        }
+
+                        if ( DEBUG12 ) {
+                            console.log("idxitems= ",idxitems," obj_subid=",obj_subid," targetobj=",targetobj, "\nhubmg= ", hubmsg );
+                        }
+                        if ( ! array_key_exists("skip_push", hubmsg) ) {
+                            pushClient(idxitems[1], idxitems[0], obj_subid, targetobj);
+                        }
+                        processRules(idxitems[1], idxitems[0], obj_subid, targetobj, "processMsg");
+                    }
+                }
+            }
+
+        }
+
+   }
     // resetRules();
     return 'pushed new status info to ' + cnt + ' tiles';
 }
@@ -3565,6 +3657,63 @@ function processIsyMessage(isymsg) {
     });
 }
 
+function getTimeStr(ifvalue, str) {
+    str = str.toUpperCase();
+    var firstcolon = str.indexOf(":");
+    var secondcolon = -1;
+    if ( firstcolon !== -1 ) {
+        var str2 = str.substr(firstcolon+1);
+        secondcolon = str2.indexOf(":");
+    }
+    var amloc = str.indexOf("AM");
+    var pmloc = str.indexOf("PM");
+
+    var today = new Date();
+    var d = new Date(today.toDateString() + " " + ifvalue);
+
+    var hour = d.getHours().toString();
+    var min = d.getMinutes().toString();
+    var sec = d.getSeconds().toString();
+
+    var zsec = "";
+    if ( secondcolon !== -1 ) {
+        zsec = sec.length < 2 ? "0" + sec : sec;
+    }
+
+    var zmin = "";
+    if ( firstcolon !== -1 ) {
+        zmin = min.length < 2 ? "0" + min : min;
+    }
+
+    if ( amloc !== -1 || pmloc !== -1 ) {
+        if ( hour=== 0 ) {
+            hour = "12";
+        } else if ( hour > 12 ) {
+            hour = (+hour - 12).toString();
+        }
+    }
+
+    var timestr = hour.length < 2 ? "0" + hour : hour;
+    if ( zmin ) {
+        timestr+= ":" + zmin;
+     }
+    if ( zmin && zsec ) {
+        timestr+=  + ":" + zsec;
+    }
+
+    if ( amloc !== -1 ) {
+        timestr+= " AM";
+    }
+    if ( pmloc !== -1 ) {
+        timestr+= " PM";
+    }
+
+    if ( DEBUG11 ) {
+        console.log("getTimeStr: ", ifvalue, str, amloc, pmloc, timestr );
+    }
+    return timestr;
+}
+
 function processRules(bid, thetype, trigger, pvalue, rulecaller) {
 
     if ( !ENABLERULES || (GLB.options.config["rules"] !=="true" && GLB.options.config["rules"] !==true) ) {
@@ -3610,7 +3759,7 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
     //                    [RULE, "if state==away or 42=presence==absent", 19=thermostatMode=heat, 19=heatingSetpoint=72, 14=lock=lock, rule2, 2] ]
     const regsplit = /[,;]/;
     const ifpattern = /(if)\s+(.*)/;
-    const triggerpattern = /(\w+)\s*([=|!|<|>])(=?)\s*(\w+)/;
+    const triggerpattern = /(\w+)\s*([=|!|<|>])(=?)\s*(.+)/;
     // const rulepattern = /(\d*)\s*=\s*(\w+)\s*([=|!|<|>])(=?)\s*(\w+)/;
     const rulepattern = /(\d*)\s*=\s*(\w+)\s*([=|!|<|>])(=?)\s*(.+)/;
     
@@ -3662,7 +3811,7 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
 
                     var doand = true;
                     if ( DEBUG11 ) {
-                        console.log( (ddbg()), "RULE debug: rulestr: ", rulestr, " rulseset: ", ruleset);
+                        console.log( (ddbg()), "RULE debug: rulestr: ", rulestr, " rulseset: ", ruleset, " newset: ", newset);
                     }
     
                     // loop through each one and add to test
@@ -3774,7 +3923,7 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
                                         }
                                     } else if ( rulesubid==="time") {
                                         var today = new Date();
-                                        var d1 = new Date(today.toDateString() + " " + ifvalue);
+                                        var d1 = new Date(today.toDateString() + " " + getTimeStr(ifvalue, rulevalue));
                                         var d2 = new Date(today.toDateString() + " " + rulevalue);
                                         num1 = d1.getTime();
                                         num2 = d2.getTime();
@@ -3794,6 +3943,14 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
                                         ( (ruleop===">" ) && (num1 >  num2) ) ||
                                         ( (ruleop===">=") && (num1 >= num2) ) 
                                     );
+
+                                    // if this is time and match isn't there check string versions
+                                    if ( rulesubid==="time" && !ismatch ) {
+                                        ismatch = ( 
+                                            ( (ruleop==="=" || ruleop==="==") && (ifvalue===rulevalue) ) ||
+                                            ( (ruleop==="!" || ruleop==="!=") && (ifvalue!==rulevalue) ) 
+                                        );
+                                    }
 
                                     // apply and/or logic to the final rule determination
                                     if ( rulenum===0 ) {
@@ -4458,11 +4615,12 @@ function queryHub(hub, swid, swtype, popup) {
 
 function translateAudio(pvalue, specialkey, audiomap) {
     // map of audio fields used in multiple places
-    if ( !specialkey ) {
+    // but if false is given then we just translate pvalue
+    if ( typeof specialkey === "undefined" ) {
         specialkey = "audioTrackData";
     }
 
-    if ( !audiomap ) {
+    if ( typeof audiomap !== "object" ) {
         audiomap = {"title": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
                     "albumArtUrl": "trackImage", "mediaSource": "mediaSource"};
     }
@@ -4474,14 +4632,28 @@ function translateAudio(pvalue, specialkey, audiomap) {
         // }
 
         // console.log("translate pre result: ", pvalue);
-        if ( pvalue && array_key_exists(specialkey, pvalue) ) {
-            if ( typeof pvalue[specialkey]==="string" ) {
-                var audiodata = JSON.parse(pvalue[specialkey]);
-            } else if ( typeof pvalue[specialkey]==="object" ) {
-                audiodata = pvalue[specialkey];
+        var audiodata;
+        if ( pvalue ) {
+            if ( specialkey==="" || specialkey===false ) {
+                if ( typeof pvalue==="string" ) {
+                    audiodata = JSON.parse(pvalue);
+                    pvalue = {};
+                } else if ( typeof pvalue==="object" ) {
+                    audiodata = clone(pvalue);
+                    pvalue = {};
+                } else {
+                    throw "Unknown format in translateAudio";
+                }
+            } else if ( array_key_exists(specialkey, pvalue) && typeof pvalue[specialkey]==="string" ) {
+                audiodata = JSON.parse(pvalue[specialkey]);
+                // delete pvalue[specialkey];
+            } else if ( array_key_exists(specialkey, pvalue) && typeof pvalue[specialkey]==="object" ) {
+                audiodata = clone(pvalue[specialkey]);
+                pvalue[specialkey] = JSON.stringify(pvalue[specialkey]);
             } else {
                 throw "Unknown format in translateAudio";
             }
+
             // console.log("translate step 2 result: ", audiodata);
             for  (var jtkey in audiodata) {
                 if ( array_key_exists(jtkey, audiomap) ) {
@@ -4493,7 +4665,24 @@ function translateAudio(pvalue, specialkey, audiomap) {
                     pvalue[jtkey] = audiodata[jtkey];
                 }
             }
-            delete pvalue[specialkey];
+
+            // get image from the string if http is buried
+            // this usually works for music tiles but not always
+            // not needed for audio tiles since http will be first
+            if ( array_key_exists("trackImage", pvalue) ) {
+                var jtval = pvalue["trackImage"];
+                if  ( typeof jtval==="string" && jtval.indexOf("http")>0 ) {
+                    var j1 = jtval.indexOf(">http") + 1;
+                    var j2 = jtval.indexOf("<", j1+1);
+                    if ( j1===-1 || j2===-1) {
+                        jtval = "";
+                    } else {
+                        jtval = jtval.substring(j1, j2);
+                        jtval = jtval.replace(/\\/g,"");
+                    }
+                    pvalue["trackImage"] = jtval;
+                }
+            }
         }
     } catch(jerr) {
         console.log(jerr);
@@ -4506,7 +4695,7 @@ function translateMusic(pvalue) {
     var audiomap = {"name": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
                     "status": "status", "trackMetaData": "trackImage", "trackImage":"trackImage", "metaData":"",
                     "trackNumber":"", "music":"", "trackUri":"", "uri":"", "transportUri":"", "enqueuedUri":"",
-                    "audioSource": "mediaSource"};
+                    "audioSource": "mediaSource", "trackData": "trackData"};
     var musicmap = {"artist": "currentArtist", "album": "currentAlbum",
                     "status": "status", "trackMetaData": "", "metaData":"",
                     "trackNumber":"trackNumber", "music":"", "trackUri":"", "uri":"", "transportUri":"", "enqueuedUri":"",
@@ -4525,26 +4714,8 @@ function translateMusic(pvalue) {
     }
 
     // if there is a trackData field then use that to overwrite stuff
-    if ( array_key_exists("trackData", pvalue) ) {
+    if ( array_key_exists("trackData", nvalue) ) {
         nvalue = translateAudio(nvalue, "trackData", audiomap);
-    }
-
-    // get image from the string - this usually works but not always
-    if ( array_key_exists("trackImage", nvalue) ) {
-        var jtval = nvalue["trackImage"];
-        if  ( typeof jtval==="string" && jtval.indexOf("http")!==-1 ) {
-            var j1 = jtval.indexOf(">http") + 1;
-            var j2 = jtval.indexOf("<", j1+1);
-            if ( j1===-1 || j2===-1) {
-                jtval = "";
-            } else {
-                jtval = jtval.substring(j1, j2);
-                jtval = jtval.replace(/\\/g,"");
-            }
-            nvalue["trackImage"] = jtval;
-        // } else {
-        //     nvalue["trackImage"] = "";
-        }
     }
 
     // console.log("Legacy music trackImage: ", j1, j2, jtval);

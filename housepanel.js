@@ -3004,6 +3004,8 @@ function processClick(that, thingname) {
         subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" ||
         subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid==="custom");
 
+    // alert("command: "+command+" subid: "+subid+" passive: "+ispassive);
+
     // turn momentary and piston items on or off temporarily
     // but only for the subid items that expect it
     // and skip if this is a custom action since it could be anything

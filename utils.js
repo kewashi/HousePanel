@@ -1,6 +1,9 @@
 'use strict';
 
 const devhistory =  ` 
+2.311   Audio tile tweaks for rule engine
+            - fix weather tile upon refresh
+            - add missing CSS for OFFLINE tile to red; change inactive to orange
 2.310   Add a status field that is styled with little dots
 2.309   Tile editor bugfix for tiles with spaces in names
             - fix width and height for images in music/audio tiles

@@ -1878,6 +1878,7 @@ div.thing.switch-thing div.overlay.switch {
 }
 
 div.thing div.status.ONLINE,
+div.thing div.status.OFFLINE,
 div.thing div.status.ACTIVE,
 div.thing div.status.INACTIVE {
     position: absolute;
@@ -1889,9 +1890,9 @@ div.thing div.status.INACTIVE {
     z-index: 51; 
     top: 5px; left: 5px;
 }
-div.thing div.status.ACTIVE {
-    background-color: rgb(19, 99, 248);
-}
 div.thing div.status.INACTIVE {
-    background-color: rgb(231, 25, 25);
+    background-color: rgb(247, 152, 28);
+}
+div.thing div.status.OFFLINE {
+    background-color: rgb(197, 5, 5);
 }
