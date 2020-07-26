@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.313   Fix bug in rule width and height adjust
 2.312   Wire up option to disable blackout on mode change properly
             - add error checking in json read of user cfg file
 2.311   Audio tile tweaks for rule engine

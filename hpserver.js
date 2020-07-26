@@ -3412,21 +3412,26 @@ function processHubMessage(hubmsg) {
     var triggeridx = hubmsg['change_type'] + "|" + hubmsgid;
     var customwidth = false;
     var customheight = false;
-    if ( array_key_exists("user_width", allthings[triggeridx]["value"]) ) {
-        customwidth = allthings[triggeridx]["value"]["user_width"];
-        if (customwidth.startsWith("::TEXT::")) {
-            customwidth = customwidth.substr(8);
-        } else {
-            customwidth = false;
+    try {
+        if ( allthings[triggeridx] && array_key_exists("user_width", allthings[triggeridx]["value"]) ) {
+            customwidth = allthings[triggeridx]["value"]["user_width"];
+            if (customwidth.startsWith("::TEXT::")) {
+                customwidth = customwidth.substr(8);
+            } else {
+                customwidth = false;
+            }
         }
-    }
-    if ( array_key_exists("user_height", allthings[triggeridx]["value"]) ) {
-        customheight = allthings[triggeridx]["value"]["user_height"];
-        if (customheight.startsWith("::TEXT::")) {
-            customheight = customheight.substr(8);
-        } else {
-            customheight = false;
+        if ( allthings[triggeridx] && array_key_exists("user_height", allthings[triggeridx]["value"]) ) {
+            customheight = allthings[triggeridx]["value"]["user_height"];
+            if (customheight.startsWith("::TEXT::")) {
+                customheight = customheight.substr(8);
+            } else {
+                customheight = false;
+            }
         }
+    } catch (e) {
+        customwidth = false;
+        customheight = false;
     }
 
     if ( DEBUG12 ) {
