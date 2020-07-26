@@ -394,6 +394,10 @@ function readRoomThings(caller, uname) {
         console.log( (ddbg()), "Reading custom file for username: ", uname, " caller: ", caller);
     }
 
+    var d = new Date();
+    var timeval = d.getTime();
+    timeval = timeval.toString();
+
     // get custom settings for this user
     // or create the custom config for new users
     var customfname = "hm_" + uname + ".cfg";
@@ -406,9 +410,6 @@ function readRoomThings(caller, uname) {
             readRoomThings(caller, "default");
             writeRoomThings(GLB.options, uname);
         } else {
-            var d = new Date();
-            var timeval = d.getTime();
-            timeval = timeval.toString();
         
             // this format is now in real json format and includes user_ tiles
             // add a signature key to flag this format
@@ -436,8 +437,15 @@ function readRoomThings(caller, uname) {
         var str = fs.readFileSync(customfname, 'utf8');
         var str1 = str.replace("\r","");
         var str2 = str1.replace("\n","");
-        var opts = JSON.parse(str2);
-    
+
+        try {
+            var opts = JSON.parse(str2);
+        } catch (e) {
+            console.log( (ddbg()), "Error while parsing JSON in the existing options file: ", customfname, " Setting up defaults.");
+            opts = {}
+            opts["::CUSTOM::"] = [uname, utils.HPVERSION, timeval];
+        }
+
         // protect against missing room array - use default list
         if ( !opts.rooms ) {
             opts.rooms = {};
@@ -4209,7 +4217,12 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
     if ( typeof body === "undefined" || body==="" || !body ) {
         pvalue = {};
     } else if ( typeof body === "string") {
-        pvalue = JSON.parse(body);
+        try {
+            pvalue = JSON.parse(body);
+        } catch(e) {
+            console.log( (ddbg()), "warning - unrecognized non-JSON string in hub push update: ", body);
+            return;
+        }
     } else if ( typeof body === "object") {
         pvalue = clone(body);
     } else {
@@ -6249,7 +6262,7 @@ function processOptions(uname, optarray) {
             continue;
         } else if ( key==="kiosk") {
             configoptions["kiosk"] = "true";
-        } else if ( key==="blackout") {
+        } else if ( key==="clrblackid") {
             configoptions["blackout"] = "true";
         } else if ( key==="rules") {
             configoptions["rules"] = ENABLERULES ? "true" : "false";
@@ -7692,15 +7705,24 @@ if ( os.hostname()==="polisy" && os.platform()==="freebsd" ) {
     hostname = null;
 }
 
-if ( hostname && fs.existsSync("ssl/polyglot.crt") && fs.existsSync("ssl/client.crt") && fs.existsSync("ssl/client_private.key") ) {
-    var ca = fs.readFileSync("ssl/polyglot.crt");
-    var cert = fs.readFileSync("ssl/client.crt");
-    var key = fs.readFileSync("ssl/client_private.key");
-    var udopts = {host: hostname, port: "1883",
-                ca: ca, cert: cert, key: key,
-                checkServerIdentity: () => { return null; },
-                rejectUnauthorized: false};
-    udclient = mqtt.connect("mqtts://" + polisyip, udopts);
+if ( MQTTHP || MQTTPOLY ) {
+    try {
+        if ( hostname && fs.existsSync("ssl/polyglot.crt") && fs.existsSync("ssl/client.crt") && fs.existsSync("ssl/client_private.key") ) {
+            var ca = fs.readFileSync("ssl/polyglot.crt");
+            var cert = fs.readFileSync("ssl/client.crt");
+            var key = fs.readFileSync("ssl/client_private.key");
+            var udopts = {host: hostname, port: "1883",
+                        ca: ca, cert: cert, key: key,
+                        checkServerIdentity: () => { return null; },
+                        rejectUnauthorized: false};
+            udclient = mqtt.connect("mqtts://" + polisyip, udopts);
+        } else if ( polisyip ) {
+            udclient = mqtt.connect("mqtt://" + polisyip );
+        }
+    } catch (e) {
+        console.log( (ddbg()), "Cannot establish MQTT connection. ", e);
+        udclient = null;
+    }
 }
 
 if ( udclient ) {
@@ -7710,10 +7732,10 @@ if ( udclient ) {
                 var frontend = JSON.parse(msg.toString());
                 console.log( (ddbg()), topic,  " ", frontend.nodeservers.length + " nodeservers");
                 frontend.nodeservers.forEach( function(node) {
-                    console.log("slot: ", node.profileNum, " name: ", node.name, " file: ", node.homeDir + node.executable);
+                    console.log( (ddbg()), "slot: ", node.profileNum, " name: ", node.name, " file: ", node.homeDir + node.executable);
                 });
             } catch(e) {
-                console.log("error - trying to decipher MQTT message from polyglot frontend", e);
+                console.log( (ddbg()), "error - trying to decipher MQTT message from polyglot frontend", e);
             }
         } else {
             if ( topic.startsWith("housepanel/") ) {
@@ -7722,7 +7744,7 @@ if ( udclient ) {
                 var str = JSON.parse(msg.toString());
                 console.log( (ddbg()), topic, "msg: ", JSON.stringify(str, null, 1) );
             } else {
-                console.log("mqtt topic: ", topic, " msg: ", msg.toString() );
+                console.log( (ddbg()), "mqtt topic: ", topic, " msg: ", msg.toString() );
             }
         }
     });

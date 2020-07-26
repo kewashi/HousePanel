@@ -489,6 +489,11 @@ function setupWebsocket(webSocketUrl)
             var clientcount = presult.clientcount;
             var subid = presult.trigger;
             var idx = thetype + "|" + bid;
+            try {
+                var blackout = cm_Globals.options.config["blackout"].toString();
+            } catch (e) {
+                blackout = "false";
+            }
 
             // reload page if signalled from server
             if ( bid==="reload" ) {
@@ -628,7 +633,7 @@ function setupWebsocket(webSocketUrl)
             });
 
             // blank screen if night mode set
-            if ( thetype==="mode" && subid==="themode" ) {
+            if ( thetype==="mode" && subid==="themode" && blackout==="true" && priorOpmode === "Operate" ) {
                 if ( pvalue[subid]==="Night" ) {
                     execButton("blackout");
                 } else if ( $("#blankme") ) {

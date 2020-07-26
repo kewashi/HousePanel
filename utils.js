@@ -1,6 +1,8 @@
 'use strict';
 
 const devhistory =  ` 
+2.312   Wire up option to disable blackout on mode change properly
+            - add error checking in json read of user cfg file
 2.311   Audio tile tweaks for rule engine
             - fix weather tile upon refresh
             - add missing CSS for OFFLINE tile to red; change inactive to orange
