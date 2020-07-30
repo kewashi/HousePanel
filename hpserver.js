@@ -1046,14 +1046,14 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                 var result = parser.parse(body);
                 var thenodes = result.nodes["node"];
                 if ( DEBUG1 ) {
+                    // console.log( (ddbg()), "All nodes returned: ", UTIL.inspect(result, false, null, false) );
                     console.log( (ddbg()), "Retrieved ", thenodes.length, " things from hub: ", hubName);
                 }
 
                 // read the real attributes and map to HP fields
                 for ( var obj in thenodes ) {
                     var node = thenodes[obj];
-                    var id = node["address"].toString();
-                    id = fixISYid(id);
+                    var id = fixISYid(node["address"].toString());
 
                     // console.log("node id: ", id, " type: ", typeof id);
                     var idx = thetype + "|" + id;
@@ -1092,6 +1092,56 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                     if (DEBUG5) {
                         console.log( (ddbg()), "idx= ", idx," hint= ", hint, " node: ", node);
                     }
+                }
+            }
+
+            // now get folders and scenes
+            var groups = result.nodes["group"];
+            for ( var obj in groups ) {
+                var node = groups[obj];
+                var id = fixISYid(node["address"].toString());
+                // console.log("scene info: ", UTIL.inspect(node, false, null, false));
+
+                var idx = thetype + "|" + id;
+                var hint = "ISY scene";
+                var name = node["name"];
+
+                // set the base tile to include name and items to turn scene on and off
+                var pvalue = {"name": name, "DON": "DON", "DOF":"DOF"};
+
+                // load up pvalue with links
+                if ( node.members && array_key_exists("link", node.members) && is_array(node.members.link) ) {
+                    for ( var sceneitem in node.members.link ) {
+                        // var idxlink = thetype + "|" + node.members.link[sceneitem];
+                        // if ( array_key_exists(idxlink, allthings) ) {
+                        //     var namelink = allthings[idxlink]["name"];
+                        // } else {
+                        //     namelink = ""; // node.members.link[sceneitem];
+                        // }
+                        // pvalue["scene_"+sceneitem] = namelink;
+                        pvalue["scene_"+sceneitem] = node.members.link[sceneitem];
+                    }
+                }
+
+                // this is the proper place to load customizations
+                pvalue = getCustomTile(pvalue, thetype, id);
+                if ( !name ) {
+                    name = pvalue["name"];
+                }
+
+                // set tile up
+                allthings[idx] = {
+                    "id": id,
+                    "name": name, 
+                    "hubnum": hubnum,
+                    "type": thetype, 
+                    "hint": hint,
+                    "refresh": "never",
+                    "value": pvalue
+                };
+
+                if (DEBUG5) {
+                    console.log( (ddbg()), "idx= ", idx," hint= ", hint, " node: ", node);
                 }
             }
         
@@ -2258,6 +2308,9 @@ function returnFile(thingvalue, thingtype) {
 function writeAccuWeather(city, region, code) {
     const acid = "awcc1531959686475";
     const unit = "F";
+    if ( !city || !code || !region ) {
+        return;
+    }
 
     var rcitycode = region + "/" + city + "/" + code + "/weather-forecast/" + code;
     var $tc = "<!DOCTYPE html>";
@@ -2269,29 +2322,12 @@ function writeAccuWeather(city, region, code) {
     fs.writeFileSync("Frame2.html", $tc, {encoding: "utf8", flag:"w"});
 }
 
-// function to create Frame1.html with WeatherWidget for a city
-// the City Name must be provided
-// writeForecastWidget("ann-arbor","Ann Arbor","42d28n83d74");
+// function to create Frame1.html for a city
+// the City Name and code must be provided
+// data for my home town:  ("ann-arbor","Ann Arbor","42d28n83d74");
 function writeForecastWidget(city, region, code) {
-
-    // if user doesn't provide a code, use my default account which should work
-    // and by default no region specified sets it to the city with -'s replaced with spaces
-    if ( !city ) {
+    if ( !city || !code || !region ) {
         return;
-    }
-    if ( !region ) {
-        var words = city.replace("-"," ").split(" ");
-        region = "";
-        for ( var i in words ) {
-            region += words[i].substr(0,1).toUpperCase() + words[i].substr(1).toLowerCase() + " ";
-        }
-        if ( !region ) {
-            region = city;
-        }
-
-    }
-    if ( !code ) {
-        code = "42d28n83d74";
     }
 
     var $tc = `
@@ -2681,6 +2717,14 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                         $tc += putElement(kindex, cnt, j, thingtype, jtval, jtkey, subtype, bgcolor, null, null, twidth, theight);
                         j++;
                     }
+                }
+            }
+
+            else if ( hint==="ISY scene" && tkey.substring(0,6)==="scene_" ) {
+                var sceneidx = "isy|" + tval;
+                if ( allthings[sceneidx] ) {
+                    tval = allthings[sceneidx].value.name + "<br />" + tval;
+                    $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, null, null, twidth, theight);
                 }
             }
 
@@ -3435,7 +3479,7 @@ function processHubMessage(hubmsg) {
     }
 
     if ( DEBUG12 ) {
-        console.log("processhub - hubmsgid: ", hubmsgid, "\nmessage: ", hubmsg, " sizes: width: ", customwidth, " height: ", customheight);
+        console.log( (ddbg()),"processhub - hubmsgid: ", hubmsgid, "\nmessage: ", hubmsg, " sizes: width: ", customwidth, " height: ", customheight);
     }
 
     for (idx in allthings) {
@@ -3514,7 +3558,7 @@ function processHubMessage(hubmsg) {
 
                     // get info for links but skip if the link had an error
                     if ( DEBUG12 ) {
-                        console.log("processhub link debug. companion=",companion," helper=",helperval," command=",command,
+                        console.log( (ddbg()),"processhub link debug. companion=",companion," helper=",helperval," command=",command,
                                     " lidx=",lidx," linktype=",linktype," linkbid=",linkbid);
                     }
                     if ( command==="LINK" && linkbid === hubmsgid ) {
@@ -3534,9 +3578,9 @@ function processHubMessage(hubmsg) {
                             targetobj["height"] = customheight;
                         }
 
-                        if ( DEBUG12 ) {
-                            console.log("idxitems= ",idxitems," obj_subid=",obj_subid," targetobj=",targetobj, "\nhubmg= ", hubmsg );
-                        }
+                        // if ( DEBUG12 ) {
+                        //     console.log( (ddbg()),"idxitems= ",idxitems," obj_subid=",obj_subid," targetobj=",targetobj, "\nhubmg= ", hubmsg );
+                        // }
                         if ( ! array_key_exists("skip_push", hubmsg) ) {
                             pushClient(idxitems[1], idxitems[0], obj_subid, targetobj);
                         }
@@ -4945,7 +4989,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                         }
                     }
                     
-                    if ( DEBUG12 ) {
+                    if ( DEBUG7 ) {
                         console.log( (ddbg()),"linked_hubnum: ", $linked_hubnum, " linked_type: ", $linked_swtype,
                                                " linked_id: ", $linked_swid, " linked_val: ", $linked_val, 
                                                " realsubid: ", $realsubid );
@@ -6273,16 +6317,22 @@ function processOptions(uname, optarray) {
             configoptions["rules"] = ENABLERULES ? "true" : "false";
         } else if ( key==="accucity" ) {
             city = val.trim();
+            configoptions["accucity"] = city;
         } else if ( key==="accuregion" ) {
             region = val.trim();
+            configoptions["accuregion"] = region;
         } else if ( key==="accucode" ) {
             code = val.trim();
+            configoptions["accucode"] = code;
         } else if ( key==="fcastcity" ) {
             fcastcity = val.trim();
+            configoptions["fcastcity"] = fcastcity;
         } else if ( key==="fcastregion" ) {
             fcastregion = val.trim();
+            configoptions["fcastregion"] = fcastregion;
         } else if ( key==="fcastcode" ) {
             fcastcode = val.trim();
+            configoptions["fcastcode"] = fcastcode;
         
         // handle user selected special tile count
         } else if ( key.substr(0,4)==="cnt_" ) {
@@ -6328,15 +6378,20 @@ function processOptions(uname, optarray) {
     // everything from this point on is after processing the options table
     // start by handling the weather
     if ( city && region && code ) {
-        configoptions["accucity"] = city;
-        configoptions["accuregion"] = region;
-        configoptions["accucode"] = code;
         writeAccuWeather(city, region, code);
     }
-    if ( fcastcity && fcastcode ) {
-        configoptions["fcastcity"] = fcastcity;
+    
+    // guess the region based on the city if left blank
+    if ( !fcastregion && fcastcity ) {
+        var words = fcastcity.replace("-"," ").split(" ");
+        fcastregion = "";
+        for ( var i in words ) {
+            fcastregion += words[i].substr(0,1).toUpperCase() + words[i].substr(1).toLowerCase() + " ";
+        }
+        fcastregion = fcastregion.trim();
         configoptions["fcastregion"] = fcastregion;
-        configoptions["fcastcode"] = fcastcode;
+    }
+    if ( fcastcity && fcastregion && fcastcode ) {
         writeForecastWidget(fcastcity, fcastregion, fcastcode);
     }
     

@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.314   Options bugfix for weather region specification
 2.313   Fix bug in rule width and height adjust
 2.312   Wire up option to disable blackout on mode change properly
             - add error checking in json read of user cfg file
