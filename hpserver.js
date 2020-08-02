@@ -13,7 +13,7 @@ const DEBUG8 = false;               // API calls
 const DEBUG9 =  false;              // ISY callbacks
 const DEBUG10 = false;              // sibling tag
 const DEBUG11 = false;              // rules
-const DEBUG12 = false;              // links
+const DEBUG12 = false;              // hub push updates
 const DEBUG13 = false;              // URL callbacks
 const DEBUG14 = false;              // tile link details
 const DEBUG15 = false;              // allthings and options dump
@@ -2984,9 +2984,9 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
             $tc += "<div class=\"overlay "+tkey+" v_"+kindex+"\">";
         }
         if (sibling) { $tc += sibling; }
-        if ( tkey === "level" || tkey==="colorTemperature" || tkey==="volume" || tkey==="groupVolume" ) {
-            $tc += aidi + ttype + " subid=\""+tkey+"\" value=\""+tval+"\" title=\""+tkey+"\" class=\"" + thingtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\"></div>";
-        } else if ( thingtype==="other" && typeof tval==="string" && tval.substr(0,7)==="number_" ) {
+        if ( tkey === "level" || tkey==="onlevel" || tkey==="colorTemperature" || tkey==="volume" ) {
+            $tc += aidi + ttype + " subid=\"" + tkey+"\" value=\""+tval+"\" title=\""+tkey+"\" class=\"" + thingtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\"></div>";
+        } else if ( typeof tkey==="string" && typeof tval==="string" && tkey.substr(0,8)==="_number_" && tval.substr(0,7)==="number_" ) {
             var numval = tkey.substring(8);
             $tc += aidi + ttype + " subid=\"" + tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\">" + numval + "</div>";
         } else {
@@ -3387,7 +3387,7 @@ function setValOrder(val) {
                    "mediaSource": 14, "currentArtist": 15, "playbackStatus": 16, 
                    "_muteGroup": 17, "_unmuteGroup": 18, "_volumeDown": 19, "_volumeUp": 20, 
                    "_previousTrack": 21, "_pause": 22, "_play": 23, "_stop": 24, "_nextTrack": 25,
-                   "level": 150, "volume": 151, "colorTemperature": 152,
+                   "onlevel": 150, "level": 151, "volume": 152, "colorTemperature": 153,
                    "allon": 41, "alloff": 42 };
 
     function getComp(vala) {
@@ -3400,8 +3400,6 @@ function setValOrder(val) {
             comp = 70;
         } else if ( vala.startsWith("event_") ) {
             comp = 100;
-        } else if ( vala==="level" || vala==="volume" ) {
-            comp = 150;
         } else {
             comp = 30;
         }
@@ -3532,7 +3530,7 @@ function processHubMessage(hubmsg) {
         newval = {};
         newval[subid] = hubmsg['change_value'];
     }
-    console.log("hubmsg: ", hubmsg, " newval: ", newval);
+    // console.log("hubmsg: ", hubmsg, " newval: ", newval);
 
     if ( typeof newval === "object" ) {
 
@@ -4189,9 +4187,13 @@ function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
 
                 // handle level sliders and the funky attr values for other tiles
                 if ( linkinfo==="" ) {
-                    if ( rsubid==="level" || rsubid==="colorTemperature" ) {
+                    if ( rsubid==="level" ) {
                         rswattr= "level";
-                    } else if ( rsubid==="volume") {
+                    } else if ( rsubid==="colorTemperature" ) {
+                        rswattr= "colorTemperature";
+                    } else if ( rsubid==="onlevel" ) {
+                        rswattr= "onlevel";
+                    } else if ( rsubid==="volume" ) {
                         rswattr= "volume";
                     } else if ( rsubid==="switch" || swtype==="isy" || (swval!=="on" && swval!=="off") ) {
                         rswattr="";
@@ -4401,7 +4403,6 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                 // convert percentage to 0 - 256 range for Insteon
                 var irange = Math.floor(parseInt(swval) * 255 / 100);
                 var cmd2 = "/nodes/" + swid + "/cmd/DON/" + irange;
-                isyresp[subid] = swval;
                 isyresp["switch"] = "DON";
                 curl_call(endpt + cmd2, isyheader, false, false, "GET", getNodeResponse);
 
@@ -4409,11 +4410,29 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                 // otherwise the onlevel is set to current level
                 // the default behavior for Insteon lights would be to comment this
                 // but I kept it here to make them work like all other hubs
+                setTimeout(function() {
+                    var cmd3 = "/nodes/" + swid + "/cmd/OL/" + irange;
+                    isyresp["onlevel"] = swval;
+                    curl_call(endpt + cmd3, isyheader, false, false, "GET", getNodeResponse);
+                }, 200 );
+                break;
+
+            case "onlevel":
+
+                // convert percentage to 0 - 256 range for Insteon
+                var irange = Math.floor(parseInt(swval) * 255 / 100);
                 var cmd3 = "/nodes/" + swid + "/cmd/OL/" + irange;
                 isyresp["onlevel"] = swval;
                 curl_call(endpt + cmd3, isyheader, false, false, "GET", getNodeResponse);
-                break;
 
+                // pause before we turn on the light to prevent slider from toggling
+                setTimeout(function() {
+                    var cmd2 = "/nodes/" + swid + "/cmd/DON/" + irange;
+                    isyresp["switch"] = "DON";
+                    curl_call(endpt + cmd2, isyheader, false, false, "GET", getNodeResponse);
+                }, 200 );
+                break;
+    
             case "switch":
             case "DOF":
             case "DON":
@@ -5491,12 +5510,13 @@ function getInfoPage(uname, returnURL, pathname) {
     }
     
 
-    $tc += "<button class=\"showhistory\">Show Dev Log</button>";
-    $tc += "<div id=\"devhistory\" class=\"infopage hidden\">";
+    $tc += "<button id=\"listhistory\" class=\"showhistory\">Show Dev Log</button>";
+    $tc += "<div id=\"showhistory\" class=\"infopage hidden\">";
     $tc += "<pre>" + utils.DEV + "</pre>";
     $tc += "</div>";
     
-    $tc += "<br><br><h3>List of Authorized Things</h3>";
+    $tc += "<br><button id=\"listthing\" class=\"showhistory\">Authorized Things</button>";
+    $tc += "<div id=\"showthing\" class=\"infopage\">";
     $tc += "<table class=\"showid\">";
     $tc += "<thead><tr><th class=\"thingname\">Name" + 
         "</th><th class=\"infotype\">Nickname" + 
@@ -5558,7 +5578,77 @@ function getInfoPage(uname, returnURL, pathname) {
             "</td><td class=\"hubid\">" + hubstr + 
             "</td><td class=\"infonum\">" + GLB.options["index"][idx] + "</td></tr>";
     }
-    $tc += "</table>";
+    $tc += "</table></div>";
+
+    // show all the customizations
+    var customList = [];
+    for ( var key in GLB.options ) {
+        if ( key.startsWith("user_") ) {
+
+            var ruleid = key.substr(5);
+            var lines = GLB.options[key];
+
+            if ( lines && is_array(lines) ) {
+        
+                // allow user to skip wrapping single entry in an array
+                // the GUI will never do this but a user might in a manual edit
+                if ( !is_array(lines[0]) ) {
+                    lines = [lines];
+                }
+
+                lines.forEach(function(line) {
+                    var customType = line[0];
+                    var customValue = line[1];
+                    var customSubid = line[2];
+
+                    if ( customType==="LINK" ) {
+                        var linktile = array_search(customValue, GLB.options.index);
+                        if ( linktile ) {
+                            customValue = "Link tile #" + customValue + " index= " + linktile + " name= " + allthings[linktile]["name"];
+                        } else {
+                            customValue = "Broken link #" + customValue;
+                        }
+                    }
+
+
+                    customList.push( [customType, ruleid, customValue, customSubid] );
+                });
+            }
+        }
+    }
+            
+    // sort the list by type
+    if ( customList.length ) {
+        customList = customList.sort( (a,b) => {
+            if ( a[0]===b[0] ) {
+                var x = 0;
+            } else if ( a[0] < b[0] ) {
+                x = -1;
+            } else {
+                x = 1;
+            }
+            return x;
+        });
+
+        // display the customizations
+        $tc += "<br><button id=\"listcustom\" class=\"showhistory\">Show Customizations</button>";
+        $tc += "<div id=\"showcustom\" class=\"infopage hidden\">";
+        $tc += "<table class=\"showid\">";
+        $tc += "<thead><tr><th class=\"infotype\">Type" + 
+            "</th><th class=\"thingname\">Rule ID" + 
+            "</th><th class=\"thingarr\">Value" +
+            "</th><th class=\"infonum\">Field</th></tr></thead>";
+
+        customList.forEach(function(thing) {
+            $tc += "<tr><td class=\"infotype\">" + thing[0] +
+                "</td><td class=\"thingname\">" + thing[1] +
+                "</td><td class=\"thingarr\">" + thing[2] +
+                "</td><td class=\"infonum\">" + thing[3] + "</td></tr>";
+        });
+        // console.log( (ddbg()), "customizer list: ", customList);
+        $tc += "</table></div>";
+    }
+
     $tc += "<button class=\"infobutton fixbottom\">Return to HousePanel</button>";
 
     $tc += utils.getFooter();
@@ -7257,7 +7347,6 @@ function apiCall(body, protocol, req, res) {
         case "showoptions":
         case "showid":
         case "reauth":
-        case "showid":
         case "logout":
         case "trackupdate":
                 var result = "error - [" + api + "] API call is no longer supported. Try loading browser with: " + GLB.returnURL + "/" + api;

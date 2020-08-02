@@ -1,6 +1,8 @@
 'use strict';
 
 const devhistory =  ` 
+2.315   Add slider for onlevel to control optionally separate from level
+            - add customization info to the info page
 2.314   Add support for ISY scenes
             - Options bugfix for weather region specification
 2.313   Fix bug in rule width and height adjust

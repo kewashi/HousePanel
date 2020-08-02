@@ -1083,3 +1083,10 @@ div.isy-thing.program div.overlay.lastRunTime,
 div.isy-thing.program div.overlay.lastFinishTime {
     display: none;
 }
+
+div.isy.ecobee.GV4::after {
+    content: "°F";
+}
+div.thermostat.humidity::after {
+    content: "%";
+}

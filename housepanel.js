@@ -900,7 +900,7 @@ function setupColors() {
 
 function setupSliders() {
     
-    $("div.overlay.level >div.level, div.overlay.volume >div.volume").slider({
+    $("div.overlay.level >div.level, div.overlay.onlevel >div.onlevel, div.overlay.volume >div.volume").slider({
         orientation: "horizontal",
         min: 0,
         max: 100,
@@ -913,7 +913,6 @@ function setupSliders() {
             var tile = '#t-'+aid;
             var bid = $(tile).attr("bid");
             var hubnum = $(tile).attr("hub");
-            var bidupd = bid;
             var ajaxcall = "doaction";
             var subid = thing.attr("subid");
             var thevalue = parseInt(ui.value);
@@ -941,7 +940,7 @@ function setupSliders() {
     });
 
     // set the initial slider values
-    $("div.overlay.level >div.level, div.overlay.volume >div.volume").each( function(){
+    $("div.overlay.level >div.level, div.overlay.onlevel >div.onlevel, div.overlay.volume >div.volume").each( function(){
         var initval = $(this).attr("value");
         $(this).slider("value", initval);
     });
@@ -1706,13 +1705,33 @@ function setupButtons() {
 
     } else if ( pagename==="info" ) {
         
-        $("button.showhistory").on('click', function() {
-            if ( $("#devhistory").hasClass("hidden") ) {
-                $("#devhistory").removeClass("hidden");
-                $(this).html("Hide Dev Log");
+        $("#listhistory").on('click', function() {
+            if ( $("#showhistory").hasClass("hidden") ) {
+                $("#showhistory").removeClass("hidden");
+                $(this).html("Dev History");
             } else {
-                $("#devhistory").addClass("hidden");
-                $(this).html("Show Dev Log");
+                $("#showhistory").addClass("hidden");
+                $(this).html("Show Dev History");
+            }
+        });
+
+        $("#listthing").on('click', function() {
+            if ( $("#showthing").hasClass("hidden") ) {
+                $("#showthing").removeClass("hidden");
+                $(this).html("Authorized Things");
+            } else {
+                $("#showthing").addClass("hidden");
+                $(this).html("Show Authorized Things");
+            }
+        });
+
+        $("#listcustom").on('click', function() {
+            if ( $("#showcustom").hasClass("hidden") ) {
+                $("#showcustom").removeClass("hidden");
+                $(this).html("Customizations");
+            } else {
+                $("#showcustom").addClass("hidden");
+                $(this).html("Show Customizations");
             }
         });
 
@@ -2370,8 +2389,8 @@ function updateTile(aid, presult, skiplink) {
                     iconimg = "media/weather/" + iconstr + ".png";
                 }
                 value = "<img src=\"" + iconimg + "\" alt=\"" + iconstr + "\" width=\"80\" height=\"80\">";
-            } else if ( (key === "level" || key === "colorTemperature" || key==="volume") && $(targetid).slider ) {
-                // console.log("aid= ", aid, " targetid= ", targetid);
+            } else if ( (key === "level" || key=== "onlevel" || key === "colorTemperature" || key==="volume") && $(targetid).slider ) {
+                // console.log("aid= ", aid, " targetid= ", targetid, " value= ", value);
                 $(targetid).slider("value", value);
                 // disable putting values in the slot
                 value = false;
@@ -2771,6 +2790,8 @@ function setupPage() {
         // also skip sliders tied to subid === level or colorTemperature
         if ( ( typeof aid==="undefined" ) || 
              ( subid==="level" ) || 
+             ( subid==="onlevel" ) || 
+             ( subid==="volume" ) || 
              ( subid==="colorTemperature" ) ||
              ( id && id.startsWith("s-") ) ) {
             return;

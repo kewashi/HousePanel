@@ -570,6 +570,9 @@ button.showhistory, button.infobutton {
 button.infobutton:hover, button.showhistory:hover {
     font-weight: bold;    color: #ffffff;
 }
+button.showhistory {
+    margin-top: 20px;
+}
 .fixbottom {
     position: fixed; 
     top: 0px; right: 0px;
