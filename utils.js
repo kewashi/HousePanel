@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.316   Fix thermostat bug for showing Temperature in ST field instead of on/off
 2.315   Add slider for onlevel to control optionally separate from level
             - add customization info to the info page
 2.314   Add support for ISY scenes

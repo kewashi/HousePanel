@@ -3,6 +3,7 @@ process.title = 'hpserver';
 
 // debug options
 const DEBUG1 = false;               // basic debug info - file loading, hub loading
+const DEBUGisy = false;             // ISY node return details
 const DEBUG2 = false;               // authorization flow and ISY programs
 const DEBUG3 = false;               // passwords
 const DEBUG4 = false;               // index, filters, options
@@ -1045,9 +1046,8 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
             } else {
                 var result = parser.parse(body);
                 var thenodes = result.nodes["node"];
-                if ( DEBUG1 ) {
-                    // console.log( (ddbg()), "All nodes returned: ", UTIL.inspect(result, false, null, false) );
-                    console.log( (ddbg()), "Retrieved ", thenodes.length, " things from hub: ", hubName);
+                if ( DEBUGisy ) {
+                    console.log( (ddbg()), "Retrieved nodes: ", UTIL.inspect(thenodes, false, null, false) );
                 }
 
                 // read the real attributes and map to HP fields
@@ -1141,7 +1141,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                 };
 
                 if (DEBUG5) {
-                    console.log( (ddbg()), "idx= ", idx," hint= ", hint, " node: ", node);
+                    console.log( (ddbg()), "idx= ", idx," hint= ", hint, " node: ", node, " pvalue: ", pvalue);
                 }
             }
         
@@ -1152,11 +1152,12 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                 xml2js(body, async function(xmlerr, result) {
                     try {
                         if ( result ) {
+
                             var nodes = result.nodes.node;
+                            if ( DEBUGisy ) {
+                                console.log( (ddbg()), "node details: ", UTIL.inspect(nodes, false, null, false) );
+                            }
                             if ( nodes ) {
-                                if ( DEBUG5 ) {
-                                    console.log( (ddbg()), "nodes returned from status");
-                                }
                                 nodes.forEach(function(node) {
                                     var nodeid = fixISYid(node["$"]["id"]);
                                     var idx = "isy|" + nodeid;
@@ -1195,14 +1196,16 @@ function mapIsy(isyid, uom) {
                    "CLIMD": "thermostatMode", "CLIHCS": "thermostatState", "CLIFS": "thermostatFanMode",
                    "CLIFRS": "thermostatOperatingState", "CLISMD": "thermostatHold", "CLITEMP":"temperature"};
     var id = isyid;
-    if ( array_key_exists(isyid, idmap) ) {
+    if ( uom==="17" && isyid==="ST" ) {
+        id = "temperature";
+    } else if ( array_key_exists(isyid, idmap) ) {
         id = idmap[isyid];
     }
 
     return id;
 }
 
-function translateIsy(nodeid, objid, uom, value, val, formatted) {
+function translateIsy(nodeid, objid, uom, subid, value, val, formatted) {
 
     // convert levels for Insteon range
     if ( uom && uom==="100" ) {
@@ -1213,9 +1216,6 @@ function translateIsy(nodeid, objid, uom, value, val, formatted) {
     if ( typeof formatted === "undefined" ) {
         formatted = "";
     }
-
-    // convert the trigger into a subid to modify
-    var subid = mapIsy(objid, uom);
 
     // set the HP equivalent subid for this type of node field
     // if maps are not present then the native ISY subid will show up
@@ -1244,11 +1244,11 @@ function translateIsy(nodeid, objid, uom, value, val, formatted) {
                 val = (formatted==="Off" || val==="0") ? "DOF" : "DON";
                 newvalue[subid] = val;
 
-            // } else if ( uom==="17" ) {
-            //     if ( typeof formatted==="undefined" || formatted==="" ) {
-            //         formatted = val + "°F";
-            //     }
-            //     newvalue["temperature"]= formatted;
+            } else if ( uom==="17" && subid==="temperature" ) {
+                if ( typeof formatted==="undefined" || formatted==="" ) {
+                    formatted = val + "°F";
+                }
+                newvalue[subid]= formatted;
 
             } else {
                 val = (formatted==="Off" || val==="0" ? "DOF" : "DON");
@@ -1347,7 +1347,7 @@ function setIsyFields(nodeid, value, props) {
             var subid = mapIsy(obj.id, obj.uom);
             value["uom_" + subid] = obj.uom;
             var val = obj.value;
-            value = translateIsy(nodeid, obj.id, obj.uom, value, val, obj.formatted);
+            value = translateIsy(nodeid, obj.id, obj.uom, subid, value, val, obj.formatted);
             allthings[idx]["value"] = clone(value);
             pushClient(nodeid, "isy", subid, value, false, false);
         });
@@ -3660,8 +3660,8 @@ function processIsyMessage(isymsg) {
                         return;
                     }
 
-                    pvalue = translateIsy(bid, control[0], uom, pvalue, newval, "");
                     var subid = mapIsy(control[0], uom);
+                    pvalue = translateIsy(bid, control[0], uom, subid, pvalue, newval, "");
                     pushClient(bid, "isy", subid, pvalue, false, false);
                     processRules(bid, "isy", subid, pvalue, "processMsg");
                     if ( DEBUG9 ) {
