@@ -3382,7 +3382,7 @@ function getCustomTile(custom_val, customtype, customid) {
 // this little gem makes sure items are in the proper order
 function setValOrder(val) {
     const order = {"name": 1, "battery": 2, "color": 3, "switch": 7, "momentary": 7, "presence": 7,
-                   "contact": 8, "door": 8, "motion": 9, "themode": 10, 
+                   "contact": 8, "door": 8, "motion": 9, "themode": 10, "temperature": 7,
                    "trackDescription": 11, "trackImage": 12, "currentAlbum": 13, 
                    "mediaSource": 14, "currentArtist": 15, "playbackStatus": 16, 
                    "_muteGroup": 17, "_unmuteGroup": 18, "_volumeDown": 19, "_volumeUp": 20, 
