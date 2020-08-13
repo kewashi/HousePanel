@@ -182,7 +182,7 @@ $.fn.isAuto = function(dimension){
 };
 
 function getOnOff(str_type, subid) {
-    var onoff = ["",""];
+    var onoff;
     var hubType = et_Globals.hubType;
 
     // handle the cases for custom tiles that could have any subid starting with valid names
@@ -234,12 +234,24 @@ function getOnOff(str_type, subid) {
     } else if ( subid.startsWith("musicmute" ) || (str_type==="audio" && subid.startsWith("mute")) ) {
         onoff = ["muted","unmuted"];
     } else if ( subid.startsWith("presence" ) ) {
-        onoff = ["absent","present"];
+        onoff = ["present","absent"];
     } else if ( subid.startsWith("state" ) ) {
         onoff = ["Away","Home","Night","Disarmed"];
-    } else if ( subid.startsWith("themode" ) ) {
-        onoff = ["Away","Home","Night", ""];
+    } else if ( str_type==="mode" && subid.startsWith("themode" ) ) {
+        onoff = [];
+        // get all the modes supported by this location
+        $("#t-"+et_Globals.aid).find("div.overlay > div.mode").each( function(index) {
+            var subid = $(this).attr("subid");
+            if ( subid.startsWith("_") ) {
+                var locmode = $(this).html();
+                onoff.push(locmode);
+            }
+        });
+        // onoff = ["Away","Home","Night", ""];
+    } else {
+        onoff = [""];
     }
+    onoff.push("");
     
     return onoff;
 }
@@ -396,17 +408,22 @@ function toggleTile(target, str_type, subid) {
     // activate the icon click to use this
     var onoff = getOnOff(str_type, subid);
     var newsub = 0;
-    if ( onoff && onoff.length > 0 ) {
+    if ( onoff && onoff.length > 1 ) {
         for ( var i=0; i < onoff.length; i++ ) {
             var oldsub = onoff[i];
+            
             if ( $(target).hasClass(oldsub) ) { 
                 $(target).removeClass(oldsub); 
             }
-            if ( oldsub === swval ) {
+            if ( oldsub === swval || (oldsub==="" && swval=="_all_") ) {
                 newsub = i+1;
                 if ( newsub >= onoff.length ) { newsub= 0; }
-                $(target).addClass( onoff[newsub] ); 
-                $(target).html( onoff[newsub] );
+                if ( onoff[newsub]==="" ) {
+                    $(target).html("_all_");
+                } else {
+                    $(target).addClass( onoff[newsub] ); 
+                    $(target).html( onoff[newsub] );
+                }
                 $('#onoffTarget').html(onoff[newsub]);
                 break;
             }
@@ -459,21 +476,6 @@ function initDialogBinds(str_type, thingindex) {
         getIcons(str_type, thingindex);	
         event.stopPropagation;
     });
-    
-
-    // set the header name
-    // var target1 = "span.n_"+thingindex;
-    // if ( str_type==="page" ) {
-    //     var newname = thingindex;
-    // } else {
-    //     var target1 = getCssRuleTarget(str_type, "head", thingindex);
-    //     var newname = $(target1).html();
-    // }
-    // $("#editName").val(newname);
-    
-    // set the scope dropdown list
-    // var newscope = getScope(str_type, false);
-    // $("#scopeEffect").html(newscope);
     
     $("#bgSize").on('change', function(event) {
         var subid = $("#subidTarget").html();
@@ -813,6 +815,37 @@ function initDialogBinds(str_type, thingindex) {
         }
         event.stopPropagation;
     });
+
+    function txtModify(before_after) {
+        var txt = $("#" + before_after + "Text").val();
+
+        // surround the txt with quotes unless it already has them
+        if ( !txt.startsWith('"') && !txt.startsWith("'") ) {
+            txt = "\"" + txt + "\"";
+        }
+        var subid = $("#subidTarget").html();
+        var str_type = $("#tileDialog").attr("str_type");
+        var thingindex = $("#tileDialog").attr("thingindex");
+        var rule = "content: " + txt + ";";
+        if ( subid !== "wholetile" && subid !== "panel" && str_type!=="page" ) {
+            var csstag = getCssRuleTarget(str_type, subid, thingindex) + "::" + before_after;
+            addCSSRule(csstag, rule, false, before_after);
+            // console.log("mod_" + before_after + ": " + csstarget + " rule: " + rule);
+        }
+
+    }
+
+    // set padding for selected item
+    $("#beforeText").on('change', function(event) {
+        txtModify("before");
+        event.stopPropagation;
+    });
+
+    // set padding for selected item
+    $("#afterText").on('change', function(event) {
+        txtModify("after");
+        event.stopPropagation;
+    });
     
 }
 
@@ -984,11 +1017,20 @@ function sizepicker(str_type, thingindex) {
     if ( !ptop || isNaN(ptop) ) { ptop = 0; }
     if ( !pleft || isNaN(pleft) ) { pleft = 0; }
     dh += "<div class='editSection_input'>";
-    dh += "<label for='topPadding'>Top Padding:</label>\t";
+    dh += "<label id=\"tpname\" for='topPadding'>Top Padding:</label>";
     dh += "<input size='4' type=\"number\" min='0' max='1600' step='5' id=\"topPadding\" value=\"" + ptop + "\"/>";
-    dh += "</div>";    dh += "<div class='editSection_input'>";
-    dh += "<label for='leftPadding'>Left Padding:</label>\t";
+    dh += "</div>";
+    dh += "<div class='editSection_input'>";
+    dh += "<label id=\"lpname\" for='leftPadding'>Left Padding:</label>";
     dh += "<input size='4' type=\"number\" min='0' max='1600' step='5' id=\"leftPadding\" value=\"" + pleft + "\"/>";
+    dh += "</div>";
+    dh += "<div class='editSection_input'>";
+    dh += "<label for='beforeText'>Text Before:</label>";
+    dh += "<input size='10' id=\"beforeText\" value=\"\"/>";
+    dh += "</div>";
+    dh += "<div class='editSection_input'>";
+    dh += "<label for='afterText'>Text After: &nbsp;</label>";
+    dh += "<input size='10' id=\"afterText\" value=\"\"/>";
     dh += "</div>";
     
     return dh;
@@ -1526,6 +1568,24 @@ function initColor(str_type, subid, thingindex) {
     if ( !pleft || isNaN(pleft) ) { pleft = 0; }
     $("#topPadding").val(ptop);
     $("#leftPadding").val(pleft);
+
+    // var txtBefore = $(target+"::before").css("content");
+    var txtBefore = window.getComputedStyle(document.querySelector(target), "::"+"before").getPropertyValue('content');
+    if ( txtBefore==="none" ) {
+        txtBefore = "";
+    } else if ( txtBefore.startsWith('"') ) {
+        txtBefore = txtBefore.substr(1, txtBefore.length-2);
+    }
+    $("#beforeText").val(txtBefore);
+
+    // var txtAfter = $(target+"::after").css("content");
+    var txtAfter = window.getComputedStyle(document.querySelector(target), "::"+"after").getPropertyValue('content');
+    if ( txtAfter==="none" ) {
+        txtAfter = "";
+    } else if ( txtAfter.startsWith('"') ) {
+        txtAfter = txtAfter.substr(1, txtAfter.length-2);
+    }
+    $("#afterText").val(txtAfter);
 
     // -----------------------------------------------------------------------
     // far left side of the screen
@@ -2206,44 +2266,45 @@ function updateSize(str_type, subid, thingindex) {
 }
 
 // removed the old addRule support since older browsers won't work with HP anyway
-function addCSSRule(selectarray, selectrule, resetFlag){
-    //Searching of the selector matching cssRules
-    // alert("Adding rules: " + rules);
-    if ( typeof selectorarray !== "object" ) {
-        if ( ! typeof selectrule === "string" || ! typeof selectarray==="string") {
-            return;
-        }
-        selectarray = {"0": [selectarray, selectrule]};
-    }
+// and simplified function to no longer assume arrays passed since this is never done
+function addCSSRule(selector, rules, resetFlag, beforetag){
+    // alert("Adding selector: " + selector + " rule: " + rules);
    
+    if ( ! typeof selector==="string" || ! typeof rules==="string") {
+        return;
+    }
+
+    // get main sheet with selectors and rules
     var sheet = document.getElementById('customtiles').sheet; // returns an Array-like StyleSheetList
     cm_Globals.reload = true;
 
-    // process every rule
-    $.each(selectarray, function(k, val) {
-        var selector = val[0];
-        var rules = val[1];
-        var index = -1;
-        for(var i=sheet.cssRules.length; i--;){
-            var current_style = sheet.cssRules[i];
-            if(current_style.selectorText === selector){
-                //Append the new rules to the current content of the cssRule;
-                if( !resetFlag ){
-                    rules=current_style.style.cssText + rules;			
-                }
-                sheet.deleteRule(i);
-                index=i;
+    //Searching of the selector matching cssRules
+    var index = -1;
+    for(var i=sheet.cssRules.length-1; i >=0; i--) {
+        var current_style = sheet.cssRules[i];
+        if( current_style.selectorText === selector && current_style.style.item(0)!=="content" ) {
+            //Append the new rules to the current content of the cssRule;
+            if( !resetFlag ){
+                rules=current_style.style.cssText + " " + rules;			
             }
+            sheet.deleteRule(i);
+            index = i;
+        } else if ( beforetag && ( (current_style.selectorText + "::" + beforetag) === selector) && current_style.style.item(0)==="content"  ) {
+            sheet.deleteRule(i);
+            index = i;
+        } else if ( beforetag && current_style.selectorText === selector && current_style.style.item(0)==="content"  ) {
+            sheet.deleteRule(i);
+            index = i;
         }
+    }
 
-        try {
-            if(index > -1) {
-                sheet.insertRule(selector + "{" + rules + "}", index);		  
-            } else {
-                sheet.insertRule(selector + "{" + rules + "}", 0);			  
-            }
-        } catch (e) {}
-    });
+    if ( index === -1 ) {
+        index = 0;
+    }
+
+    try {
+        sheet.insertRule(selector + "{" + rules + "}", index);	  
+    } catch (e) {}
 }
 
 function resetCSSRules(str_type, subid, thingindex){

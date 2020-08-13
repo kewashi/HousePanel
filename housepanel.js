@@ -1887,8 +1887,9 @@ function addEditLink() {
     $("#roomtabs").append(editdiv);
     
     $("div.editlink").on("click",function(evt) {
-        var aid = $(evt.target).attr("aid");
-        var thing = "#" + aid;
+        var taid = $(evt.target).attr("aid");
+        var thing = "#" + taid;
+        var aid = taid.substr(2);
         var str_type = $(thing).attr("type");
         var tile = $(thing).attr("tile");
         var strhtml = $(thing).html();
@@ -1900,9 +1901,9 @@ function addEditLink() {
         var hubName = "None";
         var hubType = "SmartThings";
         try {
-            var customname = $("#a-"+aid+"-name").text();
+            var customname = $("#a-"+aid+"-name").html();
         } catch(e) {
-            customname = $("#s-"+aid).text();
+            customname = $("#s-"+aid).html();
         }
         if ( hub ) {
             hubName = hub.hubName;

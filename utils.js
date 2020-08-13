@@ -1,6 +1,9 @@
 'use strict';
 
 const devhistory =  ` 
+2.317   Add ::before and ::after features to Tile Editor
+            - Image file to support http name for remote file links
+            - Determine all modes supported
 2.316   Fix thermostat bug for showing Temperature in ST field instead of on/off
 2.315   Add slider for onlevel to control optionally separate from level
             - add customization info to the info page

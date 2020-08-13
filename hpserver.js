@@ -1282,9 +1282,9 @@ function translateIsy(nodeid, objid, uom, subid, value, val, formatted) {
 
         case "CLISPC":
         case "CLISPH":
-            if ( uom==="17" && formatted==="" ) {
+            if ( uom==="17" && (typeof formatted === "undefined" || formatted==="") ) {
                 formatted = val + "°F";
-            } else if ( formatted==="" ) {
+            } else if ( (typeof formatted === "undefined" || formatted==="") ) {
                 formatted = val;
             }
             newvalue[subid] = formatted;
@@ -2177,7 +2177,7 @@ function returnFile(thingvalue, thingtype) {
     var skin;
 
     function getext(fname) {
-        var ipos = fname.indexOf(".");
+        var ipos = fname.lastIndexOf(".");
         var ext = "";
         if ( ipos !== "-1" ) {
             ext = fname.substr(ipos);
@@ -2195,7 +2195,7 @@ function returnFile(thingvalue, thingtype) {
         }
 
         var uname;
-        if (fs.existsSync(fn)) {
+        if (fs.existsSync(fn) || fn.startsWith("http")) {
             $vn = fn;
             $fext = getext(fn);
         } else if (fs.existsSync("media/"+ fn)) {
