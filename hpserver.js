@@ -4651,9 +4651,11 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
     function getNodeResponse(err, res, body) {
         if ( err ) {
             console.log( (ddbg()), "error calling ISY node: ", err);
-            // } else {
-            // var result = parser.parse(body);
-            // console.log((ddbg()), hub.hubType, " hub: ", hub.hubName, " trigger: ", subid, " rule: ", inrule, " call returned: ", result);
+        } else {
+            var result = parser.parse(body);
+            if ( DEBUG9 ) {
+                console.log((ddbg()), hub.hubType, " hub: ", hub.hubName, " trigger: ", subid, " rule: ", inrule, " isyrep: ", isyresp, " call returned: ", result);
+            }
             // update all clients - this is actually not needed if your server is accessible to websocket updates
             // because ISY will push state updates via a websocket
             // and that will process a similar pushClient but for only those things that change
@@ -4661,13 +4663,15 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
             // you can comment this if your server gets pushes reliable
             // leaving it here causes no harm other than processing the visual update twice
             // ....
-            // I no longer process rules here because it does cause harm by running rules twice
-            // var idx = swtype + "|" + swid;
-            // var rres = result.RestResponse;
-            // if ( rres && rres.status.toString()==="200" ) {
-            //     pushClient(swid, swtype, subid, isyresp, linkinfo, popup);
-            //     processRules(swid, "isy", subid, isyresp, "callHub");
-            // }
+            // push client and process rules if response failed which means it won't give a websocket reply
+            // this typically would happen for buttons which don't do anything from the panel
+            // so calling updating client and doing rules here allows the button state to change
+
+            var rres = result.RestResponse;
+            if ( !inrule && rres && rres.status && rres.status.toString()!=="200" ) {
+                pushClient(swid, swtype, subid, isyresp, linkinfo, popup);
+                processRules(swid, "isy", subid, isyresp, "callHub");
+            }
         }
     }
 
@@ -5114,7 +5118,9 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
             case "HUB":
                 try {
                     response = callHub(hub, swid, swtype, swval, swattr, subid, false, false, false);
-                    console.log( (ddbg()), "calling hub: ", hub.hubId, hub.hubName, swid, swtype, swval, swattr, subid, " response: ", response);
+                    if ( DEBUG8 ) {
+                        console.log( (ddbg()), "calling hub: ", hub.hubId, hub.hubName, swid, swtype, swval, swattr, subid, " response: ", response);
+                    }
                 } catch (e) {
                     console.log( (ddbg()), "error calling hub: ", hub.hubId, hub.hubName, swid, swtype, swval, swattr, subid, " error: ", e);
                 }

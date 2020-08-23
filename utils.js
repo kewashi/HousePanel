@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.319   Simulated websocket for rules for non responsive ISY nodes like buttons
 2.318   New rule feature to allow use of existing field values for if check
             - so "if switch=@tilenum$switch, ..." to check against tilenum state
             - add program websocket to update last run fields
