@@ -208,7 +208,7 @@ function getOnOff(str_type, subid) {
     } else if ( subid.startsWith("motion") ) {
         onoff = ["active","inactive"];
     } else if ( subid.startsWith("windowShade") ) {
-        onoff = ["open","closed","partially open"];
+        onoff = ["open","closed","partially_open"];
     } else if ( subid.startsWith("pistonName" ) ) {
         onoff = ["firing","idle"];
     } else if ( subid.startsWith("thermostatFanMode" ) ) {
@@ -403,6 +403,7 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
 
 function toggleTile(target, str_type, subid) {
     var swval = $(target).html();
+    swval = swval.replace(" ","_");
     $('#onoffTarget').html("");
     
     // activate the icon click to use this
