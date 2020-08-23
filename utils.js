@@ -1,6 +1,9 @@
 'use strict';
 
 const devhistory =  ` 
+2.318   New rule feature to allow use of existing field values for if check
+            - so "if switch=@tilenum$switch, ..." to check against tilenum state
+            - add program websocket to update last run fields
 2.317   Add ::before and ::after features to Tile Editor
             - Image file to support http name for remote file links
             - Determine all modes supported

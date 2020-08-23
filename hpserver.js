@@ -3656,7 +3656,7 @@ function processIsyMessage(isymsg) {
 
                         newval = newval.toString();
                     } catch (e) {
-                        console.log( (ddbg()), "error - processIsyMessage: ", e);
+                        console.log( (ddbg()), "error - node // processIsyMessage: ", e);
                         return;
                     }
 
@@ -3703,10 +3703,42 @@ function processIsyMessage(isymsg) {
                         }
 
                     } catch (e) {
-                        console.log( (ddbg()), "error - processIsyMessage: ", e);
+                        console.log( (ddbg()), "error - var // processIsyMessage: ", e);
                         return;
                     }
                 }
+
+            // handle program changes events
+            } else if ( is_object(eventInfo[0]) && array_key_exists("id", eventInfo[0]) && 
+                        array_key_exists("r",  eventInfo[0]) && array_key_exists("f",  eventInfo[0]) ) {
+                try {
+                    var idinteger = parseInt(eventInfo[0]["id"]);
+                    idinteger = idinteger.toString();
+                    var len = 4 - idinteger.length;
+                    var bid = "prog_" + "0000".substr(0,len) + idinteger;
+                    var idx = "isy|" + bid;
+                    if ( allthings && allthings[idx] && allthings[idx].value && allthings[idx].type==="isy" ) {
+                        pvalue = allthings[idx]["value"];
+                        pvalue["lastRunTime"] = eventInfo[0]["r"][0];
+                        pvalue["lastFinishTime"] = eventInfo[0]["f"][0];
+                        if ( array_key_exists("s", eventInfo[0]) ) {
+                            pvalue["status"] = eventInfo[0]["s"][0];
+                        }
+                        allthings[idx]["value"] = pvalue;
+                        pushClient(bid, "isy", "lastRunTime", pvalue, false, false);
+                        // pushClient(bid, "isy", "lastFinishTime", pvalue, false, false);
+                        // processRules(bid, "isy", subid, pvalue, "processMsg");
+                        if ( DEBUG9 ) {
+                            console.log( (ddbg()), "ISY webSocket updated program: ", bid, " pvalue: ", pvalue);
+                        }
+                    }
+                } catch(e) {
+                    console.log( (ddbg()), "error - program // processIsyMessage: ", e);
+                    return;
+                }
+
+            } else if (DEBUG9) {
+                console.log((ddbg()), "Unhandled ISY event: ", UTIL.inspect(result.Event, false, null, false) );
             }
         }
     });
@@ -3921,6 +3953,30 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
                                     rulevalue = ruleparts[4] || "";
                                 }
                             }
+
+                            // use this tile's existing value for check if $ symbol given
+                            var jv = rulevalue.substr(0,1);
+                            var kv = rulevalue.indexOf("$");
+                            var rvindex;
+                            if ( jv === "$" ) {
+                                rvindex = rulevalue.substr(1);
+                                if ( array_key_exists(rvindex, pvalue) ) {
+                                    rulevalue = pvalue[rvindex];
+                                }
+
+                            // use another tile's existing value for check using @tilenum$fieldname syntax
+                            } else if ( jv === "@" && kv !== -1 ) {
+                                var rvtile = rulevalue.substring(1, kv);
+                                rvindex = rulevalue.substr(kv+1);
+                                var rvidx = array_search(rvtile, GLB.options["index"]);
+                                if ( DEBUG11 ) {
+                                    console.log( (ddbg()), "rvtile = ", rvtile, " rvindex= ", rvindex, " rvidx= ", rvidx);
+                                }
+                                if ( rvidx && allthings[rvidx] && array_key_exists(rvindex, allthings[rvidx]["value"]) ) {
+                                    rulevalue = allthings[rvidx]["value"][rvindex];
+                                }
+                            }
+
                             if ( DEBUG11 ) {
                                 console.log( (ddbg()), "RULE debug: ruleparts: ", ruleparts, " ruletileid: ", ruletileid, " rulesubid: ", rulesubid, 
                                                        " ruleop: ", ruleop, " rulevalue: ", rulevalue, " before: ", doand, " rule: ", rule, " isrule: ", isrule);
