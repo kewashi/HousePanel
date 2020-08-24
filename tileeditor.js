@@ -403,7 +403,9 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
 
 function toggleTile(target, str_type, subid) {
     var swval = $(target).html();
-    swval = swval.replace(" ","_");
+    if ( swval ) {
+        swval = swval.replace(" ","_");
+    }
     $('#onoffTarget').html("");
     
     // activate the icon click to use this
