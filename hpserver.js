@@ -1977,7 +1977,7 @@ function array_key_exists(key, arr) {
 function ddbg() {
     var d = new Date();
     var dstr = d.toLocaleDateString() + "  " + d.toLocaleTimeString() + " ";
-    return dstr;
+    return "V" + utils.HPVERSION +" on " + dstr;
 }
 
 // returns true if the index is in the room things list passed
@@ -3689,11 +3689,17 @@ function processIsyMessage(isymsg) {
                             throw "invalid variable type: " + varobj["$"]["type"];
                         }
 
-                        var prec = parseInt(varobj.prec[0]);
-                        newval = parseFloat(varobj.val[0]);
-                        if ( ! isNaN(prec) && prec > 0 ) {
-                            newval = newval / Math.pow(10,prec);
+                        if ( is_array( varobj.val) ) {
+                            newval = parseFloat(varobj.val[0]);
+                        } else {
+                            newval = parseFloat(varobj.val);
                         }
+                        if ( is_array(varobj.prec) ) {
+                            var prec = parseInt(varobj.prec[0]);
+                            if ( !isNaN(newval) && ! isNaN(prec) && prec > 0 ) {
+                                newval = newval / Math.pow(10,prec);
+                            }
+                        } 
                         pvalue[subid] = newval.toString();
                         allthings[idx]["value"] = pvalue;
                         pushClient(bid, "isy", subid, pvalue, false, false);
@@ -3703,7 +3709,7 @@ function processIsyMessage(isymsg) {
                         }
 
                     } catch (e) {
-                        console.log( (ddbg()), "error - var // processIsyMessage: ", e);
+                        console.log( (ddbg()), "warning - var // processIsyMessage: ", e);
                         return;
                     }
                 }

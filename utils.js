@@ -1,7 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
-2.231   Error check in tileedit
+2.321   Error check in tileedit and when reading var precision values
 2.320   Add window shade icons and fix tile editor to handle spaces in attributes
 2.319   Simulated websocket for rules for non responsive ISY nodes like buttons
 2.318   New rule feature to allow use of existing field values for if check
