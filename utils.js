@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.323   Fix linked variables and programs to update properly in both directions
 2.322   Use correct variable ID from ISY hub for variable tile
             - add await for xml conversions to increase robustness
             - remove usage of fast parser and use xml2js everywhere

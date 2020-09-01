@@ -1845,7 +1845,7 @@ div.heatingSetpoint-up, div.coolingSetpoint-up {
     cursor: pointer;
     display: inline-block;
 }
-div.overlay div.arrow {
+div.overlay div.arrow, div.overlay div.arrow-up, div.overlay div.arrow-dn {
     display: inline-block;
     vertical-align: top;
 }

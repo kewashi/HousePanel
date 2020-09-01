@@ -481,7 +481,6 @@ function setupWebsocket(webSocketUrl)
         var reservedcap = ["name", "password", "DeviceWatch-DeviceStatus", "DeviceWatch-Enroll", "checkInterval", "healthStatus"];
         try {
             var presult = JSON.parse(evt.data);
-            // console.log("pushClient: ", presult);
             var bid = presult.id;
             var thetype = presult.type;
             var pvalue = presult.value;
@@ -584,9 +583,8 @@ function setupWebsocket(webSocketUrl)
 
             // handle links - loop through all tiles that have a link to see if they match
             // because this link shadow field has the real subid triggered we dont have to check subid below
-            // if ( subid==="trackImage" ) {
-            //     console.log("subid= ", subid, " pvalue: ", pvalue);
-            // }
+            // fixed old bug that assumed sibling was next item, which isn't true for variables
+            // console.log("linkbid= ", bid, "subid= ", subid, " pvalue: ", pvalue);
             $('div.panel div[command="LINK"][linkbid="' + bid + '"][subid="' + subid + '"]').each(function() {
 
                 // get the id to see if it is the thing being updated
@@ -597,16 +595,11 @@ function setupWebsocket(webSocketUrl)
 
                 // if we have a match, update the sibling field
                 if ( lbid === thisbid ) {
-                    var sibling = $(this).next();
+                    var aid = $(this).attr("aid");
+                    var sibling = $("#a-"+aid+"-"+subid);
                     var oldvalue = sibling.html();
-                    var oldclass = $(sibling).attr("class");
+                    var oldclass = sibling.attr("class");
                     var value = pvalue[subid];
-
-                    // change not present to absent for presence tiles
-                    // it was an early bad design decision to alter ST's value that I'm now stuck with
-                    // if ( subid==="presence" && value==="not present" ) {
-                    //     value = "absent";
-                    // }
 
                     // swap out the class and change value
                     // this should match logic in hpserver.js in putElement routine
@@ -633,7 +626,7 @@ function setupWebsocket(webSocketUrl)
             });
 
             // blank screen if night mode set
-            if ( thetype==="mode" && subid==="themode" && blackout==="true" && priorOpmode === "Operate" ) {
+            if ( thetype==="mode" && subid==="themode" && blackout==="true" && (priorOpmode === "Operate" || priorOpmode === "Sleep") ) {
                 if ( pvalue[subid]==="Night" ) {
                     execButton("blackout");
                 } else if ( $("#blankme") ) {
@@ -3184,7 +3177,8 @@ function processClick(that, thingname) {
             thevalue = "pushed";
         }
 
-        else if ( thetype==="isy" && subid==="switch" && (thevalue==="DON" || thevalue==="DOF" )  ) {
+        // remove isy type check since it could be a link
+        else if ( subid==="switch" && (thevalue==="DON" || thevalue==="DOF" )  ) {
             thevalue = thevalue==="DON" ? "DOF" : "DON";
         }
         console.log("URL: ", cm_Globals.returnURL," ", ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" hub= " + hubnum + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
@@ -3197,6 +3191,7 @@ function processClick(that, thingname) {
         // if an object is returned then show it in a popup dialog
         // values returned from actions are pushed in another place now
         // alert("API call: " + ajaxcall + " bid: " + bid + " type: " + thetype + " value: " + thevalue);
+        hubnum = "auto";
         $.post(cm_Globals.returnURL, 
                {useajax: ajaxcall, id: bid, type: thetype, value: thevalue, uname: uname, 
                 attr: theattr, subid: subid, hubid: hubnum, command: command, linkval: linkval},

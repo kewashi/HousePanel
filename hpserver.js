@@ -4954,7 +4954,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
             linkval = "";
             var links = GLB.options[ "user_" + swid];
             links.forEach(function(linkset) {
-                if ( linkval==="" && linkset[0]===command && linkset[2]===subid ){
+                if ( linkval==="" && linkset[0]===command && subid.startsWith(linkset[2]) ){
                     linkval = linkset[1];
                 }  
             });
@@ -5003,6 +5003,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
             // all others get the user input values from the options file
             case "LINK":
                 var lidx = array_search(linkval, GLB.options["index"]);
+                // console.log("lidx = ", lidx, " linkval= ", linkval);
 
                 if ( lidx ) {
                     var $linked_hubnum = allthings[lidx]["hubnum"];
@@ -5016,7 +5017,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                     // if the link subid is in the linked tile then it is the real subid
                     // otherwise it is a duplicate with info after subid so lets find the real one
                     // this is what allows us to have the same subid referenced to different tiles
-                    if ( array_key_exists(subid, $linked_val) ) {
+                    if ( subid.endsWith("-up") || subid.endsWith("-dn") || array_key_exists(subid, $linked_val) ) {
                         var $realsubid = subid;
                     } else {
                         $realsubid = false;
