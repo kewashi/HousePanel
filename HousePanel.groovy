@@ -205,9 +205,13 @@ def initialize() {
     def hubtype = getPlatform()
     state.usepistons = settings?.usepistons ?: false
     state.directIP = settings?.webSocketHost ?: ""
+    state.directIP = state.directIP.trim()
     state.directPort = settings?.webSocketPort ?: "3080"
+    state.directPort = state.directPort.trim()
     state.directIP2 = settings?.webSocketHost2 ?: ""
+    state.directIP2 = state.directIP2.trim()
     state.directPort2 = settings?.webSocketPort2 ?: "3180"
+    state.directPort2 = state.directPort2.trim()
     state.tz = settings?.timezone ?: "America/Detroit"
     state.prefix = settings?.hubprefix ?: getPrefix()
     state.dateFormat = settings?.dateformat ?: "M/dd h:mm"
@@ -2507,7 +2511,8 @@ def changeHandler(evt) {
         try {
             // log.info state.powervals
             def delta = 0.0
-            def oldpower = state.powervals[deviceid]
+            def oldpower = state.powervals[deviceid] ?: 0.0
+            oldpower = Float.valueOf(oldpower)
             state.powervals[deviceid] = Float.valueOf(value)
             if ( oldpower==0.0 && state.powervals[deviceid] < 1.0 ) {
                 skip = true
@@ -2524,7 +2529,7 @@ def changeHandler(evt) {
             
         } catch (e) {
             skip= false
-            log.debug e
+            logger("problem in change handler for power device. oldpower: ${oldpower} error msg: ${e}", "error")
         }
     }
 

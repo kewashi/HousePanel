@@ -10,6 +10,7 @@ const DEBUG4 = false;               // index, filters, options
 const DEBUG5 = false;               // hub node detail
 const DEBUG6 = false;               // tile position moves
 const DEBUG7 = false;               // hub responses
+const DEBUGvar = false;              // ISY variables
 const DEBUG8 = false;               // API calls
 const DEBUG9 =  false;              // ISY callbacks
 const DEBUG10 = false;              // sibling tag
@@ -38,7 +39,7 @@ var https = require('https');
 var fs = require('fs');
 var express = require('express');
 var bodyParser = require('body-parser');
-var parser = require('fast-xml-parser');
+// var parser = require('fast-xml-parser');
 var xml2js = require('xml2js').parseString;
 var crypto = require('crypto');
 const UTIL = require('util');
@@ -101,7 +102,6 @@ function decodeUser(unamehash) {
     if ( GLB.options.config && array_key_exists("pword", GLB.options.config) ) {
         for ( var thisuname in GLB.options.config.pword ) {
             var codeuser = pw_hash(thisuname);
-            // console.log(thisuname, codeuser, unamehash);
             if ( unamehash === codeuser) {
                 uname = thisuname;
                 break;
@@ -156,6 +156,7 @@ function writeCustomCss(skin, str) {
 
     if ( typeof str === "undefined" ) {
         console.log( (ddbg()), "error - attempted to write null to customtiles");
+        str = "";
     }
 
     // make sure we have a string
@@ -207,7 +208,7 @@ function writeCustomCss(skin, str) {
                 console.log( (ddbg()), "custom CSS file saved in skin folder:", skin, " of size: ", fixstr.length);
             }
         } catch (e) {
-            console.log(e);
+            console.log( (ddbg()), e);
             console.log( (ddbg()), "error - failed to save custom CSS file in skin folder: ", skin);
         }
     }
@@ -368,12 +369,12 @@ function readOptions(caller) {
     }
 
     if (  GLB.options.config["hubs"].length > 0 ) {
-        console.log((ddbg()), 'Loading ',  GLB.options.config["hubs"].length,' hubs.');
+        console.log( (ddbg()), 'Loading ',  GLB.options.config["hubs"].length,' hubs.');
         if ( DEBUG2 ) {
-            console.log( GLB.options.config["hubs"] );
+            console.log( (ddbg()), GLB.options.config["hubs"] );
         }
     } else {
-        console.log((ddbg()), 'No hubs found. HousePanel will only show special and custom tiles.');
+        console.log( (ddbg()), 'No hubs found. HousePanel will only show special and custom tiles.');
     }
 
     if ( DEBUG1 ) {
@@ -483,7 +484,7 @@ function readRoomThings(caller, uname) {
 
 function writeOptions(options) {
     if ( !is_object(options) ) {
-        console.log((ddbg()), "error - invalid options provided: ", options);
+        console.log( (ddbg()), "error - invalid options provided: ", options);
         return;
     }
 
@@ -867,8 +868,6 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                     pvalue = getCustomTile(pvalue, thetype, id);
                     allthings[idx] = {id: id, name: "Variables", hubnum: hubnum, type: thetype, hint: "ISY variable", refresh: "never", value: pvalue };
                 }
-        
-                // console.log("getting int variables...", body);
                 getISY_Vars(body, "int");
                 updateOptions(false, reloadpath);
             }
@@ -889,61 +888,75 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                     allthings[idx] = {id: id, name: "Variables", hubnum: hubnum, type: thetype, hint: "ISY variable", refresh: "never", value: pvalue };
                 }
         
-                // console.log("getting state variables...", body);
                 getISY_Vars(body, "state");
                 updateOptions(false, reloadpath);
             }
         }
 
-        function getISY_Vars(body, vartype) {
+        async function getISY_Vars(body, vartype) {
+            // make a single tile with all the variables in it
+            var vartypes = ["", "int", "state"];
             var id = "vars";
             var thetype = "isy";
             var idx = thetype + "|" + id;
-
-            var result = parser.parse(body);
-            if (DEBUG7) {
-                console.log( (ddbg()), vartype, "variables: ", UTIL.inspect(result, false, null, false) );
-            }
-
-            // make a single tile with all the variables in it
-            var varobj = result.vars.var;
-            if ( !is_object(varobj) || !array_key_exists(idx, allthings) ) {
+            if ( !array_key_exists(idx, allthings) ) {
                 return;
             }
 
-            // convert single variable object into an array of variable objects
-            if ( !is_array(varobj) ) {
-                varobj = [varobj];
+            if (DEBUGvar) {
+                console.log( (ddbg()), body );
             }
-                
-            var pvalue = allthings[idx]["value"];
-            var k = 1;
-            varobj.forEach(function( obj) {
-                var prec = obj.prec;
-                var val10 = parseFloat(obj.val) / Math.pow(10, prec);
-                while ( typeof pvalue[vartype+"_"+k] !== "undefined" ) {
-                    k++;
-                }
-                pvalue[vartype+"_"+k] = val10.toString();
-                pvalue["prec_"+vartype+"_"+k] = prec.toString();
-                k++;
-            });
 
-            allthings[idx]["value"] = pvalue;
-            if ( DEBUG7 ) {
-                console.log( (ddbg()), "New variable value: ", pvalue);
-            }
+            await xml2js(body, function(err, result) {
+                if (DEBUGvar) {
+                    console.log( (ddbg()), vartype, "variables: ", UTIL.inspect(result, false, null, false) );
+                }
+
+                var varobj = result.vars.var;
+                if ( !is_object(varobj) ) {
+                    return;
+                }
+
+                // convert single variable object into an array of variable objects
+                if ( !is_array(varobj) ) {
+                    varobj = [varobj];
+                }
+                    
+                var pvalue = allthings[idx]["value"];
+                varobj.forEach(function( obj) {
+                    try {
+                        var varid = obj["$"]["id"];
+                        var vartypeid = parseInt(obj["$"]["type"]);
+                    } catch (e) {
+                        varid = 0;
+                        vartypeid = 0;
+                    }
+                    if ( varid > 0 && vartype === vartypes[vartypeid] ) {
+                        var prec = parseInt(obj.prec[0]);
+                        var val10 = obj.val[0];
+                        if ( !isNaN(prec) && prec !== 0 ) {
+                            val10 = parseFloat(val10) / Math.pow(10, prec);
+                        }
+                        pvalue[vartype+"_"+varid] = val10.toString();
+                        pvalue["prec_"+vartype+"_"+varid] = prec.toString();
+                    }
+                });
+
+                allthings[idx]["value"] = pvalue;
+                if ( DEBUGvar ) {
+                    console.log( (ddbg()), "New variable value: ", pvalue);
+                }
+            });
         }
 
         // get programs and setup program tiles much like how Piston tiles are done in ST and HE
-        function getAllProgs(err, res, body) {
+        async function getAllProgs(err, res, body) {
             if ( err ) {
                 console.log( (ddbg()), "error retrieving ISY programs: ", err);
             } else {
 
                 // have to use the full parsing function here
-                // console.log("getting programs...", body);
-                xml2js(body, function(xmlerr, result) {
+                await xml2js(body, function(xmlerr, result) {
                     var thetype = "isy";
                     try {
                         if ( result ) {
@@ -1030,8 +1043,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                             });
                         }
                     } catch (e) {
-                        console.log("error - failed loading ISY programs");
-                        console.log(e);
+                        console.log( (ddbg()), "error - failed loading ISY programs. ", e);
                     }
                 });
                 updateOptions(false, reloadpath);
@@ -1039,122 +1051,110 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
 
         }
 
-        function getAllNodes(err, res, body) {
+        async function getAllNodes(err, res, body) {
             var thetype = "isy";
             if ( err ) {
                 console.log( (ddbg()), "error retrieving ISY nodes: ", err);
+                return;
             } else {
-                var result = parser.parse(body);
-                var thenodes = result.nodes["node"];
-                if ( DEBUGisy ) {
-                    console.log( (ddbg()), "Retrieved nodes: ", UTIL.inspect(thenodes, false, null, false) );
-                }
 
-                // read the real attributes and map to HP fields
-                for ( var obj in thenodes ) {
-                    var node = thenodes[obj];
-                    var id = fixISYid(node["address"].toString());
-
-                    // console.log("node id: ", id, " type: ", typeof id);
-                    var idx = thetype + "|" + id;
-                    var hint = node["type"].toString();
-
-                    // set hint to nothing if default of zeros is provided
-                    // TODO - provide a more useful mapping of hints to type names
-                    // until then user can still style hints using CSS
-                    if ( hint ) {
-                        hint.replace( /\./g, "_" );
-                        hint = "ISY " + hint;
+                // note - changed to use xml2js
+                await xml2js(body, function(xmlerr, result) {
+                    if ( DEBUGisy ) {
+                        console.log( (ddbg()), "xml2js nodes: ", UTIL.inspect(result, false, null, false) );
+                    }
+                    var thenodes = result.nodes["node"];
+                    for ( var obj in thenodes ) {
+                        var node = thenodes[obj];
+                        var id = fixISYid(node["address"][0].toString());
+    
+                        var idx = thetype + "|" + id;
+                        var hint = node["type"][0].toString();
+    
+                        // set hint to nothing if default of zeros is provided
+                        // TODO - provide a more useful mapping of hints to type names
+                        // until then user can still style hints using CSS
+                        if ( hint ) {
+                            hint.replace( /\./g, "_" );
+                            hint = "ISY " + hint;
+                        }
+    
+                        var name = node["name"][0];
+                        var pvalue = {"name": name};
+    
+                        // this is the proper place to load customizations
+                        pvalue = getCustomTile(pvalue, thetype, id);
+                        if ( !name ) {
+                            name = pvalue["name"];
+                        }
+    
+                        // set bare minimum info
+                        // this is updated below in the callback after getting node details
+                        allthings[idx] = {
+                            "id": id,
+                            "name": name, 
+                            "hubnum": hubnum,
+                            "type": thetype, 
+                            "hint": hint,
+                            "refresh": "never",
+                            "value": pvalue
+                        };
                     }
 
-                    var name = node["name"];
-                    var pvalue = {"name": name};
-
-                    // this is the proper place to load customizations
-                    pvalue = getCustomTile(pvalue, thetype, id);
-                    if ( !name ) {
-                        name = pvalue["name"];
+                    var groups = result.nodes["group"];
+                    for ( var obj in groups ) {
+                        var node = groups[obj];
+                        var id = fixISYid(node["address"][0].toString());
+                        var idx = thetype + "|" + id;
+                        var hint = "ISY scene";
+                        var name = node["name"][0];
+        
+                        // set the base tile to include name and items to turn scene on and off
+                        var pvalue = {"name": name, "DON": "DON", "DOF":"DOF"};
+                        var members = node.members[0];
+        
+                        // load up pvalue with links
+                        if ( members && array_key_exists("link", members) && is_array(members.link) ) {
+                            for ( var sceneitem in members.link ) {
+                                pvalue["scene_"+sceneitem] = members.link[sceneitem]["_"];
+                            }
+                        }
+        
+                        // this is the proper place to load customizations
+                        pvalue = getCustomTile(pvalue, thetype, id);
+                        if ( !name ) {
+                            name = pvalue["name"];
+                        }
+        
+                        // set tile up
+                        allthings[idx] = {
+                            "id": id,
+                            "name": name, 
+                            "hubnum": hubnum,
+                            "type": thetype, 
+                            "hint": hint,
+                            "refresh": "never",
+                            "value": pvalue
+                        };
+        
+                        if (DEBUGisy) {
+                            console.log( (ddbg()), "id= ", id," hint= ", hint, " node: ", node, " pvalue: ", pvalue);
+                        }
                     }
-                    // console.log("post custom: ", pvalue);
-
-                    // set bare minimum info
-                    // this is updated below in the callback after getting node details
-                    allthings[idx] = {
-                        "id": id,
-                        "name": name, 
-                        "hubnum": hubnum,
-                        "type": thetype, 
-                        "hint": hint,
-                        "refresh": "never",
-                        "value": pvalue
-                    };
-
-                    if (DEBUG5) {
-                        console.log( (ddbg()), "idx= ", idx," hint= ", hint, " node: ", node);
-                    }
-                }
-            }
-
-            // now get folders and scenes
-            var groups = result.nodes["group"];
-            for ( var obj in groups ) {
-                var node = groups[obj];
-                var id = fixISYid(node["address"].toString());
-                // console.log("scene info: ", UTIL.inspect(node, false, null, false));
-
-                var idx = thetype + "|" + id;
-                var hint = "ISY scene";
-                var name = node["name"];
-
-                // set the base tile to include name and items to turn scene on and off
-                var pvalue = {"name": name, "DON": "DON", "DOF":"DOF"};
-
-                // load up pvalue with links
-                if ( node.members && array_key_exists("link", node.members) && is_array(node.members.link) ) {
-                    for ( var sceneitem in node.members.link ) {
-                        // var idxlink = thetype + "|" + node.members.link[sceneitem];
-                        // if ( array_key_exists(idxlink, allthings) ) {
-                        //     var namelink = allthings[idxlink]["name"];
-                        // } else {
-                        //     namelink = ""; // node.members.link[sceneitem];
-                        // }
-                        // pvalue["scene_"+sceneitem] = namelink;
-                        pvalue["scene_"+sceneitem] = node.members.link[sceneitem];
-                    }
-                }
-
-                // this is the proper place to load customizations
-                pvalue = getCustomTile(pvalue, thetype, id);
-                if ( !name ) {
-                    name = pvalue["name"];
-                }
-
-                // set tile up
-                allthings[idx] = {
-                    "id": id,
-                    "name": name, 
-                    "hubnum": hubnum,
-                    "type": thetype, 
-                    "hint": hint,
-                    "refresh": "never",
-                    "value": pvalue
-                };
-
-                if (DEBUG5) {
-                    console.log( (ddbg()), "idx= ", idx," hint= ", hint, " node: ", node, " pvalue: ", pvalue);
-                }
+            
+                });
             }
         
             // now that we have all the nodes identified, get the details
             curl_call(hubEndpt + "/status", stheader, false, false, "GET", callbackStatusInfo);
 
-            function callbackStatusInfo(err, res, body) {
-                xml2js(body, async function(xmlerr, result) {
+            async function callbackStatusInfo(err, res, body) {
+                await xml2js(body, function(xmlerr, result) {
                     try {
                         if ( result ) {
 
                             var nodes = result.nodes.node;
-                            if ( DEBUGisy ) {
+                            if ( DEBUG9 ) {
                                 console.log( (ddbg()), "node details: ", UTIL.inspect(nodes, false, null, false) );
                             }
                             if ( nodes ) {
@@ -1181,10 +1181,11 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                     }
                 });
 
+                updateOptions(reload, reloadpath);
                 // update things and reload page after handling all tiles
-                setTimeout( function() {
-                    updateOptions(reload, reloadpath);
-                }, 5000);
+                // setTimeout( function() {
+                //     updateOptions(reload, reloadpath);
+                // }, 5000);
             }
         }
     }
@@ -2057,7 +2058,6 @@ function getNewPage(cnt, roomtitle, kroom, things) {
                 // keep running count of things to use in javascript logic
                 cnt++;
                 $tc += makeThing(cnt, kindex, thesensor, roomtitle, postop, posleft, zindex, customname, false);
-                // console.log(roomtitle, cnt, postop, posleft, customname);
             }
         }
     });
@@ -2078,7 +2078,7 @@ function processName(thingname, thingtype) {
     try {
         thingname = thingname.replace(pattern,"");
     } catch(e) {
-        console.log(thingname, "error: ", e);
+        console.log( (ddbg()), thingname, "error: ", e);
     }
 
     // get rid of 's and split along white space
@@ -2102,7 +2102,6 @@ function processName(thingname, thingtype) {
             }
         });
     } catch (e) {
-        console.log(e);
         subtype = "";
     }
     return [thingname, subtype];
@@ -2234,7 +2233,6 @@ function returnFile(thingvalue, thingtype) {
         }
     }
 
-    // console.log("type:", thingtype, " fn: ", fn, " size: ", fw, "x", fh,  " $fext: ", $fext, " $vn: ", $vn);
     var $v = "";
     var mediafile = "";
 
@@ -2386,7 +2384,7 @@ function getWeatherIcon(num, accu) {
 function translateWeather(name, pvalue) {
 
     if ( !pvalue || typeof pvalue!=="object" ) {
-        console.log("weather debug: ", pvalue);
+        console.log( (ddbg()), "invalid weather data - object expected but not found");
         return pvalue;
     }
 
@@ -2409,7 +2407,6 @@ function translateWeather(name, pvalue) {
     }
 
     // the rest of this function fixes up the accuWeather tile
-    // console.log("weather debug: ", pvalue);
     var newvalue = {};
     newvalue.name = name;
     newvalue.temperature = pvalue.temperature;
@@ -2445,7 +2442,6 @@ function translateWeather(name, pvalue) {
         }
         forecast = null;
     }
-    // console.log("AccuWeather forecast: ", forecast);
     if ( forecast ) {
         forecastStr = "<table class='accuweather'>";
         forecastStr += "<tr>";
@@ -2457,14 +2453,12 @@ function translateWeather(name, pvalue) {
 
         var hr = 1;
         var thishr = hr.toString().trim()+"hr"
-        // console.log(thishr, forecast[thishr]);
         while ( hr <= 3 && typeof forecast[thishr] === "object" ) {
             forecastStr += "<tr>";
             // see if we have icons and times
             if (pvalue["time"+thishr]) {
                 var words = pvalue["time"+thishr].split("\n");
                 var timestr = words[1].substr(0,3) + " " + words[2];
-                // console.log(words);
                 forecastStr += "<td class='hr'>" + timestr + "</td>";
             } else {
                 forecastStr += "<td class='hr'>" + hr + " Hr</td>";
@@ -2514,15 +2508,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     const mantemp = {"temperature":"", "feelsLike":"", "name":"", "city":"", "weather":"", 
                      "weatherIcon":"", "forecastIcon":"","alertKeys":""};
     var $tc = "";
-
-    // if ( thingvalue.name === "House Builtin" ) {
-    //     console.log("pre sort: ", thingvalue);
-    // }
     thesensor["value"] = setValOrder(thesensor["value"]);
-    // if ( thingvalue.name === "House Builtin" ) {
-    //     console.log("post sort: ", thingvalue);
-    // }
-
     var thingvalue = thesensor["value"];
     var thingtype = thesensor["type"];
     var bid = thesensor["id"];
@@ -3076,7 +3062,6 @@ function getFormattedDate(fmtdate, d, clockid) {
         fmtdate = "M d, Y";
         datestr = month + " " + day + ", " + year;
     }
-    // console.log("\n ****** getFormattedDate ******\n clockid: ", clockid," fmtdate: ", fmtdate," datestr: ", datestr, " weekday: ", weekday);
     var retobj = {fmt_date: fmtdate, date: datestr, week: weekday};
     return retobj;
 }
@@ -3146,7 +3131,6 @@ function getFormattedTime(fmttime, d, clockid) {
         }
     }
 
-    // console.log("\n ****** getFormattedTime ******\n clockid: ", clockid," fmttime: ", fmttime," timestr: ", timestr, " timezone: ", timezone);
     var retobj = {fmt_time: fmttime, time: timestr, timezone: timezone};
     return retobj;
 }
@@ -3253,7 +3237,7 @@ function getCustomTile(custom_val, customtype, customid) {
     try {
         var index = GLB.options["index"];
     } catch(e) {
-        console.log("*** warning *** index not available for customization for id= ", customid);
+        console.log( (ddbg()), "warning, index not available for customization for id= ", customid);
         return custom_val;
     }
     
@@ -3332,7 +3316,6 @@ function getCustomTile(custom_val, customtype, customid) {
                         // if ( array_key_exists(subid, pvalue) ) {
                         custom_val[companion] = "::" + calltype + "::" + idx;
                         custom_val[subid]= "LINK::" + content;
-                        // console.log( (ddbg()), "link debug: subid= ", subid, " custom_val: ", custom_val);
                             
                     // final cases are if link tile wasn't found
                     } else {
@@ -3477,7 +3460,7 @@ function processHubMessage(hubmsg) {
     }
 
     if ( DEBUG12 ) {
-        console.log( (ddbg()),"processhub - hubmsgid: ", hubmsgid, "\nmessage: ", hubmsg, " sizes: width: ", customwidth, " height: ", customheight);
+        console.log( (ddbg()), "processhub - hubmsgid: ", hubmsgid, "\nmessage: ", hubmsg, " sizes: width: ", customwidth, " height: ", customheight);
     }
 
     for (idx in allthings) {
@@ -3530,8 +3513,6 @@ function processHubMessage(hubmsg) {
         newval = {};
         newval[subid] = hubmsg['change_value'];
     }
-    // console.log("hubmsg: ", hubmsg, " newval: ", newval);
-
     if ( typeof newval === "object" ) {
 
         // loop through each field of the object
@@ -3556,13 +3537,12 @@ function processHubMessage(hubmsg) {
 
                     // get info for links but skip if the link had an error
                     if ( DEBUG12 ) {
-                        console.log( (ddbg()),"processhub link debug. companion=",companion," helper=",helperval," command=",command,
+                        console.log( (ddbg()), "processhub link debug. companion=",companion," helper=",helperval," command=",command,
                                     " lidx=",lidx," linktype=",linktype," linkbid=",linkbid);
                     }
                     if ( command==="LINK" && linkbid === hubmsgid ) {
                         cnt++;
                         entry['value'][obj_subid] = newval[obj_subid];
-
                         var idxitems = idx.split("|");
                         var targetobj = {};
                         targetobj[obj_subid] = newval[obj_subid];
@@ -3571,14 +3551,9 @@ function processHubMessage(hubmsg) {
                         if (customwidth ) {
                             targetobj["width"] = customwidth;
                         }
-
                         if (customheight) {
                             targetobj["height"] = customheight;
                         }
-
-                        // if ( DEBUG12 ) {
-                        //     console.log( (ddbg()),"idxitems= ",idxitems," obj_subid=",obj_subid," targetobj=",targetobj, "\nhubmg= ", hubmsg );
-                        // }
                         if ( ! array_key_exists("skip_push", hubmsg) ) {
                             pushClient(idxitems[1], idxitems[0], obj_subid, targetobj);
                         }
@@ -3673,7 +3648,7 @@ function processIsyMessage(isymsg) {
             } else if ( is_object(eventInfo[0]) && array_key_exists("var", eventInfo[0]) ) {
                 var varobj = eventInfo[0].var[0];
                 if ( DEBUG9 ) {
-                    console.log("Event info: ", UTIL.inspect(varobj, false, null, false) );
+                    console.log( (ddbg()), "Event info: ", UTIL.inspect(varobj, false, null, false) );
                 }
                 var bid = "vars";
                 var idx = "isy|" + bid;
@@ -3744,7 +3719,7 @@ function processIsyMessage(isymsg) {
                 }
 
             } else if (DEBUG9) {
-                console.log((ddbg()), "Unhandled ISY event: ", UTIL.inspect(result.Event, false, null, false) );
+                console.log( (ddbg()), "Unhandled ISY event: ", UTIL.inspect(result.Event, false, null, false) );
             }
         }
     });
@@ -3802,7 +3777,7 @@ function getTimeStr(ifvalue, str) {
     }
 
     if ( DEBUG11 ) {
-        console.log("getTimeStr: ", ifvalue, str, amloc, pmloc, timestr );
+        console.log( (ddbg()), "getTimeStr: ", ifvalue, str, amloc, pmloc, timestr );
     }
     return timestr;
 }
@@ -3819,10 +3794,6 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
     var rbid = bid;
     var rtype = thetype;
     var ridx = thetype + "|" + bid;
-
-    // if ( DEBUG11 ) {
-    //     console.log( (ddbg()), "RULE debug... userid: ", userid, " thetype: ", thetype, " trigger: ", trigger, " pvalue: ", pvalue);
-    // }
 
     // if this tile has no rule, do nothing
     if ( !array_key_exists(userid, GLB.options) ) {
@@ -4006,7 +3977,6 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
                                         try {
                                             ifvalue = allthings[ridx]["value"][rulesubid];
                                         } catch(e) {
-                                            // console.log(e, " ridx= ", ridx);
                                             ifvalue = false;
                                         }
                                     } else {
@@ -4036,7 +4006,7 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
                                         num1 = d1.getTime();
                                         num2 = d2.getTime();
                                         if ( DEBUG11 ) {
-                                            console.log((ddbg()), "ruleop=", ruleop," ifvalue=",ifvalue," rulevalue= ",rulevalue," d1=",d1," d2=",d2," num1=",num1," num2=",num2);
+                                            console.log( (ddbg()), "ruleop=", ruleop," ifvalue=",ifvalue," rulevalue= ",rulevalue," d1=",d1," d2=",d2," num1=",num1," num2=",num2);
                                         }
                                     } else if ( rulesubid==="time") {
                                         var today = new Date();
@@ -4045,7 +4015,7 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
                                         num1 = d1.getTime();
                                         num2 = d2.getTime();
                                         if ( DEBUG11 ) {
-                                            console.log((ddbg()), "ruleop=", ruleop," ifvalue=",ifvalue," rulevalue= ",rulevalue," d1=",d1," d2=",d2," num1=",num1," num2=",num2);
+                                            console.log( (ddbg()), "ruleop=", ruleop," ifvalue=",ifvalue," rulevalue= ",rulevalue," d1=",d1," d2=",d2," num1=",num1," num2=",num2);
                                         }
                                     } else if ( !isNaN(parseFloat(ifvalue)) && !isNaN(parseFloat(rulevalue)) ) {
                                         num1 = parseFloat(ifvalue);
@@ -4084,12 +4054,14 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
                                         }
                                     }
                                 } else {
-                                    console.log("error - invalid RULE syntax: ", rule, " parts: ", ruleparts);
+                                    if ( DEBUG11 ) {
+                                        console.log( (ddbg()), "error - invalid RULE syntax: ", rule, " parts: ", ruleparts);
+                                    }
                                     isrule = false;
                                 }
                             } else {
                                 if ( DEBUG11 ) {
-                                    console.log("error - invalid RULE syntax: ", rule);
+                                    console.log( (ddbg()), "error - invalid RULE syntax: ", rule);
                                 }
                                 ruleparts = false;
                             }
@@ -4126,7 +4098,7 @@ function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
     var itemhash = pw_hash(item,'md5');
 
     if ( DEBUG11 ) {
-        console.log((ddbg()), "RULE item: ", item, " hash: ", itemhash, " caller: ", rulecaller);
+        console.log( (ddbg()), "RULE item: ", item, " hash: ", itemhash, " caller: ", rulecaller);
     }
 
     if ( ! GLB.rules ) {
@@ -4240,8 +4212,9 @@ function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
                 } else {
                     addCustom("default", rswid, rswtype, "TEXT", rvalue, rsubid);
                     linkinfo = [rswid, rswtype, rsubid, rsubid, "TEXT"];
-                    console.log((ddbg()), " new custom field: ", rsubid, " created in tile: ", allthings[ridx].value);
-
+                    if ( DEBUG11 ) {
+                        console.log( (ddbg()), " new custom field: ", rsubid, " created in tile: ", allthings[ridx].value);
+                    }
                     // restart all clients to show the newly created field
                     // this only happens the first time the rule is triggered
                     // pushClient("reload", "/");
@@ -4389,7 +4362,7 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
     for (var i=0; i < clients.length; i++) {
         entry["client"] = i;
         if ( DEBUG17 ) {
-            console.log("Pushing client #", i, " id: ", entry.id);
+            console.log( (ddbg()), "Pushing client #", i, " id: ", entry.id);
         }
         clients[i].sendUTF(JSON.stringify(entry));
     }
@@ -4413,8 +4386,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
             result = allthings[idx].value;
         } catch(e) {
             result = "error - custom TEXT field not found for: " + idx;
-            console.log(result);
-            console.log(e);
+            console.log( (ddbg()), result, " error: ", e);
             return result;
         }
 
@@ -4526,7 +4498,6 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                     newval = (isup === "up") ? newval + 1 : newval - 1;
                     cmd = "/nodes/" + swid + "/cmd/" + clicommand + "/" + newval.toString();
                     isyresp[subid] = newval;
-                    // console.log( (ddbg()), "Thermostat debug: newval: ", newval, " cmd: ", cmd );
                     curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
                 } else {
                     result = "error - ISY thermostat set point cannot be interpreted.  value: " + swval;
@@ -4572,7 +4543,6 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                                 intvar = Math.round(intvar*pow10) / pow10;
                             }
                         }
-                        // console.log("precision debug: ", prec, intvar, subid, varnum);
                         cmd = "/vars/set/2/" + varnum + "/" + intvar.toString();
                         isyresp[realsubid] = intvar.toString();
                         curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
@@ -4615,7 +4585,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
         var pvalue;
         // var idx = swtype + "|" + swid;
         if ( DEBUG18 ) {
-            console.log((ddbg()), hub.hubType, " hub: ", hub.hubName, " trigger: ", subid, " rule: ", inrule, " call returned: ", body);
+            console.log( (ddbg()), hub.hubType, " hub: ", hub.hubName, " trigger: ", subid, " rule: ", inrule, " call returned: ", body);
         }
         if ( err ) {
             console.log( (ddbg()), "error calling ST or HE hub: ", err);
@@ -4654,14 +4624,19 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
 
     // I don't think I need to use this because the ISY pushes a webSocket that I use
     // to do the same thing in the processIsyMessage function
-    function getNodeResponse(err, res, body) {
+    async function getNodeResponse(err, res, body) {
         if ( err ) {
             console.log( (ddbg()), "error calling ISY node: ", err);
         } else {
-            var result = parser.parse(body);
-            if ( DEBUG9 ) {
-                console.log((ddbg()), hub.hubType, " hub: ", hub.hubName, " trigger: ", subid, " rule: ", inrule, " isyrep: ", isyresp, " call returned: ", result);
-            }
+
+            var rres;
+            await xml2js(body, async function(xmlerr, result) {
+                rres = result.RestResponse.status[0];
+                if ( DEBUG9 ) {
+                    console.log( (ddbg()), hub.hubType, " hub: ", hub.hubName, " trigger: ", subid, " rule: ", inrule, " isyrep: ", isyresp, " call returned: ", UTIL.inspect(result, false, null, false));
+                }
+            });
+
             // update all clients - this is actually not needed if your server is accessible to websocket updates
             // because ISY will push state updates via a websocket
             // and that will process a similar pushClient but for only those things that change
@@ -4673,8 +4648,9 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
             // this typically would happen for buttons which don't do anything from the panel
             // so calling updating client and doing rules here allows the button state to change
 
-            var rres = result.RestResponse;
-            if ( !inrule && rres && rres.status && rres.status.toString()!=="200" ) {
+            // var rres = result.RestResponse;
+            // if ( !inrule && rres && rres.status && rres.status.toString()!=="200" ) {
+            if ( !inrule && rres && rres.toString()!=="200" ) {
                 pushClient(swid, swtype, subid, isyresp, linkinfo, popup);
                 processRules(swid, "isy", subid, isyresp, "callHub");
             }
@@ -4736,7 +4712,6 @@ function queryHub(hub, swid, swtype, popup) {
         if ( err ) {
             console.log( (ddbg()), "error requesting ISY node query: ", err);
         } else {
-            // var result = parser.parse(body);
             xml2js(body, async function(xmlerr, result) {
                 try {
                     if ( result ) {
@@ -4773,12 +4748,6 @@ function translateAudio(pvalue, specialkey, audiomap) {
     }
 
     try {
-    
-        // if ( typeof pvalue==="string" ) {
-        //     pvalue = JSON.parse(pvalue);
-        // }
-
-        // console.log("translate pre result: ", pvalue);
         var audiodata;
         if ( pvalue ) {
             if ( specialkey==="" || specialkey===false ) {
@@ -4801,7 +4770,6 @@ function translateAudio(pvalue, specialkey, audiomap) {
                 throw "Unknown format in translateAudio";
             }
 
-            // console.log("translate step 2 result: ", audiodata);
             for  (var jtkey in audiodata) {
                 if ( array_key_exists(jtkey, audiomap) ) {
                     var atkey = audiomap[jtkey];
@@ -4832,9 +4800,8 @@ function translateAudio(pvalue, specialkey, audiomap) {
             }
         }
     } catch(jerr) {
-        console.log(jerr);
+        console.log( (ddbg()), jerr);
     }
-    // console.log("translate post result: ", pvalue);
     return pvalue;
 }
 
@@ -4864,9 +4831,6 @@ function translateMusic(pvalue) {
     if ( array_key_exists("trackData", nvalue) ) {
         nvalue = translateAudio(nvalue, "trackData", audiomap);
     }
-
-    // console.log("Legacy music trackImage: ", j1, j2, jtval);
-    // console.log("translate music post result: ", nvalue);
     return nvalue;
 }
 
@@ -5027,16 +4991,6 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                 response = "success";
                 break;
 
-            // case "GET":
-            //     // var posturl = decodeURIComponent(linkval);
-            //     var posturl = linkval;
-            //     if ( DEBUG7 ) {
-            //         console.log( (ddbg()), command + " call: ", posturl);
-            //     }
-            //     curl_call(posturl, null, jsonobj, false, command, urlCallback);
-            //     response = "success";
-            //     break;
-            
             // converted this over to getting the custom text out of the options
             // this allows me to avoid lugging around the custom text in the sibling helper
             // this mirrors the code in RULES below
@@ -5267,7 +5221,6 @@ function setOrder(uname, swid, swtype, swval, swattr) {
                 }
                 updated = true;
                 result = options["rooms"];
-                // console.log("room sort result: ", options["rooms"]);
                 break;
 
             // we no longer use name from the gui since we have the real name here
@@ -5713,7 +5666,6 @@ function getInfoPage(uname, returnURL, pathname) {
                 "</td><td class=\"thingarr\">" + thing[2] +
                 "</td><td class=\"infonum\">" + thing[3] + "</td></tr>";
         });
-        // console.log( (ddbg()), "customizer list: ", customList);
         $tc += "</table></div>";
     }
 
@@ -5826,7 +5778,6 @@ function getCatalog(hubpick) {
 
     // put sensors in an array so we can sort them
     var sensors = sortedSensors("hubnum", "name");
-    // console.log("sorted sensors: ", sensors);
 
     var i= 0;
     // for(var idx in allthings) {
@@ -6071,7 +6022,7 @@ function getOptionsPage(uname, hostname, pathname) {
         try {
             var $thingindex = indexoptions[idx].toString();
         } catch (e) {
-            console.log(e, " idx: ", idx, " is invalid");
+            console.log( (ddbg()), " idx: ", idx, " is invalid. error: ", e);
             return;
         }
         
@@ -6172,7 +6123,7 @@ function mainPage(uname, hostname, pathname) {
         kioskmode = false;
     }
     console.log(  "\n****************************************************************",
-                  "\nServing page at: ", GLB.returnURL,
+                  "\n", (ddbg()), "Serving page at: ", GLB.returnURL,
                   "\n****************************************************************");
 
     $tc += utils.getHeader(skin);
@@ -6591,7 +6542,6 @@ function changePageName(uname, oldname, newname) {
         delete options["things"][oldname];
         retcode = "success - Renamed room: " + oldname + " to: " + newname;
         if ( DEBUG1 ) {
-            // console.log( (ddbg()), "changePageNmae: ", UTIL.inspect(options.things[newname]));
             console.log( (ddbg()), retcode);
         }
         writeRoomThings(options, uname);
@@ -6856,10 +6806,10 @@ function apiCall(body, protocol, req, res) {
     if ( !uname ) {
         if ( typeof GLB.options!=="undefined" && typeof GLB.options["config"]!=="undefined" && array_key_exists("uname", GLB.options["config"]) ) {
             uname = GLB.options["config"]["uname"];
-            console.log((ddbg()), "*** warning *** using user= [" + uname + "] from options file for API call");
+            console.log( (ddbg()), "*** warning *** using user= [" + uname + "] from options file for API call");
         } else {
             uname = "default";
-            console.log((ddbg()), "*** warning *** using user= [default] for API call");
+            console.log( (ddbg()), "*** warning *** using user= [default] for API call");
         }
     }
 
@@ -7080,7 +7030,6 @@ function apiCall(body, protocol, req, res) {
         case "filteroptions":
             if ( protocol==="POST" ) {
                 result = saveFilters(body);
-                // console.log("Filters: ", result);
                 writeOptions(GLB.options);
             } else {
                 result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
@@ -7091,7 +7040,6 @@ function apiCall(body, protocol, req, res) {
         case "userpw":
             if ( protocol==="POST" ) {
                 result = saveUserPw(res, body, uname);
-                // console.log("User pw: ", result);
                 writeOptions(GLB.options);
             } else {
                 result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
@@ -7101,7 +7049,9 @@ function apiCall(body, protocol, req, res) {
         case "saveoptions":
             if ( protocol==="POST" ) {
                 result = processOptions(uname, body);
-                console.log("Process options: ", result, GLB.options);
+                if ( DEBUG4 ) {
+                    console.log( (ddbg()), "Process options: ", result, GLB.options);
+                }
                 if ( result === "success" ) {
                     writeOptions(GLB.options);
                     writeRoomThings(GLB.options, uname);
@@ -7131,8 +7081,9 @@ function apiCall(body, protocol, req, res) {
                     result = "success - " + n2.toString();
                     if ( n2=== nlen ) {
                         if ( DEBUG16 ) {
-                            console.log("\n----------------------------------------------------------\n", GLB.newcss);
-                            console.log("\n----------------------------------------------------------\n");
+                            console.log( (ddbg()), "----------------------------------------------------------");
+                            console.log( (ddbg()), GLB.newcss );
+                            console.log( (ddbg()), "----------------------------------------------------------");
                         }
                         writeCustomCss(getSkin(uname), GLB.newcss);
                     }
@@ -7170,7 +7121,6 @@ function apiCall(body, protocol, req, res) {
                 // check for matching passwords - if record exists, login password must match
                 if ( array_key_exists(uname, pwords ) ) {
                     var pw = pwords[uname];
-                    // console.log(pw, pword);
                     if ( pw[0] === pword || IGNOREPW ) {
                         // save the username in the cookie session
                         setCookie(res, "uname", pw_hash(uname));
@@ -7357,9 +7307,7 @@ function apiCall(body, protocol, req, res) {
                     // for ST and HE we need to use getHubInfo to first get hubId and hubName
                     // and then we call devices from there given the async nature of Node
                     // this is much like what happens in the OAUTH flow
-                    // console.log("hubType= ", hubType);
                     if ( hubType==="ISY" ) {
-                        console.log("getting ISY devices...");
                         getDevices(hubnum, hubType, accesstoken, hubEndpt, clientId, clientSecret, hubName, true, "/reauth");
                     } else {
                         getHubInfo(hub, accesstoken, hubEndpt, clientId, clientSecret);
@@ -7624,7 +7572,7 @@ try {
 
     // list on the port
     httpServer.listen(port, function () {
-        console.log((ddbg()), "HousePanel insecure server is running at location: ", dir, " on port: ", port);
+        console.log( (ddbg()), "HousePanel insecure server is running at location: ", dir, " on port: ", port);
     });
     if ( fs.existsSync("client-1.local.key") && fs.existsSync("client-1.local.crt") ) {
         try {
@@ -7639,16 +7587,16 @@ try {
             var credentials = {ca: crt, key: key, cert: crt};
             var httpsServer = https.createServer(credentials, app);
             httpsServer.listen(s_port, function () {
-                console.log((ddbg()), "HousePanel secure server is running on port: ", s_port);
+                console.log( (ddbg()), "HousePanel secure server is running on port: ", s_port);
             });
         } catch (e) {
-            console.log((ddbg(), "Error attempting to start secure server", e));
+            console.log( (ddbg(), "Error attempting to start secure server", e));
         }
     }
     applistening = true;
     
 } catch (e) {
-    console.log((ddbg()), "HousePanel server could not be started at location: ", dir, " on port: ", port);
+    console.log( (ddbg()), "HousePanel server could not be started at location: ", dir, " on port: ", port);
     app = null;
     applistening = false;
 }
@@ -7699,7 +7647,7 @@ if ( app && applistening ) {
         }
 
         if ( DEBUG3 ) {
-            console.log("pw check: uname=["+uname+"]", " codeuser: ", codeuser, " checkpw= ["+checkpw+"]");
+            console.log( (ddbg()), "pw check: uname=["+uname+"]", " codeuser: ", codeuser, " checkpw= ["+checkpw+"]");
         }
 
         // if ( !IGNOREPW && !checkpw ) {
@@ -7751,9 +7699,9 @@ if ( app && applistening ) {
                 // otherwise, comment it out
                 // GLB.newuser = true;
                 if ( DEBUG15 ) {
-                    console.log((ddbg()), "login accepted. uname = ", uname);
-                    console.log((ddbg()), "allthings before render: \n", UTIL.inspect(allthings, false, null, false) );
-                    console.log((ddbg()), "options before render: \n", UTIL.inspect(GLB.options, false, null, false) );
+                    console.log( (ddbg()), "login accepted. uname = ", uname);
+                    console.log( (ddbg()), "allthings before render: \n", UTIL.inspect(allthings, false, null, false) );
+                    console.log( (ddbg()), "options before render: \n", UTIL.inspect(GLB.options, false, null, false) );
                 }
                 // load our user setup and render page
                 readRoomThings("main", uname);
@@ -7896,7 +7844,7 @@ if ( app && applistening ) {
         
         // handle unknown requests
         } else {
-            console.log((ddbg()) + "hpserver received unknown message.", req.body);
+            console.log( (ddbg()), "hpserver received unknown message: ", req.body);
             res.json('hpserver received unknown message.');
         }
 
@@ -7912,7 +7860,6 @@ if ( app && applistening ) {
 var udclient = null;
 var polisyip = GLB.options.config["polisyip"] || "";
 
-// console.log("hostname: ", os.hostname(), " platform: ", os.platform() );
 var hostname;
 if ( os.hostname()==="polisy" && os.platform()==="freebsd" ) {
     hostname = "localhost";
@@ -7967,17 +7914,17 @@ if ( udclient ) {
     });
 
     udclient.on("error", function(err) {
-        console.log("UDI MQTT error: ", err);
+        console.log( (ddbg()), "UDI MQTT error: ", err);
     });
 
     udclient.on("connect", function() {
         if ( MQTTPOLY ) {
             udclient.subscribe("udi/#", {qos: 0}, function(err, granted) {
                 if ( !err ) {
-                    console.log("MQTT subscribed to: ", granted );
+                    console.log( (ddbg()), "MQTT subscribed to: ", granted );
                     udclient.publish("udi", "UDI mqtt setup and listening...");
                 } else {
-                    console.log("UDI MQTT error subscribing to udi topic: ", err);
+                    console.log( (ddbg()), "UDI MQTT error subscribing to udi topic: ", err);
                 }
             });
         }
@@ -7986,14 +7933,14 @@ if ( udclient ) {
         if ( MQTTHP ) {
             udclient.subscribe("housepanel/#", {qos: 0}, function(err, granted) {
                 if ( !err ) {
-                    console.log("MQTT subscribed to: ", granted );
+                    console.log( (ddbg()), "MQTT subscribed to: ", granted );
                     udclient.publish("housepanel", "HousePanel mqtt setup and listening...");
                 } else {
-                    console.log("MQTT error subscribing to housepanel topic: ", err);
+                    console.log( (ddbg()), "MQTT error subscribing to housepanel topic: ", err);
                 }
             });
         }
 
-        console.log("UDI mqtt status: ", udclient.connected);
+        console.log( (ddbg()), "UDI mqtt status: ", udclient.connected);
     });
 }

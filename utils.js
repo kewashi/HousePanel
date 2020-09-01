@@ -1,6 +1,9 @@
 'use strict';
 
 const devhistory =  ` 
+2.322   Use correct variable ID from ISY hub for variable tile
+            - add await for xml conversions to increase robustness
+            - remove usage of fast parser and use xml2js everywhere
 2.321   Error check in tileedit and when reading var precision values
 2.320   Add window shade icons and fix tile editor to handle spaces in attributes
 2.319   Simulated websocket for rules for non responsive ISY nodes like buttons
