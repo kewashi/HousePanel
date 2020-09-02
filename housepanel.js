@@ -621,7 +621,12 @@ function setupWebsocket(webSocketUrl)
                             $(sibling).removeClass(oldvalue);
                             $(sibling).addClass(value);
                     }
-                    $(sibling).html( value );
+
+                    if ( subid==="level" || subid==="onlevel" || subid==="colortemperature" || subid==="volume"  && $(sibling).slider ) {
+                        $(sibling).slider("value", value);
+                    } else {
+                        $(sibling).html( value );
+                    }
                 }
             });
 
