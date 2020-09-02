@@ -4443,12 +4443,11 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                 // comment this code to preserve the prior dimmer setting; 
                 // otherwise the onlevel is set to current level
                 // the default behavior for Insteon lights would be to comment this
-                // but I kept it here to make them work like all other hubs
-                setTimeout(function() {
-                    var cmd3 = "/nodes/" + swid + "/cmd/OL/" + irange;
-                    isyresp["onlevel"] = swval;
-                    curl_call(endpt + cmd3, isyheader, false, false, "GET", getNodeResponse);
-                }, 200 );
+                // setTimeout(function() {
+                //     var cmd3 = "/nodes/" + swid + "/cmd/OL/" + irange;
+                //     isyresp["onlevel"] = swval;
+                //     curl_call(endpt + cmd3, isyheader, false, false, "GET", getNodeResponse);
+                // }, 200 );
                 break;
 
             case "onlevel":
@@ -4868,18 +4867,16 @@ function updateHubs(newhub, oldid) {
 }
 
 function testclick(clktype, clkid) {
+    const infoclicks = [
+        "temperature", "name", "contact", "presence", "motion", "battery",
+        "date","time", "weekday", "tzone", "heatingSetpoint", "coolingSetpoint",
+        "camera", "statusMessage", "numberOfButtons", 
+        "time", "weekday", "date"
+    ];
     var test = false;
     if ( clkid.startsWith("_") || clkid.endsWith("-up") || clkid.endsWith("-dn") ) {
-        return test;
-    }
-
-    if (  clktype==="contact" || clktype==="presence" || clktype==="motion" || clktype==="weather" || clktype==="clock" ||
-          (clktype==="isy" && clkid.startsWith("int_")) ||
-          (clktype==="isy" && clkid.startsWith("state_")) ||
-          clkid==="temperature" || clkid==="name" || clkid==="contact" || clkid==="battery" ||
-          clkid==="date" || clkid==="time" || clkid==="weekday" || clkid==="tzone" ||
-          clkid==="heatingSetpoint" || clkid==="coolingSetpoint" ||
-          clkid==="presence" || clkid==="motion" || clkid.startsWith("event_") )  {
+        test = false;
+    } else if ( clktype==="weather" || clkid.startsWith("int_") || clkid.startsWith("state_") || clkid.startsWith("event_") || in_array(clkid, infoclicks) ) {
         test = true;
     }
     return test;

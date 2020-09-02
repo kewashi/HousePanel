@@ -1818,7 +1818,7 @@ div.audio-thing div.groupId {
 }
 
 /* hide unwanted items from ISY */
-div.isy.RR, div.isy.onlevel,
+div.isy.RR,
 div.isy.thermostatState, div.isy.thermostatOperatingState, div.isy.thermostatHold,
 div.isy.GV1, div.isy.GV2, div.isy.GV3, div.isy.GV4, div.isy.GV5, div.isy.GV6,
 div.isy.GV7, div.isy.GV8, div.isy.GV9, div.isy.GV10, div.isy.GV11, div.isy.GV12 {

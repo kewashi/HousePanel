@@ -361,7 +361,7 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
         // edit... changed to only use the subid since that is all we need
         //         this enables custom tile editing to work properly
         //         since the str_type can be any linked item for those
-        if ( subid!=="level" && subid!=="volume" ) {
+        if ( subid!=="level" && subid!=="volume" && subid!=="onlevel" ) {
             target+= " div." + subid;
             if ( scope==="thistile" || scope==="thispage" ) {
                 target+= '.p_'+thingindex;
@@ -372,7 +372,7 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
         // set the target to determine on/off status
         // we always use the very specific target to this tile
         if ( subid==="name" || subid==="track" || subid==="weekday" || subid.startsWith("music-") ||
-             subid==="color" || subid==="level" || subid==="volume" ||
+             subid==="color" || subid==="level" || subid==="volume" || subid==="onlevel" ||
              subid==="cool" || subid==="heat" || subid==="stream" ) {
             on = "";
         } else {
@@ -1664,7 +1664,7 @@ function initColor(str_type, subid, thingindex) {
         ceffect += "</div>";
 
         var sliderbox = target;
-        if ( subid==="level" ) {
+        if ( subid==="level" || subid==="onlevel" || subid==="volume" ) {
             sliderbox+= " .ui-slider";
             generic+= " .ui-slider";
         }
@@ -2077,7 +2077,7 @@ function getish(str_type, thingindex, subid) {
 // main routine that sets the color of items
 function updateColor(strCaller, cssRuleTarget, str_type, subid, thingindex, strColor) {
     
-    if ( subid==="level" ) {
+    if ( subid==="level" || subid==="onlevel" || subid==="volume" ) {
         cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex); //  "div.overlay.level.v_" + thingindex;
         var sliderline = cssRuleTarget;
         if ( strCaller==="background" ) {
