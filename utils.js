@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.326   Fix program update bug to handle hex and other status items
 2.325   Minor bugfix to linked volume sliders to display properly
 2.324   Tweak level slider display for ISY hubs and clean up status clicks
 2.323   Fix linked variables and programs to update properly in both directions

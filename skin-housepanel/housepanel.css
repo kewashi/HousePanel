@@ -1073,17 +1073,6 @@ div.overlay.runThen div.runThen.clicked {
     filter: invert(0);
 }
 
-/* by default hide all the other program stuff in this skin */
-div.isy-thing.program div.overlay.runElse,
-div.isy-thing.program div.overlay.stop,
-div.isy-thing.program div.overlay.enable,
-div.isy-thing.program div.overlay.disable,
-div.isy-thing.program div.overlay.status,
-div.isy-thing.program div.overlay.lastRunTime,
-div.isy-thing.program div.overlay.lastFinishTime {
-    display: none;
-}
-
 div.isy.ecobee.GV4::after {
     content: "°F";
 }

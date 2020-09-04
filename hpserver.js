@@ -9,10 +9,10 @@ const DEBUG3 = false;               // passwords
 const DEBUG4 = false;               // index, filters, options
 const DEBUG5 = false;               // hub node detail
 const DEBUG6 = false;               // tile position moves
-const DEBUG7 = false;               // hub responses
+const DEBUG7 = true;               // hub responses
 const DEBUGvar = false;              // ISY variables
 const DEBUG8 = false;               // API calls
-const DEBUG9 =  false;              // ISY callbacks
+const DEBUG9 =  true;              // ISY callbacks
 const DEBUG10 = false;              // sibling tag
 const DEBUG11 = false;              // rules
 const DEBUG12 = false;              // hub push updates
@@ -1026,6 +1026,10 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                                         }
                                     }
                                     pvalue.status = proginfo.status;
+
+                                    // get the enabled and runat states
+                                    pvalue.enabled  = proginfo.enabled;
+                                    pvalue.runAtStartup = proginfo.runAtStartup;
                                     
                                     // call customizer
                                     pvalue = getCustomTile(pvalue, thetype, progid);
@@ -1154,7 +1158,7 @@ function getDevices(hubnum, hubType, hubAccess, hubEndpt, clientId, clientSecret
                         if ( result ) {
 
                             var nodes = result.nodes.node;
-                            if ( DEBUG9 ) {
+                            if ( DEBUG5 ) {
                                 console.log( (ddbg()), "node details: ", UTIL.inspect(nodes, false, null, false) );
                             }
                             if ( nodes ) {
@@ -3693,17 +3697,39 @@ function processIsyMessage(isymsg) {
             } else if ( is_object(eventInfo[0]) && array_key_exists("id", eventInfo[0]) && 
                         array_key_exists("r",  eventInfo[0]) && array_key_exists("f",  eventInfo[0]) ) {
                 try {
-                    var idinteger = parseInt(eventInfo[0]["id"]);
-                    idinteger = idinteger.toString();
-                    var len = 4 - idinteger.length;
-                    var bid = "prog_" + "0000".substr(0,len) + idinteger;
+                    // var idsymbol = parseInt(eventInfo[0]["id"]);
+                    // idsymbol = idsymbol.toString();
+                    var idsymbol = eventInfo[0]["id"].toString().trim();
+                    var len = 4 - idsymbol.length;
+                    var bid = "prog_" + "0000".substr(0,len) + idsymbol;
                     var idx = "isy|" + bid;
                     if ( allthings && allthings[idx] && allthings[idx].value && allthings[idx].type==="isy" ) {
                         pvalue = allthings[idx]["value"];
                         pvalue["lastRunTime"] = eventInfo[0]["r"][0];
                         pvalue["lastFinishTime"] = eventInfo[0]["f"][0];
+
+                        // use decoder ring documented for ISY program events
                         if ( array_key_exists("s", eventInfo[0]) ) {
-                            pvalue["status"] = eventInfo[0]["s"][0];
+                            var st = eventInfo[0]["s"][0].toString();
+                            if ( st.startsWith("2") ) {
+                                pvalue["status"] = "true";
+                            } else if ( st.startsWith("3") ) {
+                                pvalue["status"] = "false";
+                            } else if ( st.startsWith("1") ) {
+                                pvalue["status"] = "unknown";
+                            } else {
+                                pvalue["status"] = "not_loaded"
+                            }
+                        }
+                        if ( array_key_exists("on", eventInfo[0]) ) {
+                            pvalue["enabled"] = "true";
+                        } else if ( array_key_exists("off", eventInfo[0])  ) {
+                            pvalue["enabled"] = "false";
+                        }
+                        if ( array_key_exists("rr", eventInfo[0]) ) {
+                            pvalue["runAtStartup"] = "true";
+                        } else if ( array_key_exists("nr", eventInfo[0])  ) {
+                            pvalue["runAtStartup"] = "false";
                         }
                         allthings[idx]["value"] = pvalue;
                         pushClient(bid, "isy", "lastRunTime", pvalue, false, false);
@@ -4631,7 +4657,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
             var rres;
             await xml2js(body, async function(xmlerr, result) {
                 rres = result.RestResponse.status[0];
-                if ( DEBUG9 ) {
+                if ( DEBUGisy ) {
                     console.log( (ddbg()), hub.hubType, " hub: ", hub.hubName, " trigger: ", subid, " rule: ", inrule, " isyrep: ", isyresp, " call returned: ", UTIL.inspect(result, false, null, false));
                 }
             });

@@ -1903,3 +1903,16 @@ div.thing div.status.OFFLINE {
 div.thing div.status.HUB_DISCONNECTED {
     background-color: rgb(202, 0, 222);
 }
+
+/* by default hide all the other program stuff in this skin */
+div.isy-thing.program div.overlay.runElse,
+div.isy-thing.program div.overlay.stop,
+/* div.isy-thing.program div.overlay.enable,
+div.isy-thing.program div.overlay.disable,
+div.isy-thing.program div.overlay.status,
+div.isy-thing.program div.overlay.enabled,
+div.isy-thing.program div.overlay.runAtStartup, */
+div.isy-thing.program div.overlay.lastRunTime,
+div.isy-thing.program div.overlay.lastFinishTime {
+    display: none;
+}
