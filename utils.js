@@ -1,6 +1,9 @@
 'use strict';
 
 const devhistory =  ` 
+2.327   Support Ford and Lincoln cars if you have API access to Ford Connect
+            - fix header info to force english and to fix utf-8 encoding
+            - encode all clientSecret values since Ford uses special chars
 2.326   Fix program update bug to handle hex and other status items
 2.325   Minor bugfix to linked volume sliders to display properly
 2.324   Tweak level slider display for ISY hubs and clean up status clicks
@@ -524,12 +527,14 @@ exports.getHeader = function getHeader(skin, islogin) {
     var skip = ( typeof islogin !== "undefined" && islogin ) ;
 
     var $tc = '<!DOCTYPE html>';
-    $tc += '<html><head><title>HousePanel</title>';
-    $tc += '<meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">';
+    $tc += '<html lang="en"><head>';
+    $tc += '<meta http-equiv="Content-Type" content="text/html; charset=utf-8">';
     
     // specify icon and color for windows machines
     $tc += '<meta name="msapplication-TileColor" content="#2b5797">';
     $tc += '<meta name="msapplication-TileImage" content="media/mstile-144x144.png">';
+
+    $tc += "<title>HousePanel</title>";
     
     // specify icons for browsers and apple
     $tc += '<link rel="icon" type="image/png" href="media/favicon-16x16.png" sizes="16x16"> ';

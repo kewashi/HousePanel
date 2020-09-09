@@ -1289,6 +1289,7 @@ function setupDraggable() {
                                                 setupPage();
                                                 setupSliders();
                                                 setupColors();
+                                                addEditLink();
                                             } else {
                                                 console.log("pstatus: ", pstatus, " presult: ", presult);
                                             }
@@ -1738,10 +1739,11 @@ function setupButtons() {
         $("#pickhub").on('change',function(evt) {
             var hubId = $(this).val();
             var target = "#authhub_" + hubId;
-            
+
             // this is only the starting type and all we care about is New
             // if we needed the actual type we would have used commented code
             var hubType = $(target).attr("hubtype");
+            // alert("hubType = " + hubType);
             // var realhubType = $("#hubdiv_" + hubId).children("select").val();
             // alert("realhubType= " + realhubType);
             if ( hubType==="New" ) {
@@ -1757,11 +1759,33 @@ function setupButtons() {
                 }
             });
             $(target).removeClass("hidden");
+
+            // populate the clientSecret field that could have funky characters
+            var hub = getHub(hubId);
+            if ( hubType!=="New" && hub ) {
+                $(target + " div.fixClientSecret >input").val(hub.clientSecret);
+            }
+
             evt.stopPropagation(); 
+        });
+
+        $("select[name='hubType']").on('change', function(evt) {
+            var hubType = $(this).val();
+            if ( hubType==="Ford" ) {
+                $(this).find("input[name='hubHost']").html("https://fordconnect.cv.ford.com");
+            } else if ( hubType=== "SmartThings" ) {
+                $(this).find("input[name='hubHost']").html("https://fordconnect.cv.ford.com");
+            } else if ( hubType==="Hubitat" ) {
+                $(this).find("input[name='hubHost']").html("https://oauth.cloud.hubitat.com");
+            } else if ( hubType==="ISY" ) {
+                $(this).find("input[name='hubHost']").html("http://192.168.11.31");
+            } else {
+                $(this).find("input[name='hubHost']").html("");
+            }
         });
         
         // this clears out the message window
-        $("div.greetingopts").on('click',function(evt) {
+        $("#newthingcount").on('click',function(evt) {
             $("#newthingcount").html("");
         });
         
@@ -1771,6 +1795,7 @@ function setupButtons() {
             try {
                 var hubId = $(this).attr("hubid");
                 var formData = formToObject("hubform_"+hubId);
+                // console.log(formData);
             } catch(err) {
                 evt.stopPropagation(); 
                 alert("Something went wrong when trying to authenticate your hub...\n" + err.message);
@@ -1787,6 +1812,8 @@ function setupButtons() {
 
                 if ( pstatus==="success" && typeof presult==="object") {
                     var obj = presult;
+
+                    // for hubs that have auth info in the config file we do nothing but notify user of retrieval
                     if ( obj.action === "things" ) {
                         // tell user we are authorizing hub...
                         $("#newthingcount").html("Authorizing " + obj.hubType + " hub: " + obj.hubName).fadeTo(400, 0.1 ).fadeTo(400, 1.0);
@@ -1795,14 +1822,30 @@ function setupButtons() {
                         }, 1000);
                     }
 
-                    // if oauth flow then start the process
+                    // navigate to the location to authorize Ford Pass - see the following postman schema for background info
+                    // "_postman_id": "a4dffc56-609b-4b97-9880-15e5b249b9ea",
+                    // "name": "CA Ford-Connect Production",
+                    // "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+                    else if ( obj.action === "fordoauth" ) {
+                        var nvpreq= "make=" + obj.model + "&application_id=" + obj.hubId + "&response_type=code&state=123&client_id=" + obj.clientId + "&scope=access&redirect_uri=" + encodeURI(obj.url);
+                        var location = obj.host + "/common/login/?" + nvpreq;
+                        // alert("Ready to redirect to location: " + location);
+                        window.location.href = location;
+
+                    }
+
+                    // if ST or HE oauth flow then start the process
                     else if ( obj.action === "oauth" ) {
                         // $("#newthingcount").html("Redirecting to OAUTH page");
-                        var nvpreq= "response_type=code&client_id=" + encodeURI(obj.clientId) + "&scope=app&redirect_uri=" + encodeURI(obj.url);
+                        var nvpreq= "response_type=code&client_id=" + obj.clientId + "&scope=app&redirect_uri=" + encodeURI(obj.url);
                         var location = obj.host + "/oauth/authorize?" + nvpreq;
                         // alert("Ready to redirect to location: " + location);
                         window.location.href = location;
 
+                    }
+                } else {
+                    if (typeof presult==="string" ) {
+                        $("#newthingcount").html(presult);
                     }
                 }
             });
@@ -3027,7 +3070,9 @@ function processClick(that, thingname) {
     var ispassive = (subid==="custom" || subid==="temperature" || subid==="battery" || (command==="TEXT" && subid!=="allon" && subid!=="alloff") ||
         subid==="presence" || subid==="motion" || subid==="contact" || subid==="status" ||
         subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" ||
-        subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid==="custom");
+        subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid==="custom" ||
+        (thetype==="ford" && !subid.startsWith("_"))
+    );
 
     // alert("command: "+command+" subid: "+subid+" passive: "+ispassive);
 

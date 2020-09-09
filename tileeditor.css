@@ -1916,3 +1916,8 @@ div.isy-thing.program div.overlay.lastRunTime,
 div.isy-thing.program div.overlay.lastFinishTime {
     display: none;
 }
+div.ford-thing div.overlay.commandId, 
+div.ford-thing div.overlay.commandStatus, 
+div.ford-thing div.overlay.status {
+    display: none;
+}
