@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.328   Minor but very important tweak to Ford and Lincoln support
 2.327   Support Ford and Lincoln cars if you have API access to Ford Connect
             - fix header info to force english and to fix utf-8 encoding
             - encode all clientSecret values since Ford uses special chars

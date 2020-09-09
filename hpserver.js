@@ -670,10 +670,6 @@ function getHubInfo(hub, access_token, endpt, clientId, clientSecret, reload, re
 // handle refresh tokens which happens over and over again
 function fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, clientSecret, reload, refresh) {
 
-    // for now just hardwire it -- will figure out encode/decode later
-    // TODO - figure out how to encode/decode upon entry and for storage
-    clientSecret = "[\"|YW6>4%N>W71vwcE0zYzpz";
-
     var header = {'Content-Type' : "application/x-www-form-urlencoded"};
     var policy = "B2C_1A_signup_signin_common";
     if ( hub.hubType==="Lincoln" ) {
@@ -739,19 +735,6 @@ function getAccessToken(code, hub) {
     var hubHost = hub["hubHost"];
     var clientId = hub["clientId"];
     var clientSecret = hub["clientSecret"];
-
-    // save
-    var csecret = clientSecret;
-
-    // for now just hardwire it -- will figure out encode/decode later
-    // TODO - figure out how to encode/decode upon entry and for storage
-    if ( hubType==="Ford" ) {
-        clientSecret = "[\"|YW6>4%N>W71vwcE0zYzpz";
-    }
-
-    if ( DEBUG2 ) {
-        console.log( (ddbg()), "user clientSecret: ", csecret, " fixed clientSecret: ", clientSecret);
-    }
 
     var redirect = GLB.returnURL + "/oauth";
     var header = {'Content-Type' : "application/x-www-form-urlencoded"};
