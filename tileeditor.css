@@ -9,6 +9,10 @@ By moving things here we reduce the skin file to the bare needs
 * 01/02/2020 - minor tweaks to make floor plan skins look right
 
 */
+:root {
+  --main-width-landscape: 100%;
+}
+
 * {
     font-family: "Droid Sans", sans-serif;
     font-size: 11pt; padding: 0px; margin: 0px;
@@ -34,7 +38,7 @@ body {
 @media (orientation: landscape) {
     #dragregion, #dragregion div.panel {
         min-height: 650px;
-        width: 1200px;
+        width: var(--main-width-landscape);
     }
     .ui-tabs .ui-tabs-nav .ui-tabs-anchor {
         font-size: 11pt;
@@ -61,7 +65,7 @@ div.greeting {
     margin-left: 10px;
     margin-bottom: 20px;
     border: 4px solid black;
-    width: 1200px;
+    width: var(--main-width-landscape);
     background-color: #eeeeee;
     color: black;
     font-size: 12pt;
@@ -76,7 +80,7 @@ div.greeting p {
 div.greetingopts {
     margin-left: 10px;
     margin-bottom: 20px;
-    width: 1200px;
+    width: var(--main-width-landscape);
 }
 div.greetingopts div {
     margin-top: 6px;
@@ -85,14 +89,14 @@ div.greetingopts div {
 div.greetingopts div.hubopt {
     margin-top: 0px;
     margin-bottom: 0px;
-    width: 1200px;
+    width: var(--main-width-landscape);
     padding-top: 20px;
     padding-bottom: 20px;
     border: 2px solid black;
     background-color: #cccccc;
 }
 #newthingcount {
-    width: 1200px;
+    width: var(--main-width-landscape);
     height: 30px;
     border: 2px solid black;
     border-bottom: none;
@@ -159,7 +163,7 @@ div.greetingopts div.authhub {
     margin-top: 0px;
     border: 2px solid black;
     background-color: rgba(240, 240, 220, 1);
-    width: 1200px;
+    width: var(--main-width-landscape);
 }
 
 div.maintable {
