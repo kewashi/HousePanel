@@ -26,11 +26,12 @@ const DEBUG18 = false;              // ST, HE, and Ford messages in callHub -> g
 const DEBUG19 = false;              // ST and HE callback from Groovy
 
 // various control options
-const MQTTPOLY = false;             // subscribe to and log polyglot via MQTT
-const MQTTHP = false;               // subscribe to and log HP via MQTT
-const IGNOREPW = false;             // set this to true to accept any text as a valid password
-const DONATE = true;                // set this to true to enable donation section
-const ENABLERULES = true;           // set this to false to neuter all rules
+const MQTTPOLY = false;               // subscribe to and log polyglot via MQTT
+const MQTTHP = false;                 // subscribe to and log HP via MQTT
+const IGNOREPW = false;               // set this to true to accept any text as a valid password
+const DONATE = true;                  // set this to true to enable donation section
+const ENABLERULES = true;             // set this to false to neuter all rules
+const FORDAPIVERSION = "2020-06-01";  // api version number to use for Ford api calls
 
 // websocket and http servers
 var webSocketServer = require('websocket').server;
@@ -705,20 +706,22 @@ function fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, cli
 
         // if we get back a good access_token and refresh_token, repeat the process
         // notice the true boolean last parameter in the call - this signals to refresh repeatedly
-        if ( refreshsuccess && access_token && refresh_token && expiresin ) {
+        if ( refreshsuccess && access_token && refresh_token ) {
             if ( DEBUG2 ) {
                 console.log( (ddbg()),"Refresh return... access_token: ", access_token, " refresh_token: ", refresh_token, " endpoint: ", endpt);
             }
             getHubInfo(hub, access_token, endpt, clientId, clientSecret, reload, refresh_token);
-            // if ( refresh ) {
-            //     setTimeout( async function() {
-            //         await fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, clientSecret, false, true);
-            //     }, expiresin);
-            // }
+            if ( refresh && expiresin ) {
+                setTimeout( async function() {
+                    await fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, clientSecret, false, true);
+                }, expiresin);
+            }
         } else {
             GLB.defhub = "-1";
             console.log( (ddbg()), "refresh token error for hub: " + hub.hubType + " access_token: ", access_token, " endpt: ", endpt, " refresh: ", refresh_token, "\n body: ", body);
-            pushClient("reload", "/reauth");
+            if ( reload ) {
+                pushClient("reload", "/reauth");
+            }
         }
     });
 
@@ -792,10 +795,9 @@ function getAccessToken(code, hub) {
             }
 
             // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
-            // this doesn't work so we just do a refresh when the panel is refreshed
-            // setTimeout( async function() {
-            //     await fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, clientSecret, false, true);
-            // }, expiresin);
+            setTimeout( async function() {
+                await fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, clientSecret, false, true);
+            }, expiresin);
 
             getHubInfo(hub, access_token, endpt, clientId, clientSecret, true, refresh_token);
         } else {
@@ -1032,16 +1034,17 @@ function getDevices(hub, reload, reloadpath) {
     async function getFordVehicles() {
 
         // now we call vehicle information query to get vehicle ID
-        // API version is fixed for now
+        // API version is a defined constant at front of code
         var header = {
             "Authorization": "Bearer " + hubAccess,
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "api-version": "2019-01-01",
+            "api-version": FORDAPIVERSION,
             "Application-Id": hub["hubId"],
         };
         var endpt = hub["hubEndpt"];
         curl_call(endpt, header, false, false, "GET", vehicleInfoCallback);
+
     }
 
     function vehicleInfoCallback(err, res, body) {
@@ -1064,18 +1067,64 @@ function getDevices(hub, reload, reloadpath) {
                     vehiclename = obj.modelName;
                     obj.nickName = obj.modelName;
                 }
-                var pvalue = {name: vehiclename};
+                var pvalue = {name: vehiclename, status: "SUCCESS"};
                 for (var subid in obj) {
                     if ( subid!=="vehicleId" ) {
 
                         // change color to vehicle color since color is special
                         if ( subid==="color" ) {
                             pvalue["vehiclecolor"] = obj[subid];
+                        } else if ( subid==="make" ) {
+                            if ( obj[subid]==="F" ) {
+                                pvalue[subid] = "Ford";
+                            } else if ( obj[subid]==="L" ) {
+                                pvalue[subid] = "Lincoln";
+                            } else {
+                                pvalue[subid] = obj[subid];
+                            }
                         } else {
                             pvalue[subid] = obj[subid];
                         }
                     }
                 }
+
+                // place holders for odometer detail return values
+                // *** note *** inconsistent cases for timestamp and timeStamp
+                pvalue.engineTYpe = "";
+                pvalue.mileage = "";
+                pvalue.odometer = "";
+                pvalue.lastUpdated = "";
+                pvalue.fuelLevel_value = "";
+                pvalue.fuelLevel_distanceToEmpty = "";
+                pvalue.fuelLevel_timestamp = "";
+                pvalue.batteryChargeLevel_value = "";
+                pvalue.batteryChargeLevel_distanceToEmpty = "";
+                pvalue.batteryChargeLevel_timestamp = "";
+                pvalue.tirePressureWarning = "";
+                pvalue.deepSleepInProgress = "";
+                pvalue.firmwareUpgradeInProgress = "";
+                pvalue.longitude = "";
+                pvalue.latitude = "";
+                pvalue.speed = "";
+                pvalue.direction = "";
+                pvalue.timeStamp = "";
+                pvalue.remoteStartStatus_status = "";
+                pvalue.remoteStartStatus_remoteStartDuration = "";
+                pvalue.remoteStartStatus_remoteStartTime = "";
+                pvalue.chargingStatus_value = "";
+                pvalue.chargingStatus_timestamp = "";
+                pvalue.chargingStatus_chargeStartTime = "";
+                pvalue.chargingStatus_chargeEndTime = "";
+                pvalue.pingStatus_value = "";
+                pvalue.pingStatus_timeStamp = "";
+
+                // place holders for error messages
+                pvalue.error = "";
+                pvalue.error_description = "";
+
+                // place holders for return status for commands
+                pvalue["commandStatus"] = "";
+                pvalue["commandId"] = "";
 
                 // add all the api call functions 
                 // removed _status and _location since they don't appear to work
@@ -1100,17 +1149,28 @@ function getDevices(hub, reload, reloadpath) {
                     "value": pvalue
                 };
 
+                // now call the odometer function to get details
+                // notice the true last parameter which skips rules and client pushes
+                // make user click on odometer and refresh because this doesn't work
+                // callHub(hub, vehicleid, thetype, "", "", "_odometer", false, false, true);
+
+                // now call to get the graphical icon
+                // can't figure out how to save or use the returned image
+                // callHub(hub, vehicleid, thetype, pvalue, "", "_thumbnail", false, false, true);
+
             });
 
             // update main options file
             updateOptions(reload, reloadpath);
 
             // now call the vehicle info function again for every vehicle but this time with the vehicle ID
+            // I couldn't get this to work properly so disabled for now
+            //
             // var header = {
             //     "Authorization": "Bearer " + hubAccess,
             //     "Accept": "application/json",
             //     "Content-Type": "application/json",
-            //     "api-version": "2019-01-01",
+            //     "api-version": FORDAPIVERSION,
             //     "Application-Id": hub["hubId"],
             // };
             // curl_call(endpt, header, false, false, "GET", vehicleInfoCallback);
@@ -4780,14 +4840,15 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
         var host = endpt + "/" + swid; 
         var header = {"Authorization": "Bearer " + access_token,
             "Content-Type": "application/json",
-            "api-version": "2019-01-01",
+            "api-version": FORDAPIVERSION,
             "Application-Id": hub["hubId"] 
         };
 
         switch(subid) {
 
             case "_odometer":
-            case "_details":
+                // set completion status to running
+                pushClient(swid, swtype, subid, {commandStatus: ""}, linkinfo, false);
                 curl_call(host, header, false, false, "GET", getHubResponse);
                 break;
 
@@ -4798,10 +4859,30 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
             case "_stopEngine":
             case "_wake":
             case "_location":
+
+                // set completion status to running
+                pushClient(swid, swtype, subid, {commandStatus: "RUNNING"}, linkinfo, false);
+
                 host = host + "/" + subid.substr(1);
                 curl_call(host, header, false, false, "POST", getHubResponse);
                 break;
 
+            case "_thumbnail":
+                header["Accept"] = "*/*";
+                header["Accept-Encoding"] = "gzip, deflate, br";
+                header["Content-Type"] = "image/png";
+                host = host + "/images/thumbnail?make=" + swval.make + "&model=" + swval.modelName + "&year=" + swval.modelYear;
+                curl_call(host, header, false, false, "GET", getHubImage);
+                break;
+
+            case "_image":
+                header["Accept"] = "*/*";
+                header["Accept-Encoding"] = "gzip, deflate, br";
+                header["Content-Type"] = "image/png";
+                host = host + "/images/full?make=" + swval.make + "&model=" + swval.modelName + "&year=" + swval.modelYear;
+                curl_call(host, header, false, false, "GET", getHubImage);
+                break;
+    
             default:
                 result = "error - unknown field in a ford hub call: " + subid;
                 console.log( (ddbg()), result);
@@ -4987,6 +5068,18 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
         return newval;
     }
 
+    function getHubImage(err, res, body) {
+
+        fs.writeFile("thumbraw.png", body, function() {
+            console.log( (ddbg()), "return from image request: file written - thumbraw.png" );
+        });
+        var buff = Buffer.from(body);
+        var base64 = buff.toString('base64');
+        fs.writeFile("thumbnail.png", base64, function() {
+            console.log( (ddbg()), "return from image request: file written - thumbnail.png" );
+        });
+    }
+
     function getHubResponse(err, res, body) {
         var pvalue;
         // var idx = swtype + "|" + swid;
@@ -5020,39 +5113,73 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                     } else if ( swtype==="weather" && is_object(pvalue.forecast) ) {
                         var origname = allthings[idx].name;
                         pvalue = translateWeather(origname, pvalue);
-                    } else if ( swtype==="ford" && (subid==="_odometer" || subid==="_details") && pvalue.vehicle && pvalue.status && pvalue.status==="SUCCESS" ) {
+
+                    // pluck out just vehicle data and good status for odometer call
+                    } else if ( swtype==="ford" && subid==="_odometer" && pvalue.vehicle && pvalue.status && pvalue.status==="SUCCESS" ) {
                         var vehicle = clone(pvalue["vehicle"]);
-                        pvalue = {};
+                        pvalue = {status: "SUCCESS"};
                         for (var key in vehicle) {
-                            if ( is_object(vehicle[key]) ) {
-                                for ( var newid in vehicle[key] ) {
-                                    if ( is_object(vehicle[key][newid]) ) {
-                                        for ( var subsubid in vehicle[key][newid] ) {
-                                            pvalue[newid+"_"+subsubid] = vehicle[key][newid][subsubid];
+                            var val = vehicle[key];
+                            if ( is_object(val) ) {
+                                for ( var newid in val ) {
+                                    if ( is_object(val[newid]) ) {
+                                        for ( var subsubid in val[newid] ) {
+                                            var newsub = newid+"_"+subsubid;
+                                            pvalue[newsub] = val[newid][subsubid];
+                                            if ( pvalue[newsub] === null || pvalue[newsub] === "null" ) {
+                                                pvalue[newsub] = "";
+                                            } else if ( pvalue[newsub]=== 0 ) {
+                                                pvalue[newsub] = "0.0";
+                                            } else {
+                                                pvalue[newsub] = pvalue[newsub].toString();
+                                            }
                                         }
                                     } else {
-                                        pvalue[newid] = vehicle[key][newid];
-                                        if ( pvalue[newid] === null || pvalue[newid]==="null" ) {
-                                            pvalue[newid] = "None";
+                                        if ( newid==="status" ) { newid = "vehicle_status"; }
+                                        pvalue[newid] = val[newid];
+                                        if ( pvalue[newid] === null || pvalue[newid] === "null" ) {
+                                            pvalue[newid] = "";
+                                        } else if ( pvalue[newid]=== 0 ) {
+                                            pvalue[newid] = "0.0";
+                                        } else {
+                                            pvalue[newid] = pvalue[newid].toString();
                                         }
                                     }
                                 }
             
-                            } else {
+                            } else if ( key!=="vehicleId" ) {
 
                                 // change color subid since that is reserved for color light bulbs
+                                // and convert single letter make into full name since that is used later
                                 if ( key==="color" ) {
-                                    pvalue["vehiclecolor"] = vehicle[key];
-                                } else if ( key!=="vehicleId" ) {
-                                    pvalue[key] = vehicle[key];
+                                    pvalue["vehiclecolor"] = val;
+                                } else if ( key==="make" && val==="F" ) {
+                                    pvalue[key] = "Ford";
+                                } else if ( key==="make" && val==="L" ) {
+                                    pvalue[key] = "Lincoln";
+                                } else {
+                                    pvalue[key] = val;
                                 }
                             }
+                        }
+                    } else if ( swtype==="ford" ) {
+                        if ( pvalue.error || (pvalue.status && pvalue.status!=="SUCCESS") ) {
+                            pvalue.status = "ERROR";
+                            pvalue.error = "invalid_grant";
+                            if ( pvalue.error_description && pvalue.error_description.indexOf("has expired") !== -1 ) {
+                                pvalue.error_description = "The provided grant has expired.";
+                            } else {
+                                pvalue.error_description = "Unknown error.";
+                            }
+                            // fordRefreshToken(hub, hub.hubAccess, hub.hubRefresh, hub.clientId, hub.clientSecret, false, false);
                         }
                     }
 
                     // push new values to all clients and execute rules
                     pushClient(swid, swtype, subid, pvalue, linkinfo, popup);
-                    processRules(swid, swtype, subid, pvalue, "callHub");
+                    if ( !inrule ) {
+                        processRules(swid, swtype, subid, pvalue, "callHub");
+                    }
                 }
             }
         }
@@ -5069,7 +5196,9 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                 console.log( (ddbg()), "Linkinfo: ", linkinfo, " targetobj: ", targetobj);
             }
             pushClient(linkinfo[0], linkinfo[1], linksubid, targetobj);
-            processRules(linkinfo[0], linkinfo[1], linksubid, targetobj, "callHub");
+            if ( !inrule ) {
+                processRules(linkinfo[0], linkinfo[1], linksubid, targetobj, "callHub");
+            }
         }
 
 
@@ -5103,8 +5232,8 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
 
             // var rres = result.RestResponse;
             // if ( !inrule && rres && rres.status && rres.status.toString()!=="200" ) {
+            pushClient(swid, swtype, subid, isyresp, linkinfo, popup);
             if ( !inrule && rres && rres.toString()!=="200" ) {
-                pushClient(swid, swtype, subid, isyresp, linkinfo, popup);
                 processRules(swid, "isy", subid, isyresp, "callHub");
             }
         }
