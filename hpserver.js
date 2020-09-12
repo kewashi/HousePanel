@@ -3998,21 +3998,27 @@ function processIsyMessage(isymsg) {
                             throw "invalid variable type: " + varobj["$"]["type"];
                         }
 
-                        if ( is_array( varobj.val) ) {
-                            newval = parseFloat(varobj.val[0]);
-                        } else {
-                            newval = parseFloat(varobj.val);
-                        }
-                        if ( is_array(varobj.prec) ) {
-                            var prec = parseInt(varobj.prec[0]);
-                            if ( !isNaN(newval) && ! isNaN(prec) && prec > 0 ) {
-                                newval = newval / Math.pow(10,prec);
-                            }
-                        } 
-                        pvalue[subid] = newval.toString();
-                        allthings[idx]["value"] = pvalue;
-                        pushClient(bid, "isy", subid, pvalue, false, false);
-                        processRules(bid, "isy", subid, pvalue, "processMsg");
+						// Validate 'val' element exists before setting variable
+						if ( typeof varobj.val !== "undefined" ) {
+							if ( is_array( varobj.val) ) {
+								newval = parseFloat(varobj.val[0]);
+							} else {
+								newval = parseFloat(varobj.val);
+							}
+							if ( is_array(varobj.prec) ) {
+								var prec = parseInt(varobj.prec[0]);
+								if ( !isNaN(newval) && ! isNaN(prec) && prec > 0 ) {
+									newval = newval / Math.pow(10,prec);
+								}
+							} 
+							console.log( "typeof newval = ", typeof newval );
+							if ( typeof newval !== "undefined" ) {
+								pvalue[subid] = newval.toString();
+								allthings[idx]["value"] = pvalue;
+								pushClient(bid, "isy", subid, pvalue, false, false);
+								processRules(bid, "isy", subid, pvalue, "processMsg");
+							}
+						}
                         if ( DEBUG9 ) {
                             console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " newval: ", newval, " pvalue: ", pvalue);
                         }

@@ -10,7 +10,8 @@ By moving things here we reduce the skin file to the bare needs
 
 */
 :root {
-  --main-width-landscape: 100%;
+  --main-width-landscape: auto;
+  --main-height-landscape: auto;
 }
 
 * {
@@ -20,8 +21,8 @@ By moving things here we reduce the skin file to the bare needs
     background-position: center center;
 }
 body {
-    width: 100%;
-    height: 100%;
+    /*width: 100%;
+    height: 100%;*/
     background-color: #ffffff;
     color: #000000;
     height: auto;
