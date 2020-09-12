@@ -255,13 +255,8 @@ ul.ui-tabs-nav {
 .ui-tabs {
     padding: 0;
 }
-.error {
-    background-color: #cc3300;  color: #ffffff;  font-size: 10pt;
-}
-.debug {
-    background-color: #006666;  
-    color: #ffffcc;  
-    font-size: 11pt;
+.error, .error_description {
+    background-color: #ff0000;  color: #ffffff;
 }
 div.overlay.hidden, .hidden, ul.ul-tabs-nav.hidden {
     display: none;
@@ -1882,6 +1877,8 @@ div.thing.switch-thing div.overlay.switch {
 
 div.thing div.status.ONLINE,
 div.thing div.status.OFFLINE,
+div.thing div.status.SUCCESS,
+div.thing div.status.ERROR,
 div.thing div.status.ACTIVE,
 div.thing div.status.HUB_DISCONNECTED,
 div.thing div.status.INACTIVE {
@@ -1897,7 +1894,8 @@ div.thing div.status.INACTIVE {
 div.thing div.status.INACTIVE {
     background-color: rgb(255, 155, 0);
 }
-div.thing div.status.OFFLINE {
+div.thing div.status.OFFLINE,
+div.thing div.status.ERROR {
     background-color: rgb(192, 0, 0);
 }
 div.thing div.status.HUB_DISCONNECTED {
