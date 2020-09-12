@@ -1,8 +1,11 @@
 'use strict';
 
 const devhistory =  ` 
+2.330   Include format check for hub push IP and port entries
+            - fix variable update bug found by @Kman on ISY forum
 2.329   Additional tweaks to the Ford and Lincoln integrations for stability
             - update Ford integration to support API 2020-06-01 incl BEVs
+            - fix refreshToken to work properly
 2.328   Minor but very important tweak to Ford and Lincoln support
 2.327   Support Ford and Lincoln cars if you have API access to Ford Connect
             - fix header info to force english and to fix utf-8 encoding
