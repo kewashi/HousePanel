@@ -24,6 +24,7 @@ const DEBUG16 = false;              // customtiles writing
 const DEBUG17 = false;              // push client
 const DEBUG18 = false;              // ST, HE, and Ford messages in callHub -> getHubResponse
 const DEBUG19 = false;              // ST and HE callback from Groovy
+const DEBUGtmp = true;              // used to debug anything temporarily using ||
 
 // various control options
 const MQTTPOLY = false;               // subscribe to and log polyglot via MQTT
@@ -608,16 +609,12 @@ function getHubInfo(hub, access_token, endpt, clientId, clientSecret, reload, re
         }
         if ( typeof refresh_token === "string" && refresh_token ) {
             hub["hubRefresh"] = refresh_token;
-            var today = new Date();
-            hub["refreshTime"] = today.getTime().toString();
         }
         GLB.defhub = hub["hubId"];
         writeOptions(GLB.options);
 
         // retrieve all devices and go back to reauth page
-        if ( reload ) {
-            getDevices(hub, reload, "/reauth");
-        }
+        getDevices(hub, reload, "/reauth");
 
     // for ST and HE hubs, we first call a function to get hub name and ID
     } else {
@@ -684,20 +681,39 @@ function fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, cli
         console.log( (ddbg()), "clientId, clientSecret: ", clientId, clientSecret);
         console.log( (ddbg()), "tokenhost: ", tokenhost, " nvpreq: ", nvpreq, " formData: ", formData);
     }
+    var expiresin;
+    if ( hub.hubTimer && hub.hubTimer!=="0" && !isNaN(parseInt(hub.hubTimer)) ) {
+        expiresin = parseInt(hub.hubTimer);
+    } else {
+        expiresin = "";
+    }
+
     curl_call(tokenhost, header, nvpreq, formData, "POST", function(err, res, body) {
-        var refreshsuccess = true;
+        var refreshsuccess = false;
         try {
             var jsonbody = JSON.parse(body);
-            access_token = jsonbody["access_token"];
-            refresh_token = jsonbody["refresh_token"];
-            var expiresin = jsonbody["expires_in"];
+            access_token = jsonbody["access_token"] || "";
+            refresh_token = jsonbody["refresh_token"] || "";
+            var newexpire = jsonbody["expires_in"] || "";
+            
+            // save the updated tokens
+            if ( access_token && refresh_token ) {
+                hub["hubAccess"] = access_token;
+                hub["hubRefresh"] = refresh_token;
+                // GLB.defhub = hub["hubId"];
+                
+                // if an expire in is returned from api then set hubTimer to it minus two minutes
+                if ( newexpire  && !isNaN(parseInt(newexpire)) && parseInt(newexpire)>120 ) {
+                    expiresin = (parseInt(newexpire) - 120) * 1000;
+                    hub["hubTimer"] = expiresin.toString();
+                }
+                writeOptions(GLB.options);
+                refreshsuccess = true;
 
-            // set refresh timer to 2 minutes before expiration
-            if ( !expiresin || isNaN(parseInt(expiresin)) ) {
-                expiresin = 18*60000;
-            } else {
-                expiresin = (parseInt(expiresin) - 120) * 1000;
+                // get vehicles again and reload main page if requested with new token
+                getDevices(hub, reload, "/");
             }
+
         } catch(e) {
             // primary token needs to be redone - the refresh token has expired
             // TODO - find a graceful way to tell the user
@@ -708,22 +724,22 @@ function fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, cli
         // notice the true boolean last parameter in the call - this signals to refresh repeatedly
         if ( refreshsuccess && access_token && refresh_token ) {
             if ( DEBUG2 ) {
-                console.log( (ddbg()),"Refresh return... access_token: ", access_token, " refresh_token: ", refresh_token, " endpoint: ", endpt);
+                console.log( (ddbg()),"Refresh return... access_token: ", access_token, 
+                "\n refresh_token: ", refresh_token, "\n expiresin: ", expiresin, "\n endpoint: ", endpt, "\n body: ", body);
             }
-            getHubInfo(hub, access_token, endpt, clientId, clientSecret, reload, refresh_token);
-            if ( refresh && expiresin ) {
-                setTimeout( async function() {
-                    await fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, clientSecret, false, true);
-                }, expiresin);
-            }
+
         } else {
-            GLB.defhub = "-1";
-            console.log( (ddbg()), "refresh token error for hub: " + hub.hubType + " access_token: ", access_token, " endpt: ", endpt, " refresh: ", refresh_token, "\n body: ", body);
-            if ( reload ) {
-                pushClient("reload", "/reauth");
-            }
+            // GLB.defhub = "-1";
+            console.log( (ddbg()), "refresh token error for hub: ", hub.hubType, " access_token: ", access_token, 
+            "\n refresh_token: ", refresh_token, "\n expiresin: ", expiresin, "\n endpoint: ", endpt, "\n body: ", body);
         }
     });
+
+    if ( refresh && expiresin ) {
+        setTimeout( function() {
+            fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, clientSecret, true, true);
+        }, expiresin);
+    }
 
 }
 
@@ -777,29 +793,40 @@ function getAccessToken(code, hub) {
 
     function fordCallback(err, res, body) {
         var jsonbody = JSON.parse(body);
-        access_token = jsonbody["access_token"];
-        refresh_token = jsonbody["refresh_token"];
-        var expiresin = jsonbody["expires_in"];
+        access_token = jsonbody["access_token"] || "";
+        refresh_token = jsonbody["refresh_token"] || "";
+        var newexpire = jsonbody["expires_in"] || "";
 
-        // set refresh timer to 2 minutes before expiration
-        if ( !expiresin || isNaN(parseInt(expiresin)) ) {
-            expiresin = 18*60000;
+        var expiresin;        
+        if ( hub.hubTimer && hub.hubTimer!=="0" && !isNaN(parseInt(hub.hubTimer)) ) {
+            expiresin = parseInt(hub.hubTimer);
         } else {
-            expiresin = (parseInt(expiresin) - 120) * 1000;
+            expiresin = "";
+        }
+    
+        // if an expire in is returned from api then set hubTimer to it minus two minutes
+        if ( newexpire  && !isNaN(parseInt(newexpire)) && parseInt(newexpire)>120 ) {
+            expiresin = (parseInt(newexpire) - 120) * 1000;
+            hub["hubTimer"] = expiresin.toString();
         }
         endpt = "https://api.mps.ford.com/api/fordconnect/vehicles/v1";
 
         if ( access_token && refresh_token ) {
+            GLB.defhub = hub.hubId;
             if ( DEBUG2 ) {
                 console.log( (ddbg()),"Ford access_token: ", access_token, " refresh_token: ", refresh_token, " endpoint: ", endpt);
             }
 
             // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
-            setTimeout( async function() {
-                await fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, clientSecret, false, true);
-            }, expiresin);
+            if ( expiresin ) {
+                setTimeout( function() {
+                    console.log( (ddbg()), "Ford access_token will be refreshed in ", expiresin," msec");
+                    fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, clientSecret, true, true);
+                }, expiresin);
+            }
 
             getHubInfo(hub, access_token, endpt, clientId, clientSecret, true, refresh_token);
+
         } else {
             GLB.defhub = "-1";
             console.log( (ddbg()), "fordCallback error authorizing " + hub.hubType + " hub. bad access_token: ", access_token, " or endpt: ", endpt, " or refresh: ", refresh_token, " err: ", err, "\n body: ", body);
@@ -911,7 +938,7 @@ function getAllThings(reload) {
     // get all things from all configured servers with a valid access and endpoint
     var hubs = GLB.options.config["hubs"];
     if ( hubs && is_array(hubs) && hubs.length ) {
-        hubs.forEach(async function(hub) {
+        hubs.forEach(function(hub) {
             if ( hub.hubAccess && hub.hubEndpt ) {
                 if ( DEBUG2 ) {
                     console.log( (ddbg()), "Getting devices for hub type: ", hub.hubType, "\n access_token: ", hub.hubAccess, "\n endpoint: ", hub.hubEndpt);
@@ -919,10 +946,12 @@ function getAllThings(reload) {
 
                 if ( hub.hubType==="Ford" && hub["hubAccess"] && hub["hubEndpt"] && hub["hubRefresh"] ) {
                     // refresh Ford token before getting vehicles upon request just to be sure
-                    await fordRefreshToken(hub, hub["hubAccess"], hub["hubEndpt"], hub["hubRefresh"], hub["clientId"], hub["clientSecret"], false, false);
+                    // but this call doesn't invoke a repeated cycle since that should already be in place
+                    fordRefreshToken(hub, hub["hubAccess"], hub["hubEndpt"], hub["hubRefresh"], hub["clientId"], hub["clientSecret"], reload, false);
+                } else {
+                    getDevices(hub, reload, "/");
                 }
 
-                getDevices(hub, reload, "/");
             }
         });
     }
@@ -948,7 +977,9 @@ function getDevices(hub, reload, reloadpath) {
     
     // retrieve all things from Ford of Lincoln
     } else if ( hubType==="Ford" || hubType==="Lincoln" ) {
-        // console.log("Getting Ford vehicles...");
+        if ( DEBUG2 ) {
+            console.log( (ddbg()), "Getting Ford vehicles...", hub);
+        }
         getFordVehicles();
 
     } else {
@@ -4042,11 +4073,13 @@ function processIsyMessage(isymsg) {
             } else if ( is_object(eventInfo[0]) && array_key_exists("var", eventInfo[0]) ) {
                 var varobj = eventInfo[0].var[0];
                 if ( DEBUG9 ) {
-                    console.log( (ddbg()), "Event info: ", UTIL.inspect(varobj, false, null, false) );
+                    console.log( (ddbg()), "Action: ", action, " Event info: ", UTIL.inspect(varobj, false, null, false) );
                 }
                 var bid = "vars";
                 var idx = "isy|" + bid;
-                if ( allthings && allthings[idx] && allthings[idx].value && allthings[idx].type==="isy" ) {
+
+                // include test for an init action which is skipped (kudos to @KMan)
+                if ( allthings && allthings[idx] && allthings[idx].value && allthings[idx].type==="isy" && action && action[0]==="6" ) {
                     pvalue = allthings[idx]["value"];
                     try {
                         var id = varobj["$"]["id"];
@@ -4058,23 +4091,26 @@ function processIsyMessage(isymsg) {
                             throw "invalid variable type: " + varobj["$"]["type"];
                         }
 
-                        if ( is_array( varobj.val) ) {
-                            newval = parseFloat(varobj.val[0]);
-                        } else {
-                            newval = parseFloat(varobj.val);
-                        }
-                        if ( is_array(varobj.prec) ) {
-                            var prec = parseInt(varobj.prec[0]);
-                            if ( !isNaN(newval) && ! isNaN(prec) && prec > 0 ) {
-                                newval = newval / Math.pow(10,prec);
+                        // make sure there is a val entry
+                        if ( array_key_exists("val", varobj) ) {
+                            if ( is_array( varobj.val) ) {
+                                newval = parseFloat(varobj.val[0]);
+                            } else {
+                                newval = parseFloat(varobj.val);
                             }
-                        } 
-                        pvalue[subid] = newval.toString();
-                        allthings[idx]["value"] = pvalue;
-                        pushClient(bid, "isy", subid, pvalue, false, false);
-                        processRules(bid, "isy", subid, pvalue, "processMsg");
-                        if ( DEBUG9 ) {
-                            console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " newval: ", newval, " pvalue: ", pvalue);
+                            if ( array_key_exists("prec", varobj) && is_array(varobj.prec) ) {
+                                var prec = parseInt(varobj.prec[0]);
+                                if ( !isNaN(newval) && ! isNaN(prec) && prec > 0 ) {
+                                    newval = newval / Math.pow(10,prec);
+                                }
+                            } 
+                            pvalue[subid] = newval.toString();
+                            allthings[idx]["value"] = pvalue;
+                            pushClient(bid, "isy", subid, pvalue, false, false);
+                            processRules(bid, "isy", subid, pvalue, "processMsg");
+                            if ( DEBUG9 ) {
+                                console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " newval: ", newval, " pvalue: ", pvalue);
+                            }
                         }
 
                     } catch (e) {
@@ -5160,12 +5196,8 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                         if ( pvalue.error || (pvalue.status && pvalue.status!=="SUCCESS") ) {
                             pvalue.status = "ERROR";
                             pvalue.error = "invalid_grant";
-                            if ( pvalue.error_description && pvalue.error_description.indexOf("has expired") !== -1 ) {
-                                pvalue.error_description = "The provided grant has expired.";
-                            } else {
-                                pvalue.error_description = "Unknown error.";
-                            }
-                            // fordRefreshToken(hub, hub.hubAccess, hub.hubRefresh, hub.clientId, hub.clientSecret, false, false);
+                            pvalue.error_description = "Access token expired and is being refreshed. Try again soon.";
+                            fordRefreshToken(hub, hub.hubAccess, hub.hubEndpt, hub.hubRefresh, hub.clientId, hub.clientSecret, true, true);
                         }
                     }
 

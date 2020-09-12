@@ -15,6 +15,7 @@
  * This is a SmartThings and Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history:
+ * 09/12/2020 - check for valid IP and port value entries for HP hub pushes
  * 07/20/2020 - add a status field for device items using getStatus() - thanks @phil_c
  * 07/18/2020 - include level for others and actuators so window shades work
                 also fix bug to include actuators in the event handler logic
@@ -224,12 +225,21 @@ def initialize() {
     state.loggingLevelIDE = settings.configLogLevel?.toInteger() ?: 3
     logger("Installed ${hubtype} hub with settings: ${settings} ", "info")
     
-    if (state.directIP) {
+    def pattern = ~/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/
+    def portpatt = ~/\d+/
+    if ( state.directIP ==~ pattern && state.directPort ==~ portpatt ) {
         postHub(state.directIP, state.directPort, "initialize", "", "", "", "", "")
-        if ( state.directIP2 ) {
+        logger("state changes will be posted to HP at IP: ${state.directIP}:${state.directPort} ", "info")
+
+        if ( state.directIP2 ==~ pattern && state.directPort2 ==~ portpatt ) {
             postHub(state.directIP2, state.directPort2, "initialize", "", "", "", "", "")
+            logger("state changes will also be posted to HP at IP: ${state.directIP2}:${state.directPort2} ", "info")
+        } else {
+            logger("state changes will not be posted to a secondary HP server", "info")
         }
         registerAll()
+    } else {
+        logger("state changes will not be posted to an HP server", "info")
     }
 }
 
