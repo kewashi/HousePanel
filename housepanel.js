@@ -1774,7 +1774,7 @@ function setupButtons() {
             if ( hubType==="Ford" ) {
                 $(this).find("input[name='hubHost']").html("https://fordconnect.cv.ford.com");
             } else if ( hubType=== "SmartThings" ) {
-                $(this).find("input[name='hubHost']").html("https://fordconnect.cv.ford.com");
+                $(this).find("input[name='hubHost']").html("https://graph.api.smartthings.com");
             } else if ( hubType==="Hubitat" ) {
                 $(this).find("input[name='hubHost']").html("https://oauth.cloud.hubitat.com");
             } else if ( hubType==="ISY" ) {
@@ -3067,10 +3067,13 @@ function processClick(that, thingname) {
         // this is enabled by the settings above for command, linkval, and linktype
     }
 
-    var ispassive = (subid==="custom" || subid==="temperature" || subid==="battery" || (command==="TEXT" && subid!=="allon" && subid!=="alloff") ||
+    // no longer treat TEXT custom fields as passive since they could be relabeling of action fields which is fine
+    // if they are not leaving them as an active hub call does no harm - it just returns false but you loose inspections
+    // to compensate for loss of inspection I added any custom field starting with "label" subid will inspect
+    var ispassive = (subid==="custom" || subid==="temperature" || subid==="battery" || //  (command==="TEXT" && subid!=="allon" && subid!=="alloff") ||
         subid==="presence" || subid==="motion" || subid==="contact" || subid==="status" ||
         subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" ||
-        subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid==="custom" ||
+        subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("label") ||
         (thetype==="ford" && !subid.startsWith("_"))
     );
 
