@@ -1,4 +1,5 @@
 'use strict';
+var fs = require('fs');
 
 const devhistory =  ` 
 2.330   Include format check for hub push IP and port entries
@@ -593,7 +594,14 @@ exports.getHeader = function getHeader(skin, islogin) {
     }
     
     // begin creating the main page
-    $tc += '</head><body>';
+    if (fs.existsSync(skin + "/bodyonload.js")) {
+        $tc += '<script type="text/javascript" src="' + skin + '/bodyonload.js"></script>' + '</head><body onload="skin_body_onload();">';
+        //$tc += '<script type="text/javascript" src="skin-housepanel/bodyonload.js"></script></head><body onload="skin_body_onload();">';
+        //$tc += '<script type="text/javascript" src="skin-housepanel/bodyonload.js"></script></head><body>';
+    }
+    else {
+        $tc += '</head><body>';
+    }
     $tc += '<div class="maintable">';
     return $tc;
 }
