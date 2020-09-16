@@ -2,6 +2,10 @@
 var fs = require('fs');
 
 const devhistory =  ` 
+2.331   Adjust custom TEXT fields to retain original action if overridden
+            - retain top and left values for absolute fields
+            - any custom TEXT field starting with label name is static
+            - all others retain the static status of what they replace
 2.330   Include format check for hub push IP and port entries
             - fix variable update bug found by @Kman on ISY forum
 2.329   Additional tweaks to the Ford and Lincoln integrations for stability

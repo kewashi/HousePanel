@@ -418,15 +418,11 @@ function toggleTile(target, str_type, subid) {
             if ( $(target).hasClass(oldsub) ) { 
                 $(target).removeClass(oldsub); 
             }
-            if ( oldsub === swval || (oldsub==="" && swval=="_all_") ) {
+            if ( oldsub === swval ) {
                 newsub = i+1;
                 if ( newsub >= onoff.length ) { newsub= 0; }
-                if ( onoff[newsub]==="" ) {
-                    $(target).html("_all_");
-                } else {
-                    $(target).addClass( onoff[newsub] ); 
-                    $(target).html( onoff[newsub] );
-                }
+                $(target).addClass( onoff[newsub] ); 
+                $(target).html( onoff[newsub] );
                 $('#onoffTarget').html(onoff[newsub]);
                 break;
             }
@@ -774,12 +770,16 @@ function initDialogBinds(str_type, thingindex) {
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         } else {
             var ischecked = $("#absPlace").prop("checked");
+            var rule2;
             if ( ischecked ) {
                 rule = "top: " + newsize;
+                rule2 = "padding-top: 0px;";
             } else {
                 rule = "padding-top: " + newsize;
+                rule2 = "top: 0px;";
             }
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule2);
         }
         event.stopPropagation;
     });
@@ -809,12 +809,16 @@ function initDialogBinds(str_type, thingindex) {
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         } else {
             var ischecked = $("#absPlace").prop("checked");
+            var rule2;
             if ( ischecked ) {
                 rule = "left: " + newsize;
+                rule2 = "padding-left: 0px;";
             } else {
                 rule = "padding-left: " + newsize;
+                rule2 = "left: 0px;";
             }
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule2);
         }
         event.stopPropagation;
     });
@@ -1399,20 +1403,26 @@ function checkboxHandler(idselect, onaction, offaction, overlay) {
         var thingindex = $("#tileDialog").attr("thingindex");
         var subid = $("#subidTarget").html();
         var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
-        var overlayTarget = getCssRuleTarget("wholetile", subid, thingindex);
+        if ( overlay ) {
+            var overlayTarget = getCssRuleTarget("wholetile", subid, thingindex);
+        }
         // var overlayTarget = "div.overlay." + subid + ".v_" + thingindex;
         if($(idselect).is(':checked')){
             // alert("overlay= "+overlay+" overlayTarget= "+overlayTarget+" action= "+onaction);
             if (overlay) {
-                addCSSRule(overlayTarget, onaction, true);
+                addCSSRule(overlayTarget, onaction[0], true);
             }
-            addCSSRule(cssRuleTarget, onaction, false);
+            onaction.forEach(function(act) {
+                addCSSRule(cssRuleTarget, act, false);
+            });
         } else {
             // alert("overlay= "+overlay+" overlayTarget= "+overlayTarget+" action= "+offaction);
             if (overlay) {
-                addCSSRule(overlayTarget, offaction, true);
+                addCSSRule(overlayTarget, offaction[0], true);
             }
-            addCSSRule(cssRuleTarget, offaction, false);
+            offaction.forEach(function(act) {
+                addCSSRule(cssRuleTarget, act, false);
+            });
         }
     });
 }
@@ -1561,16 +1571,22 @@ function initColor(str_type, subid, thingindex) {
     }
 
     // set the padding
-    var ptop = parseInt($(target).css("padding-top"));
-    var pleft = parseInt($(target).css("padding-left"));
-    if ( str_type==="panel" || subid==="wholetile" ) {
-        ptop = parseInt($(target).css("background-position-y"));
-        pleft = parseInt($(target).css("background-position-x"));
-    }
-    if ( !ptop || isNaN(ptop) ) { ptop = 0; }
-    if ( !pleft || isNaN(pleft) ) { pleft = 0; }
-    $("#topPadding").val(ptop);
-    $("#leftPadding").val(pleft);
+    // if ( $(target).css("position") && $(target).css("position").includes("absolute") ) {
+    //     var ptop = parseInt($(target).css("top"));
+    //     var pleft = parseInt($(target).css("left"));
+    // } else {
+    //     ptop = parseInt($(target).css("padding-top"));
+    //     pleft = parseInt($(target).css("padding-left"));
+    // }
+
+    // if ( str_type==="panel" || subid==="wholetile" ) {
+    //     ptop = parseInt($(target).css("background-position-y"));
+    //     pleft = parseInt($(target).css("background-position-x"));
+    // }
+    // if ( !ptop || isNaN(ptop) ) { ptop = 0; }
+    // if ( !pleft || isNaN(pleft) ) { pleft = 0; }
+    // $("#topPadding").val(ptop);
+    // $("#leftPadding").val(pleft);
 
     // var txtBefore = $(target+"::before").css("content");
     var txtBefore = window.getComputedStyle(document.querySelector(target), "::"+"before").getPropertyValue('content');
@@ -1815,9 +1831,10 @@ function initColor(str_type, subid, thingindex) {
     
     }
 
-    checkboxHandler("#invertIcon","filter: invert(1);","filter: invert(0);", false);
-    checkboxHandler("#absPlace","position: absolute;","position: relative;", true);
-    checkboxHandler("#inlineOpt","display: inline-block;","display: block;", false);
+    checkboxHandler("#invertIcon",["filter: invert(1);"],["filter: invert(0);"], false);
+    checkboxHandler("#absPlace",["position: absolute;","padding-top: 0px;","padding-left: 0px;"],
+                                ["position: relative;","top: 0px;","left: 0px;"], true);
+    checkboxHandler("#inlineOpt",["display: inline-block;"],["display: block;"], false);
     
     $("#editEffect").off('change');
     $("#editEffect").on('change', function (event) {
@@ -1969,7 +1986,25 @@ function initColor(str_type, subid, thingindex) {
     } else {
         $("#absPlace").prop("checked",false);
     }
+
+
+    // set the padding or absolute positioning
+    if ( str_type==="panel" || subid==="wholetile" ) {
+        var ptop = parseInt($(target).css("background-position-y"));
+        var pleft = parseInt($(target).css("background-position-x"));
+    } else if ( $(target).css("position") && $(target).css("position").includes("absolute") ) {
+        ptop = parseInt($(target).css("top"));
+        pleft = parseInt($(target).css("left"));
+    } else {
+        ptop = parseInt($(target).css("padding-top"));
+        pleft = parseInt($(target).css("padding-left"));
+    }
+    if ( !ptop || isNaN(ptop) ) { ptop = 0; }
+    if ( !pleft || isNaN(pleft) ) { pleft = 0; }
+    $("#topPadding").val(ptop);
+    $("#leftPadding").val(pleft);
     
+
     // set the initial inline check box
     if ( $(target).css("display") && $(target).css("display").includes("inline") ) {
         $("#inlineOpt").prop("checked",true);

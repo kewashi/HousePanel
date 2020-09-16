@@ -5600,9 +5600,17 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
             // converted this over to getting the custom text out of the options
             // this allows me to avoid lugging around the custom text in the sibling helper
             // this mirrors the code in RULES below
+            // but we now first try to execute an action before returning an inspect object
             case "TEXT":
-                response = allthings[idx]["value"];
-                response[subid] = linkval;
+                // response = allthings[idx]["value"];
+                // response[subid] = linkval;
+                try {
+                    response = callHub(hub, swid, swtype, swval, swattr, subid, false, false, false);
+                    if ( !response ) { throw "error"; }
+                } catch (e) {
+                    response = allthings[idx]["value"];
+                    response[subid] = linkval;
+                }
                 break;
 
             // link commands are the only ones that use the linkval setting
