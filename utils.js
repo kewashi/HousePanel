@@ -1,6 +1,8 @@
 'use strict';
 
 const devhistory =  ` 
+2.332   Add "readonly" as special custom field to neuter actions
+            - fix vulnerability in json dependency
 2.331   Adjust custom TEXT fields to retain original action if overridden
             - retain top and left values for absolute fields
             - any custom TEXT field starting with label name is static
