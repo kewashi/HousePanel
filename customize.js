@@ -477,9 +477,17 @@ function loadLinkItem(idx, allowuser, sortval, sortup) {
                     }
                 }
 
-            } else if ( !subids.includes(tkey) ){
-
-                results+= "<option value='" + tkey + "'>" + tkey + "</option>";
+            } else if ( !subids.includes(tkey) ) {
+                // If an alias name exists, then use it instead of the key
+                if (('alias' in thing) && (tkey in thing.alias)) {
+                    // Skip altogether the isy "prec" variables
+                    if ( ( idx != "isy|vars" ) || !tkey.startsWith( "prec_" ) ){
+                        results+= "<option value='" + tkey + "'>" + thing.alias[tkey] + "</option>";
+                    }
+                }
+                else {
+                    results+= "<option value='" + tkey + "'>" + tkey + "</option>";
+                }
                 subids.push(tkey);
                 numthings++;
                 if ( !firstitem  ) {
