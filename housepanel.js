@@ -2867,6 +2867,21 @@ function setupPage() {
         if ( priorOpmode!=="Operate" ) {
             return;
         }
+
+        // check for read only custom field that ignores any action clicks for whole tile
+        var ro = false;
+        if ( subid==="readonly" ) {
+            ro = true;
+        } else {
+            var rosib = $(this).parent().siblings("div.overlay.readonly");
+            if ( rosib && rosib.length > 0 ) {
+                ro = true;
+            }
+        }
+
+        if ( ro ) {
+            return;
+        }
         
         // check for clicking on a password field
         // or any other field of a tile with a password sibling
