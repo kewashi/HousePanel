@@ -505,7 +505,18 @@ function loadLinkItem(idx, allowuser, sortval, sortup) {
         sortExistingFields(sortval, sortup);
         $.each(cm_Globals.options[uid], function(index, val) {
             var subid = val[2];
-            results+= "<option value='" + subid + "'>" + subid + "<span class='reddot'> *</span></option>";
+
+            var alias = "";
+            if ( val[0] == "LINK" ) {
+                var linkid = val[1];
+                var idx = Object.keys(cm_Globals.options.index).find(key => cm_Globals.options.index[key] == linkid);
+                var linkthing = cm_Globals.allthings[idx];
+                if (("alias" in linkthing) && (subid in linkthing.alias )) {
+                   alias = " (" + linkthing.alias[subid] + ")";
+                }
+            }
+
+            results+= "<option value='" + subid + "'>" + subid + alias + "<span class='reddot'> *</span></option>";
             numthings++;
             if ( !firstitem  ) {
                 firstitem = subid;
