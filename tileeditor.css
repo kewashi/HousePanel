@@ -12,6 +12,8 @@ By moving things here we reduce the skin file to the bare needs
 :root {
   --main-width-landscape: auto;
   --main-height-landscape: auto;
+  --main-width-portrait: auto;
+  --main-height-portrait: auto;
 }
 
 * {
@@ -51,7 +53,7 @@ body {
 @media (orientation: portrait) {
     #dragregion, #dragregion div.panel {
         min-height: 1200px;
-        width: 650px;
+        width: var(--main-width-portrait);
     }
     .ui-tabs .ui-tabs-nav .ui-tabs-anchor {
         font-size: 10pt;

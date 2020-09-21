@@ -9,12 +9,18 @@
 
 /* panel backgrounds go here in the skin */
 div.panel-Family, div.panel-family, div.panel-Familyroom, div.panel-familyroom {
-    background-image: url('media/family.jpg');
-    background-size: cover;
+    /*background-image: url('media/family.jpg');
+    background-size: cover;*/
+    background: rgb(2,0,36);
+    background: linear-gradient(90deg, rgba(2,0,36,1) 0%, rgba(84,84,185,1) 0%, rgba(2,191,230,1) 100%);
 }
 div.panel-Kitchen, div.panel-kitchen, div.panel-Dinette, div.panel-dinette {
-    background-image: url('media/kitchenroom.jpg');
-    background-size: cover;
+    border: 5px solid gray;
+	padding: 5px;
+    /*background-image: url('media/kitchenroom.jpg');
+    background-size: cover;*/
+	background: rgb(2,0,36);
+	background: linear-gradient(90deg, rgba(2,0,36,1) 0%, rgba(28,28,82,1) 0%, rgba(2,191,230,1) 100%);
 }
 div.panel-Living, div.panel-living, div.panel-Livingroom, div.panel-livingroom {
     background-image: url('media/formal.jpg');
