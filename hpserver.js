@@ -1247,9 +1247,9 @@ function getDevices(hub, reload, reloadpath) {
                         allthings[vidx]["alias"][key] = vardefs[key];
                     }
                 }
-				if (DEBUGvar) {
-					console.log( (ddbg()), "ISY Alias names:  " + allthings[vidx]["alias"] );
-				}
+                if (DEBUGvar) {
+                    console.log( (ddbg()), "ISY Alias names:  " + allthings[vidx]["alias"] );
+                }
             }
         }
 

@@ -479,7 +479,7 @@ function loadLinkItem(idx, allowuser, sortval, sortup) {
 
             } else if ( !subids.includes(tkey) ) {
                 // If an alias name exists, then use it instead of the key
-				var opttext = tkey;
+                var opttext = tkey;
                 if (('alias' in thing) && (tkey in thing.alias)) {
                     opttext = thing.alias[tkey];
                 }
