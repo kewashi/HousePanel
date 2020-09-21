@@ -1,5 +1,4 @@
 'use strict';
-var fs = require('fs');
 
 const devhistory =  ` 
 2.400   Screen saver photos upon blackout if photos folder exists
@@ -603,14 +602,7 @@ exports.getHeader = function getHeader(skin, islogin) {
     }
     
     // begin creating the main page
-    if (fs.existsSync(skin + "/bodyonload.js")) {
-        $tc += '<script type="text/javascript" src="' + skin + '/bodyonload.js"></script>' + '</head><body onload="skin_body_onload();">';
-        //$tc += '<script type="text/javascript" src="skin-housepanel/bodyonload.js"></script></head><body onload="skin_body_onload();">';
-        //$tc += '<script type="text/javascript" src="skin-housepanel/bodyonload.js"></script></head><body>';
-    }
-    else {
-        $tc += '</head><body>';
-    }
+    $tc += '</head><body>';
     $tc += '<div class="maintable">';
     return $tc;
 }

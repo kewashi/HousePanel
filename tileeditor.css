@@ -9,13 +9,6 @@ By moving things here we reduce the skin file to the bare needs
 * 01/02/2020 - minor tweaks to make floor plan skins look right
 
 */
-:root {
-  --main-width-landscape: auto;
-  --main-height-landscape: auto;
-  --main-width-portrait: auto;
-  --main-height-portrait: auto;
-}
-
 * {
     font-family: "Droid Sans", sans-serif;
     font-size: 11pt; padding: 0px; margin: 0px;
@@ -26,8 +19,8 @@ div.wrap {
     overflow-wrap: anywhere;
 }
 body {
-    /*width: 100%;
-    height: 100%;*/
+    width: 100%;
+    height: 100%;
     background-color: #ffffff;
     color: #000000;
     height: auto;
@@ -44,7 +37,7 @@ body {
 @media (orientation: landscape) {
     #dragregion, #dragregion div.panel {
         min-height: 650px;
-        width: var(--main-width-landscape);
+        width: 1200px;
     }
     .ui-tabs .ui-tabs-nav .ui-tabs-anchor {
         font-size: 11pt;
@@ -56,7 +49,7 @@ body {
 @media (orientation: portrait) {
     #dragregion, #dragregion div.panel {
         min-height: 1200px;
-        width: var(--main-width-portrait);
+        width: 650px;
     }
     .ui-tabs .ui-tabs-nav .ui-tabs-anchor {
         font-size: 10pt;
@@ -71,7 +64,7 @@ div.greeting {
     margin-left: 10px;
     margin-bottom: 20px;
     border: 4px solid black;
-    width: var(--main-width-landscape);
+    width: 1200px;
     background-color: #eeeeee;
     color: black;
     font-size: 12pt;
@@ -86,7 +79,7 @@ div.greeting p {
 div.greetingopts {
     margin-left: 10px;
     margin-bottom: 20px;
-    width: var(--main-width-landscape);
+    width: 1200px;
 }
 div.greetingopts div {
     margin-top: 6px;
@@ -95,14 +88,14 @@ div.greetingopts div {
 div.greetingopts div.hubopt {
     margin-top: 0px;
     margin-bottom: 0px;
-    width: var(--main-width-landscape);
+    width: 1200px;
     padding-top: 20px;
     padding-bottom: 20px;
     border: 2px solid black;
     background-color: #cccccc;
 }
 #newthingcount {
-    width: var(--main-width-landscape);
+    width: 1200px;
     height: 30px;
     border: 2px solid black;
     border-bottom: none;
@@ -169,7 +162,7 @@ div.greetingopts div.authhub {
     margin-top: 0px;
     border: 2px solid black;
     background-color: rgba(240, 240, 220, 1);
-    width: var(--main-width-landscape);
+    width: 1200px;
 }
 
 div.maintable {
