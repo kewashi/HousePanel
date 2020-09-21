@@ -431,7 +431,7 @@ function toggleTile(target, str_type, subid) {
 };
 
 // activate ability to click on icons
-function setupIcons(category, old_str_type, old_thingindex) {
+function setupIcons(category) {
 
     $("#iconList").off("click","img");
     $("#iconList").on("click","img", function() {
@@ -2140,7 +2140,7 @@ function updateColor(strCaller, cssRuleTarget, str_type, subid, thingindex, strC
 
 function getIconCategories() {
 	var iconDoc = 'iconlist.txt';
-	var arrCat = ['Local_Storage','Local_Media'];
+	var arrCat = ["Skin_Icons","Skin_Media","Skin_Photos","Main_Icons","Main_Media","Main_Photos"];
 	$.ajax({
         url:iconDoc,
         type:'GET',
@@ -2168,21 +2168,18 @@ function getIcons(str_type, thingindex) {
     
     // change to use php to gather icons in an ajax post call
     // this replaces the old method that fails on GoDaddy
-    if ( !iCategory ) { iCategory = 'Local_Storage'; }
-    if( iCategory === 'Local_Storage' || iCategory==='Local_Media') {
-        var localPath = 'icons';
-        if ( iCategory === 'Local_Media') {
-            localPath = 'media';
-        }
+    if ( !iCategory ) { iCategory = 'Skin_Icons'; }
+    if ( iCategory.startsWith("Skin_") || iCategory.startsWith("Main_") ) {
+        var localPath = iCategory.substr(5).toLowerCase();
         $.post(returnURL, 
             {useajax: "geticons", id: 0, type: "none", value: localPath, attr: iCategory},
             function (presult, pstatus) {
-                if (pstatus==="success" ) {
+                if (pstatus==="success" && presult ) {
                     // console.log("reading icons from skin= " + skindir + " and path= "+localPath);
                     $('#iconList').html(presult);
-                    setupIcons(iCategory, str_type, thingindex);
+                    setupIcons(iCategory);
                 } else {
-                    $('#iconList').html("<div class='error'>Error reading icons from skin= " + skindir + " and local path= " + localPath + "</div>");
+                    $('#iconList').html("<div class='error'>Error reading icons for: " + iCategory + "</div>");
                 }
             }
         );
@@ -2197,7 +2194,7 @@ function getIcons(str_type, thingindex) {
                 $.each(arrIcons, function(index, val) {
                     var iconCategory = val.substr(0, val.indexOf('|'));
                     iconCategory = $.trim(iconCategory).replace(/\s/g, '_');	
-                    if(iconCategory === iCategory) {
+                    if (iconCategory === iCategory) {
                         var iconPath = val.substr(1 + val.indexOf('|'));
                         // iconPath = encodeURI(iconPath);
                         icons+='<div>';
@@ -2205,7 +2202,7 @@ function getIcons(str_type, thingindex) {
                     }
                 });			
                 $('#iconList').html(icons);
-                setupIcons(iCategory, str_type, thingindex);
+                setupIcons(iCategory);
             }
         });
     }
@@ -2252,7 +2249,7 @@ function iconSelected(category, cssRuleTarget, imagePath, str_type, thingindex) 
     var strEffect =  getBgEffect();
     
     // if the separator is back slash change to forward slash required by css
-    if ( category==="Local_Storage" || category==="Local_Media" ) {
+    if ( category.startsWith("Skin_") || category.startsWith("Main_") ) {
         // imagePath = returnURL + "/" + imagePath;
         imagePath = imagePath.replace(/\\/g,"/");
     }
@@ -2262,6 +2259,10 @@ function iconSelected(category, cssRuleTarget, imagePath, str_type, thingindex) 
     if ( imagePath.startsWith(skindir) ) {
         var n = skindir.length;
         imagePath = imagePath.substr(n);
+    }
+
+    if ( category.startsWith("Main_") ) {
+        imagePath = "../" + imagePath;
     }
 
     var imgurl = 'background-image: url("' + imagePath + '")';

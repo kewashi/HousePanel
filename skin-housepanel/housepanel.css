@@ -209,12 +209,12 @@ div.door.closed, div.contact.door.closed {
     background-size: 40px;
 }
 div.overlay.water div.water.wet {
-    background-image: url('http://cdn.device-icons.smartthings.com/alarm/water/wet@2x.png');
+    background-image: url('icons/wet@2x.png');
     background-color: rgba(204, 255, 204, 0.6);
     color: rgba(255, 255, 255, 0.01);
 }
 div.overlay.water div.water.dry {
-    background-image: url('http://cdn.device-icons.smartthings.com/alarm/water/dry@2x.png');
+    background-image: url('icons/dry@2x.png');
     background-color: rgba(245, 245, 245, 0.6);
     color: rgba(255, 255, 255, 0.01);
 }
@@ -408,10 +408,7 @@ div.heat-dn, div.cool-dn, div.level-dn, div.switchlevel-dn,
 div.colorTemperature-dn, div.hue-dn, div.saturation-dn,
 div.heatingSetpoint-dn, div.coolingSetpoint-dn {
     color: rgba(255, 255, 255, 0.01);
-    background-image: url("media/down.png");
-/*    background-image: url("media/sprites.gif");
-    background-position: -32px 0px;
-    background-size: auto;*/
+    background-image: url("icons/down.png");
     box-shadow: 0px 1px 2px rgba(0,0,0,0.8);
 }
 
@@ -419,10 +416,7 @@ div.heat-up, div.cool-up, div.level-up, div.switchlevel-up,
 div.colorTemperature-up, div.hue-up, div.saturation-up,
 div.heatingSetpoint-up, div.coolingSetpoint-up {
     color: rgba(255, 255, 255, 0.01);
-    background-image: url("media/up.png");
-/*    background-image: url("media/sprites.gif");
-    background-position: -272px -2px;
-    background-size: auto;*/
+    background-image: url("icons/up.png");
     box-shadow: 0px 1px 2px rgba(0,0,0,0.8);
 }
 
@@ -478,43 +472,43 @@ div.audio._volumeDown, div.audio._groupVolumeDown{
     width: 40px;
 }
 div.music-pause, div.audio._pause {
-    background-image: url("media/pause.png");
+    background-image: url("icons/pause.png");
 }
 div.music-stop, div.audio._stop {
-    background-image: url("media/stop.png");
+    background-image: url("icons/stop.png");
 }
 div.music-play, div.audio._play {
-    background-image: url("media/play.png");
+    background-image: url("icons/play.png");
 }
 div.music-previous, div.audio._previousTrack {
-    background-image: url("media/prev.png");
+    background-image: url("icons/prev.png");
 }
 div.music-next, div.audio._nextTrack {
-    background-image: url("media/next.png");
+    background-image: url("icons/next.png");
 }
 div.audio._mute, div.audio._muteGroup {
-    background-image: url("media/mute.png");
+    background-image: url("icons/mute.png");
 }
 div.audio._unmute, div.audio._unmuteGroup {
-    background-image: url("media/unmute.png");
+    background-image: url("icons/unmute.png");
 }
 div.audio._rewind {
-    background-image: url("media/rewind.png");
+    background-image: url("icons/rewind.png");
 }
 div.audio._fastForward {
-    background-image: url("media/fastforward.png");
+    background-image: url("icons/fastforward.png");
 }
 div.audio._volumeUp {
-    background-image: url("media/up.png");
+    background-image: url("icons/up.png");
 }
 div.audio._volumeDown {
-    background-image: url("media/down.png");
+    background-image: url("icons/down.png");
 }
 div.audio._groupVolumeUp {
-    background-image: url("media/upgroup.png");
+    background-image: url("icons/upgroup.png");
 }
 div.audio._groupVolumeDown {
-    background-image: url("media/downgroup.png");
+    background-image: url("icons/downgroup.png");
 }
 
 /* make thermostat height auto */

@@ -329,6 +329,34 @@ $(document).ready(function() {
                 setupPage(); 
                 setupSliders();
                 setupColors();
+
+                // reset to screen saver if blackout set mode to night
+                // we have to guess the prefix of the mode here - so only those guessed will work
+                // note that ISY hubs don't have a mode so I use variable int_1 = -1 to flag night mode
+                // need to put this logic in the doc
+                var midx1 = "mode|st_mode";
+                var midx2 = "mode|he_mode";
+                var midx3 = "mode|s_mode";
+                var midx3 = "mode|h_mode";
+                var midxisy = "isy|vars";
+                var allt = cm_Globals.allthings[midx1] || cm_Globals.allthings[midx2] || 
+                           cm_Globals.allthings[midx3] || cm_Globals.allthings[midx4] || false;
+                var allisy = cm_Globals.allthings[midxisy] || false;
+                if ( allt || allisy ) {
+                    try {
+                        var blackout = cm_Globals.options.config["blackout"].toString();
+                    } catch (e) {
+                        blackout = "false";
+                    }
+                    var themode = allt ? allt.value.themode : false;
+                    var isymode = allisy ? allisy.value.int_1 : false;
+                    console.log(themode, isymode);
+                    
+                    if ( blackout==="true" && (themode === "Night" || isymode === "-1" ) ) {
+                        execButton("blackout");
+                    }
+                }
+
             }, 200);
         }
     }
@@ -631,8 +659,9 @@ function setupWebsocket(webSocketUrl)
             });
 
             // blank screen if night mode set
-            if ( thetype==="mode" && subid==="themode" && blackout==="true" && (priorOpmode === "Operate" || priorOpmode === "Sleep") ) {
-                if ( pvalue[subid]==="Night" ) {
+            if ( ((thetype==="mode" && subid==="themode") || (thetype==="isy" && subid==="int_1" )) && 
+                 blackout==="true" && (priorOpmode === "Operate" || priorOpmode === "Sleep") ) {
+                if ( pvalue[subid]==="Night" || pvalue[subid]==="-1" ) {
                     execButton("blackout");
                 } else if ( $("#blankme") ) {
                     $("#blankme").off("click");
@@ -1509,16 +1538,67 @@ function execButton(buttonid) {
     } else if ( buttonid === "blackout") {
         // blank out screen with a black box size of the window and pause timers
         var w = window.innerWidth;
-        var h = window.innerHeight;            
+        var h = window.innerHeight;
+        // var dophotos = true;
+        var photohandle;
+
+        try {
+            var phototimer = cm_Globals.options.config["phototimer"];
+            phototimer = parseInt(phototimer) * 1000;
+        } catch(e) {
+            phototimer = 0;
+        }
         priorOpmode = "Sleep";
         $("div.maintable").after("<div id=\"blankme\"></div>");
-        $("#blankme").css( {"height":h+"px", "width":w+"px", 
-                            "position":"absolute", "background-color":"black",
+        var photos;
+
+        // if timer is zero or less than 1 second just do a black screen
+        if ( phototimer < 1000 ) {
+            $("#blankme").css( {"height":h+"px", "width":w+"px", 
+            "position":"absolute", "background-color":"black",
+            "left":"0px", "top":"0px", "z-index":"9999" } );
+        
+        // if timer provided make call to get list of photos to cycle through
+        // and if this fails fall back to the same simple black screen
+        } else {
+            $.post(cm_Globals.returnURL, 
+                {useajax: "getphotos", id: 0, type: "none"}, 
+                function(presult, pstatus) {
+                    if ( presult && typeof presult == "object" ) {
+                        // console.log("photos from getPhotos: ", presult);
+                        photos = presult;
+                        var pnum = 0;
+                        $("#blankme").css( {"height":h+"px", "width":w+"px", 
+                        "position":"absolute", "background-color":"black", "background-size":"contain",
+                        "background-image": "url('photos/" + photos[pnum] + "')",
+                        "left":"0px", "top":"0px", "z-index":"9999" } );
+                        photohandle = setInterval(function() {
+                            pnum++;
+                            if ( typeof photos[pnum] === "undefined" ) {
+                                pnum = 0;
+                            }
+                            $("#blankme").css( {"height":h+"px", "width":w+"px", 
+                            "position":"absolute", "background-color":"black", "background-size":"contain",
+                            "background-image": "url('photos/" + photos[pnum] + "')",
                             "left":"0px", "top":"0px", "z-index":"9999" } );
+                        }, phototimer);
+                    
+                    } else {
+                        $("#blankme").css( {"height":h+"px", "width":w+"px", 
+                        "position":"absolute", "background-color":"black",
+                        "left":"0px", "top":"0px", "z-index":"9999" } );
+                    }
+                }
+            );
+        }
+            // photos = {0: "Nascar Race-18.JPG", 1: "Nascar Race-49.JPG", 2: "ford2020mustang.png", 3: "Techonomy 2015-2.JPG"};
 
         // clicking anywhere will restore the window to normal
         $("#blankme").off("click");
         $("#blankme").on("click", function(evt) {
+            if ( photohandle ) {
+                clearInterval(photohandle);
+            }
             $("#blankme").remove(); 
             priorOpmode = "Operate";
             evt.stopPropagation();

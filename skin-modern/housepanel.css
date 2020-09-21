@@ -299,13 +299,13 @@ div.presence.absent, div.custom.absent {
     color: rgba(255, 255, 255, 0.01);
 }
 div.overlay.water div.water.wet {
-    background-image: url('http://cdn.device-icons.smartthings.com/alarm/water/wet@2x.png');
+    background-image: url('icons/wet@2x.png');
     background-color: rgba(170, 170, 170, 1);
     height: 90px;
     color: rgba(255, 255, 255, 0.01);
 }
 div.overlay.water div.water.dry {
-    background-image: url('http://cdn.device-icons.smartthings.com/alarm/water/dry@2x.png');
+    background-image: url('icons/dry@2x.png');
     background-color: rgba(170, 170, 170, 1);
     height: 90px;
     color: rgba(255, 255, 255, 0.01);
@@ -715,20 +715,16 @@ div.shm.state, div.hsm.state, div.custom.state {
     background-position-x: center;
     background-position-y: bottom;
 }
-div.shm.state.stay, div.hsm.state.armedHome, div.state.Home,
-div.custom.state.stay, div.custom.state.armedHome, div.custom.state.Home {
+div.state.stay, div.state.armedHome, div.state.Home, div.state.Day {
     background-image: url('icons/security-blue.png');
 }
-div.shm.state.away, div.hsm.state.armedAway, div.state.Away,
-div.custom.state.away, div.custom.state.armedAway, div.custom.state.Away {
+div.state.away, div.state.armedAway, div.state.Away {
     background-image: url('icons/security-red.png');
 }
-div.shm.state.off, div.hsm.state.disarmed, div.overlay.state div.state.Disarmed,
-div.custom.state.off, div.custom.state.disarmed, div.custom.state.Disarmed {
+div.state.off, div.state.disarmed, div.state.Disarmed {
     background-image: url('icons/security-green.png');
 }
-div.hsm.state.armedNight, div.state.Night, 
-div.custom.state.armedNight, div.custom.state.Night {
+div.state.armedNight, div.state.Night  {
     background-image: url('icons/security-purple.png');
 }
 div.shm-thing div.overlay div.shm.state, div.hsm-thing div.overlay div.hsm.state {
@@ -810,21 +806,15 @@ div.thing.shm-thing, div.thing.hsm-thing, div.thing.mode-thing {
     width: 120px;
     height: 180px;
 }
-/* mode and ST shm and Hubitat hsm styles */
-div.mode-thing.m1x1, div.mode-thing.m2x1,
+/* blank sizes */
 div.blank-thing.b1x1, div.blank-thing.b2x1 {
     height: 180px;
 }
-div.mode-thing.m1x2, div.mode-thing.m2x2,
 div.blank-thing.b1x2, div.blank-thing.b2x2 {
     height: 368px;
 }
-div.mode-thing.m1x1, div.mode-thing.m1x2,
 div.blank-thing.b1x1, div.blank-thing.b1x2 {
     width: 120px;
-}
-div.mode-thing.m2x1, div.mode-thing.m2x2 {
-    width: 248px;
 }
 div.blank-thing.b2x1, div.blank-thing.b2x2 {
     width: 256px;

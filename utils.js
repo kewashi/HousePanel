@@ -2,6 +2,9 @@
 var fs = require('fs');
 
 const devhistory =  ` 
+2.400   Screen saver photos upon blackout if photos folder exists
+            - clean up icon logic and expand options in tile editor
+            - move common icons from housepanel skin to main media folder
 2.332   Add "readonly" as special custom field to neuter actions
             - fix vulnerability in json dependency
 2.331   Adjust custom TEXT fields to retain original action if overridden
