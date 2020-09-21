@@ -315,6 +315,10 @@ function readOptions(caller) {
         GLB.options.config.uname = "default";
         rewrite = true;
     }
+    if ( !array_key_exists("phototimer", GLB.options.config) ) {
+        GLB.options.config.phototimer = "5";
+        rewrite = true;
+    }
 
     // various error prevention checks are below
     if ( !array_key_exists("pword", GLB.options.config) ) {
@@ -1560,10 +1564,6 @@ function getDevices(hub, reload, reloadpath) {
                 });
 
                 updateOptions(reload, reloadpath);
-                // update things and reload page after handling all tiles
-                // setTimeout( function() {
-                //     updateOptions(reload, reloadpath);
-                // }, 5000);
             }
         }
     }
@@ -6120,13 +6120,13 @@ function getInfoPage(uname, returnURL, pathname) {
         var endpt = hub["hubEndpt"];
         $tc += "<div class='bold'>Hub #" + num + "</div>";
         $tc += "<div class='bold'>Hub Name = " + hubName + "</div>";
-        $tc += "<div>Type = " + hubType + "</div>";
-        $tc += "<div>Hub ID = " + hubId + "</div>";
-        $tc += "<div>Hub Host URL = " + hubHost + "</div>";
-        $tc += "<div>Client ID = " + clientId + "</div>";
-        $tc += "<div>Client Secret = " + clientSecret + "</div>";
-        $tc += "<div>AccessToken = " + access_token + "</div>";
-        $tc += "<div>Endpoint = " + endpt + "</div>";
+        $tc += "<div class='wrap'>Type = " + hubType + "</div>";
+        $tc += "<div class='wrap'>Hub ID = " + hubId + "</div>";
+        $tc += "<div class='wrap'>Hub Host URL = " + hubHost + "</div>";
+        $tc += "<div class='wrap'>Client ID = " + clientId + "</div>";
+        $tc += "<div class='wrap'>Client Secret = " + clientSecret + "</div>";
+        $tc += "<div class='wrap'>AccessToken = " + access_token + "</div>";
+        $tc += "<div class='wrap'>Endpoint = " + endpt + "</div>";
         if ( (num + 1) < hubs.length ) {
             $tc += "<hr />";
         }
@@ -6507,6 +6507,15 @@ function getOptionsPage(uname, hostname, pathname) {
     var $ruleoptions = configoptions["rules"];
     var $timezone = configoptions["timezone"];
     var polisyip = configoptions["polisyip"] || "localhost";
+    var phototimer = configoptions["phototimer"] || "5";
+    try {
+        phototimer = parseInt(phototimer);
+        if ( isNaN(phototimer) ) {
+            phototimer = 5;
+        }
+    } catch(e) {
+        phototimer = 5;
+    }
 
     var hubpick = "all";
     if ( configoptions["hubpick"] ) {
@@ -6548,6 +6557,8 @@ function getOptionsPage(uname, hostname, pathname) {
     $tc += "<br/><label for=\"clrblackid\" class=\"kioskoption\">Blackout on Night Mode: </label>";    
     $kstr = ($blackout===true || $blackout==="true") ? "checked" : "";
     $tc+= "<input id=\"clrblackid\" width=\"24\" type=\"checkbox\" name=\"clrblackid\"  value=\"" + $blackout + "\" " + $kstr + "/>";
+    $tc+= "<br /><label for=\"photoid\" class=\"kioskoption\">Photo timer (sec): </label>";
+    $tc+= "<input class=\"kioskoption\" id=\"photoid\" name=\"phototimer\" width=\"10\" type=\"number\"  min='0' max='300' step='1' value=\"" + phototimer + "\" />";
     if ( ENABLERULES ) {
         $tc += "<br/><label for=\"ruleid\" class=\"kioskoption\">Enable Rules? </label>";
         var $rstr = ($ruleoptions===true || $ruleoptions==="true" || $ruleoptions==="1" || $ruleoptions==="yes") ? "checked" : "";
@@ -7022,6 +7033,7 @@ function processOptions(uname, optarray) {
     var fcastcity = "";
     var fcastregion = "";
     var fcastcode = "";
+    var phototimer = "5";
 
     // // get all the rooms checkboxes and reconstruct list of active things
     // // note that the list of checkboxes can come in any random order
@@ -7055,6 +7067,9 @@ function processOptions(uname, optarray) {
         } else if ( key==="fcastcode" ) {
             fcastcode = val.trim();
             configoptions["fcastcode"] = fcastcode;
+        } else if ( key==="phototimer" ) {
+            phototimer = val.trim();
+            configoptions["phototimer"] = phototimer
         
         // handle user selected special tile count
         } else if ( key.substr(0,4)==="cnt_" ) {
@@ -7230,30 +7245,68 @@ function getIcons(uname, icondir, category) {
         icondir = "icons";
     }
     if ( !category ) {
-        category = "";
+        category = "Skin_";
     }
 
     // change over to where our icons are located
-    var activedir = path.join(__dirname, skin, icondir);
+    if ( category.startsWith("Main_") ) {
+        var activedir = path.join(__dirname, icondir);
+    } else {
+        activedir = path.join(__dirname, skin, icondir);
+    }
+    try {
+        var dirlist = fs.readdirSync(activedir);
+    } catch(e) {
+        dirlist = false;
+    }
 
-    // TODO - get function to return a directory listing
-    // $dirlist = scandir($activedir);
-    var dirlist = fs.readdirSync(activedir);
-    var allowed = ["png","jpg","jpeg","gif"];
     var $tc = "";
+    if ( dirlist ) {
+        var allowed = ["png","jpg","jpeg","gif","JPG","GIF","PNG","JPEG"];
+        dirlist.forEach( function(filename) {
+            var froot = path.basename(filename);
+            var ext = path.extname(filename).slice(1);
+            if ( category.startsWith("Main_") ) {
+                var filedir = path.join(icondir, froot);
+            } else {
+                filedir = path.join(skin, icondir, froot);
+            }
 
-    dirlist.forEach( function(filename) {
-        var froot = path.basename(filename);
-        var ext = path.extname(filename).slice(1);
-        var filedir = path.join(skin, icondir, froot);
-
-        if ( in_array(ext, allowed) ) {
-            $tc += '<div class="cat ' + category + '">';
-            $tc += '<img src="' + filedir +'" class="icon" title="' + froot + '" />';
-            $tc += '</div>';
-        }
-    });
+            if ( in_array(ext, allowed) ) {
+                $tc += '<div class="cat ' + category + '">';
+                $tc += '<img src="' + filedir +'" class="icon" title="' + froot + '" />';
+                $tc += '</div>';
+            }
+        });
+    } else {
+        $tc = false;
+    }
     return $tc;
+}
+
+// get photos or return false if folder isn't there
+function getPhotos(attr) {
+    
+    try {
+        var photos = {};
+        var activedir = path.join(__dirname, attr);
+        var photolist = fs.readdirSync(activedir);
+    } catch (e) {
+        photos = false;
+        photolist = false;
+    }
+
+    if ( photolist ) {
+        var allowed = ["png","jpg","jpeg","gif","JPG","GIF","PNG","JPEG"];
+        photolist.forEach( function(filename, index) {
+            var froot = path.basename(filename);
+            var ext = path.extname(filename).slice(1);
+            if ( in_array(ext, allowed) ) {
+                photos[index] = froot;
+            }
+        })
+    }
+    return photos;
 }
 
 function pw_hash(pword, algo) {
@@ -7572,6 +7625,10 @@ function apiCall(body, protocol, req, res) {
         case "catalog":
         case "getcatalog":
             result = getCatalog(swattr);
+            break;
+
+        case "getphotos":
+            result = getPhotos("photos");
             break;
             
         case "refactor":
