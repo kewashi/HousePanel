@@ -477,9 +477,14 @@ function loadLinkItem(idx, allowuser, sortval, sortup) {
                     }
                 }
 
-            } else if ( !subids.includes(tkey) ){
+            } else if ( !subids.includes(tkey) ) {
+                // If an alias name exists, then use it instead of the key
+                var opttext = tkey;
+                if (('alias' in thing) && (tkey in thing.alias)) {
+                    opttext = thing.alias[tkey];
+                }
+                results+= "<option value='" + tkey + "'>" + opttext + "</option>";
 
-                results+= "<option value='" + tkey + "'>" + tkey + "</option>";
                 subids.push(tkey);
                 numthings++;
                 if ( !firstitem  ) {
@@ -497,7 +502,18 @@ function loadLinkItem(idx, allowuser, sortval, sortup) {
         sortExistingFields(sortval, sortup);
         $.each(cm_Globals.options[uid], function(index, val) {
             var subid = val[2];
-            results+= "<option value='" + subid + "'>" + subid + "<span class='reddot'> *</span></option>";
+
+            var alias = "";
+            if ( val[0] == "LINK" ) {
+                var linkid = val[1];
+                var idx = Object.keys(cm_Globals.options.index).find(key => cm_Globals.options.index[key] == linkid);
+                var linkthing = cm_Globals.allthings[idx];
+                if (("alias" in linkthing) && (subid in linkthing.alias )) {
+                   alias = " (" + linkthing.alias[subid] + ")";
+                }
+            }
+
+            results+= "<option value='" + subid + "'>" + subid + alias + "<span class='reddot'> *</span></option>";
             numthings++;
             if ( !firstitem  ) {
                 firstitem = subid;

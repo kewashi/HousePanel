@@ -1219,10 +1219,14 @@ function getDevices(hub, reload, reloadpath) {
         var buff = Buffer.from(hubAccess);
         var base64 = buff.toString('base64');
         var stheader = {"Authorization": "Basic " + base64};
+        var vardefs = {};
+        var done = {"int" : false, "state" : false, "int_defs" : false, "state_defs" : false };
 
         // now read in any int and state variables
         var vidx = "isy|vars";
         if ( allthings[vidx] ) { delete allthings[vidx]; }
+        curl_call(hubEndpt + "/vars/definitions/1", stheader, false, false, "GET", getIntVarsDef);
+        curl_call(hubEndpt + "/vars/definitions/2", stheader, false, false, "GET", getStateVarsDef);
         curl_call(hubEndpt + "/vars/get/1", stheader, false, false, "GET", getIntVars);
         curl_call(hubEndpt + "/vars/get/2", stheader, false, false, "GET", getStateVars);
 
@@ -1231,7 +1235,74 @@ function getDevices(hub, reload, reloadpath) {
 
         // now get all the nodes and do callback to auth page
         curl_call(hubEndpt + "/nodes", stheader, false, false, "GET", getAllNodes);
-            
+
+
+        function checkDone( stage ) {
+            done[ stage ] = true;
+            if (done["int"] && done["state"] && done["int_defs"] && done["state_defs"]) {
+                // Now that we have all the isy variables and names, create a mapping of ids to names
+                var pvalue = allthings[vidx]["value"];
+                for (key in pvalue) {
+                    if ( array_key_exists(key, vardefs) ) {
+                        allthings[vidx]["alias"][key] = vardefs[key];
+                    }
+                }
+                if (DEBUGvar) {
+                    console.log( (ddbg()), "ISY Alias names:  " + allthings[vidx]["alias"] );
+                }
+            }
+        }
+
+        function getIntVarsDef(err, res, body ) {
+            if ( err ) {
+                console.log( (ddbg()), "error retrieving ISY int definitions: ", err);
+            } else {
+
+                getISY_Defs(body, "int");
+            }
+        }
+        
+        function getStateVarsDef(err, res, body ) {
+            if ( err ) {
+                console.log( (ddbg()), "error retrieving ISY state definitions: ", err);
+            } else {
+
+                getISY_Defs(body, "state");
+            }
+        }
+        
+        async function getISY_Defs( body, vartype ) {
+
+            await xml2js(body, function(err, result) {
+                if (DEBUGvar) {
+                    console.log( (ddbg()), vartype, vartype + " variables defs: ", UTIL.inspect(result, false, null, false) );
+                }
+                var varobj = result.CList.e;
+                if ( !is_object(varobj) ) {
+                    return;
+                }
+
+                // convert single variable object into an array of variable objects
+                if ( !is_array(varobj) ) {
+                    varobj = [varobj];
+                }
+                varobj.forEach(function( obj) {
+                    try {
+                        var varid = obj["$"]["id"];
+                        var varname = obj["$"]["name"];
+                    } catch (e) {
+                        varid = 0;
+                        varname = "";
+                    }
+                    if ( varid > 0 ) {
+                        vardefs[vartype+"_"+varid] = varname;
+                        vardefs["prec_" + vartype + "_" + varid] = varname + " (prec)";
+                    }
+                });
+                checkDone(vartype + "_defs");
+            });
+        }
+        
         function getIntVars(err, res, body) {
             if ( err ) {
                 console.log( (ddbg()), "error retrieving ISY int variables: ", err);
@@ -1244,7 +1315,7 @@ function getDevices(hub, reload, reloadpath) {
                 if ( !array_key_exists(idx, allthings) ) {
                     var pvalue = {name: "Variables"};
                     pvalue = getCustomTile(pvalue, thetype, id);
-                    allthings[idx] = {id: id, name: "Variables", hubnum: hubnum, type: thetype, hint: "ISY variable", refresh: "never", value: pvalue };
+                    allthings[idx] = {id: id, name: "Variables", hubnum: hubnum, type: thetype, hint: "ISY variable", refresh: "never", value: pvalue, alias: {} };
                 }
                 getISY_Vars(body, "int");
                 updateOptions(false, reloadpath);
@@ -1263,7 +1334,7 @@ function getDevices(hub, reload, reloadpath) {
                 if ( !array_key_exists(idx, allthings) ) {
                     var pvalue = {name: "Variables"};
                     pvalue = getCustomTile(pvalue, thetype, id);
-                    allthings[idx] = {id: id, name: "Variables", hubnum: hubnum, type: thetype, hint: "ISY variable", refresh: "never", value: pvalue };
+                    allthings[idx] = {id: id, name: "Variables", hubnum: hubnum, type: thetype, hint: "ISY variable", refresh: "never", value: pvalue, alias: {} };
                 }
         
                 getISY_Vars(body, "state");
@@ -1324,6 +1395,7 @@ function getDevices(hub, reload, reloadpath) {
                 if ( DEBUGvar ) {
                     console.log( (ddbg()), "New variable value: ", pvalue);
                 }
+                checkDone(vartype);
             });
         }
 
