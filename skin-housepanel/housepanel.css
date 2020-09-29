@@ -1073,3 +1073,6 @@ div.isy.ecobee.GV4::after {
 div.thermostat.humidity::after {
     content: "%";
 }
+div.floorplan.thing div.overlay.color {
+    display: none;
+}
