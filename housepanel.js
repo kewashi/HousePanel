@@ -659,9 +659,9 @@ function setupWebsocket(webSocketUrl)
             });
 
             // blank screen if night mode set
-            if ( ((thetype==="mode" && subid==="themode") || (thetype==="isy" && subid==="int_1" )) && 
+            if ( (thetype==="mode" && subid==="themode") && 
                  blackout==="true" && (priorOpmode === "Operate" || priorOpmode === "Sleep") ) {
-                if ( pvalue[subid]==="Night" || pvalue[subid]==="-1" ) {
+                if ( pvalue[subid]==="Night" ) {
                     execButton("blackout");
                 } else if ( $("#blankme") ) {
                     $("#blankme").off("click");

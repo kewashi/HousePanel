@@ -441,7 +441,9 @@ function loadLinkItem(idx, allowuser, sortval, sortup) {
         var tval = thevalue[tkey];
 
         // skip user configuration items
-        if ( !tkey.startsWith("user_") && !initialsubids.includes(companion)) {
+        // and skip prec values for ISY since those should never be modified by user
+        if ( (!tkey.startsWith("prec_") || !idx.startsWith("isy") ) && 
+             (!tkey.startsWith("user_") && !initialsubids.includes(companion)) ) {
 
             // check value for "json" strings
             // to handle objects and arrays
@@ -468,7 +470,11 @@ function loadLinkItem(idx, allowuser, sortval, sortup) {
 
                     // skip adding an object element if it duplicates an existing one
                     if ( !subids.includes(jtkey) && !initialsubids.includes(companion) ) {
-                        results+= "<option value='" + jtkey + "'>" + jtkey + "</option>";
+                        var opttext = tkey;
+                        if (('alias' in thing) && (jtkey in thing.alias)) {
+                            opttext = thing.alias[jtkey];
+                        }
+                        results+= "<option value='" + jtkey + "'>" + opttext + "</option>";
                         subids.push(jtkey);
                         numthings++;
                         if ( !firstitem  ) {

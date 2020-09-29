@@ -12,6 +12,7 @@ var savedSheet;
 var priorIcon = "none";
 var defaultOverlay = "block";
 var tileCount = 0;
+const DEBUGte = false;
 
 // popup dialog box now uses createModal
 //       editTile(roomname, "page", roomname,     0,   0,   "",        roomnum, "None",  "None");
@@ -396,12 +397,14 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
     }
 
     // debug print of how we got the target
-    console.log("csstarget: type= ", str_type, " subid= ", subid, " tile= ", thingindex, " scope= ", scope, " target: ", target);
+    if ( DEBUGte ) {
+        console.log("csstarget: type= ", str_type, " subid= ", subid, " tile= ", thingindex, " scope= ", scope, " target: ", target);
+    }
 
     return target;
 }
 
-function toggleTile(target, str_type, subid) {
+function toggleTile(target, str_type, subid, thingindex) {
     var swval = $(target).html();
     if ( swval ) {
         swval = swval.replace(" ","_");
@@ -1052,7 +1055,16 @@ function colorpicker(str_type, thingindex) {
     // dh += "<button id='editReset' type='button'>Reset</button>";
     dh += "<div class='colorgroup'><label>Feature Selected:</label>";
     var firstsub = setsubid(str_type);
+    var subid = firstsub;
     var onoff = getOnOff(str_type, firstsub);
+
+    var idx = "isy|vars";
+    if (str_type==="isy" && ("alias" in cm_Globals.allthings[idx]) && (subid in cm_Globals.allthings[idx].alias )) {
+        firstsub = firstsub + " (" + cm_Globals.allthings[idx].alias[subid] + ")";
+    } else {
+        console.log("type, subid: ", str_type, subid);
+    }
+    
     dh += "<div id='subidTarget' class='dlgtext'>" + firstsub + "</div>";
     dh += "<div id='onoffTarget' class='dlgtext'>" + onoff[0] + "</div>";
     dh+= "</div></div>";
@@ -1063,7 +1075,7 @@ function colorpicker(str_type, thingindex) {
 function setupClicks(str_type, thingindex) {
     var firstsub = setsubid(str_type);
     var target1 = getCssRuleTarget(str_type, firstsub, thingindex);
-    toggleTile($(target1), str_type, firstsub);
+    toggleTile($(target1), str_type, firstsub, thingindex);
     // alert("target= " + target1 + " type= " + str_type + " firstsub= " + firstsub);
     initColor(str_type, firstsub, thingindex);
     initDialogBinds(str_type, thingindex);
@@ -1090,11 +1102,22 @@ function setupClicks(str_type, thingindex) {
         }
         
         // update everything to reflect current tile
-        toggleTile(event.target, str_type, subid);
+        toggleTile(event.target, str_type, subid, thingindex);
         initColor(str_type, subid, thingindex);
         initDialogBinds(str_type, thingindex);
         loadSubSelect(str_type, subid, thingindex);
-        
+
+        // include alias if there
+        var idx = "isy|vars";
+        if (str_type==="isy" && ("alias" in cm_Globals.allthings[idx]) && (subid in cm_Globals.allthings[idx].alias )) {
+            var alias = cm_Globals.allthings[idx].alias[subid];
+            if ( alias !== subid ) {
+                var theval = $("#subidTarget").html();
+                $("#subidTarget").html(theval + " (" + alias + ")");
+            }
+        }
+        // console.log("subid, alias: ", subid, alias);
+            
         var newtitle;
         if ( str_type==="page" ) {
             newtitle = "Editing Page#" + et_Globals.hubnum + " Name: " + thingindex;
@@ -1282,7 +1305,9 @@ function updateNames(str_type, thingindex) {
     }
 
     if ( oldname === newname ) {
-        console.log("Names match in updateNames, so doing nothing. name: ", newname);
+        if ( DEBUGte ) {
+            console.log("Names match in updateNames, so doing nothing. name: ", newname);
+        }
         return;
     }
     // $(target1).html(newname);
@@ -1346,7 +1371,9 @@ function saveTileEdit(str_type, thingindex) {
             }
         }
         var subcontent= sheetContents.substring(n1, n2);
-        console.log( "n1: ", n1, " n2: ", n2, " nlen: ", nlen, " subcontent:");
+        if ( DEBUGte ) {
+            console.log( "n1: ", n1, " n2: ", n2, " nlen: ", nlen, " subcontent:");
+        }
         // console.log("\n----------------------------------------------------------\n", subcontent);
         // console.log("\n----------------------------------------------------------\n");
         subcontent= encodeURI(subcontent);
@@ -1355,7 +1382,9 @@ function saveTileEdit(str_type, thingindex) {
             {useajax: "savetileedit", id: n1, n1: n1, n2: n2, nlen: sheetContents.length, type: str_type, value: subcontent, attr: newname, tile: thingindex},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
-                    console.log("savetileedit: presult= ", presult);
+                    if ( DEBUGte ) {
+                        console.log("savetileedit: presult= ", presult);
+                    }
 
                     n1 = n2;
                     n2 = n1 + 59000;

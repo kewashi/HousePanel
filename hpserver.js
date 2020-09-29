@@ -1220,11 +1220,18 @@ function getDevices(hub, reload, reloadpath) {
         var base64 = buff.toString('base64');
         var stheader = {"Authorization": "Basic " + base64};
         var vardefs = {};
-        var done = {"int" : false, "state" : false, "int_defs" : false, "state_defs" : false };
 
-        // now read in any int and state variables
+        // use this object to keep track of which things are done
+        var done = {"Int" : false, "State" : false, "Int_defs" : false, "State_defs" : false };
+
+        // now read in any int and state variables and their definitions
         var vidx = "isy|vars";
-        if ( allthings[vidx] ) { delete allthings[vidx]; }
+        if ( allthings[vidx] ) { 
+            delete allthings[vidx];
+        }
+        var pvalue = {name: "Variables"};
+        allthings[vidx] = {id: "vars", name: "Variables", hubnum: hubnum, type: "isy", hint: "ISY variable", refresh: "never", value: pvalue };
+
         curl_call(hubEndpt + "/vars/definitions/1", stheader, false, false, "GET", getIntVarsDef);
         curl_call(hubEndpt + "/vars/definitions/2", stheader, false, false, "GET", getStateVarsDef);
         curl_call(hubEndpt + "/vars/get/1", stheader, false, false, "GET", getIntVars);
@@ -1239,35 +1246,40 @@ function getDevices(hub, reload, reloadpath) {
 
         function checkDone( stage ) {
             done[ stage ] = true;
-            if (done["int"] && done["state"] && done["int_defs"] && done["state_defs"]) {
+            if (done["Int"] && done["State"] && done["Int_defs"] && done["State_defs"]) {
                 // Now that we have all the isy variables and names, create a mapping of ids to names
                 var pvalue = allthings[vidx]["value"];
-                for (key in pvalue) {
-                    if ( array_key_exists(key, vardefs) ) {
-                        allthings[vidx]["alias"][key] = vardefs[key];
-                    }
-                }
+                
+                // set all the alias values here so that updates can use alias names
+                allthings[vidx]["alias"] = vardefs;
                 if (DEBUGvar) {
-                    console.log( (ddbg()), "ISY Alias names:  " + allthings[vidx]["alias"] );
+                    console.log( (ddbg()), "ISY Alias names:  ", vardefs );
                 }
+
+                // customize here after all isy vars are read
+                // and update our options
+                allthings[vidx]["value"] = getCustomTile(pvalue, "isy", "vars");
+                updateOptions(false, reloadpath);
             }
         }
 
         function getIntVarsDef(err, res, body ) {
             if ( err ) {
                 console.log( (ddbg()), "error retrieving ISY int definitions: ", err);
+                checkDone("Int_defs");
             } else {
 
-                getISY_Defs(body, "int");
+                getISY_Defs(body, "Int");
             }
         }
         
         function getStateVarsDef(err, res, body ) {
             if ( err ) {
                 console.log( (ddbg()), "error retrieving ISY state definitions: ", err);
+                checkDone("State_defs");
             } else {
 
-                getISY_Defs(body, "state");
+                getISY_Defs(body, "State");
             }
         }
         
@@ -1277,7 +1289,11 @@ function getDevices(hub, reload, reloadpath) {
                 if (DEBUGvar) {
                     console.log( (ddbg()), vartype, vartype + " variables defs: ", UTIL.inspect(result, false, null, false) );
                 }
-                var varobj = result.CList.e;
+                try {
+                    var varobj = result.CList.e;
+                } catch(e) {
+                    return;
+                }
                 if ( !is_object(varobj) ) {
                     return;
                 }
@@ -1287,71 +1303,52 @@ function getDevices(hub, reload, reloadpath) {
                     varobj = [varobj];
                 }
                 varobj.forEach(function( obj) {
+                    var defname = vartype + "_";
                     try {
                         var varid = obj["$"]["id"];
                         var varname = obj["$"]["name"];
+                        if ( !varname ) {
+                            varname = defname + varid;
+                        }
+                        
+                        // remove spaces from name
+                        // varname = varname.replace(/ /g,"_");
+
+                        // var prec = obj["val"][0]["_"];
                     } catch (e) {
                         varid = 0;
                         varname = "";
                     }
                     if ( varid > 0 ) {
-                        vardefs[vartype+"_"+varid] = varname;
-                        vardefs["prec_" + vartype + "_" + varid] = varname + " (prec)";
+                        vardefs[defname+varid] = varname;
+                        // vardefs["prec_" + vartype + "_" + varid] = prec;
                     }
                 });
-                checkDone(vartype + "_defs");
             });
+            checkDone(vartype + "_defs");
         }
         
         function getIntVars(err, res, body) {
             if ( err ) {
-                console.log( (ddbg()), "error retrieving ISY int variables: ", err);
+                console.log( (ddbg()), "error retrieving ISY Int variables: ", err);
+                checkDone("Int");
             } else {
-
-                // create the variable thing if not there
-                var id = "vars";
-                var thetype = "isy";
-                var idx = thetype + "|" + id;
-                if ( !array_key_exists(idx, allthings) ) {
-                    var pvalue = {name: "Variables"};
-                    pvalue = getCustomTile(pvalue, thetype, id);
-                    allthings[idx] = {id: id, name: "Variables", hubnum: hubnum, type: thetype, hint: "ISY variable", refresh: "never", value: pvalue, alias: {} };
-                }
-                getISY_Vars(body, "int");
-                updateOptions(false, reloadpath);
+                getISY_Vars(body, "Int");
             }
         }
         
         function getStateVars(err, res, body) {
             if ( err ) {
-                console.log( (ddbg()), "error retrieving ISY state variables: ", err);
+                console.log( (ddbg()), "error retrieving ISY State variables: ", err);
+                checkDone("State");
             } else {
-                
-                // create the variable thing if not there
-                var id = "vars";
-                var thetype = "isy";
-                var idx = thetype + "|" + id;
-                if ( !array_key_exists(idx, allthings) ) {
-                    var pvalue = {name: "Variables"};
-                    pvalue = getCustomTile(pvalue, thetype, id);
-                    allthings[idx] = {id: id, name: "Variables", hubnum: hubnum, type: thetype, hint: "ISY variable", refresh: "never", value: pvalue, alias: {} };
-                }
-        
-                getISY_Vars(body, "state");
-                updateOptions(false, reloadpath);
+                getISY_Vars(body, "State");
             }
         }
 
         async function getISY_Vars(body, vartype) {
             // make a single tile with all the variables in it
-            var vartypes = ["", "int", "state"];
-            var id = "vars";
-            var thetype = "isy";
-            var idx = thetype + "|" + id;
-            if ( !array_key_exists(idx, allthings) ) {
-                return;
-            }
-
+            var vartypes = ["", "Int", "State"];
             if (DEBUGvar) {
                 console.log( (ddbg()), body );
             }
@@ -1371,7 +1368,7 @@ function getDevices(hub, reload, reloadpath) {
                     varobj = [varobj];
                 }
                     
-                var pvalue = allthings[idx]["value"];
+                var pvalue = allthings[vidx]["value"];
                 varobj.forEach(function( obj) {
                     try {
                         var varid = obj["$"]["id"];
@@ -1391,12 +1388,15 @@ function getDevices(hub, reload, reloadpath) {
                     }
                 });
 
-                allthings[idx]["value"] = pvalue;
+                allthings[vidx]["value"] = pvalue;
                 if ( DEBUGvar ) {
                     console.log( (ddbg()), "New variable value: ", pvalue);
                 }
-                checkDone(vartype);
             });
+
+            // move this to outside await so it can proceed if async returns prematurely
+            // the await ensures everything is done before getting here
+            checkDone(vartype);
         }
 
         // get programs and setup program tiles much like how Piston tiles are done in ST and HE
@@ -3335,28 +3335,24 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         
     // fix thermostats to have proper consistent tags
     // this is supported by changes in the .js file and .css file
+    
     if ( tkey==="hue" || tkey==="saturation" ||
          tkey==="heatingSetpoint" || tkey==="coolingSetpoint" || 
-         (tkey.startsWith("int_") && thingtype==="isy") ||
-         (tkey.startsWith("state_") && thingtype==="isy") ) {
+         (tkey.startsWith("Int_") && thingtype==="isy") ||
+         (tkey.startsWith("State_") && thingtype==="isy") ) {
 
         var modvar = tkey;
-        // if ( tkey.startsWith("int_") || tkey.startsWith("state_") ) {
-        //     modvar = tkey + " variable";
-        // } else {
-        //     modvar = tkey;
-        // }
 
         // fix thermostats to have proper consistent tags
         // this is supported by changes in the .js file and .css file
+        // notice we use alias name in actual value and original key in up/down arrows
         $tc += "<div class=\"overlay " + tkey + " " + subtype + " v_" + kindex + "\">";
         if (sibling) { $tc += sibling; }
-        $tc += aidi + " subid=\"" + tkey + "-dn\" title=\"" + thingtype + " down\" class=\"" + thingtype + " arrow-dn " + modvar + "-dn " + pkindex + "\"></div>";
-        $tc += aidi + " subid=\"" + tkey + "\" title=\"" + thingtype + " " + tkey + "\" class=\"" + thingtype + " arrow " + modvar + pkindex + "\"" + colorval + " id=\"" + aitkey + "\">" + tval + "</div>";
-        $tc += aidi + " subid=\"" + tkey + "-up\" title=\"" + thingtype + " up\" class=\"" + thingtype + " arrow-up " + modvar + "-up " + pkindex + "\"></div>";
+        $tc += aidi + " subid=\"" + modvar + "-dn\" title=\"" + modvar + " down\" class=\"" + thingtype + " arrow-dn " + modvar + "-dn " + pkindex + "\"></div>";
+        $tc += aidi + " subid=\"" + modvar + "\" title=\"" + thingtype + " " + modvar + "\" class=\"" + thingtype + " arrow " + modvar + pkindex + "\"" + colorval + " id=\"" + aitkey + "\">" + tval + "</div>";
+        $tc += aidi + " subid=\"" + modvar + "-up\" title=\"" + modvar + " up\" class=\"" + thingtype + " arrow-up " + modvar + "-up " + pkindex + "\"></div>";
         $tc += "</div>";
-    
-    
+
     // process analog clocks signalled by use of a skin with a valid name other than digital
     } else if ( thingtype==="clock" && tkey==="skin" && tval && tval!=="digital" ) {
         $tc += "<div class=\"overlay "+tkey+" v_"+kindex+"\">";
@@ -4159,9 +4155,9 @@ function processIsyMessage(isymsg) {
                     try {
                         var id = varobj["$"]["id"];
                         if ( varobj["$"]["type"] === "1" ) {
-                            var subid = "int_" + id;
+                            var subid = "Int_" + id;
                         } else if ( varobj["$"]["type"] === "2" ) {
-                            subid = "state_" + id;
+                            subid = "State_" + id;
                         } else {
                             throw "invalid variable type: " + varobj["$"]["type"];
                         }
@@ -5096,7 +5092,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
             default:
 
                 // handle arrows for variable changes
-                if ( hint==="ISY variable" && subid.startsWith("int_") ) {
+                if ( hint==="ISY variable" && subid.startsWith("Int_") ) {
                     // get the real subid that the arrows are pointing toward
                     var intvar = parseInt(swval);
                     if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
@@ -5111,7 +5107,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                     isyresp[realsubid] = intvar.toString();
                     curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
 
-                } else if ( hint==="ISY variable" && subid.startsWith("state_") ) {
+                } else if ( hint==="ISY variable" && subid.startsWith("State_") ) {
                     // get the real subid that the arrows are pointing toward
                     var intvar = parseFloat(swval);
                     var prec = 0;
@@ -5125,7 +5121,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                             realsubid = subid;
 
                             // deal with precision values
-                            prec = parseInt(allthings[idx].value["prec_state_"+varnum]);
+                            prec = parseInt(allthings[idx].value["prec_State_"+varnum]);
                             if ( ! isNaN(prec) && prec > 0 ) {
                                 var pow10 = Math.pow(10,prec);
                                 intvar = Math.round(intvar*pow10) / pow10;
@@ -5560,7 +5556,7 @@ function testclick(clktype, clkid) {
     var test = false;
     if ( clkid.startsWith("_") || clkid.endsWith("-up") || clkid.endsWith("-dn") ) {
         test = false;
-    } else if ( clktype==="weather" || clkid.startsWith("int_") || clkid.startsWith("state_") || clkid.startsWith("event_") || in_array(clkid, infoclicks) ) {
+    } else if ( clktype==="weather" || clkid.startsWith("Int_") || clkid.startsWith("State_") || clkid.startsWith("event_") || in_array(clkid, infoclicks) ) {
         test = true;
     }
     return test;
@@ -5610,7 +5606,22 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
     //                 )
     //             ) {
     } else if ( (typeof command==="undefined" || !command ) && testclick(swtype, subid) ) {
-        response = allthings[idx]["value"];
+        response = clone(allthings[idx]["value"]);
+
+        // use alias values for inspection
+        if ( 'alias' in allthings[idx] ) {
+            var aliasvals = allthings[idx]["alias"];
+            for ( var key in allthings[idx]["value"] ) {
+                if ( key in aliasvals && aliasvals[key] ) {
+                    var newkey = aliasvals[key];
+                    // console.log("key, newkey: ", key, newkey, response[key]);
+                    if ( key!== newkey ) {
+                        response[newkey] = response[key];
+                        delete response[key];
+                    }
+                }
+            }
+        }
         
     // send name, width, height to returnFile routine to get the html tag
     } else if ( (typeof command==="undefined" || command==="") && array_key_exists(swtype, specialtiles) ) {
@@ -5877,6 +5888,18 @@ async function doQuery(hubid, swid, swtype, tileid, protocol) {
             result = allthings[idx]["value"];
             if ( result["password"] ) {
                 delete result["password"];
+            }
+
+            // use alias values for inspection
+            if ( 'alias' in allthings[idx] ) {
+                var aliasvals = allthings[idx]["alias"];
+                for ( var key in result ) {
+                    if ( key in aliasvals ) {
+                        var newkey = aliasvals[key];
+                        results[newkey] = result[key];
+                        delete result[key];
+                    }
+                }
             }
 
             // only query the hub which pushes update to GUI if we queried using POST
