@@ -210,6 +210,17 @@ function writeCustomCss(skin, str) {
             str= str.replace("\\\"","\"");
         }
 
+        // convert "int_" to "Int_" and "state_" to "State_" in custom file
+        // user has to edit at least one tile for this patch to work
+        // this will mess up any user field with int_ or state_ in it
+        // thus the potential for harm with this is significant so I disabled it
+        // uncomment these lines if you have many customizations with ISY vars
+        // which most people won't have so I disabled this code
+        // if ( utils.HPVERSION <= "2.401" ) {
+        //     str = str.replace(/int_/g,"Int_");
+        //     str = str.replace(/state_/g,"State_");
+        // }
+
         // add the content to the header
         fixstr += str;
 
@@ -412,7 +423,7 @@ function readOptions(caller) {
     // update the options file if we added default info
     // we skip the user section by excluding the username
     if ( rewrite ) {
-        writeOptions(GLB.options);
+        writeOptions();
     }
 
     if ( DEBUG2 ) {
@@ -507,19 +518,19 @@ function readRoomThings(caller, uname) {
 
         // flag the room as being updated
         GLB.options.config.uname = uname;
-        writeOptions(GLB.options);
+        writeOptions();
 
     }
 
 }
 
-function writeOptions(options) {
-    if ( !is_object(options) ) {
+function writeOptions() {
+    if ( !is_object(GLB.options) ) {
         console.log( (ddbg()), "error - invalid options provided: ", options);
         return;
     }
 
-    for ( var k in options.config.hubs ) {
+    for ( var k in GLB.options.config.hubs ) {
         var hub = GLB.options.config.hubs[k];
         GLB.options.config.hubs[k].clientSecret = encodeURIComponent(hub.clientSecret);
     }
@@ -527,7 +538,7 @@ function writeOptions(options) {
     var d = new Date();
     var timeval = d.getTime();
     timeval = timeval.toString();
-    options["time"] = utils.HPVERSION + " @ " + timeval;
+    GLB.options["time"] = utils.HPVERSION + " @ " + timeval;
 
     // write the main section excluding rooms and things
     var mainopt = {};
@@ -536,13 +547,29 @@ function writeOptions(options) {
         if ( key!=="rooms" && key!=="things"  ) {
             mainopt[key] = GLB.options[key];
         }
+
+        // convert "int_" to "Int_" and "state_" to "State_"
+        if ( utils.HPVERSION <= "2.401"  &&  key.startsWith("user_") ) {
+            var fixarr = GLB.options[key];
+            if ( is_array(fixarr) && is_array(fixarr[0]) ) {
+                fixarr.forEach(function(userarray, index) {
+                    if ( is_array(userarray) ) {
+                        userarray[1] = userarray[1].replace(/int_/g,"Int_");
+                        userarray[2] = userarray[2].replace(/int_/g,"Int_");
+                        userarray[1] = userarray[1].replace(/state_/g,"State_");
+                        userarray[2] = userarray[2].replace(/state_/g,"State_");
+                        GLB.options[key][index] = userarray;
+                    }
+                });
+            }
+        }
     }
     
     // write the main options file
     var stropt =  JSON.stringify(mainopt, null, 1);
     fs.writeFileSync("hmoptions.cfg", stropt, {encoding: "utf8", flag:"w"});
 
-    for ( var k in options.config.hubs ) {
+    for ( var k in GLB.options.config.hubs ) {
         var hub = GLB.options.config.hubs[k];
         var decoded = decodeURIComponent(hub.clientSecret);
         GLB.options.config.hubs[k].clientSecret = decoded;
@@ -615,7 +642,7 @@ function getHubInfo(hub, access_token, endpt, clientId, clientSecret, reload, re
             hub["hubRefresh"] = refresh_token;
         }
         GLB.defhub = hub["hubId"];
-        writeOptions(GLB.options);
+        writeOptions();
 
         // retrieve all devices and go back to reauth page
         getDevices(hub, reload, "/reauth");
@@ -662,7 +689,7 @@ function getHubInfo(hub, access_token, endpt, clientId, clientSecret, reload, re
         hub["hubName"]  = hubName;
         hub["hubId"] = hubId;
         GLB.defhub = hubId;
-        writeOptions(GLB.options);
+        writeOptions();
 
         // retrieve all devices and go back to reauth page
         getDevices(hub, reload, "/reauth");
@@ -711,7 +738,7 @@ function fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, cli
                     expiresin = (parseInt(newexpire) - 120) * 1000;
                     hub["hubTimer"] = expiresin.toString();
                 }
-                writeOptions(GLB.options);
+                writeOptions();
                 refreshsuccess = true;
 
                 // get vehicles again and reload main page if requested with new token
@@ -1863,7 +1890,7 @@ function updateOptions(reload, reloadpath) {
             createSpecialIndex(customcnt, stype, sid[0]);
         }
 
-        writeOptions(GLB.options);
+        writeOptions();
     }
 
     // signal clients to reload
@@ -7471,7 +7498,7 @@ function addCustom(uname, swid, swtype, customtype, customval, subid) {
     }
 
     GLB.options[userid] = newoptitem;
-    writeOptions(GLB.options);
+    writeOptions();
     // writeRoomThings(options, uname);
     var idx = swtype + "|" + swid;
     
@@ -7521,7 +7548,7 @@ function delCustom(uname, swid, swtype, swval, swattr, subid) {
         } else {
             GLB.options[userid] = lines;
         }
-        writeOptions(GLB.options);
+        writeOptions();
         // writeRoomThings(GLB.options, uname);
     }
     
@@ -7767,7 +7794,7 @@ function apiCall(body, protocol, req, res) {
                 if ( uid && array_key_exists(uid, GLB.options) && swval && is_array(swval) ) {
                     GLB.options[uid] = swval;
                     allthings[idx]["value"] = getCustomTile(allthings[idx]["value"], swtype, swid);
-                    writeOptions(GLB.options);
+                    writeOptions();
                     // writeRoomThings(GLB.options, uname);
                     result = allthings[idx]["value"];
                 } else {
@@ -7798,7 +7825,7 @@ function apiCall(body, protocol, req, res) {
         case "filteroptions":
             if ( protocol==="POST" ) {
                 result = saveFilters(body);
-                writeOptions(GLB.options);
+                writeOptions();
             } else {
                 result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
             }
@@ -7808,7 +7835,7 @@ function apiCall(body, protocol, req, res) {
         case "userpw":
             if ( protocol==="POST" ) {
                 result = saveUserPw(res, body, uname);
-                writeOptions(GLB.options);
+                writeOptions();
             } else {
                 result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
             }
@@ -7821,7 +7848,7 @@ function apiCall(body, protocol, req, res) {
                     console.log( (ddbg()), "Process options: ", result, GLB.options);
                 }
                 if ( result === "success" ) {
-                    writeOptions(GLB.options);
+                    writeOptions();
                     writeRoomThings(GLB.options, uname);
                 }
             } else {
@@ -7914,7 +7941,7 @@ function apiCall(body, protocol, req, res) {
                     pwords[uname] = [pword, "skin-housepanel"];
                     setCookie(res, "uname", pw_hash(uname));
                     GLB.options["config"]["pword"] = pwords;
-                    writeOptions(GLB.options);
+                    writeOptions();
                     writeRoomThings(GLB.options, uname);
                     result = {uname: uname, pword: pword};
                 }
@@ -8046,7 +8073,7 @@ function apiCall(body, protocol, req, res) {
 
                 // update existing or add a new hub
                 updateHubs(hub, body.hubId);
-                writeOptions(GLB.options);
+                writeOptions();
                 hubs = GLB.options.config.hubs;
 
                 if (DEBUG2) {
@@ -8170,7 +8197,7 @@ function apiCall(body, protocol, req, res) {
                 GLB.options.config["pword"] = {};
                 GLB.options.config["pword"][uname] = ["", "skin-housepanel"];
                 GLB.options.config["uname"] = uname;
-                writeOptions(GLB.options);
+                writeOptions();
                 readRoomThings("reset", uname);
                 pushClient("reload", "/logout");
                 result = getLoginPage(uname);
@@ -8425,7 +8452,7 @@ if ( app && applistening ) {
             GLB.options.config["pword"] = {};
             GLB.options.config["pword"][uname] = ["", "skin-housepanel"];
             GLB.options.config["uname"] = uname;
-            writeOptions(GLB.options);
+            writeOptions();
             writeRoomThings(GLB.options, uname);
             GLB.newuser = true;
         } else {
@@ -8468,7 +8495,7 @@ if ( app && applistening ) {
                 GLB.options.config["pword"] = {};
                 GLB.options.config["pword"][uname] = ["", "skin-housepanel"];
                 GLB.options.config["uname"] = uname;
-                writeOptions(GLB.options);
+                writeOptions();
                 readRoomThings("manual reset", uname);
                 pushClient("reload", "/logout");
                 $tc = "Logging out all clients...";

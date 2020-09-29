@@ -3,6 +3,8 @@
 const devhistory =  ` 
 2.401   Incorporate custom variable names from user pull request
             - enhanced original proposal to include editor and inspect
+            - automatically update int_ and state_ in config files
+            - assumes user does not have any user fields with these vals
 2.400   Screen saver photos upon blackout if photos folder exists
             - clean up icon logic and expand options in tile editor
             - move common icons from housepanel skin to main media folder
