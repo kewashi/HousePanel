@@ -4058,18 +4058,24 @@ function processHubMessage(hubmsg) {
                     var linktype = lidxitems[0];
                     var linkbid = lidxitems[1];
 
-                    // get info for links but skip if the link had an error
-                    if ( DEBUG12 ) {
-                        console.log( (ddbg()), "processhubMessage - link debug. companion=",companion," helper=",helperval," command=",command,
-                                    " lidx=",lidx," linktype=",linktype," linkbid=",linkbid);
-                    }
                     if ( command==="LINK" && linkbid === hubmsgid ) {
                         cnt++;
-                        entry['value'][obj_subid] = newval[obj_subid];
+                        // entry['value'][obj_subid] = newval[obj_subid];
                         var idxitems = idx.split("|");
                         var targetobj = {};
-                        targetobj[obj_subid] = newval[obj_subid];
 
+                        // match all subid's that start with the target to support dup links
+                        for (var linksubid in entry.value) {
+                            if ( linksubid===obj_subid || linksubid.startsWith(obj_subid) ) {
+                                targetobj[linksubid] = newval[obj_subid];
+                                entry.value[linksubid] = newval[obj_subid];
+                            }
+                        }
+                        if ( DEBUG12 ) {
+                            console.log( (ddbg()), "processhubMessage - link debug. companion=",companion," helper=",helperval," command=",command,
+                                        " lidx=",lidx," linktype=",linktype," linkbid=",linkbid," obj_subid: ", obj_subid," targetobj: ", targetobj);
+                        }
+    
                         // add size info if available
                         if (customwidth ) {
                             targetobj["width"] = customwidth;
@@ -4334,7 +4340,7 @@ function getTimeStr(ifvalue, str) {
 
 function processRules(bid, thetype, trigger, pvalue, rulecaller) {
 
-    if ( !ENABLERULES || (GLB.options.config["rules"] !=="true" && GLB.options.config["rules"] !==true) ) {
+    if ( !ENABLERULES || (GLB.options.config["rules"] !=="true" && GLB.options.config["rules"] !==true) || (typeof pvalue !== "object") ) {
         return;
     }
 
@@ -5632,7 +5638,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
     //                    subid==="presence" || subid==="motion" || subid.startsWith("event_")
     //                 )
     //             ) {
-    } else if ( (typeof command==="undefined" || !command ) && testclick(swtype, subid) ) {
+    } else if ( (typeof command==="undefined" || !command) && testclick(swtype, subid) ) {
         response = clone(allthings[idx]["value"]);
 
         // use alias values for inspection
@@ -5651,10 +5657,9 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
         }
         
     // send name, width, height to returnFile routine to get the html tag
-    } else if ( (typeof command==="undefined" || command==="") && array_key_exists(swtype, specialtiles) ) {
+    } else if ( (typeof command==="undefined" || !command) && array_key_exists(swtype, specialtiles) ) {
         var thingvalue = allthings[idx]["value"];
         thingvalue = returnFile(thingvalue, swtype);
-        // thingvalue = getCustomTile(thingvalue, swtype, swid);
         response = thingvalue;
     } else {
 
@@ -5717,12 +5722,18 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
             case "TEXT":
                 // response = allthings[idx]["value"];
                 // response[subid] = linkval;
+                response = "success";
                 try {
-                    response = callHub(hub, swid, swtype, swval, swattr, subid, false, false, false);
-                    if ( !response ) { throw "error"; }
+                    var tresp = callHub(hub, swid, swtype, swval, swattr, subid, false, false, false);
+                    if ( !tresp ) { throw "error"; }
                 } catch (e) {
-                    response = allthings[idx]["value"];
-                    response[subid] = linkval;
+                    tresp = allthings[idx]["value"];
+                    // tresp[subid] = linkval;
+                    response = "info: clicked on user TEXT field " + subid;
+                }
+
+                if ( typeof tresp === "object" ) {
+                    processRules(swid, swtype, subid, tresp, "callHub");
                 }
                 break;
 

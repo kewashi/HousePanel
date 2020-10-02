@@ -1,6 +1,8 @@
 'use strict';
 
 const devhistory =  ` 
+2.402   Fix blackout mode logic bug and to blackout on any Night mode
+            - enable TEXT user fields to control rules for unique effects
 2.401   Incorporate custom variable names from user pull request
             - enhanced original proposal to include editor and inspect
             - automatically update int_ and state_ in config files

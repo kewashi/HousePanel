@@ -331,29 +331,30 @@ $(document).ready(function() {
                 setupColors();
 
                 // reset to screen saver if blackout set mode to night
-                // we have to guess the prefix of the mode here - so only those guessed will work
-                // note that ISY hubs don't have a mode so I use variable int_1 = -1 to flag night mode
-                // need to put this logic in the doc
-                var midx1 = "mode|st_mode";
-                var midx2 = "mode|he_mode";
-                var midx3 = "mode|s_mode";
-                var midx3 = "mode|h_mode";
-                var midxisy = "isy|vars";
-                var allt = cm_Globals.allthings[midx1] || cm_Globals.allthings[midx2] || 
-                           cm_Globals.allthings[midx3] || cm_Globals.allthings[midx4] || false;
-                var allisy = cm_Globals.allthings[midxisy] || false;
-                if ( allt || allisy ) {
+                // no longer guess and no longer use isy = -1 (can use rules instead)
+                try {
+                    var blackout = cm_Globals.options.config["blackout"].toString();
+                } catch (e) {
+                    blackout = "false";
+                }
+                // console.log ("blackout= ", blackout);
+
+                var allt = false;
+                if ( blackout === "true" || blackout === true ) {
                     try {
-                        var blackout = cm_Globals.options.config["blackout"].toString();
+                        var blacked = false;
+                        for ( var idx in cm_Globals.allthings ) {
+                            if ( blacked===false && idx.endsWith("_mode") ) {
+                                allt = cm_Globals.allthings[idx];
+                                var themode = allt ? allt.value.themode : false;
+                                // console.log("idx= ", idx, " allt= ", allt, " mode= ", themode);
+                                if ( themode === "Night" ) {
+                                    execButton("blackout");
+                                    blacked = true;
+                                }
+                            }
+                        }
                     } catch (e) {
-                        blackout = "false";
-                    }
-                    var themode = allt ? allt.value.themode : false;
-                    var isymode = allisy ? allisy.value.int_1 : false;
-                    console.log(themode, isymode);
-                    
-                    if ( blackout==="true" && (themode === "Night" || isymode === "-1" ) ) {
-                        execButton("blackout");
                     }
                 }
 
@@ -3326,7 +3327,7 @@ function processClick(that, thingname) {
         }
 
         // remove isy type check since it could be a link
-        else if ( subid==="switch" && (thevalue==="DON" || thevalue==="DOF" )  ) {
+        else if ( subid==="switch" && command==="" && (thevalue==="DON" || thevalue==="DOF" )  ) {
             thevalue = thevalue==="DON" ? "DOF" : "DON";
         }
         console.log("URL: ", cm_Globals.returnURL," ", ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" hub= " + hubnum + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
@@ -3390,6 +3391,8 @@ function processClick(that, thingname) {
                         createModal("modalpopup", showstr, "body", false, pos, function(ui) {} );
                     } else if ( presult==="success" ) {
                         console.log("Success: result will be pushed later.");
+                    } else if ( typeof presult==="string" && presult.startsWith("info:") ) {
+                        console.log(presult);
                     } else {
                         console.log("Unrecognized return from POST call. result: ", presult);
                     }
