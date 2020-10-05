@@ -214,9 +214,9 @@ function getOnOff(str_type, subid, val) {
         onoff = ["firing","idle"];
     } else if ( subid.startsWith("thermostatFanMode" ) ) {
         if ( hubType==="ISY" || str_type==="isy" ) {
-            onoff = ["Auto","On"];
+            onoff = ["Auto","Circulate","On"];
         } else {
-            onoff = ["auto","on"];
+            onoff = ["auto","circulate","on"];
         }
     } else if ( subid.startsWith("thermostatMode" ) ) {
         if ( hubType==="ISY" || str_type==="isy" ) {

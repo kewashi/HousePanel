@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.404   Turn off debug and fix blunders from last update
 2.403   Tweak rules allow TEXT to trigger and do on/off settings
             - remove space from hint for variables, scenes, and programs
 2.402   Fix blackout mode logic bug and to blackout on any Night mode
