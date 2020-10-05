@@ -15,7 +15,7 @@ const DEBUGvar = false;             // ISY variables
 const DEBUG8 = false;               // API calls
 const DEBUG9 =  false;              // ISY callbacks
 const DEBUG10 = false;              // sibling tag
-const DEBUG11 = false;              // rules
+const DEBUG11 = true;              // rules
 const DEBUG12 = false;              // hub push updates
 const DEBUG13 = false;              // URL callbacks
 const DEBUG14 = false;              // tile link details
@@ -1257,7 +1257,7 @@ function getDevices(hub, reload, reloadpath) {
             delete allthings[vidx];
         }
         var pvalue = {name: "Variables"};
-        allthings[vidx] = {id: "vars", name: "Variables", hubnum: hubnum, type: "isy", hint: "ISY variable", refresh: "never", value: pvalue };
+        allthings[vidx] = {id: "vars", name: "Variables", hubnum: hubnum, type: "isy", hint: "ISY_variable", refresh: "never", value: pvalue };
 
         curl_call(hubEndpt + "/vars/definitions/1", stheader, false, false, "GET", getIntVarsDef);
         curl_call(hubEndpt + "/vars/definitions/2", stheader, false, false, "GET", getStateVarsDef);
@@ -1516,7 +1516,7 @@ function getDevices(hub, reload, reloadpath) {
                                         "name": progname, 
                                         "hubnum": hubnum,
                                         "type": thetype,
-                                        "hint": "ISY program",
+                                        "hint": "ISY_program",
                                         "refresh": "normal",
                                         "value": pvalue
                                     };
@@ -1587,7 +1587,7 @@ function getDevices(hub, reload, reloadpath) {
                         var node = groups[obj];
                         var id = fixISYid(node["address"][0].toString());
                         var idx = thetype + "|" + id;
-                        var hint = "ISY scene";
+                        var hint = "ISY_scene";
                         var name = node["name"][0];
         
                         // set the base tile to include name and items to turn scene on and off
@@ -3226,7 +3226,7 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
                 }
             }
 
-            else if ( hint==="ISY scene" && tkey.substring(0,6)==="scene_" ) {
+            else if ( hint==="ISY_scene" && tkey.substring(0,6)==="scene_" ) {
                 var sceneidx = "isy|" + tval;
                 if ( allthings[sceneidx] ) {
                     tval = allthings[sceneidx].value.name + "<br />" + tval;
@@ -4238,7 +4238,7 @@ function processIsyMessage(isymsg) {
                         pvalue["lastRunTime"] = eventInfo[0]["r"][0];
                         pvalue["lastFinishTime"] = eventInfo[0]["f"][0];
 
-                        // use decoder ring documented for ISY program events
+                        // use decoder ring documented for ISY_program events
                         if ( array_key_exists("s", eventInfo[0]) ) {
                             var st = eventInfo[0]["s"][0].toString();
                             if ( st.startsWith("2") ) {
@@ -4343,6 +4343,8 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
     if ( !ENABLERULES || (GLB.options.config["rules"] !=="true" && GLB.options.config["rules"] !==true) || (typeof pvalue !== "object") ) {
         return;
     }
+
+    pvalue = clone(pvalue);
 
     // go through all things that could be links for this tile
     var userid = "user_" + bid;
@@ -4669,7 +4671,7 @@ function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
     }
 
     // prevent this rule from running more than once in a single doAction cycle
-    if (rulecaller==="callHub") {
+    if (rulecaller==="callHub" || rulecaller==="processMsg") {
         GLB.rules[itemhash] = true;
         if ( DEBUG11 ) {
             console.log( (ddbg()), "setting dup flag...");
@@ -5125,7 +5127,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
             default:
 
                 // handle arrows for variable changes
-                if ( hint==="ISY variable" && subid.startsWith("Int_") ) {
+                if ( hint==="ISY_variable" && subid.startsWith("Int_") ) {
                     // get the real subid that the arrows are pointing toward
                     var intvar = parseInt(swval);
                     if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
@@ -5140,7 +5142,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                     isyresp[realsubid] = intvar.toString();
                     curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
 
-                } else if ( hint==="ISY variable" && subid.startsWith("State_") ) {
+                } else if ( hint==="ISY_variable" && subid.startsWith("State_") ) {
                     // get the real subid that the arrows are pointing toward
                     var intvar = parseFloat(swval);
                     var prec = 0;
@@ -5166,7 +5168,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                     }
 
                 // run commands
-                } else if ( hint==="ISY program" ) {
+                } else if ( hint==="ISY_program" ) {
                     // var progcommands = "run|runThen|runElse|stop|enable|disable";
                     // var progarr = progcommands.split("|");
                     var progarr = ["run","runThen","runElse","stop","enable","disable"];
@@ -6405,8 +6407,8 @@ function getInfoPage(uname, returnURL, pathname) {
         $tc += "<div id=\"showcustom\" class=\"infopage hidden\">";
         $tc += "<table class=\"showid\">";
         $tc += "<thead><tr><th class=\"infotype\">Type" + 
-            "</th><th class=\"thingname\">Rule ID" + 
-            "</th><th class=\"thingarr\">Value" +
+            "</th><th class=\"thingname\">Custom ID" + 
+            "</th><th class=\"thingarr\">Custom Value" +
             "</th><th class=\"infonum\">Field</th></tr></thead>";
 
         customList.forEach(function(thing) {

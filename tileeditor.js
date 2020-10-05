@@ -182,7 +182,7 @@ $.fn.isAuto = function(dimension){
     }
 };
 
-function getOnOff(str_type, subid) {
+function getOnOff(str_type, subid, val) {
     var onoff;
     var hubType = et_Globals.hubType;
 
@@ -250,7 +250,17 @@ function getOnOff(str_type, subid) {
         });
         // onoff = ["Away","Home","Night", ""];
     } else {
-        onoff = [""];
+        if ( val==="on" ) {
+            onoff = ["on","off"];
+        } else if ( val==="off" ) {
+            onoff = ["off","on"];
+        } else if ( val==="DON" ) {
+            onoff = ["DON","DOF"];
+        } else if ( val==="DOF" ) {
+            onoff = ["DOF","DON"];
+        } else {
+            onoff = [];
+        }
     }
     onoff.push("");
     
@@ -412,7 +422,7 @@ function toggleTile(target, str_type, subid, thingindex) {
     $('#onoffTarget').html("");
     
     // activate the icon click to use this
-    var onoff = getOnOff(str_type, subid);
+    var onoff = getOnOff(str_type, subid, swval);
     var newsub = 0;
     if ( onoff && onoff.length > 1 ) {
         for ( var i=0; i < onoff.length; i++ ) {
@@ -1055,8 +1065,10 @@ function colorpicker(str_type, thingindex) {
     // dh += "<button id='editReset' type='button'>Reset</button>";
     dh += "<div class='colorgroup'><label>Feature Selected:</label>";
     var firstsub = setsubid(str_type);
+    var target1 = getCssRuleTarget(str_type, firstsub, thingindex);
+    var val = $(target1).html();
     var subid = firstsub;
-    var onoff = getOnOff(str_type, firstsub);
+    var onoff = getOnOff(str_type, subid, val);
 
     var idx = "isy|vars";
     if (str_type==="isy" && ("alias" in cm_Globals.allthings[idx]) && (subid in cm_Globals.allthings[idx].alias )) {
@@ -1075,7 +1087,7 @@ function colorpicker(str_type, thingindex) {
 function setupClicks(str_type, thingindex) {
     var firstsub = setsubid(str_type);
     var target1 = getCssRuleTarget(str_type, firstsub, thingindex);
-    toggleTile($(target1), str_type, firstsub, thingindex);
+    toggleTile( target1, str_type, firstsub, thingindex);
     // alert("target= " + target1 + " type= " + str_type + " firstsub= " + firstsub);
     initColor(str_type, firstsub, thingindex);
     initDialogBinds(str_type, thingindex);
@@ -1217,10 +1229,6 @@ function loadSubSelect(str_type, firstsub, thingindex) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
         var subid = $(event.target).val();
-        
-        // set the first onoff state
-        // var onoff = getOnOff(str_type, subid);
-//        $("#onoffTarget").html(onoff[0]);
         $("#onoffTarget").html("");
         
         initColor(str_type, subid, thingindex);
@@ -1474,9 +1482,6 @@ function initColor(str_type, subid, thingindex) {
     
     // console.log ("initcolor: str_type= " + str_type + " subid= " + subid + " thingindex= " + thingindex + " target= " + target);
     priorIcon = $(target).css("background-image");
-        
-    // set the first onoff state
-    var onoff = getOnOff(str_type, subid);
     
     // set the active value
     var onoffval = $("#onoffTarget").html();
@@ -1484,6 +1489,9 @@ function initColor(str_type, subid, thingindex) {
         $(icontarget).addClass(onoffval);
         $(icontarget).html(onoffval);
     }
+        
+    // set the first onoff state
+    var onoff = getOnOff(str_type, subid, onoffval);
     
     $.each(onoff, function() {
         if ( this && $(icontarget).hasClass(this) ) {
@@ -1975,8 +1983,6 @@ function initColor(str_type, subid, thingindex) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
         var subid = $("#subidTarget").html();
-        // var onoff = getOnOff(str_type, subid);
-        // var strCaller = $($(event.target)).attr("target");
         var ischecked = $(event.target).prop("checked");
         var displayset = "none";
         if ( !ischecked ) {
@@ -2386,12 +2392,17 @@ function resetCSSRules(str_type, subid, thingindex){
             }
         });
 
+        // remove main target
+        var target1 = getCssRuleTarget(str_type, subid, thingindex);
+        removeCSSRule(target1, thingindex, null);
+        
         // remove all the subs
-        var onoff = getOnOff(str_type, subid);
-        if ( onoff && onoff.length ) {
-            onoff.forEach( function(rule, idx, arr) {
-                var subtarget = getCssRuleTarget(str_type, rule, thingindex);
-                if ( subtarget ) {
+        var val = $(target1).html();
+        var onoff = getOnOff(str_type, subid, val);
+        if ( onoff && onoff.length > 0 ) {
+            onoff.forEach( function(rule, idx) {
+                if ( rule ) {
+                    var subtarget = target1 + "." + rule; // getCssRuleTarget(str_type, rule, thingindex);
                     removeCSSRule(subtarget, thingindex, null);
                 }
             });
