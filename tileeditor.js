@@ -1087,7 +1087,7 @@ function colorpicker(str_type, thingindex) {
 function setupClicks(str_type, thingindex) {
     var firstsub = setsubid(str_type);
     var target1 = getCssRuleTarget(str_type, firstsub, thingindex);
-    toggleTile( target1, str_type, firstsub, thingindex);
+    toggleTile( $(target1), str_type, firstsub, thingindex);
     // alert("target= " + target1 + " type= " + str_type + " firstsub= " + firstsub);
     initColor(str_type, firstsub, thingindex);
     initDialogBinds(str_type, thingindex);
