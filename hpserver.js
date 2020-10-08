@@ -1618,7 +1618,7 @@ function getDevices(hub, reload, reloadpath) {
                             "value": pvalue
                         };
         
-                        if (DEBUGisy) {
+                        if (DEBUG5) {
                             console.log( (ddbg()), "id= ", id," hint= ", hint, " node: ", node, " pvalue: ", pvalue);
                         }
                     }
@@ -1635,8 +1635,8 @@ function getDevices(hub, reload, reloadpath) {
                         if ( result ) {
 
                             var nodes = result.nodes.node;
-                            if ( DEBUG5 ) {
-                                console.log( (ddbg()), "node details: ", UTIL.inspect(nodes, false, null, false) );
+                            if ( DEBUGisy ) {
+                                console.log( (ddbg()), "node details: ", UTIL.inspect(result, false, null, false) );
                             }
                             if ( nodes ) {
                                 nodes.forEach(function(node) {
@@ -1647,9 +1647,6 @@ function getDevices(hub, reload, reloadpath) {
 
                                     // if there are props set values
                                     if ( props ) {
-                                        if ( DEBUG5 ) {
-                                            console.log( (ddbg()), "ISY status callback. node: ", nodeid, " properties: ", props);
-                                        }
                                         setIsyFields(nodeid, value, props);
                                     }
                                 });
@@ -5074,7 +5071,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
 
                 // convert percentage to 0 - 256 range for Insteon
                 var irange = Math.floor(parseInt(swval) * 255 / 100);
-                var cmd3 = "/nodes/" + swid + "/cmd/OL/" + irange;
+                var cmd3 = "/nodes/" + swid + "/set/OL/" + irange;
                 isyresp["onlevel"] = swval;
                 curl_call(endpt + cmd3, isyheader, false, false, "GET", getNodeResponse);
 
@@ -5182,8 +5179,15 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                         result = allthings[idx].value;
                     } 
                 } else {
-                    result = "error - command: " + subid + " not yet supported for ISY hubs";
-                    console.log( (ddbg()), result);
+                    // try setting a property
+                    try {
+                        cmd = "/nodes/" + swid + "/set/" + subid + "/" + swval;
+                        // isyresp[subid] = swval;
+                        curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+                    } catch (e) {
+                        result = "error - property: " + subid + " not supported for ISY hubs";
+                        console.log( (ddbg()), result, " value: ", swval, " msg: ", e);
+                    }
                 }
 
         }
@@ -5863,7 +5867,7 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
     return response;
 }
 
-async function doQuery(hubid, swid, swtype, tileid, protocol) {
+function doQuery(hubid, swid, swtype, tileid, protocol) {
     var result;
     if ( swid==="all" || swid==="fast" || swid==="slow" ) {
         if ( swid==="all" ) {
@@ -5921,10 +5925,6 @@ async function doQuery(hubid, swid, swtype, tileid, protocol) {
 
         if ( allthings && array_key_exists(idx, allthings) && array_key_exists("value", allthings[idx]) ) {
             // return current value and send updated value after hub call to clients and popup window
-            if ( hubid==="auto" ) {
-                hubid = allthings[idx]["hubnum"];
-            }
-            var hub = findHub(hubid);
             result = allthings[idx]["value"];
             if ( result["password"] ) {
                 delete result["password"];
@@ -5948,12 +5948,18 @@ async function doQuery(hubid, swid, swtype, tileid, protocol) {
             // whenever you query a tile. To avoid this use the GET method to query a tile
             // note that actions will always update clients to keep them in sync
             if ( protocol==="POST" ) {
+                if ( hubid==="auto" ) {
+                    hubid = allthings[idx]["hubnum"];
+                }
+                var hub = findHub(hubid);
                 queryHub(hub, swid, swtype, false);
             }
         } else {
             result = "error - invalid api request. hubid= " + hubid + " id= " + swid + " type= " + swtype + " tile= " + tileid;
         }
     }
+
+    // console.log("Result: ", result);
     return result;
 }
 
@@ -8530,9 +8536,17 @@ if ( app && applistening ) {
                     console.log( (ddbg()), "allthings before render: \n", UTIL.inspect(allthings, false, null, false) );
                     console.log( (ddbg()), "options before render: \n", UTIL.inspect(GLB.options, false, null, false) );
                 }
+
+                // handle GET user provided API calls here
+                if ( isquery ) {
+                    $tc = apiCall(queryobj, "GET", req, res);
+
                 // load our user setup and render page
-                readRoomThings("main", uname);
-                $tc = mainPage(uname, req.headers.host, req.path);
+                // these two lines are what make the main page
+                } else {
+                    readRoomThings("main", uname);
+                    $tc = mainPage(uname, req.headers.host, req.path);
+                }
 
             } else {
                 console.log( (ddbg()), "login rejected. uname= ", uname);
@@ -8607,10 +8621,6 @@ if ( app && applistening ) {
             getAllThings(true);
             res.send("Resetting...");
             res.end();
-
-            // handle user provided get api calls
-        } else if ( isquery ) {
-            $tc = apiCall(queryobj, "GET", req, res);
 
         } else {
             var file = path.join(dir, req.path.replace(/\/$/, '/index.html'));

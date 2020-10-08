@@ -1,6 +1,8 @@
 'use strict';
 
 const devhistory =  ` 
+2.405   Enable GET use of HP as an API engine to control things
+            - allow any ISY property to be set via user GET or POST
 2.404   Turn off debug and fix blunders from last update
 2.403   Tweak rules allow TEXT to trigger and do on/off settings
             - remove space from hint for variables, scenes, and programs
