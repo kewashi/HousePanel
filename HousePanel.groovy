@@ -15,6 +15,8 @@
  * This is a SmartThings and Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history:
+ * 10/24/2020 - clean up logger for tracking hub push changes
+              - remove routines since they are depracated and classic app is gone
  * 09/12/2020 - check for valid IP and port value entries for HP hub pushes
  * 07/20/2020 - add a status field for device items using getStatus() - thanks @phil_c
  * 07/18/2020 - include level for others and actuators so window shades work
@@ -137,8 +139,7 @@ preferences {
             input "mymomentaries", "capability.momentary", hideWhenEmpty: true, multiple: true, required: false, title: "Momentary Switches"
             input "mybuttons", "capability.button", hideWhenEmpty: true, multiple: true, required: false, title: "Buttons"
             input "mybulbs", "capability.colorControl", hideWhenEmpty: true, multiple: true, required: false, title: "Color Control Bulbs"
-            input "mypowers", "capability.powerMeter", multiple: true, required: false, title: "Power Meters"
-            // input "mylights", "capability.light", hideWhenEmpty: true, multiple: true, required: false, title: "Lights"
+            input "mypowers", "capability.powerMeter", hideWhenEmpty: true, multiple: true, required: false, title: "Power Meters"
     }
     section ("Motion and Presence") {
             input "mypresences", "capability.presenceSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Presence"
@@ -401,44 +402,14 @@ def getContact(swid, item=null) {
     getThing(mycontacts, swid, item)
 }
 
-// change to only return lock status and battery
 def getLock(swid, item=null) {
     getThing(mylocks, swid, item)
-    // item = item? item : mylocks.find {it.id == swid }
-    // def resp = false
-    // if ( item ) {
-    //     resp = [name: item.displayName]
-    //     resp = addBattery(resp, item)
-    //     resp.put("lock", item.currentValue("lock"))
-    //     resp = addHistory(resp, item)
-    // }
-    // return resp
 }
 
 // this was updated to use the real key names so that push updates work
 // note -changes were also made in housepanel.php and elsewhere to support this
 def getMusic(swid, item=null) {
-    def resp = getThing(mymusics, swid, item)
-    // item = item? item : mymusics.find {it.id == swid }
-    // def resp = false
-    // if ( item ) {
-    //     resp = [
-    //         name: item.displayName, 
-    //         trackDescription: item.currentValue("trackDescription"),
-    //         status: item.currentValue("status"),
-    //         level: item.currentValue("level"),
-    //         mute: item.currentValue("mute")
-    //     ]
-        
-    //     // add native track information if attributes exist
-    //     // this code is from @rsb in the ST forum
-    //     resp = addAttr(resp, item, "currentArtist")
-    //     resp = addAttr(resp, item, "currentAlbum")
-    //     resp = addAttr(resp, item, "trackImage")
-    //     resp = addBattery(resp, item)
-    //     resp = addHistory(resp, item)
-    // }
-    return resp
+    getThing(mymusics, swid, item)
 }
 
 def getAudio(swid, item=null) {
@@ -446,7 +417,6 @@ def getAudio(swid, item=null) {
     logger(raw, "debug" )
     
     // lets put it in the desired order
-    // "groupVolumeUp", "groupVolumeDown", "muteGroup", "unmuteGroup",
     def resp = [name: raw.name, audioTrackData: raw.audioTrackData,
         _rewind: raw._rewind, _previousTrack: raw._previousTrack,
         _pause: raw._pause, _play: raw._play, _stop: raw._stop,
@@ -466,22 +436,23 @@ def getAudio(swid, item=null) {
 // this was updated to use the real key names so that push updates work
 // note -changes were also made in housepanel.php and elsewhere to support this
 def getThermostat(swid, item=null) {
-    item = item ? item : mythermostats.find {it.id == swid }
-    def resp = false
-    if ( item ) {
-        resp = [name: item.displayName, 
-            temperature: item.currentValue("temperature"),
-            heatingSetpoint: item.currentValue("heatingSetpoint"),
-            coolingSetpoint: item.currentValue("coolingSetpoint"),
-            thermostatFanMode: item.currentValue("thermostatFanMode"),
-            thermostatMode: item.currentValue("thermostatMode"),
-            thermostatOperatingState: item.currentValue("thermostatOperatingState")
-        ]
-        resp = addBattery(resp, item)
-        resp = addAttr(resp, item, "humidity")
-        resp = addHistory(resp, item)
-    }
-    return resp
+    getThing(mythermostats, swid, item)
+    // item = item ? item : mythermostats.find {it.id == swid }
+    // def resp = false
+    // if ( item ) {
+    //     resp = [name: item.displayName, 
+    //         temperature: item.currentValue("temperature"),
+    //         heatingSetpoint: item.currentValue("heatingSetpoint"),
+    //         coolingSetpoint: item.currentValue("coolingSetpoint"),
+    //         thermostatFanMode: item.currentValue("thermostatFanMode"),
+    //         thermostatMode: item.currentValue("thermostatMode"),
+    //         thermostatOperatingState: item.currentValue("thermostatOperatingState")
+    //     ]
+    //     resp = addBattery(resp, item)
+    //     resp = addAttr(resp, item, "humidity")
+    //     resp = addHistory(resp, item)
+    // }
+    // return resp
 }
 
 // use absent instead of "not present" for absence state
@@ -558,7 +529,6 @@ def getPower(swid, item=null) {
     } catch (e) {
         state.powervals[swid] = 0.0
     }
-    logger("in getPower powervals = ${state.powervals[swid]} power = ${resp.power}", "debug")
     return resp
 }
 
@@ -621,12 +591,13 @@ def getHSMState(swid, item=null) {
     return resp
 }
 
-def getRoutine(swid, item=null) {
-    def routines = location.helloHome?.getPhrases()
-    def routine = item ? item : routines.find{it.id == swid}
-    def resp = routine ? [name: routine.label, label: routine.label] : false
-    return resp
-}
+// routines are depracated
+// def getRoutine(swid, item=null) {
+//     def routines = location.helloHome?.getPhrases()
+//     def routine = item ? item : routines.find{it.id == swid}
+//     def resp = routine ? [name: routine.label, label: routine.label] : false
+//     return resp
+// }
 
 // change pistonName to name to be consistent
 // but retain original for backward compatibility reasons
@@ -823,8 +794,8 @@ def getAllThings() {
     if ( isST() ) {
         run = logStepAndIncrement(run)
         resp = getSHMStates(resp)
-        run = logStepAndIncrement(run)
-        resp = getRoutines(resp)
+        // run = logStepAndIncrement(run)
+        // resp = getRoutines(resp)
     }
     if ( isHubitat() ) {
         run = logStepAndIncrement(run)
@@ -1037,19 +1008,20 @@ def getWeathers(resp) {
     return resp
 }
 
+// routines are depracated
 // get hellohome routines - thanks to ady264 for the tip
-def getRoutines(resp) {
-    try {
-        def routines = location.helloHome?.getPhrases()
-        def n  = routines ? routines.size() : 0
-        if ( n > 0 ) { logger("Number of routines = ${n}","debug"); }
-        routines?.each {
-            def multivalue = getRoutine(it.id, it)
-            resp << [name: it.label, id: it.id, value: multivalue, type: "routine"]
-        }
-    } catch (e) {}
-    return resp
-}
+// def getRoutines(resp) {
+//     try {
+//         def routines = location.helloHome?.getPhrases()
+//         def n  = routines ? routines.size() : 0
+//         if ( n > 0 ) { logger("Number of routines = ${n}","debug"); }
+//         routines?.each {
+//             def multivalue = getRoutine(it.id, it)
+//             resp << [name: it.label, id: it.id, value: multivalue, type: "routine"]
+//         }
+//     } catch (e) {}
+//     return resp
+// }
 
 def getOthers(resp) {
     getThings(resp, myothers, "other")
@@ -1197,10 +1169,11 @@ def doAction() {
             cmdresult = getPiston(swid)
         }
         break
-      
-      case "routine" :
-        cmdresult = setRoutine(swid, cmd, swattr, subid)
-        break
+
+    // routines are depracated
+    //   case "routine" :
+    //     cmdresult = setRoutine(swid, cmd, swattr, subid)
+    //     break
         
       case "water" :
         cmdresult = setWater(swid, cmd, swattr, subid)
@@ -1360,9 +1333,9 @@ def doQuery() {
         cmdresult = getHSMState(swid)
         break
         
-    case "routine" :
-        cmdresult = getRoutine(swid)
-        break
+    // case "routine" :
+    //     cmdresult = getRoutine(swid)
+    //     break
 
     }
    
@@ -2372,20 +2345,21 @@ def setMusic(swid, cmd, swattr, subid) {
     return resp
 }
 
-def setRoutine(swid, cmd, swattr, subid) {
-    logcaller("setRoutine", swid, cmd, swattr, subid)
-    def routine = location.helloHome?.getPhrases().find{ it.id == swid }
-    if (subid=="label" && routine) {
-        try {
-            location.helloHome?.execute(routine.label)
-        } catch (e) {}
-    } else if (cmd) {
-        try {
-            location.helloHome?.execute(cmd)
-        } catch (e) {}
-    }
-    return routine
-}
+// routines are depracated
+// def setRoutine(swid, cmd, swattr, subid) {
+//     logcaller("setRoutine", swid, cmd, swattr, subid)
+//     def routine = location.helloHome?.getPhrases().find{ it.id == swid }
+//     if (subid=="label" && routine) {
+//         try {
+//             location.helloHome?.execute(routine.label)
+//         } catch (e) {}
+//     } else if (cmd) {
+//         try {
+//             location.helloHome?.execute(cmd)
+//         } catch (e) {}
+//     }
+//     return routine
+// }
 
 def registerAll() {
     List mydevices = ["myswitches", "mydimmers", "mybulbs", "mypresences", "mybuttons",
@@ -2427,9 +2401,6 @@ def register_mydimmers() {
 def register_mybulbs() {
     registerChangeHandler(settings?.mybulbs)
 }
-// def register_mylights() {
-//     registerChangeHandler(settings?.mylights)
-// }
 def register_mypresences() {
     registerChangeHandler(settings?.mypresences)
 }
@@ -2593,12 +2564,9 @@ def modeChangeHandler(evt) {
 
 def postHub(ip, port, msgtype, name, id, attr, type, value) {
 
-    logger("HousePanel postHub ${msgtype} to IP= ${ip}:${port} name= ${name} attr= ${attr} type= ${type} value= ${value}", "info")
     
-    if ( msgtype && ip && port ) {
-        // Send Using the Direct Mechanism
-        // logger("Sending ${msgtype} to Websocket at ${ip}:${port}", "info")
-        // log.debug "Sending ${msgtype} to Websocket at ${ip}:${port}";
+    if ( msgtype && ip!="0" & ip!=0 && port!="0" & port!=0 ) {
+        logger("HousePanel postHub ${msgtype} to IP= ${ip}:${port} name= ${name} id= ${id} attr= ${attr} type= ${type} value= ${value}", "info")
 
         // set a hub action - include the access token so we know which hub this is
         def params = [

@@ -1,6 +1,13 @@
 'use strict';
 
 const devhistory =  ` 
+2.406   Update Ford API calls to return info upon refresh or start
+            - change _odometer API name to _info for Ford api calls
+            - fix timing refresh to avoid duplicate reloads
+            - add "subid" field for all rules to know which trigger
+            - fix thermostat order and enable all fields to be returned
+            - remove "routine" since legacy ST was removed
+            - enhanced log printout for endpoint parse failure
 2.405   Enable GET use of HP as an API engine to control things
             - allow any ISY property to be set via user GET or POST
 2.404   Turn off debug and fix blunders from last update

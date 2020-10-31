@@ -125,7 +125,7 @@ function decodeUser(unamehash) {
 
 function getTypes() {
     var thingtypes = [
-        "actuator", "button", "routine","switch", "switchlevel", "bulb", "momentary", "contact",
+        "actuator", "button", "switch", "switchlevel", "bulb", "momentary", "contact",
         "motion", "lock", "thermostat", "temperature", "music", "audio", "valve",
         "door", "illuminance", "smoke", "water", "isy",
         "weather", "presence", "mode", "shm", "hsm", "piston", "other",
@@ -720,7 +720,6 @@ function fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, cli
     }
 
     curl_call(tokenhost, header, nvpreq, formData, "POST", function(err, res, body) {
-        var refreshsuccess = false;
         try {
             var jsonbody = JSON.parse(body);
             access_token = jsonbody["access_token"] || "";
@@ -734,43 +733,36 @@ function fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, cli
                 // GLB.defhub = hub["hubId"];
                 
                 // if an expire in is returned from api then set hubTimer to it minus two minutes
-                if ( newexpire  && !isNaN(parseInt(newexpire)) && parseInt(newexpire)>120 ) {
+                // but only is user refresh is zero or not a number
+                if ( expiresin==="" && newexpire  && !isNaN(parseInt(newexpire)) && parseInt(newexpire)>120 ) {
                     expiresin = (parseInt(newexpire) - 120) * 1000;
-                    hub["hubTimer"] = expiresin.toString();
+                    // hub["hubTimer"] = expiresin.toString();
                 }
                 writeOptions();
-                refreshsuccess = true;
 
                 // get vehicles again and reload main page if requested with new token
                 getDevices(hub, reload, "/");
             }
 
-        } catch(e) {
-            // primary token needs to be redone - the refresh token has expired
-            // TODO - find a graceful way to tell the user
-            refreshsuccess = false;
-        }
-
-        // if we get back a good access_token and refresh_token, repeat the process
-        // notice the true boolean last parameter in the call - this signals to refresh repeatedly
-        if ( refreshsuccess && access_token && refresh_token ) {
             if ( DEBUG2 ) {
                 console.log( (ddbg()),"Refresh return... access_token: ", access_token, 
                 "\n refresh_token: ", refresh_token, "\n expiresin: ", expiresin, "\n endpoint: ", endpt, "\n body: ", body);
             }
 
-        } else {
-            // GLB.defhub = "-1";
+            if ( refresh && expiresin ) {
+                setTimeout( function() {
+                    fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, clientSecret, true, true);
+                }, expiresin);
+            }
+        
+        } catch(e) {
+            // primary token needs to be redone - the refresh token has expired
+            // TODO - find a graceful way to tell the user
             console.log( (ddbg()), "refresh token error for hub: ", hub.hubType, " access_token: ", access_token, 
             "\n refresh_token: ", refresh_token, "\n expiresin: ", expiresin, "\n endpoint: ", endpt, "\n body: ", body);
         }
-    });
 
-    if ( refresh && expiresin ) {
-        setTimeout( function() {
-            fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, clientSecret, true, true);
-        }, expiresin);
-    }
+    });
 
 }
 
@@ -918,7 +910,7 @@ function getAccessToken(code, hub) {
         }
 
         if ( err ) {
-            console.log( (ddbg()), "getEndpoint error authorizing " + hub.hubType + " hub. error: ", err);
+            console.log( (ddbg()), "getEndpoint error authorizing " + hub.hubType + " hub.\n error: ", err, "\n JSON body: ", body);
             GLB.defhub = "-1";
             pushClient("reload", "/reauth");
         } else {
@@ -1150,11 +1142,11 @@ function getDevices(hub, reload, reloadpath) {
                     }
                 }
 
-                // place holders for odometer detail return values
+                // place holders for info detail return values
                 // *** note *** inconsistent cases for timestamp and timeStamp
                 pvalue.engineTYpe = "";
                 pvalue.mileage = "";
-                pvalue.odometer = "";
+                pvalue.info = "";
                 pvalue.lastUpdated = "";
                 pvalue.fuelLevel_value = "";
                 pvalue.fuelLevel_distanceToEmpty = "";
@@ -1190,13 +1182,13 @@ function getDevices(hub, reload, reloadpath) {
 
                 // add all the api call functions 
                 // removed _status and _location since they don't appear to work
-                // the location and status are returned in the odometer call
-                pvalue["_odometer"] = "_odometer";
-                pvalue["_unlock"] = "_unlock";
-                pvalue["_lock"] = "_lock";
-                pvalue["_startEngine"] = "_startEngine";
-                pvalue["_stopEngine"] = "_stopEngine";
-                pvalue["_wake"] = "_wake";
+                // the location and status are returned in the info call
+                pvalue["_info"] = "info";
+                pvalue["_unlock"] = "unlock";
+                pvalue["_lock"] = "lock";
+                pvalue["_startEngine"] = "startEngine";
+                pvalue["_stopEngine"] = "stopEngine";
+                pvalue["_wake"] = "wake";
                 // pvalue["_status"] = "_status";
                 // pvalue["_location"] = "_location";
 
@@ -1211,10 +1203,9 @@ function getDevices(hub, reload, reloadpath) {
                     "value": pvalue
                 };
 
-                // now call the odometer function to get details
+                // now call the info function to get details
                 // notice the true last parameter which skips rules and client pushes
-                // make user click on odometer and refresh because this doesn't work
-                // callHub(hub, vehicleid, thetype, "", "", "_odometer", false, false, true);
+                callHub(hub, vehicleid, thetype, pvalue, "", "_info", false, false, true);
 
                 // now call to get the graphical icon
                 // can't figure out how to save or use the returned image
@@ -1224,19 +1215,6 @@ function getDevices(hub, reload, reloadpath) {
 
             // update main options file
             updateOptions(reload, reloadpath);
-
-            // now call the vehicle info function again for every vehicle but this time with the vehicle ID
-            // I couldn't get this to work properly so disabled for now
-            //
-            // var header = {
-            //     "Authorization": "Bearer " + hubAccess,
-            //     "Accept": "application/json",
-            //     "Content-Type": "application/json",
-            //     "api-version": FORDAPIVERSION,
-            //     "Application-Id": hub["hubId"],
-            // };
-            // curl_call(endpt, header, false, false, "GET", vehicleInfoCallback);
-    
         }
 
     }
@@ -3880,6 +3858,9 @@ function setValOrder(val) {
     const order = {"name": 1, "battery": 2, "color": 3, "switch": 7, "momentary": 7, "presence": 7,
                    "contact": 8, "door": 8, "motion": 9, "themode": 10, "temperature": 7, 
                    "make": 11, "modelName":12, "modelYear": 13, "vehiclecolor": 14, "nickName": 15,
+                   "coolingSetpoint": 11, "heatingSetpoint": 12,
+                   "thermostatMode": 21, "thermostatFanMode": 22, 
+                   "thermostatSetpoint": 31, "thermostatOperatingState": 32, "humidity": 33, "thermostat": 34,
                    "mileage": 21, "longitude": 22, "latitude": 23, "distanceToEmpty": 24, 
                    "fuleLevel_value": 31,
                    "trackDescription": 11, "trackImage": 12, "currentAlbum": 13, 
@@ -4005,7 +3986,9 @@ function processHubMessage(hubmsg) {
             if ( ! array_key_exists("skip_push", hubmsg) ) {
                 pushClient(entry.id, entry.type, subid, entry['value'])
             }
+            entry.value.subid = subid;
             processRules(entry.id, entry.type, subid, entry['value'], "processMsg");
+            delete entry.value.subid;
         }
     }
 
@@ -4083,7 +4066,9 @@ function processHubMessage(hubmsg) {
                         if ( ! array_key_exists("skip_push", hubmsg) ) {
                             pushClient(idxitems[1], idxitems[0], obj_subid, targetobj);
                         }
+                        targetobj.subid = obj_subid;
                         processRules(idxitems[1], idxitems[0], obj_subid, targetobj, "processMsg");
+                        delete targetobj.subid;
                     }
                 }
             }
@@ -4164,7 +4149,9 @@ function processIsyMessage(isymsg) {
                     var subid = mapIsy(control[0], uom);
                     pvalue = translateIsy(bid, control[0], uom, subid, pvalue, newval, "");
                     pushClient(bid, "isy", subid, pvalue, false, false);
+                    pvalue.subid = subid;
                     processRules(bid, "isy", subid, pvalue, "processMsg");
+                    delete pvalue.subid;
                     if ( DEBUG9 ) {
                         console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " uom: ", uom, " newval: ", newval, " value: ", pvalue);
                     }
@@ -4208,7 +4195,9 @@ function processIsyMessage(isymsg) {
                             pvalue[subid] = newval.toString();
                             allthings[idx]["value"] = pvalue;
                             pushClient(bid, "isy", subid, pvalue, false, false);
+                            pvalue.subid = subid;
                             processRules(bid, "isy", subid, pvalue, "processMsg");
+                            delete pvalue.subid;
                             if ( DEBUG9 ) {
                                 console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " newval: ", newval, " pvalue: ", pvalue);
                             }
@@ -4261,6 +4250,8 @@ function processIsyMessage(isymsg) {
                         allthings[idx]["value"] = pvalue;
                         pushClient(bid, "isy", "lastRunTime", pvalue, false, false);
                         // pushClient(bid, "isy", "lastFinishTime", pvalue, false, false);
+
+                        // don't do rules for programs - that seems silly
                         // processRules(bid, "isy", subid, pvalue, "processMsg");
                         if ( DEBUG9 ) {
                             console.log( (ddbg()), "ISY webSocket updated program: ", bid, " pvalue: ", pvalue);
@@ -4947,7 +4938,9 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
 
         if (result) {
             pushClient(swid, swtype, subid, result, linkinfo, popup);
+            result.subid = subid;
             processRules(swid, swtype, subid, result, "callHub");
+            delete result.subid;
         }
 
     // this function calls the Groovy hub api
@@ -4979,7 +4972,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
 
         switch(subid) {
 
-            case "_odometer":
+            case "_info":
                 // set completion status to running
                 pushClient(swid, swtype, subid, {commandStatus: ""}, linkinfo, false);
                 curl_call(host, header, false, false, "GET", getHubResponse);
@@ -5254,8 +5247,8 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                         var origname = allthings[idx].name;
                         pvalue = translateWeather(origname, pvalue);
 
-                    // pluck out just vehicle data and good status for odometer call
-                    } else if ( swtype==="ford" && subid==="_odometer" && pvalue.vehicle && pvalue.status && pvalue.status==="SUCCESS" ) {
+                    // pluck out just vehicle data and good status for info call
+                    } else if ( swtype==="ford" && subid==="_info" && pvalue.vehicle && pvalue.status && pvalue.status==="SUCCESS" ) {
                         var vehicle = clone(pvalue["vehicle"]);
                         pvalue = {status: "SUCCESS"};
                         for (var key in vehicle) {
@@ -5314,7 +5307,9 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                     // push new values to all clients and execute rules
                     pushClient(swid, swtype, subid, pvalue, linkinfo, popup);
                     if ( !inrule ) {
+                        pvalue.subid = subid;
                         processRules(swid, swtype, subid, pvalue, "callHub");
+                        delete pvalue.subid;
                     }
                 }
             }
@@ -5333,7 +5328,9 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
             }
             pushClient(linkinfo[0], linkinfo[1], linksubid, targetobj);
             if ( !inrule ) {
+                targetobj.subid = linksubid;
                 processRules(linkinfo[0], linkinfo[1], linksubid, targetobj, "callHub");
+                delete targetobj.subid;
             }
         }
 
@@ -5370,7 +5367,9 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
             // if ( !inrule && rres && rres.status && rres.status.toString()!=="200" ) {
             pushClient(swid, swtype, subid, isyresp, linkinfo, popup);
             if ( !inrule && rres && rres.toString()!=="200" ) {
+                isyresp.subid = subid;
                 processRules(swid, "isy", subid, isyresp, "callHub");
+                delete isyresp.subid;
             }
         }
     }
@@ -5420,7 +5419,9 @@ function queryHub(hub, swid, swtype, popup) {
 
                 // force processing of rules for weather and clocks on a query
                 if ( swtype==="weather" || swtype==="clock" ) {
+                    pvalue.subid = "timer";
                     processRules(swid, swtype, "timer", pvalue, "doQuery");
+                    delete pvalue.subid;
                 }
             }
         }
@@ -5739,7 +5740,9 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
                 }
 
                 if ( typeof tresp === "object" ) {
+                    pvalue.subid = subid;
                     processRules(swid, swtype, subid, tresp, "callHub");
+                    delete pvalue.subid;
                 }
                 break;
 
@@ -8188,7 +8191,9 @@ function apiCall(body, protocol, req, res) {
             }
 
             // process rules
+            result.subid = "time";
             processRules(swid, "clock", "time", result, "getclock");
+            delete result.subid;
 
             break;
 

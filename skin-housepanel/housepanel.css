@@ -1076,3 +1076,35 @@ div.thermostat.humidity::after {
 div.floorplan.thing div.overlay.color {
     display: none;
 }
+
+/* hide the functions for EcoBee thermostats */
+div.thermostat.thermostatSetpoint,
+div.thermostat.supportedThermostatFanModes,
+div.thermostat.supportedThermostatModes_0,
+div.thermostat.supportedThermostatModes_1,
+div.thermostat.supportedThermostatModes_2,
+div.thermostat.supportedThermostatModes_3,
+div.thermostat.thermostatFanMode,
+div.thermostat.supportedThermostatFanModes_0,
+div.thermostat.supportedThermostatFanModes_1,
+div.thermostat.supportedThermostatFanModes_2,
+div.thermostat.supportedThermostatFanModes_3,
+div.thermostat._heat,
+div.thermostat._emergencyHeat,
+div.thermostat._cool,
+div.thermostat._auto,
+div.thermostat._fanOn,
+div.thermostat._fanAuto,
+div.thermostat._fanCirculate,
+div.thermostat._generateEvent,
+div.thermostat._switchMode,
+div.thermostat._switchFanMode,
+div.thermostat._lowerHeatingSetpoint,
+div.thermostat._raiseHeatingSetpoint,
+div.thermostat._lowerCoolSetpoint,
+div.thermostat._raiseCoolSetpoint,
+div.thermostat._resumeProgram,
+div.thermostat._off
+{
+    display: none;
+}
