@@ -527,7 +527,7 @@ function setupWebsocket(webSocketUrl)
             if ( bid==="reload" ) {
 
                 // skip reload if we are asleep
-                if ( priorOpmode === "Sleep" ) {
+                if ( priorOpmode !== "Operate" ) {
                     return;
                 }
 
@@ -674,10 +674,9 @@ function setupWebsocket(webSocketUrl)
         }
     };
     
-    // if this socket connection closes then try to reconnect
+    // if this socket connection closes log it
     wsSocket.onclose = function(){
         console.log("webSocket connection closed for: ", webSocketUrl);
-        // initWebsocket();
     };
 }
 

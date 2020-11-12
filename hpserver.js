@@ -66,7 +66,6 @@ const defaultrooms = {
 
 // load supporting modules
 var utils = require("./utils");
-const { urlencoded } = require('body-parser');
 
 // global variables are all part of GLB object plus clients and allthings
 var GLB = {};
@@ -3867,6 +3866,8 @@ function setValOrder(val) {
                    "mediaSource": 14, "currentArtist": 15, "playbackStatus": 16, 
                    "_muteGroup": 17, "_unmuteGroup": 18, "_volumeDown": 19, "_volumeUp": 20, 
                    "_previousTrack": 21, "_pause": 22, "_play": 23, "_stop": 24, "_nextTrack": 25,
+                   "_number_0":60, "_number_1":61, "_number_2":62, "_number_3":63, "_number_4":64, 
+                   "_number_5":65, "_number_6":66, "_number_7":67, "_number_8":68, "_number_9":69, 
                    "onlevel": 150, "level": 151, "volume": 152, "colorTemperature": 153,
                    "allon": 41, "alloff": 42 };
 
@@ -3874,6 +3875,8 @@ function setValOrder(val) {
         var comp;
         if ( array_key_exists(vala, order) ) {
             comp = order[vala];
+        } else if ( vala.startsWith("_number_") ) {
+            comp = 60;
         } else if ( vala.startsWith("_") ) {
             comp = 50;
         } else if ( vala.startsWith("user_") ) {
@@ -4334,6 +4337,15 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
 
     pvalue = clone(pvalue);
 
+    // fix button triggers to ignore held if pressed given and vice versa
+    if ( trigger==="pushed" ) {
+        pvalue["held"] = "";
+        pvalue["released"] = "";
+    }
+    if ( trigger==="held" || trigger==="released" ) {
+        pvalue["pushed"] = "";
+    }
+
     // go through all things that could be links for this tile
     var userid = "user_" + bid;
     var ifvalue = false;
@@ -4734,13 +4746,18 @@ function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
                     }
                 }
 
-                // fix up ISY hubs
+                // fix up ISY hubs and handle toggle
                 if ( rswtype==="isy" && array_key_exists(rsubid, allthings[ridx]["value"]) ) {
                     var curvalue = allthings[ridx]["value"][rsubid];
-                    if ( rvalue==="on" || (rvalue==="toggle" && curvalue==="DOF") ) { rvalue = "DON"; }
-                    if ( rvalue==="off" || (rvalue==="toggle" && curvalue==="DON") ) { rvalue = "DOF"; }
+                    
+                    if ( rswtype==="isy" ) {
+                        if ( rvalue==="on" || (rvalue==="toggle" && curvalue==="DOF") ) { rvalue = "DON"; }
+                        if ( rvalue==="off" || (rvalue==="toggle" && curvalue==="DON") ) { rvalue = "DOF"; }
+                    } else {
+                        if ( rvalue==="toggle" && curvalue==="off" ) { rvalue = "on"; }
+                        if ( rvalue==="toggle" && curvalue==="on" ) { rvalue = "off"; }
+                    }
                 } 
-
 
                 // set the destination to the value which would typically be overwritten by hub call
                 // if the destination is a link force the link to a TEXT type to neuter other types

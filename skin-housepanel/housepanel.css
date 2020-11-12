@@ -328,9 +328,9 @@ div.overlay.allon div.allon, div.overlay.alloff div.alloff.off, div.overlay.allo
 }
 /* enable this if you want to show levels for switches and bulbs */
 /* this will duplicate the switchlevel functionality */
-div.switch.level {
+/* div.switch.level {
     display: none;
-}
+} */
 
 /* change power and energy default style */
 div.overlay.power div.power,
