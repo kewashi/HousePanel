@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.408   Fix bug that prevented special tile counts from updating
 2.407   Prevent reload when editing and add toggle feature for rules
 2.406   Update Ford API calls to return info upon refresh or start
             - change _odometer API name to _info for Ford api calls

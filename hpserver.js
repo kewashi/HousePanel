@@ -266,7 +266,7 @@ function readOptions(caller) {
         rewrite = true;
     }
     if ( !array_key_exists("specialtiles", GLB.options.config) ) {
-        GLB.options.config["specialtiles"] = {"video": 4, "frame": 4, "image": 4, "blank": 4, "custom": 8};
+        GLB.options.config["specialtiles"] = {"video": 4, "frame": 4, "image": 4, "blank": 2, "custom": 8};
         rewrite = true;
     }
     if ( !array_key_exists("port", GLB.options.config) ) {
@@ -1856,14 +1856,6 @@ function updateOptions(reload, reloadpath) {
     
     // save the options file
     if ( update ) {
-        // make exactly the right number of special tiles
-        var specialtiles = getSpecials();
-        for (var stype in specialtiles) {
-            var sid = specialtiles[stype];
-            var customcnt = getCustomCount(stype, sid[3]);
-            createSpecialIndex(customcnt, stype, sid[0]);
-        }
-
         writeOptions();
     }
 
@@ -1914,7 +1906,7 @@ function setupDefaultRooms() {
 
 function getSpecials() {
     // GLB.options.config["specialtiles"] = {"video": 4, "frame": 4, "image": 4, "blank": 4, "custom": 8};
-    GLB.options.config["specialtiles"] = {};
+    // GLB.options.config["specialtiles"] = {};
     var obj = {
         "video":  ["vid",480,240, 4, "normal"], 
         "frame":  ["frame",480,212, 4, "slow"],
@@ -1923,10 +1915,11 @@ function getSpecials() {
         "custom": ["custom_",120,150, 8, "normal"]
     };
 
-    for ( var key in obj ) {
-        GLB.options.config["specialtiles"][key] = obj[key][3];
+    if ( GLB.options && GLB.options.config && GLB.options.config["specialtiles"] ) {
+        for ( var key in obj ) {
+            obj[key][3] = GLB.options.config["specialtiles"][key];
+        }
     }
-
     return obj;
    
 }
@@ -1942,7 +1935,7 @@ function setDefaults() {
     GLB.options.config["webSocketServerPort"] = "1380";
     GLB.options.config["timezone"] = "America/Detroit";
     GLB.options.config["hubs"] = [];
-    GLB.options.config["specialtiles"] = {"video": 4, "frame": 4, "image": 4, "blank": 4, "custom": 8};
+    GLB.options.config["specialtiles"] = {"video": 4, "frame": 4, "image": 4, "blank": 2, "custom": 8};
     GLB.options.config["fast_timer"] = "0";
     GLB.options.config["slow_timer"] = "300000";
     GLB.options.config["rules"] = "true";
@@ -2222,20 +2215,20 @@ function getAuthPage(uname, hostname, pathname, rmsg) {
     return $tc;
 }
 
-function createSpecialIndex(customcnt, stype, spid) {
-    var oldindex = clone(GLB.options["index"]);
+function createSpecialIndex(customcnt, stype, spid, options) {
+    var oldindex = clone(options["index"]);
     var maxindex = getMaxIndex();
 
-    if ( !array_key_exists("specialtiles", GLB.options["config"]) ) {
-        GLB.options["config"]["specialtiles"] = {};
+    if ( !array_key_exists("specialtiles", options["config"]) ) {
+        options["config"]["specialtiles"] = {};
     }
-    GLB.options["config"]["specialtiles"][stype] = customcnt;
+    options["config"]["specialtiles"][stype] = customcnt;
 
     // remove special types of this type
     var n = stype.length + 1;
     for (var idx in oldindex) {
         if ( idx.substr(0,n) === stype + "|" ) {
-            delete GLB.options["index"][idx];
+            delete options["index"][idx];
         }
     }
 
@@ -2254,8 +2247,9 @@ function createSpecialIndex(customcnt, stype, spid) {
             maxindex++;
             theindex = maxindex;
         }
-        GLB.options["index"][sidnum] = theindex;
+        options["index"][sidnum] = theindex;
     }
+    return options;
 }
 
 // routine that renumbers all the things in your options file from 1
@@ -3702,6 +3696,13 @@ function addSpecials() {
                 // we now preserve the original name in the master array
                 allthings[idx] = {"id":  fid, "name": fn, "hubnum":  hubnum, 
                     "type": stype, "refresh": speed, "value":  ftile};
+            }
+            for (var j=fcnt; j<100; j++) {
+                var jstr = (j+1).toString();
+                var jdx = stype + "|" + sid[0] + jstr;
+                if ( allthings[jdx] ) {
+                    delete allthings[jdx];
+                }
             }
         }
     }
@@ -6810,75 +6811,79 @@ function getOptionsPage(uname, hostname, pathname) {
         try {
             var $thingindex = indexoptions[idx].toString();
         } catch (e) {
-            console.log( (ddbg()), " idx: ", idx, " is invalid. error: ", e);
-            return;
+            // console.log( (ddbg()), " idx: ", idx, " is invalid. error: ", e);
+            delete indexoptions[idx];
+            $thingindex = null;
         }
-        
-        // write the table row
-        if ( array_key_exists($thetype, specialtiles) ) {
-            var $special = " special";
-        } else {
-            $special = "";
-        }
-        var $odd = $evenodd = false;
-        if (in_array($thetype, useroptions)) {
-            $evenodd = !$evenodd;
-            $evenodd ? $odd = " odd" : $odd = "";
-            $tc+= "<tr type=\"" + $thetype + "\" tile=\"" + $thingindex + "\" class=\"showrow" + $odd + $special + "\">";
-        } else {
-            $tc+= "<tr type=\"" + $thetype + "\" tile=\"" + $thingindex + "\" class=\"hiderow" + $special + "\">";
-        }
-        
-        $tc+= "<td class=\"thingname\">";
-        $tc+= $thingname + "<span class=\"typeopt\"> (" + $thetype + ")";
-        if ( nickname && nickname!==$thingname ) { 
-            $tc+= "<br>custom: " + nickname; 
-        } else {
-            $tc+= "<br>custom: none"; 
-        }
-        $tc+= " (tile #" + $thingindex + ")";
-        $tc+= "</span>";
-        $tc+= "</td>";
-        
-        $tc+= "<td class=\"hubname\" hubId=\"" + $hubId + "\">";
-        $tc+= $hubStr + " (" + $hubType + ")";
-        $tc+= "</td>";
 
-        // loop through all the rooms
-        // this addresses room bug
-        for ( var roomname in roomoptions ) {
-            
-            // get the name of this room for this column
-            if ( array_key_exists(roomname, thingoptions) ) {
-                var $things = thingoptions[roomname];
-                                
-                // now check for whether this thing is in this room
-                $tc+= "<td>";
-                
-                var $ischecked = false;
-                var $idx;
-                for (var i in $things) {
-                    var $arr = $things[i];
-                    if ( is_array($arr) ) {
-                        $idx = $arr[0].toString();
-                    } else {
-                        $idx = $arr.toString();
-                    }
-                    if ( $idx === $thingindex ) {
-                        $ischecked = true;
-                        break;
-                    }
-                }
-                
-                if ( $ischecked ) {
-                    $tc+= "<input type=\"checkbox\" name=\"" + roomname + "[]\" value=\"" + $thingindex + "\" checked=\"1\" >";
-                } else {
-                    $tc+= "<input type=\"checkbox\" name=\"" + roomname + "[]\" value=\"" + $thingindex + "\" >";
-                }
-                $tc+= "</td>";
+        if ( $thingindex ) {
+
+            // write the table row
+            if ( array_key_exists($thetype, specialtiles) ) {
+                var $special = " special";
+            } else {
+                $special = "";
             }
+            var $odd = $evenodd = false;
+            if (in_array($thetype, useroptions)) {
+                $evenodd = !$evenodd;
+                $evenodd ? $odd = " odd" : $odd = "";
+                $tc+= "<tr type=\"" + $thetype + "\" tile=\"" + $thingindex + "\" class=\"showrow" + $odd + $special + "\">";
+            } else {
+                $tc+= "<tr type=\"" + $thetype + "\" tile=\"" + $thingindex + "\" class=\"hiderow" + $special + "\">";
+            }
+            
+            $tc+= "<td class=\"thingname\">";
+            $tc+= $thingname + "<span class=\"typeopt\"> (" + $thetype + ")";
+            if ( nickname && nickname!==$thingname ) { 
+                $tc+= "<br>custom: " + nickname; 
+            } else {
+                $tc+= "<br>custom: none"; 
+            }
+            $tc+= " (tile #" + $thingindex + ")";
+            $tc+= "</span>";
+            $tc+= "</td>";
+            
+            $tc+= "<td class=\"hubname\" hubId=\"" + $hubId + "\">";
+            $tc+= $hubStr + " (" + $hubType + ")";
+            $tc+= "</td>";
+
+            // loop through all the rooms
+            // this addresses room bug
+            for ( var roomname in roomoptions ) {
+                
+                // get the name of this room for this column
+                if ( array_key_exists(roomname, thingoptions) ) {
+                    var $things = thingoptions[roomname];
+                                    
+                    // now check for whether this thing is in this room
+                    $tc+= "<td>";
+                    
+                    var $ischecked = false;
+                    var $idx;
+                    for (var i in $things) {
+                        var $arr = $things[i];
+                        if ( $arr ) {
+                            if ( is_array($arr) && $arr[0] ) {
+                                $idx = $arr[0].toString();
+                                if ( $idx === $thingindex ) {
+                                    $ischecked = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if ( $ischecked ) {
+                        $tc+= "<input type=\"checkbox\" name=\"" + roomname + "[]\" value=\"" + $thingindex + "\" checked=\"1\" >";
+                    } else {
+                        $tc+= "<input type=\"checkbox\" name=\"" + roomname + "[]\" value=\"" + $thingindex + "\" >";
+                    }
+                    $tc+= "</td>";
+                }
+            }
+            $tc+= "</tr>";
         }
-        $tc+= "</tr>";
     }
 
     $tc+= "</tbody></table>";
@@ -6889,9 +6894,6 @@ function getOptionsPage(uname, hostname, pathname) {
     $tc +='<div id="optCancel" class="formbutton">Cancel</div><br>';
     $tc+= "</div>";
     $tc+= "</form>";
-    
-    // $tc+= "</div>";
-
     $tc += utils.getFooter();
 
     return $tc;
@@ -7241,9 +7243,8 @@ function processOptions(uname, optarray) {
             if ( array_key_exists(stype, specialtiles) ) {
                 var spid = specialtiles[stype][0];
                 var customcnt = parseInt(val);
-                createSpecialIndex(customcnt, stype, spid);
-                configoptions["specialtiles"] = clone(GLB.options["config"]["specialtiles"]);
-                
+                options = createSpecialIndex(customcnt, stype, spid, options);
+                configoptions["specialtiles"] = options["config"]["specialtiles"];
             }
         
         // made this more robust by checking room name being valid
@@ -7306,6 +7307,7 @@ function processOptions(uname, optarray) {
 
     // save options
     GLB.options = clone(options);
+    addSpecials();
     return "success";
 }
 

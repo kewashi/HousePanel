@@ -594,8 +594,10 @@ function setupWebsocket(webSocketUrl)
             // console.log("websocket tile update. id: ", bid, " type: ", thetype, " pvalue: ", pvalue);
 
             // update the global allthings array
-            for ( var psubid in pvalue ) {
-                cm_Globals.allthings[idx]["value"][psubid] = pvalue[psubid];
+            if ( cm_Globals.allthings && cm_Globals.allthings[idx] ) {
+                for ( var psubid in pvalue ) {
+                    cm_Globals.allthings[idx]["value"][psubid] = pvalue[psubid];
+                }
             }
 
             // update all the tiles that match this type and id
