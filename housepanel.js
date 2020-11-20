@@ -1861,18 +1861,21 @@ function setupButtons() {
             evt.stopPropagation(); 
         });
 
-        $("select[name='hubType']").on('change', function(evt) {
+        $("#hubdiv_new > select[name='hubType']").on('change', function(evt) {
             var hubType = $(this).val();
-            if ( hubType==="Ford" ) {
-                $(this).find("input[name='hubHost']").html("https://fordconnect.cv.ford.com");
-            } else if ( hubType=== "SmartThings" ) {
-                $(this).find("input[name='hubHost']").html("https://graph.api.smartthings.com");
+            var hubTarget = $("#hubform_new").find("input[name='hubHost']");
+            if ( hubType=== "SmartThings" ) {
+                hubTarget.val("https://graph.api.smartthings.com");
+            } else if ( hubType=== "NewSmartThings" ) {
+                hubTarget.val("https://api.smartthings.com");
             } else if ( hubType==="Hubitat" ) {
-                $(this).find("input[name='hubHost']").html("https://oauth.cloud.hubitat.com");
+                hubTarget.val("https://oauth.cloud.hubitat.com");
+            } else if ( hubType==="Ford" || hubType==="Lincoln" ) {
+                hubTarget.val("https://fordconnect.cv.ford.com");
             } else if ( hubType==="ISY" ) {
-                $(this).find("input[name='hubHost']").html("http://192.168.11.31");
+                hubTarget.val("http://192.168.11.31");
             } else {
-                $(this).find("input[name='hubHost']").html("");
+                hubTarget.val("");
             }
         });
         
@@ -1919,21 +1922,34 @@ function setupButtons() {
                     // "name": "CA Ford-Connect Production",
                     // "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
                     else if ( obj.action === "fordoauth" ) {
-                        var nvpreq= "make=" + obj.model + "&application_id=" + obj.hubId + "&response_type=code&state=123&client_id=" + obj.clientId + "&scope=access&redirect_uri=" + encodeURI(obj.url);
+                        var nvpreq= "make=" + obj.model + "&application_id=" + obj.hubId + 
+                                    "&response_type=code&state=123&client_id=" + obj.clientId + 
+                                    "&scope=access&redirect_uri=" + encodeURI(obj.url);
                         var location = obj.host + "/common/login/?" + nvpreq;
                         // alert("Ready to redirect to location: " + location);
                         window.location.href = location;
 
                     }
 
-                    // if ST or HE oauth flow then start the process
+                    // if oauth flow then start the process with a redirection to site
+                    // was updated to handle specific client_type values for user level auth and user scope values
                     else if ( obj.action === "oauth" ) {
                         // $("#newthingcount").html("Redirecting to OAUTH page");
-                        var nvpreq= "response_type=code&client_id=" + obj.clientId + "&scope=app&redirect_uri=" + encodeURI(obj.url);
+                        var nvpreq = "response_type=code";
+                        if ( obj.client_type ) {
+                            nvpreq = nvpreq + "&client_type=" + obj.client_type;
+                        }
+                        if ( obj.scope ) {
+                            nvpreq = nvpreq + "&scope=" + encodeURI(obj.scope);
+                        } else {
+                            nvpreq = nvpreq + "&scope=app";
+                        }
+                        nvpreq= nvpreq + "&client_id=" + encodeURI(obj.clientId) + "&redirect_uri=" + encodeURI(obj.url);
+
+                        // navigate over to the server to authorize
                         var location = obj.host + "/oauth/authorize?" + nvpreq;
                         // alert("Ready to redirect to location: " + location);
                         window.location.href = location;
-
                     }
                 } else {
                     if (typeof presult==="string" ) {
@@ -3312,7 +3328,7 @@ function processClick(that, thingname) {
  
             var showstr = "";
             $.each(value, function(s, v) {
-                if ( v && s!=="password" && !s.startsWith("user_") ) {
+                if ( v!==null && s!=="password" && !s.startsWith("user_") ) {
                     var txt = v.toString();
                     txt = txt.replace(/<.*?>/g,'');
                     showstr = showstr + s + ": " + txt + "<br>";

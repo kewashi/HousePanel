@@ -587,7 +587,7 @@ exports.getHeader = function getHeader(skin, islogin) {
     $tc += '<link rel="icon" type="image/png" href="media/favicon-32x32.png" sizes="32x32"> ';
     $tc += '<link rel="icon" type="image/png" href="media/favicon-96x96.png" sizes="96x96"> ';
     $tc += '<link rel="apple-touch-icon" href="media/apple-touch-icon.png">';
-    $tc += '<link rel="shortcut icon" href="media/favicon.ico">';
+    // $tc += '<link rel="shortcut icon" href="media/favicon.ico">';
     
     // load jQuery and themes
     $tc += '<link rel="stylesheet" type="text/css" href="jquery-ui.css">';
@@ -648,4 +648,44 @@ exports.count = function count(obj) {
     } else {
         return 0;
     }
+}
+
+exports.hsv2rgb = function hsv2rgb(h, s, v) {
+    var r, g, b;
+
+    function toHex(thenumber) {
+        var hex = thenumber.toString(16);
+        if (hex.length === 1) {
+          hex = "0" + hex;
+        }
+        return hex;
+    }
+
+    h /= 100.0;
+    s /= 100.0;
+    v /= 100.0;
+    
+    var i = Math.floor(h * 6);
+    var f = h * 6 - i;
+    var p = v * (1 - s);
+    var q = v * (1 - f * s);
+    var t = v * (1 - (1 - f) * s);
+    
+    switch (i % 6) {
+        case 0: r = v; g = t; b = p; break;
+        case 1: r = q; g = v; b = p; break;
+        case 2: r = p; g = v; b = t; break;
+        case 3: r = p; g = q; b = v; break;
+        case 4: r = t; g = p; b = v; break;
+        case 5: r = v; g = p; b = q; break;
+    }
+    
+    r = parseInt(Math.floor(r*255));
+    g = parseInt(Math.floor(g*255));
+    b = parseInt(Math.floor(b*255));
+    
+    var rhex = toHex(r);
+    var ghex = toHex(g);
+    var bhex = toHex(b);
+    return "#"+rhex+ghex+bhex;
 }
