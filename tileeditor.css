@@ -1696,6 +1696,7 @@ div.thing.control-thing div.overlay:hover {
 
 div.thing.frame-thing div.frame.width, 
 div.thing.frame-thing div.frame.height,
+div.thing.audio-thing div.audio.groupVolume,
 div.thing.audio-thing div.audio.width,
 div.thing.audio-thing div.audio.height {
     display: none;
@@ -1920,5 +1921,10 @@ div.isy-thing.program div.overlay.lastFinishTime {
 div.ford-thing div.overlay.commandId, 
 div.ford-thing div.overlay.commandStatus, 
 div.ford-thing div.overlay.status {
+    display: none;
+}
+div.overlay.deviceType,
+div.overlay.localExec,
+div.overlay.appId {
     display: none;
 }
