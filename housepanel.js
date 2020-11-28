@@ -922,15 +922,16 @@ function setupColors() {
             },
             hide: function() {
                 var newcolor = $(this).minicolors("rgbObject");
+                var hexval = $(this).minicolors("value");
                 var hsl = rgb2hsv( newcolor.r, newcolor.g, newcolor.b );
                 var hslstr = "hsl("+hsl.hue.pad(3)+","+hsl.saturation.pad(3)+","+hsl.level.pad(3)+")";
                 var tile = '#t-'+aid;
                 var bid = $(tile).attr("bid");
                 var hubnum = $(tile).attr("hub");
                 var thetype = $(tile).attr("type");
-                // console.log("doaction: id= "+bid+" type= "+ thetype+ " color= "+ hslstr);
+                console.log("setupColors doaction: id: ", bid, " type: ", thetype, " value: ", hslstr, " hex: ", hexval, " attr: color hubid: ", hubnum);
                 $.post(cm_Globals.returnURL, 
-                       {useajax: "doaction", id: bid, type: thetype, value: hslstr, attr: "color", hubid: hubnum} );
+                       {useajax: "doaction", id: bid, type: thetype, value: hslstr, subid: "color", attr: hexval, hubid: hubnum} );
             }
         });
     });
@@ -952,7 +953,6 @@ function setupSliders() {
             var tile = '#t-'+aid;
             var bid = $(tile).attr("bid");
             var hubnum = $(tile).attr("hub");
-            var ajaxcall = "doaction";
             var subid = thing.attr("subid");
             var thevalue = parseInt(ui.value);
             var thetype = $(tile).attr("type");
@@ -971,9 +971,10 @@ function setupSliders() {
             }
             
             // console.log(ajaxcall + ": id= "+bid+" type= "+linktype+ " value= " + thevalue + " subid= " + subid + " command= " + command + " linkval: ", linkval);
+            console.log("setupSliders doaction: command= " + command + " bid= "+bid+" hub= " + hubnum + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval);
             
             $.post(cm_Globals.returnURL, 
-                {useajax: ajaxcall, id: bid, type: linktype, value: thevalue, attr: subid, 
+                {useajax: "doaction", id: bid, type: linktype, value: thevalue, attr: subid, 
                  subid: subid, hubid: hubnum, command: command, linkval: linkval} );
         }
     });
@@ -1758,7 +1759,7 @@ function setupButtons() {
         $("button.infobutton").addClass("disabled").prop("disabled", true);
         setTimeout(function() {
             $("button.infobutton").removeClass("disabled").prop("disabled", false);
-        }, 1000);
+        }, 200);
             
         $("button.infobutton").on('click', function() {
             // location.reload(true);
@@ -3364,6 +3365,17 @@ function processClick(that, thingname) {
         else if ( subid==="switch" && command==="" && (thevalue==="DON" || thevalue==="DOF" )  ) {
             thevalue = thevalue==="DON" ? "DOF" : "DON";
         }
+
+        // invert open and close for doors and valves and set commaned
+        else if ( (subid==="door" || subid==="valve") && (thevalue==="open" || thevalue==="closed") ) {
+            thevalue = thevalue==="open" ? "close" : "open";
+        }
+
+        // invert and set lock command
+        else if ( subid==="lock" && (thevalue==="locked" || thevalue==="unlocked") ) {
+            thevalue = thevalue==="locked" ? "unlock" : "lock";
+        }
+
         console.log("URL: ", cm_Globals.returnURL," ", ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" hub= " + hubnum + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
 
         // create a visual cue that we clicked on this item
