@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.409   Bugfix for hub push updates with spaces in the values like shakes
 2.408   Fix bug that prevented special tile counts from updating
 2.407   Prevent reload when editing and add toggle feature for rules
 2.406   Update Ford API calls to return info upon refresh or start

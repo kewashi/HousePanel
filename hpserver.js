@@ -16,7 +16,7 @@ const DEBUG8 = false;               // API calls
 const DEBUG9 =  false;              // ISY callbacks
 const DEBUG10 = false;              // sibling tag
 const DEBUG11 = false;              // rules
-const DEBUG12 = false;              // hub push updates
+const DEBUG12 = true;              // hub push updates
 const DEBUG13 = false;              // URL callbacks
 const DEBUG14 = false;              // tile link details
 const DEBUG15 = false;              // allthings and options dump
@@ -3961,7 +3961,11 @@ function processHubMessage(hubmsg) {
     }
 
     if ( DEBUG12 ) {
-        console.log( (ddbg()), "processhubMessage - hubmsgid: ", hubmsgid, "\nmessage: ", hubmsg, " sizes: width: ", customwidth, " height: ", customheight);
+        if ( customwidth && customheight ) {
+            console.log( (ddbg()), "processhubMessage - message: ", hubmsg, " width: ", customwidth, " height: ", customheight);
+        } else {
+            console.log( (ddbg()), "processhubMessage - message: ", hubmsg);
+        }
     }
 
     for (idx in allthings) {
@@ -4018,9 +4022,9 @@ function processHubMessage(hubmsg) {
     }
     if ( typeof newval === "object" ) {
 
-        if ( DEBUG12 ) {
-            console.log( (ddbg()), "processHubMessage - newval: ", newval );
-        }
+        // if ( DEBUG12 ) {
+        //     console.log( (ddbg()), "processHubMessage - newval: ", newval );
+        // }
 
         // loop through each field of the object
         // or the only item if this is a simple link
@@ -4055,7 +4059,7 @@ function processHubMessage(hubmsg) {
                                 entry.value[linksubid] = newval[obj_subid];
                             }
                         }
-                        if ( DEBUG12 ) {
+                        if ( DEBUG12 && DEBUG14 ) {
                             console.log( (ddbg()), "processhubMessage - link debug. companion=",companion," helper=",helperval," command=",command,
                                         " lidx=",lidx," linktype=",linktype," linkbid=",linkbid," obj_subid: ", obj_subid," targetobj: ", targetobj);
                         }
@@ -4941,7 +4945,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
     var result = "success";
     var idx = swtype + "|" + swid;
     if ( DEBUG7 ) {
-        console.log( (ddbg()), "callHub: access: ", access_token, " endpt: ", endpt, " swval: ", swval, " subid: ", subid, " attr: ", swattr);
+        console.log( (ddbg()), "callHub: access: ", access_token, " endpt: ", endpt, " swval: ", swval, " subid: ", subid, " swtype: ", swtype, " attr: ", swattr, " hubId: ", hub.hubId, " hubType: ", hub.hubType);
     }
     
     var isyresp = {};
@@ -4975,10 +4979,6 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
     // implement the functions supported as described in the postman collection
     // but only the things that start with an underscore invoke the api call
     } else if ( hub["hubType"]==="Ford" ) {
-
-        if ( DEBUG18 ){
-            console.log( (ddbg()), " Calling Ford API doaction in callHub. subid: ", subid, " swid: ", swid, " swval: ", swval, " swtype: ", swtype, " hub: ", hub,  );
-        }
 
         // all API calls have the same header structure
         var host = endpt + "/" + swid; 
@@ -5341,7 +5341,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
             var linksubid = linkinfo[2];
             var targetobj = {};
             targetobj[linksubid] = pvalue[realsubid];
-            if ( DEBUG18 ) {
+            if ( DEBUG18 && DEBUG14) {
                 console.log( (ddbg()), "Linkinfo: ", linkinfo, " targetobj: ", targetobj);
             }
             pushClient(linkinfo[0], linkinfo[1], linksubid, targetobj);

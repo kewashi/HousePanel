@@ -2488,6 +2488,19 @@ function updateTile(aid, presult, skiplink) {
             var oldvalue = $(targetid).html();
             var oldclass = $(targetid).attr("class");
 
+            // swap out blanks from old value and value
+            if ( oldvalue && typeof oldvalue === "string" ) {
+                oldvalue = oldvalue.replace(/ /g,"_");
+            }
+
+            // remove spaces from class
+            var extra = value;
+            if ( value && typeof value === "string" ) {
+                value = value.trim();
+                extra = extra.trim();
+                extra = extra.replace(/ /g,"_");
+            }
+
             // remove the old class type and replace it if they are both
             // single word text fields like open/closed/on/off
             // this avoids putting names of songs into classes
@@ -2559,24 +2572,18 @@ function updateTile(aid, presult, skiplink) {
                         $("#a-"+aid+"-trackImage").html("");
                     } catch (err) { console.log(err); }
                 } 
-                
-                // if ( (forceit || (value!==oldvalue)) && !value.startsWith("Grouped with") ) {
-                if ( value!==oldvalue ) {
-                    value = value.trim();
-                    // console.log("music track changed from: [" + oldvalue + "] to: [" + value + "]");
-                }
-                
+
             // add status of things to the class and remove old status
-            } else if ( oldclass && oldvalue && value &&
+            } else if ( oldclass && oldvalue && extra &&
                     key!=="name" && key!=="trackImage" && 
                     key!=="trackDescription" && key!=="mediaSource" &&
                     key!=="currentArtist" && key!=="currentAlbum" &&
-                    $.isNumeric(value)===false && 
+                    $.isNumeric(extra)===false && 
                     $.isNumeric(oldvalue)===false &&
                     oldclass.indexOf(oldvalue)>=0 ) 
             {
                     $(targetid).removeClass(oldvalue);
-                    $(targetid).addClass(value);
+                    $(targetid).addClass(extra);
             }
 
             // update the content 
