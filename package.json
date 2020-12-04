@@ -8,6 +8,7 @@
     "cookie-parser": "^1.4.5",
     "express": "^4.17.3",
     "mqtt": "^4.3.7",
+    "mysql": "^2.18.1",
     "request": "^2.88.0",
     "url": "^0.11.0",
     "websocket": "^1.0.28",
@@ -30,5 +31,5 @@
   "bugs": {
     "url": "https://github.com/kewashi/hpserver/issues"
   },
-  "homepage": "https://github.com/kewashi/hpserver#readme"
+  "homepage": "https://housepanel.net"
 }

@@ -50,6 +50,7 @@ const os = require('os');
 const cookieParser = require('cookie-parser');
 const request = require('request');
 const url = require('url');
+const mysql = require('mysql');
 
 // load supporting modules
 var utils = require("./utils");
