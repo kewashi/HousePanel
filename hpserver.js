@@ -1025,7 +1025,7 @@ function getDevices(hub, reload, reloadpath) {
             try {
                 var jsonbody = JSON.parse(body);
             } catch (e) {
-                console.log( (ddbg()), "error translating devices: ", e);
+                console.log( (ddbg()), "error translating devices from body: ", body," error: ", e);
                 jsonbody = {};
                 return;
             }
