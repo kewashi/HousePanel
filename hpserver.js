@@ -50,10 +50,12 @@ const os = require('os');
 const cookieParser = require('cookie-parser');
 const request = require('request');
 const url = require('url');
-const mysql = require('mysql');
+// const mysql = require('mysql');
+
 
 // load supporting modules
 var utils = require("./utils");
+const sqlclass = require("./mysqlclass");
 
 // global variables are all part of GLB object plus clients and allthings
 var GLB = {};
@@ -3171,6 +3173,10 @@ function getKeyByValue(object, value) {
         return null;
     }
     return null;
+}
+
+function is_string(obj) {
+    return (typeof obj === "string");
 }
 
 // return the HP specific type for a given capability

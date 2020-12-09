@@ -5,10 +5,11 @@ class sqlDatabase {
         this.dbname = dbname;
         this.errorcode = null;
         this.recentresult = null;
-        this.mydb = mysql(dbname);
+        this.mysql = require('mysql');
+
         
         // this.setWorkingTable(defaultTable);
-        this.conn = this.mydb.createConnection({
+        this.conn = this.mysql.createConnection({
             host: "localhost",
             database: dbname,
             user: dbuid,
@@ -18,7 +19,11 @@ class sqlDatabase {
     }
 
     getDatabase() {
-        return this.mydb;
+        return this.mysql;
+    }
+
+    getConnection() {
+        return this.conn;
     }
     
 
@@ -29,6 +34,10 @@ class sqlDatabase {
     
     getError() {
         return this.errorcode;
+    }
+
+    die(msg) {
+        console.log((ddbg()), "Database error: ", msg);
     }
     
     addRow(usertable, values, fields, skipsubmit) {
@@ -43,93 +52,72 @@ class sqlDatabase {
         } else {
             insertarr = values;
         }
-        keystring = valstring = csep = "";
 
-        foreach (insertarr as fieldkey => fieldvalue) {
+        var keystring = "";
+        var valstring = "";
+
+        for (var fieldkey in insertarr) {
 
             // build in skip for submit button as the default behavior
             // this allows a POST to be sent to this function directly
-            if ( skipsubmit && fieldkey.toLowerCase() === "submit" ) continue;
+            if ( !skipsubmit || fieldkey.toLowerCase() !== "submit" ) {
 
-            // settype(fieldvalue,"string");
-            settype(fieldkey,"string");
-
-            fieldkey = "`" + fieldkey + "`";
-            if (is_string(fieldvalue) ) {
-                fieldvalue = addslashes(fieldvalue);
-                fieldvalue = "'" + fieldvalue + "'";
-            }
- 
-            // skip this field if it is blank or set to NULL string
-            if ( fieldvalue !== "NULL") {
-                keystring = keystring + csep + fieldkey;
-                valstring = valstring + csep + fieldvalue;
-                csep = ", ";
+                var fieldvalue = insertarr[fieldkey];
+                fieldkey= "`" + fieldkey.toString() + "`";
+                if ( typeof fieldvalue === "stirng" ) {
+                    fieldvalue ="'" + encodeURI(fieldvalue) +  "'";
+                }
+    
+                // skip this field if it is blank or set to NULL string
+                if ( typeof fieldvalue !== "undefined" ) {
+                    if ( keystring==="" ) {
+                        keystring = fieldkey;
+                        valstring = fieldvalue;
+                    } else {
+                        keystring += ", " + fieldkey;
+                        valstring += ", " + fieldvalue;
+                    }
+                }
             }
 
         }
 
-        mysql = "INSERT INTO usertable ( keystring ) VALUES ( valstring )";
-        result = this.query(mysql);
+        const sqlstr = "INSERT INTO usertable ( keystring ) VALUES ( valstring )";
+        result = this.query(sqlstr);
         this.recentresult = result;
 
         return result;  
     }
     
     updateRow(usertable, values, conditions) {
-        if ( !this.conn ) die("addRow call attempted without an open DB connection.");
         if ( !usertable ) die("No table specified in call to addRow");
         if ( !conditions ) die("Attempted to update row with no conditions set");
 
         this.errorcode = NULL;
-        // if (usertable=="") usertable = this.usertable;
+        var insertarr = values;
+        var updatestr = "";
+        var csep = "";
 
-        insertarr = values;
-        updatestr = "";
-        csep = "";
+        for (var fieldkey in insertarr) {
 
-        foreach (insertarr as fieldkey => fieldvalue) {
-
-            // settype(fieldvalue,"string");
-            settype(fieldkey,"string");
-
-            switch (this._dbtype) {
-                case "sqlsrv":
-                    if (is_string(fieldvalue) ) {
-                        fieldvalue = str_replace(array("'","\""),"`",fieldvalue);
-                    }
-                    fieldvalue = "'" + fieldvalue + "'";
-                    break;
-
-                case "mysql":
-                    fieldkey = "`" + fieldkey + "`";
-                    if (is_string(fieldvalue) ) {
-                        fieldvalue = addslashes(fieldvalue);
-                        fieldvalue = "'" + fieldvalue + "'";
-                    }
-                    break;
-            }
+            var fieldvalue = insertarr[fieldkey];
+            fieldkey = "`" + fieldkey.toString() + "`";
+            fieldvalue = "'" + this.conn.escape(fieldvalue) + "'";
  
-            // skip this field if it is blank or set to NULL string
-            if ( fieldvalue !== false || fieldvalue !== "NULL") {
-                updatestr .= csep + fieldkey + " = " + fieldvalue;
-                csep = ", ";
-            }
+            updatestr += csep + fieldkey + " = " + fieldvalue;
+            csep = ", ";
 
         }
 
         // make the update query
-        result = NULL;
-        
-        mysql = "UPDATE usertable SET updatestr WHERE conditions";
-        // throw new Exception("SQL = mysql");
-        result = this.query(mysql);
+        var str = "UPDATE " + usertable + " SET " + updatestr + " WHERE " + conditions;
+        var result = this.query(str);
         this.recentresult = result;
 
         return result;  
     }
     
-    getRows(usertable, fields="", joins= "", conditions= "", orderby="", firstrow=false) {
+    getRows(usertable, fields="", joins= "", conditions= "", orderby="", firstrow) {
         if ( !this.conn ) die("getRows call attempted without an open DB connection.");
         if ( !usertable ) die("No table specified in call to getRows");
 
@@ -145,39 +133,33 @@ class sqlDatabase {
             keystring = "*";
         }
 
-        mysql = "SELECT keystring FROM usertable ";
+        var str = "SELECT " + keystring + " FROM " + usertable;
 
         // add all of the joins provided do not remove the space in between
         if ( joins ) {
             if ( is_array(joins) ) {
                 joinstr = explode(" ",joins);
-                mysql .= " " + joinstr + " ";
+                str += " " + joinstr + " ";
                 // foreach (joins as joinstr) {
                 //     mysql .= " " + joinstr + " ";
                 // }
             } else {
-                mysql .= " " + joins + " ";
+                str += " " + joins + " ";
             }
         }
         
-        // mysql = mysql + " " + joins + " ";
-        // print_r(mysql);
-        // echo br(2);
-        // print_r(joins);
-
         // add on the optional conditions
-        if (conditions) mysql .= " WHERE conditions";       
+        if (conditions)  { str += " WHERE " + conditions; }
 
         // add on ordering if provided
-        if (orderby) mysql .= " ORDER BY orderby ";
+        if (orderby) { str += " ORDER BY " + orderby; }
         
         // build the array of results
-        result = this.query(mysql);
+        result = this.query(str);
 
-        showarr = NULL;
         if ( result ) {
-            if (!firstrow) showarr = array();
-            while ( row = this.fetchArray(result) ) {
+            var showarr = [];
+            while ( row = this.conn.fetchArray(result) ) {
 
                 // help speed up getRow function with this patch            
                 if (firstrow) return row;
@@ -187,134 +169,17 @@ class sqlDatabase {
                     showarr[index] = row;
                     // showarr[] = row;
                 } else {
-                    showarr[] = row;
+                    showarr.push(row);
                 }
             }
         }
         return showarr;
     }
 
-    getUniqueRows(usertable, fields="", joins= "", conditions= "", orderby="") {
-        if ( !this.conn ) die("getRows call attempted without an open DB connection.");
-        if ( !usertable ) die("No table specified in call to getUniqueRows");
-
-        // if (usertable=="") usertable = this.usertable;
-        if (fields=="") fields = "*";
-    
-        // can pass a string or an array to pick which fields to read from the table
-        // if we pass an array then the unique field equals the first item if it is Id, or sort field
-        // otherwise the sort field is the first field which should be Id
-        if ( is_string(fields) ) {
-            keystring = fields;
-            if (substr(fields,0,3)=="Id,") {
-                sortby = "Id";
-            } else {
-                sortby = orderby;
-            }
-        } else if (is_array(fields) && count(fields) ) {
-            sortby = fields[0];
-            keystring = implode(",",fields);
-            // keystring = "";
-            // csep = "";
-            // foreach (fields as field) {
-            //     keystring .= csep + field;
-            //     csep = ", ";
-            // }
-        } else {
-            keystring = "*";
-        }
-
-        mysql = "SELECT keystring FROM usertable";
-
-        // add all of the joins provided do not remove the space in between
-        if ( joins ) {
-            if ( is_array(joins) ) {
-                joinstr = explode(" ",joins);
-                mysql .= " " + joinstr + " ";
-                // foreach (joins as joinstr) {
-                //     mysql .= " " + joinstr + " ";
-                // }
-            } else {
-                mysql .= " " + joins + " ";
-            }
-        }
-        
-        // mysql = mysql + " " + joins + " ";
-        // print_r(mysql);
-        // echo br(2);
-        // print_r(joins);
-
-        // add on the optional conditions
-        if (conditions) mysql .= " WHERE conditions";       
-
-        // add on ordering if provided
-        // orderby has special meaning in this unique function - it is the field to not duplicate
-        // we instead sort by the first field given
-        if (sortby) mysql .= " ORDER BY sortby ";
-        
-        // build the array of results
-        result = this.query(mysql);
-
-        if ( !result ) {
-            showarr = NULL;
-        } else {
-            showarr = array();
-            while ( row = this.fetchArray(result) ) {
-
-                existing = false;
-                foreach (showarr as val) {
-                    if (val[orderby] == row[orderby]) {
-                        existing = true;
-                        break;
-                    }
-                }
-
-                if (array_key_exists("Id",row)) {
-                    index = row["Id"];
-                    if (!existing)
-                        showarr[index] = row;
-                } else {
-                    if ( !existing )
-                        showarr[] = row;
-                }
-            }
-        }
-        return showarr;
-    }
-
-    fetchArray(result) {
-        
-        row = NULL;
-        switch (this._dbtype) {
-        
-            case "sqlsrv":
-                row = sqlsrv_fetch_array(result, SQLSRV_FETCH_ASSOC);
-                break;
-                
-            case "mysql":
-                row = mysql_fetch_assoc(result);
-                break;
-        }
-        
-        return row;
-    }
 
     getRow(usertable, fields="", joins= "", conditions= "", orderby="") {
-        
         row = this.getRows(usertable, fields, joins, conditions, orderby, true);
-        /*
-        rows = this.getRows(usertable, fields, joins, conditions, orderby);
-
-        row = false;
-        if (rows) {
-            keys = array_keys(rows);
-            idfirst = keys[0];
-            row = rows[idfirst];
-        }
-        */
-        
         return row;
-        
     }
 
     getFields(usertable, userecent= false) {
@@ -322,62 +187,43 @@ class sqlDatabase {
         if ( !usertable ) die("No table specified in call to getFields");
         // if (usertable=="") usertable = this.usertable;
 
-        result = this.recentresult;
-        if ( ! result or ! userecent) {
-            result = this.query("SELECT * FROM usertable");
-            this.recentresult = result;
-        }
+        var result = this.query("SELECT * FROM usertable");
 
-        keys = array();
-        switch (this._dbtype) {
-        
-            case "sqlsrv":
-                metakeys = sqlsrv_field_metadata(result);
-                foreach ( metakeys as submeta ) {
-                    keys[] = submeta['Name'];
-                }
-                break;
-                
-            case "mysql":
-                i = 0;
-                numfields = mysql_num_fields(result);
-                while (i < numfields) {
-                    submeta = mysql_fetch_field(result, i);
-                    keys[] = submeta->name;
-                    i++;
-                }
-                break;
+        var keys = [];
+        var i = 0;
+        numfields = mysql_num_fields(result);
+        while (i < numfields) {
+            var submeta = mysql_fetch_field(result, i);
+            keys.push(submeta.name);
+            i++;
         }
-               
-        this.free(result);
         return keys;
     }
 
     // get values of a specific column and return as an array
-    getColumn(usertable, col, joins= "", conditions= "") {
+    getColumn(usertable, col, joins, conditions) {
         this.errorcode = NULL;
         if (usertable=="") usertable = this.usertable;
         if ( !usertable ) die("No table specified in call to addRow");
 
-        mysql = "SELECT col FROM usertable";
+        var str = "SELECT col FROM usertable";
 
         // add all of the joins provided do not remove the space in between
         if ( joins ) {
             if ( is_array(joins) ) {
-                joinstr = explode(" ",joins);
-                mysql .= " " + joinstr + " ";
-                // foreach (joins as joinstr) {
-                //     mysql .= " " + joinstr + " ";
-                // }
+                for (j in joins) {
+                    var joinstr = joins[j];
+                    str += " " + joinstr + " ";
+                }
             } else {
-                mysql .= " " + joins + " ";
+                str += " " + joins + " ";
             }
         }
         
         // add on the optional conditions
-        if (conditions) mysql .= " WHERE conditions";       
+        if (conditions) { str += " WHERE " + conditions; }
 
-        result = this.query(mysql);
+        result = this.query(str, (joins!==null));
 
         if ( !result ) {
             showarr = false;
@@ -386,7 +232,7 @@ class sqlDatabase {
             while ( row = this.fetchArray(result) ) {
                 // id = row["id"];
                 // showarr[id] = row[col];
-                showarr[] = row[col];
+                showarr.push (row[col]);
             }
         }
         return showarr;
@@ -421,33 +267,30 @@ class sqlDatabase {
     }
 
     // generic user-defined query
-    query(mysql) {
-        var = NULL;
+    async query(str, nested) {
         if ( this.conn ) {
-            result = mysql_query(mysql, this.conn);
-            this.recentresult = result;
+            var options = {sql: str, nestTables: nested};
+            await this.conn.query(options, function(err, results, fields) {
+                console.log( results );
+                this.recentresult = results;
+            });
         }
         return result;
     }
     
-    getJoinStr(usertable, idjoinfrom, jointable, idjointo, jtype = "INNER") {
+    getJoinStr(usertable, idjoinfrom, jointable, idjointo, jtype) {
         if ( !usertable ) die("No table specified in call to getJoinStr");
-        // if (usertable=="") usertable = this.usertable;
-        jstr1 = usertable + "." + idjoinfrom;
-        jstr2 = jointable + "." + idjointo;
-        jstr = " jtype JOIN jointable ON jstr1 = jstr2 ";
+        var jstr1 = usertable + "." + idjoinfrom;
+        var jstr2 = jointable + "." + idjointo;
+        if ( !jtype ) {
+            jtype = "INNER";
+        }
+        var jstr = " " + jtype + " JOIN " + jointable + " ON " + jstr1 + " = " + jstr2;
         return jstr;
     }
 
     closeConnection() {
-        this.mydb.close(this.conn);
-    }
-    
-    free(resource) {
-        this.recentresult = NULL;
-        this.errorcode = NULL;
-        if ( !this.conn || !resource ) return;
-         mysql_free_result(resource);
+        this.conn.close();
     }
        
 }
