@@ -16,11 +16,11 @@ const DEBUG8 = false;               // API calls
 const DEBUG9 =  false;              // ISY callbacks
 const DEBUG10 = false;              // sibling tag
 const DEBUG11 = false;              // rules
-const DEBUG12 = true;              // hub push updates
+const DEBUG12 = false;              // hub push updates
 const DEBUG13 = false;              // URL callbacks
 const DEBUG14 = false;              // tile link details
 const DEBUG15 = false;              // allthings and options dump
-const DEBUG16 = false;              // customtiles writing
+const DEBUG16 = false;              // customtiles writing and custom names
 const DEBUG17 = false;              // push client
 const DEBUG18 = false;              // ST, HE, and Ford messages in callHub -> getHubResponse
 const DEBUG19 = false;              // ST and HE callback from Groovy
@@ -2742,9 +2742,11 @@ function returnFile(thingvalue, thingtype) {
                 mediafile= $vn;
                 break;
 
-            // otherwise just show a blank just like below
+            // otherwise show any web file referenced or a blank just like below
             default:
-                if ( thingtype==="custom" ) {
+                if ( $vn.startsWith("http") ) {
+                    $v = "<iframe width=\"" + fw + "\" height=\"" + fh + "\" src=\"" + $vn + "\" frameborder=\"0\"></iframe>";
+                } else if ( thingtype==="custom" ) {
                     $v = "";
                 } else {
                     $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\"></div>";
@@ -2763,6 +2765,9 @@ function returnFile(thingvalue, thingtype) {
         }
     }
 
+    if ( DEBUG16 ) {
+        console.log((ddbg()), "custom name for type: ", thingtype, " vn= ", $vn, " fn= ", fn, " v= ", $v);
+    }
     thingvalue[thingtype] = $v;
 
     // TODO - figure out a better way to show large images

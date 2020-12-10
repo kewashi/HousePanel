@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2,410   Show http websites inside frames when customizer changes name
 2.409   Bugfix for hub push updates with spaces in the values like shakes
 2.408   Fix bug that prevented special tile counts from updating
 2.407   Prevent reload when editing and add toggle feature for rules
