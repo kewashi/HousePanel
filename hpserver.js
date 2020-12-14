@@ -50,12 +50,10 @@ const os = require('os');
 const cookieParser = require('cookie-parser');
 const request = require('request');
 const url = require('url');
-// const mysql = require('mysql');
-
 
 // load supporting modules
 var utils = require("./utils");
-const sqlclass = require("./mysqlclass");
+var sqlclass = require("./mysqlclass");
 
 // global variables are all part of GLB object plus clients and allthings
 var GLB = {};
@@ -572,7 +570,6 @@ function readRoomThings(caller, uname) {
         writeRoomThings(GLB.options, uname);
     }
     writeOptions();
-
     return opts;
 
 }
