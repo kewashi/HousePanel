@@ -1,9 +1,10 @@
 {
   "name": "hpserver",
-  "version": "2.22.0",
+  "version": "4.001.0",
   "description": "HousePanel Node Server",
   "main": "hpserver.js",
   "dependencies": {
+    "@mysql/xdevapi": "8.0.22",
     "body-parser": "^1.18.3",
     "cookie-parser": "^1.4.5",
     "express": "^4.16.4",
