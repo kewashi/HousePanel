@@ -3,7 +3,7 @@
  * Original version by @nitwit on SmartThings forum
  * heavily modified by Ken Washington @kewashi on the forum
  * 
- * Designed for use only with HousePanel for Hubitat, SmartThings, and ISY
+ * Designed for use only with HousePanel
  * (c) Ken Washington 2017 - 2020
  * 
  */
@@ -649,6 +649,7 @@ function initDialogBinds(str_type, thingindex) {
                 target = target + " img.trackImage";
             }
             var rule = "width: " + newsize.toString() + "px;";
+            console.log("target: ", target, " rule: ", rule);
             addCSSRule(target, rule);
 
         }
@@ -1070,12 +1071,13 @@ function colorpicker(str_type, thingindex) {
     var subid = firstsub;
     var onoff = getOnOff(str_type, subid, val);
 
-    var idx = "isy|vars";
-    if (str_type==="isy" && ("alias" in cm_Globals.allthings[idx]) && (subid in cm_Globals.allthings[idx].alias )) {
-        firstsub = firstsub + " (" + cm_Globals.allthings[idx].alias[subid] + ")";
-    } else {
-        console.log("type, subid: ", str_type, subid);
-    }
+    // remove this because it messes up styling
+    // var idx = "isy|vars";
+    // if (str_type==="isy" && ("alias" in cm_Globals.allthings[idx]) && (subid in cm_Globals.allthings[idx].alias )) {
+    //     firstsub = firstsub + " (" + cm_Globals.allthings[idx].alias[subid] + ")";
+    // } else {
+    //     console.log("type, subid: ", str_type, subid);
+    // }
     
     dh += "<div id='subidTarget' class='dlgtext'>" + firstsub + "</div>";
     dh += "<div id='onoffTarget' class='dlgtext'>" + onoff[0] + "</div>";
@@ -1120,15 +1122,14 @@ function setupClicks(str_type, thingindex) {
         loadSubSelect(str_type, subid, thingindex);
 
         // include alias if there
-        var idx = "isy|vars";
-        if (str_type==="isy" && ("alias" in cm_Globals.allthings[idx]) && (subid in cm_Globals.allthings[idx].alias )) {
-            var alias = cm_Globals.allthings[idx].alias[subid];
-            if ( alias !== subid ) {
-                var theval = $("#subidTarget").html();
-                $("#subidTarget").html(theval + " (" + alias + ")");
-            }
-        }
-        // console.log("subid, alias: ", subid, alias);
+        // var idx = "isy|vars";
+        // if (str_type==="isy" && ("alias" in cm_Globals.allthings[idx]) && (subid in cm_Globals.allthings[idx].alias )) {
+        //     var alias = cm_Globals.allthings[idx].alias[subid];
+        //     if ( alias !== subid ) {
+        //         var theval = $("#subidTarget").html();
+        //         $("#subidTarget").html(theval + " (" + alias + ")");
+        //     }
+        // }
             
         var newtitle;
         if ( str_type==="page" ) {
