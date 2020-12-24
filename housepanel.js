@@ -170,8 +170,11 @@ function getAllthings() {
 function getOptions(dosetup) {
     var doreload = "";
     try {
+    var userid = $("#userid").val();
+    var uname = $("#emailid").val();
+    var skin = $("#skinid").val();
     $.post(cm_Globals.returnURL, 
-        {useajax: "getoptions", id: "none", type: "none", attr: doreload},
+        {useajax: "getoptions", id: "none", type: "none", attr: doreload, userid: userid, uname: uname, skin: skin},
         function (presult, pstatus) {
             if (pstatus==="success" && typeof presult==="object" && presult.index ) {
                 cm_Globals.options = clone(presult);

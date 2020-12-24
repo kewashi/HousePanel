@@ -3,12 +3,11 @@ exports.sqlDatabase = class sqlDatabase {
     
     constructor(dbhost, dbname, dbuid, dbpassword) {        
         this.mysqlx = require('@mysql/xdevapi');
-        this.dbname = dbname;
-        this.errorcode = null;
-        this.recentresult = null;
         this.insertId = 0;
-        this.tables;
+        this.tablenames;
         this.session;
+        this.recentResults = null;
+        this.error;
 
         this.config = {
             host: dbhost,
@@ -18,7 +17,9 @@ exports.sqlDatabase = class sqlDatabase {
             password: dbpassword
         };
 
-        // this.session = this.getSession();
+        // save the table names for later use
+        // this takes some time so you can't use it right away
+        var that = this;
         this.getSession()
             .then(session => {
                 // console.log( session.inspect() );
@@ -28,10 +29,14 @@ exports.sqlDatabase = class sqlDatabase {
                 return schema.getTables();
             })
             .then(tables => {
-                this.tables = tables;
-                // tables.forEach( function(atable) {
-                //     console.log( "Table: ", atable.getName() );
-                // });
+                that.tablenames = [];
+                tables.forEach( function(atable) {
+                    that.tablenames.push(atable.getName());
+                });
+                return tables;
+            })
+            .catch(results => {
+                return [];
             });
     }
 
@@ -47,14 +52,29 @@ exports.sqlDatabase = class sqlDatabase {
         return this.insertId;
     }
 
+    isTable(atable) {
+        var isvalid = (this.tablenames.indexOf(atable) !== -1);
+        return isvalid;
+    }
+
+    getResults() {
+        return (this.error ? null : this.recentResults);
+    }
+
     die(msg) {
+        this.error = msg;
         console.log(">>>> sql error: ", msg);
+    }
+
+    warn(msg) {
+        this.error = msg;
+        // console.log(">>>> sql warning: ", msg);
     }
     
     getJoinStr(usertable, idjoinfrom, jointable, idjointo, jtype) {
         if ( !usertable || !jointable ) {
             this.die("Two tables must specified in call to getJoinStr");
-            return false;
+            return null;
         }
         var jstr1 = usertable + "." + idjoinfrom;
         var jstr2 = jointable + "." + idjointo;
@@ -66,23 +86,28 @@ exports.sqlDatabase = class sqlDatabase {
     }
 
     getTable(usertable) {
+        this.error = null;
         var pr = this.getSession()
         .then(session => {
             var table = getSession().getTable(usertable);
             return table;
+        })
+        .catch(reason => {
+            this.warn(reason);
+            return null;
         });
         return pr;
     }
     
     addRow(usertable, values, skipsubmit) {
+        this.error = null;
         if ( !usertable ) {
             this.die("No table specified in call to addRow");
-            return false;
+            return null;
         }
 
         var keystring = "";
         var valstring = "";
-
         for (var fieldkey in values) {
 
             // build in skip for submit button as the default behavior
@@ -90,8 +115,7 @@ exports.sqlDatabase = class sqlDatabase {
             if ( !skipsubmit || fieldkey.toLowerCase() !== "submit" ) {
 
                 var fieldvalue = values[fieldkey];
-                fieldkey= "`" + fieldkey + "`";
-                // fieldvalue ="'" + encodeURI(fieldvalue) + "'";
+                fieldkey= "`" + fieldkey.toString() + "`";
                 fieldvalue ="'" + fieldvalue + "'";
     
                 // skip this field if it is blank or set to null string
@@ -111,52 +135,82 @@ exports.sqlDatabase = class sqlDatabase {
         return this.query(str);
     }
     
+    // this either updates or adds a new row to the table
+    // it first tries to update. If it fails then conditions are ignored and an attempt to add values
+    // will be made as a new row. This will only succeed if all required fields are provided
     updateRow(usertable, values, conditions) {
+        this.error = null;
         if ( !usertable ) {
             this.die("No table specified in call to updateRow");
-            return false;
+            return null;
         }
         if ( !conditions ) {
             this.die("Attempted to update row with no conditions set");
-            return false;
+            return null;
         }
 
         var updatestr = "";
+        var keystring = "";
+        var valstring = "";
         for (var fieldkey in values) {
 
             var fieldvalue = values[fieldkey];
             fieldkey = "`" + fieldkey.toString() + "`";
-            fieldvalue = "'" + encodeURI(fieldvalue) + "'";
+            fieldvalue = "'" + fieldvalue + "'";
 
             if ( updatestr==="" ) {
-                updatestr += fieldkey + " = " + fieldvalue;
+                updatestr = fieldkey + " = " + fieldvalue;
+                keystring = fieldkey;
+                valstring = fieldvalue;
             } else {
                 updatestr += ", " + fieldkey + " = " + fieldvalue;
+                keystring += ", " + fieldkey;
+                valstring += ", " + fieldvalue;
             }
-
         }
+
+        // update the fields requested
         var str = "UPDATE " + usertable + " SET " + updatestr + " WHERE " + conditions;
-        return this.query(str);
+        var results = this.query(str)
+        .then(qres => {
+
+            // if failed, try adding a new row which will only work if all required fields are given
+            if ( qres && qres.getAffectedItemsCount() === 0 ) {
+                var str = "INSERT INTO " + usertable + " ( " + keystring + ") VALUES ( " + valstring + " )";
+                return this.query(str);
+            } else {
+                return qres;
+            }
+        });
+        return results;
     }
     
     deleteRow(usertable, conditions) {
+        this.error = null;
         if ( !usertable ) {
             this.die("No table specified in call to updateRow");
-            return false;
+            return null;
         }
         if ( !conditions ) {
             this.die("Attempted to delete row with no conditions set");
-            return false;
+            return null;
         }
-        var str = "DELETE FROM " + usertable + " WHERE " + conditions;
+        if ( conditions === "ALL" || conditions === "all" ) {
+            var str = "DELETE FROM " + usertable;
+        } else {
+            str = "DELETE FROM " + usertable + " WHERE " + conditions;
+        }
         return this.query(str);
     }
     
     // use a promise 
+    // the rows will have table names in the columns if joined is provided
+    // if you want the table name without a join, use a blank string as the join
     getRows(usertable, fields, conditions, joins, orderby, firstrow, callback) {
+        this.error = null;
         if ( !usertable ) {
             this.die("No table specified in call to getRows");
-            return false;
+            return null;
         }
 
         // can pass a string or an array to pick which fields to read from the table
@@ -170,10 +224,13 @@ exports.sqlDatabase = class sqlDatabase {
         var str = "SELECT " + keystring + " FROM " + usertable;
 
         // add all of the joins provided do not remove the space in between
+        var isjoined = false;
         if ( joins && typeof joins === "string" ) {
             str += " " + joins + " ";
+            isjoined = true;
         } else if ( joins && typeof joins === "object" && Array.isArray(joins)  ) {
             str += " " + joins.join(" ") + " ";
+            isjoined = true;
         }
         
         // add on the optional conditions
@@ -192,43 +249,62 @@ exports.sqlDatabase = class sqlDatabase {
         if (orderby && typeof orderby === "string") {
             str += " ORDER BY " + orderby; 
         }
+
+        // turns the results into a json object with the column names attached
+        // if the query involved a join, the table names are prepended
+        function makeobj(cols, row) {
+            var rowobj = {};
+            for (var i=0; i<cols.length; i++) {
+                var colname = cols[i].getColumnLabel();
+                if ( isjoined ) {
+                    colname = cols[i].getTableLabel() + "_" + colname;
+                }
+                rowobj[colname] = row[i];
+            }
+            return rowobj;
+        }
         
-        // console.log(">>>> query str: ", str);
         var pr = this.getSession()
             .then(session => {
                 return session.sql(str).execute()
                 .then( result => {
-                    // console.log(">>>> query results: ", items );
+                    var columns = result.getColumns();
                     if ( firstrow ) {
                         var rows = result.fetchOne();
+                        var rowobjs = makeobj(columns, rows);
                     } else {
                         rows = result.fetchAll();
+                        rowobjs = [];
+                        rows.forEach(function(row) {
+                            var obj = makeobj(columns, row);
+                            rowobjs.push(obj);
+                        });
                     }
-                    // console.log(">>>> query results: ", rows );
-
+                    this.recentResults = rowobjs;
                     if ( callback ) {
                         callback(rows);
                     }
-                    return rows;
+                    return rowobjs;
                 })
-                .catch( result => {
+                .catch(reason => {
+                    this.warn(reason);
                     return null;
                 })
             });
 
         // return the promise
         return pr;
-
     }
 
     getRow(usertable, fields, conditions, joins, orderby, callback) {
         return this.getRows(usertable, fields, conditions, joins, orderby, true, callback);
     }
 
-    getFields(usertable) {
+    getFields(usertable, callback) {
+        this.error = null;
         if ( !usertable ) {
             this.die("No table specified in call to getFields");
-            return;
+            return null;
         }
 
         var keys;
@@ -239,29 +315,41 @@ exports.sqlDatabase = class sqlDatabase {
                 .then( result => {
                     keys = result.getColumns()
                     var cols = [];
-                    keys.forEach(function(acol) {
-                        cols.push(acol.getColumnName());
-                    });
+                    if ( keys ) {
+                        keys.forEach(function(acol) {
+                            cols.push(acol.getColumnName());
+                        });
+                    }
+                    if ( callback ) {
+                        callback(cols);
+                    }
                     return cols;
                 });
+            })
+            .catch(reason => {
+                this.warn(reason);
+                return null;
             });
         return pr;
     }
 
     // generic user-defined query
     query(str, callback) {
+        this.error = null;
         var pr = this.getSession()
             .then(session => {
                 return session.sql(str).execute()
                 .then( result => {
-                    // console.log(">>>> query results: ", items );
-                    this.affectedCount = result.getAffectedItemsCount();
                     this.insertId = result.getAutoIncrementValue();
                     if ( callback ) {
                         callback(result);
                     }
                     return result;
                 });
+            })
+            .catch(reason => {
+                this.warn(reason);
+                return null;
             });
         return pr;
     }
