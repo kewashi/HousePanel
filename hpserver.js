@@ -153,40 +153,53 @@ function getRandomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-// get user from cookie
-function getUserName(cookies) {
-    var uname = "";
-
-    if ( is_object(cookies) && typeof cookies.uname!=="undefined"  ) {
-        uname = decodeUser(cookies.uname);
-        // if ( !uname ) { uname = "default"; }
-        // if ( uname ) {
-        //     GLB.options["config"]["uname"] = uname;
-        // }
-    }
-    return uname;
+function jsonshow(obj) {
+    return UTIL.inspect(obj, false, null, false);
 }
 
-// this function gets the user name that matches the hash
-// TODO - implement the DB version - for now just use config file hack
-function decodeUser(unamehash) {
-
-    var uname = false;
-    if ( !GLB.options || !GLB.options.config || !GLB.options.config.pword ) {
-        readOptions("decodeUser");
+// this function gets the user name and panel name that matches the hashes
+async function getUserName(cookies) {
+    // read user names from Database
+    if ( is_object(cookies) && typeof cookies.uname==="string" ) {
+        var uhash = cookies.uname;
+    } else {
+        uhash = null;
     }
 
-    if ( GLB.options && GLB.options.config && GLB.options.config.pword ) {
-        for ( var thisuname in GLB.options.config.pword ) {
-            var codeuser = pw_hash(thisuname);
-            if ( unamehash === codeuser) {
-                uname = thisuname;
-                GLB.options.config.uname = uname;
-                break;
+    // if a panel is named then we use it, otherwise we use the first panel in the user record
+    if ( is_object(cookies) && typeof cookies.pname==="string"  ) {
+        var phash = cookies.pname;
+    } else {
+        phash = "";
+    }
+
+    // get all the users and check for one that matches the hashed email address
+    // emails for all users must be unique
+    var result = false;
+    if ( uhash ) {
+        var joinstr = mydb.getJoinStr("panels", "userid", "users", "id");
+        var rows = await mydb.getRows("panels", "users.id, users.email, users.usertype, panels.id, panels.pname, panels.skin", "", joinstr);
+        if ( rows ) {
+            for ( var i=0; i<rows.length; i++ ) {
+                var row = rows[i];
+                if ( DEBUG3 ) {
+                    console.log((ddbg()), "getUserName row: ", row);
+                }
+                if ( ( pw_hash(row["users_email"]) === uhash || (pw_hash(row["panels_pname"]) === uhash && phash==="") ) && 
+                     ( phash==="" || pw_hash(row["panels.pname"]) === phash ) ) {
+                    var panelid = row["panels_id"];
+                    var pname = row["panels_pname"];
+                    var skin = row["panels_skin"];
+                    var userid = row["users_id"];
+                    var useremail = row["users_email"];
+                    var usertype = row["users_usertype"];
+                    result = {userid: userid, uname: useremail, panelid: panelid, pname: pname, skin: skin, usertype: usertype};
+                    break;
+                }
             }
         }
     }
-    return uname;
+    return result;
 }
 
 function getTypes() {
@@ -318,333 +331,339 @@ function writeCustomCss(skin, str) {
 
 function readOptions(caller) {
 
-    var rewrite = false;
-    var fname = "hmoptions.cfg";
-    GLB.newuser = false;
-    GLB.options = {};
+    console.log( (ddbg()), "error - readOptions no longer supported");
+    return;
 
-    try {
-        if ( !fs.existsSync(fname) ) {
-            GLB.newuser = true;
-            throw "hmoptions.cfg file not found.  New user assumed.  Welcome to HousePanel.";
-        } else {
-            GLB.options = JSON.parse(fs.readFileSync(fname, 'utf8'));
-            if ( !GLB.options ) {
-                GLB.options = {};
-                throw "hmoptions.cfg file found but was not able to be processed.  Resetting.";
-            }
-        }
+//     var rewrite = false;
+//     var fname = "hmoptions.cfg";
+//     GLB.newuser = false;
+//     GLB.options = {};
 
-    } catch(e) {
-        console.log( (ddbg()), e); 
-        setDefaults();
-        rewrite = true;
-    }
+//     try {
+//         if ( !fs.existsSync(fname) ) {
+//             GLB.newuser = true;
+//             throw "hmoptions.cfg file not found.  New user assumed.  Welcome to HousePanel.";
+//         } else {
+//             GLB.options = JSON.parse(fs.readFileSync(fname, 'utf8'));
+//             if ( !GLB.options ) {
+//                 GLB.options = {};
+//                 throw "hmoptions.cfg file found but was not able to be processed.  Resetting.";
+//             }
+//         }
 
-    if ( !array_key_exists("config", GLB.options) ) {
-        GLB.options.config = {};
-        rewrite = true;
-    }
-    if ( !array_key_exists("specialtiles", GLB.options.config) ) {
-        GLB.options.config["specialtiles"] = {"video": 4, "frame": 4, "image": 4, "blank": 2, "custom": 8};
-        rewrite = true;
-    }
-    if ( !array_key_exists("port", GLB.options.config) ) {
-        GLB.options.config.port = 3080;
-        rewrite = true;
-    }
-    if ( !array_key_exists("kiosk", GLB.options.config) ) {
-        GLB.options.config.kiosk = "false";
-        rewrite = true;
-    }
-    if ( !array_key_exists("blackout", GLB.options.config) ) {
-        GLB.options.config.blackout = "false";
-        rewrite = true;
-    }
-    if ( !array_key_exists("webSocketServerPort", GLB.options.config) ) {
-        GLB.options.config.webSocketServerPort = GLB.webSocketServerPort;
-        rewrite = true;
-    }
-    if ( !array_key_exists("fast_timer", GLB.options.config) ) {
-        GLB.options.config.fast_timer = "0";
-        rewrite = true;
-    }
-    if ( !array_key_exists("slow_timer", GLB.options.config) ) {
-        GLB.options.config.slow_timer = "300000";
-        rewrite = true;
-    }
-    if ( !array_key_exists("accucity", GLB.options.config) ) {
-        GLB.options.config.accucity = "ann-arbor-mi";
-        rewrite = true;
-    }
-    if ( !array_key_exists("accuregion", GLB.options.config) ) {
-        GLB.options.config.accuregion = "us";
-        rewrite = true;
-    }
-    if ( !array_key_exists("accucode", GLB.options.config) ) {
-        GLB.options.config.accucode = "329380";
-        rewrite = true;
-    }
-    if ( !array_key_exists("fcastcity", GLB.options.config) ) {
-        GLB.options.config.fcastcity = "ann-arbor";
-        rewrite = true;
-    }
-    if ( !array_key_exists("rules", GLB.options.config) ) {
-        GLB.options.config.rules = "true";
-        rewrite = true;
-    }
-    if ( !array_key_exists("hubpick", GLB.options.config) ) {
-        GLB.options.config.hubpick = "all";
-        rewrite = true;
-    }
-    if ( !array_key_exists("polisyip", GLB.options.config) ) {
-        GLB.options.config.polisyip = "localhost";
-        rewrite = true;
-    }
-    if ( !array_key_exists("uname", GLB.options.config) ) {
-        GLB.options.config.uname = "";
-        rewrite = true;
-    }
-    if ( !array_key_exists("phototimer", GLB.options.config) ) {
-        GLB.options.config.phototimer = "5";
-        rewrite = true;
-    }
+//     } catch(e) {
+//         console.log( (ddbg()), e); 
+//         setDefaults();
+//         rewrite = true;
+//     }
 
-    // various error prevention checks are below
-    if ( !array_key_exists("pword", GLB.options.config) ) {
-        GLB.options.config["pword"] = {};
-        // GLB.options.config["pword"]["default"] =  ["","skin-housepanel"];
-        // GLB.options.config.uname = "default";
-        rewrite = true;
-    }
+//     if ( !array_key_exists("config", GLB.options) ) {
+//         GLB.options.config = {};
+//         rewrite = true;
+//     }
+//     if ( !array_key_exists("specialtiles", GLB.options.config) ) {
+//         GLB.options.config["specialtiles"] = {"video": 4, "frame": 4, "image": 4, "blank": 4, "custom": 8};
+//         rewrite = true;
+//     }
+//     if ( !array_key_exists("port", GLB.options.config) ) {
+//         GLB.options.config.port = 3080;
+//         rewrite = true;
+//     }
+//     if ( !array_key_exists("kiosk", GLB.options.config) ) {
+//         GLB.options.config.kiosk = "false";
+//         rewrite = true;
+//     }
+//     if ( !array_key_exists("blackout", GLB.options.config) ) {
+//         GLB.options.config.blackout = "false";
+//         rewrite = true;
+//     }
+//     if ( !array_key_exists("webSocketServerPort", GLB.options.config) ) {
+//         GLB.options.config.webSocketServerPort = GLB.webSocketServerPort;
+//         rewrite = true;
+//     }
+//     if ( !array_key_exists("fast_timer", GLB.options.config) ) {
+//         GLB.options.config.fast_timer = "0";
+//         rewrite = true;
+//     }
+//     if ( !array_key_exists("slow_timer", GLB.options.config) ) {
+//         GLB.options.config.slow_timer = "300000";
+//         rewrite = true;
+//     }
+//     if ( !array_key_exists("accucity", GLB.options.config) ) {
+//         GLB.options.config.accucity = "ann-arbor-mi";
+//         rewrite = true;
+//     }
+//     if ( !array_key_exists("accuregion", GLB.options.config) ) {
+//         GLB.options.config.accuregion = "us";
+//         rewrite = true;
+//     }
+//     if ( !array_key_exists("accucode", GLB.options.config) ) {
+//         GLB.options.config.accucode = "329380";
+//         rewrite = true;
+//     }
+//     if ( !array_key_exists("fcastcity", GLB.options.config) ) {
+//         GLB.options.config.fcastcity = "ann-arbor";
+//         rewrite = true;
+//     }
+//     if ( !array_key_exists("rules", GLB.options.config) ) {
+//         GLB.options.config.rules = "true";
+//         rewrite = true;
+//     }
+//     if ( !array_key_exists("hubpick", GLB.options.config) ) {
+//         GLB.options.config.hubpick = "all";
+//         rewrite = true;
+//     }
+//     if ( !array_key_exists("polisyip", GLB.options.config) ) {
+//         GLB.options.config.polisyip = "localhost";
+//         rewrite = true;
+//     }
+//     if ( !array_key_exists("uname", GLB.options.config) ) {
+//         GLB.options.config.uname = "";
+//         rewrite = true;
+//     }
+//     if ( !array_key_exists("phototimer", GLB.options.config) ) {
+//         GLB.options.config.phototimer = "5";
+//         rewrite = true;
+//     }
 
-    // get valid port numbers
-    try {
-        var port = parseInt(GLB.options["config"]["port"]);
-        if ( !port || isNaN(port) ) {
-            port = 3080;
-            rewrite = true;
-        }
-    } catch(e) {
-        port = 3080;
-        rewrite = true;
-    }
-    GLB.options["config"]["port"] = port;
+//     // various error prevention checks are below
+//     if ( !array_key_exists("pword", GLB.options.config) ) {
+//         GLB.options.config["pword"] = {};
+//         // GLB.options.config["pword"]["default"] =  ["","skin-housepanel"];
+//         // GLB.options.config.uname = "default";
+//         rewrite = true;
+//     }
 
-    try {
-        var webSocketServerPort = parseInt(GLB.options["config"]["webSocketServerPort"]);
-        if ( !webSocketServerPort || isNaN(webSocketServerPort) ) {
-            webSocketServerPort = GLB.webSocketServerPort;
-            rewrite = true;
-        }
-    } catch(e) {
-        webSocketServerPort = GLB.webSocketServerPort;
-        rewrite = true;
-    }
-    GLB.options["config"]["webSocketServerPort"] = webSocketServerPort;
+//     // get valid port numbers
+//     try {
+//         var port = parseInt(GLB.options["config"]["port"]);
+//         if ( !port || isNaN(port) ) {
+//             port = 3080;
+//             rewrite = true;
+//         }
+//     } catch(e) {
+//         port = 3080;
+//         rewrite = true;
+//     }
+//     GLB.options["config"]["port"] = port;
 
-    // handle time settings
-    if ( array_key_exists("time", GLB.options) ) {
-        var timeval = GLB.options["time"];
-        var info = timeval.split(" @ ");
-        var version = info[0];
-        timeval = info[1];
-    } else {
-        var d = new Date();
-        timeval = d.getTime();
-        timeval = timeval.toString();
-        version = utils.HPVERSION;
-        GLB.options["time"] = version + " @ " + timeval;
-        rewrite = true;
-    }
+//     try {
+//         var webSocketServerPort = parseInt(GLB.options["config"]["webSocketServerPort"]);
+//         if ( !webSocketServerPort || isNaN(webSocketServerPort) ) {
+//             webSocketServerPort = GLB.webSocketServerPort;
+//             rewrite = true;
+//         }
+//     } catch(e) {
+//         webSocketServerPort = GLB.webSocketServerPort;
+//         rewrite = true;
+//     }
+//     GLB.options["config"]["webSocketServerPort"] = webSocketServerPort;
 
-    if ( !array_key_exists("useroptions", GLB.options) ) {
-        GLB.options["useroptions"]= getTypes();
-        rewrite = true;
-    }
+//     // handle time settings
+//     if ( array_key_exists("time", GLB.options) ) {
+//         var timeval = GLB.options["time"];
+//         var info = timeval.split(" @ ");
+//         var version = info[0];
+//         timeval = info[1];
+//     } else {
+//         var d = new Date();
+//         timeval = d.getTime();
+//         timeval = timeval.toString();
+//         version = utils.HPVERSION;
+//         GLB.options["time"] = version + " @ " + timeval;
+//         rewrite = true;
+//     }
 
-    // read the hubs and set to empty if nothing there
-    if ( array_key_exists("hubs", GLB.options["config"]) ) {
-        if ( !is_array(GLB.options.config["hubs"]) ) { 
-            GLB.options.config["hubs"] = [] 
-            rewrite = true;
-        } else {
-            for ( var k in GLB.options.config.hubs ) {
-                var hub = GLB.options.config.hubs[k];
-                var oldval = hub.clientSecret;
-                var decoded = decodeURIComponent(hub.clientSecret);
-                GLB.options.config.hubs[k].clientSecret = decoded;
-            }
-        }
-    } else {
-        GLB.options.config["hubs"] = [];
-        rewrite = true;
-    }
+//     if ( !array_key_exists("useroptions", GLB.options) ) {
+//         GLB.options["useroptions"]= getTypes();
+//         rewrite = true;
+//     }
 
-    if (  GLB.options.config["hubs"].length > 0 ) {
-        console.log( (ddbg()), 'Loading ',  GLB.options.config["hubs"].length,' hubs Called from: ', caller, " rewrite: ", rewrite);
-        if ( DEBUG2 ) {
-            console.log( (ddbg()), GLB.options.config["hubs"] );
-        }
-    } else {
-        console.log( (ddbg()), 'No hubs found. HousePanel will only show special and custom tiles. Called from: ', caller, " rewrite: ", rewrite);
-    }
+//     // read the hubs and set to empty if nothing there
+//     if ( array_key_exists("hubs", GLB.options["config"]) ) {
+//         if ( !is_array(GLB.options.config["hubs"]) ) { 
+//             GLB.options.config["hubs"] = [] 
+//             rewrite = true;
+//         } else {
+//             for ( var k in GLB.options.config.hubs ) {
+//                 var hub = GLB.options.config.hubs[k];
+//                 var oldval = hub.clientSecret;
+//                 var decoded = decodeURIComponent(hub.clientSecret);
+//                 GLB.options.config.hubs[k].clientSecret = decoded;
+//             }
+//         }
+//     } else {
+//         GLB.options.config["hubs"] = [];
+//         rewrite = true;
+//     }
 
-    if ( DEBUG1 ) {
-        if ( !caller ) { caller = "unknown"; }
-        console.log( (ddbg()), 'Config file for HP Version: ', version, " caller: ", caller);
-        console.log( (ddbg()), 'Options: ', UTIL.inspect(GLB.options.config, false, null, false) );
-    }
+//     if (  GLB.options.config["hubs"].length > 0 ) {
+//         console.log( (ddbg()), 'Loading ',  GLB.options.config["hubs"].length,' hubs Called from: ', caller, " rewrite: ", rewrite);
+//         if ( DEBUG2 ) {
+//             console.log( (ddbg()), GLB.options.config["hubs"] );
+//         }
+//     } else {
+//         console.log( (ddbg()), 'No hubs found. HousePanel will only show special and custom tiles. Called from: ', caller, " rewrite: ", rewrite);
+//     }
 
-    // update the options file if we added default info
-    // we skip the user section by excluding the username
-    if ( rewrite ) {
-        writeOptions();
-    }
+//     if ( DEBUG1 ) {
+//         if ( !caller ) { caller = "unknown"; }
+//         console.log( (ddbg()), 'Config file for HP Version: ', version, " caller: ", caller);
+//         console.log( (ddbg()), 'Options: ', UTIL.inspect(GLB.options.config, false, null, false) );
+//     }
 
+//     // update the options file if we added default info
+//     // we skip the user section by excluding the username
+//     if ( rewrite ) {
+//         writeOptions();
+//     }
 }
 
 function readRoomThings(caller, uname) {
 
-    if ( DEBUG1 ) {
-        console.log( (ddbg()), "Reading custom file for username: ", uname, " caller: ", caller);
-    }
+    console.log( (ddbg()), "error - readRoomThings no longer supported");
+    return;
+//     if ( DEBUG1 ) {
+//         console.log( (ddbg()), "Reading custom file for username: ", uname, " caller: ", caller);
+//     }
 
-    var d = new Date();
-    var timeval = d.getTime();
-    timeval = timeval.toString();
-    var customfname = "hm_" + uname + ".cfg";
-    var updated = false;
+//     var d = new Date();
+//     var timeval = d.getTime();
+//     timeval = timeval.toString();
+//     var customfname = "hm_" + uname + ".cfg";
+//     var updated = false;
 
-    // read this assuming new method only
-    var opts;
-    if ( fs.existsSync(customfname) ) {
-        var str = fs.readFileSync(customfname, 'utf8');
-        var str1 = str.replace("\r","");
-        var str2 = str1.replace("\n","");
+//     // read this assuming new method only
+//     var opts;
+//     if ( fs.existsSync(customfname) ) {
+//         var str = fs.readFileSync(customfname, 'utf8');
+//         var str1 = str.replace("\r","");
+//         var str2 = str1.replace("\n","");
 
-        try {
-            opts = JSON.parse(str2);
-        } catch (e) {
-            console.log( (ddbg()), "Error while parsing JSON in the existing options file: ", customfname, " Setting up defaults.");
-            opts = null;
-        }
-    }
+//         try {
+//             opts = JSON.parse(str2);
+//         } catch (e) {
+//             console.log( (ddbg()), "Error while parsing JSON in the existing options file: ", customfname, " Setting up defaults.");
+//             opts = null;
+//         }
+//     }
 
-    if ( !opts || typeof opts !=="object" || !opts.rooms || !opts.things || !opts["::CUSTOM::"] ) {
-        opts = {};
-        opts["::CUSTOM::"] = [uname, utils.HPVERSION, timeval];
-        setupDefaultRooms(uname, opts);
-        updated = true;
-    } else if ( opts["::CUSTOM::"][1] !== utils.HPVERSION ) {
-        updated = true;
-    }
+//     if ( !opts || typeof opts !=="object" || !opts.rooms || !opts.things || !opts["::CUSTOM::"] ) {
+//         opts = {};
+//         opts["::CUSTOM::"] = [uname, utils.HPVERSION, timeval];
+//         setupDefaultRooms(uname, opts);
+//         updated = true;
+//     } else if ( opts["::CUSTOM::"][1] !== utils.HPVERSION ) {
+//         updated = true;
+//     }
 
-    GLB.options["rooms"] = clone(opts.rooms);
+//     GLB.options["rooms"] = clone(opts.rooms);
     
-    // put things in rooms that exist
-    const didx = GLB.options.index["clock|clockdigital"];
-    const dclock = [didx,0,0,1,""];
-    const aidx = GLB.options.index["clock|clockanalog"];
-    const aclock = [aidx,0,0,1,""];
-    GLB.options["things"] = {};
-    for (var room in opts.rooms) {
-        if ( array_key_exists(room, opts.things) ) {
+//     // put things in rooms that exist
+//     const didx = GLB.options.index["clock|clockdigital"];
+//     const dclock = [didx,0,0,1,""];
+//     const aidx = GLB.options.index["clock|clockanalog"];
+//     const aclock = [aidx,0,0,1,""];
+//     GLB.options["things"] = {};
+//     for (var room in opts.rooms) {
+//         if ( array_key_exists(room, opts.things) ) {
             
-            // if room is empty, lets add our default clocks
-            if ( opts.things[room].length === 0 ) {
-                opts.things[room].push(dclock);
-                opts.things[room].push(aclock);
-                updated = true;
-            }
-            GLB.options["things"][room] = clone(opts.things[room]);
-        } else {
-            GLB.options["things"][room] = [];
-        }
-    }
+//             // if room is empty, lets add our default clocks
+//             if ( opts.things[room].length === 0 ) {
+//                 opts.things[room].push(dclock);
+//                 opts.things[room].push(aclock);
+//                 updated = true;
+//             }
+//             GLB.options["things"][room] = clone(opts.things[room]);
+//         } else {
+//             GLB.options["things"][room] = [];
+//         }
+//     }
 
-    // flag the room as being updated
-    GLB.options.config.uname = uname;
+//     // flag the room as being updated
+//     GLB.options.config.uname = uname;
 
-    if ( updated ) {
-        writeRoomThings(GLB.options, uname);
-    }
-    writeOptions();
-    return opts;
+//     if ( updated ) {
+//         writeRoomThings(GLB.options, uname);
+//     }
+//     writeOptions();
+//     return opts;
 
 }
 
 function writeOptions() {
-    if ( !is_object(GLB.options) ) {
-        console.log( (ddbg()), "error - invalid options provided: ", options);
-        return;
-    }
+    console.log( (ddbg()), "error - writeOptions no longer supported");
+    return;
 
-    for ( var k in GLB.options.config.hubs ) {
-        var hub = GLB.options.config.hubs[k];
-        GLB.options.config.hubs[k].clientSecret = encodeURIComponent(hub.clientSecret);
-    }
+    // for ( var k in GLB.options.config.hubs ) {
+    //     var hub = GLB.options.config.hubs[k];
+    //     GLB.options.config.hubs[k].clientSecret = encodeURIComponent(hub.clientSecret);
+    // }
 
-    var d = new Date();
-    var timeval = d.getTime();
-    timeval = timeval.toString();
-    GLB.options["time"] = utils.HPVERSION + " @ " + timeval;
+    // var d = new Date();
+    // var timeval = d.getTime();
+    // timeval = timeval.toString();
+    // GLB.options["time"] = utils.HPVERSION + " @ " + timeval;
 
-    // write the main section excluding rooms and things
-    var mainopt = {};
-    mainopt["time"] = utils.HPVERSION + " @ " + timeval;
-    for (var key in GLB.options) {
-        if ( key!=="rooms" && key!=="things"  ) {
-            mainopt[key] = GLB.options[key];
-        }
+    // // write the main section excluding rooms and things
+    // var mainopt = {};
+    // mainopt["time"] = utils.HPVERSION + " @ " + timeval;
+    // for (var key in GLB.options) {
+    //     if ( key!=="rooms" && key!=="things"  ) {
+    //         mainopt[key] = GLB.options[key];
+    //     }
 
-        // convert "int_" to "Int_" and "state_" to "State_"
-        if ( utils.HPVERSION <= "2.401"  &&  key.startsWith("user_") ) {
-            var fixarr = GLB.options[key];
-            if ( is_array(fixarr) && is_array(fixarr[0]) ) {
-                fixarr.forEach(function(userarray, index) {
-                    if ( is_array(userarray) ) {
-                        userarray[1] = userarray[1].replace(/int_/g,"Int_");
-                        userarray[2] = userarray[2].replace(/int_/g,"Int_");
-                        userarray[1] = userarray[1].replace(/state_/g,"State_");
-                        userarray[2] = userarray[2].replace(/state_/g,"State_");
-                        GLB.options[key][index] = userarray;
-                    }
-                });
-            }
-        }
-    }
+    //     // convert "int_" to "Int_" and "state_" to "State_"
+    //     if ( utils.HPVERSION <= "2.401"  &&  key.startsWith("user_") ) {
+    //         var fixarr = GLB.options[key];
+    //         if ( is_array(fixarr) && is_array(fixarr[0]) ) {
+    //             fixarr.forEach(function(userarray, index) {
+    //                 if ( is_array(userarray) ) {
+    //                     userarray[1] = userarray[1].replace(/int_/g,"Int_");
+    //                     userarray[2] = userarray[2].replace(/int_/g,"Int_");
+    //                     userarray[1] = userarray[1].replace(/state_/g,"State_");
+    //                     userarray[2] = userarray[2].replace(/state_/g,"State_");
+    //                     GLB.options[key][index] = userarray;
+    //                 }
+    //             });
+    //         }
+    //     }
+    // }
     
-    // write the main options file
-    var stropt =  JSON.stringify(mainopt, null, 1);
-    fs.writeFileSync("hmoptions.cfg", stropt, {encoding: "utf8", flag:"w"});
+    // // write the main options file
+    // var stropt =  JSON.stringify(mainopt, null, 1);
+    // fs.writeFileSync("hmoptions.cfg", stropt, {encoding: "utf8", flag:"w"});
 
-    for ( var k in GLB.options.config.hubs ) {
-        var hub = GLB.options.config.hubs[k];
-        var decoded = decodeURIComponent(hub.clientSecret);
-        GLB.options.config.hubs[k].clientSecret = decoded;
-    }
+    // for ( var k in GLB.options.config.hubs ) {
+    //     var hub = GLB.options.config.hubs[k];
+    //     var decoded = decodeURIComponent(hub.clientSecret);
+    //     GLB.options.config.hubs[k].clientSecret = decoded;
+    // }
 }
 
 function writeRoomThings(options, uname) {
-    if ( !uname ) { uname = "default"; }
 
-    var d = new Date();
-    var timeval = d.getTime();
-    timeval = timeval.toString();
-    var userfname = "hm_" + uname + ".cfg";
+    console.log( (ddbg()), "error - writeRoomThings no longer supported");
+    return;
 
-    // write only the rooms and things
-    // add a signature key to flag this format
-    var customopt = {};
-    customopt["::CUSTOM::"] = [uname, utils.HPVERSION, timeval];
-    for (var key in options) {
-        if ( key==="rooms" || key==="things" ) {
-            customopt[key] = options[key];
-        }
-    }
-    var str_customopt = JSON.stringify(customopt, null, 1);
-    fs.writeFileSync(userfname, str_customopt, {encoding: "utf8", flag:"w"});
+    // if ( !uname ) { uname = "default"; }
+
+    // var d = new Date();
+    // var timeval = d.getTime();
+    // timeval = timeval.toString();
+    // var userfname = "hm_" + uname + ".cfg";
+
+    // // write only the rooms and things
+    // // add a signature key to flag this format
+    // var customopt = {};
+    // customopt["::CUSTOM::"] = [uname, utils.HPVERSION, timeval];
+    // for (var key in options) {
+    //     if ( key==="rooms" || key==="things" ) {
+    //         customopt[key] = options[key];
+    //     }
+    // }
+    // var str_customopt = JSON.stringify(customopt, null, 1);
+    // fs.writeFileSync(userfname, str_customopt, {encoding: "utf8", flag:"w"});
 }
 
 function _curl(host, headers, nvpstr, calltype, callback) {
@@ -794,8 +813,7 @@ function getHubInfo(hub, reload) {
             console.log(" >>>> in getHubInfo - hub: ", UTIL.inspect(hub,false,null,false));
         }
 
-        writeOptions();
-
+        // writeOptions();
         // retrieve all devices and go back to reauth page
         getDevices(hub, reload, "/reauth");
 
@@ -1306,41 +1324,69 @@ function fixISYid(id) {
     return id;
 }
 
-function getAllThings(uname, hubId, reload, init) {
-    
+function processRefresh(userid, reload) {
+    getAllThings(userid, false)
+    .then(rows => {
+        if ( rows ) {
+            rows.forEach(function(row) {
+                var swid = row.id;
+                var swtype = row.devicetype;
+                var pvalue = row.pvalue;
+                pushClient(swid, swtype, "", pvalue);
+            });
+        }
+        if ( reload ) {
+            pushClient("reload","reload");
+        }
+        return rows;
+    });
+}
+
+function getAllThings(userid, reload) {
+
+    // this routine now returns devices from the DB and refreshes GUI
+    var devices = mydb.getRows("devices","*","userid="+userid)
+    .then(rows => {
+        if ( reload ) {
+            pushClient("reload","reload");
+        }
+        return rows;
+    });
+    return devices;
+
     // allthings = {};
 
     // get all things from all configured servers with a valid access and endpoint
     // TODO - read hubs for this user from database
-    var hubs = GLB.options.config["hubs"];
+    // var hubs = GLB.options.config["hubs"];
 
-    // add the special tiles
-    addSpecials();
-    updateOptions(false);
+    // // add the special tiles
+    // addSpecials();
+    // updateOptions(false);
 
-    if ( hubs && is_array(hubs) ) {
-        hubs.forEach(function(hub) {
+    // if ( hubs && is_array(hubs) ) {
+    //     hubs.forEach(function(hub) {
 
-            if ( hub.hubAccess && hub.hubEndpt && (hub.hubId===hubId || !hubId || hubId==="auto") ) {
-                if ( DEBUG2 ) {
-                    console.log( (ddbg()), "Getting devices for hub type: ", hub.hubType, "\n access_token: ", hub.hubAccess, "\n endpoint: ", hub.hubEndpt);
-                }
+    //         if ( hub.hubAccess && hub.hubEndpt && (hub.hubId===hubId || !hubId || hubId==="auto") ) {
+    //             if ( DEBUG2 ) {
+    //                 console.log( (ddbg()), "Getting devices for hub type: ", hub.hubType, "\n access_token: ", hub.hubAccess, "\n endpoint: ", hub.hubEndpt);
+    //             }
 
-                if ( hub.hubType==="Ford" && hub["hubAccess"] && hub["hubEndpt"] && hub["hubRefresh"] ) {
-                    // refresh Ford token before getting vehicles upon request just to be sure
-                    // but this call doesn't invoke a repeated cycle since that should already be in place
-                    // fordRefreshToken(hub, hub["hubAccess"], hub["hubEndpt"], hub["hubRefresh"], hub["clientId"], hub["clientSecret"], init);
-                    getDevices(hub, reload, "/");
-                } else if ( hub.hubType==="NewSmartThings" && hub["clientId"] && hub["clientSecret"] && hub["hubRefresh"] ) {
-                    // newSTRefreshToken(hub, hub["hubRefresh"], hub["clientId"], hub["clientSecret"], init);
-                    getDevices(hub, reload, "/");
-                } else {
-                    getDevices(hub, reload, "/");
-                }
+    //             if ( hub.hubType==="Ford" && hub["hubAccess"] && hub["hubEndpt"] && hub["hubRefresh"] ) {
+    //                 // refresh Ford token before getting vehicles upon request just to be sure
+    //                 // but this call doesn't invoke a repeated cycle since that should already be in place
+    //                 // fordRefreshToken(hub, hub["hubAccess"], hub["hubEndpt"], hub["hubRefresh"], hub["clientId"], hub["clientSecret"], init);
+    //                 getDevices(hub, reload, "/");
+    //             } else if ( hub.hubType==="NewSmartThings" && hub["clientId"] && hub["clientSecret"] && hub["hubRefresh"] ) {
+    //                 // newSTRefreshToken(hub, hub["hubRefresh"], hub["clientId"], hub["clientSecret"], init);
+    //                 getDevices(hub, reload, "/");
+    //             } else {
+    //                 getDevices(hub, reload, "/");
+    //             }
 
-            }
-        });
-    }
+    //         }
+    //     });
+    // }
 }
 
 function getDevices(hub, reload, reloadpath) {
@@ -1694,7 +1740,7 @@ function getDevices(hub, reload, reloadpath) {
                 });
             
                 // handle customizations
-                pvalue = getCustomTile(pvalue, swtype, device.deviceId);
+                pvalue = getCustomTile(userid, pvalue, swtype, device.deviceId);
                 allthings[idx] = {
                     "id": device.deviceId,
                     "name": device.label, 
@@ -1727,7 +1773,6 @@ function getDevices(hub, reload, reloadpath) {
 
     }
 
-
     // callback for loading ST and HE hub devices
     function hubInfoCallback(err, res, body) {
         if ( err ) {
@@ -1736,8 +1781,7 @@ function getDevices(hub, reload, reloadpath) {
             try {
                 var jsonbody = JSON.parse(body);
             } catch (e) {
-                console.log( (ddbg()), "error translating devices from body: ", body," error: ", e);
-                jsonbody = {};
+                console.log( (ddbg()), "error translating devices: ", e);
                 return;
             }
             if (DEBUG1) {
@@ -1750,7 +1794,7 @@ function getDevices(hub, reload, reloadpath) {
                 jsonbody.forEach(function(content) {
                     var thetype = content["type"];
                     var id = content["id"];
-                    var idx = thetype + "|" + id;
+                    // var idx = thetype + "|" + id;
                     var origname = content["name"] || "";
                     var pvalue = content["value"];
 
@@ -1772,7 +1816,7 @@ function getDevices(hub, reload, reloadpath) {
 
                     // this is the proper place to load customizations
                     // and we have to do it for ISY too
-                    var pvalue = getCustomTile(pvalue, thetype, id);
+                    // var pvalue = getCustomTile(pvalue, thetype, id);
                     if ( !origname ) {
                         origname = pvalue["name"];
                     }
@@ -1781,16 +1825,30 @@ function getDevices(hub, reload, reloadpath) {
                         pvalue = translateWeather(origname, pvalue);
                     }
 
-                    devicecnt++;
-                    allthings[idx] = {
-                        "id": id,
-                        "name": origname, 
-                        "hubnum": hubnum,
-                        "type": thetype,
-                        "hint": hubType, 
-                        "refresh": "normal",
-                        "value": pvalue
+                    // write this device into the DB
+                    var newdevice = {
+                        userid: userid,
+                        hubid: hubnum,
+                        deviceid: id,
+                        devicetype: thetype,
+                        hint: hubType, 
+                        refresh: "normal",
+                        pvalue: pvalue
                     };
+                    mydb.updateRow("devices",newdevice,"userid="+userid+" AND hubid="+hubnum+" AND deviceid="+id+" AND devicetype='"+thetype+"'")
+                    .then( result => {
+                        devicecnt++;
+                    });
+
+                    // allthings[idx] = {
+                    //     "id": id,
+                    //     "name": origname, 
+                    //     "hubnum": hubnum,
+                    //     "type": thetype,
+                    //     "hint": hubType, 
+                    //     "refresh": "normal",
+                    //     "value": pvalue
+                    // };
                 });
             }
             if ( DEBUG2 || DEBUGtmp ) {
@@ -1907,7 +1965,7 @@ function getDevices(hub, reload, reloadpath) {
                 // pvalue["_status"] = "_status";
                 // pvalue["_location"] = "_location";
 
-                pvalue = getCustomTile(pvalue, thetype, vehicleid);
+                pvalue = getCustomTile(userid, pvalue, thetype, vehicleid);
                 allthings[idx] = {
                     "id": vehicleid,
                     "name": vehiclename, 
@@ -1979,7 +2037,7 @@ function getDevices(hub, reload, reloadpath) {
 
                 // customize here after all isy vars are read
                 // and update our options
-                allthings[vidx]["value"] = getCustomTile(pvalue, "isy", "vars");
+                allthings[vidx]["value"] = getCustomTile(userid, pvalue, "isy", "vars");
                 updateOptions(false, reloadpath);
             }
         }
@@ -2203,7 +2261,7 @@ function getDevices(hub, reload, reloadpath) {
                                     pvalue.runAtStartup = proginfo.runAtStartup;
                                     
                                     // call customizer
-                                    pvalue = getCustomTile(pvalue, thetype, progid);
+                                    pvalue = getCustomTile(userid, pvalue, thetype, progid);
 
                                     allthings[idx] = {
                                         "id": progid,
@@ -2258,7 +2316,7 @@ function getDevices(hub, reload, reloadpath) {
                         var pvalue = {"name": name};
     
                         // this is the proper place to load customizations
-                        pvalue = getCustomTile(pvalue, thetype, id);
+                        pvalue = getCustomTile(userid, pvalue, thetype, id);
                         if ( !name ) {
                             name = pvalue["name"];
                         }
@@ -2296,7 +2354,7 @@ function getDevices(hub, reload, reloadpath) {
                         }
         
                         // this is the proper place to load customizations
-                        pvalue = getCustomTile(pvalue, thetype, id);
+                        pvalue = getCustomTile(userid, pvalue, thetype, id);
                         if ( !name ) {
                             name = pvalue["name"];
                         }
@@ -2690,30 +2748,133 @@ function setDefaults() {
     updateOptions(false);
 }
 
-function getLoginPage(uname) {
+function getLoginPage(uname, skin) {
     var $tc = "";
-    var skin = getSkin(uname);
+    var pname = "default";
+
     $tc += utils.getHeader(skin, true);
     $tc += "<h2>" + utils.APPNAME + "</h2>";
-    $tc += "<br /><br />";
     $tc += "<form id=\"loginform\" name=\"login\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
     $tc += utils.hidden("returnURL", GLB.returnURL);
     $tc += utils.hidden("pagename", "login");
     $tc += utils.hidden("api", "dologin");
     $tc += utils.hidden("id", "none");
     $tc += utils.hidden("type", "none");
-    $tc += "<div>";
-    $tc += "<label for=\"uname\" class=\"startupinp\">Username: </label>";
-    $tc += "<input id=\"uname\" name=\"uname\" width=\"20\" type=\"text\" value=\"" + uname + "\"/>"; 
-    $tc += "<br /><br />";
-    $tc += "<label for=\"pword\" class=\"startupinp\">Password: </label>";
+    $tc += "<div class='loginpage'>";
+
+    $tc += "<div class='loginline'>";
+    $tc += "<label for=\"uname\" class=\"startupinp\">User Name (Email): </label>";
+    $tc += "<input id=\"uname\" name=\"uname\" width=\"40\" type=\"text\" value=\"" + uname + "\"/>"; 
+    $tc += "</div>";
+    
+    $tc += "<div class='loginline'>";
+    $tc += "<label for=\"pword\" class=\"startupinp\">User Password: </label>";
     $tc += "<input id=\"pword\" name=\"pword\" width=\"40\" type=\"password\" value=\"\"/>"; 
-    $tc += "<br /><br />";
+    $tc += "</div>";
+    
+    $tc += "<div class='loginline'>";
+    $tc += "<label for=\"pname\" class=\"startupinp\">Which Panel: </label>";
+    $tc += "<input id=\"pname\" name=\"pname\" width=\"40\" type=\"text\" value=\"" + pname + "\"/>"; 
+    $tc += "</div>";
+    
+    $tc += "<div class='loginline'>";
+    $tc += "<label for=\"panelpword\" class=\"startupinp\">Panel Password: </label>";
+    $tc += "<input id=\"panelpword\" name=\"panelpword\" width=\"40\" type=\"password\" value=\"\"/>"; 
+    $tc += "</div>";
+    
     $tc += '<div id="dologin" class="formbutton">Login</div>';
     $tc += "</div>";
     $tc += "</form>";
     $tc += utils.getFooter();
     return $tc;
+}
+
+async function processLogin(body, res) {
+
+    // check the user name and password based on login form data
+    var uname = encodeURI(body["uname"].trim());
+    var pname = encodeURI(body["pname"].trim());
+    var uhash = pw_hash(body["pword"]);
+    var phash = pw_hash(body["pword"]);
+
+    // if no 
+
+    // check to see if the provided username is valid
+    // and that the passwords match
+    var result;
+
+    // var pwords = GLB.options["config"]["pword"];
+    if ( DEBUG3 ) {
+        console.log( (ddbg()), "dologin: uname= ", uname, " pword= ", pword, " pname= ", pname, " panelpword= ", panelpword, " body: ", body);
+    }
+
+    // see if user row exists
+    if ( uhash && phash && uname ) {
+        var joinstr = mydb.getJoinStr("panels", "userid", "users", "id");
+        row = await mydb.getRow("panels", "users.id, users.email, users.uname, users.usertype, panels.pname, panels.skin", 
+                                "panels.pname = '" + pname + "' AND panels.password = '"+phash+"' AND users.email = '"+uname+"' AND users.password = '"+uhash+"'", joinstr);
+        if (row) {
+            console.log((ddbg()), "processLogin: ", row);
+
+            setCookie(res, "pname", pw_hash(pname));
+            setCookie(res, "uname", pw_hash(uname));
+            readRoomThings("processLogin", uname);
+
+            result = row;
+        } else {
+            result = false;
+        }
+    }
+
+    if ( !result ) {
+        res.clearCookie("uname");
+        if ( DEBUG3 ) {
+            console.log( (ddbg()), "login failed. cleared cookie for uname: ", uname, " hash: ", pw_hash(uname));
+        }
+    }
+
+
+    // // check for matching passwords - if record exists, login password must match
+    // if ( array_key_exists(uname, pwords ) ) {
+    //     var pw = pwords[uname];
+    //     if ( pw[0] === pword || IGNOREPW ) {
+    //         // save the username in the cookie session
+    //         setCookie(res, "uname", pw_hash(uname));
+    //         readRoomThings("dologin", uname);
+    //         if ( DEBUG3 ) {
+    //             console.log( (ddbg()), "logged in and set cookie successfully for uname: ", uname, " to: ", pw_hash(uname));
+    //         }
+    //         result = {uname: uname, pword: pword};
+    //     } else {
+    //         // clear the cookie to force repeat of login page
+    //         res.clearCookie("uname");
+    //         if ( DEBUG3 ) {
+    //             console.log( (ddbg()), "login failed. cleared cookie for uname: ", uname, " hash: ", pw_hash(uname));
+    //         }
+    //         uname = "";
+    //         pword = "";
+    //         result = "error - login failed";
+    //     }
+
+    // // name does exist so disallow login
+    // // TODO - make a more elegant way of creating and managing users
+    // } else {
+    //     res.clearCookie("uname");
+    //     if ( DEBUG3 ) {
+    //         console.log( (ddbg()), "login failed. cleared cookie for uname: ", uname, " hash: ", pw_hash(uname));
+    //     }
+    //     uname = "";
+    //     pword = "";
+    //     result = "error - login failed";
+    //     // pwords[uname] = [pword, "skin-housepanel"];
+    //     // setCookie(res, "uname", pw_hash(uname));
+    //     // GLB.options["config"]["pword"] = pwords;
+    //     // writeOptions();
+    //     // writeRoomThings(GLB.options, uname);
+    //     // result = {uname: uname, pword: pword};
+    // }
+
+    return result;
 }
 
 function getAuthPage(uname, hostname, pathname, rmsg) {
@@ -2866,7 +3027,6 @@ function getAuthPage(uname, hostname, pathname, rmsg) {
         // for each hub make a section with its own form that comes back here as a post
         $tc +="<div id=\"authhub_" + hubId + "\" hubid=\"" + hubId + "\" hubtype=\"" + hubType + "\" class=\"" + hubclass + "\">";
         $tc += "<form id=\"hubform_" + hubId + "\" class=\"houseauth\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
-        // $tc += utils.hidden("doauthorize", hpcode);
 
         // we use this div below to grab the hub type dynamically chosen
         $tc += "<div id=\"hubdiv_" + hubId + "\"><label class=\"startupinp\">Hub Type: </label>";
@@ -3243,65 +3403,63 @@ function inroom($idx, $things) {
 // each HousePanel tab is generated by this function call
 // each page is contained within its own form and tab division
 // notice the call of $cnt by reference to keep running count
-function getNewPage(cnt, roomtitle, kroom, things) {
+function getNewPage(userid, cnt, roomname, kroom, things) {
     var $tc = "";
-    var roomname = roomtitle;
     $tc += "<div id=\"" + roomname + "-tab\">";
-    $tc += "<form title=\"" + roomtitle + "\" action=\"#\">";
+    $tc += "<form title=\"" + roomname + "\" action=\"#\">";
     
     // add room index to the id so can be style by number and names can duplicate
     // no longer use room number for id since it can change around
     // switched this to name - not used anyway other than manual custom user styling
     // if one really wants to style by room number use the class which includes it
-    $tc += "<div id=\"panel-" + roomname + "\" title=\"" + roomtitle + "\" class=\"panel panel-" + kroom + " panel-" + roomname + "\">";
+    $tc += "<div id=\"panel-" + roomname + "\" title=\"" + roomname + "\" class=\"panel panel-" + kroom + " panel-" + roomname + "\">";
 
     // the things list can be integers or arrays depending on drag/drop
-    var idxkeys = Object.keys(GLB.options["index"]);
-    var idxvals = Object.values(GLB.options["index"]);
+    // var idxkeys = Object.keys(GLB.options["index"]);
+    // var idxvals = Object.values(GLB.options["index"]);
     var zcolor = 200;
-    things.forEach(function(kindexarr) {
+    things.forEach(function(thing) {
         
         // get the offsets and the tile id
-        var kindex = parseInt(kindexarr[0]);
-        var postop = parseInt(kindexarr[1]);
-        var posleft = parseInt(kindexarr[2]);
-        if ( postop < 0 || posleft < 0 ) {
-            postop = 0;
-            posleft = 0;
-        }
-        var zindex = 1;
-        var customname = "";
+        // allthings is no longer used - we use the thing directly from the DB
+        var tileid = thing["things_tileid"];
+        var postop = thing["things_posy"];
+        var posleft = thing["things_posx"];
+        var zindex = thing["things_zindex"];
+        var customname = thing["things_customname"];
+        var id = thing["devices_deviceid"];
+        var swtype = thing["devices_devicetype"];
+        var hubid = thing["hubs_hubid"];
+        var hint = thing["devices_hint"];
+        var refresh = thing["devices_refresh"];
+        var pvalue = thing["devices_pvalue"];
 
-        if ( kindexarr.length > 3 ) {
-            zindex = kindexarr[3];
-            customname = kindexarr[4];
-            if ( typeof customname !== "string" ) {
-                customname = "";
-            }
+        // for now and testing purposes hack up a sensor
+        if ( !pvalue ) {
+            pvalue = {name: "Test Light", switch: "on"};
+        } else if ( typeof pvalue!=="object" ) {
+            pvalue = {name: customname, switch: pvalue};
         }
-        var i = idxvals.findIndex(idx => idx === kindex);
-        var thingid = idxkeys[i];
+
+        // construct the old allthings element equivalent
+        var thesensor = {id: id, type: swtype, hubnum: hubid, hint: hint, refresh: refresh, value: pvalue};
         
-        // if our thing is still in the master list, show it
-        if (thingid && allthings[thingid]) {
-            var thesensor = allthings[thingid];
+        // if our thing is an object show it
+        if ( typeof thesensor==="object" ) {
 
-            if ( typeof thesensor==="object" ) {
-
-                // adjust the zindex to show on top of others if there is a color field
-                // this starts at 199 and counts down to 100 assuming fewer than 100 color things on a page
-                // but only do this for relative placement tiles
-                // we handle color separately for dragged tiles
-                if ( array_key_exists("color", thesensor.value) && zindex < 100 && posleft===0 && postop===0 ) {
-                    zcolor--;
-                    zindex = zcolor;
-                    if ( zcolor < 100 ) { zcolor = 200; }
-                }
-
-                // keep running count of things to use in javascript logic
-                cnt++;
-                $tc += makeThing(cnt, kindex, thesensor, roomtitle, postop, posleft, zindex, customname, false);
+            // adjust the zindex to show on top of others if there is a color field
+            // this starts at 199 and counts down to 100 assuming fewer than 100 color things on a page
+            // but only do this for relative placement tiles
+            // we handle color separately for dragged tiles
+            if ( array_key_exists("color", thesensor.value) && zindex < 100 && posleft===0 && postop===0 ) {
+                zcolor--;
+                zindex = zcolor;
+                if ( zcolor < 100 ) { zcolor = 200; }
             }
+
+            // keep running count of things to use in javascript logic
+            cnt++;
+            $tc += makeThing(userid, cnt, tileid, thesensor, roomname, postop, posleft, zindex, customname, false);
         }
     });
 
@@ -3310,7 +3468,7 @@ function getNewPage(cnt, roomtitle, kroom, things) {
 
     // end this tab which is a different type of panel
     $tc +="</div>";
-    return {tc: $tc, cnt: cnt};
+    return $tc;
 }
 
 // function to search for triggers in the name to include as classes to style
@@ -3746,7 +3904,7 @@ function uniqueWords(str) {
     return newstr;
 }
 
-function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, customname, wysiwyg) {
+function makeThing(userid, cnt, kindex, thesensor, panelname, postop, posleft, zindex, customname, wysiwyg) {
     // const audiomap = {"title": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
     //                   "albumArtUrl": "trackImage", "mediaSource": "mediaSource"};
     // const musicmap = {"name": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
@@ -3765,6 +3923,10 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     } else if ( thingtype==="music" ) {
         thesensor.value = translateMusic(thesensor.value);
     }
+
+    // add in customizations here
+    thesensor.value = getCustomTile(userid, thesensor.value, thingtype, bid);
+
     thesensor["value"] = setValOrder(thesensor["value"]);
 
     // set type to hint if one is given
@@ -3776,10 +3938,10 @@ function makeThing(cnt, kindex, thesensor, panelname, postop, posleft, zindex, c
     var refresh = "normal";
 
     // use override if there
-    if ( array_key_exists("refresh", thesensor) ) {
+    if ( array_key_exists("refresh", thesensor) && thesensor.refresh ) {
         refresh = thesensor["refresh"];
     }
-    if ( array_key_exists("refresh", thingvalue) ) {
+    if ( array_key_exists("refresh", thingvalue) && thingvalue.refresh ) {
         refresh = thingvalue["refresh"];
     }
 
@@ -4445,7 +4607,7 @@ function addSpecials() {
     var clockidd = "clockdigital";
     var dclock = getClock(clockidd);
     var dname = dclock["name"];
-    dclock = getCustomTile(dclock, "clock", clockidd);
+    // dclock = getCustomTile(dclock, "clock", clockidd);
     allthings["clock|"+clockidd] = {"id" :  clockidd, "name" :  dname, 
         "hubnum" :  hubnum, "type" :  "clock", "refresh": "slow", "value" :  dclock};
 
@@ -4453,7 +4615,7 @@ function addSpecials() {
     var clockida = "clockanalog";
     var aclock = getClock(clockida);
     var aname = aclock["name"];
-    aclock = getCustomTile(aclock, "clock", clockida);
+    // aclock = getCustomTile(aclock, "clock", clockida);
     allthings["clock|"+clockida] = {"id" :  clockida, "name" :  aname, 
         "hubnum" :  hubnum, "type" :  "clock", "refresh": "slow", "value" :  aclock};
 
@@ -4478,7 +4640,7 @@ function addSpecials() {
 
                 var fn = getCustomName(stype, idx, k);
                 var ftile = {"name": fn};
-                ftile = getCustomTile(ftile, stype, fid);
+                // ftile = getCustomTile(ftile, stype, fid);
                 ftile = returnFile(ftile, stype);
 
                 // we now preserve the original name in the master array
@@ -4503,36 +4665,43 @@ function addSpecials() {
                  "c__userauth": "Re-Auth","showid": "Show Info","toggletabs": "Toggle Tabs",
                  "showdoc": "Documentation",
                  "blackout": "Blackout","operate": "Operate","reorder": "Reorder","edit": "Edit"};
-    controlval = getCustomTile(controlval, "control", "control_1");
+    // controlval = getCustomTile(controlval, "control", "control_1");
     allthings["control|control_1"] = {"id":  "control_1", "name": "Controller", "hubnum":  hubnum, 
                 "type":  "control", "refresh": "never", "value":  controlval};
 }
 
 // create addon subid's for any tile
 // this enables a unique customization effect
-function getCustomTile(custom_val, customtype, customid) {
-    const reserved = ["index","rooms","things","config","control","useroptions"];
+function getCustomTile(userid, custom_val, customtype, customid) {
 
-    try {
-        var index = GLB.options["index"];
-    } catch(e) {
-        console.log( (ddbg()), "warning, index not available for customization for id= ", customid);
-        return custom_val;
-    }
+    var configkey = "user_" + customid;
+    var updated_val = mydb.getRow("configs","configkey, configval","userid = "+userid+" AND configkey = " + configkey)
+    .then(row => {
+        if ( row ) {
+            var key = row.configkey;
+            var val = row.configval;
+            var values = custom_val;
+            if ( typeof val==="string" && val.startsWith("[") ) {
+                try {
+                    var lines = JSON.parse(val);
+                    values = processCustom(key, lines, custom_val);
+                } catch(e) {
+                    console.log( (ddbg()), "error - parsing custom config tile value");
+                }
+            }
+        }
+        return values;
+    });
     
-    // see if a section for this id is in options file
-    // this is where customizer updates are processed
-    var lines = false;
-    if (array_key_exists("user_" + customid, GLB.options) ) {
-        lines = GLB.options["user_" + customid];
-    } else if ( !in_array (customid, reserved) && array_key_exists(customid, GLB.options) ) {
-        lines = GLB.options[customid];
+    if ( utils.count(custom_val) < utils.count(updated_val) ) {
+        console.log( (ddbg()),"updated tile value: ", updated_val);
     }
 
-    if ( lines && is_array(lines) ) {
-        
+    return updated_val;
+
+    function processCustom(companion, lines, custom_val) {
         // allow user to skip wrapping single entry in an array
-        // the GUI will never do this but a user might in a manual edit
+        // the GUI will never do this but a user might in a manual write to the DB
         if ( !is_array(lines[0]) ) {
             lines = [lines];
         }
@@ -4541,9 +4710,10 @@ function getCustomTile(custom_val, customtype, customid) {
         lines.forEach(function(msgs) {
             var subidraw = msgs[2].trim();
             var subid = subidraw.replace(/[\"\*\<\>\!\{\}\.\,\:\+\&\%]/g,""); //  str_replace(ignores, "", subidraw);
-            var companion = "user_" + subid;
-            delete custom_val[subid];
-            delete custom_val[companion];
+            if ( custom_val[companion] ) {
+                delete custom_val[subid];
+                delete custom_val[companion];
+            }
         });
         
         // sort the lines and add them back in the requested order
@@ -4563,45 +4733,22 @@ function getCustomTile(custom_val, customtype, customid) {
                 // var posturl = encodeURIComponent(content);
                 var subidraw = msgs[2].trim();
                 var subid = subidraw.replace(/[\"\*\<\>\!\{\}\.\,\:\+\&\%]/g,""); //  str_replace(ignores, "", subidraw);
-                var companion = "user_" + subid;
-    
+
                 // process web calls made in custom tiles
                 // this adds a new field for the URL or LINK information
                 // in a tag called user_subid where subid is the requested field
                 // web call results and linked values are stored in the subid field
                 if ( content && (calltype==="PUT" || calltype==="GET" || calltype==="POST" || calltype==="URL") )
                 {
-                    // custom_val[companion] = "::" + calltype + "::" + posturl;
                     custom_val[companion] = "::" + calltype + "::" + encodeURI(content);
                     custom_val[subid] = calltype + "::" + subid;
                
                 } else if ( calltype==="LINK" ) {
                     // code for enabling mix and match subid's into custom tiles
-                    // this stores the tile number so we can quickly grab it upon actions
-                    // this also allows me to find the hub number of the linked tile easily
-                    // and finally, the linked tile is displayable at user's discretion
-                    // for this to work the link info is stored in a new element that is hidden
-                    
-                    var idx = array_search(content, index);
-
-                    // changed the link logic so we don't need to know the value at link time
-                    // if ( allthings && idx!== false && array_key_exists(idx, allthings) ) {
-                    if ( idx !== false ) {
-                
-                        // if the subid exists in our linked tile add it
-                        // this can replace existing fields with linked value
-                        // if an error exists show text of intended link
-                        // first case is if link is valid and not an existing field
-                        // if ( array_key_exists(subid, pvalue) ) {
-                        custom_val[companion] = "::" + calltype + "::" + idx;
-                        custom_val[subid]= "LINK::" + content;
+                    // since DB reads are fast, we can just store the tileid now
+                    custom_val[companion] = "::" + calltype + "::" + content;
+                    custom_val[subid]= "LINK::" + subid;
                             
-                    // final cases are if link tile wasn't found
-                    } else {
-                        custom_val[companion] = "::" + calltype + "::" + "error";
-                        custom_val[subid] = "LINK::" + content;
-                        console.log( (ddbg()), "error - Links unavailable to link #" + content + " with subid= " + subid);
-                    }
                
                 } else if ( ENABLERULES && calltype==="RULE" ) {
                     custom_val[companion] = "::" + calltype + "::" + content;
@@ -4613,8 +4760,7 @@ function getCustomTile(custom_val, customtype, customid) {
                     // which is more efficient and safe in case user provides
                     // a subid that the hub might recognize - this way it is
                     // guaranteed to just pass the text on the browser
-                    calltype = "TEXT";
-                    custom_val[companion] = "::" + calltype + "::" + content;
+                    // custom_val[companion] = "::" + calltype + "::" + content;
                     custom_val[subid] = content;
                 }
             }
@@ -4637,8 +4783,9 @@ function getCustomTile(custom_val, customtype, customid) {
             }
             custom_val["fmt_time"] = times.fmt_time;
         }
+        
+        return custom_val;
     }
-    return custom_val;
 }
 
 // this little gem makes sure items are in the proper order
@@ -4699,7 +4846,7 @@ function setValOrder(val) {
     return newval;
 }
 
-function processHubMessage(hubmsg) {
+function processHubMessage(userid, hubmsg) {
     // loop through all things for this hub
     // remove music trackData field that we don't know how to handle
     var audiomap = {"name": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
@@ -4715,14 +4862,14 @@ function processHubMessage(hubmsg) {
     // that was also used in the old housepanel.push app
     var subid = hubmsg['change_attribute'];
     var hubmsgid = hubmsg['change_device'].toString();
-    var strtype = null;
-    if ( hubmsg['change_type'] ) {
-        strtype = hubmsg['change_type'];
-    } else {
-        if ( subid==="audio" || subid==="music" || subid==="weather" ) {
-            strtype = getType(hubmsgid);
-        }
-    }
+    var strtype;
+    // if ( hubmsg['change_type'] ) {
+    //     strtype = hubmsg['change_type'];
+    // } else {
+    //     if ( subid==="audio" || subid==="music" || subid==="weather" ) {
+    //         strtype = getType(hubmsgid);
+    //     }
+    // }
     var origname = hubmsg['change_name'] || "";
 
     // deal with presence tiles
@@ -4730,45 +4877,19 @@ function processHubMessage(hubmsg) {
         hubmsg['change_value'] = "absent";
     }
 
-    // get any custom size parameters for linked tiles
-    var customwidth = false;
-    var customheight = false;
 
-    if ( strtype ) {
-        var triggeridx = strtype + "|" + hubmsgid;
-        if ( !origname ) {
-            origname = allthings[triggeridx]["name"];
-        }
-        try {
-            if ( allthings[triggeridx] && array_key_exists("user_width", allthings[triggeridx]["value"]) ) {
-                customwidth = allthings[triggeridx]["value"]["user_width"];
-                if (customwidth.startsWith("::TEXT::")) {
-                    customwidth = customwidth.substr(8);
-                } else {
-                    customwidth = false;
-                }
-            }
-            if ( allthings[triggeridx] && array_key_exists("user_height", allthings[triggeridx]["value"]) ) {
-                customheight = allthings[triggeridx]["value"]["user_height"];
-                if (customheight.startsWith("::TEXT::")) {
-                    customheight = customheight.substr(8);
-                } else {
-                    customheight = false;
-                }
-            }
-        } catch (e) {
-            customwidth = false;
-            customheight = false;
-        }
-    }
+    // find the devices from our list of all devices belonging to this user
+    // the root device values are updated in the DB which causes all instances to update when pushClient is called below
+    var results = mydb.getRows("devices","*", "userid = " + userid + " AND deviceid = " + hubmsgid)
+    .then(devices => {
 
-    if ( DEBUG12 ) {
-        if ( customwidth && customheight ) {
-            console.log( (ddbg()), "processhubMessage - message: ", hubmsg, " width: ", customwidth, " height: ", customheight);
-        } else {
-            console.log( (ddbg()), "processhubMessage - message: ", hubmsg);
+    })
+    .then(thing => {
+        if ( DEBUG12 ) {
+            console.log( (ddbg()), "processhubMessage - hubmsgid: ", hubmsgid, "\nmessage: ", hubmsg, " thing: ", thing);
         }
-    }
+    });
+
 
     for (idx in allthings) {
 
@@ -4884,15 +5005,16 @@ function processHubMessage(hubmsg) {
 
         }
 
+        return 'pushed new status info to ' + cnt + ' tiles';
    }
-    // resetRules();
-    return 'pushed new status info to ' + cnt + ' tiles';
+
+   return result;
 }
 
-function resetRules() {
-    GLB.rules = {};
+function resetRules(userid) {
+    GLB.rules[userid] = {};
     if ( DEBUG11 ) {
-        console.log( (ddbg()), "reset dup flag... ");
+        console.log( (ddbg()), "reset dup flag for userid: ", userid);
     }
 }
 
@@ -5459,6 +5581,7 @@ function processRules(bid, thetype, trigger, pvalue, rulecaller) {
 function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
     // get a unique has for this rule to use for managing timers and gathering stats
     // we also use this to prevent dup rules within the same doAction cycle
+    // TODO - add UserID to the hash
     var itemhash = pw_hash(item,'md5');
 
     if ( DEBUG11 ) {
@@ -6618,13 +6741,13 @@ function testclick(clktype, clkid) {
     return test;
 }
 
-function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, linkval, protocol) {
+function doAction(userid, hubid, swid, swtype, swval, swattr, subid, tileid, command, linkval, protocol) {
 
     var response = "error";
     var idx;
 
     // reset rules
-    resetRules();
+    resetRules(userid);
 
     if ( DEBUG7 ) {
         console.log( (ddbg()), "doaction: swid: ", swid, " swtype:", swtype, " swval: ", swval, 
@@ -6647,10 +6770,10 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
     // handle clocks to return current time always
     if ( (typeof command==="undefined" || !command) && swid==="clockdigital") {
         response = getClock("clockdigital");
-        response = getCustomTile(response, "clock", "clockdigital");
+        response = getCustomTile(userid, response, "clock", "clockdigital");
     } else if ( (typeof command==="undefined" || !command) && swid==="clockanalog" ) {
         response = getClock("clockanalog");
-        response = getCustomTile(response, "clock", "clockanalog");
+        response = getCustomTile(userid, response, "clock", "clockanalog");
     
     // handle types that just return the current status
     // added check to skip clicks on things that are commands flagged in ST and HE with an underscore
@@ -6939,7 +7062,7 @@ function doQuery(hubid, swid, swtype, tileid, protocol) {
                 res.value = translateWeather(res.name, res.value);
             }
 
-            res.value = getCustomTile(res.value, res.type, res.id);
+            // res.value = getCustomTile(res.value, res.type, res.id);
             res.value = returnFile(res.value, res.type);
             result[i] = res;
             
@@ -7109,7 +7232,7 @@ function setPosition(uname, swid, swtype, panel, swattr, tile) {
     
 }
 
-function addThing(uname, bid, thingtype, panel, pos, flag) {
+function addThing(userid, bid, thingtype, panel, pos, flag) {
     
     var idx = thingtype + "|" + bid;
     var options = GLB.options;
@@ -7155,8 +7278,8 @@ function addThing(uname, bid, thingtype, panel, pos, flag) {
     options["things"][panel].push([tilenum, ypos, xpos, zindex, ""]);
     
     // make a new tile based on the dragged information
-    var thing = makeThing(cnt, tilenum, thesensor, panel, ypos, xpos, zindex, "", "");
-    writeRoomThings(options, uname);
+    var thing = makeThing(userid, cnt, tilenum, thesensor, panel, ypos, xpos, zindex, "", "");
+    // writeRoomThings(options, uname);
     
     return thing;
 }
@@ -7662,21 +7785,20 @@ function tsk($timezone, $skin, $uname, $port, $webSocketServerPort, $fast_timer,
 
 function getSocketUrl(hostname) {
     var webSocketUrl = "";
-    var configoptions = GLB.options.config;
     if ( GLB.returnURL.startsWith("https://") ) {
         var ws = "wss://";
     } else {
         ws = "ws://";
     }
     
-    if ( configoptions.webSocketServerPort && !isNaN(parseInt(configoptions.webSocketServerPort)) ) {
+    if ( GLB.webSocketServerPort && !isNaN(parseInt(GLB.webSocketServerPort)) ) {
         var icolon = hostname.indexOf(":");
         if ( icolon >= 0 ) {
             webSocketUrl = ws + hostname.substr(0, icolon);
         } else {
             webSocketUrl = ws + hostname;
         }
-        webSocketUrl = webSocketUrl + ":" + configoptions.webSocketServerPort;
+        webSocketUrl = webSocketUrl + ":" + GLB.webSocketServerPort;
     }
     return webSocketUrl;
 }
@@ -7927,118 +8049,161 @@ function getOptionsPage(uname, hostname, pathname) {
 }
 
 // renders the main page
-function mainPage(uname, hostname, pathname) {
+function mainPage(userid, uname, panelid, pname, usertype, skin, req) {
+
     var $tc = "";
-    var thingoptions = GLB.options["things"];
-    var roomoptions = GLB.options["rooms"];
-    var config = GLB.options.config;
-    var skin = getSkin(uname);
-    var kioskmode = GLB.options.config["kiosk"];
-    if ( kioskmode===true || kioskmode==="true" || kioskmode===1 || kioskmode==="yes" ) {
-        kioskmode = true;
-    } else {
-        kioskmode = false;
-    }
+    var hostname = req.headers.host;
+    var pathname = req.path;
+    var kioskmode = false;
+
     console.log(  "\n****************************************************************",
                   "\n", (ddbg()), "Serving page at: ", GLB.returnURL,
                   "\n****************************************************************");
 
     $tc += utils.getHeader(skin);
 
-    if ( GLB.newuser ) {
+    // if new user flag it and udpate to no longer be new
+    if ( usertype === 0 ) {
         $tc += "<div class=\"greeting\"><strong>Welcome New User!</strong><br/ >You should first try to link your smart home hubs, using the Hub Auth button below. ";
         $tc += "You can also explore all that HousePanel has to offer by experimenting with the two clock tiles placed in each room. ";
         $tc += "When you are done, they can be removed in Edit mode or from the Options page. Click on the ? mark in the upper right corner. ";
         $tc += "to access the full online manual. Have fun!</div>";
-        GLB.newuser = false;
+        mydb.updateRow("users",{usertype: 1},"id="+userid);
     }
 
-    if ( DEBUG4 ) {
-        console.log( (ddbg()), "Options in mainPage: ", UTIL.inspect(GLB.options,false,null,false));
+    if ( DEBUG4 || DEBUGtmp ) {
+        console.log( (ddbg()), "mainPage: ", userid, uname, panelid, pname, usertype, skin, hostname, pathname);
     }
+
     // make sure our active skin has a custom file
-    if ( !fs.existsSync(skin + "/customtiles.css") ) {
-        writeCustomCss(skin, "");
-    }
-    
-    // new wrapper around catalog and things but excluding buttons
-    $tc += '<div id="dragregion">';
-    $tc += '<div id="tabs"><ul id="roomtabs">';
+    // if ( !fs.existsSync(skin + "/customtiles.css") ) {
+    //     writeCustomCss(skin, "");
+    // }
 
-    // show all room with whatever index number assuming unique
-    for (var room in roomoptions) {
-        var k = roomoptions[room];
-        if ( thingoptions[room] ) {
-            var adder= "<li roomnum=\"" + k + "\" class=\"tab-" + room + "\"><a href=\"#" + room + "-tab\">" + room + "</a></li>";
-            $tc += adder;
+    // first get the room list and make the header
+    var conditions = "userid = "+userid+" AND panelid = "+panelid;
+    var results = mydb.getRows("rooms","*",conditions,"","rooms.rorder")
+    .then(rows => {
+
+        var tc = $tc;
+        tc += '<div id="dragregion">';
+        tc += '<div id="tabs"><ul id="roomtabs">';
+
+        for (var i in rows) {
+            var row = rows[i];
+            var k = row["rorder"];
+            var room = row["rname"]
+            if ( room ) {
+                var adder= "<li roomnum=\"" + k + "\" class=\"tab-" + room + "\"><a href=\"#" + room + "-tab\">" + room + "</a></li>";
+                tc += adder;
+            }
         }
-    }
-    $tc += '</ul>';
+        tc += '</ul>';
 
-    // changed this to show rooms in the order listed
-    // this is so we just need to rewrite order to make sortable permanent
-    var cnt = 0;
-    for (var room in roomoptions) {
-        var k = roomoptions[room];
-        if ( thingoptions[room] ) {
-            var things = thingoptions[room];
-            var pgobj = getNewPage(cnt, room, k, things);
-            $tc += pgobj.tc;
-            cnt = pgobj.cnt;
+        console.log(tc, rows);
+        return [tc, rows];
+    })
+    .then(resultsarray => {
+
+        var tc = resultsarray[0];
+        var rooms = resultsarray[1];
+
+        // we link the tileid to the index of devices list - this will be unique and tied to a hub
+        var cnt = 0;
+        var joinstr1 = mydb.getJoinStr("things","tileid","devices","id");
+        var joinstr2 = mydb.getJoinStr("things","roomid","rooms","id");
+        var conditions = "things.userid = "+userid+" AND rooms.panelid = "+panelid;
+        // var newtc = mydb.getRows("things","things.*,devices.*", conditions, [joinstr1, joinstr2, joinstr3],"rooms.rorder")
+        var newtc = mydb.getRows("things","*", conditions, [joinstr1, joinstr2], "rooms.rorder, things.zindex")
+        .then(things => {
+
+            console.log("things for panel: ", pname, ": ", things);
+            
+            for (var i in rooms) {
+                var row = rooms[i];
+                var roomname = row.rname;
+                var rorder = row.rorder;
+                var thingsarray = [];
+                things.forEach(function(thing) {
+                    if ( thing["rooms_rname"] === roomname) {
+                        thingsarray.push(thing);
+                    }
+                });
+                console.log("things for room: ", roomname, ": ", thingsarray);
+
+                // show all room with whatever index number assuming unique
+                // var pagecontent = "<div class='error' id=\"" + roomname + "-tab\">"
+                //                   + "Test Page #" + i + " for Room: " + roomname + " order: " + rorder
+                //                   + "</div>";
+                var pagecontent = getNewPage(userid, cnt, roomname, rorder, thingsarray);
+                cnt += thingsarray.length;
+                tc = tc + pagecontent;
+            };
+            return tc;
+        });
+        return newtc;
+    })
+    .then(results => {
+
+        var tc = results;
+
+        // include doc button and panel name
+        // TODO: add username to display
+        tc += '<div id="showversion" class="showversion">';
+        tc += '<span id="infoname">' + pname + '</span><span> - V' + utils.HPVERSION + '</span>';
+        tc += '<div id="showdocs"><a href="https://www.housepanel.net" target="_blank">?</a></div>';
+        tc += "</div>";
+
+        // end of the tabs
+        tc += "</div>";
+
+        // set the websock servername as same as hosted page but different port
+        var webSocketUrl = getSocketUrl(hostname);
+        
+        // include form with useful data for js operation
+        tc += "<form id='kioskform'>";
+        var erstr =  ENABLERULES ? "true" : "false"
+        tc += utils.hidden("enablerules", erstr);
+
+        // save the socket address for use on js side
+        // save Node.js address for use on the js side
+        tc += utils.hidden("pagename", "main");
+        tc += utils.hidden("returnURL", GLB.returnURL);
+        tc += utils.hidden("pathname", pathname);
+        tc += utils.hidden("webSocketUrl", webSocketUrl);
+        tc += utils.hidden("userid", userid, "userid");
+        tc += utils.hidden("skinid", skin, "skinid");
+        tc += utils.hidden("emailid", uname, "emailid");
+
+        // show user buttons if we are not in kiosk mode
+        if ( !kioskmode ) {
+            tc += "<div id=\"controlpanel\">";
+            tc +='<div id="showoptions" class="formbutton">Options</div>';
+            tc +='<div id="refreshpage" class="formbutton">Refresh</div>';
+            // tc +='<div id="refactor" class="formbutton confirm">Refactor</div>';
+            tc +='<div id="userauth" class="formbutton confirm">Hub Auth</div>';
+            tc +='<div id="showid" class="formbutton">Show Info</div>';
+            tc +='<div id="toggletabs" class="formbutton">Hide Tabs</div>';
+            tc +='<div id="blackout" class="formbutton">Blackout</div>';
+
+            tc += "<div class=\"modeoptions\" id=\"modeoptions\"> \
+            <input id=\"mode_Operate\" class=\"radioopts\" type=\"radio\" name=\"usemode\" value=\"operate\" checked><label for=\"mode_Operate\" class=\"radioopts\">Operate</label> \
+            <input id=\"mode_Reorder\" class=\"radioopts\" type=\"radio\" name=\"usemode\" value=\"reorder\" ><label for=\"mode_Reorder\" class=\"radioopts\">Reorder</label> \
+            <input id=\"mode_Edit\" class=\"radioopts\" type=\"radio\" name=\"usemode\" value=\"edit\" ><label for=\"mode_Edit\" class=\"radioopts\">Edit</label> \
+            <input id=\"mode_Snap\" class=\"radioopts\" type=\"checkbox\" name=\"snapmode\" value=\"snap\"><label for=\"mode_Snap\" class=\"radioopts\">Grid Snap?</label> \
+            </div><div id=\"opmode\"></div>";
+            tc +="</div>";
         }
-    }
+        tc += "</form>";
 
-    // include doc button and username that is logged in
-    $tc += '<div id="showversion" class="showversion">';
-    $tc += '<span id="infoname">' + uname + "</span><span> - V" + utils.HPVERSION + '</span>';
-    $tc += '<div id="showdocs"><a href="http://www.housepanel.net" target="_blank">?</a></div>';
-    $tc += "</div>";
+        // end drag region enclosing catalog and main things
+        tc += "</div>";
 
-    // end of the tabs
-    $tc += "</div>";
+        tc += utils.getFooter();
+        return tc;
+    });
 
-    // set the websock servername as same as hosted page but different port
-    var webSocketUrl = getSocketUrl(hostname);
-    
-    // include form with useful data for js operation
-    $tc += "<form id='kioskform'>";
-    var erstr =  ENABLERULES ? "true" : "false"
-    $tc += utils.hidden("enablerules", erstr);
-
-    // save the socket address for use on js side
-    // save Node.js address for use on the js side
-    $tc += utils.hidden("pagename", "main");
-    $tc += utils.hidden("returnURL", GLB.returnURL);
-    $tc += utils.hidden("pathname", pathname);
-    $tc += utils.hidden("webSocketUrl", webSocketUrl);
-    $tc += utils.hidden("skinid", skin, "skinid");
-
-    // show user buttons if we are not in kiosk mode
-    if ( !kioskmode ) {
-        $tc += "<div id=\"controlpanel\">";
-        $tc +='<div id="showoptions" class="formbutton">Options</div>';
-        $tc +='<div id="refreshpage" class="formbutton">Refresh</div>';
-        // $tc +='<div id="refactor" class="formbutton confirm">Refactor</div>';
-        $tc +='<div id="userauth" class="formbutton confirm">Hub Auth</div>';
-        $tc +='<div id="showid" class="formbutton">Show Info</div>';
-        $tc +='<div id="toggletabs" class="formbutton">Hide Tabs</div>';
-        $tc +='<div id="blackout" class="formbutton">Blackout</div>';
-
-        $tc += "<div class=\"modeoptions\" id=\"modeoptions\"> \
-          <input id=\"mode_Operate\" class=\"radioopts\" type=\"radio\" name=\"usemode\" value=\"operate\" checked><label for=\"mode_Operate\" class=\"radioopts\">Operate</label> \
-          <input id=\"mode_Reorder\" class=\"radioopts\" type=\"radio\" name=\"usemode\" value=\"reorder\" ><label for=\"mode_Reorder\" class=\"radioopts\">Reorder</label> \
-          <input id=\"mode_Edit\" class=\"radioopts\" type=\"radio\" name=\"usemode\" value=\"edit\" ><label for=\"mode_Edit\" class=\"radioopts\">Edit</label> \
-          <input id=\"mode_Snap\" class=\"radioopts\" type=\"checkbox\" name=\"snapmode\" value=\"snap\"><label for=\"mode_Snap\" class=\"radioopts\">Grid Snap?</label> \
-        </div><div id=\"opmode\"></div>";
-        $tc +="</div>";
-    }
-    $tc += "</form>";
-
-    // end drag region enclosing catalog and main things
-    $tc += "</div>";
-
-    $tc += utils.getFooter();
-    return $tc;
+    return results;
 }
 
 function clone(obj) {
@@ -8066,7 +8231,7 @@ function saveFilters(body) {
 }
 
 // process username and password edits on Options page and Login page
-function saveUserPw(res, body, uname) {
+function saveUserPw(req, res, body, uname) {
     if ( DEBUG3 ) {
         console.log( (ddbg()), "password save request: ", body, " uname: ", uname);
     }
@@ -8521,130 +8686,132 @@ function pw_verify(pword, hash, algo) {
     return (pw_hash(pword, algo) === hash);
 }
 
-// the swval here is actually custom type
-function addCustom(swid, swtype, customtype, customval, subid) {
+// TODO - add new custom to DB
+function addCustom(userid, swid, swtype, customtype, customval, subid) {
     var reserved = ["index","rooms","things","config","control","time","useroptions"];
-    var userid = "user_" + swid;
+    var customkey = "user_" + swid;
+
 
     // legacy custom types
-    if ( array_key_exists(swid, GLB.options) && 
-            !in_array (swid, reserved) && 
-            !array_key_exists(userid, GLB.options) ) {
-        userid = swid;
-    }
+    // if ( array_key_exists(swid, GLB.options) && 
+    //         !in_array (swid, reserved) && 
+    //         !array_key_exists(customkey, GLB.options) ) {
+    //     customkey = swid;
+    // }
 
-    var oldcustoms;
-    if ( array_key_exists(userid, GLB.options) ) {
-        oldcustoms = clone(GLB.options[userid]);
-    } else {
-        oldcustoms = [];
-    }
+    // var oldcustoms;
+    // if ( array_key_exists(userid, GLB.options) ) {
+    //     oldcustoms = clone(GLB.options[userid]);
+    // } else {
+    //     oldcustoms = [];
+    // }
 
-    // handle encryption
-    customval = customval.toString();
-    subid = subid.toString();
-    if ( subid==="password" ) {
-        customval = pw_hash(customval);
-    }
+    // // handle encryption
+    // customval = customval.toString();
+    // subid = subid.toString();
+    // if ( subid==="password" ) {
+    //     customval = pw_hash(customval);
+    // }
     
-    var newitem = [customtype, customval, subid];
-    var newoptitem = [];
-    var doneit = false;
+    // var newitem = [customtype, customval, subid];
+    // var newoptitem = [];
+    // var doneit = false;
 
-    oldcustoms.forEach( function(val) {
-        if ( val[2].toString() === subid ) {
-            if ( !doneit ) {
-                newoptitem.push(newitem);
-                doneit = true;
-            }
-        } else {
-            newoptitem.push(val);
-        }
-    });
+    // oldcustoms.forEach( function(val) {
+    //     if ( val[2].toString() === subid ) {
+    //         if ( !doneit ) {
+    //             newoptitem.push(newitem);
+    //             doneit = true;
+    //         }
+    //     } else {
+    //         newoptitem.push(val);
+    //     }
+    // });
 
-    if ( !doneit ) {
-        newoptitem.push(newitem);
-    }
+    // if ( !doneit ) {
+    //     newoptitem.push(newitem);
+    // }
 
-    GLB.options[userid] = newoptitem;
-    writeOptions();
-    // writeRoomThings(options, uname);
-    var idx = swtype + "|" + swid;
+    // GLB.options[userid] = newoptitem;
+    // writeOptions();
+    // // writeRoomThings(options, uname);
+    // var idx = swtype + "|" + swid;
     
-    // make the new custom field using the updated options above
-    var thingval = allthings[idx]["value"];
-    thingval = getCustomTile(thingval, swtype, swid);
-    thingval = returnFile(thingval, swtype);
-
-    // save it in the main array - no need for sessions in Node
-    allthings[idx]["value"] = thingval;
-
-    return thingval;
-}
-
-function delCustom(uname, swid, swtype, swval, swattr, subid) {
-    var reserved = ["index","rooms","things","config","control","useroptions"];
-    var userid = "user_" + swid;
-
-    swattr = swattr.toString();
-    subid = subid.toString();
-
-    // legacy custom types
-    if ( array_key_exists(swid, GLB.options) && 
-            !in_array (swid, reserved) && 
-            !array_key_exists(userid, GLB.options) ) {
-        userid = swid;
-    }
-
-    if ( array_key_exists(userid, GLB.options) ) {
-
-        var oldlines = clone(GLB.options[userid]);
-        if ( ! is_array(oldlines[0]) ) {
-            oldlines = [oldlines];
-        }
-
-        // make new list of customs without the deleted item
-        var lines = [];
-        oldlines.forEach( function(newitem) {
-            if ( newitem[2].toString() !== subid ) {
-                lines.push(newitem);
-            }
-        });
-
-        // either remove or update the main options array
-        if ( lines.length === 0 ) {
-            delete GLB.options[userid];
-        } else {
-            GLB.options[userid] = lines;
-        }
-        writeOptions();
-        // writeRoomThings(GLB.options, uname);
-    }
-    
-    var idx = swtype + "|" + swid;
-    var companion = "user_" + subid;
-    var thingval = allthings[idx]["value"];
-    
-    // remove this field and any companion if it exists
-    delete thingval[subid];
-    if ( array_key_exists(companion, thingval) ) {
-        delete thingval[companion];
-    }
-
-    // save here before calling because these routines use this array
-    allthings[idx]["value"] = thingval;
-
-    // make the new custom field using the updated options above
+    // // make the new custom field using the updated options above
+    // var thingval = allthings[idx]["value"];
+    // thingval = getCustomTile(userid, thingval, swtype, swid);
     // thingval = returnFile(thingval, swtype);
-    thingval = getCustomTile(thingval, swtype, swid);
-    thingval = returnFile(thingval, swtype);
-   
+
     // save it in the main array - no need for sessions in Node
-    allthings[idx]["value"] = thingval;
+    // allthings[idx]["value"] = thingval;
+    var thingval = null;
     return thingval;
 }
 
-function apiCall(body, protocol, req, res) {
+function delCustom(userid, swid, swtype, customtype, swattr, subid) {
+    // var reserved = ["index","rooms","things","config","control","useroptions"];
+    // var userid = "user_" + swid;
+
+    // swattr = swattr.toString();
+    // subid = subid.toString();
+
+    // // legacy custom types
+    // if ( array_key_exists(swid, GLB.options) && 
+    //         !in_array (swid, reserved) && 
+    //         !array_key_exists(userid, GLB.options) ) {
+    //     userid = swid;
+    // }
+
+    // if ( array_key_exists(userid, GLB.options) ) {
+
+    //     var oldlines = clone(GLB.options[userid]);
+    //     if ( ! is_array(oldlines[0]) ) {
+    //         oldlines = [oldlines];
+    //     }
+
+    //     // make new list of customs without the deleted item
+    //     var lines = [];
+    //     oldlines.forEach( function(newitem) {
+    //         if ( newitem[2].toString() !== subid ) {
+    //             lines.push(newitem);
+    //         }
+    //     });
+
+    //     // either remove or update the main options array
+    //     if ( lines.length === 0 ) {
+    //         delete GLB.options[userid];
+    //     } else {
+    //         GLB.options[userid] = lines;
+    //     }
+    //     writeOptions();
+    //     // writeRoomThings(GLB.options, uname);
+    // }
+    
+    // var idx = swtype + "|" + swid;
+    // var companion = "user_" + subid;
+    // var thingval = allthings[idx]["value"];
+    
+    // // remove this field and any companion if it exists
+    // delete thingval[subid];
+    // if ( array_key_exists(companion, thingval) ) {
+    //     delete thingval[companion];
+    // }
+
+    // // save here before calling because these routines use this array
+    // allthings[idx]["value"] = thingval;
+
+    // // make the new custom field using the updated options above
+    // // thingval = returnFile(thingval, swtype);
+    // thingval = getCustomTile(thingval, swtype, swid);
+    // thingval = returnFile(thingval, swtype);
+   
+    // // save it in the main array - no need for sessions in Node
+    // allthings[idx]["value"] = thingval;
+    var thingval = null;
+    return thingval;
+}
+
+function apiCall(userid, uname, panelid, pname, usertype, skin, body, protocol, req, res) { 
 
     if ( DEBUG8 ) {
         console.log( (ddbg()), protocol + " api call, body: ", UTIL.inspect(body, false, null, true) );
@@ -8659,52 +8826,42 @@ function apiCall(body, protocol, req, res) {
     var command = body["command"] || "";
     var linkval = body["linkval"] || "";
 
-    if ( protocol==="POST" ) {
-        readOptions("apiCall");
-    }
-    var hubs = GLB.options.config["hubs"];
-
-    // get the user name from GUI first and cookies next and last used
-    // var uname = body["uname"] || getUserName(req.cookies);
-    // if ( !uname ) {
-    //     if ( typeof GLB.options!=="undefined" && typeof GLB.options["config"]!=="undefined" && array_key_exists("uname", GLB.options["config"]) ) {
-    //         uname = GLB.options["config"]["uname"];
-    //         console.log( (ddbg()), "*** warning *** using user= [" + uname + "] from options file for API call");
-    //     } else {
-    //         uname = "default";
-    //         console.log( (ddbg()), "*** warning *** using user= [default] for API call");
-    //     }
-    // }
-
-    // get from cookies in the secure version or from login screen
+    // if this is a login API call overwrite the panel name
     if ( api==="dologin" && protocol==="POST" ) {
-        var uname = body["uname"].trim();
-    } else {
-        uname = getUserName(req.cookies);
+        uname = body["uname"].trim();
     }
 
+    // for POST we get vital info from GUI
+    // if user is making an API call these must be provided
+    if ( protocol==="POST" ) {
+        userid = body.userid;
+        uname = body.uname;
+        panelid = body.panelid;
+        pname = body.pname;
+        skin = body.skin;
+        usertype = 1;
+        // readOptions("apiCall", uname);
+    }
+
+    
     if ( DEBUG4 || DEBUGtmp ) {
         console.log((ddbg()),"uname in apiCall: ", uname, " protocol: ", protocol, " api: ", api);
     }
 
-    if ( !uname ) {
-        if ( IGNOREPW ) {
-            uname = "default";
-            console.log( (ddbg()), "*** warning *** using unauthorized default user for API call");
-        } else {
-            console.log( (ddbg()), "*** error *** using user not authorized for API call");
-            return "error - not authorized";
-        }
+    if ( !userid || !uname ) {
+        console.log( (ddbg()), "*** error *** user not authorized for API call");
+        return "error - not authorized";
     }
-
+    
     // set the hubid
     var hubid = body["hubid"] || "auto";
-    if ( hubid==="auto" && body["hubnum"] ) {
-        var hubnum = parseInt(body["hubnum"]);
-        if ( !isNaN(hubnum) && hubnum >=0 && hubnum < hubs.length ) {
-            hubid = hubs[hubnum]["hubId"];
-        }
-    }
+    // if ( hubid==="auto" && body["hubnum"] ) {
+    //     var hubnum = parseInt(body["hubnum"]);
+    //     if ( !isNaN(hubnum) && hubnum >=0 && hubnum < hubs.length ) {
+    //         var hubs = GLB.options.config["hubs"];
+    //         hubid = hubs[hubnum]["hubId"];
+    //     }
+    // }
 
     // if this is a different user than what is loaded then load up our user
     // this shouldn't happen too often unless there are people pushing panels at same time
@@ -8712,13 +8869,6 @@ function apiCall(body, protocol, req, res) {
     //     GLB.options.config.uname = uname;
     //     readRoomThings("apiCall", uname);
     // }
-
-    // always load rooms for this user in this version since calls are now stateless
-    // TODO: implement DB
-    if ( protocol==="POST" ) {
-        getAllThings(uname, hubid, false, false);
-        readRoomThings("apiCall", uname);
-    }
 
     // send mqtt message
     // if ( (api!=="dologin" || protocol==="GET") && udclient && udclient.connected ) {
@@ -8733,598 +8883,574 @@ function apiCall(body, protocol, req, res) {
         multicall = false;
     }
 
-    var result;
-    switch (api) {
-        
-        case "doaction":
-        case "action":
-            if ( multicall ) {
-                result = [];
-                tilearray.forEach(function(atile) {
+    // always load rooms for this user in this version since calls are now stateless
+    // TODO: implement DB
+    // if ( protocol==="POST" ) {
+    //     getAllThings(hubid, false, false);
+    //     readRoomThings("apiCall", uname);
+    // }
+
+    // read configuration options tied to this user
+    // and invoke the rest of the api call
+    var result = mydb.getRows("configs","*","userid="+userid)
+    .then(configoptions => {
+        console.log( (ddbg()), "configs in API call: ", jsonshow(configoptions) );
+        return doapi(configoptions);
+    });
+    return result;
+
+
+    function doapi(configoptions) {
+
+        var result;
+        switch (api) {
+            
+            case "doaction":
+            case "action":
+                if ( multicall ) {
+                    result = [];
+                    tilearray.forEach(function(atile) {
+                        if ( DEBUG8 ) {
+                            console.log( (ddbg()), "doaction multicall: hubid: ", hubid, " swid: ", swid, " swval: ", swval, " swattr: ", swattr, " subid: ", subid, " atile: ", atile);
+                        }
+                        var aresult = doAction(useremail, "auto", "", "", swval, swattr, subid, atile, "", "", protocol);
+                        result.push(aresult);
+                    });
+                } else {
                     if ( DEBUG8 ) {
-                        console.log( (ddbg()), "doaction multicall: hubid: ", hubid, " swid: ", swid, " swval: ", swval, " swattr: ", swattr, " subid: ", subid, " atile: ", atile);
+                        console.log( (ddbg()), "doaction: hubid: ", hubid, " swid: ", swid, " swval: ", swval, " swattr: ", swattr, " subid: ", subid, " tileid: ", tileid);
                     }
-                    var aresult = doAction("auto", "", "", swval, swattr, subid, atile, "", "", protocol);
-                    result.push(aresult);
-                });
-            } else {
-                if ( DEBUG8 ) {
-                    console.log( (ddbg()), "doaction: hubid: ", hubid, " swid: ", swid, " swval: ", swval, " swattr: ", swattr, " subid: ", subid, " tileid: ", tileid);
+                    result = doAction(useremail, hubid, swid, swtype, swval, swattr, subid, tileid, command, linkval, protocol);
                 }
-                result = doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, linkval, protocol);
-            }
-            break;
-            
-        case "doquery":
-        case "query":
-            if ( multicall ) {
-                result = [];
-                tilearray.forEach(function(atile) {
-                    var aresult = doQuery("auto", "", "", atile, protocol);
-                    result.push(aresult);
-                });
-            } else {
-                result = doQuery(hubid, swid, swtype, tileid, protocol);
-            }
-            break;
-
-        case "status":
-        case "dostatus":
-            var activehubs = GLB.options.config ? utils.count(GLB.options.config.hubs) : 0;
-            var thingcount = utils.count(allthings);
-            result = {"state": "active", "hubs": activehubs, "clients": clients.length, "things": thingcount, "username": uname};
-            break;
-
-        case "wysiwyg":
-            if ( swtype==="page" ) {
-                // make the fake tile for the room for editing purposes
-                var faketile = {"panel": "panel", "name": swval, "tab": "Tab Inactive", "tabon": "Tab Selected"};
-                var thing = { "id": "r_" + swid, "name": swval, 
-                              "hubnum": "-1", "type": "page", "value": faketile};
-                result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 500, "", "te_wysiwyg");
-            } else {
-                var idx = swtype + "|" + swid;
-                var thing = allthings[idx];
-                var customname = swattr;
+                break;
                 
-                // load customizations
-                // thing.value = getCustomTile(thing.value, swtype, swid);
-                // allthings[idx] = thing;            
-                result = makeThing(0, tileid, thing, "wysiwyg", 0, 0, 500, customname, swval);
-            }
-            break;
-
-        case "pageorder":
-        case "setorder":
-            if ( protocol==="POST" ) {
-                result = setOrder(uname, swid, swtype, swval, swattr);
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-            break;
-
-        case "dragdrop":
-        case "setposition":
-            if ( protocol==="POST" ) {
-                result = setPosition(uname, swid, swtype, swval, swattr, tileid);
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-            break;
-
-        case "dragmake":
-        case "addthing":
-            if ( protocol==="POST" ) {
-                result = addThing(uname, swid, swtype, swval, swattr, "auto");
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-            break;
-    
-        case "dragdelete":
-            if ( protocol==="POST" ) {
-                result = delThing(uname, swid, swtype, swval, swattr);
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-            break;
-
-        case "pagedelete":
-            if ( protocol==="POST" ) {
-                result = delPage(uname, swval);
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-            break;
-    
-        case "pageadd":
-            if ( protocol==="POST" ) {
-                result = addPage(uname);
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-            break;
-
-        case "catalog":
-        case "getcatalog":
-            console.log(">>>> getcatalog: ", UTIL.inspect(allthings,false,null,false));
-            result = getCatalog(swattr);
-            break;
-
-        case "getphotos":
-            result = getPhotos("photos");
-            break;
-            
-        case "refactor":
-            if ( protocol==="POST" ) {
-                // TODO: this does not yet work so it was removed from menu
-                // note really needed any more given how reorder and absolute positioning now works
-                // refactorOptions(uname);
-                result = "success";
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-            break;
-    
-        case "refreshpage":
-            if ( protocol==="POST" ) {
-                getAllThings(uname, null, false, false);
-                pushClient("reload","/");
-                result = "success";
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-            break;
-        
-        // the GUI will never ask to reload options but a user might when making an api call
-        case "options":
-        case "getoptions":
-            if ( swattr==="reload" ) {
-                readOptions("getoptions");
-                readRoomThings("getoptions", uname);
-            }
-            result = GLB.options;
-            break;
-
-        case "sortupdate":
-            if ( protocol==="POST" ) {
-                var idx = swtype + "|" + swid;
-                var uid = swattr;
-                if ( uid && array_key_exists(uid, GLB.options) && swval && is_array(swval) ) {
-                    GLB.options[uid] = swval;
-                    allthings[idx]["value"] = getCustomTile(allthings[idx]["value"], swtype, swid);
-                    writeOptions();
-                    // writeRoomThings(GLB.options, uname);
-                    result = allthings[idx]["value"];
+            case "doquery":
+            case "query":
+                if ( multicall ) {
+                    result = [];
+                    tilearray.forEach(function(atile) {
+                        var aresult = doQuery("auto", "", "", atile, protocol);
+                        result.push(aresult);
+                    });
                 } else {
-                    result = "error - invalid request to update user Options";
+                    result = doQuery(hubid, swid, swtype, tileid, protocol);
                 }
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-            break;
+                break;
 
-        // this returns the existing things
-        case "getallthings":
-        case "getthings":
-        case "things":
-            result = allthings;
-            break;
+            case "status":
+            case "dostatus":
+                // var activehubs = GLB.options.config ? utils.count(GLB.options.config.hubs) : 0;
+                // var thingcount = utils.count(allthings);
+                result = {"state": "active", "clients": clients.length, "userid":userid, "username": uname};
+                break;
+
+            case "wysiwyg":
+                if ( swtype==="page" ) {
+                    // make the fake tile for the room for editing purposes
+                    var faketile = {"panel": "panel", "name": swval, "tab": "Tab Inactive", "tabon": "Tab Selected"};
+                    var thing = { "id": "r_" + swid, "name": swval, 
+                                "hubnum": "-1", "type": "page", "value": faketile};
+                    result = makeThing(userid, 0, tileid, thing, "wysiwyg", 0, 0, 500, "", "te_wysiwyg");
+                } else {
+                    var idx = swtype + "|" + swid;
+                    var thing = allthings[idx];
+                    var customname = swattr;
+                    
+                    // load customizations
+                    // thing.value = getCustomTile(thing.value, swtype, swid);
+                    // allthings[idx] = thing;            
+                    result = makeThing(userid, 0, tileid, thing, "wysiwyg", 0, 0, 500, customname, swval);
+                }
+                break;
+
+            case "pageorder":
+            case "setorder":
+                if ( protocol==="POST" ) {
+                    result = setOrder(uname, swid, swtype, swval, swattr);
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
+
+            case "dragdrop":
+            case "setposition":
+                if ( protocol==="POST" ) {
+                    result = setPosition(uname, swid, swtype, swval, swattr, tileid);
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
+
+            case "dragmake":
+            case "addthing":
+                if ( protocol==="POST" ) {
+                    result = addThing(uname, swid, swtype, swval, swattr, "auto");
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
+        
+            case "dragdelete":
+                if ( protocol==="POST" ) {
+                    result = delThing(uname, swid, swtype, swval, swattr);
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
+
+            case "pagedelete":
+                if ( protocol==="POST" ) {
+                    result = delPage(uname, swval);
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
+        
+            case "pageadd":
+                if ( protocol==="POST" ) {
+                    result = addPage(uname);
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
+
+            case "catalog":
+            case "getcatalog":
+                console.log(">>>> getcatalog: ", UTIL.inspect(allthings,false,null,false));
+                result = getCatalog(swattr);
+                break;
+
+            case "getphotos":
+                result = getPhotos("photos");
+                break;
                 
-        case "hubs":
-        case "gethubs":
-           result = hubs;
-           break;
-
-        case "filteroptions":
-            if ( protocol==="POST" ) {
-                result = saveFilters(body);
-                writeOptions();
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-        break;
-
-        case "saveuserpw":
-        case "userpw":
-            if ( protocol==="POST" ) {
-                result = saveUserPw(res, body, uname);
-                writeOptions();
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-            break;
-
-        case "saveoptions":
-            if ( protocol==="POST" ) {
-                readOptions("saveoptions");
-                readRoomThings("saveoptions", uname);
-                result = processOptions(uname, body);
-                if ( result === "success" ) {
-                    writeOptions();
-                    writeRoomThings(GLB.options, uname);
-                }
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-            break;
-
-        case "savetileedit":
-            if ( protocol==="POST" ) {
-                readOptions("saveoptions");
-                readRoomThings("saveoptions", uname);
-                var n1 = parseInt(body["n1"]);
-                var nlen = parseInt(body["nlen"]);
-                var n2 = parseInt(body["n2"]);
-                if ( isNaN(n1) || isNaN(n2) || isNaN(nlen) ) {
-                    result = "error - invalid call to savetileedit. n1= " + n1 + " n2= " + n2 + " nlen= " + nlen;
-                } else {
-                    if ( DEBUG16 ) {
-                        console.log( (ddbg()), "savetile: n1= " + n1 + " n2= " + n2 + " nlen= " + nlen );
-                    }
-                    if ( n1=== 0 ) {
-                        GLB.newcss = "";
-                    }
-                    GLB.newcss += decodeURI(swval);
-
-                    // write if this is last segment
-                    result = "success - " + n2.toString();
-                    if ( n2=== nlen ) {
-                        if ( DEBUG16 ) {
-                            console.log( (ddbg()), "----------------------------------------------------------");
-                            console.log( (ddbg()), GLB.newcss );
-                            console.log( (ddbg()), "----------------------------------------------------------");
-                        }
-                        writeCustomCss(getSkin(uname), GLB.newcss);
-                    }
-                }
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-            break;
-
-        case "updatenames":
-            // value (swval) is new name, tileid is oldname for pages
-            if ( protocol==="POST" ) {
-                readOptions("saveoptions");
-                readRoomThings("saveoptions", uname);
-                result = updateNames(uname, swtype, tileid, swval);
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-            break;
-        
-        // rewritten to use cookies
-        case "dologin":
-            if ( protocol==="POST" ) {
-                // check the user name and password based on login form data
-                uname = body["uname"].trim();
-                var pword = pw_hash(body["pword"]);
-
-                // check to see if the provided username is valid
-                // and that the passwords match
-                result = "error";
-                var pwords = GLB.options["config"]["pword"];
-
-                if ( DEBUG3 ) {
-                    console.log( (ddbg()), "dologin: uname= ", uname, " pword: ["+pword+"] body: ", body, " pwords: ", pwords);
-                }
-
-                // check for matching passwords - if record exists, login password must match
-                if ( array_key_exists(uname, pwords ) ) {
-                    var pw = pwords[uname];
-                    if ( pw[0] === pword || IGNOREPW ) {
-                        // save the username in the cookie session
-                        setCookie(res, "uname", pw_hash(uname));
-                        readRoomThings("dologin", uname);
-                        if ( DEBUG3 ) {
-                            console.log( (ddbg()), "logged in and set cookie successfully for uname: ", uname, " to: ", pw_hash(uname));
-                        }
-                        result = {uname: uname, pword: pword};
-                    } else {
-                        // clear the cookie to force repeat of login page
-                        res.clearCookie("uname");
-                        if ( DEBUG3 ) {
-                            console.log( (ddbg()), "login failed. cleared cookie for uname: ", uname, " hash: ", pw_hash(uname));
-                        }
-                        uname = "";
-                        pword = "";
-                        result = "error - login failed";
-                    }
-
-                // name does exist so disallow login
-                // TODO - make a more elegant way of creating and managing users
-                } else {
-                    res.clearCookie("uname");
-                    if ( DEBUG3 ) {
-                        console.log( (ddbg()), "login failed. cleared cookie for uname: ", uname, " hash: ", pw_hash(uname));
-                    }
-                    uname = "";
-                    pword = "";
-                    result = "error - login failed";
-                    // pwords[uname] = [pword, "skin-housepanel"];
-                    // setCookie(res, "uname", pw_hash(uname));
-                    // GLB.options["config"]["pword"] = pwords;
-                    // writeOptions();
-                    // writeRoomThings(GLB.options, uname);
-                    // result = {uname: uname, pword: pword};
-                }
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-            break;
-
-        case "pwhash":
-            result;
-            if ( swtype==="hash" ) {
-                result = pw_hash(swval);
-            } else if ( swtype==="verify" ) {
-                if ( pw_verify(swval, swattr) ) {
+            case "refactor":
+                if ( protocol==="POST" ) {
+                    // TODO: this does not yet work so it was removed from menu
+                    // note really needed any more given how reorder and absolute positioning now works
+                    // refactorOptions(uname);
                     result = "success";
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
+        
+            case "refreshpage":
+                if ( protocol==="POST" ) {
+                    getAllThings(null, false, false);
+                    pushClient("reload","/");
+                    result = "success";
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
+            
+            // the GUI will never ask to reload options but a user might when making an api call
+            case "options":
+            case "getoptions":
+                result = configoptions;
+                break;
+
+            case "sortupdate":
+                if ( protocol==="POST" ) {
+                    var idx = swtype + "|" + swid;
+                    var uid = swattr;
+                    if ( uid && array_key_exists(uid, GLB.options) && swval && is_array(swval) ) {
+                        GLB.options[uid] = swval;
+                        allthings[idx]["value"] = getCustomTile(userid, allthings[idx]["value"], swtype, swid);
+                        writeOptions();
+                        // writeRoomThings(GLB.options, uname);
+                        result = allthings[idx]["value"];
+                    } else {
+                        result = "error - invalid request to update user Options";
+                    }
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
+
+            // read things tied to this user and panel
+            case "getallthings":
+            case "getthings":
+            case "things":
+                var joinstr1 = mydb.getJoinStr("things","tileid","devices","id");
+                var joinstr2 = mydb.getJoinStr("things","roomid","rooms","id");
+                var conditions = "things.userid = "+userid+" AND rooms.panelid = "+panelid;
+                result = mydb.getRows("things","*", conditions, [joinstr1, joinstr2])
+                .then(things => {
+                    console.log( (ddbg()), "getallthings: ", things);
+                    return things;
+                });
+                break;
+                    
+            case "hubs":
+            case "gethubs":
+                result = mydb.getRows("hubs","*","userid="+userid)
+                .then(hubs => {
+                    console.log( (ddbg()), "hubs: ", hubs);
+                    return hubs;
+                });
+                break;
+
+            case "filteroptions":
+                if ( protocol==="POST" ) {
+                    result = saveFilters(body);
+                    writeOptions();
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+            break;
+
+            case "saveuserpw":
+            case "userpw":
+                if ( protocol==="POST" ) {
+                    result = saveUserPw(req, res, body, uname);
+                    writeOptions();
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
+
+            case "saveoptions":
+                if ( protocol==="POST" ) {
+                    readOptions("saveoptions");
+                    readRoomThings("saveoptions", uname);
+                    result = processOptions(uname, body);
+                    if ( result === "success" ) {
+                        writeOptions();
+                        writeRoomThings(GLB.options, uname);
+                    }
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
+
+            case "savetileedit":
+                if ( protocol==="POST" ) {
+                    readOptions("saveoptions");
+                    readRoomThings("saveoptions", uname);
+                    var n1 = parseInt(body["n1"]);
+                    var nlen = parseInt(body["nlen"]);
+                    var n2 = parseInt(body["n2"]);
+                    if ( isNaN(n1) || isNaN(n2) || isNaN(nlen) ) {
+                        result = "error - invalid call to savetileedit. n1= " + n1 + " n2= " + n2 + " nlen= " + nlen;
+                    } else {
+                        if ( DEBUG16 ) {
+                            console.log( (ddbg()), "savetile: n1= " + n1 + " n2= " + n2 + " nlen= " + nlen );
+                        }
+                        if ( n1=== 0 ) {
+                            GLB.newcss = "";
+                        }
+                        GLB.newcss += decodeURI(swval);
+
+                        // write if this is last segment
+                        result = "success - " + n2.toString();
+                        if ( n2=== nlen ) {
+                            if ( DEBUG16 ) {
+                                console.log( (ddbg()), "----------------------------------------------------------");
+                                console.log( (ddbg()), GLB.newcss );
+                                console.log( (ddbg()), "----------------------------------------------------------");
+                            }
+                            writeCustomCss(getSkin(uname), GLB.newcss);
+                        }
+                    }
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
+
+            case "updatenames":
+                // value (swval) is new name, tileid is oldname for pages
+                if ( protocol==="POST" ) {
+                    readOptions("saveoptions");
+                    readRoomThings("saveoptions", uname);
+                    result = updateNames(uname, swtype, tileid, swval);
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
+            
+            // rewritten to use cookies
+            case "dologin":
+                if ( protocol==="POST" ) {
+                    result = processLogin(body);
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
+
+            case "pwhash":
+                if ( swtype==="hash" ) {
+                    result = pw_hash(swval);
+                } else if ( swtype==="verify" ) {
+                    if ( pw_verify(swval, swattr) ) {
+                        result = "success";
+                    } else {
+                        result = "error";
+                    }
                 } else {
                     result = "error";
                 }
-            } else {
-                result = "error";
-            }
-            break;
-
-        case "addcustom":
-            if ( protocol==="POST" ) {
-                result = {}
-                result.value = addCustom(swid, swtype, swval, swattr, subid);
-                result.options = GLB.options;
-                result.things = allthings;
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-            break;
-
-        case "delcustom":
-            if ( protocol==="POST" ) {
-                result = {}
-                result.value = delCustom(uname, swid, swtype, swval, swattr, subid);
-                result.options = GLB.options;
-                result.things = allthings;
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-            break;
-
-        case "icons":
-        case "geticons":
-            result = getIcons(uname, swval, swattr);
-            break;
-
-        // this api call starts the oauth flow process
-        // the actual redirection to the first auth site is done in js file
-        case "hubauth":
-
-            if ( protocol==="POST" ) {
-
-                // now load the new data
-                var hub = {};
-                hub["hubType"] = body.hubType;
-                hub["hubHost"] = body.hubHost;
-                hub["clientId"] = body.clientId;
-                hub["clientSecret"] = body.clientSecret;
-                hub["userAccess"] = body.userAccess;
-                hub["userEndpt"] = body.userEndpt;
-                hub["hubName"] = body.hubName;
-                hub["hubId"] = body.hubId;
-                hub["hubAccess"] = body.hubAccess;
-                hub["hubRefresh"] = "";
-                hub["hubEndpt"] = body.hubEndpt;
-                hub["hubTimer"] = body.hubTimer;
-                hub["sinkFilterId"] = "";
-
-                // fix up host if http wasn't given
-                if ( !hub["hubHost"].toLowerCase().startsWith("http") ) {
-                    hub["hubHost"] = "https://" + hub["hubHost"];
-                }
-
-                // if user provides hub access info, use it
-                // for ISY hubs we know the endpoint as /rest so use it
-                if ( body.hubType==="ISY" ) {
-                    body.userAccess = body.clientId + ":" + body.clientSecret;
-                    body.userEndpt = hub["hubHost"] + "/rest";
-                    hub["userAccess"] = body.userAccess;
-                    hub["userEndpt"] = body.userEndpt;
-
-                    // also for this ISY hub, set up the websocket to get update info
-                    setupISYSocket(hub);
-                }
-
-                // if this is a new hub and no name given, give it one
-                if ( hub["hubName"].trim()==="" ) {
-                    hub["hubName"] = hub["hubType"];
-                }
-
-                // no oauth flow if access code and end points are given
-                if ( body.userAccess && body.userEndpt ) {
-                    // remove trailing slash if it is there
-                    if ( body.userEndpt.substr(-1) === "/" ) {
-                        body.userEndpt = body.userEndpt.substr(0, body.userEndpt.length -1);
-                        hub["userEndpt"] = body.userEndpt;
-                    }
-                    if (body.hubType==="ISY") {
-
-                        // get the number of ISY hubs already configured
-                        // if the id is given this means the hub exists
-                        if ( !body.hubId.startsWith("isy") ) {
-                            var newhubnum = 1;
-                            hubs.forEach(function(ahub) {
-                                if ( ahub.hubType==="ISY" && ahub.hubId.startsWith("isy") ) {
-                                    newhubnum++;
-                                }
-                            });
-                            
-                            if ( newhubnum < 10 ) {
-                                hub.hubId = "isy0" + newhubnum.toString();
-                            } else {
-                                hub.hubId = "isy" + newhubnum.toString();
-                            }
-                            body.hubId = hub.hubId;
-
-                        } else {
-                            hub.hubId = body.hubId;
-                        }
-
-                    }
-
-                    hub["hubAccess"] = body.userAccess;
-                    hub["hubEndpt"] = body.userEndpt;
-                }
-
-                // update existing or add a new hub
-                updateHubs(hub, body.hubId);
-                writeOptions();
-                hubs = GLB.options.config.hubs;
-
-                if (DEBUG2) {
-                    console.log( (ddbg()), "There are " + hubs.length + " hubs available after hubauth.");
-                    console.log( (ddbg()), "hubs: ", hubs);
-                }
-
-                // now authorize them
-                // handle direct access including ISY hubs first
-                var hubnum = hub["hubId"];
-                var hubName = hub["hubName"];
-                var hubType = hub["hubType"];
-                var host = hub["hubHost"];
-                var clientId = hub["clientId"];
-                var clientSecret = hub["clientSecret"];
-                GLB.defhub = hubnum;
-
-                // no oauth if user provides access info
-                if ( hub["userAccess"] && hub["userEndpt"] ) {
-
-                    // get all new devices and update the options index array
-                    // this forces page reload with all the new stuff
-                    // notice the reference to /reauth in the call to get Devices
-                    // this makes the final read redirect back to reauth page
-                    var access_token  = hub["userAccess"];
-                    var endpt = hub["userEndpt"];
-                    hub["hubAccess"] = access_token;
-                    hub["hubEndpt"] = endpt;
-
-                    // for ISY we can go right to getting devices
-                    if ( hubType==="ISY" ) {
-                        result = {action: "things", hubType: hubType, hubName: hubName};
-                        getDevices(hub, true, "/reauth");
-                    } else if ( hubType==="SmartThings" || hubType==="Hubitat" ) {
-                        result = {action: "things", hubType: hubType, hubName: hubName};
-                        getHubInfo(hub, true);
-                    } else {
-                        result = "error - user access and user endpoint can only be used with legacy SmartThings and Hubitat hubs.";
-                    }
-                    if ( DEBUG2 ) {
-                        console.log( (ddbg()), "Device retrieval initiated: ", result);
-                    }
-
-                // oauth flow for Ford and Lincoln vehicles
-                // we complete the flow later when redirection happens back to /oauth GET call
-                } else if ( hubType==="Ford" || hubType==="Lincoln" ) {
-                    var fordloc = GLB.returnURL + "/oauth";
-                    var model = hubType.substr(0,1);
-                    result = {action: "fordoauth", host: host, model: model, hubName: hubName, hubId: hubnum, clientId: clientId, clientSecret: clientSecret, url: fordloc};
-
-
-                // oauth flow for ST legacy and HE hubs
-                // we complete the flow later when redirection happens back to /oauth GET call
-                } else if ( hubType==="SmartThings" || hubType==="Hubitat" ) {
-                    var returnloc = GLB.returnURL + "/oauth";
-                    result = {action: "oauth", host: host, hubName: hubName, clientId: clientId, clientSecret: clientSecret, 
-                              scope: "app", url: returnloc};
-
-                // handle new OAUTH flow for SmartThings
-                } else if ( hubType==="NewSmartThings" ) {
-                    // var returnloc = GLB.returnURL + "/oauth";
-                    // we have to use our secure instance here
-                    // var returnloc = "https://housepanel.net:3080/oauth";
-                    var returnloc = GLB.returnURL + "/oauth";
-                    result = {action: "oauth", host: host, hubName: hubName, clientId: clientId, clientSecret: clientSecret, 
-                              scope: "r:devices:* x:devices:* r:scenes:* x:scenes:* r:locations:*", 
-                              client_type: "USER_LEVEL", url: returnloc};
-
-                } else {
-                    result = "error - invalid hub type requesting an OAUTH flow. hubType: " + hubType;
-                }
-
-                if ( DEBUG2 ) {
-                    console.log( (ddbg()), "OAUTH flow for " + hubType + " initiated: ", result);
-                }
-            } else {
-                result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            }
-    
-            break;
-    
-        case "hubdelete":
-            // TODO - implement hubDelete() function
-            console.log( (ddbg()), "Hub deletion is not yet supported...");
-            result = "success";
-            break;
-
-        case "getclock":
-            if ( !swid || swid==="none" ) { swid = "clockdigital"; }
-            result = getClock(swid);
-            result = getCustomTile(result, "clock", swid);
-            // replace any links with stored link values
-            // otherwise update the main array with new time info
-            for (var rsubid in result) {
-                var rvalue = result[rsubid];
-                var idx = "clock|" + swid;
-                if ( rvalue && rvalue.startsWith("LINK::") ) {
-                    result[rsubid] = allthings[idx]["value"][rsubid];
-                } else {
-                    allthings[idx]["value"][rsubid] = rvalue;
-                }
-            }
-
-            // process rules
-            result.subid = "time";
-            processRules(swid, "clock", "time", result, "getclock");
-            delete result.subid;
-
-            break;
-
-        case "cancelauth":
-        case "showoptions":
-        case "showid":
-        case "reauth":
-        case "logout":
-        case "trackupdate":
-                var result = "error - [" + api + "] API call is no longer supported. Try loading browser with: " + GLB.returnURL + "/" + api;
-                console.log( (ddbg()), result);
                 break;
 
-        // case "reload":
-        //     // pushClient("reload", "/");
-        //     break;
-        // 
-        // case "reset":
-        //     if ( protocol==="GET" ) {
-        //         // force reading main settings
-        //         readOptions("reset");
-                
-        //         uname = "default";
-        //         setCookie(res, "uname", pw_hash(uname));
-        //         GLB.options.config["pword"] = {};
-        //         GLB.options.config["pword"][uname] = ["", "skin-housepanel"];
-        //         GLB.options.config["uname"] = uname;
-        //         writeOptions();
-        //         readRoomThings("reset", uname);
-        //         pushClient("reload", "/logout");
-        //         result = getLoginPage(uname);
-        //     } else {
-        //         result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-        //     }
-        //     break;
+            case "addcustom":
+                if ( protocol==="POST" ) {
+                    result = {}
+                    result.value = addCustom(swid, swtype, swval, swattr, subid);
+                    result.options = GLB.options;
+                    result.things = allthings;
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
 
-        default:
-            result = "error - unrecognized " + protocol + " api call: " + api;
-            break;
+            case "delcustom":
+                if ( protocol==="POST" ) {
+                    result = {}
+                    result.value = delCustom(uname, swid, swtype, swval, swattr, subid);
+                    result.options = GLB.options;
+                    result.things = allthings;
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
+
+            case "icons":
+            case "geticons":
+                result = getIcons(uname, swval, swattr);
+                break;
+
+            // this api call starts the oauth flow process
+            // the actual redirection to the first auth site is done in js file
+            case "hubauth":
+
+                if ( protocol==="POST" ) {
+
+                    // now load the new data
+                    var hub = {};
+                    hub["hubType"] = body.hubType;
+                    hub["hubHost"] = body.hubHost;
+                    hub["clientId"] = body.clientId;
+                    hub["clientSecret"] = body.clientSecret;
+                    hub["userAccess"] = body.userAccess;
+                    hub["userEndpt"] = body.userEndpt;
+                    hub["hubName"] = body.hubName;
+                    hub["hubId"] = body.hubId;
+                    hub["hubAccess"] = body.hubAccess;
+                    hub["hubRefresh"] = "";
+                    hub["hubEndpt"] = body.hubEndpt;
+                    hub["hubTimer"] = body.hubTimer;
+                    hub["sinkFilterId"] = "";
+
+                    // fix up host if http wasn't given
+                    if ( !hub["hubHost"].toLowerCase().startsWith("http") ) {
+                        hub["hubHost"] = "https://" + hub["hubHost"];
+                    }
+
+                    // if user provides hub access info, use it
+                    // for ISY hubs we know the endpoint as /rest so use it
+                    if ( body.hubType==="ISY" ) {
+                        body.userAccess = body.clientId + ":" + body.clientSecret;
+                        body.userEndpt = hub["hubHost"] + "/rest";
+                        hub["userAccess"] = body.userAccess;
+                        hub["userEndpt"] = body.userEndpt;
+
+                        // also for this ISY hub, set up the websocket to get update info
+                        setupISYSocket(hub);
+                    }
+
+                    // if this is a new hub and no name given, give it one
+                    if ( hub["hubName"].trim()==="" ) {
+                        hub["hubName"] = hub["hubType"];
+                    }
+
+                    // no oauth flow if access code and end points are given
+                    if ( body.userAccess && body.userEndpt ) {
+                        // remove trailing slash if it is there
+                        if ( body.userEndpt.substr(-1) === "/" ) {
+                            body.userEndpt = body.userEndpt.substr(0, body.userEndpt.length -1);
+                            hub["userEndpt"] = body.userEndpt;
+                        }
+                        if (body.hubType==="ISY") {
+
+                            // get the number of ISY hubs already configured
+                            // if the id is given this means the hub exists
+                            if ( !body.hubId.startsWith("isy") ) {
+                                var newhubnum = 1;
+                                hubs.forEach(function(ahub) {
+                                    if ( ahub.hubType==="ISY" && ahub.hubId.startsWith("isy") ) {
+                                        newhubnum++;
+                                    }
+                                });
+                                
+                                if ( newhubnum < 10 ) {
+                                    hub.hubId = "isy0" + newhubnum.toString();
+                                } else {
+                                    hub.hubId = "isy" + newhubnum.toString();
+                                }
+                                body.hubId = hub.hubId;
+
+                            } else {
+                                hub.hubId = body.hubId;
+                            }
+
+                        }
+
+                        hub["hubAccess"] = body.userAccess;
+                        hub["hubEndpt"] = body.userEndpt;
+                    }
+
+                    // update existing or add a new hub
+                    updateHubs(hub, body.hubId);
+                    writeOptions();
+                    hubs = GLB.options.config.hubs;
+
+                    if (DEBUG2) {
+                        console.log( (ddbg()), "There are " + hubs.length + " hubs available after hubauth.");
+                        console.log( (ddbg()), "hubs: ", hubs);
+                    }
+
+                    // now authorize them
+                    // handle direct access including ISY hubs first
+                    var hubnum = hub["hubId"];
+                    var hubName = hub["hubName"];
+                    var hubType = hub["hubType"];
+                    var host = hub["hubHost"];
+                    var clientId = hub["clientId"];
+                    var clientSecret = hub["clientSecret"];
+                    GLB.defhub = hubnum;
+
+                    // no oauth if user provides access info
+                    if ( hub["userAccess"] && hub["userEndpt"] ) {
+
+                        // get all new devices and update the options index array
+                        // this forces page reload with all the new stuff
+                        // notice the reference to /reauth in the call to get Devices
+                        // this makes the final read redirect back to reauth page
+                        var access_token  = hub["userAccess"];
+                        var endpt = hub["userEndpt"];
+                        hub["hubAccess"] = access_token;
+                        hub["hubEndpt"] = endpt;
+
+                        // for ISY we can go right to getting devices
+                        if ( hubType==="ISY" ) {
+                            result = {action: "things", hubType: hubType, hubName: hubName};
+                            getHubInfo(hub, true);
+                            // getDevices(hub, true, "/reauth");
+                        } else if ( hubType==="SmartThings" || hubType==="Hubitat" ) {
+                            result = {action: "things", hubType: hubType, hubName: hubName};
+                            getHubInfo(hub, true);
+                        } else {
+                            result = "error - user access and user endpoint can only be used with legacy SmartThings and Hubitat hubs.";
+                        }
+                        if ( DEBUG2 ) {
+                            console.log( (ddbg()), "Device retrieval initiated: ", result);
+                        }
+
+                    // oauth flow for Ford and Lincoln vehicles
+                    // we complete the flow later when redirection happens back to /oauth GET call
+                    } else if ( hubType==="Ford" || hubType==="Lincoln" ) {
+                        var fordloc = GLB.returnURL + "/oauth";
+                        var model = hubType.substr(0,1);
+                        result = {action: "fordoauth", host: host, model: model, hubName: hubName, hubId: hubnum, clientId: clientId, clientSecret: clientSecret, url: fordloc};
+
+
+                    // oauth flow for ST legacy and HE hubs
+                    // we complete the flow later when redirection happens back to /oauth GET call
+                    } else if ( hubType==="SmartThings" || hubType==="Hubitat" ) {
+                        var returnloc = GLB.returnURL + "/oauth";
+                        result = {action: "oauth", host: host, hubName: hubName, clientId: clientId, clientSecret: clientSecret, 
+                                scope: "app", url: returnloc};
+
+                    // handle new OAUTH flow for SmartThings
+                    } else if ( hubType==="NewSmartThings" ) {
+                        // var returnloc = GLB.returnURL + "/oauth";
+                        // we have to use our secure instance here
+                        // var returnloc = "https://housepanel.net:3080/oauth";
+                        var returnloc = GLB.returnURL + "/oauth";
+                        result = {action: "oauth", host: host, hubName: hubName, clientId: clientId, clientSecret: clientSecret, 
+                                scope: "r:devices:* x:devices:* r:scenes:* x:scenes:* r:locations:*", 
+                                client_type: "USER_LEVEL", url: returnloc};
+
+                    } else {
+                        result = "error - invalid hub type requesting an OAUTH flow. hubType: " + hubType;
+                    }
+
+                    if ( DEBUG2 ) {
+                        console.log( (ddbg()), "OAUTH flow for " + hubType + " initiated: ", result);
+                    }
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+        
+                break;
+        
+            case "hubdelete":
+                // TODO - implement hubDelete() function
+                console.log( (ddbg()), "Hub deletion is not yet supported...");
+                result = "success";
+                break;
+
+            case "getclock":
+                if ( !swid || swid==="none" ) { swid = "clockdigital"; }
+                result = getClock(swid);
+                result = getCustomTile(userid, result, "clock", swid);
+                // replace any links with stored link values
+                // otherwise update the main array with new time info
+                for (var rsubid in result) {
+                    var rvalue = result[rsubid];
+                    var idx = "clock|" + swid;
+                    if ( rvalue && rvalue.startsWith("LINK::") ) {
+                        result[rsubid] = allthings[idx]["value"][rsubid];
+                    } else {
+                        allthings[idx]["value"][rsubid] = rvalue;
+                    }
+                }
+
+                // process rules
+                result.subid = "time";
+                processRules(swid, "clock", "time", result, "getclock");
+                delete result.subid;
+
+                break;
+
+            case "cancelauth":
+            case "showoptions":
+            case "showid":
+            case "reauth":
+            case "logout":
+            case "trackupdate":
+                    var result = "error - [" + api + "] API call is no longer supported. Try loading browser with: " + GLB.returnURL + "/" + api;
+                    console.log( (ddbg()), result);
+                    break;
+
+            // case "reload":
+            //     // pushClient("reload", "/");
+            //     break;
+            // 
+            // case "reset":
+            //     if ( protocol==="GET" ) {
+            //         // force reading main settings
+            //         readOptions("reset");
+                    
+            //         uname = "default";
+            //         setCookie(res, "uname", pw_hash(uname));
+            //         GLB.options.config["pword"] = {};
+            //         GLB.options.config["pword"][uname] = ["", "skin-housepanel"];
+            //         GLB.options.config["uname"] = uname;
+            //         writeOptions();
+            //         readRoomThings("reset", uname);
+            //         pushClient("reload", "/logout");
+            //         result = getLoginPage(uname);
+            //     } else {
+            //         result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+            //     }
+            //     break;
+
+            default:
+                result = "error - unrecognized " + protocol + " api call: " + api;
+                break;
+        }
     }
     return result;
 
@@ -9475,15 +9601,13 @@ function setupISYSocket(hub) {
 // ***************************************************
 // beginning of main routine
 // ***************************************************
-var d = new Date();
-var hpcode = d.getTime();
-GLB.hpcode = hpcode.toString();
+// var d = new Date();
+// var hpcode = d.getTime();
+// GLB.hpcode = hpcode.toString();
 
-// read the basic config info
-readOptions("startup");
-allthings = {};
-getAllThings("default", null, false, false);
-readRoomThings("startup", "default");
+// open the database
+var dbinfo = JSON.parse(fs.readFileSync("dbinfo.cfg","utf8"));
+var mydb = new sqlclass.sqlDatabase(dbinfo.dbhost, dbinfo.dbname, dbinfo.dbuid, dbinfo.dbpassword);
 
 if ( DEBUG4 ) {
     console.log( (ddbg()), "Startup Options: ", UTIL.inspect(GLB.options, false, null, false));
@@ -9496,7 +9620,7 @@ if ( DEBUG4 ) {
 //     config["port"] = 3080;
 // }
 
-var port = 3080;
+var port = 3280;
 GLB.defhub = "-1";
 
 // start our main server
@@ -9512,7 +9636,7 @@ try {
     app.use(express.static(dir));
     app.use(cookieParser());
 
-    if ( fs.existsSync("housepanel_server.key") && fs.existsSync("housepanel_server.crt") ) {
+    if ( fs.existsSync("__housepanel_server.key") && fs.existsSync("__housepanel_server.crt") ) {
         try {
             var key = fs.readFileSync("housepanel_server.key");
             var crt = fs.readFileSync("housepanel_server.crt");
@@ -9550,8 +9674,9 @@ try {
 // client pages are refreshed when each hub is done reading
 if ( app && applistening ) {
 
-    resetRules();
-    resetRuleTimers();
+    // resetRules();
+    GLB.rules = [];
+    // resetRuleTimers();
 
     // handler functions for HousePanel
     // this is where we render the baseline web page for the dashboard
@@ -9569,7 +9694,7 @@ if ( app && applistening ) {
 
     app.get('*', function (req, res) {
 
-        var $tc = "";
+        // var $tc = "";
 
         // handle ngrok which thinks it is http but is really https
         if ( req.headers.host.endsWith("ngrok.io") ) {
@@ -9578,162 +9703,144 @@ if ( app && applistening ) {
             GLB.returnURL = req.protocol + "://" + req.headers.host;
         }
 
-        // TODO - implement robust login here
-        var uname = getUserName(req.cookies);
-        var checkpw = (uname !== "");
-        GLB.newuser = false;
+        // everything starts with finding the username which drives which rows we read from the DB
+        getUserName(req.cookies)
+        .then(results => {
 
-        if ( req.path==="/" && checkpw ) {
-            readOptions("main");
-            getAllThings(uname, null, false, false);
-            readRoomThings("main", uname);
-        }
-
-        if ( DEBUG1 ) {
-            console.log((ddbg()),">>>> allthings: ", UTIL.inspect(allthings,false,null,false));
-        }
-
-
-        // handle new users - don't do this here any more
-        // if ( GLB.newuser || !GLB.options.config || !GLB.options.config["pword"] ) {
-        //     uname = "default";
-        //     checkpw = true;
-        //     setCookie(res, "uname", pw_hash(uname));
-        //     GLB.options.config["pword"] = {};
-        //     GLB.options.config["pword"][uname] = ["", "skin-housepanel"];
-        //     GLB.options.config["uname"] = uname;
-        //     writeOptions();
-        //     writeRoomThings(GLB.options, uname);
-        //     GLB.newuser = true;
-        // } else {
-        //     uname = getUserName(req.cookies);
-        //     GLB.newuser = false;
-        // }
-
-        // if ( DEBUG3 ) {
-        //     console.log( (ddbg()), "pw check: uname=["+uname+"] checkpw= ["+checkpw+"]");
-        // }
-
-        // if ( !IGNOREPW && !checkpw ) {
-        //     $tc = getLoginPage(uname);
-        //     res.send($tc);
-        //     res.end();
-
-        // first check for a valid login
-        if ( !checkpw ) {
-            if ( DEBUG15 ) {
-                console.log( (ddbg()), "login rejected. uname = ", uname);
-            }
-            $tc = getLoginPage(uname);
-
-        } else if ( req.path==="/" || typeof req.path==="undefined" || req.path==="/undefined" || req.path==="undefined" ) {
-
-            // find any query params - if provided then user is doing an API call with HP
-            var queryobj = req.query || {};
-            var isquery = (utils.count(queryobj) > 0);
-
-            // display the main page if user is in our database
-            // don't check password here because it is checked at login
-            // and the cookie is set which means all is okay
-            if ( DEBUG15 ) {
-                console.log( (ddbg()), "login accepted. uname = ", uname);
-            }
-
-            if ( isquery ) {
-                $tc = apiCall(queryobj, "GET", req, res);
-
-            // load our user setup and render page
-            // these two lines are what make the main page
-            } else {
-                // readRoomThings("main", uname);
-                $tc = mainPage(uname, req.headers.host, req.path);
-            }
-
-            res.send($tc);
-            res.end();
-
-        } else if ( req.path==="/showid" ) {
-            $tc = getInfoPage(uname, GLB.returnURL, req.path);
-            res.send($tc);
-            res.end();
-
-        } else if ( req.path==="/showoptions") {
-            $tc = getOptionsPage(uname, req.headers.host, req.path);
-            res.send($tc);
-            res.end();
-
-        } else if ( req.path==="/logout") {
-            // clear the cookie to force repeat of login page
-            res.clearCookie("uname");
-            uname = "";
-            $tc = getLoginPage(uname);
-            res.send($tc);
-            res.end();
-
-        } else if ( req.path==="/reauth" ) {
-            var $tc = getAuthPage(uname, req.headers.host, "/reauth", "");
-            res.send($tc);
-            res.end();
-
-        } else if ( req.path==="/userauth") {
-            GLB.defhub = "-1";
-            var $tc = getAuthPage(uname, req.headers.host, "/reauth", "");
-            res.send($tc);
-            res.end();
-
-        // this is where the oauth flow returns from the first auth step
-        // TODO - use cookie to transfer active hub instead of global variable
-        } else if ( req.path==="/oauth") {
-            if ( req.query && req.query["code"] ) {
-                var hubId = GLB.defhub;
-                if ( DEBUGtmp ) {
-                    console.log(">>>> in /oauth apiCall - defhub = ", hubId);
+            
+            if ( !results || !results.userid ) {
+                if ( DEBUG15 ) {
+                    console.log( (ddbg()), "login rejected.");
                 }
-                var hub = findHub(hubId);
-                if ( hub ) {
-                    var rmsg = "Retrieving devices from Hub: " + hub.hubName;
-                    if ( DEBUG2 || DEBUGtmp ) {
-                        console.log( (ddbg()), "Getting access_token for hub: ", hub);
+                var $tc = getLoginPage("", "skin-housepanel");
+                
+            } else {
+
+                var userid = results.userid;
+                var uname = results.uname;
+                var pname = results.pname;
+                var usertype = results.usertype;
+                var skin = results.skin;
+                var panelid = results.panelid;
+                $tc = "";
+
+                // first check for a valid login
+                if ( typeof req.path==="undefined" || req.path==="/" ) {
+
+                    // find any query params - if provided then user is doing an API call with HP
+                    var queryobj = req.query || {};
+                    var isquery = (utils.count(queryobj) > 0);
+
+                    // display the main page if user is in our database
+                    // don't check password here because it is checked at login
+                    // and the cookie is set which means all is okay
+                    if ( DEBUG15 ) {
+                        console.log( (ddbg()), "login accepted. uname = ", uname);
                     }
 
-                    // get access_token, endpt, and retrieve devices
-                    // this goes through a series of callbacks
-                    // and ends with a pushClient to update the auth page
-                    getAccessToken(req.query["code"], hub);
-                } else {
-                    console.log( (ddbg()), "error - hub not found during authorization flow. hubId: ", hubId);
+                    if ( isquery ) {
+                        $tc = apiCall(userid, uname, panelid, pname, usertype, skin, queryobj, "GET", req, res);
+
+                    // load our user setup and render page
+                    // these two lines are what make the main page
+                    } else {
+                        // readRoomThings("main", uname);
+                        $tc = mainPage(userid, uname, panelid, pname, usertype, skin, req);
+                    }
+
+                    $tc.then(result => {
+                        res.send(result);
+                        res.end();
+                    });
+
+                } else if ( req.path==="/showid" ) {
+                    $tc = getInfoPage(uname, GLB.returnURL, req.path);
+                    res.send($tc);
+                    res.end();
+
+                } else if ( req.path==="/showoptions") {
+                    $tc = getOptionsPage(uname, req.headers.host, req.path);
+                    res.send($tc);
+                    res.end();
+
+                } else if ( req.path==="/logout") {
+                    // clear the cookie to force repeat of login page
+                    res.clearCookie("uname");
+                    res.clearCookie("pname");
+                    $tc = getLoginPage("", "skin-housepanel");
+                    res.send($tc);
+                    res.end();
+
+                } else if ( req.path==="/reauth" ) {
+                    var $tc = getAuthPage(uname, req.headers.host, "/reauth", "");
+                    res.send($tc);
+                    res.end();
+
+                } else if ( req.path==="/userauth") {
                     GLB.defhub = "-1";
-                    rmsg = "";
+                    var $tc = getAuthPage(uname, req.headers.host, "/reauth", "");
+                    res.send($tc);
+                    res.end();
+
+                // this is where the oauth flow returns from the first auth step
+                // TODO - use cookie to transfer active hub instead of global variable
+                } else if ( req.path==="/oauth") {
+                    if ( req.query && req.query["code"] ) {
+                        var hubId = GLB.defhub;
+                        if ( DEBUGtmp ) {
+                            console.log(">>>> in /oauth apiCall - defhub = ", hubId);
+                        }
+                        var hub = findHub(hubId);
+                        if ( hub ) {
+                            var rmsg = "Retrieving devices from Hub: " + hub.hubName;
+                            if ( DEBUG2 || DEBUGtmp ) {
+                                console.log( (ddbg()), "Getting access_token for hub: ", hub);
+                            }
+
+                            // get access_token, endpt, and retrieve devices
+                            // this goes through a series of callbacks
+                            // and ends with a pushClient to update the auth page
+                            getAccessToken(req.query["code"], hub);
+                        } else {
+                            console.log( (ddbg()), "error - hub not found during authorization flow. hubId: ", hubId);
+                            GLB.defhub = "-1";
+                            rmsg = "";
+                        }
+                    } else {
+                        GLB.defhub = "-1";
+                        rmsg = "";
+                    }
+                    var $tc = getAuthPage(uname, req.headers.host, "/reauth", rmsg);
+
+                    res.send($tc);
+                    res.end();
+
+                } else {
+                    var file = path.join(dir, req.path.replace(/\/$/, '/index.html'));
+                    if (file.indexOf(dir + path.sep) !== 0) {
+                        res.status(403).end('Forbidden');
+                    }
+                    if ( DEBUG1 ) {
+                        console.log( (ddbg()), " Loading module: ", req.path, " as: ", file);
+                    }
+                    var type = mime[path.extname(file).slice(1)] || 'text/plain';
+                    var s = fs.createReadStream(file);
+                    s.on('open', function () {
+                        res.set('Content-Type', type);
+                        // res.type(type)
+                        s.pipe(res);
+                    });
+                    s.on('error', function () {
+                        res.set('Content-Type', 'text/plain');
+                        res.status(404).end(req + ' Not found');
+                    });
                 }
-            } else {
-                GLB.defhub = "-1";
-                rmsg = "";
             }
-            var $tc = getAuthPage(uname, req.headers.host, "/reauth", rmsg);
 
-            res.send($tc);
-            res.end();
+        });
 
-        } else {
-            var file = path.join(dir, req.path.replace(/\/$/, '/index.html'));
-            if (file.indexOf(dir + path.sep) !== 0) {
-                res.status(403).end('Forbidden');
-            }
-            if ( DEBUG1 ) {
-                console.log( (ddbg()), " Loading module: ", req.path, " as: ", file);
-            }
-            var type = mime[path.extname(file).slice(1)] || 'text/plain';
-            var s = fs.createReadStream(file);
-            s.on('open', function () {
-                res.set('Content-Type', type);
-                // res.type(type)
-                s.pipe(res);
-            });
-            s.on('error', function () {
-                res.set('Content-Type', 'text/plain');
-                res.status(404).end(req + ' Not found');
-            });
-        }
+
+
     });
     
     app.put('*', function(req, res) {
@@ -9760,7 +9867,6 @@ if ( app && applistening ) {
     app.post("*", function (req, res) {
 
         // get user name
-        // var uname = getUserName(req.cookies);
         var uname = "default";
 
         var hubId = null;
@@ -9769,28 +9875,37 @@ if ( app && applistening ) {
         // the first initialize type tells Node.js to update elements
         if ( uname && req.path==="/" && req.body['msgtype'] === "initialize" ) {
             hubId = req.body['hubid'] || null;
-            getAllThings(uname, hubId, false, false);
-            readRoomThings("GroovyInit", uname);
+            getAllThings(hubId, false, false);
+
+            // readRoomThings("GroovyInit", uname);
             if ( DEBUG2 ) {
                 console.log( (ddbg()), "New hub authorized: ", hubid, " updating allthings array");
             }
             res.json('hub info updated');
         
         // handle register events callbacks from Groovy - legacy SmartThings and Hubitat here
-        } else if ( uname && req.path==="/" && req.body['msgtype'] === "update" ) {
-            hubId = req.body['hubid'] || null;
-            // getAllThings(uname, hubId, false, false);
-            // readRoomThings("GroovyUpdate", uname);
-            var msg = processHubMessage(req.body);
+    } else if ( uname && req.path==="/" && req.body['msgtype'] === "update" ) {
             if ( DEBUG19 ) {
-                console.log( (ddbg()), "Received update msg from hub: ", req.body["hubid"], " msg: ", req.body, " result: ", msg);
+                console.log( (ddbg()), "Received update msg from hub: ", req.body["hubid"], " msg: ", req.body);
             }
-            res.json(msg);
+            hubId = req.body['hubid'] || null;
+            mydb.getRow("hubs","*","hubid = '" + hubId + "'")
+            .then(hub => {
+                if ( hub ) {
+                    var userid = hub.userid;
+                    var msg = processHubMessage(userid, req.body);
+                    if ( DEBUG19 ) {
+                        console.log( (ddbg()), "msg process result: ", msg);
+                    }
+                } else {
+                    msg = null;
+                }
+                res.json(msg);
+            });
 
         // handle all api calls upon the server from js client and external api calls here
-        // TODO - pass the hubId from js for our use here
         } else if ( uname && req.path==="/" &&  typeof req.body['useajax']!=="undefined" || typeof req.body["api"]!=="undefined" ) {
-            var result = apiCall(req.body, "POST", req, res);
+            var result = apiCall(null, null, null, null, 1, "skin-housepanel", req.body, "POST", req, res);
             res.json(result);
         
         // handle events from new SmartThings
@@ -9803,36 +9918,36 @@ if ( app && applistening ) {
             events.forEach(function(eventgrp) {
                 var subscription = eventgrp.subscriptions[0];
                 var event = eventgrp.event;
-                if ( event.eventType==="DEVICE_EVENT" ) {
+                if ( event.eventType==="DEVICE_EVENT" && event.deviceEvent.stateChange ) {
 
                     hubId = subscription.installedAppId;
-                    var hub = findHub(hubId);
-                    
-                    // if we found the hub process the event mimicking what we used to send from Groovy
-                    // but we skip the name and the type since the message handler doesn't really need them
-                    if ( hub ) {
-                        var swid = event.deviceEvent.deviceId;
-                        var attr = event.deviceEvent.attribute;
-                        // getAllThings(uname, hubId, false, false);
-                        // readRoomThings("newSTUpdate", uname);
-                        // var capability = event.deviceEvent.capability;
-                        var reqbody = {
-                            msgtype: "update", 
-                            hubid: hubId,
-                            change_name: "",
-                            change_device: swid,
-                            change_attribute: attr,
-                            change_type: "",
-                            change_value: event.deviceEvent.value
-                        };
 
-                        // var msg = processHubMessage(reqbody);
-                        if ( DEBUG19 || DEBUGtmp ) {
-                            console.log( (ddbg()), "Event sink msg from new ST hub: ", hubId, " msg: ", reqbody, 
-                            " stateChange: ", event.deviceEvent.stateChange,
-                            " filterNames: ", subscription.sinkFilterNames, " result: ", msg);
+                    // var hub = findHub(hubId);
+                    // get hub and user from the DB
+                    mydb.getRow("hubs","*","hubid = '" + hubId + "'")
+                    .then(hub => {
+                        if ( hub ) {
+                            var userid = hub.userid;
+                            var swid = event.deviceEvent.deviceId;
+                            var attr = event.deviceEvent.attribute;
+                            var msg = {
+                                msgtype: "update", 
+                                hubid: hubId,
+                                change_name: "",
+                                change_device: swid,
+                                change_attribute: attr,
+                                change_type: "",
+                                change_value: event.deviceEvent.value
+                            };
+    
+                            var result = processHubMessage(userid, msg);
+                            if ( DEBUG19 ) {
+                                console.log( (ddbg()), "Event sink msg from new ST hub: ", hubId, " msg: ", msg, 
+                                " stateChange: ", event.deviceEvent.stateChange,
+                                " filterNames: ", subscription.sinkFilterNames, " result: ", result);
+                            }
                         }
-                    }
+                    });                    
                 }
             });
             
