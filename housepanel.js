@@ -2455,7 +2455,7 @@ function updateTile(aid, presult, skiplink) {
         }
     }
 
-    var dupcheck = {};
+    // var dupcheck = {};
     $.each( presult, function( key, value ) {
 
         var targetid = '#a-'+aid+'-'+key;
@@ -2467,9 +2467,9 @@ function updateTile(aid, presult, skiplink) {
         }
 
         // check for dups
-        if ( typeof dupcheck[key]!=="undefined" ) {
-            dothis = false;
-        }
+        // if ( typeof dupcheck[key]!=="undefined" ) {
+        //     dothis = false;
+        // }
 
         if ( skiplink && dothis && dothis.siblings("div.user_hidden").length > 0  ) {
             if ( dothis.siblings("div.user_hidden").attr("command")==="LINK" ) {
@@ -2477,7 +2477,7 @@ function updateTile(aid, presult, skiplink) {
             }
         }
 
-        // skip objects
+        // skip objects except single entry arrays
         if ( dothis && ( typeof value==="object" || ( typeof value==="string" && value.startsWith("{") ) ) ) {
             dothis = false;
         }

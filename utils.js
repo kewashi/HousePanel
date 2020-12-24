@@ -1,6 +1,8 @@
 'use strict';
 
 const devhistory =  ` 
+2.412   corrected and added back in GET calls in customizer
+            - results returned in object form unless custom tag is _tag
 2.411   fix tile editor for ISY variables bug
 2,410   Show http websites inside frames when customizer changes name
 2.409   Bugfix for hub push updates with spaces in the values like shakes

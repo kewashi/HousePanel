@@ -51,6 +51,7 @@ const mqtt = require('mqtt');
 const os = require('os');
 var cookieParser = require('cookie-parser');
 const request = require('request');
+var url = require('url');
 
 // const SmartApp   = require('@smartthings/smartapp');
 
@@ -4912,13 +4913,14 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
 
         if ( array_key_exists(idx, allthings) ) {
             for (var thekey in pvalue) {
-                allthings[idx]["value"][thekey] = pvalue[thekey];
+                var theval = pvalue[thekey];
+                allthings[idx]["value"][thekey] = theval;
 
                 // update the link that triggered if this was a link
                 // we do something similar on the client side to change
                 // all linked things that match this
                 if ( lidx && lsubid && lreal && lreal===thekey && allthings[lidx] ) {
-                    allthings[lidx]["value"][lsubid] = pvalue[thekey];
+                    allthings[lidx]["value"][lsubid] = theval;
                 }
             }
         }
@@ -5720,32 +5722,32 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
         switch(command) {
 
             case "POST":
-            case "GET":
             case "PUT":
-                // var posturl = decodeURIComponent(linkval);
-                var posturl = linkval;
-                var isparm = posturl.indexOf("?");
-                var parmstr = "";
-                var jsonobj = {};
-                if ( isparm!=="-1" ) {
-                    parmstr = posturl.substr(isparm+1).split("&");
-                    posturl = posturl.substr(0, isparm);
-                    if ( posturl.substr(-1)==="/" ) {
-                        posturl = posturl.substr(0, posturl.length-1);
-                    }
-                    parmstr.forEach(function(key) {
-                        key = key.split("=");
-                        jsonobj[key[0]] = key[1];
-                    })
-                }
+                // var posturl = linkval;
+                var hosturl = url.parse(linkval);
+                var posturl = hosturl.origin + hosturl.pathname;
+                var parmstr = hosturl.search;
+                var parmobj = hosturl.searchParams;
+
                 if ( DEBUG7 ) {
-                    console.log( (ddbg()), command + " call: ", posturl, " parms: ", jsonobj);
+                    console.log( (ddbg()), command + " call: ", posturl, " parmstr: ", parmstr, " parmobj: ", parmobj);
                 }
-                curl_call(posturl, null, jsonobj, false, command, urlCallback);
+                curl_call(posturl, null, parmobj, false, command, urlCallback);
                 response = "success";
                 break;
 
-            // converted this over to getting the custom text out of the options
+            case "GET":
+                var hosturl = url.parse(linkval);
+                var posturl = hosturl.href;
+
+                if ( DEBUG7 ) {
+                    console.log( (ddbg()), command + " call: ", posturl);
+                }
+                curl_call(posturl, null, false, false, command, urlCallback);
+                response = "success";
+                break;
+        
+                    // converted this over to getting the custom text out of the options
             // this allows me to avoid lugging around the custom text in the sibling helper
             // this mirrors the code in RULES below
             // but we now first try to execute an action before returning an inspect object
@@ -5864,10 +5866,9 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
 
     }
 
-    async function urlCallback(err, res, body) {
-        var webresponse = {};
+    function urlCallback(err, res, body) {
         if ( err ) {
-            webresposne[command] = command + ": error";
+            console.log( (ddbg()), "URL callback returned error: ", err);
         } else if ( typeof body === "object" ) {
             // add any fields returned as an object
             // for ( var bkey in body ) {
@@ -5877,20 +5878,36 @@ function doAction(hubid, swid, swtype, swval, swattr, subid, tileid, command, li
             //         webresponse[bkey] = JSON.stringify(body[bkey]);
             //     }
             // }
+            if ( !subid.startsWith("_") ) {
+                pushClient(swid, swtype, subid, body);
+            }
             console.log( (ddbg()), "URL callback returned: ", UTIL.inspect(body, false, null, false));
             // pushClient(swid, swtype, subid, webresponse);
         } else if ( typeof body === "string" && body!=="" && body!=="success" ) {
-            // webresponse[command] = body;
-            // pushClient(swid, swtype, subid, webresponse);
+            // skip setting results if the subid starts with an underscore signaling a command
+            // always skip if the body is empty or the word success
+            if ( !subid.startsWith("_") ) {
+                try {
+                    var webresponse = JSON.parse(body);
+                    for (var key in webresponse) {
+                        if ( typeof webresponse[key] === "object" ) {
+                            webresponse[key] = JSON.stringify(webresponse[key]);
+                        }
+                    }
+                } catch(e) {
+                    webresponse = {};
+                    var subidres = subid + "_response";
+                    webresponse[subidres] = body;
+                }
+                pushClient(swid, swtype, subid, webresponse);
+            }
             console.log( (ddbg()), "URL callback returned: ", body);
         }
         if ( DEBUG13 ) {
             console.log( (ddbg()), "URL callback response: ", UTIL.inspect(body, false, null, false) );
         }
     }
-
-    // while (!finished) { }
-    return response;
+    // return response;
 }
 
 function doQuery(hubid, swid, swtype, tileid, protocol) {
