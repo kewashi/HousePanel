@@ -4793,10 +4793,12 @@ function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
                     if ( command==="TEXT" ) {
                         allthings[ridx]["value"][rsubid] = rvalue;
                         allthings[ridx]["value"][companion] = "::TEXT::" + rvalue;
-                        var newpvalue = {companion: "::TEXT::" + rvalue, rsubid: rvalue};
+                        // var newpvalue = {};
+                        // newvalue[companion] = "::TEXT::" + rvalue;
+                        // newvalue[rsubid] = rvalue;
                         linkinfo = [rswid, rswtype, rsubid, rsubid, "TEXT"];
-                        // pushClient(rswid, rswtype, rsubid, allthings[ridx]["value"]);
-                        pushClient(rswid, rswtype, rsubid, newpvalue);
+                        pushClient(rswid, rswtype, rsubid, allthings[ridx]["value"]);
+                        // pushClient(rswid, rswtype, rsubid, newpvalue);
                     } else if ( command==="GET" || command==="POST" ) {
 
                         // neuter the hub call so we don't do both and invoke action function

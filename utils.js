@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.414   quick fix to prior update to resolve regular rules issue
 2.413   updated rules to enable invoking GET and POST from other triggers
 2.412   corrected and added back in GET calls in customizer
             - results returned in object form unless custom tag is _tag
