@@ -4745,6 +4745,8 @@ function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
                 var hubid = allthings[ridx]["hubnum"];
                 var hub = findHub(hubid);
 
+                // console.log(" >>>> hubid= ", hubid, " ridx= ", ridx, " hub= ", hub);
+
                 // handle requests for parameters of the trigger tile ($) or destination tile (@)
                 // disable hub calls for this type of rule
                 var trigtype = rvalue.substr(0,1);
@@ -4756,6 +4758,8 @@ function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
                         rvalue = allthings[ridx]["value"][trigsubid];
                     }
                 }
+
+                // console.log(">>>> target for rule: ", allthings[ridx]["value"], " hub: ", hub, " testcommands: ", testcommands);
 
                 // fix up ISY hubs and handle toggle
                 if ( rswtype==="isy" && array_key_exists(rsubid, allthings[ridx]["value"]) ) {
@@ -4773,13 +4777,32 @@ function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
                 // set the destination to the value which would typically be overwritten by hub call
                 // if the destination is a link force the link to a TEXT type to neuter other types
                 var linkinfo = false;
-                if ( array_key_exists(rsubid, allthings[ridx]["value"]) ) {
-                    allthings[ridx]["value"][rsubid] = rvalue;
-                    var companion = "user_"+rsubid;
-                    if ( array_key_exists(companion, allthings[ridx]["value"]) ) {
+                var companion = "user_"+rsubid;
+                if ( array_key_exists(rsubid, allthings[ridx]["value"]) && array_key_exists(companion, allthings[ridx]["value"]) ) {
+                    // allthings[ridx]["value"][rsubid] = rvalue;
+
+                    var webstr = allthings[ridx]["value"][companion];
+                    var n = webstr.indexOf(":",3);
+                    var command = webstr.substring(2, n);
+                    var actionstr = webstr.substring(n+2);
+                    if ( DEBUG11 ) {
+                        console.log( ">>>> trigger other custom from rule. sib= ", companion, " sib val: ", webstr, " command: ", command, " actionstr: ", actionstr );
+                    }
+
+                    // if this is a text companion, just replace the value with the rule result
+                    if ( command==="TEXT" ) {
+                        allthings[ridx]["value"][rsubid] = rvalue;
                         allthings[ridx]["value"][companion] = "::TEXT::" + rvalue;
+                        var newpvalue = {companion: "::TEXT::" + rvalue, rsubid: rvalue};
                         linkinfo = [rswid, rswtype, rsubid, rsubid, "TEXT"];
-                        pushClient(rswid, rswtype, rsubid, allthings[ridx]["value"])
+                        // pushClient(rswid, rswtype, rsubid, allthings[ridx]["value"]);
+                        pushClient(rswid, rswtype, rsubid, newpvalue);
+                    } else if ( command==="GET" || command==="POST" ) {
+
+                        // neuter the hub call so we don't do both and invoke action function
+                        hub = null;
+                        doAction("auto", rswid, rswtype, rvalue, rswattr, rsubid, null, command)
+                        
                     }
 
                 // if destination subid isn't found make a user TEXT field
@@ -4845,6 +4868,7 @@ function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
                         }
                     } else {
                         try {
+                            // console.log("final rule step: id=",  rswid, "type=", rswtype, "value=", rvalue, "attr=", rswattr, "subid=", rsubid, "linkinfo=", linkinfo);
                             callHub(hub, rswid, rswtype, rvalue, rswattr, rsubid, linkinfo, false, true);
                         } catch (e) {
                             console.log( (ddbg()), "error calling hub from rule: ", rswid, rswtype, rvalue, rswattr, rsubid, " error: ", e);
@@ -8572,7 +8596,7 @@ if ( app && applistening ) {
             // know the login was not successful
             // however it can be bypassed with the IGNOREPW constant
             // but actually that is also checked in the login so not really needed here too
-            } else if ( IGNOREPW || GLB.newuser || checkpw ) {
+            } else if ( IGNOREPW || GLB.newuser || checkpw || uname==="default" ) {
                 
                 // set this to always see new user welcome message
                 // otherwise, comment it out

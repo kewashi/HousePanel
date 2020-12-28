@@ -12,7 +12,7 @@ var savedSheet;
 var priorIcon = "none";
 var defaultOverlay = "block";
 var tileCount = 0;
-const DEBUGte = false;
+var DEBUGte = false;
 
 // popup dialog box now uses createModal
 //       editTile(roomname, "page", roomname,     0,   0,   "",        roomnum, "None",  "None");

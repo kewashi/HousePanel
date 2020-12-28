@@ -261,7 +261,7 @@ $(document).ready(function() {
         var unamere = /^\D\S{3,}$/;      // start with a letter and be four long at least
         // $("#uname").val("default");
         $("#uname").focus();
-        $("#loginform").on("keydown", function() {
+        $("#loginform").on("keydown", function(e) {
             if ( e.which===27  ){
                 $("#uname").val("");
                 $("#pword").val("");
