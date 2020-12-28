@@ -16,7 +16,7 @@ var DEBUGte = false;
 
 // popup dialog box now uses createModal
 //       editTile(roomname, "page", roomname,     0,   0,   "",        roomnum, "None",  "None");
-function editTile(pagename, str_type, thingindex, aid, bid, thingclass, hubnum, hubName, hubType, customname, htmlcontent) {  
+function editTile(pagename, str_type, thingindex, aid, bid, thingclass, hubnum, hubType, customname, htmlcontent) {  
     // var returnURL;
     // try {
     //     returnURL = $("input[name='returnURL']").val();
@@ -30,11 +30,6 @@ function editTile(pagename, str_type, thingindex, aid, bid, thingclass, hubnum, 
         et_Globals.id = bid;
     }
     et_Globals.hubnum = hubnum;
-    if ( !hubName || !hubnum || hubName==="None" || hubnum==="-1" ) {
-        et_Globals.hubName = "None";
-    } else {
-        et_Globals.hubName = hubName;
-    }
     et_Globals.hubType = hubType || "None";
     et_Globals.pagename = pagename;
     if ( str_type==="page" ) {
@@ -75,7 +70,7 @@ function editTile(pagename, str_type, thingindex, aid, bid, thingclass, hubnum, 
     var jqxhr = null;
     if ( str_type==="page" ) {
         jqxhr = $.post(returnURL, 
-            {useajax: "wysiwyg", id: hubnum, type: 'page', tile: thingindex, value: thingindex, attr: customname},
+            {useajax: "pagetile", id: hubnum, type: 'page', tile: thingindex, value: thingindex, attr: customname},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;
@@ -88,14 +83,8 @@ function editTile(pagename, str_type, thingindex, aid, bid, thingclass, hubnum, 
     } else {
         // put placeholder and populate after Ajax finishes retrieving true content
         // this is actually no longer used but left code here in case I want to use it later
-        jqxhr = $.post(returnURL, 
-            {useajax: "wysiwyg", id: bid, type: str_type, tile: thingindex, value: "te_wysiwyg", attr: customname},
-            function (presult, pstatus) {
-                if (pstatus==="success" ) {
-                    htmlcontent = presult;
-                }
-            }
-        );
+        htmlcontent = "<div id='error'>Edit dialog cannot be displayed</div>";
+        htmlcontent = "<div class=\"" + thingclass + "\" id='te_wysiwyg'>" + htmlcontent + "</div>";
     }
     dialog_html += "<div id='subsection'></div>";
     dialog_html += "</div>";
@@ -1071,7 +1060,6 @@ function colorpicker(str_type, thingindex) {
     var subid = firstsub;
     var onoff = getOnOff(str_type, subid, val);
 
-    // remove this because it messes up styling
     // var idx = "isy|vars";
     // if (str_type==="isy" && ("alias" in cm_Globals.allthings[idx]) && (subid in cm_Globals.allthings[idx].alias )) {
     //     firstsub = firstsub + " (" + cm_Globals.allthings[idx].alias[subid] + ")";
@@ -1130,6 +1118,7 @@ function setupClicks(str_type, thingindex) {
         //         $("#subidTarget").html(theval + " (" + alias + ")");
         //     }
         // }
+        // console.log("subid, alias: ", subid, alias);
             
         var newtitle;
         if ( str_type==="page" ) {
