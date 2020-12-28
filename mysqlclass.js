@@ -181,11 +181,14 @@ exports.sqlDatabase = class sqlDatabase {
             } else {
                 return qres;
             }
-        });
+        })
+        .catch(reason => {
+            console.log(">>>> error - ", reason);
+        })
         return results;
     }
     
-    deleteRow(usertable, conditions) {
+    deleteRow(usertable, conditions, joins) {
         this.error = null;
         if ( !usertable ) {
             this.die("No table specified in call to updateRow");
@@ -195,11 +198,19 @@ exports.sqlDatabase = class sqlDatabase {
             this.die("Attempted to delete row with no conditions set");
             return null;
         }
-        if ( conditions === "ALL" || conditions === "all" ) {
-            var str = "DELETE FROM " + usertable;
-        } else {
-            str = "DELETE FROM " + usertable + " WHERE " + conditions;
+        var str = "DELETE FROM " + usertable;
+
+        // add all of the joins provided do not remove the space in between
+        if ( joins && typeof joins === "string" ) {
+            str += " " + joins + " ";
+        } else if ( joins && typeof joins === "object" && Array.isArray(joins)  ) {
+            str += " " + joins.join(" ") + " ";
         }
+
+        if ( conditions !== "ALL" && conditions !== "all" ) {
+            str += " WHERE " + conditions;
+        }
+
         return this.query(str);
     }
     
@@ -269,7 +280,7 @@ exports.sqlDatabase = class sqlDatabase {
                 return session.sql(str).execute()
                 .then( result => {
                     var columns = result.getColumns();
-                    if ( firstrow ) {
+                    if ( firstrow===true ) {
                         var rows = result.fetchOne();
                         var rowobjs = makeobj(columns, rows);
                     } else {

@@ -5,6 +5,8 @@
  * (c) Ken Washington 2017, 2018, 2019
  */
 
+// TODO - rewrite to not use global allthings and options arrays
+
 // globals used by this module
 cm_Globals.currentidx = "clock|clockdigital";
 cm_Globals.id = null;
