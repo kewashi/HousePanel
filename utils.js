@@ -610,9 +610,9 @@ exports.getHeader = function getHeader(skin, islogin) {
     // load tile editor fixed css file with cutomization helpers
     $tc += "<script type='text/javascript' src='tileeditor.js'></script>";
     $tc += "<link id='tileeditor' rel='stylesheet' type='text/css' href='tileeditor.css'>";	
-
+    
     if ( !skip ) {
-
+    
         // load tile customizer
         $tc += '<script type="text/javascript" src="customize.js"></script>';
         

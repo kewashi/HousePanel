@@ -175,10 +175,10 @@ async function getUserName(cookies) {
 
     // get all the users and check for one that matches the hashed email address
     // emails for all users must be unique
-    var result = false;
+    var result = null;
     if ( uhash ) {
         var joinstr = mydb.getJoinStr("panels", "userid", "users", "id");
-        var rows = await mydb.getRows("panels", "users.id, users.email, users.usertype, panels.id, panels.pname, panels.skin", "", joinstr);
+        var rows = await mydb.getRows("panels", "*", "", joinstr);
         if ( rows ) {
             for ( var i=0; i<rows.length; i++ ) {
                 var row = rows[i];
@@ -187,13 +187,14 @@ async function getUserName(cookies) {
                 }
                 if ( ( pw_hash(row["users_email"]) === uhash || (pw_hash(row["panels_pname"]) === uhash && phash==="") ) && 
                      ( phash==="" || pw_hash(row["panels.pname"]) === phash ) ) {
-                    var panelid = row["panels_id"];
-                    var pname = row["panels_pname"];
-                    var skin = row["panels_skin"];
-                    var userid = row["users_id"];
-                    var useremail = row["users_email"];
-                    var usertype = row["users_usertype"];
-                    result = {userid: userid, uname: useremail, panelid: panelid, pname: pname, skin: skin, usertype: usertype};
+                    // var panelid = row["panels_id"];
+                    // var pname = row["panels_pname"];
+                    // var skin = row["panels_skin"];
+                    // var userid = row["users_id"];
+                    // var useremail = row["users_email"];
+                    // var usertype = row["users_usertype"];
+                    // result = {userid: userid, uname: useremail, panelid: panelid, pname: pname, skin: skin, usertype: usertype};
+                    result = row;
                     break;
                 }
             }
@@ -330,340 +331,23 @@ function writeCustomCss(skin, str) {
 }
 
 function readOptions(caller) {
-
     console.log( (ddbg()), "error - readOptions no longer supported");
     return;
-
-//     var rewrite = false;
-//     var fname = "hmoptions.cfg";
-//     GLB.newuser = false;
-//     GLB.options = {};
-
-//     try {
-//         if ( !fs.existsSync(fname) ) {
-//             GLB.newuser = true;
-//             throw "hmoptions.cfg file not found.  New user assumed.  Welcome to HousePanel.";
-//         } else {
-//             GLB.options = JSON.parse(fs.readFileSync(fname, 'utf8'));
-//             if ( !GLB.options ) {
-//                 GLB.options = {};
-//                 throw "hmoptions.cfg file found but was not able to be processed.  Resetting.";
-//             }
-//         }
-
-//     } catch(e) {
-//         console.log( (ddbg()), e); 
-//         setDefaults();
-//         rewrite = true;
-//     }
-
-//     if ( !array_key_exists("config", GLB.options) ) {
-//         GLB.options.config = {};
-//         rewrite = true;
-//     }
-//     if ( !array_key_exists("specialtiles", GLB.options.config) ) {
-//         GLB.options.config["specialtiles"] = {"video": 4, "frame": 4, "image": 4, "blank": 4, "custom": 8};
-//         rewrite = true;
-//     }
-//     if ( !array_key_exists("port", GLB.options.config) ) {
-//         GLB.options.config.port = 3080;
-//         rewrite = true;
-//     }
-//     if ( !array_key_exists("kiosk", GLB.options.config) ) {
-//         GLB.options.config.kiosk = "false";
-//         rewrite = true;
-//     }
-//     if ( !array_key_exists("blackout", GLB.options.config) ) {
-//         GLB.options.config.blackout = "false";
-//         rewrite = true;
-//     }
-//     if ( !array_key_exists("webSocketServerPort", GLB.options.config) ) {
-//         GLB.options.config.webSocketServerPort = GLB.webSocketServerPort;
-//         rewrite = true;
-//     }
-//     if ( !array_key_exists("fast_timer", GLB.options.config) ) {
-//         GLB.options.config.fast_timer = "0";
-//         rewrite = true;
-//     }
-//     if ( !array_key_exists("slow_timer", GLB.options.config) ) {
-//         GLB.options.config.slow_timer = "300000";
-//         rewrite = true;
-//     }
-//     if ( !array_key_exists("accucity", GLB.options.config) ) {
-//         GLB.options.config.accucity = "ann-arbor-mi";
-//         rewrite = true;
-//     }
-//     if ( !array_key_exists("accuregion", GLB.options.config) ) {
-//         GLB.options.config.accuregion = "us";
-//         rewrite = true;
-//     }
-//     if ( !array_key_exists("accucode", GLB.options.config) ) {
-//         GLB.options.config.accucode = "329380";
-//         rewrite = true;
-//     }
-//     if ( !array_key_exists("fcastcity", GLB.options.config) ) {
-//         GLB.options.config.fcastcity = "ann-arbor";
-//         rewrite = true;
-//     }
-//     if ( !array_key_exists("rules", GLB.options.config) ) {
-//         GLB.options.config.rules = "true";
-//         rewrite = true;
-//     }
-//     if ( !array_key_exists("hubpick", GLB.options.config) ) {
-//         GLB.options.config.hubpick = "all";
-//         rewrite = true;
-//     }
-//     if ( !array_key_exists("polisyip", GLB.options.config) ) {
-//         GLB.options.config.polisyip = "localhost";
-//         rewrite = true;
-//     }
-//     if ( !array_key_exists("uname", GLB.options.config) ) {
-//         GLB.options.config.uname = "";
-//         rewrite = true;
-//     }
-//     if ( !array_key_exists("phototimer", GLB.options.config) ) {
-//         GLB.options.config.phototimer = "5";
-//         rewrite = true;
-//     }
-
-//     // various error prevention checks are below
-//     if ( !array_key_exists("pword", GLB.options.config) ) {
-//         GLB.options.config["pword"] = {};
-//         // GLB.options.config["pword"]["default"] =  ["","skin-housepanel"];
-//         // GLB.options.config.uname = "default";
-//         rewrite = true;
-//     }
-
-//     // get valid port numbers
-//     try {
-//         var port = parseInt(GLB.options["config"]["port"]);
-//         if ( !port || isNaN(port) ) {
-//             port = 3080;
-//             rewrite = true;
-//         }
-//     } catch(e) {
-//         port = 3080;
-//         rewrite = true;
-//     }
-//     GLB.options["config"]["port"] = port;
-
-//     try {
-//         var webSocketServerPort = parseInt(GLB.options["config"]["webSocketServerPort"]);
-//         if ( !webSocketServerPort || isNaN(webSocketServerPort) ) {
-//             webSocketServerPort = GLB.webSocketServerPort;
-//             rewrite = true;
-//         }
-//     } catch(e) {
-//         webSocketServerPort = GLB.webSocketServerPort;
-//         rewrite = true;
-//     }
-//     GLB.options["config"]["webSocketServerPort"] = webSocketServerPort;
-
-//     // handle time settings
-//     if ( array_key_exists("time", GLB.options) ) {
-//         var timeval = GLB.options["time"];
-//         var info = timeval.split(" @ ");
-//         var version = info[0];
-//         timeval = info[1];
-//     } else {
-//         var d = new Date();
-//         timeval = d.getTime();
-//         timeval = timeval.toString();
-//         version = utils.HPVERSION;
-//         GLB.options["time"] = version + " @ " + timeval;
-//         rewrite = true;
-//     }
-
-//     if ( !array_key_exists("useroptions", GLB.options) ) {
-//         GLB.options["useroptions"]= getTypes();
-//         rewrite = true;
-//     }
-
-//     // read the hubs and set to empty if nothing there
-//     if ( array_key_exists("hubs", GLB.options["config"]) ) {
-//         if ( !is_array(GLB.options.config["hubs"]) ) { 
-//             GLB.options.config["hubs"] = [] 
-//             rewrite = true;
-//         } else {
-//             for ( var k in GLB.options.config.hubs ) {
-//                 var hub = GLB.options.config.hubs[k];
-//                 var oldval = hub.clientSecret;
-//                 var decoded = decodeURIComponent(hub.clientSecret);
-//                 GLB.options.config.hubs[k].clientSecret = decoded;
-//             }
-//         }
-//     } else {
-//         GLB.options.config["hubs"] = [];
-//         rewrite = true;
-//     }
-
-//     if (  GLB.options.config["hubs"].length > 0 ) {
-//         console.log( (ddbg()), 'Loading ',  GLB.options.config["hubs"].length,' hubs Called from: ', caller, " rewrite: ", rewrite);
-//         if ( DEBUG2 ) {
-//             console.log( (ddbg()), GLB.options.config["hubs"] );
-//         }
-//     } else {
-//         console.log( (ddbg()), 'No hubs found. HousePanel will only show special and custom tiles. Called from: ', caller, " rewrite: ", rewrite);
-//     }
-
-//     if ( DEBUG1 ) {
-//         if ( !caller ) { caller = "unknown"; }
-//         console.log( (ddbg()), 'Config file for HP Version: ', version, " caller: ", caller);
-//         console.log( (ddbg()), 'Options: ', UTIL.inspect(GLB.options.config, false, null, false) );
-//     }
-
-//     // update the options file if we added default info
-//     // we skip the user section by excluding the username
-//     if ( rewrite ) {
-//         writeOptions();
-//     }
 }
 
 function readRoomThings(caller, uname) {
-
     console.log( (ddbg()), "error - readRoomThings no longer supported");
     return;
-//     if ( DEBUG1 ) {
-//         console.log( (ddbg()), "Reading custom file for username: ", uname, " caller: ", caller);
-//     }
-
-//     var d = new Date();
-//     var timeval = d.getTime();
-//     timeval = timeval.toString();
-//     var customfname = "hm_" + uname + ".cfg";
-//     var updated = false;
-
-//     // read this assuming new method only
-//     var opts;
-//     if ( fs.existsSync(customfname) ) {
-//         var str = fs.readFileSync(customfname, 'utf8');
-//         var str1 = str.replace("\r","");
-//         var str2 = str1.replace("\n","");
-
-//         try {
-//             opts = JSON.parse(str2);
-//         } catch (e) {
-//             console.log( (ddbg()), "Error while parsing JSON in the existing options file: ", customfname, " Setting up defaults.");
-//             opts = null;
-//         }
-//     }
-
-//     if ( !opts || typeof opts !=="object" || !opts.rooms || !opts.things || !opts["::CUSTOM::"] ) {
-//         opts = {};
-//         opts["::CUSTOM::"] = [uname, utils.HPVERSION, timeval];
-//         setupDefaultRooms(uname, opts);
-//         updated = true;
-//     } else if ( opts["::CUSTOM::"][1] !== utils.HPVERSION ) {
-//         updated = true;
-//     }
-
-//     GLB.options["rooms"] = clone(opts.rooms);
-    
-//     // put things in rooms that exist
-//     const didx = GLB.options.index["clock|clockdigital"];
-//     const dclock = [didx,0,0,1,""];
-//     const aidx = GLB.options.index["clock|clockanalog"];
-//     const aclock = [aidx,0,0,1,""];
-//     GLB.options["things"] = {};
-//     for (var room in opts.rooms) {
-//         if ( array_key_exists(room, opts.things) ) {
-            
-//             // if room is empty, lets add our default clocks
-//             if ( opts.things[room].length === 0 ) {
-//                 opts.things[room].push(dclock);
-//                 opts.things[room].push(aclock);
-//                 updated = true;
-//             }
-//             GLB.options["things"][room] = clone(opts.things[room]);
-//         } else {
-//             GLB.options["things"][room] = [];
-//         }
-//     }
-
-//     // flag the room as being updated
-//     GLB.options.config.uname = uname;
-
-//     if ( updated ) {
-//         writeRoomThings(GLB.options, uname);
-//     }
-//     writeOptions();
-//     return opts;
-
 }
 
 function writeOptions() {
     console.log( (ddbg()), "error - writeOptions no longer supported");
     return;
-
-    // for ( var k in GLB.options.config.hubs ) {
-    //     var hub = GLB.options.config.hubs[k];
-    //     GLB.options.config.hubs[k].clientSecret = encodeURIComponent(hub.clientSecret);
-    // }
-
-    // var d = new Date();
-    // var timeval = d.getTime();
-    // timeval = timeval.toString();
-    // GLB.options["time"] = utils.HPVERSION + " @ " + timeval;
-
-    // // write the main section excluding rooms and things
-    // var mainopt = {};
-    // mainopt["time"] = utils.HPVERSION + " @ " + timeval;
-    // for (var key in GLB.options) {
-    //     if ( key!=="rooms" && key!=="things"  ) {
-    //         mainopt[key] = GLB.options[key];
-    //     }
-
-    //     // convert "int_" to "Int_" and "state_" to "State_"
-    //     if ( utils.HPVERSION <= "2.401"  &&  key.startsWith("user_") ) {
-    //         var fixarr = GLB.options[key];
-    //         if ( is_array(fixarr) && is_array(fixarr[0]) ) {
-    //             fixarr.forEach(function(userarray, index) {
-    //                 if ( is_array(userarray) ) {
-    //                     userarray[1] = userarray[1].replace(/int_/g,"Int_");
-    //                     userarray[2] = userarray[2].replace(/int_/g,"Int_");
-    //                     userarray[1] = userarray[1].replace(/state_/g,"State_");
-    //                     userarray[2] = userarray[2].replace(/state_/g,"State_");
-    //                     GLB.options[key][index] = userarray;
-    //                 }
-    //             });
-    //         }
-    //     }
-    // }
-    
-    // // write the main options file
-    // var stropt =  JSON.stringify(mainopt, null, 1);
-    // fs.writeFileSync("hmoptions.cfg", stropt, {encoding: "utf8", flag:"w"});
-
-    // for ( var k in GLB.options.config.hubs ) {
-    //     var hub = GLB.options.config.hubs[k];
-    //     var decoded = decodeURIComponent(hub.clientSecret);
-    //     GLB.options.config.hubs[k].clientSecret = decoded;
-    // }
 }
 
 function writeRoomThings(options, uname) {
-
     console.log( (ddbg()), "error - writeRoomThings no longer supported");
     return;
-
-    // if ( !uname ) { uname = "default"; }
-
-    // var d = new Date();
-    // var timeval = d.getTime();
-    // timeval = timeval.toString();
-    // var userfname = "hm_" + uname + ".cfg";
-
-    // // write only the rooms and things
-    // // add a signature key to flag this format
-    // var customopt = {};
-    // customopt["::CUSTOM::"] = [uname, utils.HPVERSION, timeval];
-    // for (var key in options) {
-    //     if ( key==="rooms" || key==="things" ) {
-    //         customopt[key] = options[key];
-    //     }
-    // }
-    // var str_customopt = JSON.stringify(customopt, null, 1);
-    // fs.writeFileSync(userfname, str_customopt, {encoding: "utf8", flag:"w"});
 }
 
 function _curl(host, headers, nvpstr, calltype, callback) {
@@ -781,18 +465,17 @@ function getHubInfo(hub, reload) {
 
     // save default for auth flow use later
     // TODO - convert this to a cookie
-    GLB.defhub = hub["hubId"];
     if ( DEBUG2 || DEBUGtmp ) {
-        console.log( (ddbg()), "in getHubInfo - default Hub: ", GLB.defhub);
+        console.log( (ddbg()), "in getHubInfo - hubid: ", hub.hubid);
     }
 
-    var access_token = hub.hubAccess;
-    var clientId = hub.clientId;
-    var clientSecret = hub.clientSecret;
-    var endpt = hub.hubEndpt;
+    var access_token = hub.hubaccess;
+    var clientId = hub.clientid;
+    var clientSecret = hub.clientsecret;
+    var endpt = hub.hubendpt;
 
     // for legacy ST and Hubitat hubs we make a call to get hub name and other info
-    if ( hub.hubType==="SmartThings" || hub.hubType==="Hubitat" ) {
+    if ( hub.hubtype==="SmartThings" || hub.hubtype==="Hubitat" ) {
         var namehost = endpt + "/gethubinfo";
         var header = {"Authorization": "Bearer " + access_token};
         var nvpreq = {"scope": "app", "client_id": clientId, "client_secret": clientSecret};
@@ -801,13 +484,16 @@ function getHubInfo(hub, reload) {
     } else {
 
         // set name and id if not given by user or returned by api
-        if ( !hub["hubName"] ) {
-            hub["hubName"]  = hub["hubType"];
+        if ( !hub["hubname"] ) {
+            hub["hubname"]  = hub["hubtype"];
         }
-        if ( !hub["hubId"] ) {
+        if ( hub.hubid==="new" || !hub.hubid ) {
             var rstr = getRandomInt(1001, 9999);
-            hub["hubId"] = hub["hubType"] + rstr.toString();
+            hub["hubid"] = hub["hubyype"] + rstr.toString();
         }
+
+        // save the hubid in our user default for use later
+        mydb.updateRow("users",{defhub: hub.hubid},"id = "+hub.userid);
 
         if ( DEBUG2 ) {
             console.log(" >>>> in getHubInfo - hub: ", UTIL.inspect(hub,false,null,false));
@@ -822,31 +508,33 @@ function getHubInfo(hub, reload) {
 
     function nameidCallback(err, res, body) {
         var jsonbody;
-        var hubName = hub.hubName;;
-        var access_token = hub.hubAccess;
-        var endpt = hub.hubEndpt;
-        var hubId = hub.hubId;
-        var endpt = hub.hubEndpt;
+        var hubName = hub.hubname;;
+        var access_token = hub.hubaccess;
+        var endpt = hub.hubendpt;
+        var hubId = hub.hubid;
+        var endpt = hub.hubendpt;
         if ( err ) {
             console.log( (ddbg()), "error - attempting to make hub name request.");
             return;
         }
 
+        var iserror = false;
         try {
             jsonbody = JSON.parse(body);
             hubName = jsonbody["sitename"];
             hubId = jsonbody["hubId"];
-            if ( DEBUG2 || DEBUGtmp ) {
+            if ( DEBUG2 ) {
                 console.log( (ddbg()), "hubName request return: ", jsonbody);
             }
+
+            // save the hubid in our user default for use later
+            mydb.updateRow("users",{defhub: hub.hubid},"id = "+hub.userid);
+
         } catch(e) {
-            console.log( (ddbg()), "error retrieving hub name. ", e, "\n body: ", body);
-            hub["hubName"]  = "";
-            hub["hubId"] = "-1";
-            GLB.defhub = "-1";
-            writeOptions();
-            pushClient("reload", "/reauth");
-            return;
+            console.log( (ddbg()), "error retrieving hub ID and name. ", e, "\n body: ", body);
+            iserror = true;
+            hubName = hub.hubname
+            hubId = hub.hubid;
         }
 
         if ( DEBUG2 ) {
@@ -854,17 +542,21 @@ function getHubInfo(hub, reload) {
         }
 
         // now save our info
-        hub["hubName"]  = hubName;
-        hub["hubId"] = hubId;
-        GLB.defhub = hubId;
+        hub["hubname"]  = hubName;
+        hub["hubid"] = hubId;
 
-        console.log(">>>> nameidCallback hub: ", hub);
+        // save the hubid in our user default for use later
+        mydb.updateRow("users",{defhub: hub.hubid},"id = "+hub.userid);
 
-        // TODO: implement DB
-        writeOptions();
-
-        // retrieve all devices and go back to reauth page
-        getDevices(hub, reload, "/reauth");
+        if ( iserror ) {
+            pushClient("reload", "/reauth");
+        } else {
+            // retrieve all devices and go back to reauth page
+            mydb.updateRow("hubs", hub, "userid="+hub.userid+" AND hubid="+hubId)
+            .then(result => {
+                getDevices(hub, reload, "/reauth");
+            });
+        }
     }
 }
 
@@ -874,11 +566,11 @@ function getAccessToken(code, hub) {
     var access_token = "";
     var endpt = "";
     var refresh_token = "";
-    var hubType = hub["hubType"];
-    var hubName = hub["hubName"];
-    var hubHost = hub["hubHost"];
-    var clientId = hub["clientId"];
-    var clientSecret = hub["clientSecret"];
+    var hubType = hub["hubtype"];
+    var hubName = hub["hubname"];
+    var hubHost = hub["hubhost"];
+    var clientId = hub["clientid"];
+    var clientSecret = hub["clientsecret"];
 
     var redirect = GLB.returnURL + "/oauth";
     var header = {'Content-Type' : "application/x-www-form-urlencoded"};
@@ -887,7 +579,7 @@ function getAccessToken(code, hub) {
     if ( hubType === "Ford" || hubType === "Lincoln" ) {
         endpt = "https://api.mps.ford.com/api/fordconnect/vehicles/v1";
         var policy = "B2C_1A_signup_signin_common";
-        if ( hub.hubType==="Lincoln" ) {
+        if ( hub.hubtype==="Lincoln" ) {
             policy = policy + "_Lincoln";
         }
 
@@ -946,7 +638,7 @@ function getAccessToken(code, hub) {
         // if an expire in is returned from api then set hubTimer to it minus two minutes
         if ( newexpire  && !isNaN(parseInt(newexpire)) && parseInt(newexpire)>120 ) {
             expiresin = (parseInt(newexpire) - 120) * 1000;
-            hub["hubTimer"] = expiresin.toString();
+            hub.hubtimer = expiresin.toString();
         }
         endpt = "https://api.mps.ford.com/api/fordconnect/vehicles/v1";
 
@@ -962,17 +654,16 @@ function getAccessToken(code, hub) {
                     fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, clientSecret, true);
                 }, expiresin);
             }
-            hub.hubAccess = access_token;
-            hub.hubRefresh = refresh_token;
-            hub.hubEndpt = endpt;
+            hub.hubaccess = access_token;
+            hub.hubrefresh = refresh_token;
+            hub.hubendpt = endpt;
 
             // note - for Ford API the hubId must be provided by the user and match the Ford App ID assigned to them
 
             getHubInfo(hub, true);
 
         } else {
-            GLB.defhub = "-1";
-            console.log( (ddbg()), "fordCallback error authorizing " + hub.hubType + " hub. bad access_token: ", access_token, " or endpt: ", endpt, " or refresh: ", refresh_token, " err: ", err, "\n body: ", body);
+            console.log( (ddbg()), "fordCallback error authorizing " + hub.hubtype + " hub. bad access_token: ", access_token, " or endpt: ", endpt, " or refresh: ", refresh_token, " err: ", err, "\n body: ", body);
             pushClient("reload", "/reauth");
         }
     }
@@ -991,42 +682,43 @@ function getAccessToken(code, hub) {
         if ( err || (is_object(jsonbody) && jsonbody["error"]) ) {
             console.log( (ddbg()), "error authorizing ", hubType, " hub: ", hubName, " error: ", err, jsonbody["error"]);
             console.log( (ddbg()), "calling params: ", nvpreq, " body: ", body );
-            GLB.defhub = "-1";
             pushClient("reload", "/reauth");
+
         } else if ( is_object(jsonbody) && jsonbody["access_token"] ) {
             access_token = jsonbody["access_token"];
             refresh_token = "";
             if (access_token) {
-                hub.hubAccess = access_token;
                 var ephost;
                 if ( hubType==="SmartThings" ) {
-                    hub.hubRefresh = "";
+                    hub.hubaccess = access_token;
+                    hub.hubrefresh = "";
                     header = {"Authorization": "Bearer " + access_token};
                     ephost = hubHost + "/api/smartapps/endpoints";
                     curl_call(ephost, header, false, false, "GET", endptCallback);
                 } else if ( hubType ==="Hubitat" ) {
+                    hub.hubaccess = access_token;
+                    hub.hubrefresh = "";
                     header = {"Authorization": "Bearer " + access_token};
                     ephost = hubHost + "/apps/api/endpoints";
                     curl_call(ephost, header, false, false, "GET", endptCallback);
                 } else if ( hubType ==="NewSmartThings" ) {
                     refresh_token = jsonbody["refresh_token"];
-                    hub.hubAccess = access_token;
-                    hub.hubRefresh = refresh_token;
-                    hub.hubEndpt = hubHost;
-                    hub.hubType = hubType;
-                    hub["sinkFilterId"] = "";
-                    if ( !hub.hubName ) {
-                        hub.hubName = hub.hubType;
+                    hub.hubaccess = access_token;
+                    hub.hubrefresh = refresh_token;
+                    hub.hubendpt = hubHost;
+                    hub.hubtype = hubType;
+                    // hub["sinkFilterId"] = "";
+                    if ( !hub.hubname ) {
+                        hub.hubname = hub.hubtype;
                     }
 
                     // we can safely ignore the legacy device_id field
-                    // hub.hubId = jsonbody["device_id"];
-                    hub.hubId = jsonbody["installed_app_id"];
+                    hub.hubid = jsonbody["installed_app_id"];
                     var expiresin = jsonbody["expires_in"];
 
                     // convert refresh token from seconds to msec and two minutes before expiration
                     expiresin = (parseInt(expiresin) - 120) * 1000;
-                    hub["hubTimer"] = expiresin.toString();
+                    hub["hubtimer"] = expiresin.toString();
 
                     if ( DEBUG2 ) {
                         console.log( (ddbg()),"tokenCallback: New SmartThings access_token: ", access_token, " refresh_token: ", refresh_token, 
@@ -1036,7 +728,7 @@ function getAccessToken(code, hub) {
                     // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
                     // if ( expiresin ) {
                     //     setTimeout( function() {
-                    //         newSTRefreshToken(hub, hub.hubRefresh, clientId, clientSecret, true);
+                    //         newSTRefreshToken(hub, hub.hubrefresh, clientId, clientSecret, true);
                     //     }, expiresin);
                     // }
 
@@ -1048,7 +740,6 @@ function getAccessToken(code, hub) {
 
                 } else {
                     console.log( (ddbg()), "Invalid hub type: ", hubType, " in access_token request call");
-                    GLB.defhub = "-1";
                     pushClient("reload", "/reauth");
                     return;
                 }
@@ -1056,18 +747,17 @@ function getAccessToken(code, hub) {
             }
         } else {
             console.log( (ddbg()), "Unknown error authorizing hub: ", hubName, " error: ", err, " body: ", body);
-            GLB.defhub = "-1";
             pushClient("reload", "/reauth");
         }
     }
     
     function newSTRegisterEvents(hub) {
-        var host = hub.hubEndpt + "/sink-filters";
+        var host = hub.hubendpt + "/sink-filters";
         const filterName = "HousePanel.Sink.Filter";
         var header;
         
         // header = {
-        //     "Authorization": "Bearer " + hub.hubAccess,
+        //     "Authorization": "Bearer " + hub.hubaccess,
         //     "Content-Type": "application/json",
         //     "Accept": "application/vnd.smartthings+json;v=20200812"
         // };
@@ -1101,31 +791,31 @@ function getAccessToken(code, hub) {
         // this uses the sink provided by ST staff
         var sinkdata = {
             filterName: filterName,
-            forEntity: { entityType: "INSTALLEDAPP", entityId: hub.hubId},
+            forEntity: { entityType: "INSTALLEDAPP", entityId: hub.hubid},
             sink: GLB.sinkAlias,
             query: {queryGroups: qgroups}
         };
 
         header = {
-            "Authorization": "Bearer " + hub.hubAccess,
+            "Authorization": "Bearer " + hub.hubaccess,
             "Content-Type": "application/json",
             "Accept": "application/vnd.smartthings+json;v=20200812"
         };
 
         _curl(host, header, sinkdata, "POST", function(err, res, body) {
             if ( err ) {
-                hub["sinkFilterId"] = "";
+                // hub["sinkFilterId"] = "";
                 console.log((ddbg()), "error in registerEvents: ", err);
             } else {
                 // save the filter ID for use in confirming events for this user
                 try {
                     var jsonbody = JSON.parse(body);
-                    hub["sinkFilterId"] = jsonbody["sinkFilterId"];
+                    // hub["sinkFilterId"] = jsonbody["sinkFilterId"];
                     if ( DEBUG2 ) {
                         console.log( (ddbg()), "registerEvents result: ", UTIL.inspect(jsonbody, false, null, false));
                     }
                 } catch(e) {
-                    hub["sinkFilterId"] = "";
+                    // hub["sinkFilterId"] = "";
                     console.log( (ddbg()), "error in registerEvents: ", body);
                 }
             }
@@ -1146,8 +836,7 @@ function getAccessToken(code, hub) {
         }
 
         if ( err ) {
-            console.log( (ddbg()), "getEndpoint error authorizing " + hub.hubType + " hub.\n error: ", err, "\n JSON body: ", body);
-            GLB.defhub = "-1";
+            console.log( (ddbg()), "getEndpoint error authorizing " + hub.hubtype + " hub.\n error: ", err, "\n JSON body: ", body);
             pushClient("reload", "/reauth");
         } else {
             var endptzero = jsonbody[0];
@@ -1158,13 +847,12 @@ function getAccessToken(code, hub) {
             if ( DEBUG2 ) {
                 console.log( (ddbg()),"endptCallback - access_token: ", access_token," endpoint: ", endpt);
             }
-            hub.hubAccess = access_token;
-            hub.hubEndpt = endpt;
+            hub.hubaccess = access_token;
+            hub.hubendpt = endpt;
             getHubInfo(hub, true);
 
         } else {
-            GLB.defhub = "-1";
-            console.log( (ddbg()), "getEndpoint error authorizing " + hub.hubType + " hub. bad access_token: ", access_token, " or endpt: ", endpt);
+            console.log( (ddbg()), "getEndpoint error authorizing " + hub.hubtype + " hub. bad access_token: ", access_token, " or endpt: ", endpt);
             pushClient("reload", "/reauth");
         }
     }
@@ -1172,7 +860,7 @@ function getAccessToken(code, hub) {
 
 
 async function newSTRefreshToken(hub, refresh_token, clientId, clientSecret, refresh) {
-    // var nohttp = hub.hubHost.substr(8);
+    // var nohttp = hub.hubhost.substr(8);
     var nohttp = "api.smartthings.com";
     var header = {'Content-Type' : "application/x-www-form-urlencoded"};
     var tokenhost = "https://" + clientId + ":" + clientSecret + "@" + nohttp + "/oauth/token";
@@ -1195,8 +883,8 @@ async function newSTRefreshToken(hub, refresh_token, clientId, clientSecret, ref
         console.log("refresh update: ", jsonbody);
         var access_token = jsonbody["access_token"];
         var refresh_token = jsonbody["refresh_token"];
-        hub.hubAccess = access_token;
-        hub.hubRefresh = refresh_token;
+        hub.hubaccess = access_token;
+        hub.hubrefresh = refresh_token;
         
         // handle refresh expiration times
         var newexpire = jsonbody["expires_in"] || "";
@@ -1209,7 +897,7 @@ async function newSTRefreshToken(hub, refresh_token, clientId, clientSecret, ref
         // but only is user refresh is zero or not a number
         if ( newexpire  && !isNaN(parseInt(newexpire)) && parseInt(newexpire)>120 ) {
             expiresin = (parseInt(newexpire) - 120) * 1000;
-            hub["hubTimer"] = expiresin.toString();
+            hub.hubtimer = expiresin.toString();
         }
 
         writeOptions();
@@ -1230,7 +918,7 @@ async function newSTRefreshToken(hub, refresh_token, clientId, clientSecret, ref
     if ( refresh && hub.hubTimer ) {
         setTimeout( function() {
             console.log( (ddbg()), "New SmartThings access_token will be refreshed in ", hub.hubTimer, " msec");
-            newSTRefreshToken(hub, hub.hubRefresh, clientId, clientSecret, true);
+            newSTRefreshToken(hub, hub.hubrefresh, clientId, clientSecret, true);
         }, hub.hubTimer);
     }
 }
@@ -1241,7 +929,7 @@ function fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, cli
 
     var header = {'Content-Type' : "application/x-www-form-urlencoded"};
     var policy = "B2C_1A_signup_signin_common";
-    if ( hub.hubType==="Lincoln" ) {
+    if ( hub.hubtype==="Lincoln" ) {
         policy = policy + "_Lincoln";
     }
     var tokenhost = "https://dah2vb2cprod.b2clogin.com/914d88b1-3523-4bf6-9be4-1b96b4f6f919/oauth2/v2.0/token";
@@ -1268,15 +956,14 @@ function fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, cli
             
             // save the updated tokens
             if ( access_token && refresh_token ) {
-                hub["hubAccess"] = access_token;
-                hub["hubRefresh"] = refresh_token;
-                GLB.defhub = hub["hubId"];
+                hub["hubaccess"] = access_token;
+                hub["hubrefresh"] = refresh_token;
                 
                 // if an expire in is returned from api then set hubTimer to it minus two minutes
                 // but only is user refresh is zero or not a number
                 if ( expiresin==="" && newexpire  && !isNaN(parseInt(newexpire)) && parseInt(newexpire)>120 ) {
                     expiresin = (parseInt(newexpire) - 120) * 1000;
-                    hub["hubTimer"] = expiresin.toString();
+                    hub.hubtimer = expiresin.toString();
                 }
                 writeOptions();
 
@@ -1298,7 +985,7 @@ function fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, cli
         } catch(e) {
             // primary token needs to be redone - the refresh token has expired
             // TODO - find a graceful way to tell the user
-            console.log( (ddbg()), "refresh token error for hub: ", hub.hubType, " access_token: ", access_token, 
+            console.log( (ddbg()), "refresh token error for hub: ", hub.hubtype, " access_token: ", access_token, 
             "\n refresh_token: ", refresh_token, "\n expiresin: ", expiresin, "\n endpoint: ", endpt, "\n body: ", body);
         }
 
@@ -1367,18 +1054,18 @@ function getAllThings(userid, reload) {
     // if ( hubs && is_array(hubs) ) {
     //     hubs.forEach(function(hub) {
 
-    //         if ( hub.hubAccess && hub.hubEndpt && (hub.hubId===hubId || !hubId || hubId==="auto") ) {
+    //         if ( hub.hubaccess && hub.hubendpt && (hub.hubid===hubId || !hubId || hubId==="auto") ) {
     //             if ( DEBUG2 ) {
-    //                 console.log( (ddbg()), "Getting devices for hub type: ", hub.hubType, "\n access_token: ", hub.hubAccess, "\n endpoint: ", hub.hubEndpt);
+    //                 console.log( (ddbg()), "Getting devices for hub type: ", hub.hubtype, "\n access_token: ", hub.hubaccess, "\n endpoint: ", hub.hubendpt);
     //             }
 
-    //             if ( hub.hubType==="Ford" && hub["hubAccess"] && hub["hubEndpt"] && hub["hubRefresh"] ) {
+    //             if ( hub.hubtype==="Ford" && hub.hubaccess && hub.hubendpt && hub.hubrefresh ) {
     //                 // refresh Ford token before getting vehicles upon request just to be sure
     //                 // but this call doesn't invoke a repeated cycle since that should already be in place
-    //                 // fordRefreshToken(hub, hub["hubAccess"], hub["hubEndpt"], hub["hubRefresh"], hub["clientId"], hub["clientSecret"], init);
+    //                 // fordRefreshToken(hub, hub.hubaccess, hub.hubendpt, hub.hubrefresh, hub.clientid, hub.clientsecret, init);
     //                 getDevices(hub, reload, "/");
-    //             } else if ( hub.hubType==="NewSmartThings" && hub["clientId"] && hub["clientSecret"] && hub["hubRefresh"] ) {
-    //                 // newSTRefreshToken(hub, hub["hubRefresh"], hub["clientId"], hub["clientSecret"], init);
+    //             } else if ( hub.hubtype==="NewSmartThings" && hub.clientid && hub.clientsecret && hub.hubrefresh ) {
+    //                 // newSTRefreshToken(hub, hub["hubRefresh"], hub.clientid, hub.clientsecret, init);
     //                 getDevices(hub, reload, "/");
     //             } else {
     //                 getDevices(hub, reload, "/");
@@ -1853,7 +1540,7 @@ function getDevices(hub, reload, reloadpath) {
                 });
 
                 if ( DEBUG2 || DEBUGtmp ) {
-                    console.log((ddbg()),"Loaded ",result, " devices from ", hub.hubType," hub. reload: ", reload, " path: ", reloadpath);
+                    console.log((ddbg()),"Loaded ",result, " devices from ", hub.hubtype," hub. reload: ", reload, " path: ", reloadpath);
                 }
             }
         
@@ -1870,9 +1557,9 @@ function getDevices(hub, reload, reloadpath) {
             "Accept": "application/json",
             "Content-Type": "application/json",
             "api-version": FORDAPIVERSION,
-            "Application-Id": hub["hubId"],
+            "Application-Id": hub.hubid,
         };
-        var endpt = hub["hubEndpt"];
+        var endpt = hub.hubendpt;
         curl_call(endpt, header, false, false, "GET", vehicleInfoCallback);
 
     }
@@ -2881,223 +2568,226 @@ async function processLogin(body, res) {
     return result;
 }
 
-function getAuthPage(userid, skin, hostname, pathname, rmsg) {
-    var $tc = "";
-    // var skin = getSkin(uname);
-    if ( !rmsg ) { rmsg = ""; }
-    $tc += utils.getHeader(skin);
-    $tc += "<h2>" + utils.APPNAME + " Hub Authorization</h2>";
+function getAuthPage(user, hostname, pathname, rmsg) {
 
-    // provide welcome page with instructions for what to do
-    // this will show only if the user hasn't set up HP
-    // or if a reauth is requested or when converting old passwords
-    $tc += "<div class=\"greeting\">";
-
-    $tc +="<p>Here is where you link a SmartThings, Hubitat, or ISY hub to " +
-            "HousePanel to gain access to your smart home devices. " +
-            "Ford and Lincoln vehicles are also supported if you have a Ford-Connect API developer account. " +
-            "You can link any number and combination of hubs. " + 
-            "To link a hub you must have the following info: " +
-            "API URL, Client ID, and Client Secret. " +
-            "For ISY hubs enter your username in the ClientID field and " +
-            "password in the Client Secret field, and enter the URL of your ISY hub for API Url." +
-            "</p><br />";
-    
-    // $tc += "<p><strong>*** IMPORTANT ***</strong> Information you provide here is secret and will be stored " +
-    //         "on your server in a configuration file called <i>hmoptions.cfg</i> " + 
-    //         "This is why HousePanel should <strong>*** NOT ***</strong> be hosted on a public-facing website. " +
-    //         "A locally hosted website on a Raspberry Pi is the strongly recommended option. " +
-    //         "HousePanel does share anonymized and encrypted usage data with its developer " + 
-    //         "for the purposes of fine tuning the performance of future versions. "
-    //         "By proceeding you are agreeing to this practice.</p>";
-    $tc += "</div>";
-
-    if ( DONATE===true ) {
-        $tc += '<br /><h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
-            <br /><div><form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank"> \
-            <input type="hidden" name="cmd" value="_s-xclick"> \
-            <input type="hidden" name="hosted_button_id" value="XS7MHW7XPYJA4"> \
-            <input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!"> \
-            <img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1"> \
-            </form></div>';
-    }
-    
     // get the current settings from options file
     // legacy file support removed
-    var options = GLB.options;
-    var rewrite = false;
-    var config = options["config"];
-    
-    // removed old legacy file handling since it was prone to errors
-    if ( array_key_exists("hubs", config) ) {
-        var authhubs = clone(config["hubs"]);
-    } else {
-        authhubs = [];
-        rewrite = true;
-    }
-    
-    // get version and time info
-    // force rewrite of options if a new version
-    if ( array_key_exists("time", options) ) {
-        var time = options["time"];
-        var info = time.split(" @ ");
-        var version = info[0].trim();
-        var timestamp = parseInt(info[1].trim());
-        var d = new Date(timestamp);
-        var lastedit =  d.toLocaleDateString() + "  " + d.toLocaleTimeString();
-        if ( version !== utils.HPVERSION ) {
-            rewrite = true;
-        }
-    } else {
-        rewrite = true;
-        lastedit = "Unknown";
-        version = "Pre Version 1.7";
-    }
+    // var options = configoptions;
+    // var rewrite = false;
+    var userid = user["users_id"];
+    var useremail = user["users_email"];
+    var uname = user["users_uname"];
+    var defhub = user["users_defhub"] || "new";
+    var usertype = user["users_usertype"];
+    var panelid = user["panels_id"];
+    var pname = user["panels_pname"];
+    var skin = user["panels_skin"];
+    if ( !rmsg ) { rmsg = ""; }
 
-    // add a new blank hub at the end for adding new ones
-    // note: the type must be "New" because js uses this to do stuff
-    // hubId must be a unique name and can be anything
-    // for ST and HE hubs this is a string obtained from the hub itself
-    // for Ford and Lincoln hubs this should be provided by the user
-    var newhub = {"hubType": "New", "hubHost": "", 
-                  "clientId": "", "clientSecret": "",
-                  "userAccess": "", "userEndpt": "", "hubName": "", "hubId": "new",
-                  "hubTimer": 0, "hubAccess": "", "hubEndpt": ""};
-    authhubs.push(newhub);
+    var display = mydb.getRows("hubs","*","userid = " + userid + " AND hubid != '-1'")
+    .then( hubs => {
 
-    var webSocketUrl = getSocketUrl(hostname);
-    $tc += utils.hidden("pagename", "auth");
-    $tc += utils.hidden("returnURL", GLB.returnURL);
-    $tc += utils.hidden("pathname", pathname);
-    $tc += utils.hidden("webSocketUrl", webSocketUrl);
-    $tc += "<div class=\"greetingopts\">";
-    $tc += "<h3><span class=\"startupinp\">Last update: " + lastedit + "</span></h3>";
-    
-    // ------------------ general settings ----------------------------------
-    var numnewthings = 0;
-    if ( DEBUG2 || DEBUGtmp ) {
-        console.log( (ddbg()), "Hub auth default hub: ", GLB.defhub, " allthings: ", UTIL.inspect(allthings,false,null,false));
-    }
+        var $tc = "";
 
-    // TODO - implement DB to get the real hub for this user from DB`
-    if ( GLB.defhub && GLB.defhub !== "-1" ) {
-        var defhub = GLB.defhub;
-        for ( var idx in allthings) {
-            var thing = allthings[idx];
-            if ( thing["hubnum"] === defhub ) {
-                numnewthings++;
-            }
-        }
-        var ntc= "Hub with hubId= " + defhub + " was authorized and " + numnewthings + " devices were retrieved.";
-    } else {
-        defhub = authhubs[0]["hubId"];
-        ntc = rmsg;
-    }
+        $tc += utils.getHeader(skin);
+        $tc += "<h2>" + utils.APPNAME + " Hub Authorization</h2>";
 
-    $tc += "<div id=\"newthingcount\">" + ntc + "</div>";
-    $tc += "<div class='hubopt'><label for=\"pickhub\" class=\"startupinp\">Authorize Hub: </label>";
-    $tc += "<select name=\"pickhub\" id=\"pickhub\" class=\"startupinp pickhub\">";
+        // provide welcome page with instructions for what to do
+        // this will show only if the user hasn't set up HP
+        // or if a reauth is requested or when converting old passwords
+        $tc += "<div class=\"greeting\">";
 
-    var i= 0;
-    authhubs.forEach(function(hub) {
-        var hubName = hub["hubName"];
-        var hubType = hub["hubType"];
-        var hubId = hub["hubId"].toString();
-        if ( hubId === defhub) {
-            var hubselected = "selected";
-        } else {
-            hubselected = "";
-        }
-        $tc += "<option value=\"" + hubId + "\" " + hubselected + ">Hub #" + i + " " + hubName + " (" + hubType + ")</option>";
-        i++;
-    });
-    $tc += "</select></div>";
-
-    $tc +="<div id=\"authhubwrapper\">";
-    i = 0;
-
-    var allhubtypes = { SmartThings:"SmartThings", NewSmartThings:"New SmartThings", Hubitat: "Hubitat", ISY: "ISY", Ford: "Ford", Lincoln: "Lincoln" };
-    authhubs.forEach(function(hub) {
-        
-        // putStats(hub);
-        var hubType = hub["hubType"];
-        var hubId = hub["hubId"].toString();
-        if ( hubId === defhub) {
-            var hubclass = "authhub";
-        } else {
-            hubclass = "authhub hidden";
-        }
-
-        // for each hub make a section with its own form that comes back here as a post
-        $tc +="<div id=\"authhub_" + hubId + "\" hubid=\"" + hubId + "\" hubtype=\"" + hubType + "\" class=\"" + hubclass + "\">";
-        $tc += "<form id=\"hubform_" + hubId + "\" class=\"houseauth\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
-
-        // we use this div below to grab the hub type dynamically chosen
-        $tc += "<div id=\"hubdiv_" + hubId + "\"><label class=\"startupinp\">Hub Type: </label>";
-        $tc += "<select name=\"hubType\" class=\"startupinp\">";
-        for (var ht in allhubtypes) {
-            if ( ht === hubType ) {
-                $tc += "<option value=\"" + ht + "\" selected>" + allhubtypes[ht] + "</option>";
-            } else {
-                $tc += "<option value=\"" + ht + "\">" + allhubtypes[ht] + "</option>";
-            }
-        }
-        $tc += "</select></div>";
-        
-        if ( !hub["hubHost"] ) {
-            hub["hubHost"] = "https://graph.api.smartthings.com";
-        }
-        $tc += "<div><label class=\"startupinp required\">API Url: </label>";
-        $tc += "<input class=\"startupinp\" title=\"Enter the hub OAUTH address here\" name=\"hubHost\" width=\"80\" type=\"text\" value=\"" + hub["hubHost"] + "\"/></div>"; 
-
-        $tc += "<div><label class=\"startupinp required\">Client ID: </label>";
-        $tc += "<input class=\"startupinp\" name=\"clientId\" width=\"80\" type=\"text\" value=\"" + hub["clientId"] + "\"/></div>"; 
-
-        // we load client secret in js since it could have special chars that mess up doing it here
-        // but we do it anyway in case first one is good so it shows without clicking
-        $tc += "<div class=\"fixClientSecret\"><label class=\"startupinp required\">Client Secret: </label>";
-        var csecret = hub.clientSecret;
-        if ( csecret.indexOf("<")!== -1 || csecret.indexOf(">")!== -1 ||  csecret.indexOf("\"")!== -1 ) {
-            csecret = "";
-        }
-        $tc += "<input class=\"startupinp\" name=\"clientSecret\" width=\"80\" type=\"text\" value=\"" + csecret + "\"/></div>"; 
-
-        $tc += "<div><label class=\"startupinp\">Fixed access_token: </label>";
-        $tc += "<input class=\"startupinp\" name=\"userAccess\" width=\"80\" type=\"text\" value=\"" + hub["userAccess"] + "\"/></div>"; 
-
-        $tc += "<div><label class=\"startupinp\">Fixed Endpoint: </label>";
-        $tc += "<input class=\"startupinp\" name=\"userEndpt\" width=\"80\" type=\"text\" value=\"" + hub["userEndpt"] + "\"/></div>"; 
-
-        $tc += "<div><label class=\"startupinp\">Hub Name: </label>";
-        $tc += "<input class=\"startupinp\" name=\"hubName\" width=\"80\" type=\"text\" value=\"" + hub["hubName"] + "\"/></div>"; 
-
-        $tc += "<div><label class=\"startupinp\">hub ID or App ID: </label>";
-        $tc += "<input class=\"startupinp\" name=\"hubId\" width=\"80\" type=\"text\" value=\"" + hub["hubId"] + "\"/></div>"; 
-
-        $tc += "<div><label class=\"startupinp required\">Refresh Timer: </label>";
-        $tc += "<input class=\"startupinp\" name=\"hubTimer\" width=\"10\" type=\"text\" value=\"" + hub["hubTimer"] + "\"/></div>"; 
-
-        $tc += "<input class=\"hidden\" name=\"hubAccess\" type=\"hidden\" value=\"" + hub["hubAccess"] + "\"/>"; 
-        $tc += "<input class=\"hidden\" name=\"hubEndpt\" type=\"hidden\" value=\"" + hub["hubEndpt"] + "\"/>"; 
-        
-        $tc += "<div>";
-        $tc += "<input hubnum=\"" + i + "\" hubid=\"" + hubId + "\" class=\"authbutton hubauth\" value=\"Authorize Hub #" + i + "\" type=\"button\" />";
-        $tc += "<input hubnum=\"" + i + "\" hubid=\"" + hubId + "\" class=\"authbutton hubdel\" value=\"Remove Hub #" + i + "\" type=\"button\" />";
+        $tc +="<p>Here is where you link a SmartThings, Hubitat, or ISY hub to " +
+                "HousePanel to gain access to your smart home devices. " +
+                "Ford and Lincoln vehicles are also supported if you have a Ford-Connect API developer account. " +
+                "You can link any number and combination of hubs. " + 
+                "To link a hub you must have the following info: " +
+                "API URL, Client ID, and Client Secret. " +
+                "For ISY hubs enter your username in the ClientID field and " +
+                "password in the Client Secret field, and enter the URL of your ISY hub for API Url." +
+                "</p><br />";
         $tc += "</div>";
-        
-        $tc += "</form>";
-        $tc += "</div>";
-        
-        i++;
-    });
-    $tc += "</div>";
-    $tc += "<div id=\"authmessage\"></div>";
-    $tc += "<br><br>";
-    // $tc += "<input id=\"cancelauth\" class=\"authbutton\" value=\"Return to HousePanel\" name=\"cancelauth\" type=\"button\" />";
-    $tc += "<button class=\"infobutton\">Return to HousePanel</button>";
 
-    $tc += utils.getFooter();
-    return $tc;
+        if ( DONATE===true ) {
+            $tc += '<br /><h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
+                <br /><div><form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank"> \
+                <input type="hidden" name="cmd" value="_s-xclick"> \
+                <input type="hidden" name="hosted_button_id" value="XS7MHW7XPYJA4"> \
+                <input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!"> \
+                <img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1"> \
+                </form></div>';
+        }
+        
+        var webSocketUrl = getSocketUrl(hostname);
+        $tc += utils.hidden("pagename", "auth");
+        $tc += utils.hidden("returnURL", GLB.returnURL);
+        $tc += utils.hidden("pathname", pathname);
+        $tc += utils.hidden("webSocketUrl", webSocketUrl);
+        $tc += "<div class=\"greetingopts\">";
+        // $tc += "<h3><span class=\"startupinp\">Last update: " + lastedit + "</span></h3>";
+            
+        if ( hubs ) {
+            var authhubs = clone(hubs);
+        } else {
+            authhubs = [];
+        }
+
+        if ( DEBUG2 || DEBUGtmp ) {
+            console.log( (ddbg()), "Hub auth default hub: ", defhub, " hubs: ", UTIL.inspect(authhubs,false,null,false));
+        }
+        
+        // add a new blank hub at the end for adding new ones
+        // note: the type must be "New" because js uses this to do stuff
+        // hubId must be a unique name and can be anything
+        // for ST and HE hubs this is a string obtained from the hub itself
+        // for Ford and Lincoln hubs this should be provided by the user
+        var newhub = {userid: userid, hubid: "new", hubhost: "https://graph.api.smartthings.com", hubtype: "New",
+                      hubname: "", clientid: "", clientsecret: "",
+                      hubaccess: "", hubendpt: "", hubrefresh: "", 
+                      useraccess: "", userendpt: "", hubtimer: 0};
+        authhubs.push(newhub);
+
+        var numnewthings = 0;
+        var ntc = rmsg;
+
+        // determine how many things are in the default hub
+        if ( defhub && defhub !== "new" ) {
+            var joinstr = mydb.getJoinStr("devices","hubid","hubs","id");
+            $tc = mydb.getRows("devices","*","devices.userid="+userid+" AND hubs.hubid="+defhub, joinstr)
+            .then(devices => {
+                var num = devices ? devices.length : 0;
+                ntc= "Hub with hubId= " + defhub + " was authorized and " + num + " devices were retrieved.";
+                var res2 = $tc + "<div id=\"newthingcount\">" + ntc + "</div>";
+                res2 += getHubPanels();
+                return res2;
+            });
+        } else {
+            $tc += "<div id=\"newthingcount\">" + rmsg + "</div>";
+            $tc += getHubPanels();
+        }
+
+        $tc += "<div id=\"authmessage\"></div>";
+        $tc += "<br><br>";
+        $tc += "<button class=\"infobutton\">Return to HousePanel</button>";
+        $tc += utils.getFooter();
+        
+        return $tc;
+
+        function getHubPanels() {
+
+            var $tc = "";
+            $tc += "<div class='hubopt'><label for=\"pickhub\" class=\"startupinp\">Authorize Hub: </label>";
+            $tc += "<select name=\"pickhub\" id=\"pickhub\" class=\"startupinp pickhub\">";
+
+            var i= 0;
+            authhubs.forEach(function(hub) {
+                var hubName = hub["hubname"];
+                var hubType = hub["hubtype"];
+                var hubId = hub["hubid"].toString();
+                var id = i + 1;
+                if ( hubId === defhub) {
+                    var hubselected = "selected";
+                } else {
+                    hubselected = "";
+                }
+                $tc += "<option value=\"" + hubId + "\" " + hubselected + ">Hub #" + id + " " + hubName + " (" + hubType + ")</option>";
+                i++;
+            });
+            $tc += "</select></div>";
+
+            $tc +="<div id=\"authhubwrapper\">";
+            i = 0;
+
+            var allhubtypes = { SmartThings:"SmartThings", NewSmartThings:"New SmartThings", Hubitat: "Hubitat", ISY: "ISY", Ford: "Ford", Lincoln: "Lincoln" };
+            authhubs.forEach(function(hub) {
+                
+                // putStats(hub);
+                var hubType = hub["hubtype"];
+                var hubId = hub["hubid"].toString();
+                if ( hubId === defhub) {
+                    var hubclass = "authhub";
+                } else {
+                    hubclass = "authhub hidden";
+                }
+
+                // for each hub make a section with its own form that comes back here as a post
+                $tc +="<div id=\"authhub_" + hubId + "\" hubid=\"" + hubId + "\" hubtype=\"" + hubType + "\" class=\"" + hubclass + "\">";
+                    $tc += "<form id=\"hubform_" + hubId + "\" class=\"houseauth\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
+
+                    // insert the fields neede in the apiCall function
+                    $tc += utils.hidden("userid", userid);
+                    $tc += utils.hidden("uname", uname);
+                    $tc += utils.hidden("panelid", panelid);
+                    $tc += utils.hidden("pname", pname);
+                    $tc += utils.hidden("skin", skin);
+
+                    // we use this div below to grab the hub type dynamically chosen
+                    $tc += "<div id=\"hubdiv_" + hubId + "\"><label class=\"startupinp\">Hub Type: </label>";
+                        $tc += "<select name=\"hubtype\" class=\"startupinp\">";
+                        for (var ht in allhubtypes) {
+                            if ( ht === hubType ) {
+                                $tc += "<option value=\"" + ht + "\" selected>" + allhubtypes[ht] + "</option>";
+                            } else {
+                                $tc += "<option value=\"" + ht + "\">" + allhubtypes[ht] + "</option>";
+                            }
+                        }
+                        $tc += "</select></div>";
+                        
+                        $tc += "<div><label class=\"startupinp required\">API Url: </label>";
+                        $tc +=     "<input class=\"startupinp\" title=\"Enter the hub OAUTH address here\" name=\"hubhost\" width=\"80\" type=\"text\" value=\"" + hub["hubhost"] + "\"/>" + 
+                               "</div>"; 
+
+                        $tc += "<div><label class=\"startupinp required\">Client ID: </label>";
+                        $tc +=     "<input class=\"startupinp\" name=\"clientid\" width=\"80\" type=\"text\" value=\"" + hub["clientid"] + "\"/>" + 
+                               "</div>"; 
+
+                        // we load client secret in js since it could have special chars that mess up doing it here
+                        // but we do it anyway in case first one is good so it shows without clicking
+                        var csecret = decodeURI(hub.clientsecret);
+                        $tc += utils.hidden("csecret", csecret, "csecret_"+hubId);
+                        if ( csecret.indexOf("<")!== -1 || csecret.indexOf(">")!== -1 ||  csecret.indexOf("\"")!== -1 ) {
+                            csecret = "";
+                        }
+                        $tc += "<div class=\"fixClientSecret\"><label class=\"startupinp required\">Client Secret: </label>";
+                        $tc += "<input class=\"startupinp\" name=\"clientsecret\" width=\"80\" type=\"text\" value=\"" + csecret + "\"/></div>"; 
+
+                        $tc += "<div><label class=\"startupinp\">Fixed access_token: </label>";
+                        $tc += "<input class=\"startupinp\" name=\"useraccess\" width=\"80\" type=\"text\" value=\"" + hub["useraccess"] + "\"/></div>"; 
+
+                        $tc += "<div><label class=\"startupinp\">Fixed Endpoint: </label>";
+                        $tc += "<input class=\"startupinp\" name=\"userendpt\" width=\"80\" type=\"text\" value=\"" + hub["userendpt"] + "\"/></div>"; 
+
+                        $tc += "<div><label class=\"startupinp\">Hub Name: </label>";
+                        $tc += "<input class=\"startupinp\" name=\"hubname\" width=\"80\" type=\"text\" value=\"" + hub["hubname"] + "\"/></div>"; 
+
+                        $tc += "<div><label class=\"startupinp\">hub ID or App ID: </label>";
+                        $tc += "<input class=\"startupinp\" name=\"hubid\" width=\"80\" type=\"text\" value=\"" + hub["hubid"] + "\"/></div>"; 
+
+                        $tc += "<div><label class=\"startupinp required\">Refresh Timer: </label>";
+                        $tc += "<input class=\"startupinp\" name=\"hubtimer\" width=\"10\" type=\"text\" value=\"" + hub["hubtimer"] + "\"/></div>"; 
+
+                        $tc += "<input class=\"hidden\" name=\"hubaccess\" type=\"hidden\" value=\"" + hub["hubaccess"] + "\"/>"; 
+                        $tc += "<input class=\"hidden\" name=\"hubendpt\" type=\"hidden\" value=\"" + hub["hubendpt"] + "\"/>"; 
+                        $tc += "<input class=\"hidden\" name=\"hubrefresh\" type=\"hidden\" value=\"" + hub["hubrefresh"] + "\"/>"; 
+                        
+                        $tc += "<div>";
+                        $tc += "<input hubnum=\"" + i + "\" hubid=\"" + hubId + "\" class=\"authbutton hubauth\" value=\"Authorize Hub #" + i + "\" type=\"button\" />";
+                        // $tc += "<input hubnum=\"" + i + "\" hubid=\"" + hubId + "\" class=\"authbutton hubdel\" value=\"Remove Hub #" + i + "\" type=\"button\" />";
+                        $tc += "</div>";
+                    
+                    $tc += "</form>";
+                $tc += "</div>";
+                
+                i++;
+            });
+            $tc += "</div>";
+            return $tc;
+        }
+
+        return $tc;
+    });
+
+    return display;
 }
 
 function createSpecialIndex(customcnt, stype, spid, options) {
@@ -5775,11 +5465,20 @@ function pushClient(swid, swtype, subid, body, linkinfo, popup) {
 
 }
 
-function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrule) {
-    if ( !hub ) { return false; }
+// TODO - continue fixing this for DB
+function callHub(userid, hubid, swid, swtype, swval, swattr, subid, linkinfo, popup, inrule) {
+
+    // first get the hub from the DB
+    var result = mydb.getRow("hubs","*","userid="+userid+" AND hubid="+hubid)
+    .then(hub => {
+
+        if ( !hub ) { return null; }
+
+
+    });
     
-    var access_token = hub["hubAccess"];
-    var endpt = hub["hubEndpt"];
+    var access_token = hub.hubaccess;
+    var endpt = hub.hubendpt;
     var result = "success";
     var idx = swtype + "|" + swid;
 
@@ -5809,7 +5508,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
         }
 
     // this function calls the Groovy hub api
-    } else if ( hub["hubType"]==="SmartThings" || hub["hubType"]==="Hubitat" ) {
+    } else if ( hub.hubtype==="SmartThings" || hub.hubtype==="Hubitat" ) {
         var host = endpt + "/doaction";
         var header = {"Authorization": "Bearer " + access_token};
         var nvpreq = {"swid": swid,  
@@ -5821,7 +5520,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
 
     // make the call to the new ST API to control the device clicked on
     // TODO - implement logic that mirrors Groovy app behavior here
-    } else if ( hub["hubType"]==="NewSmartThings" ) {
+    } else if ( hub.hubtype==="NewSmartThings" ) {
         var header = {"Authorization": "Bearer " + access_token};
         var presult;
         try {
@@ -5958,19 +5657,19 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                 }
             });
         } else {
-            result = "error - unknown hub call for new ST hub: " + hub.hubName + " id: " + hub.hubId;
+            result = "error - unknown hub call for new ST hub: " + hub.hubname + " id: " + hub.hubid;
         }
 
     // implement the functions supported as described in the postman collection
     // but only the things that start with an underscore invoke the api call
-    } else if ( hub["hubType"]==="Ford" ) {
+    } else if ( hub.hubtype==="Ford" ) {
 
         // all API calls have the same header structure
         var host = endpt + "/" + swid; 
         var header = {"Authorization": "Bearer " + access_token,
             "Content-Type": "application/json",
             "api-version": FORDAPIVERSION,
-            "Application-Id": hub["hubId"] 
+            "Application-Id": hub.hubid 
         };
 
         switch(subid) {
@@ -6021,7 +5720,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
     // this module below is the equivalent of the ST and HE groovy app
     // for ISY where the logic for handling actions is provided
     // compare this to the doAction function in HousePanel.groovy
-    } else if ( hub["hubType"]==="ISY" ) {
+    } else if ( hub.hubtype==="ISY" ) {
         var buff = Buffer.from(access_token);
         var base64 = buff.toString('base64');
         var isyheader = {"Authorization": "Basic " + base64};
@@ -6238,7 +5937,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
         var pvalue;
         // var idx = swtype + "|" + swid;
         if ( DEBUG18 ) {
-            console.log( (ddbg()), hub.hubType, " hub: ", hub.hubName, " trigger: ", subid, " rule: ", inrule, " call returned: ", body);
+            console.log( (ddbg()), hub.hubtype, " hub: ", hub.hubname, " trigger: ", subid, " rule: ", inrule, " call returned: ", body);
         }
         if ( err ) {
             console.log( (ddbg()), "error calling ST or HE hub: ", err);
@@ -6325,7 +6024,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
                             pvalue.status = "ERROR";
                             pvalue.error = "invalid_grant";
                             pvalue.error_description = "Access token expired and is being refreshed. Try again soon.";
-                            fordRefreshToken(hub, hub.hubAccess, hub.hubEndpt, hub.hubRefresh, hub.clientId, hub.clientSecret, false);
+                            fordRefreshToken(hub, hub.hubaccess, hub.hubendpt, hub.hubrefresh, hub.clientid, hub.clientsecret, false);
                             // getDevices(hub, true, "/");
                         }
                     }
@@ -6374,7 +6073,7 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
             await xml2js(body, async function(xmlerr, result) {
                 rres = result.RestResponse.status[0];
                 if ( DEBUGisy ) {
-                    console.log( (ddbg()), hub.hubType, " hub: ", hub.hubName, " trigger: ", subid, " rule: ", inrule, " isyrep: ", isyresp, " call returned: ", UTIL.inspect(result, false, null, false));
+                    console.log( (ddbg()), hub.hubtype, " hub: ", hub.hubname, " trigger: ", subid, " rule: ", inrule, " isyrep: ", isyresp, " call returned: ", UTIL.inspect(result, false, null, false));
                 }
             });
 
@@ -6407,12 +6106,12 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
 function queryHub(userid, thingid, swid, swtype, thingname, swval, hubhost, access_token, refresh_token, endpt, clientid, clientsecret) {
     
     var popup = false;
-    if ( hub["hubType"]==="SmartThings" || hub["hubType"]==="Hubitat" ) {
+    if ( hub.hubtype==="SmartThings" || hub.hubtype==="Hubitat" ) {
         var host = endpt + "/doquery";
         var header = {"Authorization": "Bearer " + access_token};
         var nvpreq = {"swid": swid, "swtype": swtype};
         return curl_call(host, header, nvpreq, false, "POST", getQueryResponse);
-    } else if ( hub["hubType"]==="ISY" ) {
+    } else if ( hub.hubtype==="ISY" ) {
         var buff = Buffer.from(access_token);
         var base64 = buff.toString('base64');
         var header = {"Authorization": "Basic " + base64};
@@ -6589,35 +6288,15 @@ function translateMusic(pvalue) {
 }
 
 function findHub(hubid) {
-    var hub = false;
-    for (var h in  GLB.options.config["hubs"]) {
-        var ahub =  GLB.options.config["hubs"][h];
-        if ( ahub["hubId"]===hubid ) { hub = ahub; }
-    }
+    var hub = mydb.getRow("hubs","*","hubid="+hubid);
     return hub;
 }
 
 // update the hubs array with a new hub value of a certain ID
 // if not found the hub is added
 function updateHubs(newhub, oldid) {
-    var num = 0;
-    oldid = oldid.toString();
-    var found = false;
-
-    // every hub that matches gets updated
-    // should only be one but just in case
-    GLB.options.config.hubs.forEach(function(hub) {
-        if ( hub["hubId"].toString() === oldid ) {
-            GLB.options.config.hubs[num] = clone(newhub);
-            found = true;
-        }
-        num++;
-    });
-
-    // if not found then add new hub
-    if ( !found ) {
-        GLB.options.config.hubs.push(newhub);
-    }
+    var hub = mydb.updateRow("hubs",newhub,"hubid="+oldid);
+    var found = hub !== null;
     return found;
 }
 
@@ -6681,6 +6360,7 @@ function doAction(userid, thingid, hubid, swid, swtype, swval, swattr, subid, ti
     //                 )
     //             ) {
     } else if ( (typeof command==="undefined" || !command) && testclick(swtype, subid) ) {
+        
         response = clone(allthings[idx]["value"]);
 
         // use alias values for inspection
@@ -6706,10 +6386,10 @@ function doAction(userid, thingid, hubid, swid, swtype, swval, swattr, subid, ti
     } else {
 
         // get the hub to call
-        if ( hubid==="auto" ) {
-            hubid = allthings[idx]["hubnum"];
-        }
-        var hub = findHub(hubid);
+        // if ( hubid==="auto" ) {
+        //     hubid = allthings[idx]["hubnum"];
+        // }
+        // var hub = findHub(hubid);
 
         // first check if this subid has a companion link
         // use command to signal this - HUB is usual case which makes hub call
@@ -6783,6 +6463,7 @@ function doAction(userid, thingid, hubid, swid, swtype, swval, swattr, subid, ti
 
             // link commands are the only ones that use the linkval setting
             // all others get the user input values from the options file
+            // TODO - update to work with DB
             case "LINK":
                 var lidx = array_search(linkval, GLB.options["index"]);
                 // console.log("lidx = ", lidx, " linkval= ", linkval);
@@ -6827,7 +6508,7 @@ function doAction(userid, thingid, hubid, swid, swtype, swval, swattr, subid, ti
                             try {
                                 response = callHub($lhub, $linked_swid, $linked_swtype, swval, swattr, $realsubid, linkinfo, false, false);
                             } catch (e) {
-                                console.log( (ddbg()), "error calling hub: ", $lhub.hubId, $lhub.hubName, $linked_swid, $linked_swtype, swval, swattr, $realsubid, linkinfo, " error: ", e);
+                                console.log( (ddbg()), "error calling hub: ", $lhub.hubid, $lhub.hubname, $linked_swid, $linked_swtype, swval, swattr, $realsubid, linkinfo, " error: ", e);
                             }
                         }
                     }
@@ -6860,12 +6541,12 @@ function doAction(userid, thingid, hubid, swid, swtype, swval, swattr, subid, ti
 
             case "HUB":
                 try {
-                    response = callHub(hub, swid, swtype, swval, swattr, subid, false, false, false);
+                    response = callHub(userid, hubid, swid, swtype, swval, swattr, subid, false, false, false);
                     if ( DEBUG8 ) {
-                        console.log( (ddbg()), "calling hub: ", hub.hubId, hub.hubName, swid, swtype, swval, swattr, subid, " response: ", response);
+                        console.log( (ddbg()), "calling hub: ", hub.hubid, hub.hubname, swid, swtype, swval, swattr, subid, " response: ", response);
                     }
                 } catch (e) {
-                    console.log( (ddbg()), "error calling hub: ", hub.hubId, hub.hubName, swid, swtype, swval, swattr, subid, " error: ", e);
+                    console.log( (ddbg()), "error calling hub: ", hub.hubid, hub.hubname, swid, swtype, swval, swattr, subid, " error: ", e);
                 }
                 break;
 
@@ -7204,226 +6885,250 @@ function addPage(uname) {
     return newname;
 }
 
-function getInfoPage(uname, returnURL, pathname) {
+// TODO - update to work with DB
+function getInfoPage(user, returnURL, pathname) {
 
-    var configoptions = GLB.options["config"];
-    var hubs = configoptions["hubs"];
-    // var specialtiles = getSpecials();
-    
-    var $tc = "";
-    var skin = getSkin(uname);
-    $tc += utils.getHeader(skin, true);
-    $tc += "<h3>" + utils.APPNAME + " Information Display</h3>";
+    var userid = user["users_id"];
+    var useremail = user["users_email"];
+    var uname = user["users_uname"];
+    var defhub = user["users_defhub"];
+    var usertype = user["users_usertype"];
+    var panelid = user["panels_id"];
+    var pname = user["panels_pname"];
+    var skin = user["panels_skin"];
 
-    if ( DONATE===true ) {
-        $tc += '<br /><h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
-            <br /><div><form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank"> \
-            <input type="hidden" name="cmd" value="_s-xclick"> \
-            <input type="hidden" name="hosted_button_id" value="XS7MHW7XPYJA4"> \
-            <input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!"> \
-            <img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1"> \
-            </form></div>';
-    }
+    // get configs, hubs, and devices
+    var conditions = "userid = " + user["users_id"];
+    var visual = mydb.getRows("configs","*",conditions)
+    .then(configs => {
+        var result = {};
+        result.configs = configs;
+        return result;
+    })
+    .then(vals => {
+        var result = mydb.getRows("hubs","*",conditions)
+        .then(hubs => {
+            vals.hubs = hubs;
+            return vals;
+        });
+        return result;
+    })
+    .then(vals => {
+        var joinstr = mydb.getJoinStr("devices","hubid","hubs","id");
+        var result = mydb.getRows("devices","*", "devices.userid = " + userid, joinstr, "hubs.id, devices.name")
+        .then(devices => {
+            vals.devices = devices;
+            return vals;
+        });
+        return result;
+    })
+    .then(result => {
 
-    $tc += "<form>";
-    $tc += utils.hidden("returnURL", returnURL);
-    $tc += utils.hidden("pathname", pathname);
-    $tc += utils.hidden("pagename", "info");
-    $tc += "</form>";
-    $tc += "<div class=\"infopage\">";
-    $tc += "<div class='bold'>Site url = " + returnURL + "</div>";
-    $tc += "<div id='infoname' class='bold'>Current user = " + uname + "</div>";
-    $tc += "<div class='bold'>Skin folder = " + skin + "</div>";
-    $tc += "<div class='bold'>" + hubs.length + " Hubs active</div>";
-    $tc += "<hr />";
-    
-    var num = 0;
-    hubs.forEach (function(hub) {
-        // putStats(hub);
-        $tc += "<div class='bold'>Hub #" + num + "</div>";
-        for ( var hubattr in hub ) {
-            if ( hubattr!=="clientSecret" ) {
-                $tc += "<div class='wrap'>" + hubattr + " = " + hub[hubattr] + "</div>";
-            }
-        }
-        // var hubType = hub["hubType"];
-        // var hubName = hub["hubName"];
-        // var hubHost = hub["hubHost"];
-        // var hubId = hub["hubId"];
-        // var clientId = hub["clientId"];
-        // var clientSecret = hub["clientSecret"];
-        // var access_token = hub["hubAccess"];
-        // var endpt = hub["hubEndpt"];
-        // $tc += "<div class='bold'>Hub #" + num + "</div>";
-        // $tc += "<div class='bold'>Hub Name = " + hubName + "</div>";
-        // $tc += "<div class='wrap'>Type = " + hubType + "</div>";
-        // $tc += "<div class='wrap'>Hub ID = " + hubId + "</div>";
-        // $tc += "<div class='wrap'>Hub Host URL = " + hubHost + "</div>";
-        // $tc += "<div class='wrap'>Client ID = " + clientId + "</div>";
-        // $tc += "<div class='wrap'>Client Secret = " + clientSecret + "</div>";
-        // $tc += "<div class='wrap'>AccessToken = " + access_token + "</div>";
-        // $tc += "<div class='wrap'>Endpoint = " + endpt + "</div>";
-        if ( (num + 1) < hubs.length ) {
-            $tc += "<hr />";
-        }
-        num++;
+        var configoptions = result.configs;
+        var hubs = result.hubs;
+        var devices = result.devices;
+        return getinfocontents(configoptions, hubs, devices);
     });
 
-    $tc += "</div>";
+    return visual;
 
-    if ( clients.length > 0 ) {
-        var str = "<p>Currently connected to " + clients.length + " clients.</p>";
-        str = str + "<br><hr><br>";
-        for (var i=0; i < clients.length; i++) {
-            str = str + "Client #" + i + " host= " + clients[i].socket.remoteAddress + " <br>";
-        }
-        str = str + "<br><hr><br>";
-        $tc +=  str;
-    }
-    
-
-    $tc += "<button id=\"listhistory\" class=\"showhistory\">Show Dev Log</button>";
-    $tc += "<div id=\"showhistory\" class=\"infopage hidden\">";
-    $tc += "<pre>" + utils.DEV + "</pre>";
-    $tc += "</div>";
-    
-    $tc += "<br><button id=\"listthing\" class=\"showhistory\">Authorized Things</button>";
-    $tc += "<div id=\"showthing\" class=\"infopage\">";
-    $tc += "<table class=\"showid\">";
-    $tc += "<thead><tr><th class=\"thingname\">Name" + 
-        "</th><th class=\"infotype\">Nickname" + 
-        "</th><th class=\"thingarr\">Value Array" + 
-        "</th><th class=\"infoid\">Thing id" +
-        "</th><th class=\"infotype\">Type" + 
-        "</th><th class=\"hubid\">Hub" +
-        "</th><th class=\"infonum\">Tile Num</th></tr></thead>";
-
-    var sensors = sortedSensors("hubnum", "name", "type");
-    for (var i in sensors) {
-        var thing = sensors[i];
-        var idx = thing.type + "|" + thing.id;
-        var value = "";
-        if ( is_object(thing["value"]) ) {
-            for (var key in thing["value"] ) {
-                var val = thing["value"][key];
-                value += " ";
-                if ( key==="name" ) {
-                    continue;  // value = value;
-                // } else if ( array_key_exists(key, specialtiles) ) {
-                //     value += key + "= <strong>embedded " + key + "</strong><br/>";
-                } else if ( thing["type"]==="custom" && typeof val==="object" ) { 
-                    value += "Custom Array..."; 
-                } else if ( typeof val==="object" ) {
-                    value += key + "=" + JSON.stringify(val);
-                // } else if ( typeof val === "string" && val.length > 128 ) {
-                //     val = val.substr(0,124) + " ...";
-                //     value += key + "=" + val + "<br/>";
-                } else if ( typeof val==="string" ) {
-                    value += key + "=" + val;
-                } else if ( typeof val!=="undefined" ) {
-                    value += key + "=" + val.toString();
-                } else {
-                    value += key + "=undefined";
-                }
-            }
-        } else {
-            value = thing["value"];
-            // if ( value.length > 128 ) {
-            //     value = value.substr(0,124) + " ...";
-            // }
-        }
-        // limit size of the field shown
+    function getinfocontents(configoptions, hubs, sensors) {
         
-        var hubnum = thing["hubnum"];
-        if ( hubnum === -1 || hubnum === "-1" || hubnum === "None" ) {
-            var hubstr = "None<br><span class=\"typeopt\"> (" + hubnum + ": None)</span>";
-        } else {
-            var hub = findHub(hubnum);
-            var hubType = hub["hubType"];
-            var hubName = hub["hubName"];
-            var hubstr = hubName + "<br><span class=\"typeopt\"> (" + hubnum + ": " + hubType + ")</span>";
+        var $tc = "";
+        $tc += utils.getHeader(skin, true);
+        $tc += "<h3>" + utils.APPNAME + " Information Display</h3>";
+
+        if ( DONATE===true ) {
+            $tc += '<br /><h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
+                <br /><div><form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank"> \
+                <input type="hidden" name="cmd" value="_s-xclick"> \
+                <input type="hidden" name="hosted_button_id" value="XS7MHW7XPYJA4"> \
+                <input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!"> \
+                <img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1"> \
+                </form></div>';
         }
+
+        $tc += "<form>";
+        $tc += utils.hidden("returnURL", returnURL);
+        $tc += utils.hidden("pathname", pathname);
+        $tc += utils.hidden("pagename", "info");
+        $tc += "</form>";
+        $tc += "<div class=\"infopage\">";
+        $tc += "<div class='bold'>Site url = " + returnURL + "</div>";
+        $tc += "<div id='infoname' class='bold'>Current user = " + uname + "</div>";
+        $tc += "<div class='bold'>Skin folder = " + skin + "</div>";
+        $tc += "<div class='bold'>" + (hubs.length - 1) + " Hubs defined</div>";
+        $tc += "<hr />";
         
-        $tc += "<tr><td class=\"thingname\">" + thing["name"] +
-            "</td><td class=\"thingname\">" + thing.value.name +
-            "</td><td class=\"thingarr\">" + value +
-            "</td><td class=\"infoid\">" + thing["id"] +
-            "</td><td class=\"infotype\">" + thing["type"] +
-            "</td><td class=\"hubid\">" + hubstr + 
-            "</td><td class=\"infonum\">" + GLB.options["index"][idx] + "</td></tr>";
-    }
-    $tc += "</table></div>";
-
-    // show all the customizations
-    var customList = [];
-    for ( var key in GLB.options ) {
-        if ( key.startsWith("user_") ) {
-
-            var ruleid = key.substr(5);
-            var lines = GLB.options[key];
-
-            if ( lines && is_array(lines) ) {
-        
-                // allow user to skip wrapping single entry in an array
-                // the GUI will never do this but a user might in a manual edit
-                if ( !is_array(lines[0]) ) {
-                    lines = [lines];
-                }
-
-                lines.forEach(function(line) {
-                    var customType = line[0];
-                    var customValue = line[1];
-                    var customSubid = line[2];
-
-                    if ( customType==="LINK" ) {
-                        var linktile = array_search(customValue, GLB.options.index);
-                        if ( linktile && allthings[linktile] ) {
-                            customValue = "Link tile #" + customValue + " index= " + linktile + " name= " + allthings[linktile]["name"];
-                        } else {
-                            customValue = "Broken link #" + customValue;
-                        }
+        var num = 0;
+        hubs.forEach (function(hub) {
+            // putStats(hub);
+            if ( hub.hubid !== "-1" ) {
+                num++;
+                $tc += "<div class='bold'>Hub #" + num + "</div>";
+                for ( var hubattr in hub ) {
+                    if ( hubattr!=="clientSecret" ) {
+                        $tc += "<div class='wrap'>" + hubattr + " = " + hub[hubattr] + "</div>";
                     }
-                    customList.push( [customType, ruleid, customValue, customSubid] );
-                });
+                }
+                $tc += "<hr />";
+            }
+        });
+
+        $tc += "</div>";
+
+        if ( clients.length > 0 ) {
+            var str = "<p>Currently connected to " + clients.length + " clients.</p>";
+            str = str + "<br><hr><br>";
+            for (var i=0; i < clients.length; i++) {
+                str = str + "Client #" + i + " host= " + clients[i].socket.remoteAddress + " <br>";
+            }
+            str = str + "<br><hr><br>";
+            $tc +=  str;
+        }
+        
+
+        $tc += "<button id=\"listhistory\" class=\"showhistory\">Show Dev Log</button>";
+        $tc += "<div id=\"showhistory\" class=\"infopage hidden\">";
+        $tc += "<pre>" + utils.DEV + "</pre>";
+        $tc += "</div>";
+        
+        $tc += "<br><button id=\"listthing\" class=\"showhistory\">Authorized Things</button>";
+        $tc += "<div id=\"showthing\" class=\"infopage\">";
+        $tc += "<table class=\"showid\">";
+        $tc += "<thead><tr><th class=\"thingname\">Name" + 
+            "</th><th class=\"infotype\">Nickname" + 
+            "</th><th class=\"thingarr\">Value Array" + 
+            "</th><th class=\"infoid\">Thing id" +
+            "</th><th class=\"infotype\">Type" + 
+            "</th><th class=\"hubid\">Hub" +
+            "</th><th class=\"infonum\">Tile Num</th></tr></thead>";
+
+        // var sensors = sortedSensors("hubnum", "name", "type");
+        for (var i in sensors) {
+            var thing = sensors[i];
+            var pvalue = thing["devices_pvalue"];
+            var value = "";
+            if ( is_object(pvalue) ) {
+                for (var key in pvalue ) {
+                    var val = pvalue[key];
+                    value += " ";
+                    if ( key==="name" ) {
+                        continue;  // value = value;
+                    } else if ( typeof val==="object" ) {
+                        value += key + "=" + JSON.stringify(val);
+                    // } else if ( typeof val === "string" && val.length > 128 ) {
+                    //     val = val.substr(0,124) + " ...";
+                    //     value += key + "=" + val + "<br/>";
+                    } else if ( typeof val==="string" ) {
+                        value += key + "=" + val;
+                    } else if ( typeof val!=="undefined" ) {
+                        value += key + "=" + val.toString();
+                    } else {
+                        value += key + "=undefined";
+                    }
+                }
+            } else {
+                value = pvalue;
+            }
+            var hubid = thing["hubs_hubid"];
+            if ( hubid === -1 || hubid === "-1" || hubid === "new" ) {
+                var hubstr = "None<br><span class=\"typeopt\"> (" + hubid + ": None)</span>";
+            } else {
+                var hubType = thing["hubs_hubtype"];
+                var hubName = thing["hubs_hubname"];
+                var hubstr = hubName + "<br><span class=\"typeopt\"> (" + hubid + ": " + hubType + ")</span>";
+            }
+            
+            $tc += "<tr><td class=\"thingname\">" + thing["devices_name"] +
+                "</td><td class=\"thingname\">" + pvalue.name +
+                "</td><td class=\"thingarr\">" + value +
+                "</td><td class=\"infoid\">" + thing["devices_deviceid"] +
+                "</td><td class=\"infotype\">" + thing["devices_devicetype"] +
+                "</td><td class=\"hubid\">" + hubstr + 
+                "</td><td class=\"infonum\">" + thing["devices_id"] + "</td></tr>";
+        }
+        $tc += "</table></div>";
+
+        // show all the customizations
+        var customList = [];
+        for ( var i in configoptions ) {
+
+            var theoption = configoptions[i];
+            var key = theoption.configkey;
+            if ( key.startsWith("user_") ) {
+
+                var ruleid = key.substr(5);
+                var val = theoption.configval;
+                try {
+                    var lines = JSON.parse(val);
+                } catch(e) {
+                    lines = null;
+                }
+
+                if ( lines && is_array(lines) ) {
+            
+                    // allow user to skip wrapping single entry in an array
+                    // the GUI will never do this but a user might in a manual edit
+                    if ( !is_array(lines[0]) ) {
+                        lines = [lines];
+                    }
+
+                    lines.forEach(function(line) {
+                        var customType = line[0];
+                        var customValue = line[1];
+                        var customSubid = line[2];
+
+                        // if ( customType==="LINK" ) {
+                        //     var linktile = array_search(customValue, GLB.options.index);
+                        //     if ( linktile && allthings[linktile] ) {
+                        //         customValue = "Link tile #" + customValue + " index= " + linktile + " name= " + allthings[linktile]["name"];
+                        //     } else {
+                        //         customValue = "Broken link #" + customValue;
+                        //     }
+                        // }
+                        customList.push( [customType, ruleid, customValue, customSubid] );
+                    });
+                }
             }
         }
+                
+        // sort the list by type
+        if ( customList.length ) {
+            customList = customList.sort( (a,b) => {
+                if ( a[0]===b[0] ) {
+                    var x = 0;
+                } else if ( a[0] < b[0] ) {
+                    x = -1;
+                } else {
+                    x = 1;
+                }
+                return x;
+            });
+
+            // display the customizations
+            $tc += "<br><button id=\"listcustom\" class=\"showhistory\">Show Customizations</button>";
+            $tc += "<div id=\"showcustom\" class=\"infopage hidden\">";
+            $tc += "<table class=\"showid\">";
+            $tc += "<thead><tr><th class=\"infotype\">Type" + 
+                "</th><th class=\"thingname\">Custom ID" + 
+                "</th><th class=\"thingarr\">Custom Value" +
+                "</th><th class=\"infonum\">Field</th></tr></thead>";
+
+            customList.forEach(function(thing) {
+                $tc += "<tr><td class=\"infotype\">" + thing[0] +
+                    "</td><td class=\"thingname\">" + thing[1] +
+                    "</td><td class=\"thingarr\">" + thing[2] +
+                    "</td><td class=\"infonum\">" + thing[3] + "</td></tr>";
+            });
+            $tc += "</table></div>";
+        }
+
+        $tc += "<button class=\"infobutton fixbottom\">Return to HousePanel</button>";
+
+        $tc += utils.getFooter();
+        return $tc;
     }
-            
-    // sort the list by type
-    if ( customList.length ) {
-        customList = customList.sort( (a,b) => {
-            if ( a[0]===b[0] ) {
-                var x = 0;
-            } else if ( a[0] < b[0] ) {
-                x = -1;
-            } else {
-                x = 1;
-            }
-            return x;
-        });
-
-        // display the customizations
-        $tc += "<br><button id=\"listcustom\" class=\"showhistory\">Show Customizations</button>";
-        $tc += "<div id=\"showcustom\" class=\"infopage hidden\">";
-        $tc += "<table class=\"showid\">";
-        $tc += "<thead><tr><th class=\"infotype\">Type" + 
-            "</th><th class=\"thingname\">Custom ID" + 
-            "</th><th class=\"thingarr\">Custom Value" +
-            "</th><th class=\"infonum\">Field</th></tr></thead>";
-
-        customList.forEach(function(thing) {
-            $tc += "<tr><td class=\"infotype\">" + thing[0] +
-                "</td><td class=\"thingname\">" + thing[1] +
-                "</td><td class=\"thingarr\">" + thing[2] +
-                "</td><td class=\"infonum\">" + thing[3] + "</td></tr>";
-        });
-        $tc += "</table></div>";
-    }
-
-    $tc += "<button class=\"infobutton fixbottom\">Return to HousePanel</button>";
-
-    $tc += utils.getFooter();
-    return $tc;
 }
 
 // TODO - rewrite
@@ -7452,9 +7157,9 @@ function hubFilters(hubpick, ncols) {
     //     $tc+= "<div class='radiobutton'><input id='" + $hid + "' type='radio' name='huboptpick' value='-1'" + checked + "><label for='" + $hid + "'>No Hub</label></div>";
     //     var $hubcount = 0;
     //     $hubs.forEach(function($hub) {
-    //         var $hubName = $hub["hubName"];
-    //         var $hubType = $hub["hubType"];
-    //         var $hubId = $hub["hubId"];
+    //         var $hubName = $hub.hubname;
+    //         var $hubType = $hub.hubtype;
+    //         var $hubId = $hub.hubid;
     //         $hid = "hopt_" + $hubId;
     //         checked = (hubpick===$hubId) ? " checked='1'" : "";
     //         $tc+= "<div class='radiobutton'><input id='" + $hid + "' type='radio' name='huboptpick' value='" + $hubId + "'" + checked + "><label for='" + $hid + "'>" + $hubName + " (" + $hubType + ")</label></div>";
@@ -7784,9 +7489,9 @@ function getOptionsPage(userid, hostname, pathname) {
             var $hubId = "-1";
         } else {
             $hub = findHub($hubnum);
-            $hubType = $hub["hubType"];
-            $hubStr = $hub["hubName"];
-            $hubId = $hub["hubId"];
+            $hubType = $hub.hubtype;
+            $hubStr = $hub.hubname;
+            $hubId = $hub.hubid;
         }
 
         // get the tile index number
@@ -7888,12 +7593,16 @@ function mainPage(user, configoptions, req) {
     var hostname = req.headers.host;
     var pathname = req.path;
     var kioskmode = false;
-    var userid = user.userid;
-    var uname = user.uname;
-    var panelid = user.panelid;
-    var pname = user.pname;
-    var skin = user.skin;
-    var usertype = user.usertype;
+
+    var userid = user["users_id"];
+    var useremail = user["users_email"];
+    var uname = user["users_uname"];
+    var defhub = user["users_defhub"];
+    var usertype = user["users_usertype"];
+    var panelid = user["panels_id"];
+    var pname = user["panels_pname"];
+    var skin = user["panels_skin"];
+
 
     console.log(  "\n****************************************************************",
                   "\n", (ddbg()), "Serving page at: ", GLB.returnURL,
@@ -7939,7 +7648,7 @@ function mainPage(user, configoptions, req) {
         }
         tc += '</ul>';
 
-        console.log(rows);
+        // console.log(rows);
         return [tc, rows];
     })
     .then(resultsarray => {
@@ -7957,7 +7666,7 @@ function mainPage(user, configoptions, req) {
         var newtc = mydb.getRows("things","*", conditions, [joinstr1, joinstr2, joinstr3], "rooms.rorder, things.torder")
         .then(things => {
 
-            console.log("things for panel: ", pname, ": ", things," conditions: ", conditions);
+            // console.log("things for panel: ", pname, ": ", things," conditions: ", conditions);
             
             for (var i in rooms) {
                 var row = rooms[i];
@@ -7970,7 +7679,7 @@ function mainPage(user, configoptions, req) {
                         thingsarray.push(thing);
                     }
                 });
-                console.log("things for room: ", roomname, ": ", thingsarray);
+                // console.log("things for room: ", roomname, ": ", thingsarray);
 
                 // show all room with whatever index number assuming unique
                 // var pagecontent = "<div class='error' id=\"" + roomname + "-tab\">"
@@ -8689,29 +8398,29 @@ function apiCall(user, configoptions, body, protocol, req, res) {
     if ( protocol==="POST" ) {
         var userid = body.userid;
         var uname = body.uname;
+        var usertype = 1;
         var panelid = body.panelid;
         var pname = body.pname;
         var skin = body.skin;
-        var usertype = 1;
         try {
             configoptions = body.config;
         } catch(e) {
             configoptions = {};
         }
-        // readOptions("apiCall", uname);
-    } else if ( user && typeof configoptions === "object" ) {
-        userid = user.userid;
-        uname = user.uname;
-        panelid = user.panelid;
-        pname = user.pname;
-        skin = user.skin;
-        usertype = user.usertype;
+
+    } else if ( user && typeof user === "object" && configoptions && typeof configoptions === "object" ) {
+        userid = user["users_id"];
+        uname = user["users_uname"];
+        usertype = user["users_usertype"];
+        panelid = user["panels_id"];
+        pname = user["panels_pname"];
+        skin = user["panels_skin"];
+    
     } else {
         userid = null;
         uname = null;
     }
 
-    
     if ( DEBUG4 || DEBUGtmp ) {
         console.log((ddbg()),"userid in apiCall: ", userid, " protocol: ", protocol, " api: ", api);
     }
@@ -9079,19 +8788,21 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                     // now load the new data
                     var hub = {};
                     hub["userid"] = userid;
-                    hub["hubid"] = body.hubId;
-                    hub["hubhost"] = body.hubHost;
-                    hub["hubtype"] = body.hubType;
-                    hub["hubname"] = body.hubName;
-                    hub["clientid"] = body.clientId;
-                    hub["clientsecret"] = body.clientSecret;
-                    hub["hubaccess"] = body.hubAccess;
-                    hub["hubendpt"] = body.hubEndpt;
+                    hub["hubid"] = body.hubid;
+                    hub["hubhost"] = body.hubhost;
+                    hub["hubtype"] = body.hubtype;
+                    hub["hubname"] = body.hubname;
+                    hub["clientid"] = body.clientid;
+                    hub["clientsecret"] = body.clientsecret;
+                    hub["hubaccess"] = body.hubaccess;
+                    hub["hubendpt"] = body.hubendpt;
                     hub["hubrefresh"] = "";
-                    hub["useraccess"] = body.userAccess || "";
-                    hub["userendpt"] = body.userEndpt || "";
-                    hub["hubtimer"] = body.hubTimer || 0;
+                    hub["useraccess"] = body.useraccess || "";
+                    hub["userendpt"] = body.userendpt || "";
+                    hub["hubtimer"] = body.hubtimer || 0;
                     // hub["sinkFilterId"] = "";
+
+                    console.log(">>>> hub in hubauth: ", hub);
 
                     // for now set the hubid to value user gave
                     // if this hub exists it will be overwritten
@@ -9108,8 +8819,8 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                     }
 
                     // fix up host if http wasn't given
-                    if ( !hub["hubhost"].toLowerCase().startsWith("http") ) {
-                        hub["hubhost"] = "https://" + hub["hubhost"];
+                    if ( hub.hubhost && !hub["hubhost"].toLowerCase().startsWith("http") ) {
+                        hub.hubhost = "https://" + hub["hubhost"];
                     }
 
                     // fix up ending slashes
@@ -9118,17 +8829,19 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                     }
 
                     // if no name given, give it one
-                    if ( hub["hubname"].trim()==="" ) {
-                        hub["hubname"] = hub["hubtype"];
+                    if ( !hub.hubname ||  hub.hubname.trim()==="" ) {
+                        hub.hubname = hub.hubtype;
                     }
 
                     // if user provides hub access info, use it
                     // for ISY hubs we know the endpoint as /rest so use it
-                    if ( body.hubType==="ISY" ) {
-                        body.userAccess = body.clientId + ":" + body.clientSecret;
-                        body.userEndpt = body.hubHost + "/rest";
-                        hub["useraccess"] = body.userAccess;
-                        hub["userendpt"] = body.userEndpt;
+                    if ( body.hubtype==="ISY" ) {
+                        body.useraccess = body.clientid + ":" + body.clientsecret;
+                        body.userendpt = body.hubhost + "/rest";
+                        hub.useraccess= body.useraccess;
+                        hub.userendpt = body.userendpt;
+                        hub.hubaccess = hub.useraccess;
+                        hub.hubendpt = hub.userendpt;
 
                         // also for this ISY hub, set up the websocket to get update info
                         setupISYSocket(hub);
@@ -9139,6 +8852,8 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                         hub.hubendpt = hub.userendpt;
                     }
 
+                    // process new or modified hub information asyncronously
+                    // while this runs we return to the browser instructions for what to show as place holder
                     // save the hub to DB - this could be an update or it could be a new addition
                     // so we have to first check to see if we have this hubid
                     mydb.getRow("hubs", hub, "userid = "+userid+" AND hubid = "+hubid)
@@ -9147,10 +8862,12 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                             // this hub is there so lets update it and save id in user table for later
                             // this all happens asyncronously while the auth flow begins later
                             var id = result.id;
+                            console.log(">>>> updating hub at row: ", id," hubid= ", hubid);
                             var res2 = mydb.updateRow("hubs", hub, "id = "+id)
                             .then(res3 => {
                                 if ( res3 ) {
-                                    return mydb.updateRow("users",{defhub: hubid},"userid = "+userid);
+                                    console.log(">>>> updating user with default hub at row: ", userid," hubid= ", hubid);
+                                    return mydb.updateRow("users",{defhub: hubid},"id = "+userid);
                                 } else {
                                     return res3;
                                 }
@@ -9167,7 +8884,8 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                             var res2 = mydb.addRow("hubs", hub)
                             .then(result => {
                                 if ( result ) {
-                                    return mydb.updateRow("users",{defhub: hubid},"userid = "+userid);
+                                    console.log(">>>> updating user with default hub at row: ", userid," hubid= ", hubid);
+                                    return mydb.updateRow("users",{defhub: hubid},"id = "+userid);
                                 } else {
                                     console.log( (ddbg()), "error - problem atempting to create a new hub: ", hub);
                                     return null;
@@ -9183,115 +8901,53 @@ function apiCall(user, configoptions, body, protocol, req, res) {
 
                         if ( proceed ) {
 
-                            var hubName = hub["hubname"];
-                            var hubType = hub["hubtype"];
-                            var host = hub["hubhost"];
-                            var access_token = hub.hubaccess;
-                            var endpt = hub.hubendpt;
-
-                                    // first handle user provided auth which only works for ISY and legacy ST and HE
+                            // first handle user provided auth which only works for ISY and legacy ST and HE
                             if ( hub.useraccess && hub.userendpt ) {
                                 // get all new devices and update the options index array
                                 // this forces page reload with all the new stuff
                                 // notice the reference to /reauth in the call to get Devices
                                 // this makes the final read redirect back to reauth page
-                                access_token  = hub.useraccess;
-                                endpt = hub.userendpt;
-                                hub.hubaccess = access_token;
-                                hub.hubendpt = endpt;
+                                var hubType = hub["hubtype"];
 
                                 // for ISY and legacy ST/HE we can go right to getting hub details and devices
+                                // this meets up with the js later by pushing hub info back to reauth page
                                 if ( hubType==="ISY" || hubType==="SmartThings" || hubType==="Hubitat" ) {
-                                    result = {action: "things", hubType: hubType, hubName: hubName};
                                     getHubInfo(userid, hub, true);
-                                } else {
-                                    var msg = "error - user access and user endpoint can only be used with ISY, legacy SmartThings, and Hubitat hubs.";
-                                    pushClient("hubauth", msg);
+                                    return result;
                                 }
-                                return result;
                             }
                         }
+
                     });
-
                     
-                    // send back to client instructions to redirect if the user info wasn't given
-                    if ( !hub.useraccess || !hub.userendpt || hubType==="Ford" || hubType==="Lincoln" || hubType==="NewSmartThings" ) {
-
-                        // oauth flow for Ford and Lincoln vehicles
-                        // we complete the flow later when redirection happens back to /oauth GET call
-                        if ( hubType==="Ford" || hubType==="Lincoln" ) {
-                            var fordloc = GLB.returnURL + "/oauth";
-                            var model = hubType.substr(0,1);
-                            result = {action: "fordoauth", userid: userid, host: host, model: model, hubName: hubName, hubId: hubid, clientId: clientId, clientSecret: clientSecret, url: fordloc};
-
-
-                        // oauth flow for ST legacy and HE hubs
-                        // we complete the flow later when redirection happens back to /oauth GET call
-                        } else if ( hubType==="SmartThings" || hubType==="Hubitat" ) {
-                            var returnloc = GLB.returnURL + "/oauth";
-                            result = {action: "oauth", userid: userid, host: host, hubName: hubName, clientId: clientId, clientSecret: clientSecret, 
-                                    scope: "app", url: returnloc};
-
-                        // handle new OAUTH flow for SmartThings
-                        } else if ( hubType==="NewSmartThings" ) {
-                            // var returnloc = GLB.returnURL + "/oauth";
-                            // we have to use our secure instance here
-                            // var returnloc = "https://housepanel.net:3080/oauth";
-                            var returnloc = GLB.returnURL + "/oauth";
-                            result = {action: "oauth", userid: userid, host: host, hubName: hubName, clientId: clientId, clientSecret: clientSecret, 
-                                    scope: "r:devices:* x:devices:* r:scenes:* x:scenes:* r:locations:*", 
-                                    client_type: "USER_LEVEL", url: returnloc};
-
-                        } else {
-                            result = "error - invalid hub type requesting an OAUTH flow. hubType: " + hubType;
-                        }
-
-                    } else {
-                        result = {action: "userauth", userid: userid, host: host, hubName: hubName, clientId: clientId, clientSecret: clientSecret, 
-                        scope: "app", url: returnloc};
-                    }
-
-                    // now authorize them
-                    // handle direct access including ISY hubs first
                     var hubName = hub["hubname"];
                     var hubType = hub["hubtype"];
+                    var clientId = hub.clientid;
+                    var clientSecret = hub.clientsecret;
                     var host = hub["hubhost"];
-                    var clientId = hub["clientid"];
-                    var clientSecret = hub["clientsecret"];
-                    var clientRefresh = hub["clientrefresh"];
+                    
 
-                    // no oauth if user provides access info
-                    if ( hub["userAccess"] && hub["userEndpt"] ) {
-
+                    // determine what to retun to browser to hold callback info for hub auth flow
+                    if ( hub.useraccess && hub.userendpt ) {
                         // get all new devices and update the options index array
                         // this forces page reload with all the new stuff
                         // notice the reference to /reauth in the call to get Devices
                         // this makes the final read redirect back to reauth page
-                        var access_token  = hub["userAccess"];
-                        var endpt = hub["userEndpt"];
-                        hub["hubAccess"] = access_token;
-                        hub["hubEndpt"] = endpt;
 
-                        // for ISY we can go right to getting devices
-                        if ( hubType==="ISY" ) {
+                        // for ISY and legacy ST/HE we can go right to getting hub details and devices
+                        if ( hubType==="ISY" || hubType==="SmartThings" || hubType==="Hubitat" ) {
                             result = {action: "things", hubType: hubType, hubName: hubName};
-                            getHubInfo(hub, true);
-                        } else if ( hubType==="SmartThings" || hubType==="Hubitat" ) {
-                            result = {action: "things", hubType: hubType, hubName: hubName};
-                            getHubInfo(hub, true);
                         } else {
-                            result = "error - user access and user endpoint can only be used with legacy SmartThings and Hubitat hubs.";
+                            result = "error - user access and user endpoint can only be used with ISY, legacy SmartThings, and Hubitat hubs.";
                         }
-                        if ( DEBUG2 ) {
-                            console.log( (ddbg()), "Device retrieval initiated: ", result);
-                        }
-
+        
                     // oauth flow for Ford and Lincoln vehicles
                     // we complete the flow later when redirection happens back to /oauth GET call
                     } else if ( hubType==="Ford" || hubType==="Lincoln" ) {
                         var fordloc = GLB.returnURL + "/oauth";
                         var model = hubType.substr(0,1);
-                        result = {action: "fordoauth", userid: userid, host: host, model: model, hubName: hubName, hubId: hubid, clientId: clientId, clientSecret: clientSecret, url: fordloc};
+                        result = {action: "fordoauth", userid: userid, host: host, model: model, hubName: hubName, hubId: hubid, 
+                                  clientId: clientId, clientSecret: clientSecret, url: fordloc};
 
 
                     // oauth flow for ST legacy and HE hubs
@@ -9299,7 +8955,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                     } else if ( hubType==="SmartThings" || hubType==="Hubitat" ) {
                         var returnloc = GLB.returnURL + "/oauth";
                         result = {action: "oauth", userid: userid, host: host, hubName: hubName, clientId: clientId, clientSecret: clientSecret, 
-                                  scope: "app", url: returnloc};
+                                scope: "app", url: returnloc};
 
                     // handle new OAUTH flow for SmartThings
                     } else if ( hubType==="NewSmartThings" ) {
@@ -9311,13 +8967,11 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                                 scope: "r:devices:* x:devices:* r:scenes:* x:scenes:* r:locations:*", 
                                 client_type: "USER_LEVEL", url: returnloc};
 
+                    // otherwise return an error string message
                     } else {
                         result = "error - invalid hub type requesting an OAUTH flow. hubType: " + hubType;
                     }
 
-                    if ( DEBUG2 ) {
-                        console.log( (ddbg()), "OAUTH flow for " + hubType + " initiated: ", result);
-                    }
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -9360,28 +9014,9 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                     console.log( (ddbg()), result);
                     break;
 
-            // case "reload":
-            //     // pushClient("reload", "/");
-            //     break;
-            // 
-            // case "reset":
-            //     if ( protocol==="GET" ) {
-            //         // force reading main settings
-            //         readOptions("reset");
-                    
-            //         uname = "default";
-            //         setCookie(res, "uname", pw_hash(uname));
-            //         GLB.options.config["pword"] = {};
-            //         GLB.options.config["pword"][uname] = ["", "skin-housepanel"];
-            //         GLB.options.config["uname"] = uname;
-            //         writeOptions();
-            //         readRoomThings("reset", uname);
-            //         pushClient("reload", "/logout");
-            //         result = getLoginPage(uname);
-            //     } else {
-            //         result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            //     }
-            //     break;
+            case "reload":
+                // pushClient("reload", "/");
+                break;
 
             default:
                 result = "error - unrecognized " + protocol + " api call: " + api;
@@ -9482,8 +9117,8 @@ function setupISYSocket(hub) {
     // unlike ST and HE below, communication from ISY happens over a real webSocket
     var wshost;
 
-    if ( hub["hubType"]==="ISY" && hub["hubEndpt"] && hub["hubAccess"] ) { 
-        var hubhost = hub["hubEndpt"];
+    if ( hub.hubtype==="ISY" && hub.hubendpt && hub.hubaccess ) { 
+        var hubhost = hub.hubendpt;
         if ( hubhost.startsWith("https://") ) {
             wshost = "wss://" + hubhost.substr(8);
         } else if ( hubhost.startsWith("http://") ) {
@@ -9497,7 +9132,7 @@ function setupISYSocket(hub) {
     // set up socket for ISY hub if one is there
     if ( wshost ) {
         var wsclient = new webSocketClient();
-        var buff = Buffer.from(hub["hubAccess"]);
+        var buff = Buffer.from(hub.hubaccess);
         var base64 = buff.toString('base64');
         var origin = "com.universal-devices.websockets.isy";
         var header = {"Authorization": "Basic " + base64, "Sec-WebSocket-Protocol": "ISYSUB",  
@@ -9550,7 +9185,7 @@ if ( DEBUG4 ) {
 }
 
 var port = GLB.port;
-GLB.defhub = "-1";
+GLB.defhub = "new";
 
 // start our main server
 var httpServer;
@@ -9637,27 +9272,38 @@ if ( app && applistening ) {
         .then(results => {
 
             
-            if ( !results || !results.userid ) {
-                if ( DEBUG15 ) {
+            if ( !results || !results["users_id"] ) {
+                if ( DEBUG15 || DEBUGtmp ) {
                     console.log( (ddbg()), "login rejected.");
                 }
-                var $tc = getLoginPage("", "skin-housepanel");
-                
+
+                getLoginPage("", "skin-housepanel")
+                .then(result => {
+                    res.send(result);
+                    res.end();
+                });
+        
             } else {
 
                 var user = results;
-                var userid = results.userid;
-                var uname = results.uname;
-                var pname = results.pname;
-                var usertype = results.usertype;
-                var skin = results.skin;
-                var panelid = results.panelid;
-                var hubid = results.defhub;
+                var userid = user["users_id"];
+                var useremail = user["users_email"];
+                var uname = user["users_uname"];
+                var defhub = user["users_defhub"];
+                var usertype = user["users_usertype"];
+                var panelid = user["panels_id"];
+                var pname = user["panels_pname"];
+                var skin = user["panels_skin"];
 
-                mydb.getRow("configs", "*", "userid="+userid)
+                mydb.getRows("configs", "*", "userid="+userid)
                 .then(configoptions => {
 
-                    $tc = "";
+                    console.log( (ddbg()), "configoptions = ", configoptions);
+                    return configoptions;
+                })
+                .then(configoptions => {
+
+                    var $tc = "";
 
                     // first check for a valid login
                     if ( typeof req.path==="undefined" || req.path==="/" ) {
@@ -9669,8 +9315,8 @@ if ( app && applistening ) {
                         // display the main page if user is in our database
                         // don't check password here because it is checked at login
                         // and the cookie is set which means all is okay
-                        if ( DEBUG15 ) {
-                            console.log( (ddbg()), "login accepted. uname = ", uname);
+                        if ( DEBUG15 || DEBUGtmp ) {
+                            console.log( (ddbg()), "login accepted. user: ", user);
                         }
 
                         if ( isquery ) {
@@ -9713,24 +9359,24 @@ if ( app && applistening ) {
                         });
 
                     } else if ( req.path==="/reauth" ) {
-                        getAuthPage(userid, skin, req.headers.host, "/reauth", "")
+                        getAuthPage(user, req.headers.host, "/reauth", "")
                         .then(result => {
                             res.send(result);
                             res.end();
                         });
 
                     } else if ( req.path==="/userauth") {
-                        getAuthPage(userid, skin, req.headers.host, "/reauth", "")
+                        getAuthPage(user, req.headers.host, "/reauth", "")
                         .then(result => {
                             res.send(result);
                             res.end();
                         });
 
                     // this is where the oauth flow returns from the first auth step
-                    // TODO - use cookie to transfer active hub instead of global variable
+                    // TODO - wire up user default hub
                     } else if ( req.path==="/oauth") {
                         if ( req.query && req.query["code"] ) {
-                            GLB.defhub = hubid;
+                            var hubid = user["users_defhub"];
                             if ( DEBUGtmp ) {
                                 console.log(">>>> in /oauth apiCall - defhub = ", hubid);
                             }
@@ -9738,7 +9384,6 @@ if ( app && applistening ) {
                             .then(row => {
                                 if ( row ) {
                                     hub = row;
-                                    var rmsg = "Retrieving devices from Hub: " + hub.hubName;
                                     if ( DEBUG2 || DEBUGtmp ) {
                                         console.log( (ddbg()), "Getting access_token for hub: ", hub);
                                     }
@@ -9750,15 +9395,11 @@ if ( app && applistening ) {
                                     return row;
                                 } else {
                                     console.log( (ddbg()), "error - hub not found during authorization flow. hubid: ", hubid);
-                                    GLB.defhub = "-1";
-                                    rmsg = "";
                                 }
                             });
-                        } else {
-                            GLB.defhub = "-1";
-                            rmsg = "";
                         }
-                        getAuthPage(userid, skin, req.headers.host, "/reauth", rmsg)
+
+                        getAuthPage(user, req.headers.host, "/reauth", "working...")
                         .then(result => {
                             res.send(result);
                             res.end();

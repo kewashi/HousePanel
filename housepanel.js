@@ -322,8 +322,8 @@ $(document).ready(function() {
     }
 
     // load things and options
-    if ( pagename!=="login" ) {
-        // getAllthings();
+    if ( pagename==="main" ) {
+
         getOptions(true);
         initWebsocket();
         
@@ -341,6 +341,7 @@ $(document).ready(function() {
 
     // handle interactions for the options page
     if (pagename==="options") {
+        getOptions();
         setupCustomCount();
         setupFilters();
     }
@@ -1802,10 +1803,10 @@ function setupButtons() {
             $(target).removeClass("hidden");
 
             // populate the clientSecret field that could have funky characters
-            // var hub = getHub(hubId);
-            // if ( hubType!=="New" && hub ) {
-            //     $(target + " div.fixClientSecret >input").val(hub.clientSecret);
-            // }
+            if ( hubType!=="New" && hub ) {
+                var funkysecret = $("#csecret_"+hubId).val();
+                $(target + " div.fixClientSecret >input").val(hub.clientSecret);
+            }
 
             evt.stopPropagation(); 
         });
@@ -1875,7 +1876,8 @@ function setupButtons() {
                                     "&response_type=code&state=123&client_id=" + obj.clientId + 
                                     "&scope=access&redirect_uri=" + encodeURI(obj.url);
                         var location = obj.host + "/common/login/?" + nvpreq;
-                        // alert("Ready to redirect to location: " + location);
+                        
+                        alert("Ready to redirect to location: " + location);
                         window.location.href = location;
 
                     }
@@ -1897,7 +1899,8 @@ function setupButtons() {
 
                         // navigate over to the server to authorize
                         var location = obj.host + "/oauth/authorize?" + nvpreq;
-                        // alert("Ready to redirect to location: " + location);
+                        
+                        alert("Ready to redirect to location: " + location);
                         window.location.href = location;
                     }
                 } else {
