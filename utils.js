@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.415   bugfix that caused RULE engine to make spurious fixed values
 2.414   quick fix to prior update to resolve regular rules issue
 2.413   updated rules to enable invoking GET and POST from other triggers
 2.412   corrected and added back in GET calls in customizer

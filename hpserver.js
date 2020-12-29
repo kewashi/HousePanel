@@ -4808,7 +4808,7 @@ function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
                     }
 
                 // if destination subid isn't found make a user TEXT field
-                } else {
+                } else if ( !array_key_exists(rsubid, allthings[ridx].value ) ) {
                     addCustom("default", rswid, rswtype, "TEXT", rvalue, rsubid);
                     linkinfo = [rswid, rswtype, rsubid, rsubid, "TEXT"];
                     if ( DEBUG11 ) {
