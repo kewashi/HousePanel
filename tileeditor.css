@@ -43,7 +43,7 @@ body {
         font-size: 11pt;
     }
     .ui-tabs .ui-tabs-nav {
-        width: 85%;
+        width: 70%;
     }
 }
 @media (orientation: portrait) {
@@ -55,11 +55,11 @@ body {
         font-size: 10pt;
     }
     .ui-tabs .ui-tabs-nav {
-        width: 70%;
+        width: 65%;
     }
 }
 
-div.greeting {
+div.greeting, div.logingreeting {
     margin-top: 10px;
     margin-left: 10px;
     margin-bottom: 20px;
@@ -70,6 +70,13 @@ div.greeting {
     font-size: 12pt;
     padding-left: 5px;
     padding-right: 5px;
+}
+
+div.logingreeting {
+    margin-top: 0px;
+    width: 800px;
+    position: absolute;
+    top: 200px;
 }
 
 div.greeting p {
@@ -163,6 +170,26 @@ div.greetingopts div.authhub {
     border: 2px solid black;
     background-color: rgba(240, 240, 220, 1);
     width: 1200px;
+}
+
+div.loginline {
+    margin-top: 5px;
+    padding-top: 4px;
+}
+
+div.loginline input {
+    position: absolute;
+    left: 200px;
+}
+
+div.loginline hr {
+    color: blue;
+
+}
+
+#dologin {
+    margin-top: 20px;
+    margin-bottom: 10px;
 }
 
 div.maintable {

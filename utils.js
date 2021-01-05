@@ -1,6 +1,9 @@
 'use strict';
+const fs = require('fs');
 
 const devhistory =  ` 
+3.002   Working alpha of new DB with new login screen
+3.001   First version of Database version with New ST support
 2.418   fix rule infinite loop for ISY progs that made webSockets fail
 2.417   enable rules for programs - previously I just skipped this
 2.416   minor tweak to ISY hub to show all status values for programs
@@ -568,9 +571,7 @@ exports.hidden = function hidden(pname, pvalue, id) {
     return inpstr;
 }
 
-exports.getHeader = function getHeader(skin, islogin) {
-    
-    var skip = ( typeof islogin !== "undefined" && islogin ) ;
+exports.getHeader = function getHeader(userid, skin, skip) {
 
     var $tc = '<!DOCTYPE html>';
     $tc += '<html lang="en"><head>';
@@ -627,9 +628,13 @@ exports.getHeader = function getHeader(skin, islogin) {
         // load the main css file
         $tc += "<link rel=\"stylesheet\" type=\"text/css\" href=\"" + skin + "/housepanel.css\">";
 
-        // load the custom tile sheet if it exists
+        // load the custom tile sheet for this user if it exists
         // replaced logic to make customizations skin specific
-        $tc += "<link id=\"customtiles\" rel=\"stylesheet\" type=\"text/css\" href=\"" + skin + "/customtiles.css\">";
+        var userfn = "user" + userid + "/" + skin + "/customtiles.css";
+        // var userfn = skin + "/customtiles.css";
+        if ( fs.existsSync(userfn ) ) {
+            $tc += "<link id=\"customtiles\" rel=\"stylesheet\" type=\"text/css\" href=\"" + userfn + "\">";
+        }
     }
     
     // begin creating the main page

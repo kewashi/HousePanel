@@ -2197,7 +2197,7 @@ function getIcons(str_type, thingindex) {
     if ( iCategory.startsWith("Skin_") || iCategory.startsWith("Main_") ) {
         var localPath = iCategory.substr(5).toLowerCase();
         $.post(returnURL, 
-            {useajax: "geticons", id: 0, type: "none", value: localPath, attr: iCategory},
+            {useajax: "geticons", id: 0, userid: 1, type: "none", value: localPath, attr: iCategory},
             function (presult, pstatus) {
                 if (pstatus==="success" && presult ) {
                     // console.log("reading icons from skin= " + skindir + " and path= "+localPath);

@@ -13,7 +13,6 @@ cm_Globals.allthings = null;
 cm_Globals.options = null;
 cm_Globals.returnURL = "";
 cm_Globals.hubId = "all";
-cm_Globals.client = -1;
 
 var modalStatus = 0;
 var modalWindows = {};
@@ -175,7 +174,7 @@ function getOptions(dosetup) {
         var email = $("#emailid").val();
         var skin = $("#skinid").val();
         var config = $("#configsid").val();
-        config = JSON.parse(config);
+        config = JSON.parse(decodeURI(config));
         cm_Globals.options = {userid: userid, email: email, skin: skin, config: config};
 
         // $.post(cm_Globals.returnURL, 
@@ -288,6 +287,9 @@ $(document).ready(function() {
     
     // create key bindings for the login screen
     if ( pagename==="login" ) {
+
+        initWebsocket();
+
         var unamere = /^\D\S{3,}$/;      // start with a letter and be four long at least
         // $("#uname").val("default");
         $("#uname").focus();
@@ -313,20 +315,18 @@ $(document).ready(function() {
             }
         });
 
-        $("#pword").on("keydown",function(e) {
-            if ( e.which===13 ){
-                execButton("dologin");
-                e.stopPropagation();
-            }
-        });
+        // $("#pword").on("keydown",function(e) {
+        //     if ( e.which===13 ){
+        //         execButton("dologin");
+        //         e.stopPropagation();
+        //     }
+        // });
     }
 
     // load things and options
-    if ( pagename==="main" ) {
+    if ( pagename==="main" || pagename==="auth" ) {
 
         getOptions(true);
-        cm_Globals.initSockRestart = 0;
-        initWebsocket();
         
         // disable return key
         $("body").off("keypress");
@@ -336,10 +336,10 @@ $(document).ready(function() {
             }
         });
     }
-
+    
     // handle button setup for all pages
     setupButtons();
-
+    
     // handle interactions for the options page
     if (pagename==="options") {
         getOptions();
@@ -350,6 +350,7 @@ $(document).ready(function() {
     // handle interactions for main page
     // note that setupFilters will be called when entering edit mode
     if ( pagename==="main" ) {
+        initWebsocket();
         setupTabclick();
         cancelDraggable();
         cancelSortable();
@@ -398,12 +399,70 @@ function initWebsocket() {
         console.log(">>>> could not initialize socket between browser and server");
     }
 
+    // now try to set up web sockets for ISY hubs
+    // setupISYSocket("http://192.168.11.31/rest", "admin:ag86Nuke");
+
+}
+
+function setupISYSocket(hubhost, hubaccess) {
+    
+    // var userid = cm_Globals.options.userid;
+    // var hubs = JSON.parse(cm_Globals.options.hubs);
+    // hubs.forEach(function(hub) {
+    // if this hub is an ISY hub then set up a websocket to push results to our browser
+
+        // var buff = new ArrayBuffer(hubaccess);
+        // var base64 = buff.toString('base64');
+
+        if ( hubhost.startsWith("https://") ) {
+            wshost = "wss://" + hubaccess + "@" + hubhost.substr(8);
+        } else if ( hubhost.startsWith("http://") ) {
+            wshost = "ws://" + hubaccess + "@" + hubhost.substr(7);
+        }
+        wshost = wshost + "/subscribe";
+        // wshost = wshost + "/subscribe?Origin=com.universal-devices.websockets.isy";
+
+        // set up socket for ISY hub if one is there
+        var protocols = "ISYSUB";
+        var wsclient = new WebSocket(wshost, protocols);
+
+        // var buff = Buffer.from(hub.hubaccess);
+        // var base64 = buff.toString('base64');
+        // var origin = "com.universal-devices.websockets.isy";
+        // var header = {"Authorization": "Basic " + base64, "Sec-WebSocket-Protocol": "ISYSUB",  
+        //             "Sec-WebSocket-Version": "13", "Origin": "com.universal-devices.websockets.isy"};
+
+        wsclient.onopen = function(event) {
+            console.log( "webSocket opened: ", event);
+        }
+
+        // handle incoming state messages from ISY
+        // this will be ignored if the node isn't in our list
+        wsclient.onmessage = function(event) {
+            var msg = event.data;
+            console.log("webSocket message: ", msg);
+            // if ( msg.type==="utf8" ) {
+            //     processIsyMessage(msg.utf8Data);
+            // }
+        }
+        
+        wsclient.onerror = function(event) {
+            console.log( "webSocket error: ", event );
+        }
+        
+        wsclient.onclose = function(event) {
+            if ( event.wasClean ) {
+                console.log( "Connection closed to ISY socket: ");
+            } else {
+                console.log( "webSocket Error - closing connection to ISY socket: ", event);
+            }
+        }
+
 }
 
 // new routine to set up and handle websockets
 // only need to do this once - I have no clue why it was done the other way before
-function setupWebsocket(webSocketUrl)
-{
+function setupWebsocket(webSocketUrl) {
     var wsSocket = null;
 
     try {
@@ -422,25 +481,28 @@ function setupWebsocket(webSocketUrl)
     wsSocket.onerror = function(evt) {
         console.error("webSocket error observed: ", evt);
     };
+    
+    wsSocket.onclose = function(){
+        console.log("webSocket connection closed for: ", webSocketUrl);
+    };
 
     // received a message from housepanel-push or hpserver.js
     // this contains a single device object
     // this is where pushClient is processed for hpserver.js
     wsSocket.onmessage = function (evt) {
         var reservedcap = ["name", "password", "DeviceWatch-DeviceStatus", "DeviceWatch-Enroll", "checkInterval", "healthStatus"];
+
         try {
             var presult = JSON.parse(evt.data);
             var bid = presult.id;
             var thetype = presult.type;
             var pvalue = presult.value;
-            var client = parseInt(presult.client);
             var clientcount = presult.clientcount;
             var subid = presult.trigger;
-            var idx = thetype + "|" + bid;
-            try {
-                var blackout = cm_Globals.options.config["blackout"].toString();
-            } catch (e) {
-                blackout = "false";
+            if ( cm_Globals.options && cm_Globals.options.config && cm_Globals.options.config.blackout ) {
+                var blackout = cm_Globals.options.config.blackout;
+            } else {
+                blackout = false;
             }
 
             // reload page if signalled from server
@@ -451,159 +513,172 @@ function setupWebsocket(webSocketUrl)
                     return;
                 }
 
-                // reload all screens if that is requested
-                if ( typeof thetype==="undefined" || thetype==="" || thetype==="/" || thetype==="reload" || thetype==="/reload" ) {
-                    var reloadpage =  cm_Globals.returnURL;
-                    window.location.href = reloadpage;
+                // only reload this page if the trigger is this page name, blank, or all
+                if ( !thetype || thetype==="all" || thetype===pagename ) {
 
-                } else {
-                    if ( thetype.substr(0,1)!=="/" ) {
-                        thetype = "/" + thetype;
+                    // reload all screens if that is requested
+                    if ( typeof subid==="undefined" || subid==="" || subid==="/" || subid==="reload" || subid==="/reload" ) {
+                        var reloadpage =  cm_Globals.returnURL;
+                        window.location.href = reloadpage;
+
+                    } else {
+                        if ( subid.substr(0,1)!=="/" ) {
+                            subid = "/" + subid;
+                        }
+                        reloadpage =  cm_Globals.returnURL + subid;
+                        alert("reloading to: " + reloadpage);
+                        window.location.href = reloadpage;
+                        
                     }
-                    reloadpage =  cm_Globals.returnURL + thetype;
-                    window.location.href = reloadpage;
                 }
-                return;
-            }
 
-            // expand objects if returned
-            // update the global allthings array
-            for ( var psubid in pvalue ) {
-                try {
-                    var jsontval = JSON.parse(pvalue[psubid]);
-                } catch (jerr) {
-                    jsontval = null;
-                }
-                if ( jsontval && typeof jsontval==="object" ) {
-                    for (var jtkey in jsontval ) {
-                        var jindex = psubid + "_" + jtkey.toString();
-                        pvalue[jindex] = jsontval[jtkey];
+            // now process messages intended for the hub auth page
+            // we can either pass in a pvalue object with key/val pairs
+            // or given a specific "key" in the type and value in pvalue
+            // the thetype parameter names the page or "all" for any page
+            } else if (bid==="pagemsg" ) {
+
+                if ( !thetype || thetype==="all" || thetype===pagename ) {
+                    if (  typeof pvalue==="object" ) {
+                        for (var key in pvalue) {
+                            if ( $(key) ) {
+                                $(key).html(pvalue[key]);
+                            }
+                        }
+                    } else if ( subid && typeof subid==="string" && typeof pvalue==="string" && $(subid) ) {
+                        $(subid).html(pvalue);
                     }
-                    delete pvalue[psubid];
+                }
+
+            } else if (bid==="setposition" ) {
+
+                // console.log(">>>> thetype: ", thetype, " pvalue: ", pvalue);
+                // var thing = $("div.thing[thingid='"+thetype+"']");
+                var thing = $("#t-"+thetype);
+                if ( thing ) {
+                    // console.log("moved thing: ", thing.html());
+                    relocateTile(thing, pvalue);
+                }
+
+            } else if ( bid && thetype && pvalue && typeof pvalue==="object" ) {
+
+                // expand objects if returned
+                // update the global allthings array
+                for ( var psubid in pvalue ) {
+                    try {
+                        var jsontval = JSON.parse(pvalue[psubid]);
+                    } catch (jerr) {
+                        jsontval = null;
+                    }
+                    if ( jsontval && typeof jsontval==="object" ) {
+                        for (var jtkey in jsontval ) {
+                            var jindex = psubid + "_" + jtkey.toString();
+                            pvalue[jindex] = jsontval[jtkey];
+                        }
+                        delete pvalue[psubid];
+                    }
+                }
+
+                // grab name and subid for console log
+                var pname = pvalue["name"] ? pvalue["name"] : "";
+
+                // remove reserved fields
+                $.each(reservedcap, function(index, val) {
+                    if ( pvalue[val] ) {
+                        delete pvalue[val];
+                    }
+                });
+                
+                if ( cm_Globals.logwebsocket ) {
+                    console.log("webSocket message from: ", webSocketUrl," bid= ",bid," name:",pname," client:",client," of: ",clientcount," type= ",thetype," subid= ",subid," value= ",pvalue);
+                }
+        
+                // change not present to absent for presence tiles
+                // it was an early bad design decision to alter ST's value that I'm now stuck with
+                if ( pvalue["presence"] && pvalue["presence"] ==="not present" ) {
+                    pvalue["presence"] = "absent";
+                }
+
+                // console.log("websocket tile update. id: ", bid, " type: ", thetype, " pvalue: ", pvalue);
+                // update all the tiles that match this type and id
+                // this now works even if tile isn't on the panel
+                $('div.panel div.thing[bid="'+bid+'"][type="'+thetype+'"]').each(function() {
+                    try {
+                        var aid = $(this).attr("aid");
+                        updateTile(aid, pvalue);
+                    } catch (e) {
+                        console.log("Error updating tile of type: "+ thetype + " and id: " + bid + " with value: ", pvalue);
+                        console.log(e);
+                    }
+                });
+
+                // handle links - loop through all tiles that have a link to see if they match
+                // because this link shadow field has the real subid triggered we dont have to check subid below
+                // fixed old bug that assumed sibling was next item, which isn't true for variables
+                // console.log("linkbid= ", bid, "subid= ", subid, " pvalue: ", pvalue);
+                $('div.panel div[command="LINK"][linkbid="' + bid + '"][subid="' + subid + '"]').each(function() {
+
+                    // get the id to see if it is the thing being updated
+                    var linkedtile = $(this).attr("linkval");
+                    var src = $("div.thing.p_"+linkedtile);
+                    var lbid = src.attr("bid");
+                    var thisbid = $(this).attr("linkbid");
+
+                    // if we have a match, update the sibling field
+                    if ( lbid === thisbid ) {
+                        var aid = $(this).attr("aid");
+                        var sibling = $("#a-"+aid+"-"+subid);
+                        var oldvalue = sibling.html();
+                        var oldclass = sibling.attr("class");
+                        var value = pvalue[subid];
+
+                        // swap out the class and change value
+                        // this should match logic in hpserver.js in putElement routine
+                        if ( oldclass && oldvalue && value && typeof value==="string" &&
+                            subid!=="name" && subid!=="trackImage" && subid!=="color" && subid!=='ERR' && subid!=="date" && subid!=="time" &&
+                            !subid.startsWith("_") && subid.substr(0,6)!=="event_" &&
+                            subid!=="trackDescription" && subid!=="mediaSource" &&
+                            subid!=="currentArtist" && subid!=="currentAlbum" && subid!=="groupRole" &&
+                            value.indexOf(" ")===-1 && oldvalue.indexOf(" ")===-1 &&
+                            value.substr(0,7)!=="number_" &&
+                            value.indexOf("://")===-1 &&
+                            value.indexOf("::")===-1 &&
+                            value.indexOf("rgb(")===-1 &&
+                            value.length < 30 &&
+                            $.isNumeric(value)===false && 
+                            $.isNumeric(oldvalue)===false &&
+                            oldclass.indexOf(oldvalue)>=0 ) 
+                        {
+                                $(sibling).removeClass(oldvalue);
+                                $(sibling).addClass(value);
+                        }
+
+                        if ( subid==="level" || subid==="onlevel" || subid==="colortemperature" || subid==="volume"  && $(sibling).slider ) {
+                            $(sibling).slider("value", value);
+                        } else {
+                            $(sibling).html( value );
+                        }
+                    }
+                });
+
+                // blank screen if night mode set
+                if ( (thetype==="mode" ) && 
+                     (blackout==="true" || blackout===true) && (priorOpmode === "Operate" || priorOpmode === "Sleep") ) {
+                    if ( pvalue.themode === "Night" ) {
+                        execButton("blackout");
+                    } else if ( $("#blankme") ) {
+                        $("#blankme").off("click");
+                        $("#blankme").remove(); 
+                        priorOpmode = "Operate";
+                    }
                 }
             }
 
-            // grab name and subid for console log
-            var pname = pvalue["name"] ? pvalue["name"] : "";
-
-            // remove reserved fields
-            $.each(reservedcap, function(index, val) {
-                if ( pvalue[val] ) {
-                    delete pvalue[val];
-                }
-            });
-            
-            if ( cm_Globals.logwebsocket ) {
-                console.log("webSocket message from: ", webSocketUrl," bid= ",bid," name:",pname," client:",client," of: ",clientcount," type= ",thetype," subid= ",subid," value= ",pvalue);
-            }
         } catch (err) {
             console.log("Error interpreting webSocket message. err: ", err);
             return;
-        }
-        
-        // check if we have valid info for this update item
-        if ( bid!==null && thetype && pvalue && typeof pvalue==="object" ) {
-        
-            // change not present to absent for presence tiles
-            // it was an early bad design decision to alter ST's value that I'm now stuck with
-            // nope ... removed it
-            // if ( pvalue["presence"] && pvalue["presence"] ==="not present" ) {
-            //     pvalue["presence"] = "absent";
-            // }
-
-            // console.log("websocket tile update. id: ", bid, " type: ", thetype, " pvalue: ", pvalue);
-
-            // update the global allthings array
-            // for ( var psubid in pvalue ) {
-            //     cm_Globals.allthings[idx]["value"][psubid] = pvalue[psubid];
-            // }
-
-            // update all the tiles that match this type and id
-            // this now works even if tile isn't on the panel
-            $('div.panel div.thing[bid="'+bid+'"][type="'+thetype+'"]').each(function() {
-                try {
-                    var aid = $(this).attr("aid");
-                    updateTile(aid, pvalue);
-                } catch (e) {
-                    console.log("Error updating tile of type: "+ thetype + " and id: " + bid + " with value: ", pvalue);
-                    console.log(e);
-                }
-            });
-
-            // handle links - loop through all tiles that have a link to see if they match
-            // because this link shadow field has the real subid triggered we dont have to check subid below
-            // fixed old bug that assumed sibling was next item, which isn't true for variables
-            // console.log("linkbid= ", bid, "subid= ", subid, " pvalue: ", pvalue);
-            $('div.panel div[command="LINK"][linkbid="' + bid + '"][subid="' + subid + '"]').each(function() {
-
-                // get the id to see if it is the thing being updated
-                var linkedtile = $(this).attr("linkval");
-                var src = $("div.thing.p_"+linkedtile);
-                var lbid = src.attr("bid");
-                var thisbid = $(this).attr("linkbid");
-
-                // if we have a match, update the sibling field
-                if ( lbid === thisbid ) {
-                    var aid = $(this).attr("aid");
-                    var sibling = $("#a-"+aid+"-"+subid);
-                    var oldvalue = sibling.html();
-                    var oldclass = sibling.attr("class");
-                    var value = pvalue[subid];
-
-                    // swap out the class and change value
-                    // this should match logic in hpserver.js in putElement routine
-                    if ( oldclass && oldvalue && value && typeof value==="string" &&
-                         subid!=="name" && subid!=="trackImage" && subid!=="color" && subid!=='ERR' && subid!=="date" && subid!=="time" &&
-                         !subid.startsWith("_") && subid.substr(0,6)!=="event_" &&
-                         subid!=="trackDescription" && subid!=="mediaSource" &&
-                         subid!=="currentArtist" && subid!=="currentAlbum" && subid!=="groupRole" &&
-                         value.indexOf(" ")===-1 && oldvalue.indexOf(" ")===-1 &&
-                         value.substr(0,7)!=="number_" &&
-                         value.indexOf("://")===-1 &&
-                         value.indexOf("::")===-1 &&
-                         value.indexOf("rgb(")===-1 &&
-                         value.length < 30 &&
-                         $.isNumeric(value)===false && 
-                         $.isNumeric(oldvalue)===false &&
-                         oldclass.indexOf(oldvalue)>=0 ) 
-                    {
-                            $(sibling).removeClass(oldvalue);
-                            $(sibling).addClass(value);
-                    }
-
-                    if ( subid==="level" || subid==="onlevel" || subid==="colortemperature" || subid==="volume"  && $(sibling).slider ) {
-                        $(sibling).slider("value", value);
-                    } else {
-                        $(sibling).html( value );
-                    }
-                }
-            });
-
-            // blank screen if night mode set
-            if ( (thetype==="mode" && subid==="themode") && 
-                 blackout==="true" && (priorOpmode === "Operate" || priorOpmode === "Sleep") ) {
-                if ( pvalue[subid]==="Night" ) {
-                    execButton("blackout");
-                } else if ( $("#blankme") ) {
-                    $("#blankme").off("click");
-                    $("#blankme").remove(); 
-                    priorOpmode = "Operate";
-                }
-            }
-
-        }
-    };
-    
-    // if this socket connection closes log it
-    wsSocket.onclose = function(){
-        cm_Globals.initSockRestart++;
-        console.log("webSocket connection closed for: ", webSocketUrl," Attempting to reconnect, try #", cm_Globals.initSockRestart );
-
-        // attempt to reconnect websocket but only do 5 times
-        if ( cm_Globals.initSockRestart < 5 ) {
-            initWebsocket();
-        }
-    };
+        };
+    }
 }
 
 function rgb2hsv(r, g, b) {
@@ -970,7 +1045,8 @@ function cancelDraggable() {
     }
     
     // remove the catalog
-    $("#catalog").remove();
+    // $("#catalog").remove();
+    $("#catalog").hide();
 }
 
 function cancelSortable() {
@@ -1076,34 +1152,38 @@ function setupSortable() {
                 var tileid = $(this).attr("tile");
                 var thingid = $(this).attr("thingid");
                 num++;
-                var tileobj = {id: thingid, updval: {tileid: tileid, torder: num}};
+                // var tileobj = {id: thingid, updval: {tileid: tileid, torder: num}};
+                var tileobj = {id: thingid, tileid: tileid, torder: num, position: "relative"};
                 tilenums.push(tileobj);
                 
                 // update the sorting numbers to show new order
                 updateSortNumber(this, num.toString());
             });
 
-            // now add on the tiles that are absolute
-            $("div.thing[panel="+panel+"][style*='absolute']").each(function(){
-                var tileid = $(this).attr("tile");
-                var thingid = $(this).attr("thingid");
-                num++;
-                var tileobj = {id: thingid, tileid: tileid, torder: num}
-                tilenums.push(tileobj);
-            });
+            // only proceed if some tiles were relative
+            if ( num > 0 ) {
+                // now add on the tiles that are absolute to renumber them
+                $("div.thing[panel="+panel+"][style*='absolute']").each(function(){
+                    var tileid = $(this).attr("tile");
+                    var thingid = $(this).attr("thingid");
+                    num++;
+                    var tileobj = {id: thingid, tileid: tileid, torder: num, position: "absolute"};
+                    tilenums.push(tileobj);
+                });
 
-            console.log("reordering " + num + " tiles: ", tilenums);
-            $.post(cm_Globals.returnURL, 
-                {useajax: "setorder", userid: userid, id: "none", type: "things", value: tilenums, hubid: hubid, roomid: roomid},
-                function (presult, pstatus) {
-                    if (pstatus==="success" && typeof presult==="object" ) {
-                        console.log("setorder POST returned: ", presult );
-                        // reordered = true;
-                    } else {
-                        console.log( "pstatus: ", pstatus, " presult: ", presult);
-                    }
-                }, "json"
-            );
+                console.log("reordering " + num + " tiles: ", tilenums);
+                $.post(cm_Globals.returnURL, 
+                    {useajax: "setorder", userid: userid, id: "none", type: "things", value: tilenums, hubid: hubid, roomid: roomid},
+                    function (presult, pstatus) {
+                        if (pstatus==="success" && typeof presult==="object" ) {
+                            console.log("setorder POST returned: ", presult );
+                            // reordered = true;
+                        } else {
+                            console.log( "pstatus: ", pstatus, " presult: ", presult);
+                        }
+                    }, "json"
+                );
+            }
         }
     });
 }
@@ -1144,8 +1224,8 @@ function setupDraggable() {
                 } else if ( $(evt.target).attr("panel") ) {
                     panel = $(evt.target).attr("panel");
                 } else {
-                    var panelid = getCookie("defaultTab");
-                    panel = $("#"+panelid).text();
+                    var deftabid = getCookie("defaultTab");
+                    panel = $("#"+deftabid).text();
                 }
                 startPos["z-index"] = parseInt($(evt.target).css("z-index"));
                 
@@ -1184,22 +1264,22 @@ function setupDraggable() {
     }
     
     // get the catalog content and insert after main tabs content
-    var userid = cm_Globals.options.userid;
-    $.post(cm_Globals.returnURL, 
-        {useajax: "getcatalog", userid: userid, id: 0, type: "catalog", value: "none", attr: hubpick},
-        function (presult, pstatus) {
-            console.log("catalog return: ", pstatus);
-            if (pstatus==="success") {
-                console.log("edit result: ", presult);
-                $("#tabs").after(presult);
-            } else {
-                console.log("error - ", pstatus);
-            }
-        }
-    );
+    // var userid = cm_Globals.options.userid;
+    // $.post(cm_Globals.returnURL, 
+    //     {useajax: "getcatalog", userid: userid, id: 0, type: "catalog", value: "none", attr: hubpick},
+    //     function (presult, pstatus) {
+    //         console.log("catalog return: ", pstatus);
+    //         if (pstatus==="success") {
+    //             console.log("edit result: ", presult);
+    //             $("#tabs").after(presult);
+    //         } else {
+    //             console.log("error - ", pstatus);
+    //         }
+    //     }
+    // );
     
-    var xhr = function dum() {
-    }
+    // var xhr = function dum() {
+    // }
 
     // if we failed clean up
     // xhr.fail( cancelDraggable );
@@ -1212,7 +1292,7 @@ function setupDraggable() {
         setupFilters();
 
         // show the catalog
-        // $("#catalog").show();
+        $("#catalog").show();
 
         // the active things on a panel
         var snap = $("#mode_Snap").prop("checked");
@@ -1235,8 +1315,14 @@ function setupDraggable() {
                 var bid = $(thing).attr("bid");
                 var thingtype = $(thing).attr("type");
                 var thingname = $(thing).find(".thingname").text();
-                var hubid = $(thing).attr("hub");
+                var hubid = $(thing).attr("hubid");
+                var hubindex = $(thing).attr("hubindex");
                 var userid = cm_Globals.options.userid;
+                var panelid = $("input[name='panelid']").val();
+                startPos.left = 0;
+                startPos.top  = 0;
+                startPos["z-index"] = 1;
+                startPos.position = "relative";
 
                 // handle new tile creation
                 if ( thing.hasClass("catalog-thing") ) {
@@ -1248,6 +1334,7 @@ function setupDraggable() {
                             var panel = $("#"+clickid).text();
                             var lastthing = $("div.panel-"+panel+" div.thing").last();
                             var roomid = $("#panel-"+panel).attr("roomid");
+                            // alert("room = " + panel + " roomid = " + roomid + " hubindex = " + hubindex);
                             pos = {position: "absolute", top: evt.pageY, left: evt.pageX, width: 300, height: "auto"};
                             var zmax = getMaxZindex(panel);
                             startPos["z-index"] = zmax;
@@ -1257,22 +1344,19 @@ function setupDraggable() {
                                     // add it to the system
                                     // the ajax call must return a valid "div" block for the dragged new thing
                                     $.post(cm_Globals.returnURL, 
-                                        {useajax: "addthing", userid: userid, id: bid, type: thingtype, value: panel, attr: startPos, hubid: hubid, roomid: roomid},
-                                        function (promiseResult, pstatus) {
-                                            if (pstatus==="success" && typeof promiseResult === "object") {
-
-                                                promiseResult.then(presult => {
-                                                    console.log( "Added " + thingname + " of type " + thingtype + " and bid= " + bid + " to room " + panel, " pos: ", startPos);
-                                                    lastthing.after(presult);
-                                                    var newthing = lastthing.next();
-                                                    $(newthing).css( startPos );
-                                                    var snap = $("#mode_Snap").prop("checked");
-                                                    thingDraggable( newthing, snap, panel );
-                                                    setupPage();
-                                                    setupSliders();
-                                                    setupColors();
-                                                    addEditLink();
-                                                });
+                                        {useajax: "addthing", userid: userid, id: bid, type: thingtype, value: panel, panelid: panelid, attr: startPos, hubid: hubid, hubindex: hubindex, roomid: roomid},
+                                        function (presult, pstatus) {
+                                            if (pstatus==="success" && !presult.startsWith("error") ) {
+                                                console.log( "Added " + thingname + " of type " + thingtype + " and bid= " + bid + " to room " + panel, " pos: ", startPos);
+                                                lastthing.after(presult);
+                                                var newthing = lastthing.next();
+                                                $(newthing).css( startPos );
+                                                var snap = $("#mode_Snap").prop("checked");
+                                                thingDraggable( newthing, snap, panel );
+                                                setupPage();
+                                                setupSliders();
+                                                setupColors();
+                                                addEditLink();
                                             } else {
                                                 console.log("pstatus: ", pstatus, " presult: ", presult);
                                             }
@@ -1308,6 +1392,7 @@ function setupDraggable() {
                             zmax++;
                         }
                         startPos["z-index"] = zmax;
+                        startPos.position = "absolute";
                     }
 
                     $(thing).css(startPos);
@@ -1338,6 +1423,11 @@ function setupDraggable() {
             revert: false,
             // containment: "#dragregion",
             helper: "clone"
+        });
+
+        // enable dragging catalog
+        $("#catalog").draggable({
+            revert: false
         });
 
         // enable dropping things from panel into catalog to remove
@@ -1371,7 +1461,7 @@ function setupDraggable() {
                     var clk = $(ui).attr("name");
                     if ( clk==="okay" ) {
                         $.post(cm_Globals.returnURL, 
-                            {useajax: "delthing", userid: cm_Globals.options.userid, id: bid, type: thingtype, value: panel, attr: startpos, hubid: hubid, tile: tile, thingid: thingid, roomid: roomid},
+                            {useajax: "delthing", userid: cm_Globals.options.userid, id: bid, type: thingtype, value: panel, attr: "", hubid: hubid, tile: tile, thingid: thingid, roomid: roomid},
                             function (presult, pstatus) {
                                 // check for an object returned which should be a promise object
                                 if (pstatus==="success" && ( typeof presult==="object" || (typeof presult === "string" && !presult.startsWith("error"))) ) {
@@ -1386,23 +1476,53 @@ function setupDraggable() {
 
                     // this isn't a clone so we have to revert to original place
                     } else {
+                        startPos.position = startPos.priorStart;
+                        relocateTile(thing, startPos);
                         // $("#"+id).data('draggable').options.revert();
-                        try {
-                            $(thing).css("position", startPos.priorStart);
-                            if ( startPos.priorStart === "relative" ) {
-                                startPos.left = 0;
-                                startPos.top = 0;
-                            }
-                            $(thing).css("left", startPos.left). css("top",startPos.top).css("z-index", startPos["z-index"] );
-                        } catch(e) { 
-                            console.log("Drag/drop error. Please share this with @kewashi on the ST or HE Community Forum: ", e); 
-                        }
+                        // try {
+                        //     $(thing).css("position", startPos.priorStart);
+                        //     if ( startPos.priorStart === "relative" ) {
+                        //         startPos.left = 0;
+                        //         startPos.top = 0;
+                        //     }
+                        //     $(thing).css("left", startPos.left). css("top",startPos.top).css("z-index", startPos["z-index"] );
+                        // } catch(e) { 
+                        //     console.log("Drag/drop error. Please share this with @kewashi on the ST or HE Community Forum: ", e); 
+                        // }
                     }
                 });
             }
         });
     
     }
+}
+
+function relocateTile(thing, tileloc) {
+
+    // force positions of relative tiles back to zero
+    if ( tileloc.position && tileloc.position==="relative") {
+        tileloc.left = 0;
+        tileloc.top = 0;
+        tileloc["z-index"] = 1;
+    }
+
+    try {
+        if ( tileloc.position ) {
+            $(thing).css("position", tileloc.position);
+        }
+        if ( tileloc.left ) {
+            $(thing).css("left", tileloc.left);
+        }
+        if ( tileloc.top ) {
+            $(thing).css("top",tileloc.top);
+        }
+        if ( tileloc["z-index"] ) {
+            $(thing).css("z-index", tileloc["z-index"]);
+        }
+    } catch(e) { 
+        console.log("Tile reposition error.", e); 
+    }
+
 }
 
 // make the post call back to main server
@@ -1501,7 +1621,27 @@ function execButton(buttonid) {
 
         var genobj = formToObject("loginform");
         dynoPost("dologin", genobj, function(presult, pstatus) {
-            window.location.href = cm_Globals.returnURL;
+            if ( pstatus === "success" && presult && typeof presult === "object" ) {
+                console.log("login successful for user: ",  presult["users_email"], " and panel: ", presult["panels_pname"]);
+                var pstyle = "position: absolute; border: 6px black solid; background-color: blue; color: white; font-weight: bold; font-size: 24px; left: 500px; top: 200px; width: 600px; height: 180px; padding-top: 20px;";
+                var pos = {style: pstyle};
+                createModal("loginfo","User: " + presult["users_email"] + "<br>Logged into panel: " + presult["panels_pname"] + "<br>With skin: " + presult["panels_skin"] + "<br><br>Proceed? ", 
+                    "body", true, pos, function(ui) {
+                        var clk = $(ui).attr("name");
+                        if ( clk==="okay" ) {
+                            window.location.href = cm_Globals.returnURL;
+                        }
+                    });
+                // window.location.href = cm_Globals.returnURL;
+            } else {
+                var pstyle = "position: absolute; border: 6px black solid; background-color: red; color: white; font-weight: bold; font-size: 24px; left: 500px; top: 200px; width: 600px; height: 180px; padding-top: 50px;";
+                var pos = {style: pstyle};
+                createModal("loginfo","Either the User and Password pair are invalid, or the requested Panel and Password pair are invalid. <br><br>Please try again.", "body", false, pos);
+                setTimeout(function() {
+                    closeModal("loginfo");
+                },2000);
+                // window.location.href = cm_Globals.returnURL;
+            }
         });
 
     } else if ( buttonid === "blackout") {
@@ -1787,20 +1927,29 @@ function setupButtons() {
 
     } else if ( pagename==="auth" ) {
 
+        // now we use the DB index of the hub to ensure it is unique
         $("#pickhub").on('change',function(evt) {
-            var hubId = $(this).val();
-            var target = "#authhub_" + hubId;
+            var hubindex = $(this).val();
+            var target = "#authhub_" + hubindex;
 
             // this is only the starting type and all we care about is New
             // if we needed the actual type we would have used commented code
             var hubType = $(target).attr("hubtype");
+            var hubId = $(target).attr("hubid");
             // alert("hubType = " + hubType);
             // var realhubType = $("#hubdiv_" + hubId).children("select").val();
             // alert("realhubType= " + realhubType);
-            if ( hubType==="New" ) {
+            if ( hubId==="new" ) {
+                $("input.hubauth").removeClass("hidden");
                 $("input.hubdel").addClass("hidden");
                 $("#newthingcount").html("Fill out the fields below to add a New hub");
+            } else if ( hubId==="-1" ) {
+                $("#newthingcount").html("The \"null\" hub for things not associated with a hub. It cannot be altered or authorized.");
+                $("input.hubdel").addClass("hidden");
+                $("input.hubauth").addClass("hidden");
+                $("#hubdiv_new > select[name='hubType']").addClass("hidden");
             } else {
+                $("input.hubauth").removeClass("hidden");
                 $("input.hubdel").removeClass("hidden");
                 $("#newthingcount").html("");
             }
@@ -1812,9 +1961,9 @@ function setupButtons() {
             $(target).removeClass("hidden");
 
             // populate the clientSecret field that could have funky characters
-            if ( hubType!=="New" && hub ) {
-                var funkysecret = $("#csecret_"+hubId).val();
-                $(target + " div.fixClientSecret >input").val(hub.clientSecret);
+            if ( hubType!=="New" && hubindex ) {
+                var funkysecret = $("#csecret_"+hubindex).val();
+                $(target + " div.fixClientSecret >input").val(funkysecret);
             }
 
             evt.stopPropagation(); 
@@ -1847,8 +1996,9 @@ function setupButtons() {
         // add on one time info from user
         $("input.hubauth").click(function(evt) {
             try {
-                var hubId = $(this).attr("hubid");
-                var formData = formToObject("hubform_"+hubId);
+                // var hubId = $(this).attr("hubid");
+                var hubindex = $(this).attr("hubindex");
+                var formData = formToObject("hubform_"+hubindex);
                 // console.log(formData);
             } catch(err) {
                 evt.stopPropagation(); 
@@ -1874,6 +2024,15 @@ function setupButtons() {
                         setInterval(function() {
                             $("#newthingcount").fadeTo(400, 0.1 ).fadeTo(400, 1);
                         }, 1000);
+
+                        // reload the page after 15 seconds of trying to get the devices in the background
+                        // while we are waiting the server is reading the devices from the hub asyncronously
+                        // if this reload happens that means the device read likely failed
+                        setTimeout(function() {
+                            var location = cm_Globals.returnURL + "/reauth";
+                            window.location.href = location;
+                        }, 15000);
+
                     }
 
                     // navigate to the location to authorize Ford Pass - see the following postman schema for background info
@@ -1909,7 +2068,7 @@ function setupButtons() {
                         // navigate over to the server to authorize
                         var location = obj.host + "/oauth/authorize?" + nvpreq;
                         
-                        alert("Ready to redirect to location: " + location);
+                        // alert("Ready to redirect to location: " + location);
                         window.location.href = location;
                     }
                 } else {
@@ -1925,24 +2084,30 @@ function setupButtons() {
         $("input.hubdel").click(function(evt) {
             var hubnum = $(this).attr("hubnum");
             var hubId = $(this).attr("hubid");
+            var hubindex = $(this).attr("hubindex");
             var bodytag = "body";
-            var pos = {position: "absolute", top: 600, left: 150, 
-                       width: 600, height: 60, border: "4px solid"};
+            var pos = {position: "absolute", top: 100, left: 100, 
+                       width: 600, height: 120, border: "4px solid"};
             // alert("Remove request for hub: " + hubnum + " hubID: " + hubId );
 
-            createModal("modalhub","Remove hub #" + hubnum + " hubID: " + hubId + "? Are you sure?", bodytag , true, pos, function(ui, content) {
+            createModal("modalhub","Remove Hub #" + hubnum + " hubID: " + hubId + "? <br>Are you sure?", bodytag , true, pos, function(ui, content) {
                 var clk = $(ui).attr("name");
                 if ( clk==="okay" ) {
                     // remove it from the system
                     $.post(cm_Globals.returnURL, 
-                        {useajax: "hubdelete", userid: cm_Globals.options.userid, id: hubId, type: "none", value: "none"},
+                        {useajax: "hubdelete", userid: cm_Globals.options.userid, hubid: hubId, id: hubindex},
                         function (presult, pstatus) {
                             if (pstatus==="success" && !presult.startsWith("error")) {
-                                var location = cm_Globals.returnURL + "/reauth";
-                                window.location.href = location;
-        
-                            } else {
                                 $("#newthingcount").html(presult);
+
+                                // var location = cm_Globals.returnURL + "/reauth";
+                                // window.location.href = location;
+
+                                // $("#authhub_"+hubindex).remove();
+                                // $("#hubopt_"+hubindex).remove();
+                                // $("#newthingcount").html(presult);
+                            } else {
+                                $("#newthingcount").html("error - could not remove hub #" + hubnum + " hub ID: " + hubId);
                                 console.log(presult);
                             }
                         }
@@ -2047,12 +2212,11 @@ function addEditLink() {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "delthing", userid: userid, id: bid, type: thingtype, value: panel, attr: startpos, hubid: hubid, tile: tile, thingid: thingid, roomid: roomid},
+                    {useajax: "delthing", userid: userid, id: bid, type: thingtype, value: panel, attr: "", hubid: hubid, tile: tile, thingid: thingid, roomid: roomid},
                     function (presult, pstatus) {
                         // check for an object returned which should be a promise object
                         if (pstatus==="success" && ( typeof presult==="object" || (typeof presult === "string" && !presult.startsWith("error"))) ) {
                             console.log( "delthing presult: ", presult );
-                            console.log( "Removed tile #" + tile + " thingid: ", thingid, " name: ", tilename, " from page: ", panel);
                             $(thing).remove();
                         } else {
                             console.log("pstatus: ", pstatus, " presult: ", presult);
@@ -2074,26 +2238,24 @@ function addEditLink() {
         createModal("modaladd","Remove Room #" + roomnum + " with Name: " + roomname +" from HousePanel. Are you sure?", "body" , true, pos, function(ui, content) {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
+                
+                // fix default tab if it is on our deleted page
+                var defaultTab = getCookie( 'defaultTab' );
+                if ( defaultTab === clickid ) {
+                    defaultTab = $("#roomtabs").children().first().attr("aria-labelledby");
+                    setCookie('defaultTab', defaultTab);
+                }
+
                 // remove it from the system
-                // alert("Removing thing = " + tilename);
                 $.post(cm_Globals.returnURL, 
                     {useajax: "pagedelete", userid: cm_Globals.options.userid, id: roomnum, type: "none", value: roomname, roomid: roomid, attr: "none"},
                     function (presult, pstatus) {
                         if (pstatus==="success" && !presult.startsWith("error")) {
-                            console.log( "Removed Page #" + roomnum + " Page name: "+ roomname );
-                            // remove it visually
+                            // remove it visually - although we do a refresh so not really needed
                             $("li[roomnum="+roomnum+"]").remove();
-                            getOptions();
-                            
-                            // fix default tab if it is on our deleted page
-                            var defaultTab = getCookie( 'defaultTab' );
-                            if ( defaultTab === clickid ) {
-                                defaultTab = $("#roomtabs").children().first().attr("aria-labelledby");
-                                setCookie('defaultTab', defaultTab);
-                            }
-                        } else {
-                            console.log(presult);
+                            // getOptions();
                         }
+                        console.log(presult);
                     }
                 );
             }
@@ -2112,11 +2274,12 @@ function addEditLink() {
     $("#addpage").on("click",function(evt) {
         // var clickid = $(evt.target).attr("aria-labelledby");
         var pos = {top: 100, left: 10};
+        var panelid = $("input[name='panelid']").val();
         createModal("modaladd","Add New Room to HousePanel. Are you sure?", "body" , true, pos, function(ui, content) {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "pageadd", userid: cm_Globals.options.userid, id: "none"},
+                    {useajax: "pageadd", userid: cm_Globals.options.userid, id: "none", panelid: panelid},
                     function (presult, pstatus) {
                         if ( pstatus==="success" && !presult.startsWith("error") ) {
                             window.location.href = cm_Globals.returnURL;
@@ -2129,6 +2292,8 @@ function addEditLink() {
         });
         
     });    
+
+    $("#catalog").show();
     
 }
 
@@ -2161,7 +2326,8 @@ function delEditLink() {
 
 function showType(ischecked, theval) {
     
-    var hubpick = cm_Globals.hubId;
+    // var hubpick = cm_Globals.hubId;
+    var hubpick = "all";
         
     if ( pagename==="options" ) {
         $('table.roomoptions tr[type="'+theval+'"]').each(function() {
@@ -2595,78 +2761,87 @@ function clockUpdater() {
     // var d = new Date(utc + (1000*tz));        
     var userid = cm_Globals.options.userid;
 
-    // call server to get updated digital clocks
-    $.post(cm_Globals.returnURL, 
-        {useajax: "getclock", userid: userid, id: "clockdigital", type: "clock"},
-        function (presult, pstatus) {
-            console.log( "clock update: ", presult );
-            if ( pstatus==="success" && typeof presult==="object" ) {
-                // console.log("Updating digital clocks with: ", presult);
+    updateClock("clockdigital");
+    updateClock("clockanalog");
 
-                // remove time items since we don't want to mess up the second updater
-                delete presult["time"];
+    function updateClock(clocktype) {
 
-                // first update all the clock tiles
-                $('div.panel div.thing[bid="clockdigital"]').each(function() {
-                    var aid = $(this).attr("aid");
-                    if ( aid ) {
-                        updateTile(aid, presult);
-                    }
-                });
+        // call server to get updated digital clocks
+        $.post(cm_Globals.returnURL, 
+            {useajax: "getclock", userid: userid, id: clocktype, type: "clock"},
+            function (presult, pstatus) {
+                if ( pstatus==="success" && presult && typeof presult==="object" ) {
+                    console.log("Updating ",clocktype," with: ", presult);
 
-                // now update all linked tiles with weekdays and dates
-                // don't bother updating time zones - they dont really change
-                $('div.panel div.thing[linkbid="clockdigital"]').each(function() {
-                    var aid = $(this).attr("aid");
-                    if ( aid ) {
-                        var weekdayid = "#a-"+aid+"-weekday";
-                        if ( weekdayid ) { $(weekdayid).html(presult.weekday); }
-                        var dateid =  "#a-"+aid+"-date";
-                        if ( dateid ) { $(dateid).html(presult.date); }
-                    }
-                });
-            } else {
-                console.log("Error obtaining digital clock update");
-            }
-        }, "json"
-    );
+                    // remove time items since we don't want to mess up the second updater
+                    delete presult["time"];
+
+                    // first update all the clock tiles
+                    $('div.panel div.thing[bid="'+clocktype+'"]').each(function() {
+                        var aid = $(this).attr("aid");
+                        if ( aid ) {
+                            updateTile(aid, presult);
+                        }
+                    });
+
+                    // now update all linked tiles with weekdays and dates
+                    // don't bother updating time zones - they dont really change
+                    $('div.panel div.thing[linkbid="'+clocktype+'"]').each(function() {
+                        var aid = $(this).attr("aid");
+                        if ( aid ) {
+                            var weekdayid = "#a-"+aid+"-weekday";
+                            if ( weekdayid ) { $(weekdayid).html(presult.weekday); }
+                            var dateid =  "#a-"+aid+"-date";
+                            if ( dateid ) { $(dateid).html(presult.date); }
+                            if ( presult.skin ) {
+                                var skinid =  "#a-"+aid+"-skin";
+                                if ( skinid ) { $(skinid).html(presult.skin); }
+                            }
+                        }
+                    });
+                } else {
+                    console.log("Error obtaining ", clocktype, " clock update. pstatus: ", pstatus," presult: ", presult);
+                }
+            }, "json"
+        );
+    }
 
     // call server to get updated analog clocks
-    $.post(cm_Globals.returnURL, 
-        {useajax: "getclock", userid: userid, id: "clockanalog", type: "clock"},
-        function (presult, pstatus) {
-            if ( pstatus==="success" && typeof presult==="object" ) {
-                // console.log("Updating analog clocks with: ", presult);
+    // $.post(cm_Globals.returnURL, 
+    //     {useajax: "getclock", userid: userid, id: "clockanalog", type: "clock"},
+    //     function (presult, pstatus) {
+    //         if ( pstatus==="success" && typeof presult==="object" ) {
+    //             // console.log("Updating analog clocks with: ", presult);
 
-                // remove time items since we don't want to mess up the second updater
-                delete presult["time"];
+    //             // remove time items since we don't want to mess up the second updater
+    //             delete presult["time"];
     
-                // first update all the clock tiles
-                $('div.panel div.thing[bid="clockanalog"]').each(function() {
-                    var aid = $(this).attr("aid");
-                    if ( aid ) {
-                        updateTile(aid, presult);
-                    }
-                });
+    //             // first update all the clock tiles
+    //             $('div.panel div.thing[bid="clockanalog"]').each(function() {
+    //                 var aid = $(this).attr("aid");
+    //                 if ( aid ) {
+    //                     updateTile(aid, presult);
+    //                 }
+    //             });
 
-                // now update all linked tiles with weekdays and dates
-                // don't bother updating time zones - they dont really change
-                $('div.panel div.thing[linkbid="clockanalog"]').each(function() {
-                    var aid = $(this).attr("aid");
-                    if ( aid ) {
-                        var weekdayid = "#a-"+aid+"-weekday";
-                        if ( weekdayid ) { $(weekdayid).html(presult.weekday); }
-                        var dateid =  "#a-"+aid+"-date";
-                        if ( dateid ) { $(dateid).html(presult.date); }
-                        var skinid =  "#a-"+aid+"-skin";
-                        if ( skinid ) { $(skinid).html(presult.skin); }
-                    }
-                });
-            } else {
-                console.log("Error obtaining analog clock update");
-            }
-        }, "json"
-    );
+    //             // now update all linked tiles with weekdays and dates
+    //             // don't bother updating time zones - they dont really change
+    //             $('div.panel div.thing[linkbid="clockanalog"]').each(function() {
+    //                 var aid = $(this).attr("aid");
+    //                 if ( aid ) {
+    //                     var weekdayid = "#a-"+aid+"-weekday";
+    //                     if ( weekdayid ) { $(weekdayid).html(presult.weekday); }
+    //                     var dateid =  "#a-"+aid+"-date";
+    //                     if ( dateid ) { $(dateid).html(presult.date); }
+    //                     var skinid =  "#a-"+aid+"-skin";
+    //                     if ( skinid ) { $(skinid).html(presult.skin); }
+    //                 }
+    //             });
+    //         } else {
+    //             console.log("Error obtaining analog clock update");
+    //         }
+    //     }, "json"
+    // );
 
 }
 
@@ -2909,6 +3084,9 @@ function addOnoff(targetid, subid, thevalue) {
     return thevalue;
 }
 
+// the aid value is now exactly equal to thingid -- both are the index key in the DB
+// for the main things table that holds the index keys for devices shown on pages
+// tileid below is the index in the devices table to the absolute device information
 function processClick(that, thingname) {
     var aid = $(that).attr("aid");
     var theattr = $(that).attr("class");
@@ -2920,8 +3098,9 @@ function processClick(that, thingname) {
     var command = "";
     var bid = $(tile).attr("bid");
     var hubid = $(tile).attr("hub");
-    var hubid = $(tile).attr("hub");
     var userid = cm_Globals.options.userid;
+    var thingid = $(tile).attr("thingid");
+    var tileid = $(tile).attr("tile");
     var targetid;
     if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
         var slen = subid.length;
@@ -3015,7 +3194,7 @@ function processClick(that, thingname) {
         console.log(ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" hub Id= " + hubid + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
 
         $.post(cm_Globals.returnURL, 
-            {useajax: ajaxcall, userid: cm_Globals.options.userid, id: bid, type: thetype, value: thevalue, uname: uname,
+            {useajax: ajaxcall, userid: userid, thingid: thingid, tileid: tileid, id: bid, type: thetype, value: thevalue, uname: uname,
                 attr: subid, subid: subid, hubid: hubid},
             function(presult, pstatus) {
                 if (pstatus==="success") {
@@ -3047,6 +3226,9 @@ function processClick(that, thingname) {
             var thetype = $(tile).attr("type");
             var bid = $(tile).attr("bid");
             var hubid = $(tile).attr("hub");
+            var thingid = $(tile).attr("thingid");
+            var tileid = $(tile).attr("tile");
+                    
             var val = thevalue;
 
             var sib = $(this).siblings("div.user_hidden");
@@ -3077,7 +3259,7 @@ function processClick(that, thingname) {
             //                    " attr: ", theattr, " hubid: ", hubid, " command: ", command, " linkval: ", linkval );
             if ( val ) {
                 $.post(cm_Globals.returnURL, 
-                    {useajax: ajaxcall, userid: cm_Globals.options.userid, id: bid, type: thetype, value: val, uname: uname, roomid: roomid,
+                    {useajax: ajaxcall, userid: userid, id: bid, thingid: thingid, tileid: tileid, type: thetype, value: val, uname: uname, roomid: roomid,
                      attr: theattr, subid: "switch", hubid: hubid, command: command, linkval: linkval} );
             }
         });
@@ -3096,9 +3278,9 @@ function processClick(that, thingname) {
         // emulate refresh for show popup window for blanks and customs
         // no longer do this - will later implement a rule API function
         // TODO - implement passive click API function
-        $.post(cm_Globals.returnURL, 
-            {useajax: "passiveclick", userid: cm_Globals.options.userid, id: bid, type: thetype, value: thevalue, uname: uname, 
-             attr: theattr, subid: subid, hubid: hubid, command: command, linkval: linkval} );
+        // $.post(cm_Globals.returnURL, 
+        //     {useajax: "passiveclick", userid: cm_Globals.options.userid, id: bid, type: thetype, value: thevalue, uname: uname, 
+        //      attr: theattr, subid: subid, hubid: hubid, command: command, linkval: linkval} );
 
         // if ( thetype!=="image" && thetype!=="video" ) {
         //     // var idx = thetype + "|" + bid;
@@ -3167,7 +3349,7 @@ function processClick(that, thingname) {
             thevalue = thevalue==="locked" ? "unlock" : "lock";
         }
 
-        console.log("URL: ", cm_Globals.returnURL," ", ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" hub= " + hubid + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
+        console.log("URL: ", cm_Globals.returnURL," ", ajaxcall + ": userid= ",userid," thingid= ",thingid,"tileid= ",tileid, "thingname= " + thingname + " command= " + command + " bid= "+bid+" hub= " + hubid + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
 
         // create a visual cue that we clicked on this item
         $(targetid).addClass("clicked");
@@ -3180,8 +3362,8 @@ function processClick(that, thingname) {
         // alert("API call: " + ajaxcall + " bid: " + bid + " type: " + thetype + " value: " + thevalue);
         // hubid = "auto";
         $.post(cm_Globals.returnURL, 
-               {useajax: ajaxcall, userid: cm_Globals.options.userid, id: bid, type: thetype, value: thevalue, uname: uname, 
-                attr: theattr, subid: subid, hubid: hubid, command: command, linkval: linkval},
+               {useajax: ajaxcall, userid: userid, id: bid, thingid: thingid, type: thetype, value: thevalue, uname: uname, 
+                attr: theattr, subid: subid, hubid: hubid, tileid: tileid, command: command, linkval: linkval},
             function (presult, pstatus) {
                 if (pstatus==="success") {
 
@@ -3227,10 +3409,8 @@ function processClick(that, thingname) {
                         var pos = {top: $(tile).position().top + 80, left: leftpos};
                         closeModal("modalpopup");
                         createModal("modalpopup", showstr, "body", false, pos, function(ui) {} );
-                    } else if ( presult==="success" ) {
+                    } else if ( !presult.startsWith("error") ) {
                         console.log("Success: result will be pushed later.");
-                    } else if ( typeof presult==="string" && presult.startsWith("info:") ) {
-                        console.log(presult);
                     } else {
                         console.log("Unrecognized return from POST call. result: ", presult);
                     }
