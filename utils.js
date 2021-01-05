@@ -1,6 +1,9 @@
 'use strict';
+const fs = require('fs');
 
 const devhistory =  ` 
+3.002   Working alpha of new DB with new login screen
+3.001   First version of Database version with New ST support
 2.415   bugfix that caused RULE engine to make spurious fixed values
 2.414   quick fix to prior update to resolve regular rules issue
 2.413   updated rules to enable invoking GET and POST from other triggers
@@ -565,9 +568,7 @@ exports.hidden = function hidden(pname, pvalue, id) {
     return inpstr;
 }
 
-exports.getHeader = function getHeader(skin, islogin) {
-    
-    var skip = ( typeof islogin !== "undefined" && islogin ) ;
+exports.getHeader = function getHeader(userid, skin, skip) {
 
     var $tc = '<!DOCTYPE html>';
     $tc += '<html lang="en"><head>';
@@ -624,9 +625,13 @@ exports.getHeader = function getHeader(skin, islogin) {
         // load the main css file
         $tc += "<link rel=\"stylesheet\" type=\"text/css\" href=\"" + skin + "/housepanel.css\">";
 
-        // load the custom tile sheet if it exists
+        // load the custom tile sheet for this user if it exists
         // replaced logic to make customizations skin specific
-        $tc += "<link id=\"customtiles\" rel=\"stylesheet\" type=\"text/css\" href=\"" + skin + "/customtiles.css\">";
+        var userfn = "user" + userid + "/" + skin + "/customtiles.css";
+        // var userfn = skin + "/customtiles.css";
+        if ( fs.existsSync(userfn ) ) {
+            $tc += "<link id=\"customtiles\" rel=\"stylesheet\" type=\"text/css\" href=\"" + userfn + "\">";
+        }
     }
     
     // begin creating the main page

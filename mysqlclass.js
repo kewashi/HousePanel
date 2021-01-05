@@ -4,6 +4,7 @@ exports.sqlDatabase = class sqlDatabase {
     constructor(dbhost, dbname, dbuid, dbpassword) {        
         this.mysqlx = require('@mysql/xdevapi');
         this.insertId = 0;
+        this.impacted = 0;
         this.tablenames;
         this.session;
         this.recentResults = null;
@@ -52,13 +53,17 @@ exports.sqlDatabase = class sqlDatabase {
         return this.insertId;
     }
 
+    getImpacted() {
+        return this.impacted;
+    }
+
     isTable(atable) {
         var isvalid = (this.tablenames.indexOf(atable) !== -1);
         return isvalid;
     }
 
     getResults() {
-        return (this.error ? null : this.recentResults);
+        return this.recentResults;
     }
 
     die(msg) {
@@ -68,7 +73,7 @@ exports.sqlDatabase = class sqlDatabase {
 
     warn(msg) {
         this.error = msg;
-        // console.log(">>>> sql warning: ", msg);
+        console.log(">>>> sql warning: ", msg);
     }
     
     getJoinStr(usertable, idjoinfrom, jointable, idjointo, jtype) {
@@ -118,15 +123,12 @@ exports.sqlDatabase = class sqlDatabase {
                 fieldkey= "`" + fieldkey.toString() + "`";
                 fieldvalue ="'" + fieldvalue + "'";
     
-                // skip this field if it is blank or set to null string
-                if ( typeof fieldvalue !== "undefined" ) {
-                    if ( keystring==="" ) {
-                        keystring = fieldkey;
-                        valstring = fieldvalue;
-                    } else {
-                        keystring += ", " + fieldkey;
-                        valstring += ", " + fieldvalue;
-                    }
+                if ( keystring==="" ) {
+                    keystring = fieldkey;
+                    valstring = fieldvalue;
+                } else {
+                    keystring += ", " + fieldkey;
+                    valstring += ", " + fieldvalue;
                 }
             }
 
@@ -138,7 +140,7 @@ exports.sqlDatabase = class sqlDatabase {
     // this either updates or adds a new row to the table
     // it first tries to update. If it fails then conditions are ignored and an attempt to add values
     // will be made as a new row. This will only succeed if all required fields are provided
-    updateRow(usertable, values, conditions) {
+    updateRow(usertable, values, conditions, joins) {
         this.error = null;
         if ( !usertable ) {
             this.die("No table specified in call to updateRow");
@@ -170,10 +172,24 @@ exports.sqlDatabase = class sqlDatabase {
         }
 
         // update the fields requested
-        var str = "UPDATE " + usertable + " SET " + updatestr + " WHERE " + conditions;
+        var str = "UPDATE " + usertable;
+
+        // add all of the joins provided do not remove the space in between
+        if ( joins && typeof joins === "string" ) {
+            str += " " + joins + " ";
+        } else if ( joins && typeof joins === "object" && Array.isArray(joins)  ) {
+            str += " " + joins.join(" ") + " ";
+        }
+        
+        str += " SET " + updatestr + " ";
+
+        if ( conditions ) {
+            str += " WHERE " + conditions;
+        }
+        
+        // console.log(" ^^^^ updateRow debug: ", str);
         var results = this.query(str)
         .then(qres => {
-
             // if failed, try adding a new row which will only work if all required fields are given
             if ( qres && qres.getAffectedItemsCount() === 0 ) {
                 var str = "INSERT INTO " + usertable + " ( " + keystring + ") VALUES ( " + valstring + " )";
@@ -181,10 +197,7 @@ exports.sqlDatabase = class sqlDatabase {
             } else {
                 return qres;
             }
-        })
-        .catch(reason => {
-            console.log(">>>> error - ", reason);
-        })
+        });
         return results;
     }
     
@@ -264,44 +277,48 @@ exports.sqlDatabase = class sqlDatabase {
         // turns the results into a json object with the column names attached
         // if the query involved a join, the table names are prepended
         function makeobj(cols, row) {
-            var rowobj = {};
-            for (var i=0; i<cols.length; i++) {
-                var colname = cols[i].getColumnLabel();
-                if ( isjoined ) {
-                    colname = cols[i].getTableLabel() + "_" + colname;
+            if ( row ) {
+                var rowobj = {};
+                for (var i=0; i<cols.length; i++) {
+                    var colname = cols[i].getColumnLabel();
+                    if ( isjoined ) {
+                        colname = cols[i].getTableLabel() + "_" + colname;
+                    }
+                    rowobj[colname] = row[i];
                 }
-                rowobj[colname] = row[i];
+            } else {
+                rowobj = null;
             }
             return rowobj;
         }
         
         var pr = this.getSession()
-            .then(session => {
-                return session.sql(str).execute()
-                .then( result => {
-                    var columns = result.getColumns();
-                    if ( firstrow===true ) {
-                        var rows = result.fetchOne();
-                        var rowobjs = makeobj(columns, rows);
-                    } else {
-                        rows = result.fetchAll();
-                        rowobjs = [];
-                        rows.forEach(function(row) {
-                            var obj = makeobj(columns, row);
-                            rowobjs.push(obj);
-                        });
-                    }
-                    this.recentResults = rowobjs;
-                    if ( callback ) {
-                        callback(rows);
-                    }
-                    return rowobjs;
-                })
-                .catch(reason => {
-                    this.warn(reason);
-                    return null;
-                })
-            });
+        .then(session => {
+            return session.sql(str).execute()
+            .then( result => {
+                var columns = result.getColumns();
+                if ( firstrow===true ) {
+                    var rows = result.fetchOne();
+                    var rowobjs = makeobj(columns, rows);
+                } else {
+                    rows = result.fetchAll();
+                    rowobjs = [];
+                    rows.forEach(function(row) {
+                        var obj = makeobj(columns, row);
+                        rowobjs.push(obj);
+                    });
+                }
+                this.recentResults = rowobjs;
+                if ( callback ) {
+                    callback(rows);
+                }
+                return rowobjs;
+            })
+            .catch(reason => {
+                this.warn(reason);
+                return null;
+            })
+        });
 
         // return the promise
         return pr;
@@ -321,26 +338,26 @@ exports.sqlDatabase = class sqlDatabase {
         var keys;
         var str = "SELECT * FROM " + usertable + " LIMIT 1";
         var pr = this.getSession()
-            .then(session => {
-                return session.sql(str).execute()
-                .then( result => {
-                    keys = result.getColumns()
-                    var cols = [];
-                    if ( keys ) {
-                        keys.forEach(function(acol) {
-                            cols.push(acol.getColumnName());
-                        });
-                    }
-                    if ( callback ) {
-                        callback(cols);
-                    }
-                    return cols;
-                });
-            })
-            .catch(reason => {
-                this.warn(reason);
-                return null;
+        .then(session => {
+            return session.sql(str).execute()
+            .then( result => {
+                keys = result.getColumns()
+                var cols = [];
+                if ( keys ) {
+                    keys.forEach(function(acol) {
+                        cols.push(acol.getColumnName());
+                    });
+                }
+                if ( callback ) {
+                    callback(cols);
+                }
+                return cols;
             });
+        })
+        .catch(reason => {
+            this.warn(reason);
+            return null;
+        });
         return pr;
     }
 
@@ -348,20 +365,23 @@ exports.sqlDatabase = class sqlDatabase {
     query(str, callback) {
         this.error = null;
         var pr = this.getSession()
-            .then(session => {
-                return session.sql(str).execute()
-                .then( result => {
-                    this.insertId = result.getAutoIncrementValue();
-                    if ( callback ) {
-                        callback(result);
-                    }
-                    return result;
-                });
+        .then(session => {
+            return session.sql(str).execute()
+            .then(sqlresult => {
+                this.insertId = sqlresult.getAutoIncrementValue();
+                this.impacted = sqlresult.getAffectedItemsCount();
+                if ( callback ) {
+                    callback(sqlresult);
+                }
+                // console.log(" >>>> query result: ", sqlresult, " impacted: ", this.impacted);
+                return sqlresult;
             })
             .catch(reason => {
                 this.warn(reason);
                 return null;
             });
+    
+        });
         return pr;
     }
 

@@ -159,7 +159,7 @@ function writeOptions(userid, options) {
                     var nid = parseInt(deviceid);
                     var isHubitat = (typeof nid !== "undefined") && !isNaN(nid) && (nid.toString() === deviceid);
                     var origname = "unknown";
-                    var pvalue = {name: origname, switch:"on", test: "test"};
+                    var pvalue = {name: origname};
                     
                     var hint = swtype;
                     var refresh = "normal";
@@ -180,7 +180,7 @@ function writeOptions(userid, options) {
                         hubid = nohubid;
                     }
                     sqlstr += "(" + userid + "," + hubid + ",'" + deviceid + "','" + origname + "','" + swtype + "','" + 
-                                    hint + "','" + refresh + "','" + JSON.stringify(pvalue) + "'), ";
+                                    hint + "','" + refresh + "','" + encodeURI(JSON.stringify(pvalue)) + "'), ";
                 }
         
                 // remove the ending ", "
