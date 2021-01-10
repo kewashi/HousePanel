@@ -15,8 +15,8 @@ var tileCount = 0;
 var DEBUGte = false;
 
 // popup dialog box now uses createModal
-//       editTile(roomname, "page", roomname,     0,   0,   "",        roomnum, "None",  "None");
-function editTile(pagename, str_type, thingindex, aid, bid, thingclass, hubnum, hubType, customname, htmlcontent) {  
+//       editTile(userid, roomid,  roomname, "page",   roomname,   0,   0,   "",         0,      "None",  "None",     null);
+function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thingclass, hubnum, hubType, customname, htmlcontent) {  
     // var returnURL;
     // try {
     //     returnURL = $("input[name='returnURL']").val();
@@ -32,6 +32,8 @@ function editTile(pagename, str_type, thingindex, aid, bid, thingclass, hubnum, 
     et_Globals.hubnum = hubnum;
     et_Globals.hubType = hubType || "None";
     et_Globals.pagename = pagename;
+    et_Globals.userid = userid;
+    et_Globals.thingid = thingid;
     if ( str_type==="page" ) {
         et_Globals.wholetarget = getCssRuleTarget(str_type, "name", thingindex, "thistile");
     } else {
@@ -70,7 +72,7 @@ function editTile(pagename, str_type, thingindex, aid, bid, thingclass, hubnum, 
     var jqxhr = null;
     if ( str_type==="page" ) {
         jqxhr = $.post(returnURL, 
-            {useajax: "pagetile", id: hubnum, type: 'page', tile: thingindex, value: thingindex, attr: customname},
+            {useajax: "pagetile", userid: et_Globals.userid, thingid: et_Globals.thingid, id: hubnum, type: 'page', tile: thingindex, value: thingindex, attr: customname},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;
@@ -1060,13 +1062,6 @@ function colorpicker(str_type, thingindex) {
     var subid = firstsub;
     var onoff = getOnOff(str_type, subid, val);
 
-    // var idx = "isy|vars";
-    // if (str_type==="isy" && ("alias" in cm_Globals.allthings[idx]) && (subid in cm_Globals.allthings[idx].alias )) {
-    //     firstsub = firstsub + " (" + cm_Globals.allthings[idx].alias[subid] + ")";
-    // } else {
-    //     console.log("type, subid: ", str_type, subid);
-    // }
-    
     dh += "<div id='subidTarget' class='dlgtext'>" + firstsub + "</div>";
     dh += "<div id='onoffTarget' class='dlgtext'>" + onoff[0] + "</div>";
     dh+= "</div></div>";
@@ -1109,17 +1104,6 @@ function setupClicks(str_type, thingindex) {
         initDialogBinds(str_type, thingindex);
         loadSubSelect(str_type, subid, thingindex);
 
-        // include alias if there
-        // var idx = "isy|vars";
-        // if (str_type==="isy" && ("alias" in cm_Globals.allthings[idx]) && (subid in cm_Globals.allthings[idx].alias )) {
-        //     var alias = cm_Globals.allthings[idx].alias[subid];
-        //     if ( alias !== subid ) {
-        //         var theval = $("#subidTarget").html();
-        //         $("#subidTarget").html(theval + " (" + alias + ")");
-        //     }
-        // }
-        // console.log("subid, alias: ", subid, alias);
-            
         var newtitle;
         if ( str_type==="page" ) {
             newtitle = "Editing Page#" + et_Globals.hubnum + " Name: " + thingindex;
@@ -1312,7 +1296,7 @@ function updateNames(str_type, thingindex) {
 
     var returnURL = cm_Globals.returnURL;
     $.post(returnURL, 
-        {useajax: "updatenames", id: 0, type: str_type, value: newname, tile: thingindex},
+        {useajax: "updatenames", userid: et_Globals.userid, thingid: et_Globals.thingid, id: 0, type: str_type, value: newname, tile: thingindex},
         function (presult, pstatus) {
             if (pstatus==="success" && presult.startsWith("success") ) {
                 if ( str_type==="page"  ) {
@@ -1375,9 +1359,10 @@ function saveTileEdit(str_type, thingindex) {
         // console.log("\n----------------------------------------------------------\n", subcontent);
         // console.log("\n----------------------------------------------------------\n");
         subcontent= encodeURI(subcontent);
+        var skin = $("#skinid").val();
 
         $.post(returnURL, 
-            {useajax: "savetileedit", id: n1, n1: n1, n2: n2, nlen: sheetContents.length, type: str_type, value: subcontent, attr: newname, tile: thingindex},
+            {useajax: "savetileedit", userid: et_Globals.userid, thingid: et_Globals.thingid, skin: skin, id: n1, n1: n1, n2: n2, nlen: sheetContents.length, type: str_type, value: subcontent, attr: newname, tile: thingindex},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     if ( DEBUGte ) {
@@ -2197,7 +2182,7 @@ function getIcons(str_type, thingindex) {
     if ( iCategory.startsWith("Skin_") || iCategory.startsWith("Main_") ) {
         var localPath = iCategory.substr(5).toLowerCase();
         $.post(returnURL, 
-            {useajax: "geticons", id: 0, userid: 1, type: "none", value: localPath, attr: iCategory},
+            {useajax: "geticons", id: 0, userid: et_Globals.userid, thingid: et_Globals.thingid, type: "none", value: localPath, attr: iCategory, skin: skindir},
             function (presult, pstatus) {
                 if (pstatus==="success" && presult ) {
                     // console.log("reading icons from skin= " + skindir + " and path= "+localPath);
