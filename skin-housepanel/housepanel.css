@@ -953,7 +953,9 @@ div.other-thing.pioneer div.overlay, div.other-thing.lg div.overlay {
 }
 div.other-thing div.overlay.healthStatus,
 div.other-thing.pioneer div.overlay.name, 
+div.other-thing.pioneer div.overlay.status, 
 div.other-thing.lg div.overlay.name,
+div.other-thing.lg div.overlay.status,
 div.other-thing.pioneer div.overlay._custom5, div.other-thing.lg div.overlay._custom5,
 div.other-thing.pioneer div.overlay._virtualOn, div.other-thing.lg div.overlay._virtualOn,
 div.other-thing.pioneer div.overlay._virtualOff, div.other-thing.lg div.overlay._virtualOff

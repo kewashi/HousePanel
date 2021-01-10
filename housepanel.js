@@ -945,6 +945,8 @@ function setupSliders() {
             var thevalue = parseInt(ui.value);
             var thetype = $(tile).attr("type");
             var userid = cm_Globals.options.userid;
+            var thingid = $(tile).attr("thingid");
+            var tileid = $(tile).attr("tile");
             
             var usertile = thing.siblings(".user_hidden");
             var command = "";
@@ -961,10 +963,10 @@ function setupSliders() {
             
             // console.log(ajaxcall + ": id= "+bid+" type= "+linktype+ " value= " + thevalue + " subid= " + subid + " command= " + command + " linkval: ", linkval);
             console.log("setupSliders doaction: command= " + command + " bid= "+bid+" hub= " + hubid + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval);
-            
+
             $.post(cm_Globals.returnURL, 
-                {useajax: "doaction", userid: userid, id: bid, type: linktype, value: thevalue, attr: subid, 
-                 subid: subid, hubid: hubid, command: command, linkval: linkval} );
+                {useajax: "doaction", userid: userid, id: bid, thingid: thingid, type: linktype, value: thevalue, attr: subid, 
+                 subid: subid, hubid: hubid,  tileid: tileid, command: command, linkval: linkval} );
         }
     });
 
@@ -2154,8 +2156,9 @@ function addEditLink() {
         var pagename = $(thing).attr("panel")
         var bid = $(thing).attr("bid");
         var hubid = $(thing).attr("hub");
-        var hubType = "SmartThings";
         var hubType = $(thing).attr("hubtype");
+        var thingid = $(thing).attr("thingid");
+        var userid = cm_Globals.options.userid;
         try {
             var customname = $("#a-"+aid+"-name").html();
         } catch(e) {
@@ -2164,7 +2167,8 @@ function addEditLink() {
 
         // replace all the id tags to avoid dynamic updates
         strhtml = strhtml.replace(/ id="/g, " id=\"x_");
-        editTile(pagename, str_type, tile, aid, bid, thingclass, hubid, hubType, customname, strhtml);
+        console.log("editing tile: ", thingid, customname, pagename);
+        editTile(userid, thingid, pagename, str_type, tile, aid, bid, thingclass, hubid, hubType, customname, strhtml);
     });
     
     $("div.cmzlink").on("click",function(evt) {
@@ -2265,7 +2269,9 @@ function addEditLink() {
     $("#roomtabs div.editpage").on("click",function(evt) {
         var roomnum = $(evt.target).attr("roomnum");
         var roomname = $(evt.target).attr("roomname");
-        editTile(roomname, "page", roomname, 0, 0, "", roomnum, "None", roomname);
+        var roomid = $("#panel-"+roomname).attr("roomid");
+        console.log("editing room: ", roomid, roomnum, roomname);
+        editTile(cm_Globals.options.userid, roomid, roomname, "page", roomname, 0, 0, "", 0, "None", roomname);
     });
    
     $("#addpage").off("click");
@@ -2322,10 +2328,10 @@ function delEditLink() {
     // closeModal();
 }
 
-function showType(ischecked, theval) {
+function showType(ischecked, theval, hubpick) {
     
     // var hubpick = cm_Globals.hubId;
-    var hubpick = "all";
+    // var hubpick = "all";
         
     if ( pagename==="options" ) {
         $('table.roomoptions tr[type="'+theval+'"]').each(function() {
@@ -2367,10 +2373,12 @@ function setupFilters() {
     
 //    alert("Setting up filters");
    // set up option box clicks
+   var pickedhub = cm_Globals.hubId;
+
     function updateClick() {
         var theval = $(this).val();
         var ischecked = $(this).prop("checked");
-        showType(ischecked, theval);
+        showType(ischecked, theval, pickedhub);
     }
 
     // initial page load set up all rows
@@ -2382,7 +2390,8 @@ function setupFilters() {
     // hub specific filter
     $('input[name="huboptpick"]').click(function() {
         // get the id of the hub type we just picked
-        cm_Globals.hubId = $(this).val();
+        pickedhub = $(this).val();
+        cm_Globals.hubId = pickedhub;
 
         // reset all filters using hub setting
         $('input[name="useroptions[]"]').each(updateClick);
@@ -2476,7 +2485,7 @@ function setupCustomCount() {
         };
         
         // show the items of this type
-        showType(true, stype);
+        showType(true, stype, cm_Globals.hubId);
         
         // remove excess if we are going down
         if ( newcnt>0 && newcnt < currentcnt ) {
@@ -3192,7 +3201,7 @@ function processClick(that, thingname) {
         console.log(ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" hub Id= " + hubid + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
 
         $.post(cm_Globals.returnURL, 
-            {useajax: ajaxcall, userid: userid, thingid: thingid, tileid: tileid, id: bid, type: thetype, value: thevalue, uname: uname,
+            {useajax: ajaxcall, userid: userid, thingid: thingid, tileid: tileid, id: bid, type: thetype, value: thevalue,
                 attr: subid, subid: subid, hubid: hubid},
             function(presult, pstatus) {
                 if (pstatus==="success") {
@@ -3226,6 +3235,7 @@ function processClick(that, thingname) {
             var hubid = $(tile).attr("hub");
             var thingid = $(tile).attr("thingid");
             var tileid = $(tile).attr("tile");
+            var roomid = $("#panel-"+panel).attr("roomid");
                     
             var val = thevalue;
 
@@ -3257,7 +3267,7 @@ function processClick(that, thingname) {
             //                    " attr: ", theattr, " hubid: ", hubid, " command: ", command, " linkval: ", linkval );
             if ( val ) {
                 $.post(cm_Globals.returnURL, 
-                    {useajax: ajaxcall, userid: userid, id: bid, thingid: thingid, tileid: tileid, type: thetype, value: val, uname: uname, roomid: roomid,
+                    {useajax: ajaxcall, userid: userid, id: bid, thingid: thingid, tileid: tileid, type: thetype, value: val, roomid: roomid,
                      attr: theattr, subid: "switch", hubid: hubid, command: command, linkval: linkval} );
             }
         });
@@ -3360,7 +3370,7 @@ function processClick(that, thingname) {
         // alert("API call: " + ajaxcall + " bid: " + bid + " type: " + thetype + " value: " + thevalue);
         // hubid = "auto";
         $.post(cm_Globals.returnURL, 
-               {useajax: ajaxcall, userid: userid, id: bid, thingid: thingid, type: thetype, value: thevalue, uname: uname, 
+               {useajax: ajaxcall, userid: userid, id: bid, thingid: thingid, type: thetype, value: thevalue,
                 attr: theattr, subid: subid, hubid: hubid, tileid: tileid, command: command, linkval: linkval},
             function (presult, pstatus) {
                 if (pstatus==="success") {

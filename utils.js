@@ -2,6 +2,7 @@
 const fs = require('fs');
 
 const devhistory =  ` 
+3.003   Another working alpha with tileeditor and more working
 3.002   Working alpha of new DB with new login screen
 3.001   First version of Database version with New ST support
 2.415   bugfix that caused RULE engine to make spurious fixed values

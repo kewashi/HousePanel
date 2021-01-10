@@ -5,7 +5,7 @@ process.title = 'hpserver';
 const DEBUG1 = false;               // basic debug info - file loading, hub loading
 const DEBUGisy = false;             // ISY node return details
 const DEBUG2 = false;               // authorization flow and ISY programs
-const DEBUG3 = true;               // passwords
+const DEBUG3 = false;               // passwords
 const DEBUG4 = false;               // index, filters, options
 const DEBUG5 = false;               // hub node detail
 const DEBUG6 = false;               // tile position moves
@@ -20,8 +20,8 @@ const DEBUG12 = false;              // hub push updates
 const DEBUG13 = false;              // URL callbacks
 const DEBUG14 = false;              // tile link details
 const DEBUG15 = false;              // allthings and options dump
-const DEBUG16 = false;              // customtiles writing and custom names
-const DEBUG17 = true;               // push client
+const DEBUG16 = true;              // customtiles writing and custom names
+const DEBUG17 = false;               // push client
 const DEBUG18 = false;              // ST, HE, and Ford messages in callHub -> getHubResponse
 const DEBUG19 = false;              // ST and HE callback from Groovy or new ST Event Sink
 const DEBUGcurl = false;
@@ -31,7 +31,7 @@ const DEBUGtmp = true;              // used to debug anything temporarily using 
 const MQTTHP = false;                 // subscribe to and log HP via MQTT
 const IGNOREPW = false;               // set this to true to accept any text as a valid password
 const DONATE = false;                  // set this to true to enable donation section
-const ENABLERULES = false;             // set this to false to neuter all rules
+const ENABLERULES = true;             // set this to false to neuter all rules
 const FORDAPIVERSION = "2020-06-01";  // api version number to use for Ford api calls
 
 // websocket and http servers
@@ -90,6 +90,7 @@ GLB.ignoredAttributes = [
 // the keys here are unique to HousePanel and are used to define the type of thing on the panel
 GLB.capabilities = { 
     switch: [ ["switch"], ["_on","_off"]],
+    light: [ ["switch"], ["_on","_off"]],
     switchlevel: [ ["switchLevel","switch"], ["_on","_off"]],
     bulb: [ ["colorControl","switchLevel","switch"],["_on","_off","hue-up","hue-dn","saturation-up","saturation-dn"]], 
     button: [ ["button"],null],
@@ -214,9 +215,6 @@ async function getUserName(cookies) {
         if ( uhash && rows ) {
             for ( var i=0; i<rows.length; i++ ) {
                 var row = rows[i];
-                if ( DEBUG3 ) {
-                    console.log((ddbg()), "getUserName row: ", row);
-                }
 
                 // if username hash matches uname hash or email hash and if panel name hash match then proceed
                 if ( ( pw_hash(row["users_email"]) === uhash || pw_hash(row["users_uname"]) === uhash ) && 
@@ -234,7 +232,7 @@ async function getUserName(cookies) {
             }
         }
         return therow;
-    });
+    }).catch(reason => {console.log("dberror 1 - ", reason);});
     return result;
 }
 
@@ -246,22 +244,27 @@ function getTypes() {
     //     "other", "piston", "power", "presence", "shade", "shm", "smoke", "switch", "switchlevel", "temperature", "thermostat", 
     //     "vacuum", "valve", "video", "washer", "water", "weather"
     // ];
+
+    // add capabilities from the new SmartThings list
     var thingtypes = Object.keys(GLB.capabilities);
 
-    var specialtiles = getSpecials();
-    for (var key in specialtiles) {
-        thingtypes.push(key);
-    }
+    // add unique things to HousePanel, ISY, Ford, and other hubs
+    thingtypes.push("blank");
+    thingtypes.push("custom");
+    thingtypes.push("frame");
+    thingtypes.push("image");
+    thingtypes.push("video");
+    thingtypes.push("control");
+    thingtypes.push("momentary");
     thingtypes.push("actuator");
     thingtypes.push("other");
     thingtypes.push("clock");
-    thingtypes.push("control");
     thingtypes.push("ford");
     thingtypes.push("isy");
     thingtypes.push("hsm");
     thingtypes.push("shm");
     thingtypes.push("mode");
-    thingtypes.push("button");
+    thingtypes.push("music");
     thingtypes.push("piston");
 
     thingtypes.sort();
@@ -297,11 +300,11 @@ function readCustomCss(skin) {
 }
 
 // call to write Custom Css Back to customtiles.css
-function writeCustomCss(skin, str) {
+function writeCustomCss(userid, skin, str) {
 
     if ( typeof str === "undefined" ) {
         console.log( (ddbg()), "error - attempted to write null to customtiles");
-        str = "";
+        return;
     }
 
     // make sure we have a string
@@ -309,8 +312,9 @@ function writeCustomCss(skin, str) {
         str = str.toString();
     }
 
-    // proceed only if there is a main css file in this skin folder
-    if ( skin && fs.existsSync(skin + "/housepanel.css") ) {
+    // proceed only if there is a custom css file in this skin folder
+    var fname = "user" + userid + "/" + skin + "/customtiles.css";
+    if ( userid && skin && fs.existsSync(fname) ) {
         var d = new Date();
         var today = d.toLocaleString();
         var fixstr = "";
@@ -359,14 +363,16 @@ function writeCustomCss(skin, str) {
 
         // write to specific skin folder if the location is valid
         try {
-            fs.writeFileSync(skin + "/customtiles.css", fixstr, {encoding: "utf8", flag: opts});
-            if ( DEBUG1 ) {
-                console.log( (ddbg()), "custom CSS file saved in skin folder:", skin, " of size: ", fixstr.length);
+            fs.writeFileSync(fname, fixstr, {encoding: "utf8", flag: opts});
+            if ( DEBUG16 ) {
+                console.log( (ddbg()), "custom CSS file saved to file:", fname, " of size: ", fixstr.length);
             }
         } catch (e) {
             console.log( (ddbg()), e);
             console.log( (ddbg()), "error - failed to save custom CSS file in skin folder: ", skin);
         }
+    } else {
+        console.log( (ddbg()), "custom CSS file not saved to file:", fname);
     }
 }
 
@@ -594,7 +600,7 @@ function getHubInfo(hub, reload) {
             .then(result => {
                 // retrieve all devices and go back to reauth page
                 getDevices(hub, reload, "/reauth");
-            });
+            }).catch(reason => {console.log("dberror 2 - ", reason);});
         }
     }
 }
@@ -1065,7 +1071,7 @@ function processRefresh(userid, reload) {
             pushClient("reload", "auth", "reload");
         }
         return rows;
-    });
+    }).catch(reason => {console.log("dberror 3 - ", reason);});
 }
 
 function getAllThings(userid, reload) {
@@ -1077,7 +1083,7 @@ function getAllThings(userid, reload) {
             pushClient("reload");
         }
         return rows;
-    });
+    }).catch(reason => {console.log("dberror 4 - ", reason);});
     return devices;
 }
 
@@ -1507,7 +1513,7 @@ function getDevices(hub, reload, reloadpath) {
                         if ( devicecnt >= numdevices ) {
                             checkNewSTDone(swtype);
                         }
-                    });
+                    }).catch(reason => {console.log("dberror 5 - ", reason);});
                     
                 });  // end of this device node detail curl callback
             
@@ -1541,7 +1547,7 @@ function getDevices(hub, reload, reloadpath) {
                 return;
             }
 
-            if (DEBUG1 || DEBUGtmp) {
+            if (DEBUG1) {
                 console.log( (ddbg()), "Retrieved ", jsonbody.length, " things from hub: ", hub);
             }    
 
@@ -1599,7 +1605,7 @@ function getDevices(hub, reload, reloadpath) {
                         if ( devicecnt >= numdevices ) {
                             updateOptions(reload, reloadpath);
                         }
-                    });
+                    }).catch(reason => {console.log("dberror 6 - ", reason);});
                 });
 
             } else {
@@ -1728,7 +1734,7 @@ function getDevices(hub, reload, reloadpath) {
 
                 // now call the info function to get details
                 // notice the true last parameter which skips rules and client pushes
-                callHub(hub, vehicleid, thetype, pvalue, "", "_info", null, true);
+                // callHub(hub, vehicleid, thetype, pvalue, "", "_info", null, true);
 
                 // now call to get the graphical icon
                 // can't figure out how to save or use the returned image
@@ -2205,7 +2211,7 @@ function getDevices(hub, reload, reloadpath) {
                                                 var props = node["property"];
 
                                                 var device = newdevices[nodeid];
-                                                console.log(" >>>> props for node. device: ", device, " id: ", nodeid, " :", props);
+                                                // console.log(" >>>> props for node. device: ", device, " id: ", nodeid, " :", props);
 
                                                 // if there are props set values
                                                 // otherwise just flag that we tried by incrementing the count
@@ -2480,7 +2486,7 @@ function setIsyFields(userid, nodeid, device, props, screenupd) {
                 pushClient(nodeid, "isy", "none", value);
             }
             return results;
-        });
+        }).catch(reason => {console.log("dberror 7 - ", reason);});
         return pr;
     } else {
         return null;
@@ -2558,47 +2564,29 @@ function setupDefaultRooms(uname, defrooms) {
     }
 }
 
-function getSpecials() {
-    var obj = {
-        "video":  ["vid",480,240, 4, "normal"], 
-        "frame":  ["frame",480,212, 4, "slow"],
-        "image":  ["img",480,240, 4, "normal"],
-        "blank":  ["blank",120,150, 4, "never"],
-        "custom": ["custom_",120,150, 8, "normal"]
-    };
+function getSpecials(configoptions) {
+
+    var spobj = getConfigItem(configoptions, "specials");
+    var obj = null;
+    if ( spobj ) {
+        try {
+            obj = JSON.parse(spobj);
+        } catch (e) {
+            obj = null;
+        }
+    }
+    
+    if ( !obj ) {
+        obj = {
+            "video": 4, // ["vid",480,240, 4, "normal"], 
+            "frame": 4, // ["frame",480,212, 4, "slow"],
+            "image": 4, // ["img",480,240, 4, "normal"],
+            "blank": 4, // ["blank",120,150, 4, "never"],
+            "custom": 4 //  ["custom_",120,150, 8, "normal"]
+        };
+    }
+
     return obj;
-}
-
-// set defaults here
-function setDefaults() {
-
-    GLB.options = {};
-    GLB.options.config = {};
-    GLB.options.config["port"] = GLB.port;
-    GLB.options.config["kiosk"] = "false";
-    GLB.options.config["blackout"] = "false";
-    GLB.options.config["webSocketServerPort"] = GLB.webSocketServerPort;
-    GLB.options.config["timezone"] = "America/Detroit";
-    GLB.options.config["hubs"] = [];
-    GLB.options.config["specialtiles"] = {"video": 4, "frame": 4, "image": 4, "blank": 2, "custom": 8};
-    GLB.options.config["fast_timer"] = "0";
-    GLB.options.config["slow_timer"] = "300000";
-    GLB.options.config["rules"] = "true";
-    GLB.options.config["accucity"] = "ann-arbor-mi";
-    GLB.options.config["accuregion"] = "us";
-    GLB.options.config["accucode"] = "329380";
-    GLB.options.config["fcastcity"] = "ann-arbor";
-    GLB.options.config["hubpick"] = "all";
-    GLB.options.config["polisyip"] = "localhost";
-    GLB.options.config["uname"] = "";
-    GLB.options.config["pword"] = {};
-    // GLB.options.config["pword"]["default"] = ["", "skin-housepanel"];
-    GLB.options["useroptions"] = getTypes();
-
-    // new user setup includes ading special tiles
-    // allthings = {};
-    // addSpecials();
-    // updateOptions(false);
 }
 
 function getLoginPage(userid, emailid, hostname, skin) {
@@ -2711,7 +2699,7 @@ function processLogin(body, res) {
             // pushClient("reload", "login", "/logout");
         }
         return therow;
-    });
+    }).catch(reason => {console.log("dberror 8 - ", reason);});
     return results;
 }
 
@@ -3113,37 +3101,6 @@ function is_string(obj) {
     return (typeof obj === "string");
 }
 
-// return the HP specific type for a given capability
-function getType(swid, capability, tileid) {
-
-    // first try to get the specific tile type if the tile id is given
-    if ( tileid ) {
-        var idx = getKeyByValue(GLB.options.index, tileid);
-        var items = idx.split("|");
-        if ( items && items[0] ) {
-            return items[0];
-        }
-    }
-
-    // next base it on the capability
-    if ( capability ) {
-        for (var swtype in GLB.capabilities ) {
-            if ( GLB.capabilities[swtype][0].includes(capability) ) {
-                return swtype;
-            }
-        }
-    }
-
-    // otherwise scan the devices for a type with this ID
-    for ( var idx in GLB.options.index ) {
-        var items = idx.split("|");
-        if ( swid === items[1] ) {
-            return items[0];
-        }
-    }
-    return false;
-}
-
 function is_object(obj) {
     return ( typeof obj === "object" );
 }
@@ -3167,8 +3124,8 @@ function inroom($idx, $things) {
     var $idxint = parseInt($idx);
     for (var i in $things) {
         var $arr = $things[i];
-        var $thingindex = is_array($arr) ? $arr[0] : parseInt($arr);
-        if ( $idxint === $thingindex ) {
+        var thingindex = is_array($arr) ? $arr[0] : parseInt($arr);
+        if ( $idxint === thingindex ) {
             $found = i;
             break;
         }
@@ -3180,7 +3137,7 @@ function inroom($idx, $things) {
 // each HousePanel tab is generated by this function call
 // each page is contained within its own form and tab division
 // notice the call of $cnt by reference to keep running count
-function getNewPage(userid, configoptions, cnt, roomid, roomname, kroom, things) {
+function getNewPage(userid, configoptions, cnt, roomid, roomname, kroom, things, alldevices) {
     var $tc = "";
     $tc += "<div id=\"" + roomname + "-tab\">";
     $tc += "<form title=\"" + roomname + "\" action=\"#\">";
@@ -3240,7 +3197,7 @@ function getNewPage(userid, configoptions, cnt, roomid, roomname, kroom, things)
 
             // keep running count of things to use in javascript logic
             cnt++;
-            $tc += makeThing(userid, configoptions, cnt, tileid, thesensor, roomname, postop, posleft, zindex, customname, false);
+            $tc += makeThing(userid, configoptions, cnt, tileid, thesensor, roomname, postop, posleft, zindex, customname, false, alldevices);
         }
     });
 
@@ -3292,10 +3249,10 @@ function processName(thingname, thingtype) {
 // returns proper html to display an image, video, frame, or custom
 // if some other type is requested it returns a div of requested size and skips search
 // searches in main folder and media subfolder for file name
-function returnFile(thingvalue, thingtype) {
+function returnFile(thingvalue, thingtype, configoptions) {
 
     // do nothing if this isn't a special tile
-    var specialtiles = getSpecials();
+    var specialtiles = getSpecials(configoptions);
     if ( !array_key_exists(thingtype, specialtiles) ) {
         return thingvalue;
     }
@@ -3685,7 +3642,7 @@ function uniqueWords(str) {
     return newstr;
 }
 
-function makeThing(userid, configoptions, cnt, kindex, thesensor, panelname, postop, posleft, zindex, customname, wysiwyg) {
+function makeThing(userid, configoptions, cnt, kindex, thesensor, panelname, postop, posleft, zindex, customname, wysiwyg, alldevices) {
     // const audiomap = {"title": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
     //                   "albumArtUrl": "trackImage", "mediaSource": "mediaSource"};
     // const musicmap = {"name": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
@@ -3705,7 +3662,7 @@ function makeThing(userid, configoptions, cnt, kindex, thesensor, panelname, pos
     }
     
     // add in customizations here
-    // thesensor.value = getCustomTile(userid, configoptions, thesensor.value, thingtype, bid);
+    thesensor.value = getCustomTile(userid, configoptions, thesensor.value, thingtype, bid);
     thesensor.value = setValOrder(thesensor.value);
     var thingvalue = thesensor.value;
     
@@ -3829,18 +3786,13 @@ function makeThing(userid, configoptions, cnt, kindex, thesensor, panelname, pos
         $tc += "</div>";
         // $tc += putElement(kindex, cnt, 6, thingtype, "Sunrise: " + thingvalue["localSunrise"] + " Sunset: " + thingvalue["localSunset"], "sunriseset");
         
+        // see comments below about changes to link logic and companion use removal
         var j = 6;
         for ( var tkey in thingvalue ) {
             tkey = tkey.toString();
-            if ( !array_key_exists(tkey, mantemp) && tkey.substring(0,5)!=="user_" ) {
-                var helperkey = "user_" + tkey;
+            if ( !array_key_exists(tkey, mantemp) ) {
                 var tval = thingvalue[tkey];
-                if (  array_key_exists(helperkey, thingvalue) && thingvalue[helperkey] && thingvalue[helperkey].substr(0,2)==="::" ) {
-                    var helperval = thingvalue[helperkey];
-                    $tc += putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor);
-                } else {
-                    $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor);
-                }
+                $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor);
                 j++;
             }
         };
@@ -3894,7 +3846,7 @@ function makeThing(userid, configoptions, cnt, kindex, thesensor, panelname, pos
 
             // handle other cases where the value is an object like audio or music tiles
             // but audio, music, and weather and handled elsewhere so don't do it again here
-            if ( jsontval && is_object(jsontval) && !array_key_exists(helperkey, thingvalue) ) {
+            if ( jsontval && is_object(jsontval) ) {
 
                 var isarr = is_array(jsontval);
                 for (var jtkey in jsontval ) {
@@ -3938,15 +3890,23 @@ function makeThing(userid, configoptions, cnt, kindex, thesensor, panelname, pos
                 }
             }
 
-            else if ( tkey.substring(0,5)!=="user_" && typeof tval!=="object" ) { 
+            // else if ( tkey.substring(0,5)!=="user_" && typeof tval!=="object" ) { 
+            else if ( typeof tval!=="object" ) { 
                 
-                // new logic for links - they all now follow the format ::LINK::code
+                // new logic for links - they all now follow the format LINK::code::content
+                // we no longer print the hidden companion since the link details are in the DB now
+                // and companion tags are only printed within LINK elements on the browser now
                 // print a hidden field for user web calls and links
                 // this is what enables customization of any tile to happen
                 // this special element is not displayed and sits inside the overlay
                 // we only process the non helpers and look for helpers in same list
-                if (  array_key_exists(helperkey, thingvalue) && thingvalue[helperkey] && thingvalue[helperkey].substr(0,2)==="::" ) {
-                    var helperval = thingvalue[helperkey];
+                // $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, null, null, twidth, theight);
+
+                if ( typeof tval === "string" && tval.startsWith("LINK::") ) {
+                // if (  array_key_exists(helperkey, thingvalue) ) { // } && thingvalue[helperkey] && thingvalue[helperkey].substr(0,2)==="::" ) {
+                    // var helperval = thingvalue[helperkey];
+                    // console.log(">>>> helper: ", helperkey, helperval);
+                    var helperval = tval;
                     $tc += putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, twidth, theight);
                 } else {
                     $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, null, null, twidth, theight);
@@ -3960,7 +3920,6 @@ function makeThing(userid, configoptions, cnt, kindex, thesensor, panelname, pos
     $tc += "</div>";
     
     return $tc;
-}
 
 // compare this logic with how siblings are defined
 // in the getCustomTile function
@@ -3969,80 +3928,111 @@ function putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, s
     var linktype = thingtype;
     var linkbid = bid;
     var realsubid = tkey;
-    var idx = thingtype + "|" + bid;
+    var linkid = 0;
 
-    var ipos = helperval.indexOf("::",2);
-    var command = helperval.substring(2, ipos);
-    var linkval = helperval.substring(ipos+2);
+    var ipos = helperval.indexOf("::");
+    var command = helperval.substr(0, ipos);
+    var linkval = helperval.substr(ipos+2);
 
     // get info for links but skip if the link had an error
-    if ( command==="LINK" && linkval && linkval!=="error" && linkval.indexOf("|")!==-1 ) {
-        var lidx = linkval;
-        linkval = GLB.options.index[lidx];
-        var idxitems = lidx.split("|");
-        linktype = idxitems[0];
-        linkbid = idxitems[1];
+    // links use format - LINK::subid::tileid
+    if ( linkval ) {
+        
+        var jpos = linkval.indexOf("::");
+        if ( jpos !== -1 ) {
 
-        // use the link value - if subid isn't there look for subid's that form the beginning of our link subid
-        if ( array_key_exists(lidx, allthings) ) {
-            var linktileval = allthings[lidx]["value"];
-            if ( array_key_exists(realsubid, linktileval) ) {
-                tval = linktileval[realsubid];
-            } else {
-                for (var ltkey in linktileval) {
-                    if ( realsubid.startsWith(ltkey) ) {
-                        realsubid = ltkey;
-                        tval = linktileval[ltkey];
-                        break;
+            var realsubid = linkval.substr(0, jpos)
+            var linkid = linkval.substr(jpos+2);
+            
+            // get the device for this linked tile
+            var linkdev = alldevices[linkid];
+            // if ( DEBUG10 ) {
+            //     console.log(">>>> helperval: ", helperval, " ipos, jpos, realsubid, linkid: ", ipos, jpos, realsubid, linkid);
+            //     console.log(">>>> linkdev: ", linkdev);
+            // }
+
+            // var lidx = linkval;
+            // linkval = GLB.options.index[lidx];
+            // var idxitems = lidx.split("|");
+            // linktype = idxitems[0];
+            // linkbid = idxitems[1];
+
+            // if ( array_key_exists(lidx, allthings) ) {
+            if ( linkdev ) {
+                
+                // replace the place holder value with the linked value
+                try {
+                    var linktileval = JSON.parse(decodeURI2(linkdev["devices_pvalue"]));
+                } catch(e) {
+                    linktileval = {};
+                }
+                linkid = linkdev["devices_id"];
+                linkbid = linkdev["devices_deviceid"];
+                linktype = linkdev["devices_devicetype"];
+                
+                // now look for the real value in this device
+                // use the link value - if subid isn't there look for subid's that form the beginning of our link subid
+                var goodlink = false;
+                if ( array_key_exists(realsubid, linktileval) ) {
+                    tval = linktileval[realsubid];
+                    goodlink = true;
+                } else {
+                    for (var ltkey in linktileval) {
+                        if ( realsubid.startsWith(ltkey) ) {
+                            realsubid = ltkey;
+                            tval = linktileval[ltkey];
+                            goodlink = true;
+                            break;
+                        }
                     }
                 }
+
+                // handle case where link not found - set error condition
+                if ( !goodlink ) {
+                    helperval = "LINK::"+realsubid+"::"+linkid+"::error";
+                    tval = "LINK::error";
+                    // console.log(">>>> linkid, linkbid, linktype, linkpvalue: ", linkid, linktype, linkbid, linktileval);
+                }
+
+                // look for width and height and replace if there
+                if ( linktileval["width"] && twidth ) {
+                    twidth = linktileval["width"];
+                }
+                if ( linktileval["height"] && theight ) {
+                    theight = linktileval["height"];
+                }
+
+            } else {
+                helperval = "LINK::error";
             }
 
-            // look for width and height and replace if there
-            if ( linktileval["width"] ) {
-                twidth = linktileval["width"];
-            }
-            if ( linktileval["height"] ) {
-                theight = linktileval["height"];
-            }
-
-            // save the value in our main array for user queries and api calls
-            // note that all screen refreshes will come here again and update it
-            // but we skip this for non permanent things being made for visual sake
-            // if ( cnt!== 0 ) {
-            //     allthings[idx]["value"][tkey] = tval;
-            // }
+            var sibling= "<div id=\"sb-"+cnt+"\" linkid=\""+linkid+"\" linktype=\""+linktype+"\" linkval=\""+helperval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
         } else {
-            linkval = "dum";
+            sibling = null;
         }
-    } else if ( command==="URL" || command==="POST" || command==="PUT" || command==="GET" ) {
-        linkval = decodeURI(linkval);
-    } else {
-        // neuter out linkval since we no longer use it
-        linkval = linkval || "dum";
     }
 
     // use the original type here so we have it for later
     // but in the actual target we use the linktype
     // var sibling= "<div aid=\""+cnt+"\" linktype=\""+linktype+"\" value=\""+tval+"\" linkval=\""+linkval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
-    var sibling= "<div aid=\""+cnt+"\" linktype=\""+linktype+"\" linkval=\""+linkval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
     if ( DEBUG10 ) {
-        console.log( (ddbg()), "bid: ", bid, " helperval: ", helperval, " sibling: ", sibling);
+        console.log( (ddbg()), "bid: ", bid, " helperval: ", helperval, " sibling: ", sibling,"\n >>>> new tval: ", tval);
     }
     var $tc = putElement(kindex, cnt, j, linktype, tval, tkey, subtype, bgcolor, sibling, realsubid, twidth, theight);
     return $tc;
 }
 
-// cleans up the name of music tracks for proper html page display
-// no longer trim the name because that breaks album art
-function fixTrack(tval) {
-    if ( !tval || tval.trim()==="" ) {
-        tval = "None"; 
-    }
-    return tval;
-}
-
 function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibling, realsubid, twidth, theight) {
+    
+    // cleans up the name of music tracks for proper html page display
+    // no longer trim the name because that breaks album art
+    function fixTrack(tval) {
+        if ( !tval || tval.trim()==="" ) {
+            tval = "None"; 
+        }
+        return tval;
+    }
+
     var $tc = "";
     var aitkey = "a-" + i + "-" + tkey;
     var pkindex = " p_" + kindex;
@@ -4205,6 +4195,8 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         $tc += "</div>";
     }
     return $tc;
+}
+
 }
 
 function getCustomCount(stype, defcount) {
@@ -4373,12 +4365,18 @@ function getClock(clockid) {
     return dclock;
 }
 
-// the index of the Null hub is passed in to define these items
-function addSpecials(userid, configoptions, hubindex) {
-    // set hub number to nothing for manually created tiles
-    var hubnum = hubindex;
+function findDevice(bid, swtype, devices) {
+    for (var id in devices) {
+        var device = devices[id];
+        if ( device.deviceid === bid && device.devicetype === swtype ) {
+            return device;
+        }
+    }
+    return null;
+}
 
-    // add digital clock tile
+// the index of the Null hub is passed in to define these items
+function updSpecials(userid, configoptions, hubindex, devices, clockonly) {
     // never refresh since clocks have their own refresh timer built into the javascript code
     // you will need to over-ride this with the tile customizer if you add custom fields
 
@@ -4392,79 +4390,95 @@ function addSpecials(userid, configoptions, hubindex) {
         return device;
     }
 
+    
     // create promise result to return
     var digitalClock = makeClock("clockdigital");
-    var pr = mydb.updateRow("devices", digitalClock, "userid = "+userid+" AND deviceid = 'clockdigital'")
-    .then(result => {
+    if ( findDevice("clockdigital", "clock", devices) ) {
+        mydb.updateRow("devices", digitalClock, "userid = "+userid+" AND deviceid = 'clockdigital'");
+    } else {
+        mydb.addRow("devices", digitalClock);        
+    }
 
-        var clockAnalog = makeClock("clockanalog");
-        var res2 = mydb.updateRow("devices", clockAnalog, "userid = "+userid+" AND deviceid = 'clockanalog'");
-        return res2;
-    })
-    .then(result => {
+    var analogClock = makeClock("clockanalog");
+    if ( findDevice("clockanalog", "clock", devices) ) {
+        mydb.updateRow("devices", analogClock, "userid = "+userid+" AND deviceid = 'clockanalog'");
+    } else {
+        mydb.addRow("devices", analogClock);        
+    }
 
-        // add special tiles based on type and user provided count
-        // this replaces the old code that handled only video and frame tiles
-        // this also creates image and blank tiles here that used to be made in groovy
-        // putting this here allows them to be handled just like other modifiable tiles
-        // these tiles all refresh fast except first 4 frames that are reserved for weather
-        // renamed accuweather to forecast2 for simplicity sake and to make sorting work
-        var specialtiles = {};
-        configoptions.forEach(function(opt) {
-            if ( opt.configkey === "specialtiles" ) {
-                specialtiles = opt.configval;
-            }
-        })
-        try {
-            specialtiles = JSON.parse(specialtiles);
-        } catch(e) {
-            specialtiles = {};
-        }
-        // console.log(">>>> specialtiles: ", specialtiles);
-    
-        for (var stype in specialtiles) {
-            var sid = specialtiles[stype];
-
-            var fcnt = parseInt(sid);
-            if ( isNaN(fcnt) ) {
-                fcnt = 0;
-            }
-            
-            for (var i=0; i<fcnt; i++) {
-                var k = (i + 1).toString();
-                var devname = getCustomName(stype, k);;
-                if ( stype === "custom") {
-                    var devid = stype + "_" + k;
-                } else {
-                    devid = stype + k;
-                }
-                var ftile = encodeURI2(JSON.stringify({"name": devname}));
-
-                var device = {userid: userid, hubid: hubindex, deviceid: devid, name: devname,
-                    devicetype: stype, hint: "special", refresh: "never", pvalue: ftile};
-                result = mydb.updateRow("devices", device, "userid = "+userid+" AND deviceid = '"+devid+"'");
-            }
-        }
-        return result;
-    })
-    .then(result => {
-        // create the controller tile
-        // keys starting with c__ will get the confirm class added to it
-        // this tile cannot be customized by the user due to its unique nature
-        // but it can be visually styled just like any other tile
+    // create the controller tile if not already there for this user
+    // keys starting with c__ will get the confirm class added to it
+    // TODO - this should move to a new module that creates a new user
+    if ( !findDevice("control_1", "control", devices) ) {
         var controlval = {"name": "Controller", "showoptions": "Options","refreshpage": "Refresh","c__refactor": "Reset",
             "c__userauth": "Re-Auth","showid": "Show Info","toggletabs": "Toggle Tabs", "showdoc": "Documentation",
             "blackout": "Blackout","operate": "Operate","reorder": "Reorder","edit": "Edit"};
         controlval = encodeURI2(JSON.stringify(controlval));
-    
-        // controlval = getCustomTile(controlval, "control", "control_1");
         var device = {userid: userid, hubid: hubindex, deviceid: "control_1", "name": "Controller",
-                    devicetype: "control", hint: "special", refresh: "never", pvalue: controlval};
-        var res2 = mydb.updateRow("devices", device, "userid = "+userid+" AND deviceid = 'control_1'");
-        return res2;
-    });
-    
-    return pr;
+                      devicetype: "control", hint: "special", refresh: "never", pvalue: controlval};
+        // console.log(">>>> simulated controller update: ", device);
+        mydb.addRow("devices", device);
+    }
+
+    // if asked to only do clocks then return
+    // we do this upon first page load because the specials will be there already
+    // we call with false when specials need updating upon options page processing
+    if ( clockonly ) { return; }
+
+    // add special tiles based on type and user provided count
+    // this replaces the old code that handled only video and frame tiles
+    // this also creates image and blank tiles here that used to be made in groovy
+    // putting this here allows them to be handled just like other modifiable tiles
+    // these tiles all refresh fast except first 4 frames that are reserved for weather
+    // renamed accuweather to forecast2 for simplicity sake and to make sorting work
+    var specialtiles = getConfigItem(configoptions, "specialtiles");
+
+    // make sure we have special tiles in our master list updated
+    for (var stype in specialtiles) {
+        var sid = specialtiles[stype];
+        var fcnt = parseInt(sid);
+        if ( isNaN(fcnt) ) {
+            fcnt = 0;
+        }
+        
+        for (var i=0; i<fcnt; i++) {
+            var k = (i + 1).toString();
+            var devname = getCustomName(stype, k);;
+            if ( stype === "custom") {
+                var devid = stype + "_" + k;
+            } else {
+                devid = stype + k;
+            }
+            var ftile = encodeURI2(JSON.stringify({"name": devname}));
+
+            var device = findDevice(devid, stype, devices);
+            if ( !device ) {
+                device = {userid: userid, hubid: hubindex, deviceid: devid, name: devname,
+                            devicetype: stype, hint: "special", refresh: "never", pvalue: ftile};
+                // console.log(">>>> simulated add: ", device);
+                mydb.addRow("devices", device);
+            }
+
+            // TODO - remove extras
+            // var doneextra = false;
+            // for (var iextra= fcnt; iextra<100; iextra++) {
+            //     if ( stype === "custom") {
+            //         var devid = stype + "_" + k;
+            //     } else {
+            //         devid = stype + k;
+            //     }
+            //     mydb.deleteRow("devices", "userid = "+userid+" AND deviceid = '"+devid+"' AND devicetype = '"+stype+"'")
+            //     .then(res3 => {
+            //         if ( !res3 || res3.getAffectedItemsCount() === 0 ) {
+            //             doneextra = true;
+            //         }
+            //     }).catch(reason => {console.log("dberror - ", reason);});
+            //     if ( doneextra ) {
+            //         break;
+            //     }
+            // }
+        }
+    }
 }
 
 // make the default name start with a capital letter if we give a number
@@ -4482,50 +4496,47 @@ function getCustomName(defbase, cnum) {
 // create addon subid's for any tile
 // this enables a unique customization effect
 // we pass in the config options so this function doesn't run async
-function getCustomTile(userid, configoptions, custom_val, customtype, customid) {
+function getCustomTile(userid, configoptions, custom_val, customtype, bid) {
 
-    var configkey = "user_" + customid;
+    var configkey = "user_" + bid;
     var updated_val = clone(custom_val);
-    for ( var key in configoptions ) {
+    for ( var i in configoptions ) {
 
+        var key = configoptions[i].configkey;
+        var val = configoptions[i].configval;
         if ( key === configkey ) {
-            var val = configoptions[key];
+            if ( DEBUG14 ) {
+                console.log((ddbg()), ">>>> key: ", key, " val: ", val);
+            }
             try {
                 var lines = JSON.parse(val);
-                updated_val = processCustom(key, lines, updated_val);
+                updated_val = processCustom(lines, updated_val);
+                break;
             } catch(e) {
                 console.log( (ddbg()), "error - parsing custom config tile value: ", val, " for key: ", key);
             }
         }
     }
    
-    if ( utils.count(updated_val) > utils.count(custom_val) ) {
+    if ( DEBUG14 && utils.count(updated_val) > utils.count(custom_val) ) {
         console.log( (ddbg()),"updated tile value: ", updated_val);
     }
 
     return updated_val;
 
-    function processCustom(companion, lines, custom_val) {
+    function processCustom(lines, custom_val) {
         // allow user to skip wrapping single entry in an array
         // the GUI will never do this but a user might in a manual write to the DB
         if ( !is_array(lines[0]) ) {
             lines = [lines];
         }
         
-        // first remove existing ones so we can read them in the proper order
-        // lines.forEach(function(msgs) {
-        //     var subidraw = msgs[2].trim();
-        //     var subid = subidraw.replace(/[\"\*\<\>\!\{\}\.\,\:\+\&\%]/g,""); //  str_replace(ignores, "", subidraw);
-        //     if ( custom_val[companion] ) {
-        //         delete custom_val[subid];
-        //         delete custom_val[companion];
-        //     }
-        // });
-        
         // sort the lines and add them back in the requested order
         // replacements of default items will occur in default place
         // usort(lines, sortlinefunc);
-        
+
+        // custom tags were redone to avoid the need for a companion tag
+        // we now know from the type passed in and details obtained from DB upon clicking
         // loop through each item and add to tile
         lines.forEach(function(msgs) {
 
@@ -4539,6 +4550,7 @@ function getCustomTile(userid, configoptions, custom_val, customtype, customid) 
                 // var posturl = encodeURIComponent(content);
                 var subidraw = msgs[2].trim();
                 var subid = subidraw.replace(/[\"\*\<\>\!\{\}\.\,\:\+\&\%]/g,""); //  str_replace(ignores, "", subidraw);
+                // var companion = "user_"+subid;
 
                 // process web calls made in custom tiles
                 // this adds a new field for the URL or LINK information
@@ -4546,18 +4558,18 @@ function getCustomTile(userid, configoptions, custom_val, customtype, customid) 
                 // web call results and linked values are stored in the subid field
                 if ( content && (calltype==="PUT" || calltype==="GET" || calltype==="POST" || calltype==="URL") )
                 {
-                    custom_val[companion] = "::" + calltype + "::" + encodeURI(content);
+                    // custom_val[companion] = "::" + calltype + "::" + encodeURI(content);
                     custom_val[subid] = calltype + "::" + subid;
                
                 } else if ( calltype==="LINK" ) {
                     // code for enabling mix and match subid's into custom tiles
                     // since DB reads are fast, we can just store the tileid now
-                    custom_val[companion] = "::" + calltype + "::" + content;
-                    custom_val[subid]= "LINK::" + subid;
+                    // custom_val[companion] = "::" + calltype + "::" + content;
+                    custom_val[subid]= "LINK::" + subid + "::" + content;
                             
                
-                } else if ( ENABLERULES && calltype==="RULE" ) {
-                    custom_val[companion] = "::" + calltype + "::" + content;
+                } else if ( calltype==="RULE" ) {
+                    // custom_val[companion] = "::" + calltype + "::" + content;
                     custom_val[subid] = "RULE::" + subid;
 
                 } else if ( calltype==="TEXT" ) {
@@ -4572,24 +4584,31 @@ function getCustomTile(userid, configoptions, custom_val, customtype, customid) 
             }
         });
 
-        // fix clock date if the format sting is provided
-        if ( array_key_exists("date", custom_val) && array_key_exists("fmt_date", custom_val) ) {
-            var dates = getFormattedDate(custom_val["fmt_date"], null, customid);
-            custom_val["date"] = dates.date;
-            if ( array_key_exists("weekday", custom_val) ) {
-                custom_val["weekday"] = dates.week;
+        try {
+            // fix clock date if the format sting is provided
+            if ( array_key_exists("date", custom_val) && array_key_exists("fmt_date", custom_val) ) {
+                var dates = getFormattedDate(custom_val["fmt_date"], null, bid);
+                custom_val["date"] = dates.date;
+                if ( array_key_exists("weekday", custom_val) ) {
+                    custom_val["weekday"] = dates.week;
+                }
+                custom_val["fmt_date"] = dates.fmt_date;
             }
-            custom_val["fmt_date"] = dates.fmt_date;
-        }
-        if ( array_key_exists("time", custom_val) && array_key_exists("fmt_time", custom_val) ) {
-            var times = getFormattedTime(custom_val["fmt_time"], null, customid);
-            custom_val["time"] = times.time;
-            if ( array_key_exists("tzone", custom_val) ) {
-                custom_val["tzone"] = times.timezone;
+            if ( array_key_exists("time", custom_val) && array_key_exists("fmt_time", custom_val) ) {
+                var times = getFormattedTime(custom_val["fmt_time"], null, bid);
+                custom_val["time"] = times.time;
+                if ( array_key_exists("tzone", custom_val) ) {
+                    custom_val["tzone"] = times.timezone;
+                }
+                custom_val["fmt_time"] = times.fmt_time;
             }
-            custom_val["fmt_time"] = times.fmt_time;
+        } catch (e) {
+            console.log((ddbg()), "error - setting custom date format for clock");
         }
         
+        if ( DEBUG14 ) {
+            console.log((ddbg()), ">>>>  companion: ", companion, " customized tile: ", custom_val);
+        }
         return custom_val;
     }
 }
@@ -4719,7 +4738,7 @@ function processHubMessage(userid, hub, hubmsg) {
                 newval = pvalue;
             }
 
-            if ( DEBUG12 || DEBUGtmp ) {
+            if ( DEBUG12 ) {
                 console.log( (ddbg()), "processHubMessage - hubmsgid: ", hubmsgid, " swtype: ", swtype, " subid: ", subid, " pvalue: ", newval);
             }
 
@@ -4727,7 +4746,7 @@ function processHubMessage(userid, hub, hubmsg) {
                 pushClient(hubmsgid, swtype, subid, newval);
             }
             newval.subid = subid;
-            processRules(hubmsgid, swtype, subid, newval, "processMsg");
+            processRules(userid, device.id, hubmsgid, swtype, subid, newval, "processMsg");
             delete pvalue.subid;
 
         });
@@ -4873,12 +4892,16 @@ function processIsyMessage(userid, isymsg) {
                  action[0] && action[0]["$"] && action[0]["_"] ) {
                 var bid = node[0];
 
-                mydb.getRow("devices", "*", "userid = "+userid+" AND devicetype = 'isy' AND deviceid = '"+bid+"'")
+                var conditions = "userid = "+userid+" AND devicetype = 'isy' AND deviceid = '"+bid+"'";
+                mydb.getRow("devices", "*", conditions)
                 .then(results => {
 
                     if ( !results ) { return; }
 
                     var device = results;
+                    if ( DEBUGisy ) {
+                        console.log( (ddbg()), "in processISYMessage - device: ", device);
+                    }
                     try {
 
                         if ( device.pvalue && device.pvalue!=="undefined" ) {
@@ -4913,11 +4936,14 @@ function processIsyMessage(userid, isymsg) {
                     pushClient(bid, "isy", subid, pvalue);
 
                     pvalue.subid = subid;
-                    processRules(bid, "isy", subid, pvalue, "processMsg");
+                    processRules(userid, device.id, bid, "isy", subid, pvalue, "processMsg");
                     delete pvalue.subid;
                     if ( DEBUG9 ) {
                         console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " uom: ", uom, " newval: ", newval, " pvalue: ", pvalue);
                     }
+                }).catch(reason => {
+                    // console.log(">>>> condition: ", conditions);
+                    console.log("dberror 10 - ", reason);
                 });
 
             // set variable changes events
@@ -4929,7 +4955,7 @@ function processIsyMessage(userid, isymsg) {
                 }
                 var bid = "vars";
 
-                mydb.getRow("devices","userid = "+userid+" AND devicetype = 'isy' AND deviceid = '"+bid+"'")
+                mydb.getRow("devices", "*", "userid = "+userid+" AND devicetype = 'isy' AND deviceid = '"+bid+"'")
                 .then(results => {
 
                     if ( !results ) { return; }
@@ -4968,7 +4994,7 @@ function processIsyMessage(userid, isymsg) {
                             pushClient(bid, "isy", subid, pvalue);
                             
                             pvalue.subid = subid;
-                            processRules(bid, "isy", subid, pvalue, "processMsg");
+                            processRules(userid, device.id, bid, "isy", subid, pvalue, "processMsg");
                             delete pvalue.subid;
                             if ( DEBUG9 ) {
                                 console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " newval: ", newval, " pvalue: ", pvalue);
@@ -4978,7 +5004,7 @@ function processIsyMessage(userid, isymsg) {
                         console.log( (ddbg()), "warning - var // processIsyMessage: ", e, device);
                         return;
                     }
-                });
+                }).catch(reason => {console.log("dberror 11 - ", reason);});
 
             // handle program changes events
             } else if ( is_object(eventInfo[0]) && array_key_exists("id", eventInfo[0]) && 
@@ -4989,7 +5015,7 @@ function processIsyMessage(userid, isymsg) {
                 var len = 4 - idsymbol.length;
                 var bid = "prog_" + "0000".substr(0,len) + idsymbol;
 
-                mydb.getRow("devices","userid = "+userid+" AND devicetype = 'isy' AND deviceid = '"+bid+"'")
+                mydb.getRow("devices","*", "userid = "+userid+" AND devicetype = 'isy' AND deviceid = '"+bid+"'")
                 .then(results => {
 
                     if ( !results ) { return; }
@@ -5036,6 +5062,8 @@ function processIsyMessage(userid, isymsg) {
                         console.log( (ddbg()), "warning - program // processIsyMessage: ", e, device);
                         return;
                     }
+                }).catch(reason => {
+                    console.log("dberror 12 - ", reason);
                 });
 
             } else if (DEBUG9a) {
@@ -5102,8 +5130,7 @@ function getTimeStr(ifvalue, str) {
     return timestr;
 }
 
-// TODO - fix for DB
-function processRules(bid, thetype, trigger, pvalueinput, rulecaller) {
+function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rulecaller) {
 
     if ( !ENABLERULES || (typeof pvalueinput !== "object") ) {
         return;
@@ -5121,530 +5148,562 @@ function processRules(bid, thetype, trigger, pvalueinput, rulecaller) {
     }
 
     // go through all things that could be links for this tile
-    var userid = "user_" + bid;
+    var configkey = "user_" + bid;
     var ifvalue = false;
     var rbid = bid;
     var rtype = thetype;
-    var ridx = thetype + "|" + bid;
 
-    // if this tile has no rule, do nothing
-    if ( !array_key_exists(userid, GLB.options) ) {
-        return;
-    }
+    var lines;
+    var hubs;
+    var devices;
+    var rulesdone = {configs: false, hubs: false, devices: false};
 
-    // go through all tiles with a new rule type
-    var idx = thetype + "|" + bid;
-    try {
-        var index = GLB.options["index"];
-        var tileid = index[idx].toString();
-    } catch (e) {
-        console.log( (ddbg()), "webSocket RULE error: id: ", bid, " type: ", thetype, " trigger: ", trigger, " error: ", e);
-        return;
-    }
-    
-    // rule structure
-    // delay and attr are optional, but must give a delay to give an attr; just set it to 0 or false to skip delay
-    // you cannot safely mix the logic of "or" with the logic of "and" but it sometimes works
-    // for example if an "or" is given at the end it will be a logical or of everything in front of it
-    // likewise if an "and" is given at the end it will be a logic and of everything in front of it
-    // so you can mix and and or if you use the non dominant logic statement only once at the end
-    // if subid>=xx or num=subid=on or num=subid=off... , num=subid=value=delay, num=subid=value=delay=attr, ...
-    // if subid>=xx and num=subid=on and num=subid=off... , num=subid=value=delay, num=subid=value=delay=attr, ...
-    // for example...
-    // user_custome_1 : [ [RULE, "if switch==on and 167=switch==on, 28=switch=on, 12=switch=on=2", myrule, 1], 
-    //                    [RULE, "if state==away or 42=presence==absent", 19=thermostatMode=heat, 19=heatingSetpoint=72, 14=lock=lock, rule2, 2] ]
-    const regsplit = /[,;]/;
-    const ifpattern = /(if)\s+(.*)/;
-    const triggerpattern = /(\w+)\s*([=|!|<|>])(=?)\s*(.+)/;
-    // const rulepattern = /(\d*)\s*=\s*(\w+)\s*([=|!|<|>])(=?)\s*(\w+)/;
-    const rulepattern = /(\d*)\s*=\s*(\w+)\s*([=|!|<|>])(=?)\s*(.+)/;
-    
-    // print some debug info
-    var items = GLB.options[userid];
-    if ( DEBUG11 ) {
-        console.log( (ddbg()), "RULE: id: ", bid, " type: ", thetype, " trigger: ", trigger, " tileid: ", tileid, " userid: ", userid, " rules: ", UTIL.inspect(items, false, null, false));
-    }
+    // retrieve customization for this device
+    mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
+    .then(results => {
+        if ( results ) {
+            lines = JSON.parse(decodeURI2(results.configval));
+            if ( DEBUG11 ) {
+                console.log( (ddbg()), "Rule processing for bid: ", bid," lines: ", lines);
+            }
+        } else {
+            lines = null;
+        }
+        checkDone("configs");
+        return lines;
+    })
+    .then(items => {
 
-    // loop through all the custom elements of this tile looking for rules
-    items.forEach( function(item) {
-
-        // process custom entries that are rules
-        // the subid it is tied to is ignored as is the order number
-        // so we only need to get item[0] and item[1]
-        if ( item[0]==="RULE" ) {
-            var linkval = item[1].trim();
-            var isrule = false;
-
-            // split the test line between commas and semi-colons
-            var testcommands = linkval.split(regsplit);
-
-            // only proceed if there are at least two parts and the first part starts with "if "
-            if ( testcommands.length > 1 && testcommands[0].trim().startsWith("if") ) {
-
-                // get the if and the rule and continue if in the right format
-                var iftest = testcommands[0].match(ifpattern);
-                var rulestr = (iftest && iftest.length>1 && iftest[2]) ? iftest[2] : "";
-                if ( iftest[1]==="if" && rulestr ) {
-
-                    // get the rule set
-                    var ruleset = rulestr.split(/\s+/);
-                    var newset = [];
-                    var theword = "";
-                    ruleset.forEach(function(aword) {
-                        aword = aword.trim();
-                        if ( aword.toLowerCase()==="or" || aword.toLowerCase()==="and" ) {
-                            newset.push(theword);
-                            newset.push(aword.toLowerCase());
-                            theword = "";
-                        } else if ( aword.toLowerCase()==="am" || aword.toLowerCase()==="pm" ) {
-                            theword = theword + " " + aword;
-                        } else {
-                            theword = theword + aword;
-                        }
-                    }) 
-                    newset.push(theword);
-
-
-                    var doand = true;
-                    if ( DEBUG11 ) {
-                        console.log( (ddbg()), "RULE debug: rulestr: ", rulestr, " rulseset: ", ruleset, " newset: ", newset);
+        // if a set of lines was found then retrieve all hubs and all devices since rules can act on any of these
+        if ( items ) {
+            mydb.getRows("hubs", "*", "userid = "+userid)
+            .then(dbhubs => {
+                hubs = dbhubs;
+                checkDone("hubs");
+            })
+            .then(results => {
+                mydb.getRows("devices", "*", "userid = "+userid)
+                .then(dbdevices => {
+                    devices = {};
+                    for ( var adev in dbdevices ) {
+                        var id = dbdevices[adev].id;
+                        devices[id] = dbdevices[adev]
                     }
-    
-                    // loop through each one and add to test
-                    var rulenum = 0;
-                    var priorand = false;
-                    var firstlogical = false;
-                    newset.forEach( function(rule) {
+                    checkDone("devices");
+                });
+            });
+        }
+    }).catch(reason => {console.log("dberror 13 - ", reason);});
 
-                        var ruleparts = null;
-                        var ruletileid = null;
-                        var rulesubid = "";
-                        var rulevalue = "";
-                        var ruleop = "";
-                        var ruleop2 = "";
-                        rule = rule.trim();
-                        if ( DEBUG11 ) {
-                            console.log( (ddbg()), "RULE debug: rule step#", rulenum, " rule: ", rule);
-                        }
-    
-                        // set rule mode based on word - if it is "and" then use and logic
-                        // the firstlogical parameter is used to allow mixing of and and or to some degree
-                        // it allows logical "or" to follow some and strings by using just the first item
-                        // if one then switches back to and then firstlogical will save the most recent and status for the next or
-                        if ( rule==="and" ) {
-                            doand = true;
-                            priorand = true;
+    return;
 
-                        // if the separator word is "or" then use or logic
-                        } else if ( rule==="or" ) {
-                            doand = false;
+    function checkDone(element) {
+        if ( element ) {
+            rulesdone[element] = true;
+        }
 
-                        // otherwise we are on an element so interpret the test
-                        } else {
-                            ruleparts = rule.match(rulepattern);
-                            // first check for format with a tile ID number
-                            if ( ruleparts ) {
-                                ruletileid = parseInt(ruleparts[1]);
-                                rulesubid = ruleparts[2] || "";
-                                ruleop = ruleparts[3] || "";
-                                ruleop2 = ruleparts[4];
-                                if ( ruleop2 ) { ruleop = ruleop + ruleop2; }
-                                rulevalue = ruleparts[5] || "";
-                            // if id number not given then assume this tile ID
+        if ( rulesdone.configs && rulesdone.hubs && rulesdone.devices ) {
+            if ( lines && hubs && devices ) {
+                // console.log(" >>>> devices: ", devices);
+                invokeRules(deviceid, lines, hubs, devices);
+            }
+        }
+    }
+
+    function invokeRules(tileid, items, hubs, devices) {
+        // go through all tiles with a new rule type
+        var idx = thetype + "|" + bid;
+        
+        // rule structure
+        // delay and attr are optional, but must give a delay to give an attr; just set it to 0 or false to skip delay
+        // you cannot safely mix the logic of "or" with the logic of "and" but it sometimes works
+        // for example if an "or" is given at the end it will be a logical or of everything in front of it
+        // likewise if an "and" is given at the end it will be a logic and of everything in front of it
+        // so you can mix and and or if you use the non dominant logic statement only once at the end
+        // if subid>=xx or num=subid=on or num=subid=off... , num=subid=value=delay, num=subid=value=delay=attr, ...
+        // if subid>=xx and num=subid=on and num=subid=off... , num=subid=value=delay, num=subid=value=delay=attr, ...
+        // for example...
+        // user_custome_1 : [ [RULE, "if switch==on and 167=switch==on, 28=switch=on, 12=switch=on=2", myrule, 1], 
+        //                    [RULE, "if state==away or 42=presence==absent", 19=thermostatMode=heat, 19=heatingSetpoint=72, 14=lock=lock, rule2, 2] ]
+        const regsplit = /[,;]/;
+        const ifpattern = /(if)\s+(.*)/;
+        const triggerpattern = /(\w+)\s*([=|!|<|>])(=?)\s*(.+)/;
+        // const rulepattern = /(\d*)\s*=\s*(\w+)\s*([=|!|<|>])(=?)\s*(\w+)/;
+        const rulepattern = /(\d*)\s*=\s*(\w+)\s*([=|!|<|>])(=?)\s*(.+)/;
+        
+        // print some debug info
+        if ( DEBUG11 ) {
+            console.log( (ddbg()), "RULE: id: ", bid, " type: ", thetype, " trigger: ", trigger, " tileid: ", tileid, " userid: ", userid, " rules: ", UTIL.inspect(items, false, null, false));
+        }
+
+        // loop through all the custom elements of this tile looking for rules
+        items.forEach( function(item) {
+
+            // process custom entries that are rules
+            // the subid it is tied to is ignored as is the order number
+            // so we only need to get item[0] and item[1]
+            if ( item[0]==="RULE" ) {
+                var linkval = item[1].trim();
+                var isrule = false;
+
+                // split the test line between commas and semi-colons
+                var testcommands = linkval.split(regsplit);
+
+                // only proceed if there are at least two parts and the first part starts with "if "
+                if ( testcommands.length > 1 && testcommands[0].trim().startsWith("if") ) {
+
+                    // get the if and the rule and continue if in the right format
+                    var iftest = testcommands[0].match(ifpattern);
+                    var rulestr = (iftest && iftest.length>1 && iftest[2]) ? iftest[2] : "";
+                    if ( iftest[1]==="if" && rulestr ) {
+
+                        // get the rule set
+                        var ruleset = rulestr.split(/\s+/);
+                        var newset = [];
+                        var theword = "";
+                        ruleset.forEach(function(aword) {
+                            aword = aword.trim();
+                            if ( aword.toLowerCase()==="or" || aword.toLowerCase()==="and" ) {
+                                newset.push(theword);
+                                newset.push(aword.toLowerCase());
+                                theword = "";
+                            } else if ( aword.toLowerCase()==="am" || aword.toLowerCase()==="pm" ) {
+                                theword = theword + " " + aword;
                             } else {
-                                ruleparts = rule.match(triggerpattern);
-                                if ( ruleparts ) {
-                                    ruletileid = tileid;
-                                    rulesubid = ruleparts[1] || "";
-                                    ruleop = ruleparts[2] || "";
-                                    ruleop2 = ruleparts[3];
-                                    if ( ruleop2 ) { ruleop = ruleop + ruleop2; }
-                                    rulevalue = ruleparts[4] || "";
-                                }
+                                theword = theword + aword;
                             }
+                        }) 
+                        newset.push(theword);
 
-                            // use this tile's existing value for check if $ symbol given
-                            var jv = rulevalue.substr(0,1);
-                            var kv = rulevalue.indexOf("$");
-                            var rvindex;
-                            if ( jv === "$" ) {
-                                rvindex = rulevalue.substr(1);
-                                if ( array_key_exists(rvindex, pvalue) ) {
-                                    rulevalue = pvalue[rvindex];
-                                }
 
-                            // use another tile's existing value for check using @tilenum$fieldname syntax
-                            } else if ( jv === "@" && kv !== -1 ) {
-                                var rvtile = rulevalue.substring(1, kv);
-                                rvindex = rulevalue.substr(kv+1);
-                                var rvidx = array_search(rvtile, GLB.options["index"]);
-                                if ( DEBUG11 ) {
-                                    console.log( (ddbg()), "rvtile = ", rvtile, " rvindex= ", rvindex, " rvidx= ", rvidx);
-                                }
-                                if ( rvidx && allthings[rvidx] && array_key_exists(rvindex, allthings[rvidx]["value"]) ) {
-                                    rulevalue = allthings[rvidx]["value"][rvindex];
-                                }
-                            }
+                        var doand = true;
+                        if ( DEBUG11 ) {
+                            console.log( (ddbg()), "RULE debug: rulestr: ", rulestr, " rulseset: ", ruleset, " newset: ", newset);
+                        }
+        
+                        // loop through each one and add to test
+                        var rulenum = 0;
+                        var priorand = false;
+                        var firstlogical = false;
+                        newset.forEach( function(rule) {
 
+                            var ruleparts = null;
+                            var ruletileid = null;
+                            var rulesubid = "";
+                            var rulevalue = "";
+                            var ruleop = "";
+                            var ruleop2 = "";
+                            rule = rule.trim();
                             if ( DEBUG11 ) {
-                                console.log( (ddbg()), "RULE debug: ruleparts: ", ruleparts, " ruletileid: ", ruletileid, " rulesubid: ", rulesubid, 
-                                                       " ruleop: ", ruleop, " rulevalue: ", rulevalue, " before: ", doand, " rule: ", rule, " isrule: ", isrule);
+                                console.log( (ddbg()), "RULE debug: rule step#", rulenum, " rule: ", rule);
                             }
-    
-                            // compute the test if this test part has the required elements
-                            if ( ruletileid && ! isNaN(ruletileid) && ruleop && rulevalue ) {
+        
+                            // set rule mode based on word - if it is "and" then use and logic
+                            // the firstlogical parameter is used to allow mixing of and and or to some degree
+                            // it allows logical "or" to follow some and strings by using just the first item
+                            // if one then switches back to and then firstlogical will save the most recent and status for the next or
+                            if ( rule==="and" ) {
+                                doand = true;
+                                priorand = true;
 
-                                // find the tile index and proceed with activating the rule
-                                if ( ruletileid===tileid && array_key_exists(rulesubid, pvalue) ) {
-                                    rtype = thetype;
-                                    rbid = bid;
-                                    ridx = thetype + "|" + bid;
-                                    ifvalue = pvalue[rulesubid];
+                            // if the separator word is "or" then use or logic
+                            } else if ( rule==="or" ) {
+                                doand = false;
+
+                            // otherwise we are on an element so interpret the test
+                            } else {
+                                ruleparts = rule.match(rulepattern);
+                                // first check for format with a tile ID number
+                                if ( ruleparts ) {
+                                    ruletileid = parseInt(ruleparts[1]);
+                                    rulesubid = ruleparts[2] || "";
+                                    ruleop = ruleparts[3] || "";
+                                    ruleop2 = ruleparts[4];
+                                    if ( ruleop2 ) { ruleop = ruleop + ruleop2; }
+                                    rulevalue = ruleparts[5] || "";
+                                // if id number not given then assume this tile ID
                                 } else {
-                                    ridx = array_search(ruletileid, GLB.options["index"]);
-                                    if ( ridx ) {
-                                        var ritems = ridx.split("|");
-                                        rtype = ritems[0];
-                                        rbid = ritems[1];
+                                    ruleparts = rule.match(triggerpattern);
+                                    if ( ruleparts ) {
+                                        ruletileid = tileid;
+                                        rulesubid = ruleparts[1] || "";
+                                        ruleop = ruleparts[2] || "";
+                                        ruleop2 = ruleparts[3];
+                                        if ( ruleop2 ) { ruleop = ruleop + ruleop2; }
+                                        rulevalue = ruleparts[4] || "";
+                                    }
+                                }
+
+                                // use this tile's existing value for check if $ symbol given
+                                var jv = rulevalue.substr(0,1);
+                                var kv = rulevalue.indexOf("$");
+                                var rvindex;
+                                if ( jv === "$" ) {
+                                    rvindex = rulevalue.substr(1);
+                                    if ( array_key_exists(rvindex, pvalue) ) {
+                                        rulevalue = pvalue[rvindex];
+                                    }
+
+                                // use another tile's existing value for check using @tilenum$fieldname syntax
+                                } else if ( jv === "@" && kv !== -1 ) {
+                                    var rvtile = rulevalue.substring(1, kv);
+                                    rvindex = rulevalue.substr(kv+1);
+                                    rulevalue = devices[rvtile].pvalue[rvindex];
+                                    if ( DEBUG11 ) {
+                                        console.log( (ddbg()), "rvtile = ", rvtile, " rulevalue= ", rulevalue);
+                                    }
+
+                                    // var rvidx = array_search(rvtile, GLB.options["index"]);
+                                    // if ( DEBUG11 ) {
+                                    //     console.log( (ddbg()), "rvtile = ", rvtile, " rvindex= ", rvindex, " rvidx= ", rvidx);
+                                    // }
+                                    // if ( rvidx && allthings[rvidx] && array_key_exists(rvindex, allthings[rvidx]["value"]) ) {
+                                    //     rulevalue = allthings[rvidx]["value"][rvindex];
+                                    // }
+                                }
+
+                                if ( DEBUG11 ) {
+                                    console.log( (ddbg()), "RULE debug: ruleparts: ", ruleparts, " ruletileid: ", ruletileid, " rulesubid: ", rulesubid, 
+                                                        " ruleop: ", ruleop, " rulevalue: ", rulevalue, " before: ", doand, " rule: ", rule, " isrule: ", isrule);
+                                }
+        
+                                // compute the test if this test part has the required elements
+                                if ( ruletileid && ! isNaN(ruletileid) && ruleop && rulevalue ) {
+
+                                    // find the tile index and proceed with activating the rule
+                                    if ( ruletileid===tileid && array_key_exists(rulesubid, pvalue) ) {
+                                        rtype = thetype;
+                                        rbid = bid;
+                                        ifvalue = pvalue[rulesubid];
+                                    } else {
                                         try {
-                                            ifvalue = allthings[ridx]["value"][rulesubid];
+                                            rtype = devices[ruletileid].devicetype; 
+                                            rbid = devices[ruletileid].deviceid;
+                                            ifvalue = devices[ruletileid].pvalue[rulesubid];
                                         } catch(e) {
+                                            rtype = "";
+                                            rbid = 0;
                                             ifvalue = false;
                                         }
-                                    } else {
-                                        ifvalue = false;
-                                        rtype = "";
-                                        rbid = "";
-                                    }
-                                }
-
-                                // fix up ISY hubs
-                                if ( rtype==="isy" && rulevalue==="on" ) { rulevalue = "DON"; }
-                                if ( rtype==="isy" && rulevalue==="off" ) { rulevalue = "DOF"; }
-
-                                if ( DEBUG11 ) {
-                                    console.log( (ddbg()), "RULE debug: ridx: ", ridx, " rtype= ", rtype, " rbid= ", rbid, " ifvalue: ", ifvalue, "rulevalue: ", rulevalue, " ruletileid: ", ruletileid, " parts: ", ruleparts );
-                                }
-
-                                // get the rule check if the requested subid is recognized
-                                // we handle numbers, dates, and times differently than strings
-                                if ( ifvalue!==false ) {
-
-                                    var num1 = ifvalue;
-                                    var num2 = rulevalue;
-                                    if ( rulesubid==="date") {
-                                        var d1 = new Date(ifvalue);
-                                        var d2 = new Date(rulevalue);
-                                        num1 = d1.getTime();
-                                        num2 = d2.getTime();
-                                        if ( DEBUG11 ) {
-                                            console.log( (ddbg()), "ruleop=", ruleop," ifvalue=",ifvalue," rulevalue= ",rulevalue," d1=",d1," d2=",d2," num1=",num1," num2=",num2);
-                                        }
-                                    } else if ( rulesubid==="time") {
-                                        var today = new Date();
-                                        var d1 = new Date(today.toDateString() + " " + getTimeStr(ifvalue, rulevalue));
-                                        var d2 = new Date(today.toDateString() + " " + rulevalue);
-                                        num1 = d1.getTime();
-                                        num2 = d2.getTime();
-                                        if ( DEBUG11 ) {
-                                            console.log( (ddbg()), "ruleop=", ruleop," ifvalue=",ifvalue," rulevalue= ",rulevalue," d1=",d1," d2=",d2," num1=",num1," num2=",num2);
-                                        }
-                                    } else if ( !isNaN(parseFloat(ifvalue)) && !isNaN(parseFloat(rulevalue)) ) {
-                                        num1 = parseFloat(ifvalue);
-                                        num2 = parseFloat(rulevalue);
                                     }
 
-                                    var ismatch = ( 
-                                        ( (ruleop==="=" || ruleop==="==") && (num1===num2) ) ||
-                                        ( (ruleop==="!" || ruleop==="!=") && (num1!==num2) ) ||
-                                        ( (ruleop==="<" ) && (num1 <  num2) ) ||
-                                        ( (ruleop==="<=") && (num1 <= num2) ) ||
-                                        ( (ruleop===">" ) && (num1 >  num2) ) ||
-                                        ( (ruleop===">=") && (num1 >= num2) ) 
-                                    );
+                                    // fix up ISY hubs
+                                    if ( rtype==="isy" && rulevalue==="on" ) { rulevalue = "DON"; }
+                                    if ( rtype==="isy" && rulevalue==="off" ) { rulevalue = "DOF"; }
 
-                                    // if this is time and match isn't there check string versions
-                                    if ( rulesubid==="time" && !ismatch ) {
-                                        ismatch = ( 
-                                            ( (ruleop==="=" || ruleop==="==") && (ifvalue===rulevalue) ) ||
-                                            ( (ruleop==="!" || ruleop==="!=") && (ifvalue!==rulevalue) ) 
+                                    if ( DEBUG11 ) {
+                                        console.log( (ddbg()), "RULE debug: rtype= ", rtype, " rbid= ", rbid, " ifvalue: ", ifvalue, "rulevalue: ", rulevalue, " ruletileid: ", ruletileid, " parts: ", ruleparts );
+                                    }
+
+                                    // get the rule check if the requested subid is recognized
+                                    // we handle numbers, dates, and times differently than strings
+                                    if ( ifvalue!==false ) {
+
+                                        var num1 = ifvalue;
+                                        var num2 = rulevalue;
+                                        if ( rulesubid==="date") {
+                                            var d1 = new Date(ifvalue);
+                                            var d2 = new Date(rulevalue);
+                                            num1 = d1.getTime();
+                                            num2 = d2.getTime();
+                                            if ( DEBUG11 ) {
+                                                console.log( (ddbg()), "ruleop=", ruleop," ifvalue=",ifvalue," rulevalue= ",rulevalue," d1=",d1," d2=",d2," num1=",num1," num2=",num2);
+                                            }
+                                        } else if ( rulesubid==="time") {
+                                            var today = new Date();
+                                            var d1 = new Date(today.toDateString() + " " + getTimeStr(ifvalue, rulevalue));
+                                            var d2 = new Date(today.toDateString() + " " + rulevalue);
+                                            num1 = d1.getTime();
+                                            num2 = d2.getTime();
+                                            if ( DEBUG11 ) {
+                                                console.log( (ddbg()), "ruleop=", ruleop," ifvalue=",ifvalue," rulevalue= ",rulevalue," d1=",d1," d2=",d2," num1=",num1," num2=",num2);
+                                            }
+                                        } else if ( !isNaN(parseFloat(ifvalue)) && !isNaN(parseFloat(rulevalue)) ) {
+                                            num1 = parseFloat(ifvalue);
+                                            num2 = parseFloat(rulevalue);
+                                        }
+
+                                        var ismatch = ( 
+                                            ( (ruleop==="=" || ruleop==="==") && (num1===num2) ) ||
+                                            ( (ruleop==="!" || ruleop==="!=") && (num1!==num2) ) ||
+                                            ( (ruleop==="<" ) && (num1 <  num2) ) ||
+                                            ( (ruleop==="<=") && (num1 <= num2) ) ||
+                                            ( (ruleop===">" ) && (num1 >  num2) ) ||
+                                            ( (ruleop===">=") && (num1 >= num2) ) 
                                         );
-                                    }
 
-                                    // apply and/or logic to the final rule determination
-                                    if ( rulenum===0 ) {
-                                        isrule = ismatch;
-                                        firstlogical = ismatch;
-                                    } else if ( doand ) {
-                                        isrule = isrule && ismatch;
-                                    } else {
-                                        if ( priorand ) {
-                                            isrule = firstlogical || ismatch;
-                                            firstlogical = isrule;
-                                        } else {
-                                            isrule = isrule || ismatch;
+                                        // if this is time and match isn't there check string versions
+                                        if ( rulesubid==="time" && !ismatch ) {
+                                            ismatch = ( 
+                                                ( (ruleop==="=" || ruleop==="==") && (ifvalue===rulevalue) ) ||
+                                                ( (ruleop==="!" || ruleop==="!=") && (ifvalue!==rulevalue) ) 
+                                            );
                                         }
+
+                                        // apply and/or logic to the final rule determination
+                                        if ( rulenum===0 ) {
+                                            isrule = ismatch;
+                                            firstlogical = ismatch;
+                                        } else if ( doand ) {
+                                            isrule = isrule && ismatch;
+                                        } else {
+                                            if ( priorand ) {
+                                                isrule = firstlogical || ismatch;
+                                                firstlogical = isrule;
+                                            } else {
+                                                isrule = isrule || ismatch;
+                                            }
+                                        }
+                                    } else {
+                                        if ( DEBUG11 ) {
+                                            console.log( (ddbg()), "error - invalid RULE syntax: ", rule, " parts: ", ruleparts);
+                                        }
+                                        isrule = false;
                                     }
                                 } else {
                                     if ( DEBUG11 ) {
-                                        console.log( (ddbg()), "error - invalid RULE syntax: ", rule, " parts: ", ruleparts);
+                                        console.log( (ddbg()), "error - invalid RULE syntax: ", rule);
                                     }
-                                    isrule = false;
+                                    ruleparts = false;
                                 }
-                            } else {
-                                if ( DEBUG11 ) {
-                                    console.log( (ddbg()), "error - invalid RULE syntax: ", rule);
-                                }
-                                ruleparts = false;
                             }
-                        }
 
-                        // report state of test
-                        if ( DEBUG11 ) {
-                            console.log( (ddbg()), "RULE debug: and=true, or=false: ", doand, " ", rule, " after isrule: ", isrule);
-                        }
-                        rulenum++;
-            
-                    });
-                }
-            } else {
-                isrule = false;
-            }
-
-            // execute the statements after if for the cases that pass the logic test above
-            if ( isrule ) {
-                execRules(rulecaller, item[1], thetype, 1, testcommands, pvalue);
-            }
-
-        }
-
-    });
-
-}
-
-// this executes the rules in the list starting with either 0 or 1
-// rules without if statements start at 0, if RULES start at 1
-function execRules(rulecaller, item, swtype, istart, testcommands, pvalue) {
-    // get a unique has for this rule to use for managing timers and gathering stats
-    // we also use this to prevent dup rules within the same doAction cycle
-    // TODO - add UserID to the hash
-    var itemhash = pw_hash(item,'md5');
-
-    if ( DEBUG11 ) {
-        console.log( (ddbg()), "RULE item: ", item, " hash: ", itemhash, " caller: ", rulecaller);
-    }
-
-    if ( ! GLB.rules ) {
-        GLB.rules = {};
-    }
-    if ( ! GLB.ruledelay ) {
-        GLB.ruledelay = {};
-    }
-    
-    if ( !array_key_exists(itemhash, GLB.rules) ) {
-        GLB.rules[itemhash] = false;
-    }
-
-    // prevent this rule from running more than once in a single doAction cycle
-    if (rulecaller==="callHub" || rulecaller==="processMsg") {
-        GLB.rules[itemhash] = true;
-        if ( DEBUG11 ) {
-            console.log( (ddbg()), "setting dup flag...");
-        }
-    } else if ( GLB.rules[itemhash] ) {
-        if ( DEBUG11 ) {
-            console.log( (ddbg()), "skipping dup rule...");
-        }
-        // immediately clear so we only skip this once
-        // if a future event comes along for same rule, we do it
-        GLB.rules[itemhash] = false;
-        return;
-    }
-
-    // perform all of the commands if we meet the if test
-    // const actpattern = /(\d+)\s*=\s*(\w+)\s*=\s*(\w+)\s*=?\s*(.*)/;
-    for (var i= istart; i<testcommands.length; i++) {
-        var autostr = testcommands[i];
-
-        // get the parts of the auto exec
-        // the regex is an alternate approach but it is slower and not needed for this simple syntax
-        // var autoexec = autostr.match(actpattern);
-        // the unshift is just so I can keep the same index numbers as when using regex
-        var autoexec = autostr.split("=");
-        autoexec.unshift(" ");
-        var len = autoexec.length;
-
-        if ( len >= 3 ) {
-            var rtileid = parseInt(autoexec[1].trim());
-            var rsubid = autoexec[2].trim();
-            var rvalue = len > 3 ? autoexec[3].trim() : "on" ;
-            var delay = len > 4 ? autoexec[4] : false;
-            if ( delay ) {
-                delay = parseInt( delay.trim() );
-                if ( isNaN(delay) || delay<=0 ) {
-                    delay = false;
-                } else {
-                    delay = delay * 1000;
-                }
-            }
-            var rswattr = len > 5 ? autoexec[5].trim() : "";
-            var ridx = false;
-
-            // check for a stop all other timer rules command
-            // this is done by entering 0=__delay as a rule segment
-            if ( rsubid==="__delay" ) {
-                resetRuleTimers();
-            } else {
-                // find the tile index and proceed with activating the rule
-                ridx = array_search(rtileid, GLB.options["index"]);
-            }
-            if ( DEBUG11 ) {
-                console.log( (ddbg()), "RULE debug: exec step #", i, " rtileid: ", rtileid, " rsubid: ", rsubid, " rvalue: ", rvalue, " rswattr: ", rswattr, " ridx: ", ridx, " delay: ", delay);
-            }
-
-            if ( ridx && allthings[ridx] ) {
-                var idxitems = ridx.split("|");
-                var rswtype = idxitems[0];
-                var rswid = idxitems[1];
-                var hubid = allthings[ridx]["hubnum"];
-                var hub = findHub(hubid);
-
-                // console.log(" >>>> hubid= ", hubid, " ridx= ", ridx, " hub= ", hub);
-
-                // handle requests for parameters of the trigger tile ($) or destination tile (@)
-                // disable hub calls for this type of rule
-                var trigtype = rvalue.substr(0,1);
-                if ( trigtype==="$" || trigtype==="@" ) {
-                    var trigsubid = rvalue.substr(1);
-                    if ( trigtype==="$" && array_key_exists(trigsubid, pvalue) ) {
-                        rvalue = pvalue[trigsubid];
-                    } else if ( trigtype==="@" && array_key_exists(trigsubid, allthings[ridx]["value"]) ) {
-                        rvalue = allthings[ridx]["value"][trigsubid];
+                            // report state of test
+                            if ( DEBUG11 ) {
+                                console.log( (ddbg()), "RULE debug: and=true, or=false: ", doand, " ", rule, " after isrule: ", isrule);
+                            }
+                            rulenum++;
+                
+                        });
                     }
+                } else {
+                    isrule = false;
                 }
 
-                // console.log(">>>> target for rule: ", allthings[ridx]["value"], " hub: ", hub, " testcommands: ", testcommands);
+                // execute the statements after if for the cases that pass the logic test above
+                if ( isrule ) {
+                    execRules(rulecaller, deviceid, item[1], thetype, 1, testcommands, pvalue);
+                }
 
-                // fix up ISY hubs and handle toggle
-                if ( rswtype==="isy" && array_key_exists(rsubid, allthings[ridx]["value"]) ) {
-                    var curvalue = allthings[ridx]["value"][rsubid];
-                    
-                    if ( rswtype==="isy" ) {
-                        if ( rvalue==="on" || (rvalue==="toggle" && curvalue==="DOF") ) { rvalue = "DON"; }
-                        if ( rvalue==="off" || (rvalue==="toggle" && curvalue==="DON") ) { rvalue = "DOF"; }
+            }
+
+        });
+    }
+
+    // this executes the rules in the list starting with either 0 or 1
+    // rules without if statements start at 0, if RULES start at 1
+    function execRules(rulecaller, deviceid, item, swtype, istart, testcommands, pvalue) {
+        // get a unique has for this rule to use for managing timers and gathering stats
+        // we also use this to prevent dup rules within the same doAction cycle
+        // var itemhash = pw_hash(item,'md5');
+
+        if ( DEBUG11 ) {
+            console.log( (ddbg()), "RULE item: ", item, " caller: ", rulecaller);
+        }
+
+        // if ( ! GLB.rules ) {
+        //     GLB.rules = {};
+        // }
+        // if ( ! GLB.ruledelay ) {
+        //     GLB.ruledelay = {};
+        // }
+        
+        // if ( !array_key_exists(itemhash, GLB.rules) ) {
+        //     GLB.rules[itemhash] = false;
+        // }
+
+        // prevent this rule from running more than once in a single doAction cycle
+        // if (rulecaller==="callHub" || rulecaller==="processMsg") {
+        //     GLB.rules[itemhash] = true;
+        //     if ( DEBUG11 ) {
+        //         console.log( (ddbg()), "setting dup flag...");
+        //     }
+        // } else if ( GLB.rules[itemhash] ) {
+        //     if ( DEBUG11 ) {
+        //         console.log( (ddbg()), "skipping dup rule...");
+        //     }
+        //     // immediately clear so we only skip this once
+        //     // if a future event comes along for same rule, we do it
+        //     GLB.rules[itemhash] = false;
+        //     return;
+        // }
+
+        // perform all of the commands if we meet the if test
+        // const actpattern = /(\d+)\s*=\s*(\w+)\s*=\s*(\w+)\s*=?\s*(.*)/;
+        for (var i= istart; i<testcommands.length; i++) {
+            var autostr = testcommands[i];
+
+            // get the parts of the auto exec
+            // the regex is an alternate approach but it is slower and not needed for this simple syntax
+            // var autoexec = autostr.match(actpattern);
+            // the unshift is just so I can keep the same index numbers as when using regex
+            var autoexec = autostr.split("=");
+            autoexec.unshift(" ");
+            var len = autoexec.length;
+
+            if ( len >= 3 ) {
+                var rtileid = parseInt(autoexec[1].trim());
+                var rsubid = autoexec[2].trim();
+                var rvalue = len > 3 ? autoexec[3].trim() : "on" ;
+                var delay = len > 4 ? autoexec[4] : false;
+                if ( delay ) {
+                    delay = parseInt( delay.trim() );
+                    if ( isNaN(delay) || delay<=0 ) {
+                        delay = false;
                     } else {
-                        if ( rvalue==="toggle" && curvalue==="off" ) { rvalue = "on"; }
-                        if ( rvalue==="toggle" && curvalue==="on" ) { rvalue = "off"; }
-                    }
-                } 
-
-                // set the destination to the value which would typically be overwritten by hub call
-                // if the destination is a link force the link to a TEXT type to neuter other types
-                var linkinfo = false;
-                var companion = "user_"+rsubid;
-                if ( array_key_exists(rsubid, allthings[ridx]["value"]) && array_key_exists(companion, allthings[ridx]["value"]) ) {
-                    // allthings[ridx]["value"][rsubid] = rvalue;
-
-                    var webstr = allthings[ridx]["value"][companion];
-                    var n = webstr.indexOf(":",3);
-                    var command = webstr.substring(2, n);
-                    var actionstr = webstr.substring(n+2);
-                    if ( DEBUG11 ) {
-                        console.log( ">>>> trigger other custom from rule. sib= ", companion, " sib val: ", webstr, " command: ", command, " actionstr: ", actionstr );
-                    }
-
-                    // if this is a text companion, just replace the value with the rule result
-                    if ( command==="TEXT" ) {
-                        // allthings[ridx]["value"][rsubid] = rvalue;
-                        // allthings[ridx]["value"][companion] = "::TEXT::" + rvalue;
-                        // var newpvalue = {};
-                        // newvalue[companion] = "::TEXT::" + rvalue;
-                        // newvalue[rsubid] = rvalue;
-                        linkinfo = [rswid, rswtype, rsubid, rsubid, "TEXT"];
-                        pushClient(rswid, rswtype, rsubid, allthings[ridx]["value"]);
-                        // pushClient(rswid, rswtype, rsubid, newpvalue);
-                    } else if ( command==="GET" || command==="POST" ) {
-
-                        // neuter the hub call so we don't do both and invoke action function
-                        hub = null;
-                        doAction(userid, thingid, rswid, rswtype, rvalue, rswattr, rsubid, null, command)
-                        
-                    }
-
-                // if destination subid isn't found make a user TEXT field
-                } else {
-                    addCustom(rswid, rswtype, "TEXT", rvalue, rsubid);
-                    linkinfo = [rswid, rswtype, rsubid, rsubid, "TEXT"];
-                    if ( DEBUG11 ) {
-                        console.log( (ddbg()), " new custom field: ", rsubid, " created in tile: ", allthings[ridx].value);
-                    }
-                    // restart all clients to show the newly created field
-                    // this only happens the first time the rule is triggered
-                    // pushClient("reload", "main", "/");
-                }
-
-                // handle level sliders and the funky attr values for other tiles
-                if ( linkinfo==="" ) {
-                    if ( rsubid==="level" ) {
-                        rswattr= "level";
-                    } else if ( rsubid==="colorTemperature" ) {
-                        rswattr= "colorTemperature";
-                    } else if ( rsubid==="onlevel" ) {
-                        rswattr= "onlevel";
-                    } else if ( rsubid==="volume" ) {
-                        rswattr= "volume";
-                    } else if ( rsubid==="switch" || swtype==="isy" || (swval!=="on" && swval!=="off") ) {
-                        rswattr="";
-                    } else if ( !rswattr && rswtype!=="isy" ) {
-                        var swval = rvalue==="on" ? "off" : "on";
-                        rswattr= swtype + " p_" + rtileid + " " + swval;
+                        delay = delay * 1000;
                     }
                 }
+                var rswattr = len > 5 ? autoexec[5].trim() : "";
+                // var ridx = false;
 
-                if ( hub ) {
-                    var thandle;
+                // check for a stop all other timer rules command
+                // this is done by entering 0=__delay as a rule segment
+                // if ( rsubid==="__delay" ) {
+                //     resetRuleTimers();
+                // } else {
+                //     // find the tile index and proceed with activating the rule
+                //     ridx = array_search(rtileid, GLB.options["index"]);
+                // }
+                if ( DEBUG11 ) {
+                    console.log( (ddbg()), "RULE debug: exec step #", i, " rtileid: ", rtileid, " rsubid: ", rsubid, " rvalue: ", rvalue, " rswattr: ", rswattr, " delay: ", delay);
+                }
 
-                    // look for this rule being in a timer and if found, clear timer
-                    if ( array_key_exists(itemhash, GLB.ruledelay) ) {
-                        thandle = GLB.ruledelay[itemhash];
-                        if ( DEBUG11 ) {
-                            console.log( (ddbg()), "clearing timer handle: ", itemhash);
+                // if ( ridx && allthings[ridx] ) {
+                if ( rtileid && devices[rtileid] ) {
+                    // var idxitems = ridx.split("|");
+                    var rswtype = devices[rtileid].devicetype;    // idxitems[0];
+                    var rswid = devices[rtileid].deviceid;   // idxitems[1];
+                    var hubindex = devices[rtileid].hubid;    //  allthings[ridx]["hubnum"];
+                    var hub = hubs[hubindex];   // findHub(hubid);
+
+                    // console.log(" >>>> hubid= ", hubid, " ridx= ", ridx, " hub= ", hub);
+
+                    // handle requests for parameters of the trigger tile ($) or destination tile (@)
+                    // disable hub calls for this type of rule
+                    var trigtype = rvalue.substr(0,1);
+                    if ( trigtype==="$" || trigtype==="@" ) {
+                        var trigsubid = rvalue.substr(1);
+                        if ( trigtype==="$" && array_key_exists(trigsubid, pvalue) ) {
+                            rvalue = pvalue[trigsubid];
+                        } else if ( trigtype==="@" && array_key_exists(trigsubid, devices[rtileid].pvalue) ) {
+                            rvalue = devices[rtileid].pvalue[trigsubid];   //  allthings[ridx]["value"][trigsubid];
                         }
-                        try {
-                            clearTimeout(thandle);
-                            delete GLB.ruledelay[itemhash];
-                        } catch(e) { }
                     }
 
-                    // make the hub call now or delayed
-                    // if delayed we store the handle in our rules array so that
-                    // should the same rule come along again we cancel this one first
-                    // this way delay light on and off will stay on if trigger keeps happening
-                    if ( delay && delay > 0 ) {
-                        thandle = setTimeout( function() {
+                    // console.log(">>>> target for rule: ", allthings[ridx]["value"], " hub: ", hub, " testcommands: ", testcommands);
+
+                    // fix up ISY hubs and handle toggle
+                    if ( rswtype==="isy" && devices[rtileid].pvalue ) {
+                        var curvalue = devices[rtileid].pvalue[rsubid];
+                        
+                        if ( rswtype==="isy" ) {
+                            if ( rvalue==="on" || (rvalue==="toggle" && curvalue==="DOF") ) { rvalue = "DON"; }
+                            if ( rvalue==="off" || (rvalue==="toggle" && curvalue==="DON") ) { rvalue = "DOF"; }
+                        } else {
+                            if ( rvalue==="toggle" && curvalue==="off" ) { rvalue = "on"; }
+                            if ( rvalue==="toggle" && curvalue==="on" ) { rvalue = "off"; }
+                        }
+                    } 
+
+                    // set the destination to the value which would typically be overwritten by hub call
+                    // if the destination is a link force the link to a TEXT type to neuter other types
+                    var linkinfo = null;
+                    var companion = "user_"+rsubid;
+                    var webstr = pvalue[rsubid];        //  allthings[ridx]["value"][companion];
+                    var n = webstr.indexOf("::",2);
+                    if ( array_key_exists(rsubid, pvalue) && n !== -1 ) {
+                        // allthings[ridx]["value"][rsubid] = rvalue;
+
+                        var command = webstr.substring(0, n);
+                        // var actionstr = webstr.substring(n+2);
+                        if ( DEBUG11 ) {
+                            console.log( ">>>> trigger other custom from rule. sib= ", companion, " sib val: ", webstr, " command: ", command);
+                        }
+
+                        // take action if it is in a rule
+                        if ( command==="GET" || command==="POST" ) {
+
+                            // neuter the hub call so we don't do both and invoke action function
+                            hub = null;
+                            doAction(userid, thingid, rswid, rswtype, rvalue, rswattr, rsubid, null, command);
+                            
+                        }
+
+                    // if destination subid isn't found make a user TEXT field
+                    } else if ( !array_key_exists(rsubid, pvalue) ) {
+                        // addCustom(userid, deviceid, rswid, rswtype, "TEXT", rvalue, rsubid);
+                        // linkinfo = [rswid, rswtype, rsubid, rsubid, "TEXT"];
+                        if ( DEBUG11 ) {
+                            console.log( (ddbg()), " new custom field: ", rsubid, " created in tile: ", pvalue);
+                        }
+                        // restart all clients to show the newly created field
+                        // this only happens the first time the rule is triggered
+                        // pushClient("reload", "main", "/");
+                    }
+                    
+                    if ( hub ) {
+
+                        // handle level sliders and the funky attr values for other tiles
+                        if ( rsubid==="level" ) {
+                            rswattr= "level";
+                        } else if ( rsubid==="colorTemperature" ) {
+                            rswattr= "colorTemperature";
+                        } else if ( rsubid==="onlevel" ) {
+                            rswattr= "onlevel";
+                        } else if ( rsubid==="volume" ) {
+                            rswattr= "volume";
+                        } else if ( rsubid==="switch" || swtype==="isy" || (swval!=="on" && swval!=="off") ) {
+                            rswattr="";
+                        } else if ( !rswattr && rswtype!=="isy" ) {
+                            var swval = rvalue==="on" ? "off" : "on";
+                            rswattr= swtype + " p_" + rtileid + " " + swval;
+                        }
+                        var thandle;
+
+                        // look for this rule being in a timer and if found, clear timer
+                        // if ( array_key_exists(itemhash, GLB.ruledelay) ) {
+                        //     thandle = GLB.ruledelay[itemhash];
+                        //     if ( DEBUG11 ) {
+                        //         console.log( (ddbg()), "clearing timer handle: ", itemhash);
+                        //     }
+                        //     try {
+                        //         clearTimeout(thandle);
+                        //         delete GLB.ruledelay[itemhash];
+                        //     } catch(e) { }
+                        // }
+
+                        // make the hub call now or delayed
+                        // if delayed we store the handle in our rules array so that
+                        // should the same rule come along again we cancel this one first
+                        // this way delay light on and off will stay on if trigger keeps happening
+                        if ( delay && delay > 0 ) {
+                            thandle = setTimeout( function() {
+                                try {
+                                    callHub(userid, hub.id, rswid, rswtype, deviceid, rvalue, rswattr, rsubid, linkinfo, true);
+                                } catch (e) {
+                                    console.log( (ddbg()), "error calling hub from rule: ", rswid, rswtype, rvalue, rswattr, rsubid, " error: ", e);
+                                }
+                            }, delay);
+                            // GLB.ruledelay[itemhash] = thandle;
+                            // if ( DEBUG11 ) {
+                            //     console.log( (ddbg()), "setting timer handle: ", itemhash);
+                            // }
+                        } else {
                             try {
-                                callHub(hub, rswid, rswtype, rvalue, rswattr, rsubid, linkinfo, true);
+                                // console.log("final rule step: id=",  rswid, "type=", rswtype, "value=", rvalue, "attr=", rswattr, "subid=", rsubid, "linkinfo=", linkinfo);
+                                callHub(userid, hub.id, rswid, rswtype, deviceid, rvalue, rswattr, rsubid, linkinfo, true);
                             } catch (e) {
                                 console.log( (ddbg()), "error calling hub from rule: ", rswid, rswtype, rvalue, rswattr, rsubid, " error: ", e);
                             }
-                        }, delay);
-                        GLB.ruledelay[itemhash] = thandle;
-                        if ( DEBUG11 ) {
-                            console.log( (ddbg()), "setting timer handle: ", itemhash);
-                        }
-                    } else {
-                        try {
-                            // console.log("final rule step: id=",  rswid, "type=", rswtype, "value=", rvalue, "attr=", rswattr, "subid=", rsubid, "linkinfo=", linkinfo);
-                            callHub(hub, rswid, rswtype, rvalue, rswattr, rsubid, linkinfo, true);
-                        } catch (e) {
-                            console.log( (ddbg()), "error calling hub from rule: ", rswid, rswtype, rvalue, rswattr, rsubid, " error: ", e);
                         }
                     }
                 }
+
+
             }
-
-
         }
+
     }
 
 }
@@ -5727,7 +5786,7 @@ function pushClient(swid, swtype, subid, body, linkinfo) {
 }
 
 // TODO - continue fixing this for DB to write new value to devices
-function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, linkinfo, inrule) {
+function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid, linkinfo, inrule) {
 
     // first get the hub from the DB
     var result = mydb.getRow("hubs","*","userid="+userid+" AND id = " + hubindex)
@@ -5745,7 +5804,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, linkinfo,
         if ( isNaN(valint) ) {
             valint = 50;
         }
-        if ( DEBUG7 || DEBUGtmp ) {
+        if ( DEBUG7 ) {
             console.log( (ddbg()), "callHub: access: ", access_token, " endpt: ", endpt, " swval: ", swval, " subid: ", subid, " swtype: ", swtype, " attr: ", swattr, " hub: ", hub);
         }
         
@@ -6149,7 +6208,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, linkinfo,
             }
         }
 
-    });
+    }).catch(reason => {console.log("dberror 14 - ", reason);});
     return result;
 
     // --------------------- end of callHub commands ------------------------------
@@ -6200,7 +6259,8 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, linkinfo,
         var pvalue;
         // var idx = swtype + "|" + swid;
         if ( DEBUG18 ) {
-            console.log( (ddbg()), hub.hubtype, " hub: ", hub.hubname, " trigger: ", subid, " rule: ", inrule, " call returned: ", body);
+            // console.log( (ddbg()), hub.hubtype, " hub: ", hub.hubname, " trigger: ", subid, " rule: ", inrule, " call returned: ", body);
+            console.log( (ddbg()), " trigger: ", subid, " rule: ", inrule, " call returned: ", body);
         }
         if ( err ) {
             console.log( (ddbg()), "error calling ST or HE hub: ", err);
@@ -6296,11 +6356,8 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, linkinfo,
                     pushClient(swid, swtype, subid, pvalue, linkinfo);
                     if ( !inrule ) {
                         pvalue.subid = subid;
-                        processRules(swid, swtype, subid, pvalue, "callHub");
+                        processRules(userid, deviceid, swid, swtype, subid, pvalue, "callHub");
                         delete pvalue.subid;
-
-
-
                     }
                 }
             }
@@ -6314,14 +6371,16 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, linkinfo,
             var linksubid = linkinfo[2];
             var targetobj = {};
             targetobj[linksubid] = pvalue[realsubid];
-            if ( DEBUG18 && DEBUG14) {
+            if ( DEBUG18 || DEBUG14) {
                 console.log( (ddbg()), "Linkinfo: ", linkinfo, " targetobj: ", targetobj);
             }
             pushClient(linkinfo[0], linkinfo[1], linksubid, targetobj);
             if ( !inrule ) {
-                targetobj.subid = linksubid;
-                processRules(linkinfo[0], linkinfo[1], linksubid, targetobj, "callHub");
-                delete targetobj.subid;
+                // targetobj.subid = linksubid;
+
+                // TODO - change linkinfo to include the linked deviceid
+                // processRules(userid, deviceid, linkinfo[0], linkinfo[1], linksubid, targetobj, "callHub");
+                // delete targetobj.subid;
             }
         }
 
@@ -6396,7 +6455,7 @@ function queryHub(userid, thingid, hubindex, swid, swtype, thingname ) {
 
         }
 
-    });
+    }).catch(reason => {console.log("dberror 15 - ", reason);});
     
     function getQueryResponse(err, res, pvalue) {
         if ( err ) {
@@ -6426,11 +6485,12 @@ function queryHub(userid, thingid, hubindex, swid, swtype, thingname ) {
                 pushClient(swid, swtype, "none", pvalue);
 
                 // force processing of rules for weather and clocks on a query
-                if ( swtype==="weather" || swtype==="clock" ) {
-                    pvalue.subid = "timer";
-                    processRules(swid, swtype, "timer", pvalue, "queryHub");
-                    delete pvalue.subid;
-                }
+                // no longer do this because we don't know the weather and clock device id easily
+                // if ( swtype==="weather" || swtype==="clock" ) {
+                //     pvalue.subid = "timer";
+                //     processRules(swid, swtype, "timer", pvalue, "queryHub");
+                //     delete pvalue.subid;
+                // }
             }
         }
     }
@@ -6447,7 +6507,7 @@ function queryHub(userid, thingid, hubindex, swid, swtype, thingname ) {
                         if ( nodeid ) {
 
                             var props = result.nodeInfo.properties[0].property;
-                            console.log( " >>>> ", props);
+                            // console.log( " >>>> ", props);
 
                             // first read the existing field data to update the json string
                             // pass to our field updater which does the screen update
@@ -6456,7 +6516,7 @@ function queryHub(userid, thingid, hubindex, swid, swtype, thingname ) {
                                 if (device) {
                                     setIsyFields(userid, nodeid, device, props, true);
                                 }
-                            });
+                            }).catch(reason => {console.log("dberror 16 - ", reason);});
 
                         } else {
                             throw "Something went wrong reading node from ISY in getNodeQueryResponse";
@@ -6605,7 +6665,7 @@ function testclick(clktype, clkid) {
 function doAction(userid, thingid, configoptions, swid, swtype, swval, swattr, subid, command, linkv, protocol) {
 
     // reset rules
-    resetRules(userid);
+    // resetRules(userid);
 
     if ( DEBUG7 ) {
         console.log( (ddbg()), "doaction: thingid: ", thingid, " swid: ", swid, " swtype:", swtype, " swval: ", swval, 
@@ -6684,7 +6744,7 @@ function doAction(userid, thingid, configoptions, swid, swtype, swval, swattr, s
                 if ( typeof pvalue === "object" ) {
                     pushClient(swid, swtype, subid, pvalue);
                     pvalue.subid = subid;
-                    processRules(swid, swtype, subid, pvalue, "callHub");
+                    processRules(userid, thingid, swid, swtype, subid, pvalue, "callHub");
                     delete pvalue.subid;
                 }
 
@@ -6692,44 +6752,45 @@ function doAction(userid, thingid, configoptions, swid, swtype, swval, swattr, s
                 processLink(linkval);
             
             } else if ( command==="RULE" ) {
-                if ( ENABLERULES ) {
-                    // get the execution statements and call them all here
-                    const regsplit = /[,;]/;
-                    if ( linkval ) {
-                        var testcommands = linkval.split(regsplit);
-                        var istart = 0;
-                        if ( testcommands[0].trim().startsWith("if") ) {
-                            istart = 1;
-                        }
-                        execRules("callHub", linkval, swtype, istart, testcommands, pvalue);
-                    }
-                } else {
-                    msg = "rules are disabled.";
-                }
+                // if ( ENABLERULES ) {
+                //     // get the execution statements and call them all here
+                //     const regsplit = /[,;]/;
+                //     if ( linkval ) {
+                //         var testcommands = linkval.split(regsplit);
+                //         var istart = 0;
+                //         if ( testcommands[0].trim().startsWith("if") ) {
+                //             istart = 1;
+                //         }
+
+                //         execRules("callHub", thingid, linkval, swtype, istart, testcommands, pvalue);
+                //     }
+                // } else {
+                //     msg = "rules are disabled.";
+                // }
+                msg = "CLicking on Rules no longer invokes the Rule action.";
             }
 
         } else {
-            try {
-                console.log(">>>> calling callHub: ", hubindex, swid, swtype, swval, swattr, subid);
-                callHub(userid, hubindex, swid, swtype, swval, swattr, subid, null, false);
-            } catch (e) {
-                msg = "error - calling hub#" + hubindex + " swid: " + swid + " type: " + swtype;
-                console.log( (ddbg()), msg, " error: ", e);
-            }
+            // try {
+                console.log(">>>> callHub: ", hubindex, swid, swtype, swval, swattr, subid);
+                callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, null, false);
+            // } catch (e) {
+            //     msg = "error - calling hub#" + hubindex + " swid: " + swid + " type: " + swtype;
+            //     console.log( (ddbg()), msg, " error: ", e);
+            // }
         }
         return pr;
 
-    });
+    })
+    .catch(reason => {
+        console.log("db error - ", reason);
+    })
     return pr;
 
     function processLink(linkthingid) {
 
         // link commands used to get the linkval setting from the tile click
         // but we now get it from the options in the DB just like other tiles
-        if ( DEBUGtmp ) {
-            console.log(">>>> linkthingid = ", linkthingid);
-        }
-        
         // get the tile unless it is this one
         mydb.getRow("devices","*","id = "+linkthingid)
         .then(linkdev => {
@@ -6775,11 +6836,11 @@ function doAction(userid, thingid, configoptions, swid, swtype, swval, swattr, s
                         pushClient($linked_swid, $linked_swtype,$realsubid, $linked_val);
                     } else {
                         var linkinfo = [swid, swtype, subid, $realsubid, "LINK"];
-                        callHub(userid, $lhub, $linked_swid, $linked_swtype, swval, swattr, $realsubid, linkinfo, false);
+                        callHub(userid, $lhub, $linked_swid, thingid, $linked_swtype, swval, swattr, $realsubid, linkinfo, false);
                     }
                 }
             }
-        });
+        }).catch(reason => {console.log("dberror 17 - ", reason);});
     }
 
     function urlCallback(err, res, body) {
@@ -6862,7 +6923,7 @@ function doQuery(userid, thingid, protocol) {
                 pushClient(swid, swtype, firstsubid, pvalue);
             }
             return devices;
-        });
+        }).catch(reason => {console.log("dberror 18 - ", reason);});
 
     // a specific device is being requested
     // lets get the device info and call its hub function
@@ -6895,7 +6956,7 @@ function doQuery(userid, thingid, protocol) {
                 }
                 return qres;
             }
-        })
+        }).catch(reason => {console.log("dberror 19 - ", reason);});
 
     }
 
@@ -6917,7 +6978,7 @@ function setOrder(userid, swtype, swval) {
             mydb.updateRow("rooms", updval, "id = "+roomid)
             .then(results => {
                 console.log(results.getAffectedItemsCount() );
-            });
+            }).catch(reason => {console.log("dberror 20 - ", reason);});
             num++;
         }
         result = "success - updated order of " + num + " rooms for user = " + userid;
@@ -6979,7 +7040,7 @@ function setPosition(userid, swid, swtype, panel, swattr, tileid, thingid) {
                 if ( result ) {
                     var tileloc = {left: left, top: top, "z-index": zindex, position: postype};
                     pushClient("setposition", thingid, "", tileloc);
-                    if ( DEBUG6 || DEBUGtmp ) {
+                    if ( DEBUG6 ) {
                         console.log( (ddbg()), "moved tile: ", thing, " to a new position: ", tileloc);
                     }
                     return tileloc;
@@ -6992,7 +7053,7 @@ function setPosition(userid, swid, swtype, panel, swattr, tileid, thingid) {
             console.log( (ddbg()), "error - could not find tile: ", tileid, " to move to position: ", top, left, zindex);
             return "error - could not find tile: " + tileid;
         }
-    });
+    }).catch(reason => {console.log("dberror 21 - ", reason);});
 
     return pr;
 }
@@ -7047,7 +7108,7 @@ function addThing(userid, bid, thingtype, panel, hubid, hubindex, roomid, pos, c
                         // construct the old allthings element equivalent but add the unique thingid and roomid fields
                         var thesensor = {id: bid, thingid: thingid, roomid: roomid, type: thingtype, hubnum: hubid, 
                                         hint: hint, refresh: refresh, value: pvalue};
-                        var thing = makeThing(userid, configoptions, thingid, tileid, thesensor, panel, 0, 0, 1, "", false);
+                        var thing = makeThing(userid, configoptions, thingid, tileid, thesensor, panel, 0, 0, 1, "", false, null);
                         console.log( (ddbg()), "added tile #",tileid," (thingid = ",thingid,") of type: ",thingtype," to page: ",panel,
                                             " deviceid: ", bid, " hubid: ", hubid, " thing: ", thing);
                         return thing;
@@ -7060,7 +7121,7 @@ function addThing(userid, bid, thingtype, panel, hubid, hubindex, roomid, pos, c
                 // return null;
                 return "error - could not find device of type " + thingtype + " in your list of authenticated devices";
             }
-        });
+        }).catch(reason => {console.log("dberror 22 - ", reason);});
 
         return promiseResult;
     });
@@ -7082,7 +7143,7 @@ function delThing(userid, bid, thingtype, panel, tileid, thingid) {
         }
         console.log( (ddbg()), msg);
         return msg;
-    });
+    }).catch(reason => {console.log("dberror 23 - ", reason);});
     return promiseResult;
 }
 
@@ -7098,7 +7159,7 @@ function delPage(userid, roomid, panel) {
         }
         console.log( (ddbg()), msg);
         return msg;
-    });
+    }).catch(reason => {console.log("dberror 24 - ", reason);});
     return promiseResult;
 }
 
@@ -7172,7 +7233,7 @@ function addPage(userid, panelid ) {
             msg = "Room added with id: " + roomid;
         }
         return msg;
-    });
+    }).catch(reason => {console.log("dberror 25 - ", reason);});
 
     function checkDone(item) {
         donestat[item] = true;
@@ -7229,7 +7290,7 @@ function getInfoPage(user, configoptions, hubs, req) {
         // var hubs = result.hubs;
         var devices = result;
         return getinfocontents(userid, configoptions, hubs, devices);
-    });
+    }).catch(reason => {console.log("dberror 26 - ", reason);});
 
     return visual;
 
@@ -7263,9 +7324,9 @@ function getInfoPage(user, configoptions, hubs, req) {
         $tc += "</form>";
         $tc += "<div class=\"infopage\">";
         $tc += "<div class='bold'>Site url = " + GLB.returnURL + "</div>";
-        $tc += "<div id='infoname' class='bold'>Current user = " + uname + "</div>";
-        $tc += "<div id='infoname' class='bold'>Displaying panel = " + pname + "</div>";
-        $tc += "<div id='infoname' class='bold'>User email = " + useremail + "</div>";
+        $tc += "<div class='bold'>Current user = " + uname + "</div>";
+        $tc += "<div class='bold'>Displaying panel = " + pname + "</div>";
+        $tc += "<div class='bold'>User email = " + useremail + "</div>";
         $tc += "<div class='bold'>Skin folder = " + skin + "</div>";
         $tc += "<div class='bold'>" + numhubs + " Hubs defined</div>";
         $tc += "<hr />";
@@ -7345,7 +7406,7 @@ function getInfoPage(user, configoptions, hubs, req) {
             } else {
                 var hubType = thing["hubs_hubtype"];
                 var hubName = thing["hubs_hubname"];
-                var hubstr = hubName + "<br><span class=\"typeopt\"> (" + hubid + ": " + hubType + ")</span>";
+                hubstr = hubName + "<br><span class=\"typeopt\"> (" + hubid + ": " + hubType + ")</span>";
             }
             
             $tc += "<tr><td class=\"thingname\">" + thing["devices_name"] +
@@ -7440,7 +7501,7 @@ function getInfoPage(user, configoptions, hubs, req) {
 }
 
 // TODO - rewrite
-function hubFilters(userid, hubpick, hubs, useroptions, ncols) {
+function hubFilters(userid, hubpick, hubs, useroptions, pagename, ncols) {
     // var options = GLB.options;
     // var useroptions = options["useroptions"];
     // var configoptions = options["config"];
@@ -7449,32 +7510,36 @@ function hubFilters(userid, hubpick, hubs, useroptions, ncols) {
     var thingtypes = getTypes();
     var $tc = "";
     $tc+= "<form id=\"filteroptions\" class=\"options\" name=\"filteroptions\" action=\"#\">";
-    
+    $tc+= utils.hidden("userid", userid);
+    $tc += utils.hidden("pagename", pagename);
+    $tc += utils.hidden("returnURL", GLB.returnURL);
+
     // // if more than one hub then let user pick which one to show
-    // var hubpick = "all";
-    // if ( configoptions["hubpick"] ) {
-    //     hubpick = configoptions["hubpick"];
-    // }
-    // if ( utils.count($hubs) > 1 ) {
-    //     $tc+= "<div class=\"filteroption\">Hub Filters: ";
-    //     var $hid = "hopt_all";
-    //     var checked = (hubpick==="all") ? " checked='1'" : "";
-    //     $tc+= "<div class='radiobutton'><input id='" + $hid + "' type='radio' name='huboptpick' value='all'"  + checked + "><label for='" + $hid + "'>All Hubs</label></div>";
-    //     $hid = "hopt_none";
-    //     checked = (hubpick==="-1") ? " checked='1'" : "";
-    //     $tc+= "<div class='radiobutton'><input id='" + $hid + "' type='radio' name='huboptpick' value='-1'" + checked + "><label for='" + $hid + "'>No Hub</label></div>";
-    //     var $hubcount = 0;
-    //     $hubs.forEach(function($hub) {
-    //         var $hubName = $hub.hubname;
-    //         var $hubType = $hub.hubtype;
-    //         var $hubId = $hub.hubid;
-    //         $hid = "hopt_" + $hubId;
-    //         checked = (hubpick===$hubId) ? " checked='1'" : "";
-    //         $tc+= "<div class='radiobutton'><input id='" + $hid + "' type='radio' name='huboptpick' value='" + $hubId + "'" + checked + "><label for='" + $hid + "'>" + $hubName + " (" + $hubType + ")</label></div>";
-    //         $hubcount++;
-    //     });
-    //     $tc+= "</div>";
-    // }
+    if ( !hubpick ) {
+        hubpick = "all";
+    }
+
+    if (hubs && hubs.length ) {
+        $tc+= "<div class=\"filteroption\">Hub Filters: ";
+        var hid = "hopt_all";
+        var checked = (hubpick==="all") ? " checked='1'" : "";
+        $tc+= "<div class='radiobutton'><input id='" + hid + "' type='radio' name='huboptpick' value='all'"  + checked + "><label for='" + hid + "'>All Hubs</label></div>";
+        // hid = "hopt_none";
+        // checked = (hubpick==="-1") ? " checked='1'" : "";
+        // $tc+= "<div class='radiobutton'><input id='" + hid + "' type='radio' name='huboptpick' value='-1'" + checked + "><label for='" + hid + "'>No Hub</label></div>";
+        var $hubcount = 0;
+        hubs.forEach(function(hub) {
+            var hubName = hub.hubname;
+            var hubType = hub.hubtype;
+            var hubId = hub.hubid;
+            var hubindex = hub.id;
+            hid = "hopt_" + hubindex;
+            checked = (hubpick===hubId) ? " checked='1'" : "";
+            $tc+= "<div class='radiobutton'><input id='" + hid + "' hubindex='" + hubindex + "' type='radio' name='huboptpick' value='" + hubId + "'" + checked + "><label for='" + hid + "'>" + hubName + " (" + hubType + ")</label></div>";
+            $hubcount++;
+        });
+        $tc+= "</div>";
+    }
 
     // // buttons for all or no filters
     $tc+= "<div id=\"thingfilters\" class='filteroption'>Select Things to Display:</div>";
@@ -7484,6 +7549,7 @@ function hubFilters(userid, hubpick, hubs, useroptions, ncols) {
 
     $tc+= "<table class=\"useroptions\"><tr>";
     var $i= 0;
+    var numtypes = utils.count(thingtypes);
     for (var $iopt in thingtypes) {
         var $opt = thingtypes[$iopt];
         $i++;
@@ -7493,7 +7559,7 @@ function hubFilters(userid, hubpick, hubs, useroptions, ncols) {
             $tc+= "<td><input id=\"cbx_" + $i + "\" type=\"checkbox\" name=\"useroptions[]\" value=\"" + $opt + "\">";
         }
         $tc+= "<label for=\"cbx_" + $i + "\" class=\"optname\">" + $opt + "</label></td>";
-        if ( $i % ncols == 0 && $i < utils.count(thingtypes) ) {
+        if ( $i % ncols === 0 && $i < numtypes ) {
             $tc+= "</tr><tr>";
         }
     }
@@ -7537,7 +7603,7 @@ function getCatalog(userid, hubpick, hubs, useroptions, sensors) {
     var $tc = "";
 
     $tc += "<div id=\"catalog\">";
-    $tc += hubFilters(userid, hubpick, hubs, useroptions, 3);
+    $tc += hubFilters(userid, hubpick, hubs, useroptions, "main", 3);
 
     $tc += "<div class='scrollvtable fshort'><table class=\"catalog\">";
 
@@ -7581,47 +7647,47 @@ function getCatalog(userid, hubpick, hubs, useroptions, sensors) {
 
 // this used to create input blocks for auth page
 // it was modified for use now on the options page
-function tsk($timezone, $skin, $uname, $port, $webSocketServerPort, $fast_timer, $slow_timer, polisyip) {
+// function tsk($timezone, $skin, $uname, $port, $webSocketServerPort, $fast_timer, $slow_timer, polisyip) {
 
-    var $tc= "";
-    $tc += "<form id=\"userpw\" class=\"options\" name=\"userpw\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
+//     var $tc= "";
+//     $tc += "<form id=\"userpw\" class=\"options\" name=\"userpw\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
 
-    $tc += "<div class=\"filteroption\">";
-    $tc += "<div class='inp'><label class=\"startupinp\">Skin Folder: </label>";
-    $tc += "<input id=\"skinid\" class=\"startupinp\" name=\"skin\" width=\"80\" type=\"text\" value=\"" + $skin + "\"/></div>"; 
+//     $tc += "<div class=\"filteroption\">";
+//     $tc += "<div class='inp'><label class=\"startupinp\">Skin Folder: </label>";
+//     $tc += "<input id=\"skinid\" class=\"startupinp\" name=\"skin\" width=\"80\" type=\"text\" value=\"" + $skin + "\"/></div>"; 
     
-    $tc += "<div><label class=\"startupinp\">Timezone: </label>";
-    $tc += "<input id=\"newtimezone\" class=\"startupinp\" name=\"timezone\" width=\"80\" type=\"text\" value=\"" + $timezone + "\"/></div>"; 
+//     $tc += "<div><label class=\"startupinp\">Timezone: </label>";
+//     $tc += "<input id=\"newtimezone\" class=\"startupinp\" name=\"timezone\" width=\"80\" type=\"text\" value=\"" + $timezone + "\"/></div>"; 
 
-    // $tc += "<div><label class=\"startupinp\">Main App Port: </label>";
-    // $tc += "<input disabled id=\"newport\" class=\"startupinp\" name=\"port\" width=\"20\" type=\"text\" value=\"" + $port + "\"/></div>"; 
+//     // $tc += "<div><label class=\"startupinp\">Main App Port: </label>";
+//     // $tc += "<input disabled id=\"newport\" class=\"startupinp\" name=\"port\" width=\"20\" type=\"text\" value=\"" + $port + "\"/></div>"; 
 
-    // $tc += "<div><label class=\"startupinp\">WebSocket Port: </label>";
-    // $tc += "<input disabled id=\"newsocketport\" class=\"startupinp\" name=\"webSocketServerPort\" width=\"20\" type=\"text\" value=\"" + $webSocketServerPort + "\"/></div>"; 
+//     // $tc += "<div><label class=\"startupinp\">WebSocket Port: </label>";
+//     // $tc += "<input disabled id=\"newsocketport\" class=\"startupinp\" name=\"webSocketServerPort\" width=\"20\" type=\"text\" value=\"" + $webSocketServerPort + "\"/></div>"; 
 
-    $tc += "<div><label class=\"startupinp\">Fast Timer: </label>";
-    $tc += "<input id=\"newfast_timer\" class=\"startupinp\" name=\"fast_timer\" width=\"20\" type=\"text\" value=\"" + $fast_timer + "\"/></div>"; 
+//     $tc += "<div><label class=\"startupinp\">Fast Timer: </label>";
+//     $tc += "<input id=\"newfast_timer\" class=\"startupinp\" name=\"fast_timer\" width=\"20\" type=\"text\" value=\"" + $fast_timer + "\"/></div>"; 
 
-    $tc += "<div><label class=\"startupinp\">Slow Timer: </label>";
-    $tc += "<input id=\"newslow_timer\" class=\"startupinp\" name=\"slow_timer\" width=\"20\" type=\"text\" value=\"" + $slow_timer + "\"/></div>"; 
+//     $tc += "<div><label class=\"startupinp\">Slow Timer: </label>";
+//     $tc += "<input id=\"newslow_timer\" class=\"startupinp\" name=\"slow_timer\" width=\"20\" type=\"text\" value=\"" + $slow_timer + "\"/></div>"; 
 
-    $tc += "<div><label class=\"startupinp\">Polisy box IP: </label>";
-    $tc += "<input id=\"newpolisyip\" class=\"startupinp\" name=\"polisyip\" width=\"30\" type=\"text\" value=\"" + polisyip + "\"/></div>"; 
+//     $tc += "<div><label class=\"startupinp\">Polisy box IP: </label>";
+//     $tc += "<input id=\"newpolisyip\" class=\"startupinp\" name=\"polisyip\" width=\"30\" type=\"text\" value=\"" + polisyip + "\"/></div>"; 
 
-    $tc += "<div><label for=\"uname\" class=\"startupinp\">Panel name: </label>";
-    $tc += "<input id=\"uname\" class=\"startupinp\" name=\"uname\" width=\"20\" type=\"text\" value=\"" + $uname + "\"/></div>"; 
+//     $tc += "<div><label for=\"uname\" class=\"startupinp\">Panel name: </label>";
+//     $tc += "<input id=\"uname\" class=\"startupinp\" name=\"uname\" width=\"20\" type=\"text\" value=\"" + $uname + "\"/></div>"; 
 
-    $tc += "<div><label for=\"pword\" class=\"startupinp\">Set New Password: </label>";
-    $tc += "<input id=\"pword\" class=\"startupinp\" name=\"pword\" width=\"80\" type=\"password\" value=\"\"/></div>"; 
+//     $tc += "<div><label for=\"pword\" class=\"startupinp\">Set New Password: </label>";
+//     $tc += "<input id=\"pword\" class=\"startupinp\" name=\"pword\" width=\"80\" type=\"password\" value=\"\"/></div>"; 
     
-    $tc += "<div><label></label><span class='indent typeopt'>(blank to keep prior)</span></div>";
-    $tc += "<div></div><br />";
-    $tc += "</div>";
-    $tc += "</form>";
+//     $tc += "<div><label></label><span class='indent typeopt'>(blank to keep prior)</span></div>";
+//     $tc += "<div></div><br />";
+//     $tc += "</div>";
+//     $tc += "</form>";
 
-    return $tc;
+//     return $tc;
     
-}
+// }
 
 function getSocketUrl(hostname) {
     var webSocketUrl = "";
@@ -7655,7 +7721,34 @@ function getOptionsPage(user, configoptions, hubs, req) {
 
     var hostname = req.headers.host;
     var pathname = req.path;
-    var specialtiles = getSpecials();
+
+    var alldevices = {};
+    var rooms;
+    var things;
+    var maindone = {devices: false, rooms: false, things: false};
+
+    function checkDone(element) {
+        if ( element ) {
+            maindone[element] = true;
+            console.log(">>>> finished with element: ", element);
+        }
+        
+        var alldone = true;
+        for (var el in maindone) {
+            alldone = alldone && maindone[el];
+        }
+
+        if ( alldone ) {
+            console.log(">>>> finished with all elements and rendering page");
+            var tc = ""; // renderMain(configoptions, hubs, rooms, alldevices, things);
+            res.send(tc);
+            res.end();
+        }
+        
+        return alldone;
+    }
+
+    var specialtiles = getSpecials(configoptions);
 
     // get all the things in the various rooms as we do on the main page
     var pr = mydb.getRows("rooms","*", "userid = "+userid+" AND panelid = "+panelid)
@@ -7672,14 +7765,6 @@ function getOptionsPage(user, configoptions, hubs, req) {
         return pr;
     })
     .then(resarray => {
-        //             var $thingname = thesensor["devices_name"];
-        // var nickname = thesensor["things_customname"] || "";
-        // var $thetype = thesensor["devices_devicetype"];
-        // var $hubType = thesensor["hubs_hubtype"];
-        // var $hubStr = thesensor["hubs_hubname"];
-        // var $hubId = thesensor["hubs_hubid"];
-        // var $thingindex = thesensor["things_tileid"];
-
         var joinstr1 = mydb.getJoinStr("things","tileid","devices","id");
         var joinstr2 = mydb.getJoinStr("things","roomid","rooms","id");
         var pr = mydb.getRows("things","*", 
@@ -7699,15 +7784,15 @@ function getOptionsPage(user, configoptions, hubs, req) {
         // console.log(">>>> options rooms: ", rooms);
         // return JSON.stringify(things);
         if ( rooms && devices && things ) {
-            return getInfoContents(rooms, devices, things);
+            return renderOptionsPage(rooms, devices, things);
         } else {
             return "error - problem with reading your existing tiles";
         }
-    });
+    }).catch(reason => {console.log("dberror 27 - ", reason);});
 
     return pr;
 
-    function getInfoContents(rooms, devices, sensors) {
+    function renderOptionsPage(rooms, devices, sensors) {
 
         var $port = getConfigItem(configoptions,"port");
         var $webSocketServerPort = getConfigItem(configoptions, "webSocketServerPort");
@@ -7725,8 +7810,7 @@ function getOptionsPage(user, configoptions, hubs, req) {
         var $accucity = getConfigItem(configoptions, "accucity");
         var $accuregion = getConfigItem(configoptions, "accuregion");
         var $accucode = getConfigItem(configoptions, "accucode");      // ann-arbor-mi code is 329380
-        var hubpick = "all";
-        // var hubpick = getConfigItem(configoptions, "hubpick");
+        var hubpick = getConfigItem(configoptions, "hubpick") || "all";
     
         var $tc = "";
         $tc += utils.getHeader(userid, skin, true);
@@ -7740,8 +7824,9 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc += utils.hidden("pathname", pathname);
         $tc += utils.hidden("webSocketUrl", webSocketUrl);
 
-        $tc += hubFilters(userid, hubpick, hubs, configoptions, 7);
-        $tc += tsk($timezone, skin, uname, $port, $webSocketServerPort, $fast_timer, $slow_timer, polisyip);
+        var useroptions = getConfigItem(configoptions, "useroptions");
+        $tc += hubFilters(userid, hubpick, hubs, useroptions, "options", 7);
+        // $tc += tsk($timezone, skin, uname, $port, $webSocketServerPort, $fast_timer, $slow_timer, polisyip);
 
         $tc += "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
 
@@ -7765,15 +7850,24 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc+= "<input id=\"clrblackid\" width=\"24\" type=\"checkbox\" name=\"clrblackid\"  value=\"" + $blackout + "\" " + $kstr + "/>";
         $tc+= "<br /><label for=\"photoid\" class=\"kioskoption\">Photo timer (sec): </label>";
         $tc+= "<input class=\"kioskoption\" id=\"photoid\" name=\"phototimer\" width=\"10\" type=\"number\"  min='0' max='300' step='1' value=\"" + phototimer + "\" />";
+        $tc += "<br><label class=\"startupinp\">WebSocket Port: </label>";
+        $tc += "<input disabled id=\"newsocketport\" class=\"startupinp\" name=\"webSocketServerPort\" width=\"20\" type=\"text\" value=\"" + $webSocketServerPort + "\"/>";
         if ( ENABLERULES ) {
             $tc += "<br/><label for=\"ruleid\" class=\"kioskoption\">Enable Rules? </label>";
             var $rstr = ($ruleoptions===true || $ruleoptions==="true" || $ruleoptions==="1" || $ruleoptions==="yes") ? "checked" : "";
             $tc += "<input id=\"ruleid\" width=\"24\" type=\"checkbox\" name=\"rules\"  value=\"" + $ruleoptions + "\" " + $rstr + "/>";
         }
+
         $tc += "</div>";
 
         $tc += "<div class=\"filteroption\">";
         $tc += "<table>";
+
+        // $tc += "<tr>";
+        // $tc += "<td><label class=\"startupinp\">WebSocket Port: </label></td>";
+        // $tc += "<td><input disabled id=\"newsocketport\" class=\"startupinp\" name=\"webSocketServerPort\" width=\"20\" type=\"text\" value=\"" + $webSocketServerPort + "\"/></td>";
+        // $tc+= "</tr>"; 
+
         $tc += "<tr>";
         $tc += "<td><label for=\"fcastcityid\" class=\"kioskoption\">Forecast City: </label></td>";
         $tc += "<td><input id=\"fcastcityid\" width=\"180\" type=\"text\" name=\"fcastcity\"  value=\"" + fcastcity + "\" /></td>";
@@ -7782,7 +7876,9 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc += "<td><label for=\"fcastcodeid\" class=\"kioskoption\">Forecast Code: </label></td>";
         $tc += "<td><input id=\"fcastcodeid\" width=\"20\" type=\"text\" name=\"fcastcode\"  value=\"" + fcastcode + "\"/>";
         $tc += "<span class='typeopt'>(for Frame1 tiles)</span></td>";
-        $tc += "</tr><tr>";
+        $tc += "</tr>";
+
+        $tc += "<tr>";
         $tc += "<td><label for=\"accucityid\" class=\"kioskoption\">Accuweather City: </label></td>";
         $tc += "<td><input id=\"accucityid\" width=\"180\" type=\"text\" name=\"accucity\"  value=\"" + $accucity + "\" /></td>";
         $tc += "<td><label for=\"accuregionid\" class=\"kioskoption\">Accuweather Region: </label></td>";
@@ -7809,52 +7905,40 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc += "<table class=\"roomoptions\">";
         $tc += "<tbody>";
 
-        // sort the things
-        // uasort(allthings, "mysortfunc");
-        
-        // now print our options matrix
-        // $rowcnt = 0;
         var $evenodd = true;
-        var $hub;
-
-        // use a sorted list
-        // var sensors = sortedSensors(sensors, "hubnum", "name", "type");
-
         for ( var i in devices) {
             var device = devices[i];
-            var $thingname = device["devices_name"];
-            // console.log(">>>> id= ", device["devices_id"], " n: ", $thingname);
-            // var nickname = thesensor["things_customname"] || "";
-            var $thetype = device["devices_devicetype"];
-            var $hubType = device["hubs_hubtype"];
-            var $hubStr = device["hubs_hubname"];
+            var thingname = device["devices_name"];
+            var thetype = device["devices_devicetype"];
+            var hubType = device["hubs_hubtype"];
+            var hubStr = device["hubs_hubname"];
             var hubid = device["hubs_hubid"];
-            var hubindex = device["hubs_hubindex"];
-            var $thingindex = device["devices_id"];
+            var hubindex = device["hubs_id"];
+            var thingindex = device["devices_id"];
             var $special = "";
 
             // write the table row
-            // if ( array_key_exists($thetype, specialtiles) ) {
+            // if ( array_key_exists(thetype, specialtiles) ) {
             //     var $special = " special";
             // } else {
             //     $special = "";
             // }
             var $odd = $evenodd = false;
-            // if (in_array($thetype, configoptions)) {
-            if ( $thetype ) {
+            // if ( thetype ) {
+            if (in_array(thetype, useroptions)) {
                 $evenodd = !$evenodd;
                 $evenodd ? $odd = " odd" : $odd = "";
-                $tc+= "<tr type=\"" + $thetype + "\" tile=\"" + $thingindex + "\" class=\"showrow" + $odd + $special + "\">";
+                $tc+= "<tr type=\"" + thetype + "\" tile=\"" + thingindex + "\" class=\"showrow" + $odd + $special + "\">";
             } else {
-                $tc+= "<tr type=\"" + $thetype + "\" tile=\"" + $thingindex + "\" class=\"hiderow" + $special + "\">";
+                $tc+= "<tr type=\"" + thetype + "\" tile=\"" + thingindex + "\" class=\"hiderow" + $special + "\">";
             }
             
             $tc+= "<td class=\"thingname\">";
-            $tc+= $thingname;
+            $tc+= thingname + " (" + thetype + ")";
             $tc+= "</td>";
             
             $tc+= "<td class=\"hubname\" hubindex=\"" + hubindex + "\" hubid=\"" + hubid + "\">";
-            $tc+= $hubStr + " (" + $hubType + ")";
+            $tc+= hubStr + " (" + hubType + ")";
             $tc+= "</td>";
 
             // loop through all the rooms
@@ -7870,15 +7954,15 @@ function getOptionsPage(user, configoptions, hubs, req) {
                 var ischecked = false;
                 for (var i in sensors) {
                     var thing = sensors[i];
-                    if ( thing["things_tileid"] === $thingindex &&  thing["things_roomid"] === roomid ) {
+                    if ( thing["things_tileid"] === thingindex &&  thing["things_roomid"] === roomid ) {
                         ischecked = true;
                     }
                 }
                 
                 if ( ischecked ) {
-                    $tc+= "<input type=\"checkbox\" name=\"" + roomname + "[]\" value=\"" + $thingindex + "\" checked=\"1\" >";
+                    $tc+= "<input type=\"checkbox\" name=\"" + roomname + "[]\" value=\"" + thingindex + "\" checked=\"1\" >";
                 } else {
-                    $tc+= "<input type=\"checkbox\" name=\"" + roomname + "[]\" value=\"" + $thingindex + "\" >";
+                    $tc+= "<input type=\"checkbox\" name=\"" + roomname + "[]\" value=\"" + thingindex + "\" >";
                 }
                 $tc+= "</td>";
             }
@@ -7901,7 +7985,7 @@ function getOptionsPage(user, configoptions, hubs, req) {
 }
 
 // renders the main page
-function mainPage(user, configoptions, hubs, req) {
+function getMainPage(user, configoptions, hubs, req, res) {
 
     var $tc = "";
     var hostname = req.headers.host;
@@ -7916,142 +8000,162 @@ function mainPage(user, configoptions, hubs, req) {
     var panelid = user["panels_id"];
     var pname = user["panels_pname"];
     var skin = user["panels_skin"];
-    var catalog = "";
+
+    var alldevices = {};
+    var rooms;
+    var things;
+    var maindone = {specials: true, devices: false, rooms: false, things: false};
+
+    function checkDone(element) {
+        if ( element ) {
+            maindone[element] = true;
+            console.log(">>>> finished with element: ", element);
+        }
+        
+        var alldone = true;
+        for (var el in maindone) {
+            alldone = alldone && maindone[el];
+        }
+
+        if ( alldone ) {
+            console.log(">>>> finished with all elements and rendering page");
+            var tc = renderMain(configoptions, hubs, rooms, alldevices, things);
+
+            // set up local sockets if all ISY hubs
+            hubs.forEach(function(hub) {
+                if ( hub.hubtype === "ISY" ) {
+                    if ( DEBUGisy ) {
+                        console.log("ISY hub found: ", hub);
+                    }
+                    setupISYSocket(hub);
+                }
+            });
+
+            res.send(tc);
+            res.end();
+        }
+        
+        return alldone;
+    }
 
     console.log(  "\n****************************************************************",
-                  "\n", (ddbg()), "Serving page at: ", GLB.returnURL,
+                  "\n", (ddbg()), "Serving pages from: ", GLB.returnURL,
                   "\n****************************************************************");
 
-    $tc += utils.getHeader(userid, skin, false);
+    // var temp = "<br>****************************************************************" +
+    //            "<br>" + (ddbg()) + "Serving pages from: " + GLB.returnURL +
+    //            "<br>****************************************************************";
+    // res.send(temp);
+    // res.end();
+    // return true;
 
-    // if new user flag it and udpate to no longer be new
-    if ( usertype === 0 ) {
-        $tc += "<div class=\"greeting\"><strong>Welcome New User!</strong><br/ >You should first try to link your smart home hubs, using the Hub Auth button below. ";
-        $tc += "You can also explore all that HousePanel has to offer by experimenting with the two clock tiles placed in each room. ";
-        $tc += "When you are done, they can be removed in Edit mode or from the Options page. Click on the ? mark in the upper right corner. ";
-        $tc += "to access the full online manual. Have fun!</div>";
-        mydb.updateRow("users",{usertype: 1},"id="+userid);
-    }
-
-    if ( DEBUG4 ) {
-        console.log( (ddbg()), "mainPage: ", userid, uname, panelid, pname, usertype, skin, hostname, pathname);
-    }
-
-    // make sure our active skin has a custom file
-    // if ( !fs.existsSync(skin + "/customtiles.css") ) {
-    //     writeCustomCss(skin, "");
-    // }
-    var results = addSpecials(userid, configoptions, 1)
-    .then(result => {
-
-        // console.log(" >>>> special tiles: ", specialtiles);
-
-        // first get the room list and make the header
-        var conditions = "userid = "+userid+" AND panelid = "+panelid;
-        var results = mydb.getRows("rooms","*",conditions,"","rooms.rorder");
-        return results;
-    })
+    // first get the room list and make the header
+    var conditions = "userid = "+userid+" AND panelid = "+panelid;
+    mydb.getRows("rooms","*",conditions,"","rooms.rorder")
     .then(rows => {
-
-        var tc = $tc;
-        tc += '<div id="dragregion">';
-        tc += '<div id="tabs"><ul id="roomtabs">';
-
-        for (var i in rows) {
-            var row = rows[i];
-            var k = row["rorder"];
-            var room = row["rname"]
-            if ( room ) {
-                var adder= "<li roomnum=\"" + k + "\" class=\"tab-" + room + "\"><a href=\"#" + room + "-tab\">" + room + "</a></li>";
-                tc += adder;
-            }
+        rooms = rows;
+        if ( DEBUG1 ) {
+            console.log((ddbg()), "rooms: ", rooms);
         }
-        tc += '</ul>';
-
-        // console.log(rows);
-        return [tc, rows];
+        return checkDone("rooms");
     })
-    .then(resultsarray => {
+    .then( () => {
+
         var joinstr = mydb.getJoinStr("devices","hubid","hubs","id");
         mydb.getRows("devices","*","devices.userid = " + userid, joinstr,"hubs.hubid, devices.name")
-        .then(alldevices => {
-            console.log("alldevices: ", alldevices);
-            // alldevices = sortedSensors(alldevices, "hubid", "name", "devicetype");
-            var hubpick = getConfigItem(configoptions, "hubpick");
-            var useroptions = getConfigItem(configoptions, "useroptions");
-            catalog = getCatalog(userid, hubpick, hubs, useroptions, alldevices);
-        });
-        return resultsarray;
-    })
-    .then(resultsarray => {
+        .then(rows => {
+            // convert array of devices to an array of objects that looks like our old allthings
+            alldevices = {};
+            rows.forEach(function(dev) {
+                var devid = dev["devices_id"];
+                alldevices[devid] = dev;
+            });
+            if ( DEBUG1 ) {
+                console.log((ddbg()), "alldevices: ", alldevices);
+            }
 
-        var tc = resultsarray[0];
-        var rooms = resultsarray[1];
+            // update clocks to start off correctly
+            var hubzero = hubs[0].id;
+            updSpecials(userid, configoptions, hubzero, alldevices, true);
+
+            return checkDone("devices");
+        });
+        // return results;
+    })
+    .then( () => {
 
         // we link the tileid to the index of devices list - this will be unique and tied to a hub
-        var cnt = 0;
         var joinstr1 = mydb.getJoinStr("things","tileid","devices","id");
         var joinstr2 = mydb.getJoinStr("things","roomid","rooms","id");
         var joinstr3 = mydb.getJoinStr("devices","hubid","hubs","id");
         var conditions = "things.userid = "+userid+" AND rooms.panelid = "+panelid;
-        // var newtc = mydb.getRows("things","things.*,devices.*", conditions, [joinstr1, joinstr2, joinstr3],"rooms.rorder")
-        var newtc = mydb.getRows("things","*", conditions, [joinstr1, joinstr2, joinstr3], "rooms.rorder, things.torder, things.id")
-        .then(things => {
-
-            // console.log("things for panel: ", pname, ": ", things," conditions: ", conditions);
-            
-            for (var i in rooms) {
-                var row = rooms[i];
-                var roomname = row.rname;
-                var rorder = row.rorder;
-                var roomid = row.id;
-                var thingsarray = [];
-                things.forEach(function(thing) {
-                    if ( thing["rooms_rname"] === roomname) {
-                        thingsarray.push(thing);
-                    }
-                });
-                // console.log("things for room: ", roomname, ": ", thingsarray);
-
-                // show all room with whatever index number assuming unique
-                // var pagecontent = "<div class='error' id=\"" + roomname + "-tab\">"
-                //                   + "Test Page #" + i + " for Room: " + roomname + " order: " + rorder
-                //                   + "</div>";
-                var pagecontent = getNewPage(userid, configoptions, cnt, roomid, roomname, rorder, thingsarray);
-                cnt += thingsarray.length;
-                tc = tc + pagecontent;
-            };
-
-            // gather array of all things to later make the catalog as a hidden thing
-            // things.forEach(function(thing) {
-            //     allsensors.push(thing);
-            // });
-
-            // sort the sensors here since we use the same thing for options and main catalog
-            // allsensors = sortedSensors(allsensors, "hubs_hubid", "devices_name", "devices_devicetype");
-
-            return tc;
+        mydb.getRows("things","*", conditions, [joinstr1, joinstr2, joinstr3], "rooms.rorder, things.torder, things.id")
+        .then(rows => {
+            things = rows;
+            if ( DEBUG1 ) {
+                console.log((ddbg()), "things: ", things);
+            }
+            return checkDone("things");
         });
-        return newtc;
     })
-    .then(results => {
+    .catch(reason => {
+        console.log("error: ", reason);
+    })
+        
+    function renderMain(configoptions, hubs, rooms, alldevices, things) {
 
-        var tc = results;
+        var tc = "";
+        tc += utils.getHeader(userid, skin, false);
 
-        // var hubpick = getConfigItem(configoptions, "hubpick");
-        // var useroptions = getConfigItem(configoptions, "useroptions");
-        var hubpick = "all";
-        var useroptions = [
-            "actuator", "audio", "blank", "bulb", "button", "clock", "contact", "control", "custom", "door", "ford", "frame", "hsm", 
-            "illuminance", "image", "isy", "lock", "mode", "momentary", "motion", "music", 
-            "other", "piston", "power", "presence", "shade", "shm", "smoke", "switch", "switchlevel", "temperature", "thermostat", 
-            "vacuum", "valve", "video", "washer", "water", "weather"
-        ];
+        // if new user flag it and udpate to no longer be new
+        if ( usertype === 0 ) {
+            tc += "<div class=\"greeting\"><strong>Welcome New User!</strong><br/ >You should first try to link your smart home hubs, using the Hub Auth button below. ";
+            tc += "You can also explore all that HousePanel has to offer by experimenting with the two clock tiles placed in each room. ";
+            tc += "When you are done, they can be removed in Edit mode or from the Options page. Click on the ? mark in the upper right corner. ";
+            tc += "to access the full online manual. Have fun!</div>";
+            mydb.updateRow("users",{usertype: 1},"id="+userid);
+        }
+    
+        if ( DEBUG4 ) {
+            console.log( (ddbg()), "getMainPage: ", userid, uname, panelid, pname, usertype, skin, hostname, pathname);
+        }
+    
+        tc += '<div id="dragregion">';
+        tc += '<div id="tabs"><ul id="roomtabs">';
 
-        // var catalog = getCatalog(userid, hubpick, hubs, useroptions, allsensors);
+        for (var i in rooms) {
+            var row = rooms[i];
+            var k = row.rorder;
+            var roomname = row.rname;
+            if ( roomname ) {
+                tc += "<li roomnum=\"" + k + "\" class=\"tab-" + roomname + "\"><a href=\"#" + roomname + "-tab\">" + roomname + "</a></li>";
+            }
+        }
+        tc += '</ul>';
+            
+        var cnt = 0;
+        for (var i in rooms) {
+            var row = rooms[i];
+            var roomname = row.rname;
+            var rorder = row.rorder;
+            var roomid = row.id;
+            var thingsarray = [];
+            things.forEach(function(thing) {
+                if ( thing["rooms_rname"] === roomname) {
+                    thingsarray.push(thing);
+                }
+            });
+            // console.log("things for room: ", roomname, ": ", thingsarray);
 
-        // console.log( (ddbg()), "catalog: ", catalog);
-
+            // show all room with whatever index number assuming unique
+            // var pagecontent = "<div class='error' id=\"" + roomname + "-tab\">"
+            //                   + "Test Page #" + i + " for Room: " + roomname + " order: " + rorder
+            //                   + "</div>";
+            var pagecontent = getNewPage(userid, configoptions, cnt, roomid, roomname, rorder, thingsarray, alldevices);
+            cnt += thingsarray.length;
+            tc = tc + pagecontent;
+        };
+ 
         // include doc button and panel name
         // TODO: add username to display
         tc += '<div id="showversion" class="showversion">';
@@ -8079,7 +8183,7 @@ function mainPage(user, configoptions, hubs, req) {
         tc += utils.hidden("userid", userid, "userid");
         tc += utils.hidden("panelid", panelid, "panelid");
         tc += utils.hidden("skinid", skin, "skinid");
-        tc += utils.hidden("emailid", uname, "emailid");
+        tc += utils.hidden("emailid", useremail, "emailid");
 
         // write the configurations without the rules
         var configs = {};
@@ -8111,6 +8215,10 @@ function mainPage(user, configoptions, hubs, req) {
         }
         tc += "</form>";
 
+        // alldevices = sortedSensors(alldevices, "hubid", "name", "devicetype");
+        var hubpick = getConfigItem(configoptions, "hubpick");
+        var useroptions = getConfigItem(configoptions, "useroptions");
+        var catalog = getCatalog(userid, hubpick, hubs, useroptions, alldevices);
         tc += catalog;
         
         // end drag region enclosing catalog and main things
@@ -8118,38 +8226,43 @@ function mainPage(user, configoptions, hubs, req) {
 
         tc += utils.getFooter();
         return tc;
-    });
+    }
 
-    return results;
 }
 
 function clone(obj) {
     return JSON.parse(JSON.stringify(obj));
 }
 
-
 function saveFilters(userid, body) {
     if ( DEBUG4 ) {
-        console.log( (ddbg()), "filters save request: ", body);
+        console.log( (ddbg()), "filters save request for user: ", userid, " body: ", body);
     }
+    var result = null;
     
-    var result = {};
-
-    if ( body.useroptions ) {
-        GLB.options["useroptions"] = body.useroptions;
-        result.useroptions = body.useroptions;
+    if ( typeof body.useroptions === "object" ) {
+        var updval = {configval: JSON.stringify(body.useroptions)};
+        result = mydb.updateRow("configs", updval, "userid = " + userid + " AND configkey = 'useroptions'")
+        .then(result => {
+            if ( result ) {
+                return "success - updated filters";
+            } else {
+                return "error - could not update filters";
+            }
+        });
     }
 
-    if ( typeof body.huboptpick !== "undefined" ) {
-        GLB.options["config"]["hubpick"] = body.huboptpick;
-        result.huboptpick = body.huboptpick;
+    if ( typeof body.huboptpick === "string" ) {
+        var updhub = {configval: body.huboptpick};
+        mydb.updateRow("configs", updhub, "userid = " + userid + " AND configkey = 'hubpick'");
     }
 
     return result;
 }
 
 // process username and password edits on Options page and Login page
-function saveUserPw(req, res, body, uname) {
+// TODO - update
+function saveUserPw(userid, req, res, body) {
     if ( DEBUG3 ) {
         console.log( (ddbg()), "password save request: ", body, " uname: ", uname);
     }
@@ -8241,8 +8354,9 @@ function saveUserPw(req, res, body, uname) {
     }
 
     // make sure our default skin has a custom file
-    if ( !fs.existsSync(skin + "/customtiles.css") ) {
-        writeCustomCss(skin, "");
+    var fname = "user" + userid + "/" + skin + "/customtiles.css";
+    if ( !fs.existsSync(fname) ) {
+        writeCustomCss(userid, skin, "");
     }
 
     // save the skin in my user specific setting
@@ -8270,7 +8384,8 @@ function saveUserPw(req, res, body, uname) {
 }
 
 // process user options page
-function processOptions(uname, optarray) {
+// TODO - update to process into DB
+function processOptions(userid, configoptions, optarray) {
 
     if (DEBUG4) {
         console.log( (ddbg()), "Process Options - Before Processing");
@@ -8281,15 +8396,21 @@ function processOptions(uname, optarray) {
     readRoomThings("processOptions", uname);
     var options = clone(GLB.options);
 
+    // get existing things and rooms from our database
+    mydb.getRows("rooms","*","userid = "+userid);
+
     // start with a blank slate
-    options["things"] = {};
+    var newthings = {};
+
     for( var room in GLB.options["rooms"]) {
         options["things"][room] = [];
     }
 
-    var specialtiles = getSpecials();
-    var configoptions = options["config"];
+    var specialtiles = getConfigItem(configoptions,"specialtiles");
+
+
     var roomnames = Object.keys(options["rooms"]);
+
     if ( !is_object(configoptions["specialtiles"]) ) {
         configoptions["specialtiles"] = {};
     }
@@ -8418,105 +8539,44 @@ function processOptions(uname, optarray) {
 
     // save options
     GLB.options = clone(options);
-    // addSpecials();
+    // updSpecials((userid, configoptions, hubindex, devices, false);
     return "success";
 }
 
-function changePageName(uname, oldname, newname) {
- 
-    var retcode = "success - testing";
-    var options = GLB.options;
-
-    if ( oldname && newname && oldname!==newname && array_key_exists(oldname, options["rooms"]) ) {
-
-        // set new room to the number of the old room
-        options["rooms"][newname] = options["rooms"][oldname];
-
-        // create a new set of things tied to the new room name
-        options["things"][newname] = [];
-        var things = options["things"][oldname];
-        things.forEach(function(tile, k) {
-            if ( is_array(tile) ) {
-                var newtile = clone(tile);
-                options["things"][newname].push(newtile);
-            }
-        });
-
-        // delete the old room and thing list
-        delete options["rooms"][oldname];
-        delete options["things"][oldname];
-        retcode = "success - Renamed room: " + oldname + " to: " + newname;
-        if ( DEBUG1 ) {
-            console.log( (ddbg()), retcode);
-        }
-        writeRoomThings(options, uname);
-    } else {
-        retcode = "error - old page: " + oldname + " new page: " + newname;
-        console.log( (ddbg()), retcode);
-    }
-    return retcode;
-}
-
-function updateNames(uname, type, tileid, newname) {
+function updateNames(userid, thingid, type, tileid, newname) {
     var result;
-    var oldname = "";
+
+    // the thingid parameter is the roomid for room name udpates
     if ( type === "page" ) {
         newname = newname.replace(/ /g, "_");
-        oldname = tileid;
-        result = changePageName(uname, oldname, newname);
+        var updval = {rname: newname};
+        result = mydb.updateRow("rooms", updval, "userid = "+userid+" AND id = "+thingid)
+        .then(result => {
+            if ( result ) {
+                var ans = "success - room name changed for thing id: " + thingid  + " to name= " + newname;
+            } else {
+                ans = "warning - room name not updated for thing id: " + thingid + " to name= " + newname;
+            }
+            return ans;
+        })
+
+    // the thingid parameter is the tileid for tile name updates
     } else {
-        var options = GLB.options;
-        var updcss = false;
-        var nupd = 0;
-        tileid = parseInt(tileid);
-
-        // if the name is blank, reset it to original
-        newname = newname.trim();
-        var resetname = false;
-        var idx = array_search(tileid, options["index"]);
-        if ( newname==="" ) {
-            newname = allthings[idx]["name"];
-            resetname = true;
-        } else {
-            allthings[idx].value.name = newname;
-        }
-
-        for (var room in options["things"]) {
-            var things = options["things"][room];
-        
-            // look for matching options item
-            // and update to new value if it changed
-            // also guard against old style that wasn't an array
-            // or arrays that were not at least 4 elements long
-            // the 4th element of the array is the custom name
-            things.forEach(function(tiles, k) {
-                if ( is_array(tiles) && parseInt(tiles[0]) === tileid && 
-                     (resetname || (tiles.length>3 && tiles[4]!==newname))  ) {
-
-                    oldname = tiles[4];
-                    tiles[4] = newname;
-
-                    // update the things names in room lists
-                    options["things"][room][k] = tiles;
-
-                    nupd++;
-                    updcss = true;
-                }
-
-            });
-        }
-        if ( updcss ) {
-            writeRoomThings(options, uname);
-            result = "success " + nupd.toString() + " names changed for type= " + type + " oldname= " + oldname + " newname= " + newname;
-        } else {
-            result = "warning - nothing updated for type= " + type + " oldname= " + oldname + " newname= " + newname;
-        }
+        var updval = {customname: newname};
+        result = mydb.updateRow("things", updval, "userid = "+userid+" AND id = "+thingid)
+        .then(result => {
+            if ( result ) {
+                var ans = "success name changed for thing id: " + thingid  + " to name= " + newname;
+            } else {
+                ans = "warning - nothing updated for thing id: " + thingid + " to name= " + newname;
+            }
+            return ans;
+        });
     }
     return result;
 }
 
-function getIcons(uname, icondir, category) {
-    var skin = getSkin(uname);
+function getIcons(userid, skin, icondir, category) {
 
     if ( !icondir ) {
         icondir = "icons";
@@ -8531,6 +8591,8 @@ function getIcons(uname, icondir, category) {
     } else {
         activedir = path.join(__dirname, skin, icondir);
     }
+    // console.log(">>>> activedir: ", activedir);
+
     try {
         var dirlist = fs.readdirSync(activedir);
     } catch(e) {
@@ -8605,7 +8667,7 @@ function pw_verify(pword, hash, algo) {
 }
 
 // TODO - add new custom to DB
-function addCustom(userid, swid, swtype, customtype, customval, subid) {
+function addCustom(userid, deviceid, swid, swtype, customtype, customval, subid) {
     var reserved = ["index","rooms","things","config","control","time","useroptions"];
     var customkey = "user_" + swid;
 
@@ -8666,7 +8728,7 @@ function addCustom(userid, swid, swtype, customtype, customval, subid) {
     return thingval;
 }
 
-function delCustom(userid, swid, swtype, customtype, swattr, subid) {
+function delCustom(userid, deviceid, swid, swtype, customtype, swattr, subid) {
     // var reserved = ["index","rooms","things","config","control","useroptions"];
     // var userid = "user_" + swid;
 
@@ -8750,9 +8812,9 @@ function apiCall(user, configoptions, body, protocol, req, res) {
 
     // for POST we get vital info from GUI
     // if user is making an API call these must be provided
+    // TODO - remove use of uname and replace with userid everywhere
     if ( protocol==="POST" ) {
         var userid = body.userid;
-        var uname = body.uname;
         var usertype = body.usertype || 1;
         var panelid = body.panelid || 0;
         var pname = body.pname;
@@ -8765,7 +8827,6 @@ function apiCall(user, configoptions, body, protocol, req, res) {
 
     } else if ( user && typeof user === "object" && configoptions && typeof configoptions === "object" ) {
         userid = user["users_id"];
-        uname = user["users_uname"];
         usertype = user["users_usertype"];
         panelid = user["panels_id"];
         pname = user["panels_pname"];
@@ -8853,7 +8914,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                     var faketile = {"panel": "panel", "name": swval, "tab": "Tab Inactive", "tabon": "Tab Selected"};
                     var thesensor = { "id": "r_" + swid, "name": swval, thingid: 0, roomid: roomid, 
                                       "hubnum": "-1", "type": "page", "value": faketile};
-                    result = makeThing(userid, configoptions, 0, tileid, thesensor, "wysiwyg", 0, 0, 500, "", "te_wysiwyg");
+                    result = makeThing(userid, configoptions, 0, tileid, thesensor, "wysiwyg", 0, 0, 500, "", "te_wysiwyg", null);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -8920,7 +8981,6 @@ function apiCall(user, configoptions, body, protocol, req, res) {
             case "catalog":
             case "getcatalog":
                 result = "error - api call [" + api + "] is no longer supported";
-                console.log(result);
                 break;
 
             case "getphotos":
@@ -8928,14 +8988,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                 break;
                 
             case "refactor":
-                if ( protocol==="POST" ) {
-                    // TODO: this does not yet work so it was removed from menu
-                    // note really needed any more given how reorder and absolute positioning now works
-                    // refactorOptions(uname);
-                    result = "success";
-                } else {
-                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-                }
+                result = "error - api call [" + api + "] is no longer supported";
                 break;
         
             case "refreshpage":
@@ -8987,7 +9040,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                 .then(things => {
                     console.log( (ddbg()), "getallthings: ", things);
                     return things;
-                });
+                }).catch(reason => {console.log("dberror 28 - ", reason);});
                 break;
                     
             case "hubs":
@@ -8996,7 +9049,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                 .then(hubs => {
                     console.log( (ddbg()), "hubs: ", hubs);
                     return hubs;
-                });
+                }).catch(reason => {console.log("dberror 29 - ", reason);});
                 break;
 
             case "filteroptions":
@@ -9011,8 +9064,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
             case "saveuserpw":
             case "userpw":
                 if ( protocol==="POST" ) {
-                    result = saveUserPw(req, res, body, uname);
-                    writeOptions();
+                    result = saveUserPw(userid, req, res, body);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -9020,13 +9072,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
 
             case "saveoptions":
                 if ( protocol==="POST" ) {
-                    readOptions("saveoptions");
-                    readRoomThings("saveoptions", uname);
-                    result = processOptions(uname, body);
-                    if ( result === "success" ) {
-                        writeOptions();
-                        writeRoomThings(GLB.options, uname);
-                    }
+                    result = processOptions(userid, configoptions, body);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -9034,8 +9080,6 @@ function apiCall(user, configoptions, body, protocol, req, res) {
 
             case "savetileedit":
                 if ( protocol==="POST" ) {
-                    readOptions("saveoptions");
-                    readRoomThings("saveoptions", uname);
                     var n1 = parseInt(body["n1"]);
                     var nlen = parseInt(body["nlen"]);
                     var n2 = parseInt(body["n2"]);
@@ -9046,19 +9090,19 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                             console.log( (ddbg()), "savetile: n1= " + n1 + " n2= " + n2 + " nlen= " + nlen );
                         }
                         if ( n1=== 0 ) {
-                            GLB.newcss = "";
+                            GLB.newcss[userid] = "";
                         }
-                        GLB.newcss += decodeURI(swval);
+                        GLB.newcss[userid] += decodeURI(swval);
 
                         // write if this is last segment
                         result = "success - " + n2.toString();
                         if ( n2=== nlen ) {
                             if ( DEBUG16 ) {
                                 console.log( (ddbg()), "----------------------------------------------------------");
-                                console.log( (ddbg()), GLB.newcss );
+                                console.log( (ddbg()), "userid: ", userid, " data size: ", GLB.newcss[userid].length );
                                 console.log( (ddbg()), "----------------------------------------------------------");
                             }
-                            writeCustomCss(getSkin(uname), GLB.newcss);
+                            writeCustomCss( userid, skin, GLB.newcss[userid] );
                         }
                     }
                 } else {
@@ -9069,9 +9113,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
             case "updatenames":
                 // value (swval) is new name, tileid is oldname for pages
                 if ( protocol==="POST" ) {
-                    readOptions("saveoptions");
-                    readRoomThings("saveoptions", uname);
-                    result = updateNames(uname, swtype, tileid, swval);
+                    result = updateNames(userid, thingid, swtype, tileid, swval);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -9103,7 +9145,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
             case "addcustom":
                 if ( protocol==="POST" ) {
                     result = {}
-                    result.value = addCustom(swid, swtype, swval, swattr, subid);
+                    result.value = addCustom(userid, thingid, swid, swtype, swval, swattr, subid);
                     result.options = GLB.options;
                     result.things = allthings;
                 } else {
@@ -9114,7 +9156,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
             case "delcustom":
                 if ( protocol==="POST" ) {
                     result = {}
-                    result.value = delCustom(uname, swid, swtype, swval, swattr, subid);
+                    result.value = delCustom(userid, thingid, swid, swtype, swval, swattr, subid);
                     result.options = GLB.options;
                     result.things = allthings;
                 } else {
@@ -9124,7 +9166,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
 
             case "icons":
             case "geticons":
-                result = getIcons(uname, swval, swattr);
+                result = getIcons(userid, skin, swval, swattr);
                 break;
 
             // this api call starts the oauth flow process
@@ -9190,10 +9232,6 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                         hub.userendpt = body.userendpt;
                         hub.hubaccess = hub.useraccess;
                         hub.hubendpt = hub.userendpt;
-
-                        // also for this ISY hub, set up the websocket to get update info
-                        // actually now do this later
-                        // setupISYSocket(hub);
 
                     // use provided credentials if given
                     } else if ( hub.useraccess && hub.userendpt ) {
@@ -9272,7 +9310,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                             }
                         }
 
-                    });
+                    }).catch(reason => {console.log("dberror 30 - ", reason);});
                     
                     var hubName = hub["hubname"];
                     var hubType = hub["hubtype"];
@@ -9334,8 +9372,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
             case "hubdelete":
                 // TODO - implement hubDelete() function
                 if ( protocol === "POST" ) {
-                    // result = mydb.deleteRow("hubs","userid = "+userid+" AND id = " + swid)
-                    mydb.deleteRow("hubs","userid = "+userid+" AND id = 15")
+                    mydb.deleteRow("hubs","userid = "+userid+" AND id = " + swid)
                     .then(results => {
                         if ( results && results.getAffectedItemsCount() > 0 ) {
                             mydb.updateRow("users",{defhub: ""}, "id = " + userid);
@@ -9364,10 +9401,11 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                 result = getClock(swid);
                 // result = getCustomTile(userid, configoptions, result, "clock", swid);
 
+                // TODO - obtain clock id from DB and use to update and process rules
                 // process rules
-                result.subid = "time";
-                processRules(swid, "clock", "time", result, "getclock");
-                delete result.subid;
+                // result.subid = "time";
+                // processRules(swid, "clock", "time", result, "getclock");
+                // delete result.subid;
 
                 break;
 
@@ -9517,6 +9555,7 @@ function setupISYSocket(hub) {
             // this will be ignored if the node isn't in our list
             connection.on("message", function(msg) {
                 if ( msg.type==="utf8" ) {
+                    // console.log(">>>> ISY message from user: ", hub.userid, " msg: ", msg.utf8Data);
                     processIsyMessage(hub.userid, msg.utf8Data);
                 }
             });
@@ -9553,6 +9592,7 @@ if ( DEBUG4 ) {
 
 var port = GLB.port;
 GLB.defhub = "new";
+GLB.newcss = {};
 
 // start our main server
 var httpServer;
@@ -9716,23 +9756,10 @@ if ( app && applistening ) {
                         if ( isquery ) {
                             $tc = apiCall(user, configoptions, queryobj, "GET", req, res);
 
-                        // load our user setup and render page
-                        // these two lines are what make the main page
+                        // this is what makes the main page
                         } else {
-
-                            // set up local sockets if an ISY hub was found
-                            mydb.getRow("hubs","*","userid = " + userid + " AND hubtype = 'ISY'")
-                            .then(hub => {
-                                if ( hub ) {
-                                    if ( DEBUGisy ) {
-                                        console.log("ISY hub found: ", hub);
-                                    }
-                                    setupISYSocket(hub);
-                                }
-                            });
-                            
-                            // readRoomThings("main", uname);
-                            $tc = mainPage(user, configoptions, hubs, req);
+                            getMainPage(user, configoptions, hubs, req, res);
+                            $tc = null;
                         }
 
                         if ( $tc && typeof $tc === "object" && $tc.then && typeof $tc.then==="function" ) {
@@ -9740,7 +9767,7 @@ if ( app && applistening ) {
                                 res.send(result);
                                 res.end();
                             });
-                        } else {
+                        } else if ($tc) {
                             res.send($tc);
                             res.end();
                         }
@@ -9839,7 +9866,7 @@ if ( app && applistening ) {
 
             }
 
-        });
+        }).catch(reason => {console.log("dberror 31 - ", reason);});
 
 
     });
@@ -9874,7 +9901,7 @@ if ( app && applistening ) {
                 mydb.getRow("hubs","*","hubid = " + hubid)
                 .then(hub => {
                     getDevices(hub, true, "/");
-                });
+                }).catch(reason => {console.log("dberror 32 - ", reason);});
                 if ( DEBUG2 ) {
                     console.log( (ddbg()), "New hub authorized: ", hubid);
                 }
@@ -9897,7 +9924,7 @@ if ( app && applistening ) {
                     }
                     res.json("processed msg");
                     res.end();
-                });
+                }).catch(reason => {console.log("dberror 33 - ", reason);});
             }
 
         // handle all api calls upon the server from js client and external api calls here
@@ -9957,7 +9984,7 @@ if ( app && applistening ) {
                                 " filterNames: ", subscription.sinkFilterNames);
                             }
                         }
-                    });                    
+                    }).catch(reason => {console.log("dberror 34 - ", reason);});        
                 }
             });
             
