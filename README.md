@@ -17,4 +17,4 @@ Quick install directions: log into your rPI with SSH and enter:
   
 ```
 
-Full documentation is at http://www.housepanel.net
+Full documentation is at https://housepanel.net
