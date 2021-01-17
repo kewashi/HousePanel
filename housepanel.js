@@ -20,7 +20,6 @@ var priorOpmode = "Operate";
 var pagename = "main";
 
 // set a global socket variable to manage two-way handshake
-// var wsSocket = null;
 // var webSocketUrl = null;
 // var wsinterval = null;
 var reordered = false;
@@ -174,30 +173,31 @@ function getOptions(dosetup) {
         var email = $("#emailid").val();
         var skin = $("#skinid").val();
         var config = $("#configsid").val();
-        config = JSON.parse(decodeURI(config));
-        cm_Globals.options = {userid: userid, email: email, skin: skin, config: config};
+        config = JSON.parse(config);
+        cm_Globals.options = {userid: userid, email: email, skin: skin, config: config, rules: null};
+        // console.log("getOptions returned: ", config);
+        setFastSlow(config);
 
-        // $.post(cm_Globals.returnURL, 
-        //     {useajax: "getoptions", id: "none", type: "none", attr: doreload, userid: userid, uname: uname, skin: skin},
-        //     function (presult, pstatus) {
-        //         if (pstatus==="success" && typeof presult==="object" && presult.index ) {
-        //             cm_Globals.options = clone(presult);
-        //             var indexkeys = Object.keys(presult.index);
-        //             console.log("getOptions returned: " + indexkeys.length + " things");
-        //             if ( dosetup ) {
-        //                 setupUserOpts();
-        //             }
-        //         } else {
-        //             cm_Globals.options = null;
-        //             console.log("error - failure reading your hmoptions.cfg file");
-        //         }
-        //     }, "json"
-        // );
+        // set the customization list
+        $.post(cm_Globals.returnURL, 
+            {useajax: "getoptions", userid: userid, id:"none", type:"none"},
+            function (presult, pstatus) {
+                if (pstatus==="success" ) {
+                    // console.log(">>>> presult: ", presult);
+                    cm_Globals.options.rules = presult;
+
+                    var indexkeys = Object.keys(presult);
+                    console.log("getOptions returned: " + indexkeys.length + " configuration rules/links");
+                } else {
+                    console.log("error - failure reading config options from database for user = " + userid);
+                }
+            }, "json"
+        );
     } catch(e) {
         console.log("error - failure reading your hmoptions.cfg file");
     }
 
-    if ( dosetup ) {
+    function setFastSlow(config) {
         try {
             var fast_timer = config.fast_timer;
             fast_timer = parseInt(fast_timer, 10);
@@ -387,6 +387,7 @@ function initWebsocket() {
 
     // get the webSocket info
     try {
+        var userid = $("#userid").val();
         var webSocketUrl = $("input[name='webSocketUrl']").val();
     } catch(err) {
         webSocketUrl = null;
@@ -394,7 +395,7 @@ function initWebsocket() {
     
     // set up socket
     if ( webSocketUrl ) {
-        setupWebsocket(webSocketUrl);
+        setupWebsocket(userid, webSocketUrl);
     }
 
     // now try to set up web sockets for ISY hubs
@@ -460,7 +461,7 @@ function setupISYSocket(hubhost, hubaccess) {
 
 // new routine to set up and handle websockets
 // only need to do this once - I have no clue why it was done the other way before
-function setupWebsocket(webSocketUrl) {
+function setupWebsocket(userid, webSocketUrl) {
     var wsSocket = null;
 
     try {
@@ -472,15 +473,23 @@ function setupWebsocket(webSocketUrl) {
     }
     
     // upon opening a new socket notify user and do nothing else
-    wsSocket.onopen = function(){
+    wsSocket.onopen = function() {
         console.log("webSocket connection opened for: ", webSocketUrl);
+
+        function sendUser() {
+            if ( wsSocket.readyState === wsSocket.OPEN ) {
+                wsSocket.send(userid.toString());
+            }
+        }
+        // console.log( "ready state: ",  wsSocket.readyState );
+        sendUser();
     };
     
     wsSocket.onerror = function(evt) {
-        console.error("webSocket error observed: ", evt);
+        console.error("webSocket error: ", evt);
     };
     
-    wsSocket.onclose = function(){
+    wsSocket.onclose = function() {
         console.log("webSocket connection closed for: ", webSocketUrl);
     };
 
@@ -917,9 +926,13 @@ function setupColors() {
                 var hubid = $(tile).attr("hub");
                 var thetype = $(tile).attr("type");
                 var userid = cm_Globals.options.userid;
+                var thingid = $(tile).attr("thingid");
+                var tileid = $(tile).attr("tile");
                 console.log("setupColors doaction: id: ", bid, " type: ", thetype, " value: ", hslstr, " hex: ", hexval, " attr: color hubid: ", hubid);
+
                 $.post(cm_Globals.returnURL, 
-                       {useajax: "doaction", userid: userid, id: bid, type: thetype, value: hslstr, subid: "color", attr: hexval, hubid: hubid} );
+                       {useajax: "doaction", userid: userid, id: bid, thingid: thingid, type: thetype, value: hslstr, 
+                        subid: "color", attr: hexval, hubid: hubid, tileid: tileid} );
             }
         });
     });
@@ -966,7 +979,7 @@ function setupSliders() {
 
             $.post(cm_Globals.returnURL, 
                 {useajax: "doaction", userid: userid, id: bid, thingid: thingid, type: linktype, value: thevalue, attr: subid, 
-                 subid: subid, hubid: hubid,  tileid: tileid, command: command, linkval: linkval} );
+                 subid: subid, hubid: hubid, tileid: tileid, command: command, linkval: linkval} );
         }
     });
 
@@ -2176,6 +2189,7 @@ function addEditLink() {
         var thing = "#" + aid;
         var thingname = $(thing).attr("name");
         var pwsib = $(evt.target).siblings("div.overlay.password");
+        var userid = cm_Globals.options.userid;
         if ( pwsib && pwsib.length > 0 ) {
             pw = pwsib.children("div.password").html();
             checkPassword(thing, "Tile editing", pw, runCustom);
@@ -2187,7 +2201,8 @@ function addEditLink() {
             var tile = $(thing).attr("tile");
             var bid = $(thing).attr("bid");
             var hubid = $(thing).attr("hub");
-            customizeTile(tile, aid, bid, str_type, hubid);
+            // var thingid = $(thing).attr("thingid");
+            customizeTile(userid, tile, aid, bid, str_type, hubid);
         }
         // customizeTile(tile, aid, bid, str_type, hubid);
     });

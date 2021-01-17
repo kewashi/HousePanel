@@ -2,6 +2,10 @@
 const fs = require('fs');
 
 const devhistory =  ` 
+3.005   Downgraded mySQL to 5.7 to work on GoDaddy server
+            - customizer rewritten to work with DB
+            - numerous bug fixes
+3.004   Updated configurator to work with DB
 3.003   Another working alpha with tileeditor and more working
 3.002   Working alpha of new DB with new login screen
 3.001   First version of Database version with New ST support

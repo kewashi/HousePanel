@@ -1955,3 +1955,8 @@ div.overlay.localExec,
 div.overlay.appId {
     display: none;
 }
+span.reddot {
+    margin-left: 5px;
+    background-color: "red";
+    color: "white";
+}
