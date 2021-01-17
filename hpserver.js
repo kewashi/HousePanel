@@ -4241,15 +4241,16 @@ function processIsyMessage(isymsg) {
                         // use decoder ring documented for ISY_program events
                         if ( array_key_exists("s", eventInfo[0]) ) {
                             var st = eventInfo[0]["s"][0].toString();
-                            if ( st.startsWith("2") ) {
-                                pvalue["status"] = "true";
-                            } else if ( st.startsWith("3") ) {
-                                pvalue["status"] = "false";
-                            } else if ( st.startsWith("1") ) {
-                                pvalue["status"] = "unknown";
-                            } else {
-                                pvalue["status"] = "not_loaded"
-                            }
+                            pvalue["status"] = st;
+                            // if ( st.startsWith("2") ) {
+                            //     pvalue["status"] = "true";
+                            // } else if ( st.startsWith("3") ) {
+                            //     pvalue["status"] = "false";
+                            // } else if ( st.startsWith("1") ) {
+                            //     pvalue["status"] = "unknown";
+                            // } else {
+                            //     pvalue["status"] = "not_loaded"
+                            // }
                         }
                         if ( array_key_exists("on", eventInfo[0]) ) {
                             pvalue["enabled"] = "true";
