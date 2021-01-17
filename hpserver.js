@@ -19,9 +19,9 @@ const DEBUG11 = false;              // rules
 const DEBUG12 = false;              // hub push updates
 const DEBUG13 = false;              // URL callbacks
 const DEBUG14 = false;              // tile link details
-const DEBUG15 = false;              // allthings and options dump
-const DEBUG16 = true;              // customtiles writing and custom names
-const DEBUG17 = false;               // push client
+const DEBUG15 = false;              // unused
+const DEBUG16 = false;              // customtiles writing and custom names
+const DEBUG17 = false;              // push client
 const DEBUG18 = false;              // ST, HE, and Ford messages in callHub -> getHubResponse
 const DEBUG19 = false;              // ST and HE callback from Groovy or new ST Event Sink
 const DEBUGcurl = false;
@@ -56,7 +56,7 @@ const url = require('url');
 var utils = require("./utils");
 var sqlclass = require("./mysqlclass");
 
-// global variables are all part of GLB object plus clients and allthings
+// global variables are all part of GLB object
 var GLB = {};
 
 GLB.port = 3280;
@@ -132,7 +132,7 @@ GLB.trigger2 = [
 ];
 
 // list of currently connected clients (users)
-var clients = [];
+var clients = {};
 
 // TODO - remove this once I update everything to the DB version
 // array of all tiles in all hubs
@@ -232,7 +232,7 @@ async function getUserName(cookies) {
             }
         }
         return therow;
-    }).catch(reason => {console.log("dberror 1 - ", reason);});
+    }).catch(reason => {console.log("dberror 1 - getUserName - ", reason);});
     return result;
 }
 
@@ -269,26 +269,6 @@ function getTypes() {
 
     thingtypes.sort();
     return thingtypes;
-}
-
-// get the active user and skin
-function getSkin(uname) {
-    var skin;
-    var pwords;
-    if ( typeof GLB.options!=="undefined" && GLB.options["config"] && GLB.options["config"]["pword"] ) {
-        pwords = GLB.options["config"]["pword"];
-    }
-
-    if ( !pwords || utils.count(pwords)===0 ) {
-        skin = "skin-housepanel";
-    } else if ( uname && array_key_exists(uname, pwords) && is_array(pwords[uname]) ) {
-        skin = pwords[uname][1] || "skin-housepanel";
-    } else if ( array_key_exists(skin, GLB.options.config) ) {
-        skin = GLB.options.config["skin"];
-    } else {
-        skin = "skin-housepanel";
-    }
-    return skin;
 }
 
 // read in customtiles ignoring the comments
@@ -593,19 +573,19 @@ function getHubInfo(hub, reload) {
         mydb.updateRow("users",{defhub: hub.hubid},"id = "+hub.userid);
 
         if ( iserror || !hubindex ) {
-            pushClient("reload", "auth", "/reauth");
+            pushClient(userid, "reload", "auth", "/reauth");
         } else {
             // we know the actual index of the hub at this point
             mydb.updateRow("hubs", hub, "userid="+hub.userid+" AND id="+hubindex)
             .then(result => {
                 // retrieve all devices and go back to reauth page
                 getDevices(hub, reload, "/reauth");
-            }).catch(reason => {console.log("dberror 2 - ", reason);});
+            }).catch(reason => {console.log("dberror 2 - nameidCallback - ", reason);});
         }
     }
 }
 
-function getAccessToken(code, hub) {
+function getAccessToken(userid, code, hub) {
 
     // these are the parameters determined here using a series of curl calls and callbacks
     var access_token = "";
@@ -709,7 +689,7 @@ function getAccessToken(code, hub) {
 
         } else {
             console.log( (ddbg()), "fordCallback error authorizing " + hub.hubtype + " hub. bad access_token: ", access_token, " or endpt: ", endpt, " or refresh: ", refresh_token, " err: ", err, "\n body: ", body);
-            pushClient("reload", "auth", "/reauth");
+            pushClient(userid, "reload", "auth", "/reauth");
         }
     }
 
@@ -727,7 +707,7 @@ function getAccessToken(code, hub) {
         if ( err || (is_object(jsonbody) && jsonbody["error"]) ) {
             console.log( (ddbg()), "error authorizing ", hubType, " hub: ", hubName, " error: ", err, jsonbody["error"]);
             console.log( (ddbg()), "calling params: ", nvpreq, " body: ", body );
-            pushClient("reload", "auth", "/reauth");
+            pushClient(userid, "reload", "auth", "/reauth");
 
         } else if ( is_object(jsonbody) && jsonbody["access_token"] ) {
             access_token = jsonbody["access_token"];
@@ -785,14 +765,14 @@ function getAccessToken(code, hub) {
 
                 } else {
                     console.log( (ddbg()), "Invalid hub type: ", hubType, " in access_token request call");
-                    pushClient("reload", "auth", "/reauth");
+                    pushClient(userid, "reload", "auth", "/reauth");
                     return;
                 }
 
             }
         } else {
             console.log( (ddbg()), "Unknown error authorizing hub: ", hubName, " error: ", err, " body: ", body);
-            pushClient("reload", "auth", "/reauth");
+            pushClient(userid, "reload", "auth", "/reauth");
         }
     }
     
@@ -882,7 +862,7 @@ function getAccessToken(code, hub) {
 
         if ( err ) {
             console.log( (ddbg()), "getEndpoint error authorizing " + hub.hubtype + " hub.\n error: ", err, "\n JSON body: ", body);
-            pushClient("reload", "auth", "/reauth");
+            pushClient(userid, "reload", "auth", "/reauth");
         } else {
             var endptzero = jsonbody[0];
             endpt = endptzero.uri;
@@ -898,7 +878,7 @@ function getAccessToken(code, hub) {
 
         } else {
             console.log( (ddbg()), "getEndpoint error authorizing " + hub.hubtype + " hub. bad access_token: ", access_token, " or endpt: ", endpt);
-            pushClient("reload", "auth", "/reauth");
+            pushClient(userid, "reload", "auth", "/reauth");
         }
     }
 }
@@ -1056,23 +1036,23 @@ function fixISYid(id) {
     return id;
 }
 
-function processRefresh(userid, reload) {
-    getAllThings(userid, false)
-    .then(rows => {
-        if ( rows ) {
-            rows.forEach(function(row) {
-                var swid = row.id;
-                var swtype = row.devicetype;
-                var pvalue = row.pvalue;
-                pushClient(swid, swtype, "", pvalue);
-            });
-        }
-        if ( reload ) {
-            pushClient("reload", "auth", "reload");
-        }
-        return rows;
-    }).catch(reason => {console.log("dberror 3 - ", reason);});
-}
+// function processRefresh(userid, reload) {
+//     getAllThings(userid, false)
+//     .then(rows => {
+//         if ( rows ) {
+//             rows.forEach(function(row) {
+//                 var swid = row.id;
+//                 var swtype = row.devicetype;
+//                 var pvalue = row.pvalue;
+//                 pushClient(userid, swid, swtype, "", pvalue);
+//             });
+//         }
+//         if ( reload ) {
+//             pushClient(userid, "reload", "auth", "reload");
+//         }
+//         return rows;
+//     }).catch(reason => {console.log("dberror 3 - ", reason);});
+// }
 
 function getAllThings(userid, reload) {
 
@@ -1080,10 +1060,10 @@ function getAllThings(userid, reload) {
     var devices = mydb.getRows("devices","*","userid="+userid)
     .then(rows => {
         if ( reload ) {
-            pushClient("reload");
+            pushClient(userid, "reload");
         }
         return rows;
-    }).catch(reason => {console.log("dberror 4 - ", reason);});
+    }).catch(reason => {console.log("dberror 4 - getAllThings -", reason);});
     return devices;
 }
 
@@ -1108,7 +1088,7 @@ function getDevices(hub, reload, reloadpath) {
 
     if ( !hubindex ) {
         console.log( (ddbg()), "error - hub index not found in DB");
-        pushClient("reload", "reauth", reloadpath);
+        pushClient(userid, "reload", "reauth", reloadpath);
     }
 
     // retrieve all things from ST or HE
@@ -1128,7 +1108,7 @@ function getDevices(hub, reload, reloadpath) {
 
     } else {
         console.log( (ddbg()), "error - attempt to read an unknown hub type= ", hubType);
-        pushClient("reload", "reauth", reloadpath);
+        pushClient(userid, "reload", "reauth", reloadpath);
     }
 
     return result;
@@ -1321,7 +1301,7 @@ function getDevices(hub, reload, reloadpath) {
 
         // signal clients to reload
         // if ( reload && reloadpath) {
-        //     pushClient("reload", "auth", reloadpath);
+        //     pushClient(userid, "reload", "auth", reloadpath);
         // }
 
         function checkNewSTDone(thetype) {
@@ -1513,7 +1493,7 @@ function getDevices(hub, reload, reloadpath) {
                         if ( devicecnt >= numdevices ) {
                             checkNewSTDone(swtype);
                         }
-                    }).catch(reason => {console.log("dberror 5 - ", reason);});
+                    }).catch(reason => {console.log("dberror 5 - newSTCallback - ", reason);});
                     
                 });  // end of this device node detail curl callback
             
@@ -1527,7 +1507,7 @@ function getDevices(hub, reload, reloadpath) {
 
             // signal clients to reload
             // if ( reload && reloadpath) {
-            //     pushClient("reload", "auth", reloadpath);
+            //     pushClient(userid, "reload", "auth", reloadpath);
             // }
                     
         }  // end of getNewSmartDevices callback
@@ -1591,8 +1571,6 @@ function getDevices(hub, reload, reloadpath) {
                     }
 
                     var pvalstr = encodeURI2(JSON.stringify(pvalue));
-                    // var pvalstr = JSON.stringify({name: "test", switch: "on"});
-
                     var device = {userid: userid, hubid: hubindex, deviceid: deviceid, name: origname, 
                         devicetype: thetype, hint: hint, refresh: refresh, pvalue: pvalstr};
                     
@@ -1605,7 +1583,7 @@ function getDevices(hub, reload, reloadpath) {
                         if ( devicecnt >= numdevices ) {
                             updateOptions(reload, reloadpath);
                         }
-                    }).catch(reason => {console.log("dberror 6 - ", reason);});
+                    }).catch(reason => {console.log("dberror 6 - hubInfoCallback - ", reason);});
                 });
 
             } else {
@@ -1636,11 +1614,12 @@ function getDevices(hub, reload, reloadpath) {
             var jsonbody = JSON.parse(body);
         } catch(e) {
             console.log(e, " body: ", body);
-            pushClient("reload", "main", reloadpath);
+            pushClient(userid, "reload", "main", reloadpath);
             return;
         }
         var thetype = "ford";
         if ( jsonbody.status === "SUCCESS" && array_key_exists("vehicles", jsonbody) && is_array(jsonbody.vehicles) ) {
+            var numdevices = jsonbody.vehicles.length;
             jsonbody.vehicles.forEach(function(obj) {
                 var vehicleid = obj.vehicleId;
                 var idx = thetype + "|" + vehicleid;
@@ -1721,29 +1700,22 @@ function getDevices(hub, reload, reloadpath) {
                 // pvalue["_status"] = "_status";
                 // pvalue["_location"] = "_location";
 
-                // pvalue = getCustomTile(userid, pvalue, thetype, vehicleid);
-                allthings[idx] = {
-                    "id": vehicleid,
-                    "name": vehiclename, 
-                    "hubnum": hubnum,
-                    "type": thetype,
-                    "hint": hubType,
-                    "refresh": "normal",
-                    "value": pvalue
-                };
+                var pvalstr = encodeURI2(JSON.stringify(pvalue));
+                var device = {userid: userid, hubid: hubindex, deviceid: vehicleid, name: vehiclename, 
+                    devicetype: thetype, hint: hubType, refresh: "normal", pvalue: pvalstr};
+                mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+
+                                                  " AND devicetype = '"+thetype+"' AND deviceid = '"+vehicleid+"'")
+                .then(result => {
+                    devicecnt++;
 
-                // now call the info function to get details
-                // notice the true last parameter which skips rules and client pushes
-                // callHub(hub, vehicleid, thetype, pvalue, "", "_info", null, true);
-
-                // now call to get the graphical icon
-                // can't figure out how to save or use the returned image
-                // callHub(hub, vehicleid, thetype, pvalue, "", "_thumbnail", null, true);
+                    // check if this is our last one
+                    if ( devicecnt >= numdevices ) {
+                        updateOptions(reload, reloadpath);
+                    }
+                }).catch(reason => {console.log("dberror 6 - vehicleInfoCallback - ", reason);});
 
             });
-
-            // update main options file
-            // updateOptions(reload, reloadpath);
+        } else {
             updateOptions(false, reloadpath);
         }
 
@@ -1769,13 +1741,6 @@ function getDevices(hub, reload, reloadpath) {
         // use this object to keep track of which things are done
         var done = {"Int" : false, "State" : false, "Int_defs" : false, "State_defs" : false, 
                     "Nodes": false, "Progs": false, "Vars": false };
-
-        // now read in any int and state variables and their definitions
-        // var vidx = "isy|vars";
-        // if ( allthings[vidx] ) { 
-        //     delete allthings[vidx];
-        // }
-        // allthings[vidx] = {id: "vars", name: "Variables", hubnum: hubnum, type: "isy", hint: "ISY_variable", refresh: "never", value: pvalue };
 
         console.log("endpoint = ", hubEndpt, " stheader = ", stheader, " hubAccess: ", hubAccess);
 
@@ -1805,7 +1770,6 @@ function getDevices(hub, reload, reloadpath) {
             if ( !done["Vars"] && (done["Int"] && done["State"] && done["Int_defs"] && done["State_defs"]) ) {
 
                 // Now that we have all the isy variables and names, create a mapping of ids to names
-                // var pvalue = allthings[vidx]["value"];
                 done["Vars"] = true;
                 vardefs.pvalue = encodeURI2(JSON.stringify(pvariables));
                 if ( DEBUGisy ) {
@@ -1931,7 +1895,6 @@ function getDevices(hub, reload, reloadpath) {
                     varobj = [varobj];
                 }
                     
-                // var pvalue = allthings[vidx]["value"];
                 varobj.forEach(function( obj) {
                     try {
                         var varid = obj["$"]["id"];
@@ -1951,7 +1914,6 @@ function getDevices(hub, reload, reloadpath) {
                     }
                 });
 
-                // allthings[vidx]["value"] = pvalue;
                 if ( DEBUGvar ) {
                     console.log( (ddbg()), "New variable value: ", pvariables);
                 }
@@ -2472,7 +2434,6 @@ function setIsyFields(userid, nodeid, device, props, screenupd) {
             value["uom_" + subid] = obj.uom;
             var val = obj.value;
             value = translateIsy(nodeid, obj.id, obj.uom, subid, value, val, obj.formatted);
-            // allthings[idx]["value"] = clone(value);
         });
         
         // update DB
@@ -2483,10 +2444,10 @@ function setIsyFields(userid, nodeid, device, props, screenupd) {
         var pr = mydb.updateRow("devices", device, "userid="+userid+" AND deviceid = '"+nodeid+"'")
         .then(results => {
             if ( results && screenupd ) {
-                pushClient(nodeid, "isy", "none", value);
+                pushClient(userid, nodeid, "isy", "none", value);
             }
             return results;
-        }).catch(reason => {console.log("dberror 7 - ", reason);});
+        }).catch(reason => {console.log("dberror 7 - setIsyFields - ", reason);});
         return pr;
     } else {
         return null;
@@ -2514,63 +2475,20 @@ function updateOptions(reload, reloadpath) {
 
     // signal clients to reload
     if ( reload && reloadpath && reloadpath==="/reauth") {
-        pushClient("reload", "auth", reloadpath);
+        pushClient(userid, "reload", "auth", reloadpath);
     } else if ( reload ) {
-        pushClient("reload", "all", reloadpath);
-    }
-}
-
-function setupDefaultRooms(uname, defrooms) {
-    // make a default options array based on the old logic
-    // protocol for the options array is an array of room names
-    // where each item is an array with the first element being the order number
-    // second element is an optional alternate name defaulted to room name
-    // each subsequent item is then a tuple of ST id and ST type
-    // encoded as ST-id|ST-type to enable an easy quick text search
-    defrooms["rooms"] = {};
-    defrooms["things"] = {};
-
-    var k = 0;
-    for (var room in GLB.defaultrooms) {
-        defrooms["rooms"][room] = k;
-        defrooms["things"][room] = [];
-        k++;
-    }
-
-    if ( DEBUG4 ) {
-        console.log( (ddbg()), " >>>> allthings in setupDefaultRooms: ", UTIL.inspect(allthings,false,null,false));
-        console.log( (ddbg()), " >>>> options in setupDefaultRooms: ", UTIL.inspect(GLB.options.index,false,null,false));
-    }
-
-    // organize things into rooms if we have things loaded
-    if ( allthings && GLB.options["index"] ) {
-        for (var thingid in allthings) {
-            var thesensor = allthings[thingid];
-            var thename= thesensor["name"].toLowerCase();
-            var k = GLB.options["index"][thingid];
-            if ( k ) {
-                for (var room in GLB.defaultrooms) {
-                    var checkarr = GLB.defaultrooms[room].split("|");
-                    checkarr.forEach(function(keyword) {
-                        var islocated = thename.indexOf(keyword);
-                        if ( islocated !== -1 ) {
-                            var tile = [k,0,0,1,""];
-                            defrooms["things"][room].push(tile);
-                        }
-                    });
-                }
-            }
-        }
+        pushClient(userid, "reload", "all", reloadpath);
     }
 }
 
 function getSpecials(configoptions) {
 
     var spobj = getConfigItem(configoptions, "specials");
-    var obj = null;
-    if ( spobj ) {
+    if ( typeof spobj === "object" ) {
+        var obj = spobj;
+    } else {
         try {
-            obj = JSON.parse(spobj);
+            obj = JSON.parse(decodeURI2(spobj));
         } catch (e) {
             obj = null;
         }
@@ -2691,19 +2609,19 @@ function processLogin(body, res) {
                 clientid: "", clientsecret: "", hubaccess: "", hubendpt: "", hubrefresh: "", 
                 useraccess: "", userendpt: "", hubtimer: "0" };
             mydb.updateRow("hubs",nullhub,"userid = " + therow["users_id"] + " AND hubid = '-1'");
-            // pushClient("reload", "login", "/");
+            // pushClient(userid, "reload", "login", "/");
         } else {
             res.clearCookie("uname");
             res.clearCookie("pname");
             console.log( (ddbg()), ">>>> Failed login attempt. Username: ", uname, " Panelname: ", pname);
-            // pushClient("reload", "login", "/logout");
+            // pushClient(userid, "reload", "login", "/logout");
         }
         return therow;
-    }).catch(reason => {console.log("dberror 8 - ", reason);});
+    }).catch(reason => {console.log("dberror 8 - processLogin - ", reason);});
     return results;
 }
 
-function getAuthPage(user, hostname, pathname, rmsg) {
+function getAuthPage(user, configoptions, hostname, pathname, rmsg) {
 
     // get the current settings from options file
     // legacy file support removed
@@ -2730,19 +2648,22 @@ function getAuthPage(user, hostname, pathname, rmsg) {
     // })
 
     var conditions = "userid = " + user["users_id"];
-    var display = mydb.getRows("configs","*",conditions)
-    .then(configs => {
+    // var display = mydb.getRows("configs","*",conditions)
+    // .then(configs => {
+    //     var vals = {};
+    //     vals.configs = configs;
+    //     return vals;
+    // })
+    // .then(vals => {
+    //     var result = mydb.getRows("hubs","*",conditions)
+    var display = mydb.getRows("hubs","*",conditions)
+    .then(hubs => {
         var vals = {};
-        vals.configs = configs;
+        vals.configs = configoptions;
+        vals.hubs = hubs;
         return vals;
-    })
-    .then(vals => {
-        var result = mydb.getRows("hubs","*",conditions)
-        .then(hubs => {
-            vals.hubs = hubs;
-            return vals;
-        });
-        return result;
+        // });
+        // return result;
     })
     .then(vals => {
         // we can't query by hubid because it may not be unique to this user
@@ -2757,7 +2678,7 @@ function getAuthPage(user, hostname, pathname, rmsg) {
     })
     .then(vals => {
 
-        var configoptions = vals.configs;
+        // var configoptions = vals.configs;
         var hubs = vals.hubs;
         var devices = vals.devices;
         return getinfocontents(configoptions, hubs, devices);
@@ -2811,7 +2732,14 @@ function getAuthPage(user, hostname, pathname, rmsg) {
         $tc += utils.hidden("userid", userid, "userid");
         $tc += utils.hidden("emailid", useremail, "emailid");
         $tc += utils.hidden("skinid", skin, "skinid");
-        $tc += utils.hidden("configsid", encodeURI(JSON.stringify(configoptions)), "configsid");
+        var configs = {};
+        for (var i in configoptions) {
+            var key = configoptions[i].configkey;
+            if ( !key.startsWith("user_") ) {
+                configs[key] = configoptions[i].configval;
+            }
+        }
+        $tc += utils.hidden("configsid", JSON.stringify(configs), "configsid");
         $tc += "<div class=\"greetingopts\">";
         // $tc += "<h3><span class=\"startupinp\">Last update: " + lastedit + "</span></h3>";
             
@@ -3155,7 +3083,6 @@ function getNewPage(userid, configoptions, cnt, roomid, roomname, kroom, things,
     things.forEach(function(thing) {
         
         // get the offsets and the tile id
-        // allthings is no longer used - we use the thing directly from the DB
         var tileid = thing["things_tileid"];
         var postop = thing["things_posy"];
         var posleft = thing["things_posx"];
@@ -3178,7 +3105,7 @@ function getNewPage(userid, configoptions, cnt, roomid, roomname, kroom, things,
             pvalue = {name: ""};
         }
 
-        // construct the old allthings element equivalent but add the unique thingid and roomid fields
+        // construct the old all things equivalent but add the unique thingid and roomid fields
         var thesensor = {id: id, name: thingname, thingid: thingid, roomid: roomid, type: swtype, hubnum: hubid, hubtype: hubtype,
                          hint: hint, refresh: refresh, value: pvalue};
 
@@ -3662,8 +3589,10 @@ function makeThing(userid, configoptions, cnt, kindex, thesensor, panelname, pos
     }
     
     // add in customizations here
-    thesensor.value = getCustomTile(userid, configoptions, thesensor.value, thingtype, bid);
-    thesensor.value = setValOrder(thesensor.value);
+    if ( configoptions ) {
+        thesensor.value = getCustomTile(userid, configoptions, thesensor.value, thingtype, bid);
+        thesensor.value = setValOrder(thesensor.value);
+    }
     var thingvalue = thesensor.value;
     
     // set type to hint if one is given
@@ -3883,11 +3812,8 @@ function makeThing(userid, configoptions, cnt, kindex, thesensor, panelname, pos
             }
 
             else if ( hint==="ISY_scene" && tkey.substring(0,6)==="scene_" ) {
-                var sceneidx = "isy|" + tval;
-                if ( allthings[sceneidx] ) {
-                    tval = allthings[sceneidx].value.name + "<br />" + tval;
-                    $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, null, null, twidth, theight);
-                }
+                tval = thingvalue["name"] + "<br>" + tval;
+                $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, null, null, twidth, theight);
             }
 
             // else if ( tkey.substring(0,5)!=="user_" && typeof tval!=="object" ) { 
@@ -3902,7 +3828,7 @@ function makeThing(userid, configoptions, cnt, kindex, thesensor, panelname, pos
                 // we only process the non helpers and look for helpers in same list
                 // $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, null, null, twidth, theight);
 
-                if ( typeof tval === "string" && tval.startsWith("LINK::") ) {
+                if ( typeof tval === "string" && tval.startsWith("LINK::") && alldevices ) {
                 // if (  array_key_exists(helperkey, thingvalue) ) { // } && thingvalue[helperkey] && thingvalue[helperkey].substr(0,2)==="::" ) {
                     // var helperval = thingvalue[helperkey];
                     // console.log(">>>> helper: ", helperkey, helperval);
@@ -3957,7 +3883,6 @@ function putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, s
             // linktype = idxitems[0];
             // linkbid = idxitems[1];
 
-            // if ( array_key_exists(lidx, allthings) ) {
             if ( linkdev ) {
                 
                 // replace the place holder value with the linked value
@@ -4368,8 +4293,8 @@ function getClock(clockid) {
 function findDevice(bid, swtype, devices) {
     for (var id in devices) {
         var device = devices[id];
-        if ( device.deviceid === bid && device.devicetype === swtype ) {
-            return device;
+        if ( device["devices_deviceid"] === bid && device["devices_devicetype"] === swtype ) {
+            return device["devices_id"];
         }
     }
     return null;
@@ -4393,30 +4318,36 @@ function updSpecials(userid, configoptions, hubindex, devices, clockonly) {
     
     // create promise result to return
     var digitalClock = makeClock("clockdigital");
-    if ( findDevice("clockdigital", "clock", devices) ) {
-        mydb.updateRow("devices", digitalClock, "userid = "+userid+" AND deviceid = 'clockdigital'");
+    var id = findDevice("clockdigital", "clock", devices);
+    if ( id ) {
+        mydb.updateRow("devices", digitalClock, "id = "+id);
+        console.log(">>>> updating clockdigital");
     } else {
         mydb.addRow("devices", digitalClock);        
+        console.log(">>>> adding clockdigital", devices);
     }
 
     var analogClock = makeClock("clockanalog");
-    if ( findDevice("clockanalog", "clock", devices) ) {
-        mydb.updateRow("devices", analogClock, "userid = "+userid+" AND deviceid = 'clockanalog'");
+    id = findDevice("clockanalog", "clock", devices);
+    if ( id ) {
+        mydb.updateRow("devices", analogClock, "id = "+id);
+        console.log(">>>> updating clockanalog");
     } else {
         mydb.addRow("devices", analogClock);        
+        console.log(">>>> adding clockanalog");
     }
 
     // create the controller tile if not already there for this user
     // keys starting with c__ will get the confirm class added to it
     // TODO - this should move to a new module that creates a new user
-    if ( !findDevice("control_1", "control", devices) ) {
+    id = findDevice("control_1", "control", devices);
+    if ( !id ) {
         var controlval = {"name": "Controller", "showoptions": "Options","refreshpage": "Refresh","c__refactor": "Reset",
             "c__userauth": "Re-Auth","showid": "Show Info","toggletabs": "Toggle Tabs", "showdoc": "Documentation",
             "blackout": "Blackout","operate": "Operate","reorder": "Reorder","edit": "Edit"};
         controlval = encodeURI2(JSON.stringify(controlval));
         var device = {userid: userid, hubid: hubindex, deviceid: "control_1", "name": "Controller",
                       devicetype: "control", hint: "special", refresh: "never", pvalue: controlval};
-        // console.log(">>>> simulated controller update: ", device);
         mydb.addRow("devices", device);
     }
 
@@ -4449,35 +4380,39 @@ function updSpecials(userid, configoptions, hubindex, devices, clockonly) {
             } else {
                 devid = stype + k;
             }
-            var ftile = encodeURI2(JSON.stringify({"name": devname}));
-
-            var device = findDevice(devid, stype, devices);
-            if ( !device ) {
+            
+            var cid = findDevice(devid, stype, devices);
+            if ( !cid ) {
+                var ftile = encodeURI2(JSON.stringify({"name": devname}));
                 device = {userid: userid, hubid: hubindex, deviceid: devid, name: devname,
                             devicetype: stype, hint: "special", refresh: "never", pvalue: ftile};
                 // console.log(">>>> simulated add: ", device);
                 mydb.addRow("devices", device);
             }
-
-            // TODO - remove extras
-            // var doneextra = false;
-            // for (var iextra= fcnt; iextra<100; iextra++) {
-            //     if ( stype === "custom") {
-            //         var devid = stype + "_" + k;
-            //     } else {
-            //         devid = stype + k;
-            //     }
-            //     mydb.deleteRow("devices", "userid = "+userid+" AND deviceid = '"+devid+"' AND devicetype = '"+stype+"'")
-            //     .then(res3 => {
-            //         if ( !res3 || res3.getAffectedItemsCount() === 0 ) {
-            //             doneextra = true;
-            //         }
-            //     }).catch(reason => {console.log("dberror - ", reason);});
-            //     if ( doneextra ) {
-            //         break;
-            //     }
-            // }
         }
+
+        // TODO - test and debug
+        var doneextra = false;
+        for (var iextra= fcnt; iextra < 25; iextra++) {
+            if ( stype === "custom") {
+                var devid = stype + "_" + k;
+            } else {
+                devid = stype + k;
+            }
+            mydb.deleteRow("devices", "userid = "+userid+" AND deviceid = '"+devid+"' AND devicetype = '"+stype+"'")
+            .then(res3 => {
+                if ( !res3 || res3.getAffectedItemsCount() === 0 ) {
+                    doneextra = true;
+                }
+            }).catch(reason => {
+                console.log("dberror - updSpecials - ", reason);
+                doneextra = true;
+            });
+            if ( doneextra ) {
+                break;
+            }
+        }
+
     }
 }
 
@@ -4508,13 +4443,18 @@ function getCustomTile(userid, configoptions, custom_val, customtype, bid) {
             if ( DEBUG14 ) {
                 console.log((ddbg()), ">>>> key: ", key, " val: ", val);
             }
-            try {
-                var lines = JSON.parse(val);
+            if ( typeof val === "object" ) {
+                var lines = val;
                 updated_val = processCustom(lines, updated_val);
-                break;
-            } catch(e) {
-                console.log( (ddbg()), "error - parsing custom config tile value: ", val, " for key: ", key);
+            } else {
+                try {
+                    lines = JSON.parse(decodeURI2(val));
+                    updated_val = processCustom(lines, updated_val);
+                } catch(e) {
+                    console.log( (ddbg()), "error - parsing custom config tile value: ", val, " for key: ", key);
+                }
             }
+            break;
         }
     }
    
@@ -4671,7 +4611,7 @@ function setValOrder(val) {
     return newval;
 }
 
-// TODO - finish updating this
+// TODO - finish updating and testing this
 function processHubMessage(userid, hub, hubmsg) {
     // loop through all things for this hub
     // remove music trackData field that we don't know how to handle
@@ -4743,7 +4683,7 @@ function processHubMessage(userid, hub, hubmsg) {
             }
 
             if ( ! array_key_exists("skip_push", hubmsg) ) {
-                pushClient(hubmsgid, swtype, subid, newval);
+                pushClient(userid, hubmsgid, swtype, subid, newval);
             }
             newval.subid = subid;
             processRules(userid, device.id, hubmsgid, swtype, subid, newval, "processMsg");
@@ -4832,7 +4772,7 @@ function processHubMessage(userid, hub, hubmsg) {
 //                             targetobj["height"] = customheight;
 //                         }
 //                         if ( ! array_key_exists("skip_push", hubmsg) ) {
-//                             pushClient(idxitems[1], idxitems[0], obj_subid, targetobj);
+//                             pushClient(userid, idxitems[1], idxitems[0], obj_subid, targetobj);
 //                         }
 //                         targetobj.subid = obj_subid;
 //                         processRules(idxitems[1], idxitems[0], obj_subid, targetobj, "processMsg");
@@ -4933,7 +4873,7 @@ function processIsyMessage(userid, isymsg) {
 
                     var subid = mapIsy(control[0], uom);
                     pvalue = translateIsy(bid, control[0], uom, subid, pvalue, newval, "");
-                    pushClient(bid, "isy", subid, pvalue);
+                    pushClient(userid, bid, "isy", subid, pvalue);
 
                     pvalue.subid = subid;
                     processRules(userid, device.id, bid, "isy", subid, pvalue, "processMsg");
@@ -4943,7 +4883,7 @@ function processIsyMessage(userid, isymsg) {
                     }
                 }).catch(reason => {
                     // console.log(">>>> condition: ", conditions);
-                    console.log("dberror 10 - ", reason);
+                    console.log("dberror 10 - processIsyMessage - ", reason);
                 });
 
             // set variable changes events
@@ -4991,7 +4931,7 @@ function processIsyMessage(userid, isymsg) {
                                 }
                             } 
                             pvalue[subid] = newval.toString();
-                            pushClient(bid, "isy", subid, pvalue);
+                            pushClient(userid, bid, "isy", subid, pvalue);
                             
                             pvalue.subid = subid;
                             processRules(userid, device.id, bid, "isy", subid, pvalue, "processMsg");
@@ -5004,7 +4944,7 @@ function processIsyMessage(userid, isymsg) {
                         console.log( (ddbg()), "warning - var // processIsyMessage: ", e, device);
                         return;
                     }
-                }).catch(reason => {console.log("dberror 11 - ", reason);});
+                }).catch(reason => {console.log("dberror 11 - processIsyMessage - ", reason);});
 
             // handle program changes events
             } else if ( is_object(eventInfo[0]) && array_key_exists("id", eventInfo[0]) && 
@@ -5054,7 +4994,7 @@ function processIsyMessage(userid, isymsg) {
                         } else if ( array_key_exists("nr", eventInfo[0])  ) {
                             pvalue["runAtStartup"] = "false";
                         }
-                        pushClient(bid, "isy", "lastRunTime", pvalue);
+                        pushClient(userid, bid, "isy", "lastRunTime", pvalue);
                         // don't do rules for programs - that seems silly
                         if ( DEBUG9 ) {
                             console.log( (ddbg()), "ISY webSocket updated program: ", bid, " pvalue: ", device);
@@ -5064,7 +5004,7 @@ function processIsyMessage(userid, isymsg) {
                         return;
                     }
                 }).catch(reason => {
-                    console.log("dberror 12 - ", reason);
+                    console.log("dberror 12 - processIsyMessage - ", reason);
                 });
 
             } else if (DEBUG9a) {
@@ -5194,7 +5134,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                 });
             });
         }
-    }).catch(reason => {console.log("dberror 13 - ", reason);});
+    }).catch(reason => {console.log("dberror 13 - processRules - ", reason);});
 
     return;
 
@@ -5353,14 +5293,6 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                                     if ( DEBUG11 ) {
                                         console.log( (ddbg()), "rvtile = ", rvtile, " rulevalue= ", rulevalue);
                                     }
-
-                                    // var rvidx = array_search(rvtile, GLB.options["index"]);
-                                    // if ( DEBUG11 ) {
-                                    //     console.log( (ddbg()), "rvtile = ", rvtile, " rvindex= ", rvindex, " rvidx= ", rvidx);
-                                    // }
-                                    // if ( rvidx && allthings[rvidx] && array_key_exists(rvindex, allthings[rvidx]["value"]) ) {
-                                    //     rulevalue = allthings[rvidx]["value"][rvindex];
-                                    // }
                                 }
 
                                 if ( DEBUG11 ) {
@@ -5570,15 +5502,12 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                     console.log( (ddbg()), "RULE debug: exec step #", i, " rtileid: ", rtileid, " rsubid: ", rsubid, " rvalue: ", rvalue, " rswattr: ", rswattr, " delay: ", delay);
                 }
 
-                // if ( ridx && allthings[ridx] ) {
                 if ( rtileid && devices[rtileid] ) {
                     // var idxitems = ridx.split("|");
-                    var rswtype = devices[rtileid].devicetype;    // idxitems[0];
-                    var rswid = devices[rtileid].deviceid;   // idxitems[1];
-                    var hubindex = devices[rtileid].hubid;    //  allthings[ridx]["hubnum"];
-                    var hub = hubs[hubindex];   // findHub(hubid);
-
-                    // console.log(" >>>> hubid= ", hubid, " ridx= ", ridx, " hub= ", hub);
+                    var rswtype = devices[rtileid].devicetype;
+                    var rswid = devices[rtileid].deviceid;
+                    var hubindex = devices[rtileid].hubid;
+                    var hub = hubs[hubindex];
 
                     // handle requests for parameters of the trigger tile ($) or destination tile (@)
                     // disable hub calls for this type of rule
@@ -5588,11 +5517,9 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                         if ( trigtype==="$" && array_key_exists(trigsubid, pvalue) ) {
                             rvalue = pvalue[trigsubid];
                         } else if ( trigtype==="@" && array_key_exists(trigsubid, devices[rtileid].pvalue) ) {
-                            rvalue = devices[rtileid].pvalue[trigsubid];   //  allthings[ridx]["value"][trigsubid];
+                            rvalue = devices[rtileid].pvalue[trigsubid];
                         }
                     }
-
-                    // console.log(">>>> target for rule: ", allthings[ridx]["value"], " hub: ", hub, " testcommands: ", testcommands);
 
                     // fix up ISY hubs and handle toggle
                     if ( rswtype==="isy" && devices[rtileid].pvalue ) {
@@ -5611,10 +5538,9 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                     // if the destination is a link force the link to a TEXT type to neuter other types
                     var linkinfo = null;
                     var companion = "user_"+rsubid;
-                    var webstr = pvalue[rsubid];        //  allthings[ridx]["value"][companion];
+                    var webstr = pvalue[rsubid];
                     var n = webstr.indexOf("::",2);
                     if ( array_key_exists(rsubid, pvalue) && n !== -1 ) {
-                        // allthings[ridx]["value"][rsubid] = rvalue;
 
                         var command = webstr.substring(0, n);
                         // var actionstr = webstr.substring(n+2);
@@ -5640,7 +5566,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                         }
                         // restart all clients to show the newly created field
                         // this only happens the first time the rule is triggered
-                        // pushClient("reload", "main", "/");
+                        // pushClient(userid, "reload", "main", "/");
                     }
                     
                     if ( hub ) {
@@ -5681,7 +5607,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                         if ( delay && delay > 0 ) {
                             thandle = setTimeout( function() {
                                 try {
-                                    callHub(userid, hub.id, rswid, rswtype, deviceid, rvalue, rswattr, rsubid, linkinfo, true);
+                                    callHub(userid, hub.id, rswid, deviceid, rswtype, rvalue, rswattr, rsubid, linkinfo, true);
                                 } catch (e) {
                                     console.log( (ddbg()), "error calling hub from rule: ", rswid, rswtype, rvalue, rswattr, rsubid, " error: ", e);
                                 }
@@ -5693,7 +5619,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                         } else {
                             try {
                                 // console.log("final rule step: id=",  rswid, "type=", rswtype, "value=", rvalue, "attr=", rswattr, "subid=", rsubid, "linkinfo=", linkinfo);
-                                callHub(userid, hub.id, rswid, rswtype, deviceid, rvalue, rswattr, rsubid, linkinfo, true);
+                                callHub(userid, hub.id, rswid, deviceid, rswtype, rvalue, rswattr, rsubid, linkinfo, true);
                             } catch (e) {
                                 console.log( (ddbg()), "error calling hub from rule: ", rswid, rswtype, rvalue, rswattr, rsubid, " error: ", e);
                             }
@@ -5709,13 +5635,12 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
 
 }
 
-function pushClient(swid, swtype, subid, body, linkinfo) {
+function pushClient(userid, swid, swtype, subid, body, linkinfo) {
     // send the new results to all clients
     var entry = {};
     if ( typeof subid === "undefined" ) { subid= ""; }
     entry["id"] = swid;
     entry["type"] = swtype;
-    entry["clientcount"] = clients.length;
     entry["trigger"] = subid;
     var pvalue;
 
@@ -5724,41 +5649,6 @@ function pushClient(swid, swtype, subid, body, linkinfo) {
     } else {
         pvalue = body;
     }
-
-    // if ( pvalue["password"] ) { delete pvalue["password"]; }
-
-    // update the main array with changed push values
-    // if ( swid!=="reload" && swtype ) {
-    //     var idx = swtype + "|" + swid;
-    //     var lidx = "";
-    //     var lsubid = "";
-    //     var lreal = "";
-    //     if ( linkinfo && is_array(linkinfo) ) {
-    //         lidx = linkinfo[1] + "|" + linkinfo[0];
-    //         lsubid = linkinfo[2];
-    //         lreal = linkinfo[3];
-    //         // entry["LINK"] = linkinfo;
-    //     }
-
-    //     if ( array_key_exists(idx, allthings) ) {
-    //         for (var thekey in pvalue) {
-    //             var theval = pvalue[thekey];
-    //             allthings[idx]["value"][thekey] = theval;
-
-    //             // update the link that triggered if this was a link
-    //             // we do something similar on the client side to change
-    //             // all linked things that match this
-    //             if ( lidx && lsubid && lreal && lreal===thekey && allthings[lidx] ) {
-    //                 allthings[lidx]["value"][lsubid] = theval;
-    //             }
-    //         }
-    //     }
-    // }
-
-    // update device values in the database if found
-    // if ( swid!=="reload" && swid!=="pagemsg" && swtype && pvalue ) {
-    //     mydb.updateRow("devices", {pvalue: encodeURI2(JSON.stringify(pvalue))}, "deviceid='"+swid+"' AND devicetype='"+swtype+"'");
-    // }
 
     // create blank object if nothing given
     if ( !pvalue ) {
@@ -5778,10 +5668,11 @@ function pushClient(swid, swtype, subid, body, linkinfo) {
         console.log( (ddbg()), "pushClient: ", UTIL.inspect(entry, false, null, false));
     }
 
-    // do a push to each client
-    // if this is a screen reload request only the triggering screen should reload
-    for (var i=0; i < clients.length; i++) {
-        clients[i].sendUTF(JSON.stringify(entry));
+    // do a push to each client for this user if ready
+    if ( clients[userid] ) {
+        for (var i=0; i < clients[userid].length; i++) {
+            clients[userid][i].sendUTF(JSON.stringify(entry));
+        }
     }
 
 }
@@ -5811,23 +5702,6 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
         
         var isyresp = {};
 
-        // TODO - handle linkinfo without using allthings
-        // if ( linkinfo && is_array(linkinfo) && linkinfo.length>3 && linkinfo[4]==="TEXT" ) {
-        //     try {
-        //         result = allthings[idx].value;
-        //     } catch(e) {
-        //         result = "error - custom TEXT field not found for: " + idx;
-        //         console.log( (ddbg()), result, " error: ", e);
-        //         return result;
-        //     }
-
-        //     if (result) {
-        //         pushClient(swid, swtype, subid, result, linkinfo);
-        //         result.subid = subid;
-        //         processRules(swid, swtype, subid, result, "callHub");
-        //         delete result.subid;
-        //     }
-
         // this function calls the Groovy hub api
         if ( hub.hubtype==="SmartThings" || hub.hubtype==="Hubitat" ) {
             var host = endpt + "/doaction";
@@ -5837,6 +5711,10 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                         "swvalue": swval, 
                         "swtype": swtype};
             if ( subid && subid!=="none" ) { nvpreq["subid"] = subid; }
+
+            // if ( DEBUG7 || DEBUGtmp ) {
+            //     console.log( (ddbg()), "callHub calling param: ", nvpreq);
+            // }
             curl_call(host, header, nvpreq, false, "POST", getHubResponse);
 
         // make the call to the new ST API to control the device clicked on
@@ -5867,16 +5745,48 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
             
             // support toggle commands
             } else if ( subid==="switch" && swval==="toggle" ) {
-                if ( linkinfo ) {
-                    var idx = getKeyByValue(GLB.options.index, linkinfo);
-                    var items = idx.split("|");
-                    swid = items[1];
-                }
-                if ( idx ) {
-                    var curval = allthings[idx]["value"][subid];
+
+                nvpreq = null;
+
+                mydb.getRow("devices","*","userid = "+userid+" AND id = "+deviceid)
+                .then(device => {
+                    var pvalue = JSON.parse(decodeURI2(device.pvalue));
+                    var curval = pvalue[subid];
                     swval = curval==="off" ? "on" : "off";
                     nvpreq = {"commands": [ { component:"main", capability: "switch", command: swval, arguments: [] } ] };
-                }
+
+                    var host = endpt + "/devices/" + swid + "/commands";
+                    if ( DEBUG7 ) {
+                        console.log( (ddbg()), "Calling New ST callHub with: ", UTIL.inspect(nvpreq, false, null, false));
+                    }
+    
+                    // curl_call(host, header, nvpreq, false, "POST", getHubResponse);
+                    _curl(host, header, nvpreq, "POST", function(err, tmp, res) {
+                        console.log( (ddbg()), "New ST callHub result: ", res);
+                        // push results immediately to give user a responsive feel
+                        // emulate the callback to getHubResponse done for other hubs
+                        if ( !err && res && presult!==false ) {
+                            if ( !presult ) {
+                                presult = {};
+                                presult[subid] = swval;
+                            }
+                            getHubResponse(err, res, presult);
+                            // pushClient(userid, swid, swtype, subid, presult);
+                        }
+                    });
+    
+
+                });
+                // if ( linkinfo ) {
+                //     var idx = getKeyByValue(GLB.options.index, linkinfo);
+                //     var items = idx.split("|");
+                //     swid = items[1];
+                // }
+                // if ( idx ) {
+                //     var curval = allthings[idx]["value"][subid];
+                //     swval = curval==="off" ? "on" : "off";
+                //     nvpreq = {"commands": [ { component:"main", capability: "switch", command: swval, arguments: [] } ] };
+                // }
         
             // handle slider light levels
             } else if ( subid==="level" ) {
@@ -5974,7 +5884,7 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                             presult[subid] = swval;
                         }
                         getHubResponse(err, res, presult);
-                        // pushClient(swid, swtype, subid, presult);
+                        // pushClient(userid, swid, swtype, subid, presult);
                     }
                 });
             } else {
@@ -5997,7 +5907,7 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
 
                 case "_info":
                     // set completion status to running
-                    pushClient(swid, swtype, subid, {commandStatus: ""}, linkinfo);
+                    pushClient(userid, swid, swtype, subid, {commandStatus: ""}, linkinfo);
                     curl_call(host, header, false, false, "GET", getHubResponse);
                     break;
 
@@ -6010,7 +5920,7 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                 case "_location":
 
                     // set completion status to running
-                    pushClient(swid, swtype, subid, {commandStatus: "RUNNING"}, linkinfo);
+                    pushClient(userid, swid, swtype, subid, {commandStatus: "RUNNING"}, linkinfo);
 
                     host = host + "/" + subid.substr(1);
                     curl_call(host, header, false, false, "POST", getHubResponse);
@@ -6103,11 +6013,7 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                 case "DOF":
                 case "DON":
                     // handle toggle command - note that the GUI will never produce a toggle swval command
-                    // but the RULE logic can and so can users when using api calls
-                    if ( swval==="toggle" ) {
-                            var currentval = allthings["isy|"+swid]["value"][subid];
-                            swval = currentval==="DON" ? "DOF" : "DON";
-                    }
+                    // no longer support because we don't know requesting user state
                     cmd = "/nodes/" + swid + "/cmd/" + swval;
                     isyresp[subid] = swval;
                     curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
@@ -6155,7 +6061,7 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                         isyresp[realsubid] = intvar.toString();
                         curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
 
-                    // TODO - figure out how to manipulate STATE vars without using allthings
+                    // TODO - figure out how to manipulate STATE vars without using old all things
                     // } else if ( subid.startsWith("State_") ) {
                     //     // get the real subid that the arrows are pointing toward
                     //     var intvar = parseFloat(swval);
@@ -6182,7 +6088,7 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                     //     }
 
                     // run commands
-                    // TODO - figure out how to get the prog ID in the call without using allthings
+                    // TODO - figure out how to get the prog ID in the call without using all things
                     // } else if ( hint==="ISY_program" ) {
                     //     // var progcommands = "run|runThen|runElse|stop|enable|disable";
                     //     // var progarr = progcommands.split("|");
@@ -6209,7 +6115,7 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
             }
         }
 
-    }).catch(reason => {console.log("dberror 14 - ", reason);});
+    }).catch(reason => {console.log("dberror 14 - callHub - ", reason);});
     return result;
 
     // --------------------- end of callHub commands ------------------------------
@@ -6292,7 +6198,7 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                     } else if ( swtype==="music" ) {
                         pvalue = translateMusic(pvalue);
                     } else if ( swtype==="weather" && is_object(pvalue.forecast) ) {
-                        var thisorigname = allthings[idx].name || allthings[idx].value.name;
+                        var thisorigname = pvalue.name;
                         pvalue = translateWeather(thisorigname, pvalue);
 
                     // pluck out just vehicle data and good status for info call
@@ -6354,7 +6260,7 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                     }
 
                     // push new values to all clients and execute rules
-                    pushClient(swid, swtype, subid, pvalue, linkinfo);
+                    pushClient(userid, swid, swtype, subid, pvalue, linkinfo);
                     if ( !inrule ) {
                         pvalue.subid = subid;
                         processRules(userid, deviceid, swid, swtype, subid, pvalue, "callHub");
@@ -6375,7 +6281,7 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
             if ( DEBUG18 || DEBUG14) {
                 console.log( (ddbg()), "Linkinfo: ", linkinfo, " targetobj: ", targetobj);
             }
-            pushClient(linkinfo[0], linkinfo[1], linksubid, targetobj);
+            pushClient(userid, linkinfo[0], linkinfo[1], linksubid, targetobj);
             if ( !inrule ) {
                 // targetobj.subid = linksubid;
 
@@ -6416,7 +6322,7 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
 
             // var rres = result.RestResponse;
             // if ( !inrule && rres && rres.status && rres.status.toString()!=="200" ) {
-            // pushClient(swid, swtype, subid, isyresp, linkinfo);
+            // pushClient(userid, swid, swtype, subid, isyresp, linkinfo);
             // if ( !inrule && rres && rres.toString()!=="200" ) {
             //     isyresp.subid = subid;
             //     processRules(swid, "isy", subid, isyresp, "callHub");
@@ -6456,7 +6362,7 @@ function queryHub(userid, thingid, hubindex, swid, swtype, thingname ) {
 
         }
 
-    }).catch(reason => {console.log("dberror 15 - ", reason);});
+    }).catch(reason => {console.log("dberror 15 - queryHub - ", reason);});
     
     function getQueryResponse(err, res, pvalue) {
         if ( err ) {
@@ -6483,7 +6389,7 @@ function queryHub(userid, thingid, hubindex, swid, swtype, thingname ) {
                 mydb.updateRow("devices", {pvalue: encodeURI2(JSON.stringify(pvalue))}, "id = " + thingid + " AND userid = " + userid);
 
                 // push results to all clients
-                pushClient(swid, swtype, "none", pvalue);
+                pushClient(userid, swid, swtype, "none", pvalue);
 
                 // force processing of rules for weather and clocks on a query
                 // no longer do this because we don't know the weather and clock device id easily
@@ -6517,7 +6423,7 @@ function queryHub(userid, thingid, hubindex, swid, swtype, thingname ) {
                                 if (device) {
                                     setIsyFields(userid, nodeid, device, props, true);
                                 }
-                            }).catch(reason => {console.log("dberror 16 - ", reason);});
+                            }).catch(reason => {console.log("dberror 16 - getNodeQueryResponse - ", reason);});
 
                         } else {
                             throw "Something went wrong reading node from ISY in getNodeQueryResponse";
@@ -6638,14 +6544,6 @@ function findHub(hubid) {
     return hub;
 }
 
-// update the hubs array with a new hub value of a certain ID
-// if not found the hub is added
-function updateHubs(newhub, oldid) {
-    var hub = mydb.updateRow("hubs",newhub,"hubid="+oldid);
-    var found = hub !== null;
-    return found;
-}
-
 function testclick(clktype, clkid) {
     const infoclicks = [
         "temperature", "name", "contact", "presence", "motion", "battery",
@@ -6662,7 +6560,6 @@ function testclick(clktype, clkid) {
     return test;
 }
 
-// TODO - finish updating this to work with DB
 function doAction(userid, thingid, configoptions, swid, swtype, swval, swattr, subid, command, linkv, protocol) {
 
     // reset rules
@@ -6699,7 +6596,7 @@ function doAction(userid, thingid, configoptions, swid, swtype, swval, swattr, s
 
         // do nothing but push tile to clients if this is not clickable
         // if ( (typeof command==="undefined" || !command) && testclick(swtype, subid) ) {
-        //     pushClient(deviceid, devicetype, subid, pvalue);
+        //     pushClient(userid, deviceid, devicetype, subid, pvalue);
         //     return;
         // }
 
@@ -6710,7 +6607,11 @@ function doAction(userid, thingid, configoptions, swid, swtype, swval, swattr, s
             var customid = "user_" + swid;
             configoptions.forEach(function(opt) {
                 var key = opt.configkey;
-                var linkset = JSON.parse(opt.configval);
+                if ( typeof opt.configval === "object" ) {
+                    var linkset = opt.configval;
+                } else {
+                    linkset = JSON.parse(decodeURI2(opt.configval));
+                }
                 if ( linkval==="" && key === customid && linkset[0]===command && subid.startsWith(linkset[2]) ){
                     linkval = linkset[1];
                 }  
@@ -6743,7 +6644,7 @@ function doAction(userid, thingid, configoptions, swid, swtype, swval, swattr, s
 
             } else if ( command==="TEXT" ) {
                 if ( typeof pvalue === "object" ) {
-                    pushClient(swid, swtype, subid, pvalue);
+                    pushClient(userid, swid, swtype, subid, pvalue);
                     pvalue.subid = subid;
                     processRules(userid, thingid, swid, swtype, subid, pvalue, "callHub");
                     delete pvalue.subid;
@@ -6797,10 +6698,6 @@ function doAction(userid, thingid, configoptions, swid, swtype, swval, swattr, s
         .then(linkdev => {
 
             if ( linkdev ) {
-                // var $linked_hubnum = allthings[lidx]["hubnum"];
-                // var $linked_swtype = allthings[lidx]["type"];
-                // var $linked_swid = allthings[lidx]["id"];
-                // var $linked_val = allthings[lidx]["value"];
                 var $lhub = linkdev.hubid;
                 var $linked_swtype = linkdev.devicetype;
                 var $linked_swid = linkdev.deviceid;
@@ -6834,14 +6731,15 @@ function doAction(userid, thingid, configoptions, swid, swtype, swval, swattr, s
                 // if link is to something static, show it
                 if ( $realsubid ) {
                     if ( testclick($linked_swtype, $realsubid) ) {
-                        pushClient($linked_swid, $linked_swtype,$realsubid, $linked_val);
+                        pushClient(userid, $linked_swid, $linked_swtype,$realsubid, $linked_val);
                     } else {
+                        // TODO - include thingid in the linkinfo array
                         var linkinfo = [swid, swtype, subid, $realsubid, "LINK"];
                         callHub(userid, $lhub, $linked_swid, thingid, $linked_swtype, swval, swattr, $realsubid, linkinfo, false);
                     }
                 }
             }
-        }).catch(reason => {console.log("dberror 17 - ", reason);});
+        }).catch(reason => {console.log("dberror 17 - processLink - ", reason);});
     }
 
     function urlCallback(err, res, body) {
@@ -6857,10 +6755,10 @@ function doAction(userid, thingid, configoptions, swid, swtype, swval, swattr, s
             //     }
             // }
             if ( !subid.startsWith("_") ) {
-                pushClient(swid, swtype, subid, body);
+                pushClient(userid, swid, swtype, subid, body);
             }
             console.log( (ddbg()), "URL callback returned: ", UTIL.inspect(body, false, null, false));
-            // pushClient(swid, swtype, subid, webresponse);
+            // pushClient(userid, swid, swtype, subid, webresponse);
         } else if ( typeof body === "string" && body!=="" && body!=="success" ) {
             // skip setting results if the subid starts with an underscore signaling a command
             // always skip if the body is empty or the word success
@@ -6877,7 +6775,7 @@ function doAction(userid, thingid, configoptions, swid, swtype, swval, swattr, s
                     var subidres = subid + "_response";
                     webresponse[subidres] = body;
                 }
-                pushClient(swid, swtype, subid, webresponse);
+                pushClient(userid, swid, swtype, subid, webresponse);
             }
             console.log( (ddbg()), "URL callback returned: ", body);
         }
@@ -6921,10 +6819,10 @@ function doQuery(userid, thingid, protocol) {
                 var firstsubid = Object.keys(pvalue)[0];
 
                 // push result to the clients
-                pushClient(swid, swtype, firstsubid, pvalue);
+                pushClient(userid, swid, swtype, firstsubid, pvalue);
             }
             return devices;
-        }).catch(reason => {console.log("dberror 18 - ", reason);});
+        }).catch(reason => {console.log("dberror 18 - doQuery - ", reason);});
 
     // a specific device is being requested
     // lets get the device info and call its hub function
@@ -6957,7 +6855,7 @@ function doQuery(userid, thingid, protocol) {
                 }
                 return qres;
             }
-        }).catch(reason => {console.log("dberror 19 - ", reason);});
+        }).catch(reason => {console.log("dberror 19 - doQuery - ", reason);});
 
     }
 
@@ -6965,7 +6863,6 @@ function doQuery(userid, thingid, protocol) {
     return result;
 }
 
-// TODO - implement the "checkDone" logic
 function setOrder(userid, swtype, swval) {
     var result;
     var num = 0;
@@ -6979,7 +6876,7 @@ function setOrder(userid, swtype, swval) {
             mydb.updateRow("rooms", updval, "id = "+roomid)
             .then(results => {
                 console.log(results.getAffectedItemsCount() );
-            }).catch(reason => {console.log("dberror 20 - ", reason);});
+            }).catch(reason => {console.log("dberror 20 - setOrder - ", reason);});
             num++;
         }
         result = "success - updated order of " + num + " rooms for user = " + userid;
@@ -7040,7 +6937,7 @@ function setPosition(userid, swid, swtype, panel, swattr, tileid, thingid) {
             .then(result => {
                 if ( result ) {
                     var tileloc = {left: left, top: top, "z-index": zindex, position: postype};
-                    pushClient("setposition", thingid, "", tileloc);
+                    pushClient(userid, "setposition", thingid, "", tileloc);
                     if ( DEBUG6 ) {
                         console.log( (ddbg()), "moved tile: ", thing, " to a new position: ", tileloc);
                     }
@@ -7054,16 +6951,16 @@ function setPosition(userid, swid, swtype, panel, swattr, tileid, thingid) {
             console.log( (ddbg()), "error - could not find tile: ", tileid, " to move to position: ", top, left, zindex);
             return "error - could not find tile: " + tileid;
         }
-    }).catch(reason => {console.log("dberror 21 - ", reason);});
+    }).catch(reason => {console.log("dberror 21 - setPosition - ", reason);});
 
     return pr;
 }
 
-// userid, swid, swtype, rname, hubid, hubindex, roomid, startpos, configoptions
-function addThing(userid, bid, thingtype, panel, hubid, hubindex, roomid, pos, configoptions) {
+// userid, swid, swtype, rname, hubid, hubindex, roomid, startpos
+function addThing(userid, bid, thingtype, panel, hubid, hubindex, roomid, pos) {
 
     // first get the max order number of the tiles in this room
-    var querystr = "SELECT Max(torder) FROM housepanel.things WHERE roomid = " + roomid;
+    var querystr = "SELECT Max(torder) FROM things WHERE roomid = " + roomid;
     var promiseResult = mydb.query(querystr)
     .then(result => {
         // console.log(">>>> max torder = ", result);
@@ -7106,10 +7003,10 @@ function addThing(userid, bid, thingtype, panel, hubid, hubindex, roomid, pos, c
                         var thingid = result.getAutoIncrementValue();
 
                         // now make the visual tile and return it as a promised value
-                        // construct the old allthings element equivalent but add the unique thingid and roomid fields
+                        // construct the old things element equivalent but add the unique thingid and roomid fields
                         var thesensor = {id: bid, thingid: thingid, roomid: roomid, type: thingtype, hubnum: hubid, 
                                         hint: hint, refresh: refresh, value: pvalue};
-                        var thing = makeThing(userid, configoptions, thingid, tileid, thesensor, panel, 0, 0, 1, "", false, null);
+                        var thing = makeThing(userid, null, thingid, tileid, thesensor, panel, 0, 0, 1, "", false, null);
                         console.log( (ddbg()), "added tile #",tileid," (thingid = ",thingid,") of type: ",thingtype," to page: ",panel,
                                             " deviceid: ", bid, " hubid: ", hubid, " thing: ", thing);
                         return thing;
@@ -7122,7 +7019,7 @@ function addThing(userid, bid, thingtype, panel, hubid, hubindex, roomid, pos, c
                 // return null;
                 return "error - could not find device of type " + thingtype + " in your list of authenticated devices";
             }
-        }).catch(reason => {console.log("dberror 22 - ", reason);});
+        }).catch(reason => {console.log("dberror 22 - addThing - ", reason);});
 
         return promiseResult;
     });
@@ -7144,7 +7041,7 @@ function delThing(userid, bid, thingtype, panel, tileid, thingid) {
         }
         console.log( (ddbg()), msg);
         return msg;
-    }).catch(reason => {console.log("dberror 23 - ", reason);});
+    }).catch(reason => {console.log("dberror 23 - delThing - ", reason);});
     return promiseResult;
 }
 
@@ -7160,7 +7057,7 @@ function delPage(userid, roomid, panel) {
         }
         console.log( (ddbg()), msg);
         return msg;
-    }).catch(reason => {console.log("dberror 24 - ", reason);});
+    }).catch(reason => {console.log("dberror 24 - delPage - ", reason);});
     return promiseResult;
 }
 
@@ -7234,7 +7131,7 @@ function addPage(userid, panelid ) {
             msg = "Room added with id: " + roomid;
         }
         return msg;
-    }).catch(reason => {console.log("dberror 25 - ", reason);});
+    }).catch(reason => {console.log("dberror 25 - addPage - ", reason);});
 
     function checkDone(item) {
         donestat[item] = true;
@@ -7291,7 +7188,7 @@ function getInfoPage(user, configoptions, hubs, req) {
         // var hubs = result.hubs;
         var devices = result;
         return getinfocontents(userid, configoptions, hubs, devices);
-    }).catch(reason => {console.log("dberror 26 - ", reason);});
+    }).catch(reason => {console.log("dberror 26 - getInfoPage - ", reason);});
 
     return visual;
 
@@ -7322,6 +7219,14 @@ function getInfoPage(user, configoptions, hubs, req) {
         $tc += utils.hidden("returnURL", GLB.returnURL);
         $tc += utils.hidden("pathname", pathname);
         $tc += utils.hidden("pagename", "info");
+        var configs = {};
+        for (var i in configoptions) {
+            var key = configoptions[i].configkey;
+            if ( !key.startsWith("user_") ) {
+                configs[key] = configoptions[i].configval;
+            }
+        }
+        $tc += utils.hidden("configsid", JSON.stringify(configs), "configsid");
         $tc += "</form>";
         $tc += "<div class=\"infopage\">";
         $tc += "<div class='bold'>Site url = " + GLB.returnURL + "</div>";
@@ -7349,11 +7254,11 @@ function getInfoPage(user, configoptions, hubs, req) {
 
         $tc += "</div>";
 
-        if ( clients.length > 0 ) {
-            var str = "<p>Currently connected to " + clients.length + " clients.</p>";
+        if ( clients[userid] && clients[userid].length > 0 ) {
+            var str = "<p>Currently connected to " + clients[userid].length + " clients.</p>";
             str = str + "<br><hr><br>";
-            for (var i=0; i < clients.length; i++) {
-                str = str + "Client #" + i + " host= " + clients[i].socket.remoteAddress + " <br>";
+            for (var i=0; i < clients[userid].length; i++) {
+                str = str + "Client #" + i + " host= " + clients[userid][i].socket.remoteAddress + " <br>";
             }
             str = str + "<br><hr><br>";
             $tc +=  str;
@@ -7430,10 +7335,14 @@ function getInfoPage(user, configoptions, hubs, req) {
 
                 var ruleid = key.substr(5);
                 var val = theoption.configval;
-                try {
-                    var lines = JSON.parse(val);
-                } catch(e) {
-                    lines = null;
+                if ( typeof val === "object" ) {
+                    var lines = val;
+                } else {
+                    try {
+                        lines = JSON.parse(decodeURI2(val));
+                    } catch(e) {
+                        lines = null;
+                    }
                 }
 
                 if ( lines && is_array(lines) ) {
@@ -7448,15 +7357,6 @@ function getInfoPage(user, configoptions, hubs, req) {
                         var customType = line[0];
                         var customValue = line[1];
                         var customSubid = line[2];
-
-                        // if ( customType==="LINK" ) {
-                        //     var linktile = array_search(customValue, GLB.options.index);
-                        //     if ( linktile && allthings[linktile] ) {
-                        //         customValue = "Link tile #" + customValue + " index= " + linktile + " name= " + allthings[linktile]["name"];
-                        //     } else {
-                        //         customValue = "Broken link #" + customValue;
-                        //     }
-                        // }
                         customList.push( [customType, ruleid, customValue, customSubid] );
                     });
                 }
@@ -7501,7 +7401,6 @@ function getInfoPage(user, configoptions, hubs, req) {
     }
 }
 
-// TODO - rewrite
 function hubFilters(userid, hubpick, hubs, useroptions, pagename, ncols) {
     // var options = GLB.options;
     // var useroptions = options["useroptions"];
@@ -7712,7 +7611,6 @@ function getSocketUrl(hostname) {
 
 function getOptionsPage(user, configoptions, hubs, req) {
 
-    // TODO - set userid and other variables
     var userid = user["users_id"];
     var useremail = user["users_email"];
     var uname = user["users_uname"];
@@ -7789,7 +7687,7 @@ function getOptionsPage(user, configoptions, hubs, req) {
         } else {
             return "error - problem with reading your existing tiles";
         }
-    }).catch(reason => {console.log("dberror 27 - ", reason);});
+    }).catch(reason => {console.log("dberror 27 - getOptionsPage - ", reason);});
 
     return pr;
 
@@ -8065,7 +7963,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
         var joinstr = mydb.getJoinStr("devices","hubid","hubs","id");
         mydb.getRows("devices","*","devices.userid = " + userid, joinstr,"hubs.hubid, devices.name")
         .then(rows => {
-            // convert array of devices to an array of objects that looks like our old allthings
+            // convert array of devices to an array of objects that looks like our old all things array
             alldevices = {};
             rows.forEach(function(dev) {
                 var devid = dev["devices_id"];
@@ -8188,12 +8086,15 @@ function getMainPage(user, configoptions, hubs, req, res) {
 
         // write the configurations without the rules
         var configs = {};
-        for (var key in configoptions) {
+
+        for (var i in configoptions) {
+            console.log("configoptions [", i, "] = ", configoptions[i] );
+            var key = configoptions[i].configkey;
             if ( !key.startsWith("user_") ) {
-                configs[key] = configoptions[key];
+                configs[key] = configoptions[i].configval;
             }
         }
-        tc += utils.hidden("configsid", encodeURI(JSON.stringify(configs)), "configsid");
+        tc += utils.hidden("configsid", JSON.stringify(configs), "configsid");
 
         // show user buttons if we are not in kiosk mode
         if ( !kioskmode ) {
@@ -8262,7 +8163,7 @@ function saveFilters(userid, body) {
 }
 
 // process username and password edits on Options page and Login page
-// TODO - update
+// TODO - update for DB
 function saveUserPw(userid, req, res, body) {
     if ( DEBUG3 ) {
         console.log( (ddbg()), "password save request: ", body, " uname: ", uname);
@@ -8667,129 +8568,31 @@ function pw_verify(pword, hash, algo) {
     return (pw_hash(pword, algo) === hash);
 }
 
-// TODO - add new custom to DB
-function addCustom(userid, deviceid, swid, swtype, customtype, customval, subid) {
-    var reserved = ["index","rooms","things","config","control","time","useroptions"];
-    var customkey = "user_" + swid;
+// TODO - test and debug
+function updCustom(userid, swid, rules) {
+    // var reserved = ["index","rooms","things","config","control","time","useroptions"];
+    var configkey = "user_" + swid;
 
+    // handle encryption
+    for (var i = 0; i < rules.length; i++) {
+        var rule = rules[i];
+        var customval = rule[1].toString();
+        var subid = rule[2];
+        if ( rule[0]==="TEXT" && subid==="password" && customval.length < 60 ) {
+            rules[i][1] = pw_hash(customval);
+        }
+    }
 
-    // legacy custom types
-    // if ( array_key_exists(swid, GLB.options) && 
-    //         !in_array (swid, reserved) && 
-    //         !array_key_exists(customkey, GLB.options) ) {
-    //     customkey = swid;
-    // }
-
-    // var oldcustoms;
-    // if ( array_key_exists(userid, GLB.options) ) {
-    //     oldcustoms = clone(GLB.options[userid]);
-    // } else {
-    //     oldcustoms = [];
-    // }
-
-    // // handle encryption
-    // customval = customval.toString();
-    // subid = subid.toString();
-    // if ( subid==="password" ) {
-    //     customval = pw_hash(customval);
-    // }
-    
-    // var newitem = [customtype, customval, subid];
-    // var newoptitem = [];
-    // var doneit = false;
-
-    // oldcustoms.forEach( function(val) {
-    //     if ( val[2].toString() === subid ) {
-    //         if ( !doneit ) {
-    //             newoptitem.push(newitem);
-    //             doneit = true;
-    //         }
-    //     } else {
-    //         newoptitem.push(val);
-    //     }
-    // });
-
-    // if ( !doneit ) {
-    //     newoptitem.push(newitem);
-    // }
-
-    // GLB.options[userid] = newoptitem;
-    // writeOptions();
-    // // writeRoomThings(options, uname);
-    // var idx = swtype + "|" + swid;
-    
-    // // make the new custom field using the updated options above
-    // var thingval = allthings[idx]["value"];
-    // thingval = getCustomTile(userid, thingval, swtype, swid);
-    // thingval = returnFile(thingval, swtype);
-
-    // save it in the main array - no need for sessions in Node
-    // allthings[idx]["value"] = thingval;
-    var thingval = null;
-    return thingval;
-}
-
-function delCustom(userid, deviceid, swid, swtype, customtype, swattr, subid) {
-    // var reserved = ["index","rooms","things","config","control","useroptions"];
-    // var userid = "user_" + swid;
-
-    // swattr = swattr.toString();
-    // subid = subid.toString();
-
-    // // legacy custom types
-    // if ( array_key_exists(swid, GLB.options) && 
-    //         !in_array (swid, reserved) && 
-    //         !array_key_exists(userid, GLB.options) ) {
-    //     userid = swid;
-    // }
-
-    // if ( array_key_exists(userid, GLB.options) ) {
-
-    //     var oldlines = clone(GLB.options[userid]);
-    //     if ( ! is_array(oldlines[0]) ) {
-    //         oldlines = [oldlines];
-    //     }
-
-    //     // make new list of customs without the deleted item
-    //     var lines = [];
-    //     oldlines.forEach( function(newitem) {
-    //         if ( newitem[2].toString() !== subid ) {
-    //             lines.push(newitem);
-    //         }
-    //     });
-
-    //     // either remove or update the main options array
-    //     if ( lines.length === 0 ) {
-    //         delete GLB.options[userid];
-    //     } else {
-    //         GLB.options[userid] = lines;
-    //     }
-    //     writeOptions();
-    //     // writeRoomThings(GLB.options, uname);
-    // }
-    
-    // var idx = swtype + "|" + swid;
-    // var companion = "user_" + subid;
-    // var thingval = allthings[idx]["value"];
-    
-    // // remove this field and any companion if it exists
-    // delete thingval[subid];
-    // if ( array_key_exists(companion, thingval) ) {
-    //     delete thingval[companion];
-    // }
-
-    // // save here before calling because these routines use this array
-    // allthings[idx]["value"] = thingval;
-
-    // // make the new custom field using the updated options above
-    // // thingval = returnFile(thingval, swtype);
-    // thingval = getCustomTile(thingval, swtype, swid);
-    // thingval = returnFile(thingval, swtype);
-   
-    // // save it in the main array - no need for sessions in Node
-    // allthings[idx]["value"] = thingval;
-    var thingval = null;
-    return thingval;
+    var rulejson = JSON.stringify(rules);
+    var rulerow = {userid: userid, configkey: configkey, configval: rulejson};
+    return mydb.updateRow("configs", rulerow, "userid = "+userid+" AND configkey = '"+configkey+"'")
+    .then(result => {
+        if ( result ) {
+            return rules;
+        } else {
+            return null;
+        }
+    });
 }
 
 function apiCall(user, configoptions, body, protocol, req, res) { 
@@ -8813,7 +8616,6 @@ function apiCall(user, configoptions, body, protocol, req, res) {
 
     // for POST we get vital info from GUI
     // if user is making an API call these must be provided
-    // TODO - remove use of uname and replace with userid everywhere
     if ( protocol==="POST" ) {
         var userid = body.userid;
         var usertype = body.usertype || 1;
@@ -8821,12 +8623,17 @@ function apiCall(user, configoptions, body, protocol, req, res) {
         var pname = body.pname;
         var skin = body.skin;
         try {
-            configoptions = body.config;
+            if ( body.rule ) {
+                var rules = JSON.parse(decodeURI(body.rules));
+                console.log("POST rules: ", rules);
+            } else {
+                rules = null;
+            }
         } catch(e) {
-            configoptions = {};
+            rules = null;
         }
 
-    } else if ( user && typeof user === "object" && configoptions && typeof configoptions === "object" ) {
+    } else if ( user && typeof user === "object" ) {
         userid = user["users_id"];
         usertype = user["users_usertype"];
         panelid = user["panels_id"];
@@ -8903,8 +8710,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
             case "status":
             case "dostatus":
                 // var activehubs = GLB.options.config ? utils.count(GLB.options.config.hubs) : 0;
-                // var thingcount = utils.count(allthings);
-                result = {state: "active", clients: clients.length, userid:userid, userid: userid, pname: pname, config: configoptions};
+                result = {state: "active", userid: userid, pname: pname, config: configoptions};
                 break;
 
             // changed to only handle page fake tile requests
@@ -8915,14 +8721,23 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                     var faketile = {"panel": "panel", "name": swval, "tab": "Tab Inactive", "tabon": "Tab Selected"};
                     var thesensor = { "id": "r_" + swid, "name": swval, thingid: 0, roomid: roomid, 
                                       "hubnum": "-1", "type": "page", "value": faketile};
-                    result = makeThing(userid, configoptions, 0, tileid, thesensor, "wysiwyg", 0, 0, 500, "", "te_wysiwyg", null);
+                    result = makeThing(userid, null, 0, tileid, thesensor, "wysiwyg", 0, 0, 500, "", "te_wysiwyg", null);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
                 break;
 
             case "wysiwyg":
-                result = "error - api call [" + api + "] is no longer supported.";
+                // var rulelines = JSON.parse(decodeURI(body.rules));
+                var device = JSON.parse(decodeURI(body.value));
+                
+                var thesensor = {id: swid, name: device.name, thingid: thingid, roomid: 0, type: device.devicetype, hubnum: "-1", hubtype: "None", 
+                                 hint: device.hint, refresh: device.refresh, value: device.pvalue};
+                var customname = swattr;
+                // $tc += makeThing(userid, configoptions, cnt, tileid, thesensor, roomname, postop, posleft, zindex, customname, false, alldevices);
+                result = makeThing(userid, null, 0, tileid, thesensor, "wysiwyg", 0, 0, 999, customname, "te_wysiwyg", null);
+                // console.log(">>>> wysiwyg: tileid: ", tileid, " post: ", jsonshow(body) );
+                // result = "error - api call [" + api + "] is no longer supported.";
                 break;
 
             case "setorder":
@@ -8947,7 +8762,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                 if ( protocol==="POST" ) {
                     var rname = swval;
                     var startpos = swattr;
-                    result = addThing(userid, swid, swtype, rname, hubid, hubindex, roomid, startpos, configoptions);
+                    result = addThing(userid, swid, swtype, rname, hubid, hubindex, roomid, startpos);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -8995,35 +8810,66 @@ function apiCall(user, configoptions, body, protocol, req, res) {
             case "refreshpage":
                 if ( protocol==="POST" ) {
                     getAllThings(null, false, false);
-                    pushClient("reload", "main", "/");
+                    pushClient(userid, "reload", "main", "/");
                     result = "success";
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
                 break;
             
-            case "options":
+            // this returns all user customizations
             case "getoptions":
-                result = configoptions;
+                result = mydb.getRows("configs","*","userid = "+userid+" AND configkey LIKE 'user_%'")
+                .then(rows => {
+                    var rulelist = {};
+                    if ( rows ) {
+                        rows.forEach(row => {
+                            if ( row.configkey !== "useroptions" ) {
+                                rulelist[row.configkey] = JSON.parse(row.configval);
+                            }
+                        });
+                    }
+                    if ( DEBUG2 ) {
+                        console.log( (ddbg()),"rules list for user: ", userid," list: ", jsonshow(rulelist) );
+                    }
+                    return rulelist;
+                });
+                break;
+            
+            // this returns just the rules list for a specific user and device swid
+            case "getrules":
+                var configkey = "user_" + swid;
+                result = mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
+                .then(row => {
+                    var rulelist = [[]];
+                    if ( row ) {
+                        rulelist = JSON.parse(row.configval);
+                        if ( DEBUG2 || DEBUGtmp ) {
+                            console.log( (ddbg()),"rule list for user: ", userid," swid: ", swid, " rules: ", jsonshow(rulelist) );
+                        }
+                    }
+                    return rulelist;
+                });
                 break;
 
-            // TODO - fix sort to work with DB
-            case "sortupdate":
+            // read and return devoces tied to this user
+            case "getdevices":
                 if ( protocol==="POST" ) {
-                    result = "not yet implemented";
-
-                    // var idx = swtype + "|" + swid;
-                    // var uid = swattr;
-                    // if ( uid && array_key_exists(uid, GLB.options) && swval && is_array(swval) ) {
-                    //     GLB.options[uid] = swval;
-                    //     allthings[idx]["value"] = getCustomTile(userid, allthings[idx]["value"], swtype, swid);
-                    //     writeOptions();
-                    //     // writeRoomThings(GLB.options, uname);
-                    //     result = allthings[idx]["value"];
-                    // } else {
-                        // result = "error - invalid request to update user Options";
-                    // }
-
+                    var conditions = "userid = "+userid;
+                    result = mydb.getRows("devices","*", conditions)
+                    .then(rows => {
+                        if ( DEBUG2 ) {
+                            console.log( (ddbg()), "getdevices: ", rows);
+                        }
+                        var devices = {};
+                        if ( rows ) {
+                            rows.forEach(row => {
+                                row.pvalue = JSON.parse(decodeURI2(row.pvalue));
+                                devices[row.id] = row;
+                            });
+                        }
+                        return devices;
+                    }).catch(reason => {console.log("dberror 28a - apiCall - ", reason);});
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -9032,16 +8878,19 @@ function apiCall(user, configoptions, body, protocol, req, res) {
             // read things tied to this user and panel
             case "getallthings":
             case "getthings":
-            case "things":
-                var joinstr1 = mydb.getJoinStr("things","tileid","devices","id");
-                var joinstr2 = mydb.getJoinStr("things","roomid","rooms","id");
-                var joinstr3 = mydb.getJoinStr("devices","hubid","hubs","id");
-                var conditions = "things.userid = "+userid+" AND rooms.panelid = "+panelid;
-                result = mydb.getRows("things","*", conditions, [joinstr1, joinstr2, joinstr3])
-                .then(things => {
-                    console.log( (ddbg()), "getallthings: ", things);
-                    return things;
-                }).catch(reason => {console.log("dberror 28 - ", reason);});
+                if ( protocol==="POST" ) {
+                    var joinstr1 = mydb.getJoinStr("things","tileid","devices","id");
+                    var joinstr2 = mydb.getJoinStr("things","roomid","rooms","id");
+                    var joinstr3 = mydb.getJoinStr("devices","hubid","hubs","id");
+                    var conditions = "things.userid = "+userid+" AND rooms.panelid = "+panelid;
+                    result = mydb.getRows("things","*", conditions, [joinstr1, joinstr2, joinstr3])
+                    .then(things => {
+                        console.log( (ddbg()), "getallthings: ", things);
+                        return things;
+                    }).catch(reason => {console.log("dberror 28b - apiCall - ", reason);});
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
                 break;
                     
             case "hubs":
@@ -9050,7 +8899,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                 .then(hubs => {
                     console.log( (ddbg()), "hubs: ", hubs);
                     return hubs;
-                }).catch(reason => {console.log("dberror 29 - ", reason);});
+                }).catch(reason => {console.log("dberror 29 - apiCall - ", reason);});
                 break;
 
             case "filteroptions":
@@ -9144,22 +8993,10 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                 break;
 
             case "addcustom":
-                if ( protocol==="POST" ) {
-                    result = {}
-                    result.value = addCustom(userid, thingid, swid, swtype, swval, swattr, subid);
-                    result.options = GLB.options;
-                    result.things = allthings;
-                } else {
-                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-                }
-                break;
-
             case "delcustom":
                 if ( protocol==="POST" ) {
-                    result = {}
-                    result.value = delCustom(userid, thingid, swid, swtype, swval, swattr, subid);
-                    result.options = GLB.options;
-                    result.things = allthings;
+                    var rules = JSON.parse(decodeURI(body.rules));
+                    result = updCustom(userid, swid, rules);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -9311,7 +9148,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                             }
                         }
 
-                    }).catch(reason => {console.log("dberror 30 - ", reason);});
+                    }).catch(reason => {console.log("dberror 30 - apiCall - ", reason);});
                     
                     var hubName = hub["hubname"];
                     var hubType = hub["hubtype"];
@@ -9382,7 +9219,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                         } else {
                             msg = "error - could not remove hub with ID = " + hubid;
                         }
-                        pushClient("pagemsg", "auth", "#newthingcount", msg );
+                        pushClient(userid, "pagemsg", "auth", "#newthingcount", msg );
                         console.log( (ddbg()), msg);
                         return msg;
                     })
@@ -9400,14 +9237,6 @@ function apiCall(user, configoptions, body, protocol, req, res) {
             case "getclock":
                 // if ( !swid || swid==="none" ) { swid = "clockdigital"; }
                 result = getClock(swid);
-                // result = getCustomTile(userid, configoptions, result, "clock", swid);
-
-                // TODO - obtain clock id from DB and use to update and process rules
-                // process rules
-                // result.subid = "time";
-                // processRules(swid, "clock", "time", result, "getclock");
-                // delete result.subid;
-
                 break;
 
             case "cancelauth":
@@ -9421,7 +9250,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                     break;
 
             case "reload":
-                pushClient("reload", "main", "/");
+                pushClient(userid, "reload", "main", "/");
                 break;
 
             default:
@@ -9446,7 +9275,9 @@ function setupBrowserSocket() {
         var credentials = {key: key, cert: crt, ca: cabundle};
         var server = https.createServer(credentials, function() {});
     } else {
-        server = http.createServer(function() {});
+        server = http.createServer(function(req, res) {
+            console.log( (ddbg()), " received request for: ", req.url);
+        });
     }
 
     // set up server for a two way socket communication with the browser
@@ -9467,32 +9298,47 @@ function setupBrowserSocket() {
             wsrequest.accept(null, wsrequest.origin); 
         });
 
-        wsServer.on('message', function(wsrequest) {
-            console.log( (ddbg()), 'websocket msg data: ', wsrequest.data );
-        });
+        // wsServer.on('message', function(wsrequest) {
+        //     console.log( (ddbg()), 'websocket msg data: ', wsrequest.data );
+        // });
 
         wsServer.on('connect', function(connection) {
+            var userid = 0;
+            var browserurl = "";
+
             console.log( (ddbg()), 'Connecting websocket. Address: ', connection.socket.remoteAddress );   // connection.remoteAddresses,
             // console.log( (ddbg()), 'Connection details: ', connection );   // connection.remoteAddresses,
 
             // shut down any existing connections to same remote host
-            var host = connection.socket.remoteAddress;
-            var i = 0;
-            while ( i < clients.length ) {
-                var oldhost = clients[i].socket.remoteAddress;
-                if ( oldhost===host ) {
-                    clients.splice(i, 1);
-                } else {
-                    i++;
+            browserurl = connection.socket.remoteAddress;
+
+            // wait for message from browser telling us what user id this is
+            connection.on("message", function(msg) {
+                if ( msg.type==="utf8" ) {
+                    userid = parseInt(msg.utf8Data);
+                    console.log(">>>> browserurl: ", browserurl, " userid: ", userid);
                 }
-            }
 
-            // report index of the connection
-            // we no longer rely on this to close prior connections
-            // instead we just shut down any that match
-            var index = clients.push(connection) - 1;
-            console.log( (ddbg()), 'Connection accepted. Client #' + index, " host: ", host, " Client count: ", clients.length);
-
+                // create this user's list of pages if not there
+                if ( !clients[userid] ) {
+                    clients[userid] = [];
+                }
+                
+                // now that we know the userid and the URL of the browser, register this client
+                var i = 0;
+                while ( i < clients[userid].length ) {
+                    var oldhost = clients[userid][i].socket.remoteAddress;
+                    if ( oldhost===browserurl ) {
+                        clients[userid].splice(i, 1);
+                    } else {
+                        i++;
+                    }
+                }
+                var index = clients[userid].push(connection) - 1;
+                console.log( (ddbg()), 'Connection accepted. Client #' + index, " host: ", browserurl, " userid: ", userid, " # Clients: ", clients[userid].length);
+    
+            });
+        
             // user disconnected - remove all clients that match this socket
             connection.on('close', function(reason, description) {
                 var host = connection.socket.remoteAddress;
@@ -9501,10 +9347,10 @@ function setupBrowserSocket() {
                 // remove clients that match this host
                 // clients.splice(indexsave, 1);
                 var i = 0;
-                while ( i < clients.length ) {
-                    var oldhost = clients[i].socket.remoteAddress;
+                while ( i < clients[userid].length ) {
+                    var oldhost = clients[userid][i].socket.remoteAddress;
                     if ( oldhost===host ) {
-                        clients.splice(i, 1);
+                        clients[userid].splice(i, 1);
                     } else {
                         i++;
                     }
@@ -9608,7 +9454,7 @@ try {
     app.use(express.static(dir));
     app.use(cookieParser());
 
-    if ( fs.existsSync("__housepanel_server.key") && fs.existsSync("__housepanel_server.crt") && fs.existsSync("__housepanel_server.ca") ) {
+    if ( fs.existsSync("housepanel_server.key") && fs.existsSync("housepanel_server.crt") && fs.existsSync("housepanel_server.ca") ) {
         try {
             var key = fs.readFileSync("housepanel_server.key");
             var crt = fs.readFileSync("housepanel_server.crt");
@@ -9687,7 +9533,7 @@ if ( app && applistening ) {
         //     setCookie(res, "uname", uhash);
         //     setCookie(res, "pname", phash);
 
-        //     pushClient("reload","all","/");
+        //     pushClient(userid, "reload","all","/");
         // }
 
         // everything starts with finding the username which drives which rows we read from the DB
@@ -9696,7 +9542,7 @@ if ( app && applistening ) {
 
             
             if ( !results || !results["users_id"] ) {
-                if ( DEBUG15 ) {
+                if ( DEBUG3 ) {
                     console.log( (ddbg()), "login rejected.");
                 }
 
@@ -9750,7 +9596,7 @@ if ( app && applistening ) {
                         // display the main page if user is in our database
                         // don't check password here because it is checked at login
                         // and the cookie is set which means all is okay
-                        if ( DEBUG15 ) {
+                        if ( DEBUG3 ) {
                             console.log( (ddbg()), "login accepted. user: ", user);
                         }
 
@@ -9796,21 +9642,20 @@ if ( app && applistening ) {
                         res.end();
 
                     } else if ( req.path==="/reauth" ) {
-                        getAuthPage(user, req.headers.host, "/reauth", "")
+                        getAuthPage(user, configoptions, req.headers.host, "/reauth", "")
                         .then(result => {
                             res.send(result);
                             res.end();
                         });
 
                     } else if ( req.path==="/userauth") {
-                        getAuthPage(user, req.headers.host, "/reauth", "")
+                        getAuthPage(user, configoptions, req.headers.host, "/reauth", "")
                         .then(result => {
                             res.send(result);
                             res.end();
                         });
 
                     // this is where the oauth flow returns from the first auth step
-                    // TODO - wire up user default hub
                     } else if ( req.path==="/oauth") {
                         if ( req.query && req.query["code"] ) {
                             var hubid = user["users_defhub"];
@@ -9828,7 +9673,7 @@ if ( app && applistening ) {
                                     // get access_token, endpt, and retrieve devices
                                     // this goes through a series of callbacks
                                     // and ends with a pushClient to update the auth page
-                                    getAccessToken(req.query["code"], hub);
+                                    getAccessToken(userid, req.query["code"], hub);
                                     return row;
                                 } else {
                                     console.log( (ddbg()), "error - hub not found during authorization flow. hubid: ", hubid);
@@ -9836,7 +9681,7 @@ if ( app && applistening ) {
                             });
                         }
 
-                        getAuthPage(user, req.headers.host, "/reauth", "working...")
+                        getAuthPage(user, configoptions, req.headers.host, "/reauth", "working...")
                         .then(result => {
                             res.send(result);
                             res.end();
@@ -9867,7 +9712,7 @@ if ( app && applistening ) {
 
             }
 
-        }).catch(reason => {console.log("dberror 31 - ", reason);});
+        }).catch(reason => {console.log("dberror 31 - app.get - ", reason);});
 
 
     });
@@ -9902,7 +9747,7 @@ if ( app && applistening ) {
                 mydb.getRow("hubs","*","hubid = " + hubid)
                 .then(hub => {
                     getDevices(hub, true, "/");
-                }).catch(reason => {console.log("dberror 32 - ", reason);});
+                }).catch(reason => {console.log("dberror 32 - app.post - msg initialize - ", reason);});
                 if ( DEBUG2 ) {
                     console.log( (ddbg()), "New hub authorized: ", hubid);
                 }
@@ -9925,7 +9770,7 @@ if ( app && applistening ) {
                     }
                     res.json("processed msg");
                     res.end();
-                }).catch(reason => {console.log("dberror 33 - ", reason);});
+                }).catch(reason => {console.log("dberror 33 - app.post - msg update - ", reason);});
             }
 
         // handle all api calls upon the server from js client and external api calls here
@@ -9959,10 +9804,11 @@ if ( app && applistening ) {
                 if ( event.eventType==="DEVICE_EVENT" && event.deviceEvent.stateChange ) {
 
                     hubid = subscription.installedAppId;
+                    console.log(">>>> hubid from ST msg: ", hubid);
 
                     // var hub = findHub(hubId);
                     // get hub and user from the DB
-                    mydb.getRow("hubs","*","hubid = '" + hubId + "'")
+                    mydb.getRow("hubs","*","hubid = '" + hubid + "'")
                     .then(hub => {
                         if ( hub ) {
                             var userid = hub.userid;
@@ -9970,7 +9816,7 @@ if ( app && applistening ) {
                             var attr = event.deviceEvent.attribute;
                             var msg = {
                                 msgtype: "update", 
-                                hubid: hubId,
+                                hubid: hubid,
                                 change_name: "",
                                 change_device: swid,
                                 change_attribute: attr,
@@ -9985,7 +9831,7 @@ if ( app && applistening ) {
                                 " filterNames: ", subscription.sinkFilterNames);
                             }
                         }
-                    }).catch(reason => {console.log("dberror 34 - ", reason);});        
+                    }).catch(reason => {console.log("dberror 34 - app.post newST /sink - ", reason);});        
                 }
             });
             

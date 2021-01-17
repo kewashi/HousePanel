@@ -1,54 +1,30 @@
-
+var mysqlx = require('mysql');
 exports.sqlDatabase = class sqlDatabase {
     
     constructor(dbhost, dbname, dbuid, dbpassword) {        
-        this.mysqlx = require('@mysql/xdevapi');
         this.insertId = 0;
         this.impacted = 0;
-        this.tablenames;
-        this.session;
-        this.recentResults = null;
+        this.recentResults;
         this.error;
+        // var hpcrt = fs.readFileSync(__dirname + 'rootCA.crt');
 
         this.config = {
             host: dbhost,
-            port: 33060,
-            schema: dbname,
             user: dbuid,
-            password: dbpassword
+            password: dbpassword,
+            database: dbname
         };
+        // console.log(">>>> db info - startup: ", dbhost, dbname, dbuid, dbpassword);
 
-        // save the table names for later use
-        // this takes some time so you can't use it right away
-        var that = this;
-        this.getSession()
-            .then(session => {
-                // console.log( session.inspect() );
-                return session.getSchema(dbname);
-            })
-            .then(schema => {
-                return schema.getTables();
-            })
-            .then(tables => {
-                that.tablenames = [];
-                tables.forEach( function(atable) {
-                    that.tablenames.push(atable.getName());
-                });
-                return tables;
-            })
-            .catch(results => {
-                return [];
-            });
-    }
-
-    async getSession() {
-        if ( !this.session ) {
-            var mysession = await this.mysqlx.getSession(this.config);
-            this.session = mysession;
+        try {
+            this.connection = mysqlx.createConnection(this.config);
+            this.connection.connect();
+        } catch (e) {
+            console.log("db connect error: ", e);
         }
-        return this.session;
+        // console.log(">>>> db info - config: ", this.config);
     }
-    
+
     getId() {
         return this.insertId;
     }
@@ -57,13 +33,12 @@ exports.sqlDatabase = class sqlDatabase {
         return this.impacted;
     }
 
-    isTable(atable) {
-        var isvalid = (this.tablenames.indexOf(atable) !== -1);
-        return isvalid;
-    }
-
     getResults() {
         return this.recentResults;
+    }
+
+    getError() {
+        return this.error;
     }
 
     die(msg) {
@@ -90,48 +65,25 @@ exports.sqlDatabase = class sqlDatabase {
         return jstr;
     }
 
-    getTable(usertable) {
-        this.error = null;
-        var pr = this.getSession()
-        .then(session => {
-            var table = getSession().getTable(usertable);
-            return table;
-        })
-        .catch(reason => {
-            this.warn(reason);
-            return null;
-        });
-        return pr;
-    }
-    
-    addRow(usertable, values, skipsubmit) {
-        this.error = null;
+    addRow(usertable, values) {
         if ( !usertable ) {
             this.die("No table specified in call to addRow");
             return null;
         }
-
         var keystring = "";
         var valstring = "";
         for (var fieldkey in values) {
+            var fieldvalue = values[fieldkey];
+            fieldkey= "`" + fieldkey.toString() + "`";
+            fieldvalue ="'" + fieldvalue + "'";
 
-            // build in skip for submit button as the default behavior
-            // this allows a POST to be sent to this function directly
-            if ( !skipsubmit || fieldkey.toLowerCase() !== "submit" ) {
-
-                var fieldvalue = values[fieldkey];
-                fieldkey= "`" + fieldkey.toString() + "`";
-                fieldvalue ="'" + fieldvalue + "'";
-    
-                if ( keystring==="" ) {
-                    keystring = fieldkey;
-                    valstring = fieldvalue;
-                } else {
-                    keystring += ", " + fieldkey;
-                    valstring += ", " + fieldvalue;
-                }
+            if ( keystring==="" ) {
+                keystring = fieldkey;
+                valstring = fieldvalue;
+            } else {
+                keystring += ", " + fieldkey;
+                valstring += ", " + fieldvalue;
             }
-
         }
         var str = "INSERT INTO " + usertable + " ( " + keystring + ") VALUES ( " + valstring + " )";
         return this.query(str);
@@ -141,7 +93,6 @@ exports.sqlDatabase = class sqlDatabase {
     // it first tries to update. If it fails then conditions are ignored and an attempt to add values
     // will be made as a new row. This will only succeed if all required fields are provided
     updateRow(usertable, values, conditions, joins) {
-        this.error = null;
         if ( !usertable ) {
             this.die("No table specified in call to updateRow");
             return null;
@@ -186,19 +137,7 @@ exports.sqlDatabase = class sqlDatabase {
         if ( conditions ) {
             str += " WHERE " + conditions;
         }
-        
-        // console.log(" ^^^^ updateRow debug: ", str);
-        var results = this.query(str)
-        .then(qres => {
-            // if failed, try adding a new row which will only work if all required fields are given
-            if ( qres && qres.getAffectedItemsCount() === 0 ) {
-                var str = "INSERT INTO " + usertable + " ( " + keystring + ") VALUES ( " + valstring + " )";
-                return this.query(str);
-            } else {
-                return qres;
-            }
-        });
-        return results;
+        return this.query(str)
     }
     
     deleteRow(usertable, conditions, joins) {
@@ -274,115 +213,79 @@ exports.sqlDatabase = class sqlDatabase {
             str += " ORDER BY " + orderby; 
         }
 
-        // turns the results into a json object with the column names attached
-        // if the query involved a join, the table names are prepended
-        function makeobj(cols, row) {
-            if ( row ) {
-                var rowobj = {};
-                for (var i=0; i<cols.length; i++) {
-                    var colname = cols[i].getColumnLabel();
-                    if ( isjoined ) {
-                        colname = cols[i].getTableLabel() + "_" + colname;
-                    }
-                    rowobj[colname] = row[i];
-                }
-            } else {
-                rowobj = null;
-            }
-            return rowobj;
+        var options = {sql: str};
+        if ( joins ) {
+            options.nestTables = "_";
         }
-        
-        var pr = this.getSession()
-        .then(session => {
-            return session.sql(str).execute()
-            .then( result => {
-                var columns = result.getColumns();
-                if ( firstrow===true ) {
-                    var rows = result.fetchOne();
-                    var rowobjs = makeobj(columns, rows);
-                } else {
-                    rows = result.fetchAll();
-                    rowobjs = [];
-                    rows.forEach(function(row) {
-                        var obj = makeobj(columns, row);
-                        rowobjs.push(obj);
-                    });
-                }
-                this.recentResults = rowobjs;
-                if ( callback ) {
-                    callback(rows);
-                }
-                return rowobjs;
-            })
-            .catch(reason => {
-                this.warn(reason);
-                return null;
-            })
-        });
+        var rowobjs;
+        var that = this;
 
-        // return the promise
-        return pr;
+        // create a custom promise that mimicks how the X lib works
+        var promise = new Promise(function(resolve, reject) {
+            that.connection.query(options, function(err, result, columns) {
+                
+                if ( err ) {
+                    that.error = err;
+                    if ( typeof reject === "function" ) {
+                        reject(err);
+                    }
+                } else {
+
+                    if ( typeof result !== "object" ) {
+                        rowobjs = null;
+                    } else if ( firstrow===true ) {
+                        rowobjs = result[0];
+                    } else {
+                        rowobjs = result;
+                    }
+                    // console.log(">>>> rowobjs: ", rowobjs);
+                    that.recentResults = rowobjs;
+                    resolve(rowobjs);
+                }
+
+                if ( callback ) {
+                    callback(rowobjs);
+                }
+
+            });
+        });
+        return promise;
     }
 
     getRow(usertable, fields, conditions, joins, orderby, callback) {
         return this.getRows(usertable, fields, conditions, joins, orderby, true, callback);
     }
 
-    getFields(usertable, callback) {
-        this.error = null;
-        if ( !usertable ) {
-            this.die("No table specified in call to getFields");
-            return null;
-        }
-
-        var keys;
-        var str = "SELECT * FROM " + usertable + " LIMIT 1";
-        var pr = this.getSession()
-        .then(session => {
-            return session.sql(str).execute()
-            .then( result => {
-                keys = result.getColumns()
-                var cols = [];
-                if ( keys ) {
-                    keys.forEach(function(acol) {
-                        cols.push(acol.getColumnName());
-                    });
-                }
-                if ( callback ) {
-                    callback(cols);
-                }
-                return cols;
-            });
-        })
-        .catch(reason => {
-            this.warn(reason);
-            return null;
-        });
-        return pr;
-    }
-
     // generic user-defined query
     query(str, callback) {
         this.error = null;
-        var pr = this.getSession()
-        .then(session => {
-            return session.sql(str).execute()
-            .then(sqlresult => {
-                this.insertId = sqlresult.getAutoIncrementValue();
-                this.impacted = sqlresult.getAffectedItemsCount();
+        var that = this;
+
+        var promise = new Promise(function(resolve, reject) {
+
+            that.connection.query(str, function(err, sqlresult, fields) {
+                if ( err ) {
+                    sqlresult = null;
+                    that.error = err;
+                    if ( typeof reject === "function" ) {
+                        reject(err);
+                    }
+                } else {
+                    that.insertId = sqlresult.insertId;
+                    that.impacted = sqlresult.affectedRows;
+                    resolve(sqlresult);
+                }
+
                 if ( callback ) {
                     callback(sqlresult);
                 }
-                // console.log(" >>>> query result: ", sqlresult, " impacted: ", this.impacted);
-                return sqlresult;
-            })
-            .catch(reason => {
-                this.warn(reason);
-                return null;
             });
-    
         });
-        return pr;
+        return promise;
+    }
+
+    catch(err) {
+
     }
 
 }
