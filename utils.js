@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.416   minor tweak to ISY hub to show all status values for programs
 2.415   bugfix that caused RULE engine to make spurious fixed values
 2.414   quick fix to prior update to resolve regular rules issue
 2.413   updated rules to enable invoking GET and POST from other triggers
