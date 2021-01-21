@@ -116,13 +116,13 @@ preferences {
         input (name: "timezone", type: "text", multiple: false, title: "Timezone Name:", required: false, defaultValue: "America/Detroit")
         input (name: "dateformat", type: "text", multiple: false, title: "Date Format:", required: false, defaultValue: "M/dd h:mm")
         paragraph "Specify these parameters to enable your panel to stay in sync with things when they change in your home."
-        input "webSocketHost", "text", title: "Host IP", defaultValue: "192.168.11.32", required: false
+        input "webSocketHost", "text", title: "Host IP", defaultValue: "192.168.11.20", required: false
         input "webSocketPort", "text", title: "Port", defaultValue: "3080", required: false
         paragraph "The Alt Host IP and Port values are used to send hub pushes to two distinct installations of HousePanel. " +
                   "If left blank a secondary hub push will not occur. Only use this if you are hosting two versions of HP " +
                   "that both need to stay in sync with your smart home hubs."
-        input "webSocketHost2", "text", title: "Alt Host IP", defaultValue: "192.168.11.20", required: false
-        input "webSocketPort2", "text", title: "Alt Port", defaultValue: "3180", required: false
+        input "webSocketHost2", "text", title: "Alt Host IP", defaultValue: "", required: false
+        input "webSocketPort2", "text", title: "Alt Port", defaultValue: "3280", required: false
         input (
             name: "configLogLevel",
             title: "IDE Live Logging Level:\nMessages with this level and higher will be logged to the IDE.",
