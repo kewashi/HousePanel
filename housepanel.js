@@ -187,7 +187,7 @@ function getOptions(dosetup) {
                     cm_Globals.options.rules = presult;
 
                     var indexkeys = Object.keys(presult);
-                    console.log("getOptions returned: " + indexkeys.length + " configuration rules/links");
+                    console.log("getOptions returned: " + indexkeys.length + " configuration rules/links", presult);
                 } else {
                     console.log("error - failure reading config options from database for user = " + userid);
                 }
@@ -228,7 +228,7 @@ $(document).ready(function() {
         }
     } catch(e) {
         console.log("***Warning*** ", e);
-        cm_Globals.returnURL = "http://localhost:3080";
+        cm_Globals.returnURL = "https://housepanel.net:3080";
     }
 
     try {
@@ -466,7 +466,7 @@ function setupWebsocket(userid, webSocketUrl) {
 
     try {
         console.log("Creating webSocket for: ", webSocketUrl);
-        wsSocket = new WebSocket(webSocketUrl);
+        wsSocket = new WebSocket(webSocketUrl, "housepanel");
     } catch(err) {
         console.log("Error attempting to create webSocket for: ", webSocketUrl," error: ", err);
         return;
@@ -486,6 +486,7 @@ function setupWebsocket(userid, webSocketUrl) {
     };
     
     wsSocket.onerror = function(evt) {
+        console.log(">>>> webSocketUrl: ", webSocketUrl);
         console.error("webSocket error: ", evt);
     };
     
@@ -1555,7 +1556,7 @@ function dynoPost(ajaxcall, body, callback) {
             }
         }
     } else {
-        body = {api: ajaxcall, id: "none", type: "none"};
+        body = {api: ajaxcall, userid: cm_Globals.options.userid, id: "none", type: "none"};
     }
 
     if ( callback && typeof callback==="function" ) {
@@ -3131,11 +3132,10 @@ function processClick(that, thingname) {
         targetid = '#a-'+aid+'-'+subid;
     }
 
-    // get the username for this click since it is easier than processing the cookie
-    // cookies will be used as a fallback just in case
-    var ujq = $("#infoname");
-    var uname = ujq ? ujq.text() : "";
-    // alert("uname = " + uname);
+    // set attr to name for ISY hubs
+    if ( thetype === "isy" ) {
+        theattr = $("#a-"+aid+"-name").html();
+    }
 
     // all hubs now use the same doaction call name
     var ajaxcall = "doaction";
@@ -3148,39 +3148,39 @@ function processClick(that, thingname) {
         thevalue = $("#a-"+aid+"-temperature").html();
     }
 
-    // handle linked tiles by looking for sibling
-    // there is only one sibling for each of the music controls
-    // check for companion sibling element for handling customizations
-    // includes easy references for a URL or TEXT link
-    // using jQuery sibling feature and check for valid http string
-    // if found then switch the type to the linked type for calls
-    // and grab the proper hub number
-    var usertile = $(that).siblings(".user_hidden");
-    var userval = "";
+    // determine if this is a LINK or RULE by presence of ::
+    // new logic based on DB version
+    var jcolon = thevalue.indexOf("::");
+    if ( jcolon>0 && ( thevalue.startsWith("GET") || thevalue.startsWith("POST") || 
+                       thevalue.startsWith("PUT") || thevalue.startsWith("LINK") || 
+                       thevalue.startsWith("RULE") ) )
+    {
+        command = thevalue.substr(0, jcolon);
+        linkval = thevalue.substr(jcolon+2);
+    }
     
-    if ( usertile && usertile.length>0 && $(usertile).attr("command") ) {
-        command = $(usertile).attr("command");    // command type
-        linkval = $(usertile).attr("linkval");    // urlencooded val
-        linktype = $(usertile).attr("linktype");  // type of tile linked to
+    if ( command === "URL" ) {
+        var userkey = "user_" + bid;
+        for (var key in cm_Globals.options.rules ) {
 
-        // handle redirects to a user provided web page
-        // remove the http requirement to support Android stuff
-        // this places extra burden on users to avoid doing stupid stuff
-        if ( command==="URL" ) {
-            var userval = $(usertile).attr("linkval");      // raw user provided val
-            try {
-                if ( !userval ) {
-                    throw "URL value is empty";
-                }
-                window.open(userval,'_blank');
-            } catch(e) {
-                console.log("user provided URL failed to open: ", e);
+            if ( key === userkey ) {
+                var rules = cm_Globals.options.rules[key];
+                rules.forEach(rule => {
+                    if ( rule[0]==="URL" && rule[2]===subid ) {
+                        var userval = rule[1];
+                        try {
+                            if ( !userval || !userval.startsWith("http") ) {
+                                throw "URL value is empty";
+                            }
+                            window.open(userval,'_blank');
+                        } catch(e) {
+                            console.log("user provided URL failed to open: ", e);
+                        }
+                    }
+
+                });
             }
-            return;
         }
-
-        // all the other command types are handled on the server side
-        // this is enabled by the settings above for command, linkval, and linktype
     }
 
     // no longer treat TEXT custom fields as passive since they could be relabeling of action fields which is fine
@@ -3251,17 +3251,10 @@ function processClick(that, thingname) {
             var thingid = $(tile).attr("thingid");
             var tileid = $(tile).attr("tile");
             var roomid = $("#panel-"+panel).attr("roomid");
-                    
+            // var command = "";
+            // var linkval = "";
             var val = thevalue;
 
-            var sib = $(this).siblings("div.user_hidden");
-            if ( sib && sib.length > 0 ) {
-                command = sib.attr("command");
-                linkval = sib.attr("linkval");
-            } else {
-                command = "";
-                linkval = "";
-            }
             // force use of command mode by setting attr to blank
             theattr = "";  // $(this).attr("class");
 
@@ -3291,55 +3284,6 @@ function processClick(that, thingname) {
         // console.log("Refreshing tile of passive clicked on element: ", subid, " tile type: ", thetype);
         $(targetid).html(thevalue);
 
-        // open all images that are graphics files in a new window
-        // var sibimage = $('#a-'+aid+'-_media_');
-        // if ( sibimage && sibimage.html() ) {
-        //     window.open(sibimage.html(), "_blank");
-        //     return;
-        // }
-        
-        // emulate refresh for show popup window for blanks and customs
-        // no longer do this - will later implement a rule API function
-        // TODO - implement passive click API function
-        // $.post(cm_Globals.returnURL, 
-        //     {useajax: "passiveclick", userid: cm_Globals.options.userid, id: bid, type: thetype, value: thevalue, uname: uname, 
-        //      attr: theattr, subid: subid, hubid: hubid, command: command, linkval: linkval} );
-
-        // if ( thetype!=="image" && thetype!=="video" ) {
-        //     // var idx = thetype + "|" + bid;
-        //     // var thing= cm_Globals.allthings[idx];
-        //     // var value = thing.value;
-
-        //     // make post call emulating refresh from hub to force rule execution
-        //     // note we include field that signals to skip any value updates
-        //     var body = {
-        //         msgtype: "update", 
-        //         hubid: hubid,
-        //         change_device: bid,
-        //         change_attribute: subid,
-        //         change_value: thevalue,
-        //         skip_push: true 
-        //     };
-        //     $.post(cm_Globals.returnURL, body);
- 
-        // TODO - rewrite this to show the hidden graphical fields
-        //     // var showstr = "";
-        //     // $.each(value, function(s, v) {
-        //     //     if ( v!==null && s!=="password" && !s.startsWith("user_") ) {
-        //     //         var txt = v.toString();
-        //     //         txt = txt.replace(/<.*?>/g,'');
-        //     //         showstr = showstr + s + ": " + txt + "<br>";
-        //     //     }
-        //     // });
-        //     // var winwidth = $("#dragregion").innerWidth();
-        //     // var leftpos = $(tile).position().left + 5;
-        //     // if ( leftpos + 220 > winwidth ) {
-        //     //     leftpos = leftpos - 110;
-        //     // }
-        //     // var pos = {top: $(tile).position().top + 80, left: leftpos};
-        //     // createModal("modalpopup", showstr, "body", false, pos, function(ui) {
-        //     // });
-        // }
 
     } else {
         // invert value for lights since we want them to do opposite of state

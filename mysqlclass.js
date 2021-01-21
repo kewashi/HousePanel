@@ -1,4 +1,7 @@
 var mysqlx = require('mysql');
+const DEBUGsql = false;
+const DEBUGrow = false;
+
 exports.sqlDatabase = class sqlDatabase {
     
     constructor(dbhost, dbname, dbuid, dbpassword) {        
@@ -14,15 +17,19 @@ exports.sqlDatabase = class sqlDatabase {
             password: dbpassword,
             database: dbname
         };
-        // console.log(">>>> db info - startup: ", dbhost, dbname, dbuid, dbpassword);
+        if ( DEBUGsql ) {
+            console.log(">>>> db info - startup: ", dbhost, dbname, dbuid, dbpassword);
+        }
 
         try {
             this.connection = mysqlx.createConnection(this.config);
             this.connection.connect();
         } catch (e) {
-            console.log("db connect error: ", e);
+            console.log(">>>> db connect error: ", e);
         }
-        // console.log(">>>> db info - config: ", this.config);
+        if ( DEBUGsql ) {
+            console.log(">>>> db connection config: ", this.config);
+        }
     }
 
     getId() {
@@ -43,17 +50,19 @@ exports.sqlDatabase = class sqlDatabase {
 
     die(msg) {
         this.error = msg;
-        console.log(">>>> sql error: ", msg);
+        if ( DEBUGsql ) {
+            console.log(">>>> sql error: ", msg);
+        }
+        var promise = new Promise(function(resolve, reject) {
+            reject(msg);
+            // resolve(null);
+        });
+        return promise;
     }
 
-    warn(msg) {
-        this.error = msg;
-        console.log(">>>> sql warning: ", msg);
-    }
-    
     getJoinStr(usertable, idjoinfrom, jointable, idjointo, jtype) {
         if ( !usertable || !jointable ) {
-            this.die("Two tables must specified in call to getJoinStr");
+            console.log(">>>> Two tables must be specified in call to getJoinStr");
             return null;
         }
         var jstr1 = usertable + "." + idjoinfrom;
@@ -67,9 +76,9 @@ exports.sqlDatabase = class sqlDatabase {
 
     addRow(usertable, values) {
         if ( !usertable ) {
-            this.die("No table specified in call to addRow");
-            return null;
+            return this.die("No table specified in call to addRow");
         }
+
         var keystring = "";
         var valstring = "";
         for (var fieldkey in values) {
@@ -92,63 +101,88 @@ exports.sqlDatabase = class sqlDatabase {
     // this either updates or adds a new row to the table
     // it first tries to update. If it fails then conditions are ignored and an attempt to add values
     // will be made as a new row. This will only succeed if all required fields are provided
-    updateRow(usertable, values, conditions, joins) {
+    updateRow(usertable, values, conditions) {
         if ( !usertable ) {
-            this.die("No table specified in call to updateRow");
-            return null;
+            return this.die("No table specified in call to updateRow");
         }
         if ( !conditions ) {
-            this.die("Attempted to update row with no conditions set");
-            return null;
+            return this.die("Attempted to update row with no conditions set");
         }
 
-        var updatestr = "";
-        var keystring = "";
-        var valstring = "";
-        for (var fieldkey in values) {
 
-            var fieldvalue = values[fieldkey];
-            fieldkey = "`" + fieldkey.toString() + "`";
-            fieldvalue = "'" + fieldvalue + "'";
+        var that = this;
+        var promise = new Promise( function(resolve, reject) { 
 
-            if ( updatestr==="" ) {
-                updatestr = fieldkey + " = " + fieldvalue;
-                keystring = fieldkey;
-                valstring = fieldvalue;
-            } else {
-                updatestr += ", " + fieldkey + " = " + fieldvalue;
-                keystring += ", " + fieldkey;
-                valstring += ", " + fieldvalue;
+            that.getRow(usertable, "*", conditions)
+            .then( function(result) {
+
+                // handle errors from getRow
+                if ( that.error ) {
+                    if ( typeof reject === "function" ) {
+                        reject(that.error);
+                    }
+                }
+
+                // if row is there then update it and return the update promise
+                if ( result ) {
+                    if ( DEBUGsql ) {
+                        console.log(">>>> updating row: ", result);
+                    }
+                    resolve( doUpdate(that) );
+
+                // otherwise add a new row and return the add promise
+                } else {
+                    if ( DEBUGsql ) {
+                        console.log(">>>> adding row: ", values);
+                    }
+                    resolve (that.addRow(usertable, values) );
+                }
+            });
+
+        });
+
+        return promise;
+
+        function doUpdate(that) {
+            var updatestr = "";
+            for (var fieldkey in values) {
+
+                var fieldvalue = values[fieldkey];
+                fieldkey = "`" + fieldkey.toString() + "`";
+                fieldvalue = "'" + fieldvalue + "'";
+
+                if ( updatestr==="" ) {
+                    updatestr = fieldkey + " = " + fieldvalue;
+                } else {
+                    updatestr += ", " + fieldkey + " = " + fieldvalue;
+                }
             }
-        }
 
-        // update the fields requested
-        var str = "UPDATE " + usertable;
+            // update the fields requested
+            var str = "UPDATE " + usertable;
+            // // add all of the joins provided do not remove the space in between
+            // if ( joins && typeof joins === "string" ) {
+            //     str += " " + joins + " ";
+            // } else if ( joins && typeof joins === "object" && Array.isArray(joins)  ) {
+            //     str += " " + joins.join(" ") + " ";
+            // }
+            
+            str += " SET " + updatestr + " ";
 
-        // add all of the joins provided do not remove the space in between
-        if ( joins && typeof joins === "string" ) {
-            str += " " + joins + " ";
-        } else if ( joins && typeof joins === "object" && Array.isArray(joins)  ) {
-            str += " " + joins.join(" ") + " ";
+            if ( conditions ) {
+                str += " WHERE " + conditions;
+            }
+            return that.query(str);
         }
-        
-        str += " SET " + updatestr + " ";
-
-        if ( conditions ) {
-            str += " WHERE " + conditions;
-        }
-        return this.query(str)
     }
     
     deleteRow(usertable, conditions, joins) {
         this.error = null;
         if ( !usertable ) {
-            this.die("No table specified in call to updateRow");
-            return null;
+            return this.die("No table specified in call to deleteRow");
         }
         if ( !conditions ) {
-            this.die("Attempted to delete row with no conditions set");
-            return null;
+            return this.die("Attempted to delete row with no conditions set");
         }
         var str = "DELETE FROM " + usertable;
 
@@ -172,8 +206,7 @@ exports.sqlDatabase = class sqlDatabase {
     getRows(usertable, fields, conditions, joins, orderby, firstrow, callback) {
         this.error = null;
         if ( !usertable ) {
-            this.die("No table specified in call to getRows");
-            return null;
+            return this.die("No table specified in call to getRows");
         }
 
         // can pass a string or an array to pick which fields to read from the table
@@ -238,7 +271,9 @@ exports.sqlDatabase = class sqlDatabase {
                     } else {
                         rowobjs = result;
                     }
-                    // console.log(">>>> rowobjs: ", rowobjs);
+                    if ( DEBUGrow ) {
+                        console.log(">>>> rowobjs: ", rowobjs);
+                    }
                     that.recentResults = rowobjs;
                     resolve(rowobjs);
                 }
@@ -253,6 +288,10 @@ exports.sqlDatabase = class sqlDatabase {
     }
 
     getRow(usertable, fields, conditions, joins, orderby, callback) {
+        if ( !usertable ) {
+            return this.die("No table specified in call to getRow");
+        }
+
         return this.getRows(usertable, fields, conditions, joins, orderby, true, callback);
     }
 
@@ -273,6 +312,14 @@ exports.sqlDatabase = class sqlDatabase {
                 } else {
                     that.insertId = sqlresult.insertId;
                     that.impacted = sqlresult.affectedRows;
+
+                    // mimick X protocol
+                    sqlresult.getAffectedItemsCount = function() {
+                        return sqlresult.affectedRows;
+                    }
+                    sqlresult.getAutoIncrementValue = function() {
+                        return sqlresult.insertId;
+                    }
                     resolve(sqlresult);
                 }
 

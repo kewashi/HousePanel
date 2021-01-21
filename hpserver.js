@@ -24,8 +24,8 @@ const DEBUG16 = false;              // customtiles writing and custom names
 const DEBUG17 = false;              // push client
 const DEBUG18 = false;              // ST, HE, and Ford messages in callHub -> getHubResponse
 const DEBUG19 = false;              // ST and HE callback from Groovy or new ST Event Sink
-const DEBUGcurl = false;
-const DEBUGtmp = true;              // used to debug anything temporarily using ||
+const DEBUGcurl = false;            // detailed _curl inspection
+const DEBUGtmp =  true;             // used to debug anything temporarily using ||
 
 // various control options
 const MQTTHP = false;                 // subscribe to and log HP via MQTT
@@ -59,8 +59,8 @@ var sqlclass = require("./mysqlclass");
 // global variables are all part of GLB object
 var GLB = {};
 
-GLB.port = 3280;
-GLB.webSocketServerPort = 1382;
+GLB.port = 3080;
+GLB.webSocketServerPort = 8181;
 
 GLB.defaultrooms = {
     "Kitchen": "clock|kitchen|sink|pantry|dinette" ,
@@ -384,7 +384,7 @@ function _curl(host, headers, nvpstr, calltype, callback) {
 
     // add query string if given separately
     var formbuff;
-    if ( nvpstr && typeof nvpstr === "string" ) {
+    if ( nvpstr && (typeof nvpstr === "string" || typeof nvpstr === "number") ) {
         if ( calltype==="GET" ) {
             host = host + "?" + nvpstr;
             nvpstr = null;
@@ -432,6 +432,9 @@ function _curl(host, headers, nvpstr, calltype, callback) {
     }
     
     req.on("error", (e) => {
+        if ( DEBUGcurl ) {
+            console.log(">>>> error: ", e);
+        }
         if ( callback ) {
             if ( typeof e === "object" && e.message ) {
                 var errmsg = e.message;
@@ -440,7 +443,7 @@ function _curl(host, headers, nvpstr, calltype, callback) {
             }
             callback(errmsg, res, null);
         } else {
-            console.log((ddbg()), "error with _curl host: ", host, " error: ", e);
+            console.log((ddbg()), "error with host: ", host, " error: ", e);
         }
     });
     
@@ -449,15 +452,17 @@ function _curl(host, headers, nvpstr, calltype, callback) {
     // callback from the access_token request
     function curlResponse(res) {
         res.setEncoding('utf8');
+        var statusCode = res.statusCode;
+        var statusMsg = res.statusMessage;
         res.on("data", (body) => {
             totalbody+= body;
         });
         res.on("end", ()=> {
             if ( callback ) {
-                callback(null, res, totalbody);
+                callback(statusCode, res, totalbody);
             }
             if ( DEBUGcurl ) {
-                console.log((ddbg()), "end of _curl message. totalbody: ", totalbody);
+                console.log((ddbg()), "end of _curl message. status: ", statusCode, statusMsg, " body: ", totalbody);
             }
         });
     }
@@ -493,9 +498,10 @@ function getHubInfo(hub, reload) {
     var clientId = hub.clientid;
     var clientSecret = hub.clientsecret;
     var endpt = hub.hubendpt;
+    var hubindex = hub.id;
     var userid = hub.userid;
     if ( DEBUG2 ) {
-        console.log( (ddbg()), "in getHubInfo - hubid: ", hub.hubid);
+        console.log( (ddbg()), "in getHubInfo - hubid: ", hub.hubid," id: ", hub.id);
     }
     
     // for legacy ST and Hubitat hubs we make a call to get hub name and other info
@@ -505,6 +511,7 @@ function getHubInfo(hub, reload) {
         var nvpreq = {"scope": "app", "client_id": clientId, "client_secret": clientSecret};
         curl_call(namehost, header, nvpreq, false, "POST", nameidCallback);
 
+    // this branch is for New SmartThings and other hubs that don't need to get their name via a hub call
     } else {
 
         // set name and id if not given by user or returned by api
@@ -516,16 +523,29 @@ function getHubInfo(hub, reload) {
             hub["hubid"] = hub["hubyype"] + rstr.toString();
         }
 
-        // save the hubid in our user default for use later
-        mydb.updateRow("users",{defhub: hub.hubid},"id = "+userid);
-
         if ( DEBUG2 ) {
-            console.log(" >>>> in getHubInfo - hub: ", UTIL.inspect(hub,false,null,false));
+            console.log(">>>> in getHubInfo - hub: ", UTIL.inspect(hub,false,null,false));
         }
 
-        // writeOptions();
-        // retrieve all devices and go back to reauth page
-        getDevices(hub, reload, "/reauth");
+        // save the hubid in our user default for use later
+        mydb.updateRow("users",{defhub: hub.hubid},"id = "+userid)
+        .then(result => {
+            if ( DEBUG2 ) {
+                console.log(">>>> update user to default hubid = ", hub.hubid, " result: ", result);
+            }
+
+            mydb.updateRow("hubs", hub, "userid = " + userid + " AND id = " + hubindex)
+            .then( function(result) {
+
+                if ( DEBUG2 ) {
+                    console.log(">>>> update hubs result: ", result);
+                }
+
+                // now get all the devices
+                getDevices(hub, reload, "/reauth");
+            });
+
+        });
 
     }
 
@@ -537,6 +557,7 @@ function getHubInfo(hub, reload) {
         var hubId = hub.hubid;
         var endpt = hub.hubendpt;
         var hubindex = hub.id;
+        var userid = hub.userid;
         if ( err ) {
             console.log( (ddbg()), "error - attempting to make hub name request.");
             return;
@@ -552,7 +573,7 @@ function getHubInfo(hub, reload) {
             }
 
             // save the hubid in our user default for use later
-            mydb.updateRow("users",{defhub: hub.hubid},"id = "+hub.userid);
+            mydb.updateRow("users",{defhub: hub.hubid},"id = " + userid);
 
         } catch(e) {
             console.log( (ddbg()), "error retrieving hub ID and name. ", e, "\n body: ", body);
@@ -572,11 +593,15 @@ function getHubInfo(hub, reload) {
         // save the hubid in our user default for use later
         mydb.updateRow("users",{defhub: hub.hubid},"id = "+hub.userid);
 
+        if ( DEBUG2 ) {
+            console.log( (ddbg()), "Finished updating users. Ready to update hub: ", hubindex, hub);
+        }
+
         if ( iserror || !hubindex ) {
             pushClient(userid, "reload", "auth", "/reauth");
         } else {
             // we know the actual index of the hub at this point
-            mydb.updateRow("hubs", hub, "userid="+hub.userid+" AND id="+hubindex)
+            mydb.updateRow("hubs", hub, "userid = " + userid+" AND id = "+hubindex)
             .then(result => {
                 // retrieve all devices and go back to reauth page
                 getDevices(hub, reload, "/reauth");
@@ -654,8 +679,8 @@ function getAccessToken(userid, code, hub) {
         var newexpire = jsonbody["expires_in"] || "";
 
         var expiresin;        
-        if ( hub.hubTimer && hub.hubTimer!=="0" && !isNaN(parseInt(hub.hubTimer)) ) {
-            expiresin = parseInt(hub.hubTimer);
+        if ( hub.hubtimer && hub.hubtimer!=="0" && !isNaN(parseInt(hub.hubtimer)) ) {
+            expiresin = parseInt(hub.hubtimer);
         } else {
             expiresin = "";
         }
@@ -704,7 +729,7 @@ function getAccessToken(userid, code, hub) {
             console.log( (ddbg()), hubType + " access_token return: ", jsonbody);
         }
 
-        if ( err || (is_object(jsonbody) && jsonbody["error"]) ) {
+        if ( (err && err!==200) || ( jsonbody && typeof jsonbody==="object" && jsonbody["error"]) ) {
             console.log( (ddbg()), "error authorizing ", hubType, " hub: ", hubName, " error: ", err, jsonbody["error"]);
             console.log( (ddbg()), "calling params: ", nvpreq, " body: ", body );
             pushClient(userid, "reload", "auth", "/reauth");
@@ -742,8 +767,8 @@ function getAccessToken(userid, code, hub) {
                     var expiresin = jsonbody["expires_in"];
 
                     // convert refresh token from seconds to msec and two minutes before expiration
-                    expiresin = (parseInt(expiresin) - 120) * 1000;
-                    hub["hubtimer"] = expiresin.toString();
+                    expiresin = (parseInt(expiresin) - 3600) * 1000;
+                    hub.hubtimer = expiresin.toString();
 
                     if ( DEBUG2 ) {
                         console.log( (ddbg()),"tokenCallback: New SmartThings access_token: ", access_token, " refresh_token: ", refresh_token, 
@@ -751,14 +776,14 @@ function getAccessToken(userid, code, hub) {
                     }
 
                     // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
-                    // if ( expiresin ) {
-                    //     setTimeout( function() {
-                    //         newSTRefreshToken(hub, hub.hubrefresh, clientId, clientSecret, true);
-                    //     }, expiresin);
-                    // }
+                    if ( expiresin ) {
+                        setTimeout( function() {
+                            newSTRefreshToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, true, null);
+                        }, expiresin);
+                    }
 
                     // register the sinks to cause events to come back to me
-                    // newSTRegisterEvents(hub);
+                    newSTRegisterEvents(hub);
 
                     // save our info - could skip this and save options and reload screen
                     getHubInfo(hub, true);
@@ -777,75 +802,89 @@ function getAccessToken(userid, code, hub) {
     }
     
     function newSTRegisterEvents(hub) {
+
         var host = hub.hubendpt + "/sink-filters";
         const filterName = "HousePanel.Sink.Filter";
-        var header;
-        
-        // header = {
-        //     "Authorization": "Bearer " + hub.hubaccess,
-        //     "Content-Type": "application/json",
-        //     "Accept": "application/vnd.smartthings+json;v=20200812"
-        // };
-
-        // check for a prior registrations tied to our sink and this hub
-        // delete all prior sinks tied to this access token
-        // _curl(host, header, null, "DELETE", function(err, res, body) {
-        //     if (err) { 
-        //         console.log((ddbg()), "error - attempting to clear previously registered Events: ", err);
-        //     } else {
-        //         console.log((ddbg()), "Sink delete returned: ", body);
-        //     }
-
-        // });
-
-        // gather all the capability events as groups
-        // for now just get a few categories to limit things
-        var qitem1 = [
-            {"field": "deviceEvent.capability", "value": GLB.trigger1, "operator": "IN"}
-        ];
-        var qitem2 = [
-            {"field": "deviceEvent.capability", "value": GLB.trigger2, "operator": "IN"}
-            //  {"field": "deviceEvent.stateChange", "value": true, "operator": "EQ"}
-        ];
-        var qgroups = [
-            {queryItems: qitem1}, 
-            {queryItems: qitem2} 
-        ];
-
-        // set up event sinks for the new ST app
-        // this uses the sink provided by ST staff
-        var sinkdata = {
-            filterName: filterName,
-            forEntity: { entityType: "INSTALLEDAPP", entityId: hub.hubid},
-            sink: GLB.sinkAlias,
-            query: {queryGroups: qgroups}
-        };
-
-        header = {
+        var header = {
             "Authorization": "Bearer " + hub.hubaccess,
             "Content-Type": "application/json",
             "Accept": "application/vnd.smartthings+json;v=20200812"
         };
 
-        _curl(host, header, sinkdata, "POST", function(err, res, body) {
-            if ( err ) {
-                // hub["sinkFilterId"] = "";
-                console.log((ddbg()), "error in registerEvents: ", err);
+        // get all existing sinks and
+        // check for a prior registration tied to our sink and this hub
+        _curl(host, header, null, "GET", function(err, res, body) {
+            if (err && err !== 200) { 
+                console.log((ddbg()), "error - attempting to check for previously registered sink events: ", err);
             } else {
-                // save the filter ID for use in confirming events for this user
-                try {
-                    var jsonbody = JSON.parse(body);
-                    // hub["sinkFilterId"] = jsonbody["sinkFilterId"];
-                    if ( DEBUG2 ) {
-                        console.log( (ddbg()), "registerEvents result: ", UTIL.inspect(jsonbody, false, null, false));
+                console.log((ddbg()), "Sink listing returned: ", body);
+
+                var sinkexist = false;
+                for (var i in body) {
+                    var sink = body[i];
+                    if ( sink.filterName === filterName ) {
+                        sinkexist = true;
                     }
-                } catch(e) {
-                    // hub["sinkFilterId"] = "";
-                    console.log( (ddbg()), "error in registerEvents: ", body);
+                }
+
+                // now that we know if a sink doesn't exist, let's add one
+                if ( !sinkexist ) {
+                    regNewFilter();
                 }
             }
-
         });
+
+        function regNewFilter() {
+
+            // gather all the capability events as groups
+            // for now just get a few categories to limit things
+            var qitem1 = [
+                {"field": "deviceEvent.capability", "value": GLB.trigger1, "operator": "IN"},
+                {"field": "deviceEvent.stateChange", "value": true, "operator": "EQ"}
+            ];
+            var qitem2 = [
+                {"field": "deviceEvent.capability", "value": GLB.trigger2, "operator": "IN"},
+                {"field": "deviceEvent.stateChange", "value": true, "operator": "EQ"}
+            ];
+            var qgroups = [
+                {queryItems: qitem1}, 
+                {queryItems: qitem2} 
+            ];
+
+            // set up event sinks for the new ST app
+            // this uses the sink provided by ST staff
+            var sinkdata = {
+                filterName: filterName,
+                forEntity: { entityType: "INSTALLEDAPP", entityId: hub.hubid},
+                sink: GLB.sinkAlias,
+                query: {queryGroups: qgroups}
+            };
+
+            header = {
+                "Authorization": "Bearer " + hub.hubaccess,
+                "Content-Type": "application/json",
+                "Accept": "application/vnd.smartthings+json;v=20200812"
+            };
+
+            _curl(host, header, sinkdata, "POST", function(err, res, body) {
+                if ( err && err !== 200 ) {
+                    // hub["sinkFilterId"] = "";
+                    console.log((ddbg()), "error in registerEvents: ", err);
+                } else {
+                    // save the filter ID for use in confirming events for this user
+                    try {
+                        var jsonbody = JSON.parse(body);
+                        // hub["sinkFilterId"] = jsonbody["sinkFilterId"];
+                        if ( DEBUG2 ) {
+                            console.log( (ddbg()), "registerEvents result: ", UTIL.inspect(jsonbody, false, null, false));
+                        }
+                    } catch(e) {
+                        // hub["sinkFilterId"] = "";
+                        console.log( (ddbg()), "error in registerEvents: ", body);
+                    }
+                }
+            });
+        }
 
     }
         
@@ -884,68 +923,78 @@ function getAccessToken(userid, code, hub) {
 }
 
 
-async function newSTRefreshToken(hub, refresh_token, clientId, clientSecret, refresh) {
+function newSTRefreshToken(userid, hub, refresh_token, clientId, clientSecret, refresh, postCallback) {
     // var nohttp = hub.hubhost.substr(8);
     var nohttp = "api.smartthings.com";
     var header = {'Content-Type' : "application/x-www-form-urlencoded"};
     var tokenhost = "https://" + clientId + ":" + clientSecret + "@" + nohttp + "/oauth/token";
     var nvpreq = "grant_type=refresh_token" + "&client_id=" + clientId + 
-                 "&refresh_token=" + refresh_token +
-                 "&client_secret=" + clientSecret;
+                 "&refresh_token=" + refresh_token;
      if ( DEBUG2 ) {
         console.log( (ddbg()), "Refreshing ST token via call with nvpreq: ", nvpreq);
     }
 
-    await _curl(tokenhost, header, nvpreq, "POST", function(err, res, body) {
+    _curl(tokenhost, header, nvpreq, "POST", function(err, res, body) {
+        if ( err && err !== 200 ) {
+            if ( postCallback && typeof postCallback === "function" ) {
+                postCallback("_curl error status = " + err.toString());
+            }
+            return;
+        }
+
         try {
             var jsonbody = JSON.parse(body);
         } catch(e) {
-            console.log( (ddbg()), "error - attempting parsing JSON from refresh of new ST token. body: ", body);
+            var errmsg = "error - attempting parsing JSON from refresh of new ST token";
+            console.log( (ddbg()), errmsg, "\n", e, "\n body: ", body);
+            // if we requested a post hub updated callback do it with an error message
+            if ( postCallback && typeof postCallback === "function" ) {
+                postCallback(errmsg);
+            }
             return;
         }
 
         // save our refreshed values
-        console.log("refresh update: ", jsonbody);
-        var access_token = jsonbody["access_token"];
-        var refresh_token = jsonbody["refresh_token"];
-        hub.hubaccess = access_token;
-        hub.hubrefresh = refresh_token;
+        hub.hubaccess = jsonbody["access_token"];
+        hub.hubrefresh = jsonbody["refresh_token"];
         
         // handle refresh expiration times
-        var newexpire = jsonbody["expires_in"] || "";
-        var expiresin = "";
-        if ( hub.hubTimer && hub.hubTimer!=="0" && !isNaN(parseInt(hub.hubTimer)) ) {
-            expiresin = parseInt(hub.hubTimer);
+        var newexpire = jsonbody["expires_in"];
+        var expiresin;
+        if ( newexpire  && !isNaN(parseInt(newexpire)) && parseInt(newexpire) > 3600 ) {
+            expiresin = (parseInt(newexpire) - 3600) * 1000;
+        } else {
+            expiresin = (23 * 3600000);
         }
-                
-        // if an expire in is returned from api then set hubTimer to it minus two minutes
-        // but only is user refresh is zero or not a number
-        if ( newexpire  && !isNaN(parseInt(newexpire)) && parseInt(newexpire)>120 ) {
-            expiresin = (parseInt(newexpire) - 120) * 1000;
-            hub.hubtimer = expiresin.toString();
-        }
+        hub.hubtimer = expiresin.toString();
 
-        writeOptions();
-
-        // reveal results temporarily
         if ( DEBUG2 ) {
-            console.log( (ddbg()),"New SmartThings refreshToken jsonbody: ", jsonbody, " hub: ", hub);
+            console.log( (ddbg()),"New SmartThings refresh results. access_token: ", hub.hubaccess, " refresh_token: ", hub.hubrefresh, " expiresin: ", expiresin, " jsonbody: ", jsonbody, " hub: ", hub);
         }
 
-        // convert refresh token from seconds to msec and two minutes before expiration
-        if ( DEBUG2 ) {
-            console.log( (ddbg()),"New SmartThings access_token: ", access_token, " refresh_token: ", refresh_token, " expiresin: ", expiresin, " jsonbody: ", jsonbody);
+        // now update the hub info in our DB
+        mydb.updateRow("hubs", hub, "userid = "+userid+" AND id = "+hub.id)
+        .then(result => {
+            // if we provided a callback to do something after hub updates, do it
+            // but send back null if the update failed for whatever reason
+            if ( postCallback && typeof postCallback === "function" ) {
+                if ( result ) {
+                    postCallback(null);
+                } else {
+                    postCallback("error - hub update to DB failed");
+                }
+            }
+        })
+
+        // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
+        if ( refresh && hub.hubtimer ) {
+            setTimeout( function() {
+                newSTRefreshToken(userid, hub, hub.hubrefresh, clientId, clientSecret, true, null);
+            }, expiresin);
         }
 
     });
 
-    // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
-    if ( refresh && hub.hubTimer ) {
-        setTimeout( function() {
-            console.log( (ddbg()), "New SmartThings access_token will be refreshed in ", hub.hubTimer, " msec");
-            newSTRefreshToken(hub, hub.hubrefresh, clientId, clientSecret, true);
-        }, hub.hubTimer);
-    }
 }
 
 
@@ -966,8 +1015,8 @@ function fordRefreshToken(hub, access_token, endpt, refresh_token, clientId, cli
         console.log( (ddbg()), "tokenhost: ", tokenhost, " nvpreq: ", nvpreq, " formData: ", formData);
     }
     var expiresin;
-    if ( hub.hubTimer && hub.hubTimer!=="0" && !isNaN(parseInt(hub.hubTimer)) ) {
-        expiresin = parseInt(hub.hubTimer);
+    if ( hub.hubtimer && hub.hubtimer!=="0" && !isNaN(parseInt(hub.hubtimer)) ) {
+        expiresin = parseInt(hub.hubtimer);
     } else {
         expiresin = "";
     }
@@ -1288,6 +1337,10 @@ function getDevices(hub, reload, reloadpath) {
                         await newSTCallback("actuator", userid, hubindex, err, res, body);
                     });
                     break;
+
+                default:
+                    checkNewSTDone(swtype);
+                    break;
             }
 
         }
@@ -1325,7 +1378,7 @@ function getDevices(hub, reload, reloadpath) {
                 if ( DEBUGtmp ) {
                     console.log(">>>> finished reading all newST types");
                 }
-                updateOptions(true, "reauth");
+                updateOptions(userid, reload, reloadpath);
             }
         }
 
@@ -1353,11 +1406,16 @@ function getDevices(hub, reload, reloadpath) {
             var devicecnt = 0;
             var numdevices = items.length;
 
+            // console.log(">>>> device type= ", swtype," num= ", numdevices);
+
             // read each device of this type
             items.forEach(function(device) {
 
-                var pvalue = {name: device.label};
+                var pname = device.label;
+                pname = pname.replace(/'/g,"");
+                var pvalue = {name: pname};
                 var st_type = device.type;
+                var deviceid = device.deviceId;
                 
                 // handle Groovy device types
                 if ( st_type==="DTH" ) {
@@ -1377,14 +1435,19 @@ function getDevices(hub, reload, reloadpath) {
 
                 // now get the device details
                 // curl_call(hubEndpt + "/devices/" + device.deviceId+"/status", stheader, params, false, "GET", function(err, res, bodyStatus) {
-                _curl(hubEndpt + "/devices/" + device.deviceId+"/status", stheader, null, "GET", function(err, res, bodyStatus) {
+                _curl(hubEndpt + "/devices/" + deviceid+"/status", stheader, null, "GET", function(err, res, bodyStatus) {
+
+                    if ( err && err !== 200 ) {
+                        jsonStatus = null;
+                        return;
+                    }
 
                     try {
                         var jsonStatus = JSON.parse(bodyStatus);
                     } catch (e) {
-                        console.log( (ddbg()), "error translating device status", e);
-                        console.log( (ddbg()), "body: ", bodyStatus);
+                        console.log( (ddbg()), "error translating device status", e, " body: ", bodyStatus);
                         jsonStatus = null;
+                        return;
                     }
 
                     // if ( DEBUG2 ) {
@@ -1466,17 +1529,16 @@ function getDevices(hub, reload, reloadpath) {
                     //     pvalue[subid] = jsonStatus.healthState[subid];
                     // }
 
-                    if ( DEBUG2 || DEBUGtmp ) {
+                    if ( DEBUG2 ) {
                         console.log( (ddbg()), "device pvalue of type: ", swtype, " obtained from New SmartThings hub. pvalue: ", pvalue);
                     }
 
+                    var pname = pvalue.name;
                     pvalue = encodeURI2(JSON.stringify(pvalue));
-                    var pname = device.label;
-                    pname = pname.replace(/'/g,"");
-                    var device = {
+                    var rowdevice = {
                         userid: userid,
                         hubid: hubindex,
-                        deviceid: device.deviceId,
+                        deviceid: deviceid,
                         name: pname, 
                         devicetype: swtype,
                         hint: hubType, 
@@ -1484,12 +1546,13 @@ function getDevices(hub, reload, reloadpath) {
                         pvalue: pvalue
                     };
                         
-                    mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+
+                    mydb.updateRow("devices", rowdevice, "userid = "+userid+" AND hubid = "+hubindex+
                         " AND devicetype = '"+swtype+"' AND deviceid = '"+deviceid+"'")
                     .then(result => {
                         devicecnt++;
 
                         // check if this is our last one
+                        console.log(">>>> new ST numdevices = ", numdevices, " devicent = ", devicecnt, " pname: ", pname);
                         if ( devicecnt >= numdevices ) {
                             checkNewSTDone(swtype);
                         }
@@ -1518,7 +1581,7 @@ function getDevices(hub, reload, reloadpath) {
     function hubInfoCallback(err, res, body) {
         if ( err ) {
             console.log( (ddbg()), "error retrieving devices: ", err);
-            updateOptions(reload, reloadpath);
+            updateOptions(userid, reload, reloadpath);
         } else {
             try {
                 var jsonbody = JSON.parse(body);
@@ -1581,13 +1644,13 @@ function getDevices(hub, reload, reloadpath) {
 
                         // check if this is our last one
                         if ( devicecnt >= numdevices ) {
-                            updateOptions(reload, reloadpath);
+                            updateOptions(userid, reload, reloadpath);
                         }
                     }).catch(reason => {console.log("dberror 6 - hubInfoCallback - ", reason);});
                 });
 
             } else {
-                updateOptions(reload, reloadpath);
+                updateOptions(userid, reload, reloadpath);
             }
         }
     }
@@ -1618,6 +1681,7 @@ function getDevices(hub, reload, reloadpath) {
             return;
         }
         var thetype = "ford";
+
         if ( jsonbody.status === "SUCCESS" && array_key_exists("vehicles", jsonbody) && is_array(jsonbody.vehicles) ) {
             var numdevices = jsonbody.vehicles.length;
             jsonbody.vehicles.forEach(function(obj) {
@@ -1710,13 +1774,13 @@ function getDevices(hub, reload, reloadpath) {
 
                     // check if this is our last one
                     if ( devicecnt >= numdevices ) {
-                        updateOptions(reload, reloadpath);
+                        updateOptions(userid, reload, reloadpath);
                     }
                 }).catch(reason => {console.log("dberror 6 - vehicleInfoCallback - ", reason);});
 
             });
         } else {
-            updateOptions(false, reloadpath);
+            updateOptions(userid, false, reloadpath);
         }
 
     }
@@ -1782,7 +1846,7 @@ function getDevices(hub, reload, reloadpath) {
             }
 
             if ( done["Vars"] && done["Progs"] && done["Nodes"] ) {
-                updateOptions(true, reloadpath);
+                updateOptions(userid, reload, reloadpath);
             }
 
         }
@@ -2088,7 +2152,6 @@ function getDevices(hub, reload, reloadpath) {
                                 console.log( (ddbg()), "finished loading all nodes.");
                             }
                             checkDone("Nodes");
-                            // updateOptions(true, reloadpath);
                         }
                     }
 
@@ -2471,7 +2534,7 @@ function getMaxIndex() {
 }
 
 // updates the global options array with new things found on hub
-function updateOptions(reload, reloadpath) {
+function updateOptions(userid, reload, reloadpath) {
 
     // signal clients to reload
     if ( reload && reloadpath && reloadpath==="/reauth") {
@@ -4613,13 +4676,7 @@ function setValOrder(val) {
 
 // TODO - finish updating and testing this
 function processHubMessage(userid, hub, hubmsg) {
-    // loop through all things for this hub
-    // remove music trackData field that we don't know how to handle
-    // var audiomap = {"name": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
-    //                 "status": "status", "trackMetaData": "trackImage", "trackImage":"trackImage", "metaData":"",
-    //                 "trackNumber":"", "music":"", "trackUri":"", "uri":"", "transportUri":"", "enqueuedUri":"",
-    //                 "audioSource": "mediaSource"};
-
+    // loop through all devices tied to this message for any hub
     // push info to all things that match
     // we don't know the thing types so we have to check all things
     // this uses the format defined in the HousePanel.groovy file
@@ -4627,8 +4684,6 @@ function processHubMessage(userid, hub, hubmsg) {
     var subid = hubmsg['change_attribute'];
     var hubmsgid = hubmsg['change_device'].toString();
     var origname = hubmsg['change_name'] || "";
-
-    
     // msgtype: "update", 
     // hubid: hubId,
     // change_name: "",
@@ -4636,7 +4691,6 @@ function processHubMessage(userid, hub, hubmsg) {
     // change_attribute: attr,
     // change_type: "",
     // change_value: event.deviceEvent.value
-
 
     var pvalue;
     // pvalue[subid] = hubmsg['change_value'];
@@ -4688,6 +4742,10 @@ function processHubMessage(userid, hub, hubmsg) {
             newval.subid = subid;
             processRules(userid, device.id, hubmsgid, swtype, subid, newval, "processMsg");
             delete pvalue.subid;
+
+            // update the DB
+            device.pvalue = encodeURI2(JSON.stringify(newval));
+            mydb.updateRow("devices", device, "id = "+device.id);
 
         });
         return devices;
@@ -4812,7 +4870,7 @@ function resetRuleTimers() {
 // because ISY hubs are local, this function must be invoked locally
 // TODO - figure out a way to support this once the code is on my server
 //        one solution will be to provide a local connecter Node.js app
-function processIsyMessage(userid, isymsg) {
+function processIsyMessage(userid, hub, isymsg) {
     var newval;
     var pvalue;
 
@@ -5537,15 +5595,15 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                     // set the destination to the value which would typically be overwritten by hub call
                     // if the destination is a link force the link to a TEXT type to neuter other types
                     var linkinfo = null;
-                    var companion = "user_"+rsubid;
-                    var webstr = pvalue[rsubid];
-                    var n = webstr.indexOf("::",2);
-                    if ( array_key_exists(rsubid, pvalue) && n !== -1 ) {
+                    // var companion = "user_"+rsubid;
+                    var webstr = devices[rtileid].pvalue[rsubid];
+                    var n = typeof webstr === "string" ? webstr.indexOf("::",2) : -1;
+                    if ( n !== -1 ) {
 
                         var command = webstr.substring(0, n);
                         // var actionstr = webstr.substring(n+2);
                         if ( DEBUG11 ) {
-                            console.log( ">>>> trigger other custom from rule. sib= ", companion, " sib val: ", webstr, " command: ", command);
+                            console.log( ">>>> trigger other custom from rule. sib val: ", webstr, " command: ", command);
                         }
 
                         // take action if it is in a rule
@@ -5558,11 +5616,11 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                         }
 
                     // if destination subid isn't found make a user TEXT field
-                    } else if ( !array_key_exists(rsubid, pvalue) ) {
+                    } else if ( !array_key_exists(rsubid, devices[rtileid].pvalue) ) {
                         // addCustom(userid, deviceid, rswid, rswtype, "TEXT", rvalue, rsubid);
                         // linkinfo = [rswid, rswtype, rsubid, rsubid, "TEXT"];
                         if ( DEBUG11 ) {
-                            console.log( (ddbg()), " new custom field: ", rsubid, " created in tile: ", pvalue);
+                            console.log( (ddbg()), " new custom field: ", rsubid, " created in tile: ", devices[rtileid].pvalue);
                         }
                         // restart all clients to show the newly created field
                         // this only happens the first time the rule is triggered
@@ -5761,21 +5819,28 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                     }
     
                     // curl_call(host, header, nvpreq, false, "POST", getHubResponse);
-                    _curl(host, header, nvpreq, "POST", function(err, tmp, res) {
-                        console.log( (ddbg()), "New ST callHub result: ", res);
+                    _curl(host, header, nvpreq, "POST", function(err, res, body) {
+                        console.log( (ddbg()), "New ST callHub; err: ", err, " result: ", body);
+
+
+                        // if we get an unauthorized message error, refresh the token and try again
+                        if ( err === 401 ) {
+                            console.log(">>>> obtaining refresh token...");
+                            newSTRefreshToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, false, function(err) {
+                                if ( !err ) {
+                                    callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid, linkinfo, inrule);
+                                }
+                            });
+                            return;
+                        }
+
                         // push results immediately to give user a responsive feel
                         // emulate the callback to getHubResponse done for other hubs
-                        if ( !err && res && presult!==false ) {
-                            if ( !presult ) {
-                                presult = {};
-                                presult[subid] = swval;
-                            }
-                            getHubResponse(err, res, presult);
-                            // pushClient(userid, swid, swtype, subid, presult);
+                        if ( (!err || err===200) ) {
+                            pvalue[subid] = swval;
+                            getHubResponse(err, body, pvalue);
                         }
                     });
-    
-
                 });
                 // if ( linkinfo ) {
                 //     var idx = getKeyByValue(GLB.options.index, linkinfo);
@@ -5874,17 +5939,28 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                 }
 
                 // curl_call(host, header, nvpreq, false, "POST", getHubResponse);
-                _curl(host, header, nvpreq, "POST", function(err, tmp, res) {
-                    console.log( (ddbg()), "New ST callHub result: ", res);
+                _curl(host, header, nvpreq, "POST", function(err, res, body) {
+                    console.log( (ddbg()), "New ST callHub result: ", err, body);
+
+                    // if we get an unauthorized message error, refresh the token and try again later
+                    if ( err === 401 ) {
+                        console.log(">>>> obtaining refresh token...");
+                        newSTRefreshToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, false, function (err) {
+                            if ( !err ) {
+                                callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid, linkinfo, inrule);
+                            }
+                        });
+                        return;
+                    }
+
                     // push results immediately to give user a responsive feel
                     // emulate the callback to getHubResponse done for other hubs
-                    if ( !err && res && presult!==false ) {
+                    if ( (!err || err===200) && presult!==false ) {
                         if ( !presult ) {
                             presult = {};
                             presult[subid] = swval;
                         }
-                        getHubResponse(err, res, presult);
-                        // pushClient(userid, swid, swtype, subid, presult);
+                        getHubResponse(err, body, presult);
                     }
                 });
             } else {
@@ -5968,81 +6044,67 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                 subid = "switch";
             }
 
+            // only handle switches and dimmers in the cloud DB version of HP
+            // this uses the webhooks feature of the ISY portal
+            // they must be set up a special way and the hubrefresh set to the key
             switch(subid) {
 
                 case "level":
-                    // for now semd both level commands since either could be expected
-                    // one is for Insteon other is for Polyglot nodes
-                    // later we will flag this in the item
-                    var cmd1 = "/nodes/" + swid + "/cmd/SETLVL/" + swval;
-                    curl_call(endpt + cmd1, isyheader, false, false, "GET", getNodeResponse);
-
-                    // convert percentage to 0 - 256 range for Insteon
-                    var irange = Math.floor(parseInt(swval) * 255 / 100);
-                    var cmd2 = "/nodes/" + swid + "/cmd/DON/" + irange;
-                    isyresp["switch"] = "DON";
-                    curl_call(endpt + cmd2, isyheader, false, false, "GET", getNodeResponse);
-
-                    // comment this code to preserve the prior dimmer setting; 
-                    // otherwise the onlevel is set to current level
-                    // the default behavior for Insteon lights would be to comment this
-                    // setTimeout(function() {
-                    //     var cmd3 = "/nodes/" + swid + "/cmd/OL/" + irange;
-                    //     isyresp["onlevel"] = swval;
-                    //     curl_call(endpt + cmd3, isyheader, false, false, "GET", getNodeResponse);
-                    // }, 200 );
-                    break;
-
                 case "onlevel":
 
                     // convert percentage to 0 - 256 range for Insteon
                     var irange = Math.floor(parseInt(swval) * 255 / 100);
-                    var cmd3 = "/nodes/" + swid + "/set/OL/" + irange;
-                    isyresp["onlevel"] = swval;
-                    curl_call(endpt + cmd3, isyheader, false, false, "GET", getNodeResponse);
+                    irange = irange.toString();
 
-                    // pause before we turn on the light to prevent slider from toggling
-                    setTimeout(function() {
-                        var cmd2 = "/nodes/" + swid + "/cmd/DON/" + irange;
-                        isyresp["switch"] = "DON";
-                        curl_call(endpt + cmd2, isyheader, false, false, "GET", getNodeResponse);
-                    }, 200 );
+                    var hookname = swid;
+                    hookname = hookname.replace(/ /g,"");
+                    var hookon = hookname + "_DON";
+                    hookname+= "_level";
+
+                    // set the level
+                    var hookurl = "https://my.isy.io/api/ifttt/" + hookname + "/key/" + hub.hubrefresh;
+                    var header = {"Content-Type": "text/plain"};
+                    _curl(hookurl, header, irange, "POST");
+                    
+                    // turn light on
+                    var hookurlon = "https://my.isy.io/api/ifttt/" + hookon + "/key/" + hub.hubrefresh;
+                    _curl(hookurlon, null, null, "POST");
+                    
+                    console.log(">>>> hookurl: ", hookurl, "subid: ", subid, " irange: ", irange, " swid: ", swid);
+                    // var cmd3 = "/nodes/" + swid + "/set/OL/" + irange;
+                    // isyresp["onlevel"] = swval;
+                    // curl_call(endpt + cmd3, isyheader, false, false, "GET", getNodeResponse);
+
+                    // // pause before we turn on the light to prevent slider from toggling
+                    // setTimeout(function() {
+                    //     var cmd2 = "/nodes/" + swid + "/cmd/DON/" + irange;
+                    //     isyresp["switch"] = "DON";
+                    //     curl_call(endpt + cmd2, isyheader, false, false, "GET", getNodeResponse);
+                    // }, 200 );
                     break;
         
                 case "switch":
                 case "DOF":
                 case "DON":
+
+                    var hookname = swid;
+                    hookname = hookname.replace(/ /g,"");
+                    if ( swval==="DON" || swval==="DOF" ) {
+                        hookname+= "_" + swval;
+                    } else {
+                        hookname+= "_DON";
+                    }
+                    var hookurl = "https://my.isy.io/api/ifttt/" + hookname + "/key/" + hub.hubrefresh;
+                    _curl(hookurl, null, null, "POST");
+                    console.log(">>>> hookurl: ", hookurl, "subid: ", subid, " swid: ", swid);
                     // handle toggle command - note that the GUI will never produce a toggle swval command
                     // no longer support because we don't know requesting user state
-                    cmd = "/nodes/" + swid + "/cmd/" + swval;
-                    isyresp[subid] = swval;
-                    curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+                    // cmd = "/nodes/" + swid + "/cmd/" + swval;
+                    // isyresp[subid] = swval;
+                    // curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+
                     break;
-
-                case "heatingSetpoint-up":
-                case "coolingSetpoint-up":
-                case "heatingSetpoint-dn":
-                case "coolingSetpoint-dn":
-                    // do some fancy footwork here to get either CLISPH or CLISPC so we can use same code
-                    var hcletter = subid.substr(0,1).toUpperCase();
-                    var clicommand = "CLISP" + hcletter;
-
-                    // determine if up or down
-                    var isup = subid.substr(-2);
-
-                    // get existing value and then proceed with adjust if it is a number
-                    var newval = extractTemp(swval);
-                    if ( !isNaN(newval) ) { 
-                        newval = (isup === "up") ? newval + 1 : newval - 1;
-                        cmd = "/nodes/" + swid + "/cmd/" + clicommand + "/" + newval.toString();
-                        isyresp[subid] = newval;
-                        curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
-                    } else {
-                        result = "error - ISY thermostat set point cannot be interpreted.  value: " + swval;
-                        console.log( (ddbg()), result);
-                    }
-                    break;
-        
+       
                 default:
 
                     // handle arrows for variable changes
@@ -6057,9 +6119,29 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                             varnum = subid.substr(4);
                             realsubid = subid;
                         }
-                        cmd = "/vars/set/1/" + varnum + "/" + intvar.toString();
-                        isyresp[realsubid] = intvar.toString();
-                        curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+
+                        // get the Variable device
+                        mydb.getRow("devices","*","userid = "+userid+" AND deviceid = 'vars'")
+                        .then(row => {
+
+                            var pvalue = JSON.parse(decodeURI2(row.pvalue));
+                            pvalue[realsubid] = intvar.toString();
+                            var newpvalstr = encodeURI2(JSON.stringify(pvalue));
+                            row.pvalue = newpvalstr;
+
+                            // update the row;
+                            mydb.updateRow("devices", row, "id = "+row.id);
+
+                            // show result on screen
+                            pushClient(userid, swid, swtype, realsubid, pvalue);
+                            // console.log(">>>> processed int: subid: ", subid, " realsubid: ", realsubid, " pvalue: ", pvalue);
+
+                        });
+
+                        // cmd = "/vars/set/1/" + varnum + "/" + intvar.toString();
+                        // isyresp[realsubid] = intvar.toString();
+                        // curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+                    }
 
                     // TODO - figure out how to manipulate STATE vars without using old all things
                     // } else if ( subid.startsWith("State_") ) {
@@ -6100,17 +6182,17 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                     //         curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
                     //         result = "success";
                     //     } 
-                    } else {
-                        // try setting a property
-                        try {
-                            cmd = "/nodes/" + swid + "/set/" + subid + "/" + swval;
-                            // isyresp[subid] = swval;
-                            curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
-                        } catch (e) {
-                            result = "error - property: " + subid + " not supported for ISY hubs";
-                            console.log( (ddbg()), result, " value: ", swval, " msg: ", e);
-                        }
-                    }
+                    // } else {
+                    //     // try setting a property
+                    //     try {
+                    //         cmd = "/nodes/" + swid + "/set/" + subid + "/" + swval;
+                    //         // isyresp[subid] = swval;
+                    //         curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+                    //     } catch (e) {
+                    //         result = "error - property: " + subid + " not supported for ISY hubs";
+                    //         console.log( (ddbg()), result, " value: ", swval, " msg: ", e);
+                    //     }
+                    // }
 
             }
         }
@@ -6169,7 +6251,7 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
             // console.log( (ddbg()), hub.hubtype, " hub: ", hub.hubname, " trigger: ", subid, " rule: ", inrule, " call returned: ", body);
             console.log( (ddbg()), " trigger: ", subid, " rule: ", inrule, " call returned: ", body);
         }
-        if ( err ) {
+        if ( err && err!== 200 ) {
             console.log( (ddbg()), "error calling ST or HE hub: ", err);
         } else {
             // update all clients - this is actually not needed if your server is accessible to websocket updates
@@ -6731,7 +6813,7 @@ function doAction(userid, thingid, configoptions, swid, swtype, swval, swattr, s
                 // if link is to something static, show it
                 if ( $realsubid ) {
                     if ( testclick($linked_swtype, $realsubid) ) {
-                        pushClient(userid, $linked_swid, $linked_swtype,$realsubid, $linked_val);
+                        pushClient(userid, $linked_swid, $linked_swtype, $realsubid, $linked_val);
                     } else {
                         // TODO - include thingid in the linkinfo array
                         var linkinfo = [swid, swtype, subid, $realsubid, "LINK"];
@@ -6960,19 +7042,16 @@ function setPosition(userid, swid, swtype, panel, swattr, tileid, thingid) {
 function addThing(userid, bid, thingtype, panel, hubid, hubindex, roomid, pos) {
 
     // first get the max order number of the tiles in this room
-    var querystr = "SELECT Max(torder) FROM things WHERE roomid = " + roomid;
-    var promiseResult = mydb.query(querystr)
+    // var querystr = "SELECT Max(torder) FROM things WHERE roomid = " + roomid;
+    // var promiseResult = mydb.query(querystr)
+    var promiseResult = mydb.getRows("things","torder","roomid = "+roomid)
     .then(result => {
-        // console.log(">>>> max torder = ", result);
-        if ( result && result.hasData() ) {
-            var maxtorder = result.fetchOne();
-            if ( typeof maxtorder === "object" ) {
-                maxtorder = maxtorder[0];
-            }
-            maxtorder ++;
-        } else {
-            maxtorder = 1;
-        }
+        var maxtorder = 0;
+        result.forEach(row => {
+            if ( row.torder > maxtorder ) { maxtorder = row.torder; }
+        });
+        maxtorder++;
+
         // console.log(">>>> max torder = ", maxtorder );
         return maxtorder
     })
@@ -7008,7 +7087,7 @@ function addThing(userid, bid, thingtype, panel, hubid, hubindex, roomid, pos) {
                                         hint: hint, refresh: refresh, value: pvalue};
                         var thing = makeThing(userid, null, thingid, tileid, thesensor, panel, 0, 0, 1, "", false, null);
                         console.log( (ddbg()), "added tile #",tileid," (thingid = ",thingid,") of type: ",thingtype," to page: ",panel,
-                                            " deviceid: ", bid, " hubid: ", hubid, " thing: ", thing);
+                                            " deviceid: ", bid, " hubid: ", hubid, " hubindex: ", hubindex);
                         return thing;
                     } else {
                         return "error - could not create a new device of type " + thingtype + " on page " + panel;
@@ -7023,7 +7102,6 @@ function addThing(userid, bid, thingtype, panel, hubid, hubindex, roomid, pos) {
 
         return promiseResult;
     });
-
    
     return promiseResult;
 }
@@ -7307,11 +7385,11 @@ function getInfoPage(user, configoptions, hubs, req) {
                 value = pvalue;
             }
             var hubid = thing["hubs_hubid"];
-            if ( hubid === -1 || hubid === "-1" || hubid === "new" ) {
+            if ( hubid === -1 || hubid === "-1" ) {
                 var hubstr = "None<br><span class=\"typeopt\"> (" + hubid + ": None)</span>";
             } else {
-                var hubType = thing["hubs_hubtype"];
-                var hubName = thing["hubs_hubname"];
+                var hubType = thing["hubs_hubtype"] || "None";
+                var hubName = thing["hubs_hubname"] || "None";
                 hubstr = hubName + "<br><span class=\"typeopt\"> (" + hubid + ": " + hubType + ")</span>";
             }
             
@@ -7920,15 +7998,17 @@ function getMainPage(user, configoptions, hubs, req, res) {
             console.log(">>>> finished with all elements and rendering page");
             var tc = renderMain(configoptions, hubs, rooms, alldevices, things);
 
-            // set up local sockets if all ISY hubs
-            hubs.forEach(function(hub) {
-                if ( hub.hubtype === "ISY" ) {
-                    if ( DEBUGisy ) {
-                        console.log("ISY hub found: ", hub);
-                    }
-                    setupISYSocket(hub);
-                }
-            });
+            // now handle this with our connector app
+            // set up local sockets of all ISY hubs
+            // hubs.forEach(function(hub) {
+            //     if ( hub.hubtype === "ISY" ) {
+            //         if ( DEBUGisy ) {
+            //             console.log("ISY hub found: ", hub);
+            //         }
+
+            //         setupISYSocket(hub);
+            //     }
+            // });
 
             res.send(tc);
             res.end();
@@ -8088,7 +8168,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
         var configs = {};
 
         for (var i in configoptions) {
-            console.log("configoptions [", i, "] = ", configoptions[i] );
+            // console.log("configoptions [", i, "] = ", configoptions[i] );
             var key = configoptions[i].configkey;
             if ( !key.startsWith("user_") ) {
                 configs[key] = configoptions[i].configval;
@@ -8809,8 +8889,18 @@ function apiCall(user, configoptions, body, protocol, req, res) {
         
             case "refreshpage":
                 if ( protocol==="POST" ) {
-                    getAllThings(null, false, false);
-                    pushClient(userid, "reload", "main", "/");
+
+                    mydb.getRows("hubs","*","userid = "+userid)
+                    .then(hubs => {
+                        if ( hubs ) {
+                            hubs.forEach(hub => {
+                                if ( hub.hubid !== "-1" && hub.hubid!=="new" ) {
+                                    getDevices(hub, true, "/");
+                                }
+                            });
+                        }
+                    });
+
                     result = "success";
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
@@ -8829,7 +8919,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                             }
                         });
                     }
-                    if ( DEBUG2 ) {
+                    if ( DEBUG11 ) {
                         console.log( (ddbg()),"rules list for user: ", userid," list: ", jsonshow(rulelist) );
                     }
                     return rulelist;
@@ -8844,7 +8934,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                     var rulelist = [[]];
                     if ( row ) {
                         rulelist = JSON.parse(row.configval);
-                        if ( DEBUG2 || DEBUGtmp ) {
+                        if ( DEBUG2 ) {
                             console.log( (ddbg()),"rule list for user: ", userid," swid: ", swid, " rules: ", jsonshow(rulelist) );
                         }
                     }
@@ -9265,27 +9355,28 @@ function apiCall(user, configoptions, body, protocol, req, res) {
 // setup socket between server and all user browsers
 function setupBrowserSocket() {
     var wsServer;
+    var secinfo;
 
     // create the HTTP server for handling sockets
     // support insecure and secure sockets to deal with ISY which is insecure
-    if ( fs.existsSync("__housepanel_server.key") && fs.existsSync("__housepanel_server.crt") && fs.existsSync("__housepanel_server.ca") ) {
+    if ( fs.existsSync("housepanel_server.key") && fs.existsSync("housepanel_server.crt") && fs.existsSync("housepanel_server.ca") ) {
         var key = fs.readFileSync("housepanel_server.key");
         var crt = fs.readFileSync("housepanel_server.crt");
         var cabundle = fs.readFileSync("housepanel_server.ca");
         var credentials = {key: key, cert: crt, ca: cabundle};
         var server = https.createServer(credentials, function() {});
+        secinfo = "Secure";
     } else {
-        server = http.createServer(function(req, res) {
-            console.log( (ddbg()), " received request for: ", req.url);
-        });
+        server = http.createServer(function() {});
+        secinfo = "Insecure";
     }
 
     // set up server for a two way socket communication with the browser
     if ( server ) {
         // create the webSocket server
-        wsServer = new webSocketServer({httpServer: server });
+        wsServer = new webSocketServer({httpServer: server});
         server.listen(GLB.webSocketServerPort, function() {
-            console.log( (ddbg()), "webSocket Server is listening on port: ", GLB.webSocketServerPort);
+            console.log( (ddbg()), secinfo, " webSocket Server is listening on port: ", GLB.webSocketServerPort);
         });
     } else {
         console.log( (ddbg()), "webSocket could not be established. webSocketServerPort= ", GLB.webSocketServerPort);
@@ -9294,8 +9385,10 @@ function setupBrowserSocket() {
     // This function handles new connections, messages from connections, and closed connections
     if ( wsServer ) {
         wsServer.on('request', function(wsrequest) {
-            console.log( (ddbg()), 'Requesting websocket connection: ', wsrequest.origin);
-            wsrequest.accept(null, wsrequest.origin); 
+            console.log( (ddbg()), 'Requesting websocket connection: ', wsrequest.requestedProtocols );
+            if ( wsrequest.requestedProtocols[0] === "housepanel" ) {
+                wsrequest.accept("housepanel", wsrequest.origin); 
+            }
         });
 
         // wsServer.on('message', function(wsrequest) {
@@ -9361,7 +9454,7 @@ function setupBrowserSocket() {
     }
 }
 
-// TODO - move this to the javascript client browser side since ISY hubs are local
+// TODO - move this to a connector app or the javascript client browser side since ISY hubs are local
 //        this way ISY things can be updated on the panel served by my central server
 function setupISYSocket(hub) {
 
@@ -9403,7 +9496,7 @@ function setupISYSocket(hub) {
             connection.on("message", function(msg) {
                 if ( msg.type==="utf8" ) {
                     // console.log(">>>> ISY message from user: ", hub.userid, " msg: ", msg.utf8Data);
-                    processIsyMessage(hub.userid, msg.utf8Data);
+                    processIsyMessage(hub.userid, hub, msg.utf8Data);
                 }
             });
         
@@ -9768,29 +9861,28 @@ if ( app && applistening ) {
                     if ( hub ) {
                         processHubMessage(hub.userid, hub, req.body);
                     }
-                    res.json("processed msg");
-                    res.end();
-                }).catch(reason => {console.log("dberror 33 - app.post - msg update - ", reason);});
+                }).catch(reason => {console.log("dberror 33a - app.post - msg update - ", reason);});
+            }
+            res.json("msg received and processed");
+            res.end();
+
+        // handle connector for ISY hubs that process webSockets locally
+        // there is a little local connector app that sends a post with the message to our server
+        // only works with a single ISY hub as there is no elegant way to pass the hub IP here
+        } else if ( req.path==="/" && req.body.type && req.body.type==="utf8" && req.body.utf8Data ) {
+            if ( DEBUG19 ) {
+                console.log( (ddbg()), "Received msg from ISY hub. msg: \n", req.body);
             }
 
-        // handle all api calls upon the server from js client and external api calls here
-        // note - if user calls this externally then the userid and thingid values must be provided
-        // most users won't know these values but they are shown on the showid page
-        // GET calls from a browser are easier because the cookie will be set
-        // this means that user GET API calls can only be made from a device that has HP running on it
-        // POST calls can be made from any platform as long as the userid and thingid values are known
-        } else if ( req.path==="/" &&  typeof req.body['useajax']!=="undefined" || typeof req.body["api"]!=="undefined" ) {
-            var result = apiCall(null, null, req.body, "POST", req, res);
-
-            if ( typeof result === "object" && typeof result.then === "function" ) {
-                result.then(res2 => {
-                    res.json(res2);
-                    res.end();
-                });
-            } else {
-                res.json(result);
-                res.end();
-            }
+            mydb.getRow("hubs","*","hubtype = 'ISY'")
+            .then(hub => {
+                if ( hub ) {
+                    processIsyMessage(hub.userid, hub, req.body.utf8Data);
+                }
+            }).catch(reason => {console.log("dberror 33b - app.post - msg update - ", reason);});
+            
+            res.send("ISY msg done processing: " + req.body.utf8Data);
+            res.end();
         
         // handle events from new SmartThings
         } else if ( (req.path==="/" || req.path==="/sinks") && 
@@ -9804,7 +9896,7 @@ if ( app && applistening ) {
                 if ( event.eventType==="DEVICE_EVENT" && event.deviceEvent.stateChange ) {
 
                     hubid = subscription.installedAppId;
-                    console.log(">>>> hubid from ST msg: ", hubid);
+                    // console.log(">>>> hubid from ST msg: ", hubid);
 
                     // var hub = findHub(hubId);
                     // get hub and user from the DB
@@ -9838,6 +9930,25 @@ if ( app && applistening ) {
             // console.log( (ddbg()), "Event from new SmartThings: ", UTIL.inspect(req.body.eventData, false, null, false) );
             res.json("new SmartThings event received");
             res.end();
+
+        // handle all api calls upon the server from js client and external api calls here
+        // note - if user calls this externally then the userid and thingid values must be provided
+        // most users won't know these values but they are shown on the showid page
+        // GET calls from a browser are easier because the cookie will be set
+        // this means that user GET API calls can only be made from a device that has HP running on it
+        // POST calls can be made from any platform as long as the userid and thingid values are known
+        } else if ( req.path==="/" &&  typeof req.body['useajax']!=="undefined" || typeof req.body["api"]!=="undefined" ) {
+            var result = apiCall(null, null, req.body, "POST", req, res);
+
+            if ( typeof result === "object" && typeof result.then === "function" ) {
+                result.then(res2 => {
+                    res.json(res2);
+                    res.end();
+                });
+            } else {
+                res.json(result);
+                res.end();
+            }
 
         // handle unknown requests
         } else {
