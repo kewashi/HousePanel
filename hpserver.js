@@ -271,7 +271,7 @@ function readOptions(caller) {
         rewrite = true;
     }
     if ( !array_key_exists("port", GLB.options.config) ) {
-        GLB.options.config.port = 3080;
+        GLB.options.config.port = 3280;
         rewrite = true;
     }
     if ( !array_key_exists("kiosk", GLB.options.config) ) {
@@ -283,7 +283,7 @@ function readOptions(caller) {
         rewrite = true;
     }
     if ( !array_key_exists("webSocketServerPort", GLB.options.config) ) {
-        GLB.options.config.webSocketServerPort = 1380;
+        GLB.options.config.webSocketServerPort = 1382;
         rewrite = true;
     }
     if ( !array_key_exists("fast_timer", GLB.options.config) ) {
@@ -343,11 +343,11 @@ function readOptions(caller) {
     try {
         var port = parseInt(GLB.options["config"]["port"]);
         if ( !port || isNaN(port) ) {
-            port = 3080;
+            port = 3280;
             rewrite = true;
         }
     } catch(e) {
-        port = 3080;
+        port = 3280;
         rewrite = true;
     }
     GLB.options["config"]["port"] = port;
@@ -355,11 +355,11 @@ function readOptions(caller) {
     try {
         var webSocketServerPort = parseInt(GLB.options["config"]["webSocketServerPort"]);
         if ( !webSocketServerPort || isNaN(webSocketServerPort) ) {
-            webSocketServerPort = 1380;
+            webSocketServerPort = 1382;
             rewrite = true;
         }
     } catch(e) {
-        webSocketServerPort = 1380;
+        webSocketServerPort = 1382;
         rewrite = true;
     }
     GLB.options["config"]["webSocketServerPort"] = webSocketServerPort;
@@ -1930,10 +1930,10 @@ function setDefaults() {
 
     GLB.options = {};
     GLB.options.config = {};
-    GLB.options.config["port"] = "3080";
+    GLB.options.config["port"] = "3280";
     GLB.options.config["kiosk"] = "false";
     GLB.options.config["blackout"] = "false";
-    GLB.options.config["webSocketServerPort"] = "1380";
+    GLB.options.config["webSocketServerPort"] = "1382";
     GLB.options.config["timezone"] = "America/Detroit";
     GLB.options.config["hubs"] = [];
     GLB.options.config["specialtiles"] = {"video": 4, "frame": 4, "image": 4, "blank": 2, "custom": 8};
@@ -4262,12 +4262,12 @@ function processIsyMessage(isymsg) {
                         } else if ( array_key_exists("nr", eventInfo[0])  ) {
                             pvalue["runAtStartup"] = "false";
                         }
+                        var subid = "lastRunTime";
                         allthings[idx]["value"] = pvalue;
-                        pushClient(bid, "isy", "lastRunTime", pvalue, false, false);
-                        // pushClient(bid, "isy", "lastFinishTime", pvalue, false, false);
-
-                        // don't do rules for programs - that seems silly
-                        // processRules(bid, "isy", subid, pvalue, "processMsg");
+                        pushClient(bid, "isy", subid, pvalue, false, false);
+                        pvalue.subid = subid;
+                        processRules(bid, "isy", subid, pvalue, "processMsg");
+                        delete pvalue.subid;
                         if ( DEBUG9 ) {
                             console.log( (ddbg()), "ISY webSocket updated program: ", bid, " pvalue: ", pvalue);
                         }
@@ -8459,8 +8459,8 @@ if ( DEBUG4 ) {
 var config = GLB.options.config;
 var port = config["port"];
 if ( !port ) {
-    port = 3080;
-    config["port"] = 3080;
+    port = 3280;
+    config["port"] = port;
 }
 GLB.defhub = "-1";
 
