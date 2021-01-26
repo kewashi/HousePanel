@@ -576,7 +576,7 @@ exports.hidden = function hidden(pname, pvalue, id) {
     return inpstr;
 }
 
-exports.getHeader = function getHeader(userid, skin, skip) {
+exports.getHeader = function getHeader(userid, pname, skin, skip) {
 
     var $tc = '<!DOCTYPE html>';
     $tc += '<html lang="en"><head>';
@@ -615,28 +615,28 @@ exports.getHeader = function getHeader(userid, skin, skip) {
     
     // load main script file
     $tc += '<script type="text/javascript" src="housepanel.js"></script>';  
+
+    if ( !skip ) {
+        // load tile editor and customizer
+        $tc += "<script type='text/javascript' src='tileeditor.js'></script>";
+        $tc += '<script type="text/javascript" src="customize.js"></script>';
+    }
     
-    // load tile editor fixed css file with cutomization helpers
-    $tc += "<script type='text/javascript' src='tileeditor.js'></script>";
+    // load fixed css file with cutomization helpers
     $tc += "<link id='tileeditor' rel='stylesheet' type='text/css' href='tileeditor.css'>";	
     
-    if ( !skip ) {
+    // load the main css file - first check for valid skin folder
+    if (!skin) {
+        skin = "skin-housepanel";
+    }
+    $tc += "<link rel=\"stylesheet\" type=\"text/css\" href=\"" + skin + "/housepanel.css\">";
     
-        // load tile customizer
-        $tc += '<script type="text/javascript" src="customize.js"></script>';
-        
-        // check for valid skin folder
-        if (!skin) {
-            skin = "skin-housepanel";
-        }
-
-        // load the main css file
-        $tc += "<link rel=\"stylesheet\" type=\"text/css\" href=\"" + skin + "/housepanel.css\">";
-
+    if ( userid && pname && !skip ) {
+    
         // load the custom tile sheet for this user if it exists
         // replaced logic to make customizations skin specific
-        var userfn = "user" + userid + "/" + skin + "/customtiles.css";
-        // var userfn = skin + "/customtiles.css";
+        var userfn = "user" + userid + "/" + pname + "/customtiles.css";
+        // var userfn = "user" + userid + "/" + skin + "/customtiles.css";
         if ( fs.existsSync(userfn ) ) {
             $tc += "<link id=\"customtiles\" rel=\"stylesheet\" type=\"text/css\" href=\"" + userfn + "\">";
         }

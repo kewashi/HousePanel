@@ -180,6 +180,7 @@ div.loginline {
 div.loginline input {
     position: absolute;
     left: 200px;
+    width: 250px;
 }
 
 div.loginline hr {

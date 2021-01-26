@@ -13,6 +13,7 @@ cm_Globals.allthings = null;
 cm_Globals.options = null;
 cm_Globals.returnURL = "";
 cm_Globals.hubId = "all";
+cm_Globals.wsclient = null;
 
 var modalStatus = 0;
 var modalWindows = {};
@@ -173,6 +174,7 @@ function getOptions(dosetup) {
         var email = $("#emailid").val();
         var skin = $("#skinid").val();
         var config = $("#configsid").val();
+        var pname = $("#showversion span#infoname").html();
         config = JSON.parse(config);
         cm_Globals.options = {userid: userid, email: email, skin: skin, config: config, rules: null};
         // console.log("getOptions returned: ", config);
@@ -180,7 +182,7 @@ function getOptions(dosetup) {
 
         // set the customization list
         $.post(cm_Globals.returnURL, 
-            {useajax: "getoptions", userid: userid, id:"none", type:"none"},
+            {useajax: "getoptions", userid: userid, pname: pname, id:"none", type:"none"},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     // console.log(">>>> presult: ", presult);
@@ -399,32 +401,28 @@ function initWebsocket() {
     }
 
     // now try to set up web sockets for ISY hubs
-    // setupISYSocket("http://192.168.11.31/rest", "admin:ag86Nuke");
+    // var isyhubhost = "ws://192.168.11.20:8182";
+    // cm_Globals.wsclient = setupISYSocket(isyhubhost);
 
+    if ( cm_Globals.wsclient && cm_Globals.wsclient.readyState === cm_Globals.wsclient.OPEN ) {
+        cm_Globals.wsclient.send("This is a test");
+    }
 }
 
-function setupISYSocket(hubhost, hubaccess) {
+function setupISYSocket(hubhost) {
     
     // var userid = cm_Globals.options.userid;
     // var hubs = JSON.parse(cm_Globals.options.hubs);
     // hubs.forEach(function(hub) {
     // if this hub is an ISY hub then set up a websocket to push results to our browser
-
-        // var buff = new ArrayBuffer(hubaccess);
-        // var base64 = buff.toString('base64');
-
-        if ( hubhost.startsWith("https://") ) {
-            wshost = "wss://" + hubaccess + "@" + hubhost.substr(8);
-        } else if ( hubhost.startsWith("http://") ) {
-            wshost = "ws://" + hubaccess + "@" + hubhost.substr(7);
-        }
-        wshost = wshost + "/subscribe";
-        // wshost = wshost + "/subscribe?Origin=com.universal-devices.websockets.isy";
-
-        // set up socket for ISY hub if one is there
-        var protocols = "ISYSUB";
-        var wsclient = new WebSocket(wshost, protocols);
-
+    try {
+        console.log("Creating webSocket for isyconnect on: ", hubhost);
+        var wsclient = new WebSocket(hubhost, "housepanel");
+    } catch(err) {
+        console.log("Error attempting to create webSocket for isyconnect on: ", hubhost," error: ", err);
+        return;
+    }
+    
         // var buff = Buffer.from(hub.hubaccess);
         // var base64 = buff.toString('base64');
         // var origin = "com.universal-devices.websockets.isy";
@@ -432,14 +430,14 @@ function setupISYSocket(hubhost, hubaccess) {
         //             "Sec-WebSocket-Version": "13", "Origin": "com.universal-devices.websockets.isy"};
 
         wsclient.onopen = function(event) {
-            console.log( "webSocket opened: ", event);
+            console.log( "isyconnect webSocket opened: ", event);
         }
 
         // handle incoming state messages from ISY
         // this will be ignored if the node isn't in our list
         wsclient.onmessage = function(event) {
             var msg = event.data;
-            console.log("webSocket message: ", msg);
+            console.log("isyconnect webSocket message: ", msg);
             // if ( msg.type==="utf8" ) {
             //     processIsyMessage(msg.utf8Data);
             // }
@@ -457,6 +455,7 @@ function setupISYSocket(hubhost, hubaccess) {
             }
         }
 
+    return wsclient;
 }
 
 // new routine to set up and handle websockets
@@ -627,7 +626,7 @@ function setupWebsocket(userid, webSocketUrl) {
                 $('div.panel div[command="LINK"][linkbid="' + bid + '"][subid="' + subid + '"]').each(function() {
 
                     // get the id to see if it is the thing being updated
-                    var linkedtile = $(this).attr("linkval");
+                    var linkedtile = $(this).attr("linkid");
                     var src = $("div.thing.p_"+linkedtile);
                     var lbid = src.attr("bid");
                     var thisbid = $(this).attr("linkbid");
@@ -929,11 +928,26 @@ function setupColors() {
                 var userid = cm_Globals.options.userid;
                 var thingid = $(tile).attr("thingid");
                 var tileid = $(tile).attr("tile");
-                console.log("setupColors doaction: id: ", bid, " type: ", thetype, " value: ", hslstr, " hex: ", hexval, " attr: color hubid: ", hubid);
+                var pname = $("#showversion span#infoname").html();
+
+                var usertile =  $("#sb-"+aid);
+                var command = "";
+                var linktype = thetype;
+                var linkval = thevalue;
+                var linkbid = bid;
+    
+                if ( usertile && $(usertile).attr("command") ) {
+                    command = $(usertile).attr("command");    // command type
+                    linkval = $(usertile).attr("linkval");    // urlencooded val
+                    linktype = $(usertile).attr("linktype");  // type of tile linked to
+                    linkbid = $(usertile).attr("linkbid");
+                }
+    
+                    console.log("setupColors doaction: id: ", bid, " type: ", thetype, " value: ", hslstr, " hex: ", hexval, " attr: color hubid: ", hubid);
 
                 $.post(cm_Globals.returnURL, 
-                       {useajax: "doaction", userid: userid, id: bid, thingid: thingid, type: thetype, value: hslstr, 
-                        subid: "color", attr: hexval, hubid: hubid, tileid: tileid} );
+                       {useajax: "doaction", userid: userid, pname: pname, id: bid, thingid: thingid, type: linktype, value: hslstr, 
+                        subid: "color", attr: hexval, hubid: hubid, tileid: tileid, command: command, linkval: linkval} );
             }
         });
     });
@@ -961,26 +975,50 @@ function setupSliders() {
             var userid = cm_Globals.options.userid;
             var thingid = $(tile).attr("thingid");
             var tileid = $(tile).attr("tile");
+            var pname = $("#showversion span#infoname").html();
             
-            var usertile = thing.siblings(".user_hidden");
+            var usertile =  $("#sb-"+aid);
             var command = "";
             var linktype = thetype;
-            var linkval = "";
-            if ( usertile && usertile.length>0 && $(usertile).attr("command") ) {
+            var linkval = thevalue;
+            var linkbid = bid;
+
+            if ( usertile && $(usertile).attr("command") ) {
                 command = $(usertile).attr("command");    // command type
-                if ( !thevalue ) {
-                    thevalue = $(usertile).attr("value");      // raw user provided val
-                }
                 linkval = $(usertile).attr("linkval");    // urlencooded val
                 linktype = $(usertile).attr("linktype");  // type of tile linked to
+                linkbid = $(usertile).attr("linkbid");
             }
-            
-            // console.log(ajaxcall + ": id= "+bid+" type= "+linktype+ " value= " + thevalue + " subid= " + subid + " command= " + command + " linkval: ", linkval);
-            console.log("setupSliders doaction: command= " + command + " bid= "+bid+" hub= " + hubid + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval);
 
-            $.post(cm_Globals.returnURL, 
-                {useajax: "doaction", userid: userid, id: bid, thingid: thingid, type: linktype, value: thevalue, attr: subid, 
-                 subid: subid, hubid: hubid, tileid: tileid, command: command, linkval: linkval} );
+            if ( linktype === "isyxxx" ) {
+                var swid = linkbid;
+                var irange = Math.floor(parseInt(thevalue) * 255 / 100);
+                irange = irange.toString();
+
+                // send command to turn light on
+                var cmd2 = "/nodes/" + swid + "/cmd/DON/" + irange;
+                if ( cm_Globals.wsclient && cm_Globals.wsclient.readyState === cm_Globals.wsclient.OPEN ) {
+                    cm_Globals.wsclient.send(cmd2);
+                }
+
+                // send command to make this the new set on level
+                var cmd = "/nodes/" + swid + "/set/OL/" + irange;
+                console.log("setupSliders ISY doaction: command= ", cmd );
+    
+                // send the ISY command to our local websocket to make the local hub call
+                if ( cm_Globals.wsclient && cm_Globals.wsclient.readyState === cm_Globals.wsclient.OPEN ) {
+                    cm_Globals.wsclient.send(cmd);
+                }
+        
+            } else {
+            
+                // console.log(ajaxcall + ": id= "+bid+" type= "+linktype+ " value= " + thevalue + " subid= " + subid + " command= " + command + " linkval: ", linkval);
+                console.log("setupSliders doaction: command= " + command + " bid= "+bid+" hub= " + hubid + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval);
+
+                $.post(cm_Globals.returnURL, 
+                    {useajax: "doaction", userid: userid, pname: pname, id: bid, thingid: thingid, type: linktype, value: thevalue, attr: subid, 
+                    subid: subid, hubid: hubid, tileid: tileid, command: command, linkval: linkval} );
+            }
         }
     });
 
@@ -1010,6 +1048,7 @@ function setupSliders() {
             var thetype = $(tile).attr("type");
             var usertile = thing.siblings(".user_hidden");
             var userid = cm_Globals.options.userid;
+            var pname = $("#showversion span#infoname").html();
             var command = "";
             var linktype = thetype;
             var linkval = "";
@@ -1025,7 +1064,7 @@ function setupSliders() {
             // console.log(ajaxcall + ": command= " + command + " id= "+bid+" type= "+linktype+ " value= " + thevalue + " subid= " + subid + " command= " + command + " linkval: ", linkval);
             
             $.post(cm_Globals.returnURL, 
-                {useajax: ajaxcall, userid: userid, id: bid, type: thetype, value: parseInt(ui.value), 
+                {useajax: ajaxcall, userid: userid, pname: pname, id: bid, type: thetype, value: parseInt(ui.value), 
                           attr: "colorTemperature", subid: subid, hubid: hubid, command: command, linkval: linkval } );
         }
     });
@@ -1116,9 +1155,10 @@ function setupPagemove() {
                 // updateSortNumber(this, k.toString());
             });
             var userid = cm_Globals.options.userid;
+            var pname = $("#showversion span#infoname").html();
             console.log("reordering " + k + " rooms: ", pages);
             $.post(cm_Globals.returnURL, 
-                {useajax: "setorder", userid: userid, id: "none", type: "rooms", value: pages},
+                {useajax: "setorder", userid: userid, pname: pname, id: "none", type: "rooms", value: pages},
                 function (presult, pstatus) {
                     if (pstatus==="success" ) {
                         console.log( "setorder POST returned: ", presult );
@@ -1158,6 +1198,7 @@ function setupSortable() {
             var roomid = $("#panel-"+panel).attr("roomid");
             var hubid = $(ui.item).attr("hub");
             var userid = cm_Globals.options.userid;
+            var pname = $("#showversion span#infoname").html();
             var tilenums = [];
             var num = 0;
             $("div.thing[panel="+panel+"][style*='relative']").each(function(){
@@ -1187,7 +1228,7 @@ function setupSortable() {
 
                 console.log("reordering " + num + " tiles: ", tilenums);
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "setorder", userid: userid, id: "none", type: "things", value: tilenums, hubid: hubid, roomid: roomid},
+                    {useajax: "setorder", userid: userid, pname: pname, id: "none", type: "things", value: tilenums, hubid: hubid, roomid: roomid},
                     function (presult, pstatus) {
                         if (pstatus==="success" && typeof presult==="object" ) {
                             console.log("setorder POST returned: ", presult );
@@ -1332,6 +1373,7 @@ function setupDraggable() {
                 var hubid = $(thing).attr("hubid");
                 var hubindex = $(thing).attr("hubindex");
                 var userid = cm_Globals.options.userid;
+                var pname = $("#showversion span#infoname").html();
                 var panelid = $("input[name='panelid']").val();
                 startPos.left = 0;
                 startPos.top  = 0;
@@ -1348,6 +1390,7 @@ function setupDraggable() {
                             var panel = $("#"+clickid).text();
                             var lastthing = $("div.panel-"+panel+" div.thing").last();
                             var roomid = $("#panel-"+panel).attr("roomid");
+                            var pname = $("#showversion span#infoname").html();
                             // alert("room = " + panel + " roomid = " + roomid + " hubindex = " + hubindex);
                             pos = {position: "absolute", top: evt.pageY, left: evt.pageX, width: 300, height: "auto"};
                             var zmax = getMaxZindex(panel);
@@ -1358,7 +1401,8 @@ function setupDraggable() {
                                     // add it to the system
                                     // the ajax call must return a valid "div" block for the dragged new thing
                                     $.post(cm_Globals.returnURL, 
-                                        {useajax: "addthing", userid: userid, id: bid, type: thingtype, value: panel, panelid: panelid, attr: startPos, hubid: hubid, hubindex: hubindex, roomid: roomid},
+                                        {useajax: "addthing", userid: userid, pname: pname, id: bid, type: thingtype, value: panel, panelid: panelid, 
+                                                              attr: startPos, hubid: hubid, hubindex: hubindex, roomid: roomid, pname: pname},
                                         function (presult, pstatus) {
                                             if (pstatus==="success" && !presult.startsWith("error") ) {
                                                 console.log( "Added " + thingname + " of type " + thingtype + " and bid= " + bid + " to room " + panel, " pos: ", startPos);
@@ -1416,7 +1460,7 @@ function setupDraggable() {
                     if ( ! $("#catalog").hasClass("ui-droppable-hover") ) {
                         console.log( "Moving tile #" + tile + " thingid= ", thingid, " to position: ", startPos);
                         $.post(cm_Globals.returnURL, 
-                               {useajax: "setposition", userid: cm_Globals.options.userid, id: bid, type: thingtype, value: panel, attr: startPos, tile: tile, hubid: hubid, thingid: thingid, roomid: roomid},
+                               {useajax: "setposition", userid: cm_Globals.options.userid, pname: pname, id: bid, type: thingtype, value: panel, attr: startPos, tile: tile, hubid: hubid, thingid: thingid, roomid: roomid},
                                function (presult, pstatus) {
                                 // check for an object returned which should be a promise object
                                 if (pstatus==="success" && ( typeof presult==="object" || (typeof presult === "string" && !presult.startsWith("error"))) ) {
@@ -1470,12 +1514,14 @@ function setupDraggable() {
                 var tile = $(thing).attr("tile");
                 var tilename = $(thing).find(".thingname").text();
                 var pos = {top: 100, left: 10};
+                var pname = $("#showversion span#infoname").html();
 
                 createModal("modaladd","Remove: "+ tilename + " (thing # " + thingid + ") of type: "+thingtype+" from room "+panel+"? Are you sure?", "body" , true, pos, function(ui, content) {
                     var clk = $(ui).attr("name");
                     if ( clk==="okay" ) {
                         $.post(cm_Globals.returnURL, 
-                            {useajax: "delthing", userid: cm_Globals.options.userid, id: bid, type: thingtype, value: panel, attr: "", hubid: hubid, tile: tile, thingid: thingid, roomid: roomid},
+                            {useajax: "delthing", userid: cm_Globals.options.userid, id: bid, type: thingtype, value: panel, 
+                                                  attr: "", hubid: hubid, tile: tile, thingid: thingid, roomid: roomid, pname: pname},
                             function (presult, pstatus) {
                                 // check for an object returned which should be a promise object
                                 if (pstatus==="success" && ( typeof presult==="object" || (typeof presult === "string" && !presult.startsWith("error"))) ) {
@@ -1543,11 +1589,13 @@ function relocateTile(thing, tileloc) {
 function dynoPost(ajaxcall, body, callback) {
     var isreload = false;
     var delay = false;
+    var pname = $("#showversion span#infoname").html();
 
     // if body is not given or is not an object then use all other values
     // to set the object to pass to post call with last one being a reload flag
     if ( typeof body === "object" ) { 
         body["api"] = ajaxcall;
+        body.pname = pname;
         if ( body.reload ) {
             isreload = true;
             var d = parseInt(body.reload);
@@ -1556,7 +1604,7 @@ function dynoPost(ajaxcall, body, callback) {
             }
         }
     } else {
-        body = {api: ajaxcall, userid: cm_Globals.options.userid, id: "none", type: "none"};
+        body = {api: ajaxcall, userid: cm_Globals.options.userid, pname: pname, id: "none", type: "none"};
     }
 
     if ( callback && typeof callback==="function" ) {
@@ -1684,8 +1732,9 @@ function execButton(buttonid) {
         // if timer provided make call to get list of photos to cycle through
         // and if this fails fall back to the same simple black screen
         } else {
+            var pname = $("#showversion span#infoname").html();
             $.post(cm_Globals.returnURL, 
-                {useajax: "getphotos", userid: cm_Globals.options.userid, id: 0, type: "none"}, 
+                {useajax: "getphotos", userid: cm_Globals.options.userid, pname: pname}, 
                 function(presult, pstatus) {
                     if ( presult && typeof presult == "object" ) {
                         // console.log("photos from getPhotos: ", presult);
@@ -2024,7 +2073,9 @@ function setupButtons() {
             // make an api call and process results
             // some hubs return devices on server and pushes results later
             // others return a request to start an OATH redirection flow
+            var pname = $("#showversion span#infoname").html();
             formData["api"] = "hubauth";
+            formData.pname = pname;
             $.post(cm_Globals.returnURL, formData,  function(presult, pstatus) {
                 // console.log("hubauth: ", presult);
 
@@ -2100,6 +2151,7 @@ function setupButtons() {
             var hubId = $(this).attr("hubid");
             var hubindex = $(this).attr("hubindex");
             var bodytag = "body";
+            var pname = $("#showversion span#infoname").html();
             var pos = {position: "absolute", top: 100, left: 100, 
                        width: 600, height: 120, border: "4px solid"};
             // alert("Remove request for hub: " + hubnum + " hubID: " + hubId );
@@ -2109,7 +2161,7 @@ function setupButtons() {
                 if ( clk==="okay" ) {
                     // remove it from the system
                     $.post(cm_Globals.returnURL, 
-                        {useajax: "hubdelete", userid: cm_Globals.options.userid, hubid: hubId, id: hubindex},
+                        {useajax: "hubdelete", userid: cm_Globals.options.userid, pname: pname, hubid: hubId, id: hubindex},
                         function (presult, pstatus) {
                             if (pstatus==="success" && !presult.startsWith("error")) {
                                 $("#newthingcount").html(presult);
@@ -2225,12 +2277,14 @@ function addEditLink() {
         var thingid = $(thing).attr("thingid");
         var hubid = $(thing).attr("hub");
         var userid = cm_Globals.options.userid;
+        var pname = $("#showversion span#infoname").html();
 
         createModal("modaladd","Remove: "+ tilename + " of type: "+thingtype+" from hub Id: " + hubid + " & room "+panel+"?<br>Are you sure?", "body" , true, pos, function(ui, content) {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "delthing", userid: userid, id: bid, type: thingtype, value: panel, attr: "", hubid: hubid, tile: tile, thingid: thingid, roomid: roomid},
+                    {useajax: "delthing", userid: userid, id: bid, type: thingtype, value: panel, 
+                                          attr: "", hubid: hubid, tile: tile, thingid: thingid, roomid: roomid, pname: pname},
                     function (presult, pstatus) {
                         // check for an object returned which should be a promise object
                         if (pstatus==="success" && ( typeof presult==="object" || (typeof presult === "string" && !presult.startsWith("error"))) ) {
@@ -2253,6 +2307,7 @@ function addEditLink() {
         var roomid = $("#panel-"+roomname).attr("roomid");
         var clickid = $(evt.target).parent().attr("aria-labelledby");
         var pos = {top: 100, left: 10};
+        var pname = $("#showversion span#infoname").html();
         createModal("modaladd","Remove Room #" + roomnum + " with Name: " + roomname +" from HousePanel. Are you sure?", "body" , true, pos, function(ui, content) {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
@@ -2266,7 +2321,7 @@ function addEditLink() {
 
                 // remove it from the system
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "pagedelete", userid: cm_Globals.options.userid, id: roomnum, type: "none", value: roomname, roomid: roomid, attr: "none"},
+                    {useajax: "pagedelete", userid: cm_Globals.options.userid, id: roomnum, type: "none", value: roomname, roomid: roomid, attr: "none", pname: pname},
                     function (presult, pstatus) {
                         if (pstatus==="success" && !presult.startsWith("error")) {
                             // remove it visually - although we do a refresh so not really needed
@@ -2295,11 +2350,12 @@ function addEditLink() {
         // var clickid = $(evt.target).attr("aria-labelledby");
         var pos = {top: 100, left: 10};
         var panelid = $("input[name='panelid']").val();
+        var pname = $("#showversion span#infoname").html();
         createModal("modaladd","Add New Room to HousePanel. Are you sure?", "body" , true, pos, function(ui, content) {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "pageadd", userid: cm_Globals.options.userid, id: "none", panelid: panelid},
+                    {useajax: "pageadd", userid: cm_Globals.options.userid, id: "none", panelid: panelid, pname: pname},
                     function (presult, pstatus) {
                         if ( pstatus==="success" && !presult.startsWith("error") ) {
                             window.location.href = cm_Globals.returnURL;
@@ -2762,8 +2818,9 @@ function updateTile(aid, presult, skiplink) {
 }
 
 function refreshTile(aid, bid, thetype, hubid) {
+    var pname = $("#showversion span#infoname").html();
     $.post(cm_Globals.returnURL, 
-        {useajax: "doquery", userid: cm_Globals.options.userid, id: bid, type: thetype, value: "none", attr: "none", hubid: hubid} );
+        {useajax: "doquery", userid: cm_Globals.options.userid, pname: pname, id: bid, type: thetype, value: "none", attr: "none", hubid: hubid} );
 }
 
 // refresh tiles on this page when switching to it
@@ -2783,6 +2840,7 @@ function clockUpdater() {
     // var utc = old.getTime() + (old.getTimezoneOffset() * 60000);
     // var d = new Date(utc + (1000*tz));        
     var userid = cm_Globals.options.userid;
+    var pname = $("#showversion span#infoname").html();
 
     updateClock("clockdigital");
     updateClock("clockanalog");
@@ -2791,7 +2849,7 @@ function clockUpdater() {
 
         // call server to get updated digital clocks
         $.post(cm_Globals.returnURL, 
-            {useajax: "getclock", userid: userid, id: clocktype, type: "clock"},
+            {useajax: "getclock", userid: userid, pname: pname, id: clocktype, type: "clock"},
             function (presult, pstatus) {
                 if ( pstatus==="success" && presult && typeof presult==="object" ) {
                     console.log("Updating ",clocktype," with: ", presult);
@@ -2872,6 +2930,7 @@ function setupTimer(timertype, timerval, hubid) {
 
     // we now pass the unique hubId value instead of numerical hub
     // since the number can now change when new hubs are added and deleted
+    var pname = $("#showversion span#infoname").html();
     var updarray = [timertype, timerval, hubid];
     updarray.myMethod = function() {
 
@@ -2885,7 +2944,7 @@ function setupTimer(timertype, timerval, hubid) {
                 // just do the post and nothing else since the post call pushClient to refresh the tiles
                 var thingid = that[0];
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "doquery", userid: cm_Globals.options.userid, thingid: thingid, hubid: that[2]},
+                    {useajax: "doquery", userid: cm_Globals.options.userid, pname: pname, thingid: thingid, hubid: that[2]},
                     function (presult, pstatus) {
                         if (pstatus==="success" && typeof presult==="object" ) {
                             if ( cm_Globals.logwebsocket ) {
@@ -3013,6 +3072,7 @@ function checkPassword(tile, thingname, pw, yesaction) {
     var tpos = $(tile).offset();
     var ttop = (tpos.top > 95) ? tpos.top - 90 : 5;
     var pos = {top: ttop, left: tpos.left};
+    var pname = $("#showversion span#infoname").html();
     var htmlcontent;
     if ( pw==="" ) {
         htmlcontent = "<p>Operate action for tile [" + thingname + "] Are you sure?</p>";
@@ -3033,7 +3093,7 @@ function checkPassword(tile, thingname, pw, yesaction) {
             } else {
                 userpw = $("#userpw").val();
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "pwhash", userid: cm_Globals.options.userid, id: "none", type: "verify", value: userpw, attr: pw},
+                    {useajax: "pwhash", userid: cm_Globals.options.userid, pname: pname, id: "none", type: "verify", value: userpw, attr: pw},
                     function (presult, pstatus) {
                         if ( pstatus==="success" && presult==="success" ) {
                             // console.log("Protected tile [" + thingname + "] access granted.");
@@ -3120,10 +3180,12 @@ function processClick(that, thingname) {
     var linkval = "";
     var command = "";
     var bid = $(tile).attr("bid");
+    var linkbid = bid;
     var hubid = $(tile).attr("hub");
     var userid = cm_Globals.options.userid;
     var thingid = $(tile).attr("thingid");
     var tileid = $(tile).attr("tile");
+    var pname = $("#showversion span#infoname").html();
     var targetid;
     if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
         var slen = subid.length;
@@ -3148,15 +3210,26 @@ function processClick(that, thingname) {
         thevalue = $("#a-"+aid+"-temperature").html();
     }
 
-    // determine if this is a LINK or RULE by presence of ::
+    // determine if this is a LINK or RULE by checking for sb-aid sibling element
+    // this includes setting the bid of the linked tile if needed
     // new logic based on DB version
-    var jcolon = thevalue.indexOf("::");
-    if ( jcolon>0 && ( thevalue.startsWith("GET") || thevalue.startsWith("POST") || 
-                       thevalue.startsWith("PUT") || thevalue.startsWith("LINK") || 
-                       thevalue.startsWith("RULE") ) )
+    if ( $("#sb-"+aid) && $("#sb-"+aid).attr("linkval") ) {
+        var linkval = $("#sb-"+aid).attr("linkval");
+        linkbid = $("#sb-"+aid).attr("linkbid");
+    } else {
+        linkval = thevalue;
+    }
+
+    if ( linkval.startsWith("GET::") || linkval.startsWith("POST::") || 
+         linkval.startsWith("PUT::") || linkval.startsWith("LINK::") || 
+         linkval.startsWith("RULE::") )
     {
+        var jcolon = linkval.indexOf("::");
         command = thevalue.substr(0, jcolon);
         linkval = thevalue.substr(jcolon+2);
+    } else {
+        command = null;
+        linkval = null;
     }
     
     if ( command === "URL" ) {
@@ -3216,7 +3289,7 @@ function processClick(that, thingname) {
         console.log(ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" hub Id= " + hubid + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
 
         $.post(cm_Globals.returnURL, 
-            {useajax: ajaxcall, userid: userid, thingid: thingid, tileid: tileid, id: bid, type: thetype, value: thevalue,
+            {useajax: ajaxcall, userid: userid, pname: pname, thingid: thingid, tileid: tileid, id: bid, type: thetype, value: thevalue,
                 attr: subid, subid: subid, hubid: hubid},
             function(presult, pstatus) {
                 if (pstatus==="success") {
@@ -3275,7 +3348,7 @@ function processClick(that, thingname) {
             //                    " attr: ", theattr, " hubid: ", hubid, " command: ", command, " linkval: ", linkval );
             if ( val ) {
                 $.post(cm_Globals.returnURL, 
-                    {useajax: ajaxcall, userid: userid, id: bid, thingid: thingid, tileid: tileid, type: thetype, value: val, roomid: roomid,
+                    {useajax: ajaxcall, userid: userid, pname: pname, id: bid, thingid: thingid, tileid: tileid, type: thetype, value: val, roomid: roomid,
                      attr: theattr, subid: "switch", hubid: hubid, command: command, linkval: linkval} );
             }
         });
@@ -3302,7 +3375,7 @@ function processClick(that, thingname) {
         }
 
         // remove isy type check since it could be a link
-        else if ( subid==="switch" && command==="" && (thevalue==="DON" || thevalue==="DOF" )  ) {
+        else if ( subid==="switch" && (thevalue==="DON" || thevalue==="DOF" )  ) {
             thevalue = thevalue==="DON" ? "DOF" : "DON";
         }
 
@@ -3328,62 +3401,81 @@ function processClick(that, thingname) {
         // values returned from actions are pushed back to GUI from server via pushClient call
         // alert("API call: " + ajaxcall + " bid: " + bid + " type: " + thetype + " value: " + thevalue);
         // hubid = "auto";
-        $.post(cm_Globals.returnURL, 
-               {useajax: ajaxcall, userid: userid, id: bid, thingid: thingid, type: thetype, value: thevalue,
-                attr: theattr, subid: subid, hubid: hubid, tileid: tileid, command: command, linkval: linkval},
-            function (presult, pstatus) {
-                if (pstatus==="success") {
 
-                    if ( typeof presult==="object" ) {
-                        var showstr = "";
-                        // console.log("doaction query result: ", presult);
-                        $.each(presult, function(s, v) {
-                            if ( s && v && s!=="password" && !s.startsWith("user_") ) {
-                                // first try to parse as json string
-                                try {
-                                    var jsontval = JSON.parse(v);
-                                } catch(jerr) {
-                                    jsontval = null;
-                                }
-                                if ( jsontval && typeof jsontval==="object" ) {
-                                    for (var jtkey in jsontval ) {
-                                        var jtval = jsontval[jtkey];
-                                        if ( jtval ) {
-                                            if ( jtval.length > 12 ) {
-                                                showstr = showstr + jtkey + ": " + jtval.substr(0,10) + "...<br>";
-                                            } else {
-                                                showstr = showstr + jtkey + ": " + jtval + "<br>";
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    if ( typeof v !== "string" ) {
-                                        v = v.toString();
-                                    }
-                                    if ( v.length > 12 ) {
-                                        showstr = showstr + s + ": " + v.substr(0,10) + "...<br>";
-                                    } else {
-                                        showstr = showstr + s + ": " + v + "<br>";
-                                    }
-                                }
-                            }
-                        });
-                        var winwidth = $("#dragregion").innerWidth();
-                        var leftpos = $(tile).position().left + 5;
-                        if ( leftpos + 220 > winwidth ) {
-                            leftpos = leftpos - 110;
-                        }
-                        var pos = {top: $(tile).position().top + 80, left: leftpos};
-                        closeModal("modalpopup");
-                        createModal("modalpopup", showstr, "body", false, pos, function(ui) {} );
-                    } else if ( !presult.startsWith("error") ) {
-                        console.log("Success: result will be pushed later.");
+        // call local ISY hub using the isyconnect intermediary websocket
+        if ( thetype === "isyxxx" ) {
+            var swid = linkbid;
+            var swval = thevalue;
+            var cmd;
+            var intvar;
+            var varnum;
+
+            if ( subid==="switch" || subid==="DON" || subid==="DOF" ) {
+                cmd = "/nodes/" + swid + "/cmd/" + swval;
+
+            } else if ( subid === "level" || subid === "onlevel" ) {
+                var irange = Math.floor(parseInt(swval) * 255 / 100);
+                irange = irange.toString();
+
+                // send command to turn light on
+                var cmd2 = "/nodes/" + swid + "/cmd/DON/" + irange;
+                cm_Globals.wsclient.send(cmd2);
+
+                // send command to make this the new set on level
+                cmd = "/nodes/" + swid + "/set/OL/" + irange;
+
+            } else if ( subid.startsWith("Int_") ) {
+
+                var intvar = parseInt(thevalue);
+                if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
+                    varnum = subid.substr(4, subid.length-7);
+                    intvar = subid.endsWith("-up") ? intvar + 1 : intvar - 1;
+                } else {
+                    varnum = subid.substr(4);
+                }
+
+                cmd = "/vars/set/1/" + varnum + "/" + intvar.toString();
+
+            } else if ( subid.startsWith("State_") ) {
+                intvar = parseFloat(swval);
+                if ( isNaN(intvar) ) {
+                    intval = 0.0;
+                } else {
+                    if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
+                        varnum = subid.substr(6, subid.length-9);
+                        intvar = subid.endsWith("-up") ? intvar + 1 : intvar - 1;
                     } else {
-                        console.log("Unrecognized return from POST call. result: ", presult);
+                        varnum = subid.substr(6);
                     }
                 }
-            }, "json"
-        );
+                cmd = "/vars/set/2/" + varnum + "/" + intvar.toString();
+            } else {
+                // try setting a property
+                cmd = "/nodes/" + swid + "/set/" + subid + "/" + swval;
+            }
 
+            // send the ISY command to our local websocket to make the local hub call
+            if ( cm_Globals.wsclient && cm_Globals.wsclient.readyState === cm_Globals.wsclient.OPEN ) {
+                console.log("sending: ", cmd);
+                cm_Globals.wsclient.send(cmd);
+            }
+
+        } else {
+            $.post(cm_Globals.returnURL, 
+                {useajax: ajaxcall, userid: userid, pname: pname, id: bid, thingid: thingid, type: thetype, value: thevalue,
+                    attr: theattr, subid: subid, hubid: hubid, tileid: tileid, command: command, linkval: linkval},
+                function (presult, pstatus) {
+                    if (pstatus==="success") {
+                        if ( presult && typeof presult === "object" ) {
+                            console.log("Success: ", presult);
+                        } else if ( presult && typeof presult === "string" && !presult.startsWith("error") ) {
+                            console.log("Success: result will be pushed later.");
+                        } else {
+                            console.log("Unrecognized return from POST call. result: ", presult);
+                        }
+                    }
+                }, "json"
+            );
+        }
     } 
 }
