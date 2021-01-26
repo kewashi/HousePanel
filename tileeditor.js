@@ -1360,9 +1360,11 @@ function saveTileEdit(str_type, thingindex) {
         // console.log("\n----------------------------------------------------------\n");
         subcontent= encodeURI(subcontent);
         var skin = $("#skinid").val();
+        var pname = $("#showversion span#infoname").html();
 
         $.post(returnURL, 
-            {useajax: "savetileedit", userid: et_Globals.userid, thingid: et_Globals.thingid, skin: skin, id: n1, n1: n1, n2: n2, nlen: sheetContents.length, type: str_type, value: subcontent, attr: newname, tile: thingindex},
+            {useajax: "savetileedit", userid: et_Globals.userid, thingid: et_Globals.thingid, skin: skin, id: n1, n1: n1, n2: n2, nlen: sheetContents.length, 
+                                      type: str_type, value: subcontent, attr: newname, tile: thingindex, pname: pname},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     if ( DEBUGte ) {
