@@ -16,6 +16,7 @@ cm_Globals.returnURL = "";
 cm_Globals.hubId = "all";
 cm_Globals.client = -1;
 cm_Globals.skipseconds = false;
+cm_Globals.initSockRestart = 0;
 
 var modalStatus = 0;
 var modalWindows = {};
@@ -295,6 +296,7 @@ $(document).ready(function() {
     if ( pagename!=="login" ) {
         getAllthings();
         getOptions(true);
+        cm_Globals.initSockRestart = 0;
         initWebsocket();
         
         // disable return key
@@ -476,6 +478,8 @@ function initWebsocket() {
     // set up socket
     if ( webSocketUrl ) {
         setupWebsocket(webSocketUrl);
+    } else {
+        console.log(">>>> could not initialize socket between browser and server");
     }
 
 }
@@ -678,7 +682,13 @@ function setupWebsocket(webSocketUrl)
     
     // if this socket connection closes log it
     wsSocket.onclose = function(){
-        console.log("webSocket connection closed for: ", webSocketUrl);
+        cm_Globals.initSockRestart++;
+        console.log("webSocket connection closed for: ", webSocketUrl," Attempting to reconnect, try #", cm_Globals.initSockRestart );
+
+        // attempt to reconnect websocket but only do 5 times
+        if ( cm_Globals.initSockRestart < 5 ) {
+            initWebsocket();
+        }
     };
 }
 

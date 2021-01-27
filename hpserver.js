@@ -4994,9 +4994,11 @@ function callHub(hub, swid, swtype, swval, swattr, subid, linkinfo, popup, inrul
 
         if (result) {
             pushClient(swid, swtype, subid, result, linkinfo, popup);
-            result.subid = subid;
-            processRules(swid, swtype, subid, result, "callHub");
-            delete result.subid;
+            if ( !inrule ) {
+                result.subid = subid;
+                processRules(swid, swtype, subid, result, "callHub");
+                delete result.subid;
+            }
         }
 
     // this function calls the Groovy hub api
@@ -6309,10 +6311,12 @@ function getInfoPage(uname, returnURL, pathname) {
             </form></div>';
     }
 
+    var webSocketUrl = getSocketUrl(hostname);
     $tc += "<form>";
+    $tc += utils.hidden("pagename", "info");
     $tc += utils.hidden("returnURL", returnURL);
     $tc += utils.hidden("pathname", pathname);
-    $tc += utils.hidden("pagename", "info");
+    $tc += utils.hidden("webSocketUrl", webSocketUrl);
     $tc += "</form>";
     $tc += "<div class=\"infopage\">";
     $tc += "<div class='bold'>Site url = " + returnURL + "</div>";

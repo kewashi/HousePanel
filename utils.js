@@ -1,6 +1,7 @@
 'use strict';
 
 const devhistory =  ` 
+2.418   fix rule infinite loop for ISY progs that made webSockets fail
 2.417   enable rules for programs - previously I just skipped this
 2.416   minor tweak to ISY hub to show all status values for programs
 2.415   bugfix that caused RULE engine to make spurious fixed values
