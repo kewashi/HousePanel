@@ -10,6 +10,7 @@
     "express": "^4.16.4",
     "mqtt": "^3.0.0",
     "mysql": "github:mysqljs/mysql",
+    "nodemailer": "^6.4.17",
     "request": "^2.88.0",
     "url": "^0.11.0",
     "websocket": "^1.0.28",

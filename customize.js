@@ -266,12 +266,10 @@ function customInfoPanel() {
 }
 
 // this little gem will sort by up to three things
-function sortedSensors(one, two, three) {
-
-    if ( !one ) { one = "name"; }
+function sortedSensors(unsorted, one, two, three) {
 
     // put sensors in an array so we can sort them
-    var sensors = Object.values(cm_Globals.devices).sort( function(obja, objb) {
+    var sensors = unsorted.sort( function(obja, objb) {
         function test(a, b) {
             if ( typeof a === "object" || typeof b === "object" ) { return 0; }
             else if ( a===b ) { return 0 }
@@ -305,9 +303,11 @@ function loadLinkPanel(tileid) {
 
     // create a sorted list here
     // var sensors = sortedSensors("name", "type", "hubnum");
+    var sortdevices = sortedSensors( Object.values(cm_Globals.devices), "name", "devicetype" );
 
-    for ( var id in cm_Globals.devices ) {
-        var sensor = cm_Globals.devices[id];
+    for ( var i in sortdevices ) {
+        var sensor = sortdevices[i];
+        var id = sensor["id"];
         if ( id !== tileid ) {
             var thingname = sensor["name"];
             var thingtype = sensor["devicetype"];

@@ -317,12 +317,47 @@ $(document).ready(function() {
             }
         });
 
-        // $("#pword").on("keydown",function(e) {
-        //     if ( e.which===13 ){
-        //         execButton("dologin");
-        //         e.stopPropagation();
-        //     }
-        // });
+        $("#moreinfo").off("click");
+        $("#moreinfo").on("click",function(evt) {
+            if ( $("#loginmore").hasClass("hidden") ) {
+                $("#loginmore").removeClass("hidden");
+                $(evt.target).html("Less...");
+            } else {
+                $("#loginmore").addClass("hidden");
+                $(evt.target).html("More...");
+            }
+        });
+
+        $("#newuser").off("click");
+        $("#newuser").on("click",function(evt) {
+            $("#loginform").addClass("hidden");
+            $("#newuserform").removeClass("hidden");
+        });
+
+        $("#olduser").off("click");
+        $("#olduser").on("click",function(e) {
+            $("#newuserform").addClass("hidden");
+            $("#loginform").removeClass("hidden");
+            e.stopPropagation();
+        });
+
+        $("#revertolduser").off("click");
+        $("#revertolduser").on("click",function(e) {
+            window.location.href = cm_Globals.returnURL + "/logout";
+        });
+
+        $("#forgotpw").off("click");
+        $("#forgotpw").on("click",function(e) {
+            execForgotPassword();
+            e.stopPropagation();
+        });
+
+        $("#pword").on("keydown",function(e) {
+            if ( e.which===13 ){
+                execButton("dologin");
+                e.stopPropagation();
+            }
+        });
     }
 
     // load things and options
@@ -1589,7 +1624,14 @@ function relocateTile(thing, tileloc) {
 function dynoPost(ajaxcall, body, callback) {
     var isreload = false;
     var delay = false;
-    var pname = $("#showversion span#infoname").html();
+    if ( !body.pname ) {
+        var pname = $("#showversion span#infoname").html();
+        if ( typeof pname === "undefined" || !pname ) {
+            pname = "default";
+        }
+    } else {
+        pname = body.pname;
+    }
 
     // if body is not given or is not an object then use all other values
     // to set the object to pass to post call with last one being a reload flag
@@ -1630,6 +1672,124 @@ function dynoPost(ajaxcall, body, callback) {
             }
         );
     }
+}
+
+function execForgotPassword() {
+
+    var genobj = formToObject("loginform");
+    var emailname = genobj.emailid;
+    if ( emailname.length < 3 || emailname.indexOf("@") === -1 ) {
+        alert("Enter a valide email address before requesting a reset.");
+    } else {
+        // alert(emailname);
+        $.post(cm_Globals.returnURL, 
+            {useajax: "forgotpw", email: emailname}, 
+            function(presult, pstatus) {
+                if ( pstatus==="success" && presult && typeof presult === "object" ) {
+                    var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 100px; padding-top: 50px; text-align: center;";
+                    var pos = {style: pstyle};
+                    console.log("user: ", presult);
+                    createModal("loginfo","Login reset link send to " + emailname + "<br><br>", "body", "Done", pos, function(ui) {
+                        window.location.href = cm_Globals.returnURL;
+                    });
+                    setTimeout(function() {
+                        closeModal("loginfo");
+                        window.location.href = cm_Globals.returnURL;
+                    },60000);
+                } else {
+                    console.log("forgot error: ", presult);
+                    alert("There was a problem attempting to reset login. Try again.");
+                    // window.location.href = cm_Globals.returnURL;
+                }
+            }
+        );
+    }
+
+}
+
+function execCreateUser() {
+
+    var genobj = formToObject("newuserform");
+    var emailname = genobj.newemailid;
+    var username = genobj.newuname;
+    var newpw = genobj.newpword;
+    var newpw2 = genobj.newpword2;
+
+    if ( newpw.length < 6 ) {
+        alert("Password provided is too short. Must be 6 or more characters in length");
+    } else if ( newpw !== newpw2 ) {
+        alert("Passwords do not match. Try again.");
+    } else {
+        $.post(cm_Globals.returnURL, 
+            {useajax: "createuser", email: emailname, uname: username, pword: newpw}, 
+            function(presult, pstatus) {
+                if ( pstatus==="success" && presult && typeof presult === "object" ) {
+                    var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
+                    var pos = {style: pstyle};
+                    createModal("loginfo","New user created successfully.<br>Please log in with the new credentials.<br>email = " + emailname+ "<br><br>", "body", "Done", pos, function(ui) {
+                        window.location.href = cm_Globals.returnURL;
+                    });
+                    setTimeout(function() {
+                        closeModal("loginfo");
+                        window.location.href = cm_Globals.returnURL;
+                    },60000);
+                } else {
+                    pstyle = "position: absolute; border: 6px black solid; background-color: red; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
+                    pos = {style: pstyle};
+                    var errstr = "";
+                    if ( typeof presult === "string" ) { errstr = "<br>" + presult; }
+                    createModal("loginfo","There was a problem with creating a new user." + errstr + "<br><br>Please try again.", "body", "Okay", pos, function(ui) {
+                        window.location.href = cm_Globals.returnURL;
+                    });
+                }
+            }
+        );
+    }
+
+}
+
+function execNewPassword() {
+
+    var genobj = formToObject("newpwform");
+    var userid = genobj.userid;
+    var newpw = genobj.newpword;
+    var newpw2 = genobj.newpword2;
+    var pname = genobj.pname;
+    var panelpw = genobj.panelpword;
+    var emailname = genobj.email;
+    var uname = genobj.uname;
+
+    if ( newpw.length < 6 ) {
+        alert("Password provided is too short. Must be 6 or more characters in length");
+    } else if ( newpw !== newpw2 ) {
+        alert("Passwords do not match. Try again.");
+    } else {
+        $.post(cm_Globals.returnURL, 
+            {useajax: "updatepassword", userid: userid, email:emailname, uname: uname, pword: newpw, pname: pname, panelpw: panelpw}, 
+            function(presult, pstatus) {
+                if ( pstatus==="success" && presult && typeof presult === "object" ) {
+                    var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
+                    var pos = {style: pstyle};
+                    createModal("loginfo","User and panel passwords updated successfully.<br>Please log in with the new credentials.<br>email = " + emailname+ "<br><br>", "body", "Done", pos, function(ui) {
+                        window.location.href = cm_Globals.returnURL;
+                    });
+                    setTimeout(function() {
+                        closeModal("loginfo");
+                        window.location.href = cm_Globals.returnURL;
+                    },60000);
+                } else {
+                    pstyle = "position: absolute; border: 6px black solid; background-color: red; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
+                    pos = {style: pstyle};
+                    var errstr = "";
+                    if ( typeof presult === "string" ) { errstr = "<br>" + presult; }
+                    createModal("loginfo","There was a problem with updating a new password." + errstr + "<br><br>Please try again.", "body", "Okay", pos, function(ui) {
+                        window.location.href = cm_Globals.returnURL;
+                    });
+                }
+            }
+        );
+    }
+
 }
 
 function execButton(buttonid) {
@@ -1677,17 +1837,24 @@ function execButton(buttonid) {
         $("#optionspage")[0].reset();
         $("#filteroptions")[0].reset();
 
+    } else if ( buttonid==="createuser" ) {
+        execCreateUser();
+
+    } else if ( buttonid==="newpassword") {
+        execNewPassword();
+
     } else if ( buttonid==="dologin") {
 
         if ( !checkLogin() ) { return; }
 
         var genobj = formToObject("loginform");
+
         dynoPost("dologin", genobj, function(presult, pstatus) {
             if ( pstatus === "success" && presult && typeof presult === "object" ) {
                 console.log("login successful for user: ",  presult["users_email"], " and panel: ", presult["panels_pname"]);
-                var pstyle = "position: absolute; border: 6px black solid; background-color: blue; color: white; font-weight: bold; font-size: 24px; left: 500px; top: 200px; width: 600px; height: 180px; padding-top: 20px;";
+                var pstyle = "position: absolute; border: 6px black solid; background-color: blue; color: white; font-weight: bold; font-size: 24px; left: 560px; top: 220px; width: 600px; height: 220px; padding-top: 20px;";
                 var pos = {style: pstyle};
-                createModal("loginfo","User: " + presult["users_email"] + "<br>Logged into panel: " + presult["panels_pname"] + "<br>With skin: " + presult["panels_skin"] + "<br><br>Proceed? ", 
+                createModal("loginfo","User Email: " + presult["users_email"] + "<br>Username: " + presult["users_uname"] + "<br>Logged into panel: " + presult["panels_pname"] + "<br>With skin: " + presult["panels_skin"] + "<br><br>Proceed? ", 
                     "body", true, pos, function(ui) {
                         var clk = $(ui).attr("name");
                         if ( clk==="okay" ) {
@@ -1696,7 +1863,8 @@ function execButton(buttonid) {
                     });
                 // window.location.href = cm_Globals.returnURL;
             } else {
-                var pstyle = "position: absolute; border: 6px black solid; background-color: red; color: white; font-weight: bold; font-size: 24px; left: 500px; top: 200px; width: 600px; height: 180px; padding-top: 50px;";
+                console.log("not logged in. ", presult);
+                var pstyle = "position: absolute; border: 6px black solid; background-color: red; color: white; font-weight: bold; font-size: 24px; left: 560px; top: 220px; width: 600px; height: 180px; padding-top: 50px;";
                 var pos = {style: pstyle};
                 createModal("loginfo","Either the User and Password pair are invalid, or the requested Panel and Password pair are invalid. <br><br>Please try again.", "body", false, pos);
                 setTimeout(function() {
@@ -1797,7 +1965,7 @@ function execButton(buttonid) {
         $("#mode_Edit").prop("checked",true);
         priorOpmode = "DragDrop";
     } else if ( buttonid==="showdoc" ) {
-        window.open("http://www.housepanel.net",'_blank');
+        window.open("https://housepanel.net",'_blank');
         return;
     // } else if ( buttonid==="name" ) {
     //     return;
@@ -1943,10 +2111,11 @@ function setupButtons() {
             evt.stopPropagation();
         });
         
-        $("#infoname").on("click", function(e) {
-            var username = $(this).html();
+        $("#showversion").on("click", function(e) {
+            var username = $("#infoname").html();
+            var emailname = $("#emailname").html();
             var pos = {top: 40, left: 820};
-            createModal("modalexec","Log out user "+ username + " <br/>Are you sure?", "body" , true, pos, function(ui, content) {
+            createModal("modalexec","Log out user "+ emailname + " on panel " + username+  " <br/>Are you sure?", "body" , true, pos, function(ui, content) {
                 var clk = $(ui).attr("name");
                 if ( clk==="okay" ) {
                     window.location.href = cm_Globals.returnURL + "/logout";
