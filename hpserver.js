@@ -19,7 +19,7 @@ const DEBUG11 = false;              // rules
 const DEBUG12 = false;              // hub push updates
 const DEBUG13 = false;              // URL callbacks
 const DEBUG14 = false;              // tile link details
-const DEBUG15 = false;              // unused
+const DEBUG15 = false;              // new user and forgot password
 const DEBUG16 = false;              // customtiles writing and custom names
 const DEBUG17 = false;              // push client
 const DEBUG18 = false;              // ST, HE, and Ford messages in callHub -> getHubResponse
@@ -51,6 +51,7 @@ const os = require('os');
 const cookieParser = require('cookie-parser');
 const request = require('request');
 const url = require('url');
+const nodemailer = require('nodemailer');
 
 // load supporting modules
 var utils = require("./utils");
@@ -188,6 +189,20 @@ function getConfigItem(configoptions, tag) {
         }
     }
     return result;
+}
+
+function addConfigItem(userid, key, value) {
+    var updval = {userid, userid, configkey: key, configval: JSON.stringify(value)};
+    return mydb.addRow("configs", updval)
+    .then(result => {
+        if ( result ) {
+            updval.id = result.getAutoIncrementValue();
+            return updval;
+        } else {
+            console.log( (ddbg()), "error - could not add configuration parameters for userid:", userid, " key:", key, " value:", value);
+            return null;
+        }
+    });
 }
 
 // this function gets the user name and panel name that matches the hashes
@@ -2554,67 +2569,498 @@ function getSpecials(configoptions) {
 }
 
 function getLoginPage(userid, usertype, emailid, hostname, skin) {
-    var $tc = "";
-    var pname = "";
-    $tc += utils.getHeader(userid, null, skin, true);
-    $tc += "<h2>" + utils.APPNAME + "</h2>";
+    var tc = "";
+    var pname = "default";
+    tc+= utils.getHeader(userid, null, skin, true);
 
-    $tc += "<div class=\"greeting\">";
-    $tc +="<p>Enter your username or email and password to access HousePanel " +
+
+    tc+= "<form id=\"loginform\" name=\"login\" action=\"#\"  method=\"POST\">";
+    tc+= utils.hidden("returnURL", GLB.returnURL);
+    tc+= utils.hidden("pagename", "login");
+    var webSocketUrl = getSocketUrl(hostname);
+    tc+= utils.hidden("webSocketUrl", webSocketUrl);
+    tc+= utils.hidden("api", "dologin");
+    tc+= utils.hidden("userid", userid, "userid");
+
+    tc+= "<div class='logingreeting'>";
+    tc+= "<h2 class='login'>" + utils.APPNAME + "</h2>";
+
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"emailid\" class=\"startupinp\">Email or username: </label><br>";
+    tc+= "<input id=\"emailid\" name=\"emailid\" width=\"60\" type=\"text\" value=\"" + emailid + "\"/>"; 
+    tc+= "</div>";
+    
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"pword\" class=\"startupinp\">Password: </label><br>";
+    tc+= "<input id=\"pword\" name=\"pword\" width=\"60\" type=\"password\" value=\"\"/>"; 
+    tc+= "</div>";
+    
+    tc+= "<hr>";
+
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"pname\" class=\"startupinp\">Panel Name: </label><br>";
+    tc+= "<input id=\"pname\" name=\"pname\" width=\"60\" type=\"text\" value=\"" + pname + "\"/>"; 
+    tc+= "</div>";
+    
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"panelpword\" class=\"startupinp\">Panel Password: </label><br>";
+    tc+= "<input id=\"panelpword\" name=\"panelpword\" width=\"60\" type=\"password\" value=\"\"/>"; 
+    tc+= "</div>";
+    
+    tc+= "<div class='loginline'>";
+    tc+= '<div id="dologin" class="formbutton">Sign In</div>';
+    tc+= "</div>";
+
+    tc+= "<hr>";
+    tc+= "<div class='loginline'>";
+    tc+= "Forgot Password? Enter email address above and then";
+    tc+= '<div id="forgotpw" class="inlinebutton">Click Here to Reset</div>';
+    tc+= "</div>";
+
+    tc+= "<hr>";
+    tc+= "<div class='loginline'>";
+    tc+= "Don't have an account?";
+    tc+= '<div id="newuser" class="inlinebutton">Create One Here</div>';
+    tc+= "</div>";
+
+    tc+= "<hr>";
+    tc+= "<div class='loginline'>";
+    tc+= "<div>By signing in, you are agreeing to our <div id=\"privacypolicy\" class=\"inlinebutton\">Privacy Policy</div></div>";
+    tc+= "<br><div>For login instructions<div id=\"moreinfo\" class=\"inlinebutton\">Click Here...</div></div>";
+    tc+="<div id=\"loginmore\" class=\" loginmore hidden\">Enter your username or email and password to access HousePanel " +
             "and gain access to your smart home devices. All accounts must be password protected.<br><br>" +
 
             "Each user can have any number of panels defined with each one having its own password and skin. " + 
             "This allows a single account holder to display their smart devices in different ways on different devices. " +
             "To load a specific panel skin, please enter its name and password. " +
-            "If this is left blank then first panel available that is not password protected in the user's account will be loaded. " +
-            "If the panel is password protected you must provide its name and password to load it." +
-            "</p><br />";
-    $tc += "</div>";
+            "If this is left blank, the first panel available that is not password protected in the user's account will be loaded. " +
+            "If all panels are password protected you must provide the name and password of a valid panel to sign into HousePanel." +
+            "</div><br />";
+    tc+= "</div>";
 
+    tc+= "</div>";
+    tc+= "</form>";
 
-    // $tc += "<form id=\"loginform\" name=\"login\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
-    $tc += "<form id=\"loginform\" name=\"login\" action=\"#\"  method=\"POST\">";
-    $tc += utils.hidden("returnURL", GLB.returnURL);
-    $tc += utils.hidden("pagename", "login");
+    tc+= "<form id=\"newuserform\" class=\"hidden\" name=\"newuserform\" action=\"#\"  method=\"POST\">";
+    tc+= utils.hidden("returnURL", GLB.returnURL);
+    tc+= utils.hidden("pagename", "login");
     var webSocketUrl = getSocketUrl(hostname);
-    $tc += utils.hidden("webSocketUrl", webSocketUrl);
-    $tc += utils.hidden("api", "dologin");
-    // $tc += utils.hidden("id", "none");
-    // $tc += utils.hidden("type", "none");
-    $tc += utils.hidden("userid", userid, "userid");
-    $tc += "<div class='logingreeting'>";
+    tc+= utils.hidden("webSocketUrl", webSocketUrl);
+    tc+= utils.hidden("api", "newuser");
+    tc+= utils.hidden("userid", userid);
 
-    $tc += "<div class='loginline'>";
-    $tc += "<label for=\"emailid\" class=\"startupinp\">User Name (Email): </label>";
-    $tc += "<input id=\"emailid\" name=\"emailid\" width=\"60\" type=\"text\" value=\"" + emailid + "\"/>"; 
-    $tc += "</div>";
-    
-    $tc += "<div class='loginline'>";
-    $tc += "<label for=\"pword\" class=\"startupinp\">User Password: </label>";
-    $tc += "<input id=\"pword\" name=\"pword\" width=\"60\" type=\"password\" value=\"\"/>"; 
-    $tc += "</div>";
-    $tc += '<div id="donewuser" class="formbutton">New User</div>';
-    
-    $tc += "<div class='loginline'>";
-    $tc += "<br><hr><br><br>";
-    $tc += "<label for=\"pname\" class=\"startupinp\">Skin Panel: </label>";
-    $tc += "<input id=\"pname\" name=\"pname\" width=\"60\" type=\"text\" value=\"" + pname + "\"/>"; 
-    $tc += "</div>";
-    
-    $tc += "<div class='loginline'>";
-    $tc += "<label for=\"panelpword\" class=\"startupinp\">Panel Password: </label>";
-    $tc += "<input id=\"panelpword\" name=\"panelpword\" width=\"60\" type=\"password\" value=\"\"/>"; 
-    $tc += "</div>";
-    $tc += '<div id="donewpanel" class="formbutton">New Panel</div>';
-    
-    $tc += "<div class='loginline'>";
-    $tc += '<div id="dologin" class="formbutton">Login</div>';
-    $tc += "</div>";
+    tc+= "<div class='logingreeting'>";
+    tc+= "<h2 class='login'>" + utils.APPNAME + "</h2>";
 
-    $tc += "</div>";
-    $tc += "</form>";
-    $tc += utils.getFooter();
-    return $tc;
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"newemailid\" class=\"startupinp\">Email: </label><br>";
+    tc+= "<input id=\"newemailid\" name=\"newemailid\" width=\"60\" type=\"text\" value=\"\"/>"; 
+    tc+= "</div>";
+
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"newunameid\" class=\"startupinp\">Username (optional): </label><br>";
+    tc+= "<input id=\"newunameid\" name=\"newuname\" width=\"60\" type=\"text\" value=\"\"/>"; 
+    tc+= "</div>";
+    
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"newpword\" class=\"startupinp\">Password: </label><br>";
+    tc+= "<input id=\"newpword\" name=\"newpword\" width=\"60\" type=\"password\" value=\"\"/>"; 
+    tc+= "</div>";
+    
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"newpword2\" class=\"startupinp\">Confirm Password: </label><br>";
+    tc+= "<input id=\"newpword2\" name=\"newpword2\" width=\"60\" type=\"password\" value=\"\"/>"; 
+    tc+= "</div>";
+    
+    tc+= "<div class='loginline'>";
+    tc+= '<div id="createuser" class="formbutton">Create Account</div>';
+    tc+= "</div>";
+
+    tc+= "<br><hr>";
+    tc+= "<div class='loginline'>";
+    tc+= "Already have an account?";
+    tc+= '<div id="olduser" class="inlinebutton">Create Here To Login</div>';
+    tc+= "</div>";
+
+    tc+= "<br><hr>";
+    tc+= "<div class='loginline'>";
+    tc+= "<div>By creating a new account, you are agreeing to our <div id=\"privacypolicy\" class=\"inlinebutton\">Privacy Policy</div></div>";
+    tc+= "</div><br>";
+
+    tc+= "</div>";
+    tc+= "</form>";
+
+    tc+= utils.getFooter();
+    return tc;
+}
+
+function createNewUser(body) {
+
+    var emailname = body.email;
+    var username = body.uname;
+    var pword = body.pword;
+    var userid;
+    var panelid;
+    var newuser;
+    var nullhub;
+    var defaultpanel;
+
+    if ( !emailname ) {
+        return "error - A valid email address must be provided to create a new account.";
+    }
+
+    // first check to see if this user exists
+    return mydb.getRow("users","*","email = '"+emailname+"'")
+    .then(row => {
+        if ( row ) { return "error - user with email " + emailname + " already exists"; }
+
+        // create confirmation code
+        var d = new Date();
+        var time = d.toLocaleTimeString();
+        var logincode = pw_hash(emailname + ":" + time);
+
+        // create new user but set type to 0 until we get an email confirmation
+        newuser = {email: emailname, uname: username, password: pw_hash(pword), usertype: 0, defhub: "", hpcode: logincode };
+        return mydb.addRow("users", newuser)
+        .then(result => {
+
+            if ( !result ) { return "error - encountered a problem adding a new user to the HousePanel user community."; }
+
+            userid = result.getAutoIncrementValue();
+            newuser.id = userid;
+            return newuser;
+        })
+        .then(result => {
+
+            if ( !result || typeof result !== "object" ) { return result; }
+
+            // make a default hub for this user
+            nullhub = {userid: userid, hubid: "-1", hubhost: "None", hubtype: "None", hubname: "None", 
+                clientid: "", clientsecret: "", hubaccess: "", hubendpt: "", hubrefresh: "", 
+                useraccess: "", userendpt: "", hubtimer: "0" };
+
+            return mydb.addRow("hubs", nullhub)
+            .then(result => {
+                if ( !result || typeof result !== "object" ) { return result; }
+
+                nullhub.id = result.getAutoIncrementValue();
+                return nullhub;
+            });
+        })
+        .then(result => {
+            if ( !result || typeof result !== "object" ) { return result; }
+
+            addConfigItem(userid, "skin", "skin-housepanel");
+            addConfigItem(userid, "kiosk", "false");
+            addConfigItem(userid, "blackout", "true");
+            addConfigItem(userid, "rules", "true");
+            addConfigItem(userid, "timezone", "America/Detroit");
+            addConfigItem(userid, "phototimer","0");
+            addConfigItem(userid, "fcastcity") || "ann-arbor";
+            addConfigItem(userid, "fcastregion","Ann Arbor");
+            addConfigItem(userid, "fcastcode","42d28n83d74");
+            addConfigItem(userid, "accucity","ann-arbor-mi");
+            addConfigItem(userid, "accuregion","us");
+            addConfigItem(userid, "accucode", "329380");
+            addConfigItem(userid, "hubpick", "all");
+            var useroptions = getTypes();
+            addConfigItem(userid, "useroptions", useroptions);
+            var specials = {video:4, frame:4, image:4, blank:4, custom:8};
+            addConfigItem(userid, "specialtiles", specials);
+            var d = new Date();
+            var timesig = utils.HPVERSION + " @ " + d.getTime();
+            addConfigItem(userid, "time", timesig);
+            return result;
+        })
+        .then(result => {
+            if ( !result || typeof result !== "object" ) { return result; }
+
+            // now create a default panel and add a default set of rooms with a clock
+            defaultpanel = {userid: userid, pname: "default", password: "", skin: "skin-housepanel"};
+            return mydb.addRow("panels", defaultpanel)
+            .then(result => {
+
+                if ( !result || typeof result !== "object" ) { return result; }
+
+                // if we added a default panel okay create a set of default rooms
+                panelid = result.getAutoIncrementValue();
+                defaultpanel.id = panelid;
+
+                var k = 1;
+                var rooms = [];
+                for ( var roomname in GLB.defaultrooms ) {
+                    var room = {userid: userid, panelid: panelid, rname: roomname, rorder: k};
+                    k++;
+                    mydb.addRow("rooms", room)
+                    .then(result => {
+                        if ( result ) {
+                            room.id = result.getAutoIncrementValue();
+                            rooms.push(room);
+                        }
+                    });
+                }
+
+                // send email to confirm
+                if ( DEBUG15 ) {
+                    console.log( (ddbg()), "newuser: ", newuser, "hub: ", nullhub, "panel: ", defaultpanel, "rooms: ", rooms);
+                }
+                return [newuser, nullhub, defaultpanel, rooms];
+
+            });
+        })
+        .then(result => {
+
+            // send email to user with information about the new account requesting confirmation
+            var transporter = nodemailer.createTransport({
+                host: GLB.dbinfo.emailhost,
+                port: GLB.dbinfo.emailport,
+                secure: false,
+                auth: {
+                    user: GLB.dbinfo.emailuser,
+                    pass: GLB.dbinfo.emailpass
+                }
+            });
+
+            // setup the message
+            var textmsg = "If you did not request a new HousePanel acount for user [" + emailname + "] please ignore this email.\n\n";
+            textmsg+= "To confirm and activate your HousePanel account, paste this into your browser window:\n\n";
+            textmsg+= GLB.returnURL + "/activateuser?userid="+userid+"&hpcode="+logincode;
+            textmsg+= "This link expires in 15 minutes.";
+            var htmlmsg = "<strong>If you did not request a new HousePanel account for user [" + emailname + "] please ignore this email.</strong><br><br>";
+            htmlmsg+= "To confirm and activate your HousePanel account, <a href=\"" + GLB.returnURL + "/activateuser?userid="+userid+"&hpcode="+logincode+"\">click here</a><br><br>";
+            htmlmsg+= "This link expires in 15 minutes.";
+
+            var message = {
+                from: GLB.dbinfo.emailuser,
+                to: emailname,
+                subject: "HousePanel new user confirmation",
+                text: textmsg,
+                html: htmlmsg
+            };
+
+            // send the email
+            transporter.sendMail(message, function(err, info) {
+                if ( err ) {
+                    console.log( (ddbg()), "error sending email to: ", emailname, " error: ", err);
+                } else {
+                    console.log( (ddbg()), "email successfully sent to: ", emailname, " response: ", info.response);
+                }
+            });
+
+            // make the hpcode expire after 15 minutes
+            var delay = 15 * 60000;
+            setTimeout(function() {
+                mydb.updateRow("users",{hpcode: ""},"id = "+userid);
+            }, delay);
+
+            return result;
+        });
+
+    });
+
+}
+
+function getNewUserPage(user, hostname) {
+    var userid = user.id;
+    var tc = "";
+    tc+= utils.getHeader(userid, null, null, true);
+    tc+= "<h2>Congratulations. You have activated your new HousePanel account.</h2>";
+    tc+= "<hr>";
+
+    tc+= "<form name=\"newuserpage\" action=\"#\"  method=\"POST\">";
+    tc+= utils.hidden("returnURL", GLB.returnURL);
+    tc+= utils.hidden("pagename", "login");
+    tc+= utils.hidden("userid", userid);
+    // var webSocketUrl = getSocketUrl(hostname);
+    // tc+= utils.hidden("webSocketUrl", webSocketUrl);
+
+    tc+= "<div class='logingreeting'>";
+    tc+= "<h2 class='login'>" + utils.APPNAME + "</h2>";
+
+    tc+= "<div class='userinfo'><strong>Email: </strong>" + user.email + "</div>";
+    tc+= "<div class='userinfo'><strong>Username:</strong>" + user.uname + "</div>";
+    tc+= "<div class='userinfo'><strong>User ID:</strong>" + user.id + "</div>";
+
+    tc+= "<hr><br><div><a href=\"" + GLB.returnURL + "\">Click Here</a> to log in with your new credentials. ";
+    tc+= "This will log you into the default panel named \"default\" with a blank password. You can configure your panels later.</div>";
+
+    tc+= "</div>";
+    tc+= "</form>";
+    tc+= utils.getFooter();
+
+    return tc;
+}
+
+function getNewPasswordPage(user, hostname) {
+    var userid = user.id;
+    var tc = "";
+    tc+= utils.getHeader(userid, null, null, true);
+    tc+= "<h2>Enter New Credentials Below</h2>";
+    tc+= "<hr>";
+
+    // only need to put the userid in a hidden field since email and uname are not updated
+    // but we show them in a static field below
+    tc+= "<form id=\"newpwform\" name=\"newpwform\" action=\"#\"  method=\"POST\">";
+    tc+= utils.hidden("returnURL", GLB.returnURL);
+    tc+= utils.hidden("pagename", "login");
+    tc+= utils.hidden("userid", userid);
+    tc+= utils.hidden("email", user.email);
+    tc+= utils.hidden("uname", user.uname);
+    // var webSocketUrl = getSocketUrl(hostname);
+    // tc+= utils.hidden("webSocketUrl", webSocketUrl);
+
+    tc+= "<div class='logingreeting'>";
+    tc+= "<h2 class='login'>" + utils.APPNAME + "</h2>";
+
+    tc+= "<div class='loginline'>";
+    tc+= "<label class=\"startupinp\">Email: " + user.email + "</label><br>";
+    tc+= "</div>";
+
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"newunameid\" class=\"startupinp\">Username: " + user.uname + "</label><br>";
+    tc+= "</div>";
+    
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"newpword\" class=\"startupinp\">New Password: </label><br>";
+    tc+= "<input id=\"newpword\" name=\"newpword\" width=\"60\" type=\"password\" value=\"\"/>"; 
+    tc+= "</div>";
+    
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"newpword2\" class=\"startupinp\">Confirm Password: </label><br>";
+    tc+= "<input id=\"newpword2\" name=\"newpword2\" width=\"60\" type=\"password\" value=\"skin-housepanel\"/>"; 
+    tc+= "</div>";
+    
+    tc+= "<hr>";
+
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"pname\" class=\"startupinp\">Panel Name: </label><br>";
+    tc+= "<input id=\"pname\" name=\"pname\" width=\"60\" type=\"text\" value=\"" + "default" + "\"/>"; 
+    tc+= "</div>";
+    
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"panelpword\" class=\"startupinp\">Panel Password: </label><br>";
+    tc+= "<input id=\"panelpword\" name=\"panelpword\" width=\"60\" type=\"password\" value=\"\"/>"; 
+    tc+= "</div>";
+    
+    tc+= "<div class='loginline'>";
+    tc+= '<div id="newpassword" class="formbutton">Update Credentials</div>';
+    tc+= "</div>";
+
+    tc+= "<br><hr>";
+    tc+= "<div class='loginline'>";
+    tc+= "Think you remember your password after all?<br>";
+    tc+= '<div id="revertolduser" class="inlinebutton">Click here to login with existing credentials</div><br>';
+    tc+= "</div>";
+
+    tc+= "</div>";
+    tc+= "</form>";
+
+    tc+= utils.getFooter();
+
+    return tc;
+
+}
+
+function forgotPassword(emailname) {
+
+    // get the user from the database and send reminder if user exists
+    return mydb.getRow("users","*","email = '"+emailname+"'")
+    .then(row => {
+        if ( !row ) { return "error - user with email " + emailname + " does not exist"; }
+
+        // compute a special code to check later
+        var d = new Date();
+        var time = d.toLocaleTimeString();
+        var logincode = pw_hash(emailname + ":" + time);
+    
+        // save this in the DB for confirming later
+        var userid = row.id;
+        return mydb.updateRow("users",{hpcode: logincode},"id = "+userid)
+        .then(result => {
+            if ( !result ) { return "error - could not process password reset for user " + emailname; }
+
+            // setup the transport to send email
+            var transporter = nodemailer.createTransport({
+                host: GLB.dbinfo.emailhost,
+                port: GLB.dbinfo.emailport,
+                secure: false,
+                auth: {
+                    user: GLB.dbinfo.emailuser,
+                    pass: GLB.dbinfo.emailpass
+                }
+            });
+
+            // setup the message
+            var textmsg = "If you did not request a HousePanel login reset for user [" + emailname + "] please ignore this email.\n\n";
+            textmsg+= "To reset your HousePanel login, paste this into your browser window:\n\n";
+            textmsg+= GLB.returnURL + "/confirmreset?userid="+userid+"&hpcode="+logincode;
+            textmsg+= "This link expires in 15 minutes.";
+            var htmlmsg = "<strong>If you did not request a HousePanel login reset for user [" + emailname + "] please ignore this email.</strong><br><br>";
+            htmlmsg+= "To reset your HousePanel login, <a href=\"" + GLB.returnURL + "/confirmreset?userid="+userid+"&hpcode="+logincode+"\">click here</a><br><br>";
+            htmlmsg+= "This link expires in 15 minutes.<br>";
+
+            var message = {
+                from: GLB.dbinfo.emailuser,
+                to: emailname,
+                subject: "HousePanel login reset",
+                text: textmsg,
+                html: htmlmsg
+            };
+
+            // send the email
+            transporter.sendMail(message, function(err, info) {
+                if ( err ) {
+                    console.log( (ddbg()), "error sending email to: ", emailname, " error: ", err);
+                } else {
+                    console.log( (ddbg()), "email successfully sent to: ", emailname, " response: ", info.response);
+                }
+            });
+
+            // make the hpcode expire after 15 minutes
+            var delay = 15 * 60000;
+            setTimeout(function() {
+                mydb.updateRow("users",{hpcode: ""},"id = "+userid);
+            }, delay);
+
+            row.hpcode = logincode;
+            return row;
+
+        });
+
+    });
+
+}
+
+function updatePassword(body) {
+    
+    var userid = body.userid;
+    var pname = body.pname;
+    var pword = pw_hash(body.pword);
+    var panelpw = pw_hash(body.panelpw);
+
+    if ( !userid ) {
+        return "error - existing userid not found - password cannot be updated.";
+    }
+
+    // update the designated user
+    var upduser = {password: pword, defhub: "", hpcode: ""};
+    return mydb.updateRow("users", upduser, "id = " + userid)
+    .then( row => {
+        if ( row ) {
+            var updpanel = {userid: userid, pname: pname, password: panelpw};
+            return mydb.updateRow("panels", updpanel, "userid = " + userid + " AND pname = '"+pname+"'")
+            .then( row => {
+                if ( row ) {
+                    return {pword: pword, pname: pname, panelpw: panelpw};
+                } else {
+                    return "error - problem updating or creating a new panel";
+                }
+            });
+        } else {
+            return "error - problem updating user password";
+        }
+    });
+
 }
 
 function processLogin(body, res) {
@@ -2631,7 +3077,7 @@ function processLogin(body, res) {
         phash = pw_hash(body["panelpword"]);
     }
 
-    if ( DEBUG3 ) {
+    if ( DEBUG3 || DEBUGtmp ) {
         console.log( (ddbg()), "dologin: uname= ", uname, " pword= ", uhash, " pname= ", pname, " panelpword= ", phash, " body: ", body);
     }
 
@@ -2664,6 +3110,7 @@ function processLogin(body, res) {
             res.clearCookie("uname");
             res.clearCookie("pname");
             console.log( (ddbg()), ">>>> Failed login attempt. Username: ", uname, " Panelname: ", pname);
+            therow = "invalid username or password";
             // pushClient(userid, "reload", "login", "/logout");
         }
         return therow;
@@ -3229,6 +3676,10 @@ function processName(thingname, thingtype) {
 function returnFile(userid, pname, thingvalue, thingtype, configoptions) {
 
     // do nothing if this isn't a special tile
+    if ( !configoptions ) {
+        return thingvalue;
+    }
+
     var specialtiles = getSpecials(configoptions);
     if ( !array_key_exists(thingtype, specialtiles) ) {
         return thingvalue;
@@ -3642,10 +4093,8 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     if ( configoptions ) {
         thesensor.value = getCustomTile(userid, configoptions, thesensor.value, thingtype, bid);
         thesensor.value = setValOrder(thesensor.value);
+        thesensor.value = returnFile(userid, pname, thesensor.value, thingtype, configoptions);
     }
-
-    // add in the file specific stuff
-    thesensor.value = returnFile(userid, pname, thesensor.value, thingtype, configoptions);
 
     var thingvalue = thesensor.value;
         
@@ -8053,9 +8502,10 @@ function getMainPage(user, configoptions, hubs, req, res) {
         // include doc button and panel name
         // TODO: add username to display
         tc += '<div id="showversion" class="showversion">';
-        tc += '<span id="infoname">' + pname + '</span><span> - V' + utils.HPVERSION + '</span>';
-        tc += '<div id="showdocs"><a href="https://www.housepanel.net" target="_blank">?</a></div>';
-        tc += "</div>";
+        tc += '<span id="emailname">' + (uname || useremail) + '</span> | <span id="infoname">' + pname + '</span><span> | V' + utils.HPVERSION + '</span>';
+        tc += '</div>';
+        tc+= '<div id="showdocs"><a href="https://www.housepanel.net" target="_blank">?</a></div>';
+        // tc += "</div>";
 
         // end of the tabs
         tc += "</div>";
@@ -8538,7 +8988,7 @@ function apiCall(user, configoptions, body, protocol, req, res) {
         console.log((ddbg()),"userid in apiCall: ", userid, " protocol: ", protocol, " api: ", api);
     }
 
-    if ( !userid ) {
+    if ( !userid && api!=="forgotpw" && api!=="createuser") {
         console.log( (ddbg()), "*** error *** user not authorized for API call. api: ", api, " body: ", body);
         return "error - not authorized";
     }
@@ -8872,6 +9322,31 @@ function apiCall(user, configoptions, body, protocol, req, res) {
             case "dologin":
                 if ( protocol==="POST" ) {
                     result = processLogin(body, res);
+                } else {
+                    result = "error - api call [" + api + "] is not supported";
+                }
+                break;
+
+            case "forgotpw":
+                if ( protocol==="POST" ) {
+                    var useremail = body.email;
+                    result = forgotPassword(useremail);
+                } else {
+                    result = "error - api call [" + api + "] is not supported";
+                }
+                break;
+
+            case "createuser":
+                if ( protocol==="POST" ) {
+                    result = createNewUser(body);
+                } else {
+                    result = "error - api call [" + api + "] is not supported";
+                }
+                break;
+
+            case "updatepassword":
+                if ( protocol==="POST" ) {
+                    result = updatePassword(body);
                 } else {
                     result = "error - api call [" + api + "] is not supported";
                 }
@@ -9249,12 +9724,14 @@ function setupBrowserSocket() {
                 // remove clients that match this host
                 // clients.splice(indexsave, 1);
                 var i = 0;
-                while ( i < clients[userid].length ) {
-                    var oldhost = clients[userid][i].socket.remoteAddress;
-                    if ( oldhost===host ) {
-                        clients[userid].splice(i, 1);
-                    } else {
-                        i++;
+                if ( clients && userid && clients[userid] ) {
+                    while ( i < clients[userid].length ) {
+                        var oldhost = clients[userid][i].socket.remoteAddress;
+                        if ( oldhost===host ) {
+                            clients[userid].splice(i, 1);
+                        } else {
+                            i++;
+                        }
                     }
                 }
             });
@@ -9332,8 +9809,9 @@ function setupISYSocket(hub) {
 // GLB.hpcode = hpcode.toString();
 
 // open the database
-var dbinfo = JSON.parse(fs.readFileSync("dbinfo.cfg","utf8"));
-var mydb = new sqlclass.sqlDatabase(dbinfo.dbhost, dbinfo.dbname, dbinfo.dbuid, dbinfo.dbpassword);
+GLB.dbinfo = JSON.parse(fs.readFileSync("dbinfo.cfg","utf8"));
+console.log(GLB.dbinfo);
+var mydb = new sqlclass.sqlDatabase(GLB.dbinfo.dbhost, GLB.dbinfo.dbname, GLB.dbinfo.dbuid, GLB.dbinfo.dbpassword);
 
 if ( DEBUG4 ) {
     console.log( (ddbg()), "Startup Options: ", UTIL.inspect(GLB.options, false, null, false));
@@ -9424,19 +9902,42 @@ if ( app && applistening ) {
             GLB.returnURL = req.protocol + "://" + hostname;
         }
 
-        // console.log("req path = ", req.path);
-        // if ( req.path === "/login" ) {
-        //     var queryobj = req.query || {};
-        //     var uhash = queryobj.uhash;
-        //     var phash = queryobj.phash;
+        // first check to see if user is requesting a password reset or new account confirmation
+        // in both cases a cookie will not be set but we can check for valid user from hpcode query parameter
+        if ( req.path === "/activateuser" || req.path === "/confirmreset" ) {
 
-        //     console.log(">>>> ", uhash," >>>> ", phash);
+            
+            var queryobj = req.query || {};
+            var result;
+            if ( queryobj.userid && queryobj.hpcode ) {
+                var userid = queryobj.userid;
+                mydb.getRow("users","*", "id = "+userid)
+                .then(row => {
+                    if ( row && row.hpcode === queryobj.hpcode ) {
+                        // set the cookies to log the user in
 
-        //     setCookie(res, "uname", uhash);
-        //     setCookie(res, "pname", phash);
+                        if ( req.path === "/activateuser" ) {
+                            setCookie(res, "uname", pw_hash(row.email));
+                            setCookie(res, "pname", pw_hash("default"));
+                            result = getNewUserPage(row, hostname);
+                        } else {
+                            result = getNewPasswordPage(row, hostname);
+                        }
+                    } else {
+                        result = getLoginPage(0, 0, "", hostname, "skin-housepanel");
+                    }
+                    res.send(result);
+                    res.end();
+                })
+            } else {
+                result = getLoginPage(0, 0, "", hostname, "skin-housepanel");
+                res.send(result);
+                res.end();
+            }
+            return;
 
-        //     pushClient(userid, "reload","all","/");
-        // }
+        }
+
 
         // everything starts with finding the username which drives which rows we read from the DB
         getUserName(req.cookies)
@@ -9535,7 +10036,7 @@ if ( app && applistening ) {
                             res.end();
                         });
 
-                    } else if ( req.path==="/logout") {
+                    } else if ( req.path==="/logout" ) {
                         // clear the cookie to force repeat of login page
                         res.clearCookie("uname");
                         res.clearCookie("pname");

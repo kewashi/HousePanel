@@ -2,6 +2,7 @@
 const fs = require('fs');
 
 const devhistory =  ` 
+3.006   Beta version of add new user and forgot password
 3.005   Downgraded mySQL to 5.7 to work on GoDaddy server
             - customizer rewritten to work with DB
             - numerous bug fixes
