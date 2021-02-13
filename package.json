@@ -7,6 +7,7 @@
     "@mysql/xdevapi": "8.0.22",
     "body-parser": "^1.18.3",
     "cookie-parser": "^1.4.5",
+    "countries-and-timezones": "^2.3.1",
     "express": "^4.16.4",
     "mqtt": "^3.0.0",
     "mysql": "github:mysqljs/mysql",
@@ -33,5 +34,8 @@
   "bugs": {
     "url": "https://github.com/kewashi/hpserver/issues"
   },
-  "homepage": "https://housepanel.net"
+  "homepage": "https://housepanel.net",
+  "nodemonConfig": {
+    "ignore": ["media/*","nbproject/*","node_modules/*","photos/*","skin-housepanel/*","skin-modern/*","ssl/*","dev/*","user1/*"]
+  }
 }

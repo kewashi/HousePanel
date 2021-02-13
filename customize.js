@@ -956,7 +956,9 @@ function handleBuiltin(subid) {
         }
     } else {
         cmtext = value[subid];
-        linkval = cmtext;
+        if ( !linkval ) {
+            linkval = cmtext;
+        }
     }
 
     // update dyno panel
@@ -1027,7 +1029,11 @@ function applyCustomField(action, subid) {
     var thing = cm_Globals.devices[tileid]
     var bid = thing.deviceid;
 
-    var oldrules = cm_Globals.rules.slice(0);
+    if ( cm_Globals.rules ) {
+        var oldrules = cm_Globals.rules.slice(0);
+    } else {
+        var oldrules = [];
+    }
     console.log(">>>> rules before update: ", oldrules);
 
     // var value = thing.pvalue;
@@ -1065,7 +1071,7 @@ function applyCustomField(action, subid) {
         while ( i < cm_Globals.rules.length ) {
             var rule = cm_Globals.rules[i];
             console.log("i, rule[2], subid: ", i, rule[2], subid);
-            if ( rule[2]===subid ) {
+            if ( (rule && rule.length && rule.length > 2 && rule[2]===subid) ||  !rule || !rule.length || rule.length < 3  ) {
                 cm_Globals.rules.splice(i,1);
                 existing = true;
                 break;
@@ -1093,19 +1099,27 @@ function applyCustomField(action, subid) {
     if ( action==="addcustom" && customtype==="TEXT" && content.length===0 ) {
         errors.push("Custom text provided for TEXT type addition cannot be an empty string.");
     }
-    
+
+    // don't update if we are adding
+    // if we are deleting then remove all rules since they are messed up
     if ( errors.length ) {
         var errstr = errors.join("\n  ");
         alert("Invalid entries:\n" + errstr);
-    } else {
+        if ( action==="addcustom" ) { 
+            return; 
+        } else {
+            cm_Globals.rules = "";
+        }
+    }
         
         // show processing window
         // var pos = {top: 5, left: 5, zindex: 9999, background: "red", color: "white"};
         // createModal("waitbox", "Processing " + action + " Please wait...", "table.cm_table", false, pos);
         var rules = encodeURI(JSON.stringify(cm_Globals.rules));
+        console.log(">>>> rules : ", rules);
         $.post(cm_Globals.returnURL, 
             {useajax: action, userid: cm_Globals.options.userid, id: bid, value: customtype, 
-                rules: rules, tile: tileid, subid: subid},
+                rules: rules, tileid: tileid, subid: subid},
             function (presult, pstatus) {
                 if (pstatus==="success") {
                     cm_Globals.reload = true;
@@ -1134,7 +1148,6 @@ function applyCustomField(action, subid) {
                 }
             }, "json"
         );
-    }
    
 }
 
@@ -1147,19 +1160,21 @@ function showPreview() {
     var device = clone(cm_Globals.devices[tileid]);
 
     // make an unresolved item for each rule/link
-    cm_Globals.rules.forEach(rule => {
-        var rulesubid = rule[2];
-        var command = rule[0];
-        var ruleval = command + "::";
-        if ( command === "LINK" ) {
-            ruleval = ruleval + rule[1];
-        } else if ( command === "TEXT" ) {
-            ruleval = rule[1];
-        } else {
-            ruleval = ruleval + rulesubid;
-        }
-        device.pvalue[rulesubid] = ruleval;
-    });
+    if ( cm_Globals.rules ) {
+        cm_Globals.rules.forEach(rule => {
+            var rulesubid = rule[2];
+            var command = rule[0];
+            var ruleval = command + "::";
+            if ( command === "LINK" ) {
+                ruleval = ruleval + rule[1];
+            } else if ( command === "TEXT" ) {
+                ruleval = rule[1];
+            } else {
+                ruleval = ruleval + rulesubid;
+            }
+            device.pvalue[rulesubid] = ruleval;
+        });
+    }
 
     var thingvalue = encodeURI(JSON.stringify(device));
     
