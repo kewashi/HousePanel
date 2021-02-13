@@ -13,6 +13,7 @@ var priorIcon = "none";
 var defaultOverlay = "block";
 var tileCount = 0;
 var DEBUGte = false;
+// const fs = require('fs');
 
 // popup dialog box now uses createModal
 //       editTile(userid, roomid,  roomname, "page",   roomname,   0,   0,   "",         0,      "None",  "None",     null);
@@ -470,11 +471,13 @@ function initDialogBinds(str_type, thingindex) {
     });
         
     // new button to process the name change
+    $("#processName").off("click");
     $("#processName").on("click", function (event) {
         updateNames(str_type, thingindex);
         event.stopPropagation;
     });
 
+    $("#iconSrc").off('change');
     $("#iconSrc").on('change', function (event) {
         getIcons(str_type, thingindex);	
         event.stopPropagation;
@@ -2152,81 +2155,84 @@ function updateColor(strCaller, cssRuleTarget, str_type, subid, thingindex, strC
 
 function getIconCategories() {
 	var iconDoc = 'iconlist.txt';
-	var arrCat = ["Skin_Icons","Skin_Media","Skin_Photos","Main_Icons","Main_Media","Main_Photos"];
+	var arrCat = ["Main_Icons","Main_Media","Main_Photos","Modern_Icons","Modern_Media","Modern_Photos","User_Icons","User_Media","User_Photos"];
+    // $('#iconSrc').html("");
+
 	$.ajax({
         url:iconDoc,
         type:'GET',
         success: function (data) {
             var arrIcons = data.toString().replace(/[\t\n]+/g,'').split(',');
-            $.each(arrIcons, function(index, val) {
-                var iconCategory = val.substr(0, val.indexOf('|'));
-                iconCategory = $.trim(iconCategory).replace(/\s/g, '_');	
-                arrCat.push(iconCategory);					
-            }); //end each Icon
-            arrCat = makeUnique(arrCat);
-            $.each(arrCat, function(index, iconCat) {
+
+            arrIcons.forEach(function(val) {
+                var jbar = val.indexOf("|");
+                var iconCategory = val.substr(0, jbar);
+                iconCategory = iconCategory.trim().replace(/ /g, '_');	
+                if ( ! arrCat.includes(iconCategory) ) {
+                    arrCat.push(iconCategory);
+                }
+            });
+            // console.log("cat length: ", arrCat.length);
+            $('#iconSrc').empty();
+
+            var i = 1;
+            arrCat.forEach(function(iconCat) {
                 var catText = iconCat.replace(/_/g, ' ')
-                $('#iconSrc').append($('<option></option>').val(iconCat).text(catText));
+                // console.log(i,":",iconCat);
+                $('#iconSrc').append($('<option>'+catText+'</option>').val(iconCat));
+                i++;
             }); 
-        } //end function()
-	}); //end ajax
+        }
+	});
+
+
 }
 
-function getIcons(str_type, thingindex) {
+function getIcons() {
     var returnURL = cm_Globals.returnURL;
     getIconCategories();
     var iCategory = $("#iconSrc").val();
     var skindir = $("#skinid").val();
+    var pname = $("#showversion span#infoname").html();
     
     // change to use php to gather icons in an ajax post call
     // this replaces the old method that fails on GoDaddy
-    if ( !iCategory ) { iCategory = 'Skin_Icons'; }
-    if ( iCategory.startsWith("Skin_") || iCategory.startsWith("Main_") ) {
-        var localPath = iCategory.substr(5).toLowerCase();
-        $.post(returnURL, 
-            {useajax: "geticons", id: 0, userid: et_Globals.userid, thingid: et_Globals.thingid, type: "none", value: localPath, attr: iCategory, skin: skindir},
-            function (presult, pstatus) {
-                if (pstatus==="success" && presult ) {
-                    // console.log("reading icons from skin= " + skindir + " and path= "+localPath);
-                    $('#iconList').html(presult);
-                    setupIcons(iCategory);
-                } else {
-                    $('#iconList').html("<div class='error'>Error reading icons for: " + iCategory + "</div>");
-                }
-            }
-        );
+    if ( !iCategory ) { iCategory = 'Main_Icons'; }
+    var localPath;
+    if ( iCategory.startsWith("Main_") ) {
+        localPath = iCategory.substr(5).toLowerCase();
+    } else if ( iCategory.startsWith("User_") ) {
+        localPath = iCategory.substr(5).toLowerCase();
+        // localPath = "../../" + skindir + "/" + iCategory.substr(5).toLowerCase();
+    } else if ( iCategory.startsWith("Modern_") ) {
+        localPath = iCategory.substr(7).toLowerCase();
     } else {
-        var icons = '';
-        var iconDoc = 'iconlist.txt';
-        $.ajax({
-            url:iconDoc,
-            type:'GET',
-            success: function (data) {
-                var arrIcons = data.toString().replace(/[\t\n]+/g,'').split(',');
-                $.each(arrIcons, function(index, val) {
-                    var iconCategory = val.substr(0, val.indexOf('|'));
-                    iconCategory = $.trim(iconCategory).replace(/\s/g, '_');	
-                    if (iconCategory === iCategory) {
-                        var iconPath = val.substr(1 + val.indexOf('|'));
-                        // iconPath = encodeURI(iconPath);
-                        icons+='<div>';
-                        icons+='<img class="icon" src="' + iconPath + '"></div>';
-                    }
-                });			
-                $('#iconList').html(icons);
-                setupIcons(iCategory);
-            }
-        });
+        localPath = iCategory;
+        // localPath = "../../media/" + iCategory;
     }
+    // alert("path = "+localPath);
+
+    $.post(returnURL, 
+        {useajax: "geticons", id: 0, userid: et_Globals.userid, thingid: et_Globals.thingid, type: "none", value: localPath, attr: iCategory, skin: skindir, pname: pname},
+        function (presult, pstatus) {
+            if (pstatus==="success" && presult ) {
+                // console.log("reading icons from skin= " + skindir + " and path= "+localPath);
+                $('#iconList').html(presult);
+                setupIcons(iCategory);
+            } else {
+                $('#iconList').html("<div class='error'>No icons available for: " + iCategory + "</div>");
+            }
+        }
+    );
 }
 
-function makeUnique(list) {
-    var result = [];
-    $.each(list, function(i, e) {
-        if ($.inArray(e, result) == -1) result.push(e);
-    });
-    return result;
-}
+// function makeUnique(list) {
+//     var result = [];
+//     $.each(list, function(i, e) {
+//         if ($.inArray(e, result) == -1) result.push(e);
+//     });
+//     return result;
+// }
 
 function getBgEffect(effect) {
     var strEffect = '';
@@ -2261,20 +2267,18 @@ function iconSelected(category, cssRuleTarget, imagePath, str_type, thingindex) 
     var strEffect =  getBgEffect();
     
     // if the separator is back slash change to forward slash required by css
-    if ( category.startsWith("Skin_") || category.startsWith("Main_") ) {
-        // imagePath = returnURL + "/" + imagePath;
-        imagePath = imagePath.replace(/\\/g,"/");
-    }
+    imagePath = imagePath.replace(/\\/g,"/");
+    // alert(imagePath);
 
     // remove skin directory reference because css is now located in the skin directory
-    var skindir = $("#skinid").val() + "/";
-    if ( imagePath.startsWith(skindir) ) {
-        var n = skindir.length;
-        imagePath = imagePath.substr(n);
-    }
+    // var skindir = $("#skinid").val() + "/";
+    // if ( imagePath.startsWith(skindir) ) {
+    //     var n = skindir.length;
+    //     imagePath = imagePath.substr(n);
+    // }
 
-    if ( category.startsWith("Main_") ) {
-        imagePath = "../" + imagePath;
+    if ( !category.startsWith("User_") ) {
+        imagePath = "../../" + imagePath;
     }
 
     var imgurl = 'background-image: url("' + imagePath + '")';

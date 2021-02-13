@@ -231,7 +231,7 @@ h1, h2, h3 {
     margin-bottom: 2px;    margin-top: 2px;    margin-left: 10px;
 }
 
-input.startupinp {
+input.startupinp, input.optioninp, input.optionnuminp {
     font-style: normal;
     font-weight: normal;
     font-size: 12pt;
@@ -243,6 +243,16 @@ input.startupinp {
     position: absolute;
     left: 220px;
     display: inline-block;
+}
+
+input.optioninp {
+    left: 180px;
+    width: 300px;
+}
+
+input.optionnuminp {
+    left: 180px;
+    width: 60px;
 }
 
 form.filteroptions {

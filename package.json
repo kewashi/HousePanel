@@ -10,6 +10,7 @@
     "express": "^4.17.3",
     "mqtt": "^4.3.7",
     "mysql": "github:mysqljs/mysql",
+    "countries-and-timezones": "^2.3.1",
     "nodemailer": "^6.4.17",
     "request": "^2.88.0",
     "url": "^0.11.0",
@@ -33,5 +34,8 @@
   "bugs": {
     "url": "https://github.com/kewashi/hpserver/issues"
   },
-  "homepage": "https://housepanel.net"
+  "homepage": "https://housepanel.net",
+  "nodemonConfig": {
+    "ignore": ["media/*","nbproject/*","node_modules/*","photos/*","skin-housepanel/*","skin-modern/*","ssl/*","dev/*","user1/*"]
+  }
 }

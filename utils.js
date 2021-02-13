@@ -2,6 +2,11 @@
 const fs = require('fs');
 
 const devhistory =  ` 
+3.012   Revised icon logic for tile editor to work with multi users
+3.011   Bugfixes - including dimmer clicks for new ST
+3.009   Fix URL, POST, GET, and PUT links
+3.008   Fix link bug, customizer tile fix, re-enable inspect passives
+3.007   Rewrite SaveOptions page to work, fix clock, and bug fixes
 3.006   Beta version of add new user and forgot password
 3.005   Downgraded mySQL to 5.7 to work on GoDaddy server
             - customizer rewritten to work with DB
