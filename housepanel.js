@@ -988,7 +988,7 @@ function setupColors() {
 
 function setupSliders() {
     
-    $("div.overlay.level >div.level, div.overlay.onlevel >div.onlevel, div.overlay.volume >div.volume").slider({
+    $("div.overlay.level >div.level, div.overlay.onlevel >div.onlevel, div.overlay.volume >div.volume, div.overlay.groupVolume >div.groupVolume").slider({
         orientation: "horizontal",
         min: 0,
         max: 100,
@@ -1048,7 +1048,7 @@ function setupSliders() {
     });
 
     // set the initial slider values
-    $("div.overlay.level >div.level, div.overlay.onlevel >div.onlevel, div.overlay.volume >div.volume").each( function(){
+    $("div.overlay.level >div.level, div.overlay.onlevel >div.onlevel, div.overlay.volume >div.volume, div.overlay.groupVolume >div.groupVolume").each( function(){
         var initval = $(this).attr("value");
         $(this).slider("value", initval);
     });
@@ -2819,7 +2819,7 @@ function updateTile(aid, presult, skiplink) {
     if ( presult["trackImage"] ) {
         var trackImage = presult["trackImage"].trim();
         if ( $("#a-"+aid+"-width") &&  $("#a-"+aid+"-width").html() && $("#a-"+aid+"-height") && $("#a-"+aid+"-height").html() ) {
-            var wstr = " width='" + $("#a-"+aid+"-width").html() + "' height= '" + $("#a-"+aid+"-height").html() + "' ";
+            var wstr = " class='trackImage' width='" + $("#a-"+aid+"-width").html() + "' height= '" + $("#a-"+aid+"-height").html() + "' ";
         } else {
             wstr = " class='trackImage'";
         }
@@ -2901,9 +2901,10 @@ function updateTile(aid, presult, skiplink) {
                     iconimg = "media/Weather/" + iconstr + ".png";
                 }
                 value = "<img src=\"" + iconimg + "\" alt=\"" + iconstr + "\" width=\"80\" height=\"80\">";
-            } else if ( (key === "level" || key=== "onlevel" || key === "colorTemperature" || key==="volume") && $(targetid).slider ) {
+            } else if ( (key === "level" || key=== "onlevel" || key === "colorTemperature" || key==="volume" || key==="groupVolume") && $(targetid).slider ) {
                 // console.log("aid= ", aid, " targetid= ", targetid, " value= ", value);
                 $(targetid).slider("value", value);
+                $(targetid).attr("value",value);
                 // disable putting values in the slot
                 value = false;
                 oldvalue = false;
@@ -3126,14 +3127,12 @@ function clockUpdater() {
         // TODO - handle cases when realsubid is different
         $('div.panel div[command="LINK"][linkbid="'+clocktype+'"]').each(function() {
             var sib = $(this).attr("id");
-            var aid = sib.substr(3);
-            var sibsubid = $(this).attr("subid");
+            // var aid = $(this).attr("aid");
+            var realsubid = $(this).attr("subid");
+            var targetid = "#a-"+sib.substr(3);
 
-            if ( sibsubid==="time" || sibsubid==="date" || sibsubid==="weekday" ) {
-                var targetid = "#a-"+aid+"-"+sibsubid;
-                if ( $(targetid) ) {
-                    $(targetid).html( clockdevice[sibsubid] );
-                }
+            if ( $(targetid) && (realsubid==="time" || realsubid==="date" || realsubid==="weekday") ) {
+                $(targetid).html( clockdevice[realsubid] );
             }
         });
     }
@@ -3616,6 +3615,12 @@ function processClick(that, thingname) {
         // invert and set lock command
         else if ( subid==="lock" && (thevalue==="locked" || thevalue==="unlocked") ) {
             thevalue = thevalue==="locked" ? "unlock" : "lock";
+        }
+
+        // set value to volume for volume triggers
+        else if ( subid==="_volumeDown" || subid==="_volumeUp" ) {
+            var targetvol = '#a-'+aid+'-volume';
+            thevalue = $(targetvol).attr("value");
         }
 
         console.log("userid= ", userid, " thingid= ", thingid, "tileid= ", tileid, "thingname= ", thingname, 

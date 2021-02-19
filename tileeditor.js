@@ -443,7 +443,7 @@ function setupIcons(category) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
         
-        var img = $(this).attr("src");
+        var img = $(this).attr("show");
         var subid = $("#subidTarget").html();
         var strIconTarget = getCssRuleTarget(str_type, subid, thingindex);
         // console.log("Clicked on img= "+img+" Category= "+category+" strIconTarget= "+strIconTarget+" type= "+str_type+" subid= "+subid+" index= "+thingindex);
@@ -453,6 +453,7 @@ function setupIcons(category) {
 
 function initDialogBinds(str_type, thingindex) {
 	
+    $('#noIcon').off('change');
     $('#noIcon').on('change', function() {
         var subid = $("#subidTarget").html();
         var str_type = $("#tileDialog").attr("str_type");
@@ -483,6 +484,7 @@ function initDialogBinds(str_type, thingindex) {
         event.stopPropagation;
     });
     
+    $("#bgSize").off('change');
     $("#bgSize").on('change', function(event) {
         var subid = $("#subidTarget").html();
         var str_type = $("#tileDialog").attr("str_type");
@@ -491,6 +493,7 @@ function initDialogBinds(str_type, thingindex) {
         event.stopPropagation;
     });
     
+    $("#autoBgSize").off('change');
     $("#autoBgSize").on('change', function(event) {
         var subid = $("#subidTarget").html();
         var str_type = $("#tileDialog").attr("str_type");
@@ -506,6 +509,7 @@ function initDialogBinds(str_type, thingindex) {
     });
 
     // set overall tile height
+    $("#tileHeight").off('change');
     $("#tileHeight").on('change', function(event) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
@@ -521,6 +525,7 @@ function initDialogBinds(str_type, thingindex) {
     });
 
     // set overall tile width and header and overlay for all subitems
+    $("#tileWidth").off('change');
     $("#tileWidth").on('change', function(event) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
@@ -547,6 +552,7 @@ function initDialogBinds(str_type, thingindex) {
     });
 
     // set overall tile width and header and overlay for all subitems
+    $("#autoTileHeight").off('change');
     $("#autoTileHeight").on('change', function(event) {
         var rule;
         var str_type = $("#tileDialog").attr("str_type");
@@ -573,6 +579,7 @@ function initDialogBinds(str_type, thingindex) {
         event.stopPropagation;
     });
     
+    $("#autoTileWidth").off('change');
     $("#autoTileWidth").on('change', function(event) {
         var rule;
         // var midrule;
@@ -612,6 +619,7 @@ function initDialogBinds(str_type, thingindex) {
     });
 
     // set overall tile width and header and overlay for all subitems
+    $("#editHeight").off('change');
     $("#editHeight").on('change', function(event) {
         var newsize = parseInt( $("#editHeight").val() );
         var subid = $("#subidTarget").html();
@@ -630,6 +638,7 @@ function initDialogBinds(str_type, thingindex) {
     });
 
     // set overall tile width and header and overlay for all subitems
+    $("#editWidth").off('change');
     $("#editWidth").on('change', function(event) {
         var newsize = parseInt( $("#editWidth").val() );
         var subid = $("#subidTarget").html();
@@ -651,6 +660,7 @@ function initDialogBinds(str_type, thingindex) {
     });
 
     // set the item height
+    $("#autoHeight").off('change');
     $("#autoHeight").on('change', function(event) {
         var subid = $("#subidTarget").html();
         var str_type = $("#tileDialog").attr("str_type");
@@ -690,6 +700,7 @@ function initDialogBinds(str_type, thingindex) {
     });
 
     // set the item width
+    $("#autoWidth").off('change');
     $("#autoWidth").on('change', function(event) {
         var subid = $("#subidTarget").html();
         if ( subid !== "wholetile" ) {
@@ -754,6 +765,7 @@ function initDialogBinds(str_type, thingindex) {
     });
 
     // set padding for selected item
+    $("#topPadding").off('change');
     $("#topPadding").on('change', function(event) {
         var subid = $("#subidTarget").html();
         var str_type = $("#tileDialog").attr("str_type");
@@ -793,6 +805,7 @@ function initDialogBinds(str_type, thingindex) {
     });
 
     // set padding for selected item
+    $("#leftPadding").off('change');
     $("#leftPadding").on('change', function(event) {
         var subid = $("#subidTarget").html();
         var str_type = $("#tileDialog").attr("str_type");
@@ -851,12 +864,14 @@ function initDialogBinds(str_type, thingindex) {
     }
 
     // set padding for selected item
+    $("#beforeText").off('change');
     $("#beforeText").on('change', function(event) {
         txtModify("before");
         event.stopPropagation;
     });
 
     // set padding for selected item
+    $("#afterText").off('change');
     $("#afterText").on('change', function(event) {
         txtModify("after");
         event.stopPropagation;
@@ -1080,9 +1095,11 @@ function setupClicks(str_type, thingindex) {
     initColor(str_type, firstsub, thingindex);
     initDialogBinds(str_type, thingindex);
     loadSubSelect(str_type, firstsub, thingindex);
+    // getIconCategories("Main_Icons");
     getIcons(str_type, thingindex);	
             
     var trigger = "div"; // div." + str_type + ".p_"+thingindex;
+    $("#te_wysiwyg").off('click', trigger);
     $("#te_wysiwyg").on('click', trigger, function(event) {
         // load up our silent tags
         var subid = $(event.target).attr("subid");
@@ -1212,14 +1229,6 @@ function loadSubSelect(str_type, firstsub, thingindex) {
         initDialogBinds(str_type, thingindex);
         event.stopPropagation();
     });
-    
-    // if ( str_type !== "page" ) {
-    //     $("#cm_activateCustomize").off('click');
-    //     $("#cm_activateCustomize").on('click', function(event) {
-    //         customizeTile(thingindex, et_Globals.aid, et_Globals.id, str_type, et_Globals.hubnum);
-    //         event.stopPropagation();
-    //     });
-    // }
 }
 
 function setsubid(str_type) {
@@ -1979,6 +1988,7 @@ function initColor(str_type, subid, thingindex) {
         event.stopPropagation;
     });	
     
+    $("#editReset").off('click');
     $("#editReset").on('click', function (event) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
@@ -2153,45 +2163,34 @@ function updateColor(strCaller, cssRuleTarget, str_type, subid, thingindex, strC
     }
 }
 
-function getIconCategories() {
-	var iconDoc = 'iconlist.txt';
-	var arrCat = ["Main_Icons","Main_Media","Main_Photos","Modern_Icons","Modern_Media","Modern_Photos","User_Icons","User_Media","User_Photos"];
-    // $('#iconSrc').html("");
-
-	$.ajax({
-        url:iconDoc,
-        type:'GET',
-        success: function (data) {
-            var arrIcons = data.toString().replace(/[\t\n]+/g,'').split(',');
-
-            arrIcons.forEach(function(val) {
-                var jbar = val.indexOf("|");
-                var iconCategory = val.substr(0, jbar);
-                iconCategory = iconCategory.trim().replace(/ /g, '_');	
-                if ( ! arrCat.includes(iconCategory) ) {
-                    arrCat.push(iconCategory);
-                }
-            });
-            // console.log("cat length: ", arrCat.length);
-            $('#iconSrc').empty();
-
-            var i = 1;
-            arrCat.forEach(function(iconCat) {
-                var catText = iconCat.replace(/_/g, ' ')
-                // console.log(i,":",iconCat);
-                $('#iconSrc').append($('<option>'+catText+'</option>').val(iconCat));
-                i++;
-            }); 
+// the old ST icons are now stored locally and obtained from an internal list for efficiency
+function getIconCategories(iCategory) {
+    var specialCat = ["Main_Icons","Main_Media","Main_Photos","Modern_Icons","Modern_Media","Modern_Photos","User_Icons","User_Media","User_Photos"];
+    // var arrCat = [];
+    
+    var arrCat = ["Alarm","Appliances","BMW","Bath","Bedroom","Camera","Categories","Colors","Contact","Custom",
+                  "Doors","Electronics","Entertainment","Food_Dining","Fridge","Harmony","Health_Wellness","Home",
+                  "Illuminance","Indicators","Kids","Lighting","Lights","Locks","Motion","Nest","Office","Outdoor",
+                  "Particulate","People","Presence","Quirky","Samsung","Seasonal_Fall","Seasonal_Winter","Secondary",
+                  "Security","Shields","Sonos","Switches","Tesla","Thermostat","Transportation","Unknown","Valves",
+                  "Vents","Weather"];
+                  arrCat = specialCat.concat(arrCat);
+                  
+    $('#iconSrc').empty();
+    arrCat.forEach(function(iconCat) {
+        var catText = iconCat.replace(/_/g, ' ')
+        var item = $('<option>'+catText+'</option>').val(iconCat);
+        if ( iCategory === iconCat ) {
+            item.prop("selected",true);
         }
-	});
-
-
+        $('#iconSrc').append(item);
+    }); 
 }
 
 function getIcons() {
     var returnURL = cm_Globals.returnURL;
-    getIconCategories();
     var iCategory = $("#iconSrc").val();
+    getIconCategories(iCategory);
     var skindir = $("#skinid").val();
     var pname = $("#showversion span#infoname").html();
     
@@ -2225,14 +2224,6 @@ function getIcons() {
         }
     );
 }
-
-// function makeUnique(list) {
-//     var result = [];
-//     $.each(list, function(i, e) {
-//         if ($.inArray(e, result) == -1) result.push(e);
-//     });
-//     return result;
-// }
 
 function getBgEffect(effect) {
     var strEffect = '';

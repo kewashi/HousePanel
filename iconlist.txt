@@ -1,3 +1,4 @@
+
 Appliances|http://cdn.device-icons.smartthings.com/Appliances/appliances1-icn@2x.png,
 Appliances|http://cdn.device-icons.smartthings.com/Appliances/appliances10-icn@2x.png,
 Appliances|http://cdn.device-icons.smartthings.com/Appliances/appliances11-icn@2x.png,
