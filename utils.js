@@ -2,6 +2,8 @@
 const fs = require('fs');
 
 const devhistory =  ` 
+3.014   Bugfix to color lights not working, fix clock updater for links
+3.013   Enable audio Sonos tiles to work properly including album art
 3.012   Revised icon logic for tile editor to work with multi users
 3.011   Bugfixes - including dimmer clicks for new ST
 3.009   Fix URL, POST, GET, and PUT links
@@ -14,7 +16,9 @@ const devhistory =  `
 3.004   Updated configurator to work with DB
 3.003   Another working alpha with tileeditor and more working
 3.002   Working alpha of new DB with new login screen
-3.001   First version of Database version with New ST support
+3.001   First version of Database version with New ST support`;
+
+const oldhistory2 = `
 2.418   fix rule infinite loop for ISY progs that made webSockets fail
 2.417   enable rules for programs - previously I just skipped this
 2.416   minor tweak to ISY hub to show all status values for programs
@@ -228,7 +232,7 @@ const devhistory =  `
 2.200   Initial Node.js version release
 `;
 
-const oldhistory = `
+const oldhistory1 = `
 2.118      Fix bug that prevented user from changing custom tile count
 2.117      Load jquery locally and include files in the distro
 2.116      Tweaks to enable floor plan skins and bug fixes

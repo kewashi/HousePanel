@@ -24,6 +24,7 @@ const DEBUG16 = false;              // customtiles writing and custom names
 const DEBUG17 = false;              // push client
 const DEBUG18 = false;              // ST, HE, and Ford messages in callHub -> getHubResponse
 const DEBUG19 = false;              // ST and HE callback from Groovy or new ST Event Sink
+const DEBUG19s = false;             // New ST sink message debug
 const DEBUG20 = false;              // New SmartThings detail
 const DEBUGcurl = false;            // detailed _curl inspection
 const DEBUGtmp =  true;             // used to debug anything temporarily using ||
@@ -80,43 +81,60 @@ GLB.clientid = "140b41bb-a5d6-4940-8731-7382e9311b96";
 GLB.clientsecret = "ed65ed1e-85a4-41ff-be49-3ed5cd2134e0";
 
 // any attribute here will be ignored for events and display
+// this now includes ignoring washer and robot crazy fields
 GLB.ignoredAttributes = [
-    'sensor', 'actuator', 'DeviceWatch-DeviceStatus', 'DeviceWatch-Enroll', 'checkInterval', 'healthStatus', 'devTypeVer', 'dayPowerAvg', 'apiStatus', 'yearCost', 'yearUsage','monthUsage', 'monthEst', 'weekCost', 'todayUsage',
-    'supportedPlaybackCommands', 'groupPrimaryDeviceId', 'groupId', 'supportedTrackControlCommands', 'presets',
+    'sensor', 'actuator', 'DeviceWatch-DeviceStatus', 'DeviceWatch-Enroll', 'checkInterval', 'healthStatus', 'devTypeVer', 'dayPowerAvg', 'apiStatus', 
+    'yearCost', 'yearUsage','monthUsage', 'monthEst', 'weekCost', 'todayUsage', 'groupPrimaryDeviceId', 'groupId', 'presets',
     'maxCodeLength', 'maxCodes', 'readingUpdated', 'maxEnergyReading', 'monthCost', 'maxPowerReading', 'minPowerReading', 'monthCost', 'weekUsage', 'minEnergyReading',
-    'codeReport', 'scanCodes', 'verticalAccuracy', 'horizontalAccuracyMetric', 'altitudeMetric', 'latitude', 'distanceMetric', 'closestPlaceDistanceMetric',
-    'closestPlaceDistance', 'leavingPlace', 'currentPlace', 'codeChanged', 'codeLength', 'lockCodes', 'horizontalAccuracy', 'bearing', 'speedMetric',
-    'speed', 'verticalAccuracyMetric', 'altitude', 'indicatorStatus', 'todayCost', 'longitude', 'distance', 'previousPlace','closestPlace', 'places', 'minCodeLength',
-    'arrivingAtPlace', 'lastUpdatedDt', 'custom.disabledComponents'
+    'codeReport', 'scanCodes', 'verticalAccuracy', 'horizontalAccuracyMetric', 'distanceMetric', 'closestPlaceDistanceMetric',
+    'closestPlaceDistance', 'codeChanged', 'codeLength', 'lockCodes', 'horizontalAccuracy',
+    'verticalAccuracyMetric', 'indicatorStatus', 'todayCost', 'previousPlace','closestPlace', 'minCodeLength',
+    'arrivingAtPlace', 'lastUpdatedDt', 'custom.disabledComponents',
+    'disabledCapabilities','enabledCapabilities','supportedCapabilities',
+    'supportedPlaybackCommands','supportedTrackControlCommands','supportedButtonValues','supportedThermostatModes','supportedThermostatFanModes',
+    'dmv','di','pi','mnml','mnmn','mnpv','mnsl','icv','washerSpinLevel','mnmo','mnos','mnhw','mnfv','supportedCourses','washerCycle','cycle'
 ];
 
 // this map contains the base capability for each type and all valid commands for that capability
 // the keys here are unique to HousePanel and are used to define the type of thing on the panel
 GLB.capabilities = { 
     switch: [ ["switch"], ["_on","_off"]],
-    light: [ ["switch"], ["_on","_off"]],
     switchlevel: [ ["switchLevel","switch"], ["_on","_off"]],
-    bulb: [ ["colorControl","switchLevel","switch"],["_on","_off","color"]], 
+    bulb: [ ["colorControl","switch"],["_on","_off","color"]], 
     button: [ ["button"],null],
     presence: [ ["presenceSensor"],null], 
     motion: [ ["motionSensor"],null], 
-    power: [ ["powerMeter","energyMeter"],null],
     contact: [ ["contactSensor"],null], 
-    door: [ ["doorControl","contactSensor"],["_open","_close"]], 
-    lock: [ ["lock"],["unlock","lock"]],
-    thermostat: [ ["thermostatHeatingSetpoint","thermostatCoolingSetpoint","thermostatSetpoint","thermostatFanMode","thermostatOperatingState","temperatureMeasurement","relativeHumidityMeasurement"],
-                  ["heatingSetpoint-up","heatingSetpoint-dn","coolingSetpoint-up","coolingSetpoint-dn"]], 
-    temperature: [ ["temperatureMeasurement"],null], 
-    illuminance: [ ["illuminanceMeasurement"],null],
-    water: [ ["waterSensor"],null], 
-    valve: [ ["valve"],["_open","_close"]], 
-    smoke: [ ["smokeDetector"],null], 
+    door: [ ["doorControl"],["_open","_close"]], 
+    garage: [ ["garageDoorControl"],["_open","_close"] ],
+    dust: [ ["dustSensor"],null], 
+    fanspeed: [ ["fanSpeed"],null],
     acceleration: [ ["accelerationSensor"],null], 
+    airquality: [ ["airQualitySensor"],null], 
+    alarm: [ ["alarm"],["_both","_off","_siren","_strobe"]], 
+    illuminance: [ ["illuminanceMeasurement"],null],
+    lock: [ ["lock"],["_unlock","_lock"]],
+    thermostat: [ ["temperatureMeasurement","thermostatMode","thermostatHeatingSetpoint","thermostatCoolingSetpoint","thermostatOperatingState"],null],
+                //   ["heatingSetpoint-up","heatingSetpoint-dn","coolingSetpoint-up","coolingSetpoint-dn"]], 
+    temperature: [ ["temperatureMeasurement"],null], 
+    power: [ ["powerMeter"],null],
+    energy: [ ["energyMeter"],null],
+    fan: [ ["fanSpeed"],null],
+    smoke: [ ["smokeDetector"],null], 
+    sound: [ ["soundSensor"],null], 
+    tamper: [ ["tamperAlert"],null], 
+    cosensor: [ ["carbonMonoxideMeasurement"],null], 
+    co2sensor: [ ["carbonDioxideMeasurement"],null], 
+    valve: [ ["valve"],["_open","_close"]], 
     weather: [ ["temperatureMeasurement","relativeHumidityMeasurement","stsmartweather.astronomicalData","illuminanceMeasurement","ultravioletIndex"],null],
-    audio: [ ["audioNotification","musicPlayer","mediaPlayback"],["_volumeUp","_volumeDown","_mute","_unmute","_previousTrack","_pause","_play","_stop","_nextTrack"]], 
+    audio: [ ["mediaPlayback","audioVolume","audioMute"],["_previousTrack","_pause","_play","_stop","_nextTrack","_volumeDown","_volumeUp","_mute","_unmute"]], 
     shade: [ ["windowShade","switchLevel"],["_open","_close","_presetPosition"]], 
+    tone: [ ["tone"],["_beep"]], 
+    uvindex: [["ultravioletIndex"],null],
+    voltage: [["voltageMeasurement"],null],
     washer: [ ["washerOperatingState","washerMode","switch"],["_on","_off","_pause","_run","_stop","_setWasherMode"]],
-    vacuum: [ ["robotCleanerCleaningMode"],["_auto","_part","_repeat","_manual","_stop"]]
+    vacuum: [ ["robotCleanerCleaningMode"],["_auto","_part","_repeat","_manual","_stop"]],
+    water: [ ["waterSensor"],null]
     // , other: ["sensor",null], 
     // actuator: ["actuator",null] 
 };
@@ -131,7 +149,7 @@ GLB.trigger1 = [
 GLB.trigger2 = [
     "thermostat", "thermostatSetpoint", "robotCleanerMovement", "robotCleanerCleaningMode",
     "temperatureMeasurement", "thermostatMode", "thermostatHeatingSetpoint", "thermostatCoolingSetpoint",
-    "mediaTrackControl", "mediaPlayback",
+    "mediaTrackControl", "mediaPlayback", "audioTrackData",
     "illuminanceMeasurement", "smokeDetector", "valve", "waterSensor", "tvChannel"
 ];
 
@@ -275,6 +293,7 @@ function getTypes() {
     thingtypes.push("control");
     thingtypes.push("momentary");
     thingtypes.push("actuator");
+    thingtypes.push("sensor");
     thingtypes.push("other");
     thingtypes.push("clock");
     thingtypes.push("ford");
@@ -299,18 +318,14 @@ function readCustomCss(userid, pname) {
 function writeCustomCss(userid, pname, str) {
 
     if ( typeof str === "undefined" ) {
-        console.log( (ddbg()), "error - attempted to write null to customtiles");
-        return;
-    }
-
-    // make sure we have a string
-    if ( typeof str !== "string" ) {
+        str = "";
+    } else if ( typeof str !== "string" ) {
         str = str.toString();
     }
 
     // proceed only if there is a custom css file in this skin folder
-    var fname = "user" + userid + "/" + pname + "/customtiles.css";
-    if ( userid && pname && fs.existsSync(fname) ) {
+    if ( userid && pname ) {
+        var fname = "user" + userid + "/" + pname + "/customtiles.css";
         var d = new Date();
         var today = d.toLocaleString();
         var fixstr = "";
@@ -1417,7 +1432,8 @@ function getDevices(hub, reload, reloadpath) {
                                 // only pull the fields for this specific capability for switches, illuminance, and temperature
                                 // or all fields for sensor and actuator - also always get the battery and switch
                                 // if we are not reading a switch or illuminance or temperature then get all fields
-                                if ( swtype==="other" || swtype==="actuator" || cap==="battery" || capabilitiesList.includes(cap) ) {
+                                // if ( swtype==="other" || swtype==="actuator" || cap==="battery" || capabilitiesList.includes(cap) ) {
+                                if ( swtype==="other" || swtype==="actuator" || cap==="battery" || capabilitiesList.includes(cap) || true ) {
 
                                     // go through the attributes
                                     var attributes = capabilities[cap];
@@ -1452,6 +1468,20 @@ function getDevices(hub, reload, reloadpath) {
                                                         pvalue["event_1"] = attributes[attr]["value"] + " " + attributes[attr][othersub];
                                                     } else if ( othersub === "unit" ) {
                                                         pvalue["uom_"+subid] = attributes[attr]["unit"];
+                                                    } else if ( othersub === "data" ) {
+                                                        try {
+                                                            var otherobj = JSON.parse(attributes[attr][othersub]);
+                                                            for ( var datasubid in otherobj ) {
+                                                                if ( typeof pvalue[datasubid]==="undefined" ) {
+                                                                    pvalue[datasubid] = otherobj[datasubid];
+                                                                } else {
+                                                                    pvalue["data_"+datasubid] = otherobj[datasubid];
+                                                                }
+                                                            }
+                                                        } catch (e) {
+                                                        }
+                                                    } else {
+                                                        console.log(">>>> ignoring othersub=", othersub," for type=",swtype," val=", attributes[attr][othersub]);
                                                     }
                                                 }
                                             }
@@ -1474,13 +1504,23 @@ function getDevices(hub, reload, reloadpath) {
                         }
                     }
 
+                    // for audio add placeholders for album info and art if not there
+                    if ( swtype === "audio" && pvalue.deviceType && pvalue.deviceType.startsWith("LAN Sonos") && !pvalue.audioTrackData ) {
+                        pvalue.audioTrackData = {
+                            title: "",
+                            artist: "",
+                            album: "",
+                            albumArtUrl: '<img width="120" height="120" src="media/Electronics/electronics13-icn@2x.png"></img>',
+                            mediaSource: "Sonos"
+                        };
+                    }
+
                     // // get the health state info
                     // for ( var subid in jsonStatus.healthState ) {
                     //     pvalue[subid] = jsonStatus.healthState[subid];
                     // }
-
                     if ( DEBUG20 ) {
-                        console.log( (ddbg()), "device pvalue of type: ", swtype, " obtained from New SmartThings hub. pvalue: ", pvalue);
+                        console.log( (ddbg()), "New SmartThings device type: ", swtype, " pvalue: ", pvalue);
                     }
 
                     var pname = pvalue.name;
@@ -1502,10 +1542,10 @@ function getDevices(hub, reload, reloadpath) {
                         devicecnt++;
 
                         // check if this is our last one
-                        if ( DEBUG20 ) {
-                            console.log( (ddbg()), "new ST numdevices = ", numdevices, " devicent = ", devicecnt, " pname: ", pname);
-                        }
                         if ( devicecnt >= numdevices ) {
+                            if ( DEBUG20 ) {
+                                console.log( (ddbg()), "new ST numdevices = ", numdevices);
+                            }
                             checkNewSTDone(swtype);
                         }
                     }).catch(reason => {console.log("dberror 5 - newSTCallback - ", reason);});
@@ -1583,6 +1623,14 @@ function getDevices(hub, reload, reloadpath) {
                         pvalue = translateMusic(pvalue);
                     } else if ( thetype==="weather" ) {
                         pvalue = translateWeather(origname, pvalue);
+                    }
+
+                    // remove ignored items from pvalue
+                    for (var field in pvalue) {
+                        if ( GLB.ignoredAttributes.includes(field) || field.startsWith("supportedWasher") ) {
+                            console.log(">>>> ignoring: ", field);
+                            delete pvalue[field];
+                        }
                     }
 
                     var pvalstr = encodeURI2(JSON.stringify(pvalue));
@@ -2639,6 +2687,37 @@ function getLoginPage(userid, usertype, emailid, hostname, skin) {
     return tc;
 }
 
+function makeDefaultFolder(userid, pname) {
+    var userfolder = "user"+userid.toString();
+    if (!fs.existsSync(userfolder) ) {
+        fs.mkdirSync(userfolder);
+        
+        var panelfolder = userfolder + "/" + pname;
+        if ( !fs.existsSync(panelfolder) ) {
+            fs.mkdirSync(panelfolder);
+        }
+
+        var fname = panelfolder + "/customtiles.css";
+        if ( !fs.existsSync(fname) ) {
+            writeCustomCss(userid, pname, "");
+        }
+
+        // add three folders for custom icons, media, and photos
+        var imgfolder = panelfolder + "/icons";
+        if ( !fs.existsSync(imgfolder) ) {
+            fs.mkdirSync(imgfolder);
+        }
+        imgfolder = panelfolder + "/media";
+        if ( !fs.existsSync(imgfolder) ) {
+            fs.mkdirSync(imgfolder);
+        }
+        imgfolder = panelfolder + "/photos";
+        if ( !fs.existsSync(imgfolder) ) {
+            fs.mkdirSync(imgfolder);
+        }
+    }
+}
+
 function createNewUser(body) {
 
     var emailname = body.email;
@@ -2664,6 +2743,11 @@ function createNewUser(body) {
         var time = d.toLocaleTimeString();
         var logincode = pw_hash(emailname + ":" + time);
 
+        // change username to email if none given
+        if ( !username ) {
+            username = emailname;
+        }
+
         // create new user but set type to 0 until we get an email confirmation
         newuser = {email: emailname, uname: username, password: pw_hash(pword), usertype: 0, defhub: "", hpcode: logincode };
         return mydb.addRow("users", newuser)
@@ -2679,15 +2763,16 @@ function createNewUser(body) {
 
             if ( !result || typeof result !== "object" ) { return result; }
 
+            // make a directory for this user with a default panel folder
+            makeDefaultFolder(userid, pname);
+
             // make a default hub for this user
             nullhub = {userid: userid, hubid: "-1", hubhost: "None", hubtype: "None", hubname: "None", 
                 clientid: "", clientsecret: "", hubaccess: "", hubendpt: "", hubrefresh: "", 
                 useraccess: "", userendpt: "", hubtimer: "0" };
-
             return mydb.addRow("hubs", nullhub)
             .then(result => {
                 if ( !result || typeof result !== "object" ) { return result; }
-
                 nullhub.id = result.getAutoIncrementValue();
                 return nullhub;
             });
@@ -3066,29 +3151,25 @@ function processLogin(body, res) {
             pname = therow["panels_pname"];
             setCookie(res, "uname", pw_hash(uname));
             setCookie(res, "pname", pw_hash(pname));
-            console.log((ddbg()), ">>>> Successful login. Username: ", uname, " Panelname: ", pname);
+            if ( DEBUG3 ) {
+                console.log((ddbg()), ">>>> Successful login. Username: ", uname, " Panelname: ", pname);
+            }
 
             // lets make sure there is a null hub for this user
             var nullhub = {userid: therow["users_id"], hubid: "-1", hubhost: "None", hubtype: "None", hubname: "None", 
                 clientid: "", clientsecret: "", hubaccess: "", hubendpt: "", hubrefresh: "", 
                 useraccess: "", userendpt: "", hubtimer: "0" };
-            mydb.updateRow("hubs",nullhub,"userid = " + therow["users_id"] + " AND hubid = '-1'");
+            mydb.updateRow("hubs",nullhub,"userid = " + userid + " AND hubid = '-1'");
 
             // create the user directory and default custom css
-            if (!fs.existsSync("user"+userid)){
-                fs.mkdirSync("user"+userid);
-                var fname = "user" + userid + "/" + pname + "/customtiles.css";
-                if ( !fs.existsSync(fname) ) {
-                    writeCustomCss(userid, pname, "");
-                }
-            }
+            makeDefaultFolder(userid, pname);
         
             // pushClient(userid, "reload", "login", "/");
         } else {
             res.clearCookie("uname");
             res.clearCookie("pname");
             console.log( (ddbg()), ">>>> Failed login attempt. Username: ", uname, " Panelname: ", pname);
-            therow = "invalid username or password";
+            therow = "error - invalid username or password";
             // pushClient(userid, "reload", "login", "/logout");
         }
         return therow;
@@ -5093,7 +5174,7 @@ function setValOrder(val) {
 }
 
 // TODO - finish updating and testing this
-function processHubMessage(userid, hub, hubmsg) {
+function processHubMessage(userid, hub, hubmsg, newST) {
     // loop through all devices tied to this message for any hub
     // push info to all things that match
     // we don't know the thing types so we have to check all things
@@ -5102,6 +5183,12 @@ function processHubMessage(userid, hub, hubmsg) {
     var subid = hubmsg['change_attribute'];
     var hubmsgid = hubmsg['change_device'].toString();
     var origname = hubmsg['change_name'] || "";
+    var swval = hubmsg['change_value'];
+    if ( newST ) {
+        var change_type = hubmsg["change_type"];
+    } else {
+        change_type = "string";
+    }
     // msgtype: "update", 
     // hubid: hubId,
     // change_name: "",
@@ -6148,9 +6235,12 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
         } else if ( hub.hubtype==="NewSmartThings" ) {
             var header = {"Authorization": "Bearer " + access_token};
             var presult;
+            var cap = subid;
             try {
-                var capabilitiesList = GLB.capabilities[subid][0];
-                var cap = capabilitiesList[0];
+                var capabilitiesList = GLB.capabilities[swtype][0];
+                if ( !capabilitiesList.includes(cap) ) {
+                    cap = capabilitiesList[0];
+                }
             } catch(e) {
                 cap = subid;
             }
@@ -6167,6 +6257,9 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                 (subid==="door" && (swval==="open" || swval==="close")) ||
                 (subid==="lock" && (swval==="unlock" || swval==="lock")) ) {
                 nvpreq = {"commands": [ { component:"main", capability: cap, command: swval, arguments: [] } ] };
+                if ( DEBUG7 ) {
+                    console.log( (ddbg()), "Calling New ST callHub with: ", UTIL.inspect(nvpreq, false, null, false));
+                }
             
             // support toggle commands
             } else if ( subid==="switch" && swval==="toggle" ) {
@@ -6178,7 +6271,7 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                     var pvalue = JSON.parse(decodeURI2(device.pvalue));
                     var curval = pvalue[subid];
                     swval = curval==="off" ? "on" : "off";
-                    nvpreq = {"commands": [ { component:"main", capability: "switch", command: swval, arguments: [] } ] };
+                    var nvpreq = {"commands": [ { component:"main", capability: "switch", command: swval, arguments: [] } ] };
 
                     var host = endpt + "/devices/" + swid + "/commands";
                     if ( DEBUG7 ) {
@@ -6239,16 +6332,20 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
 
             // process the thermostat commands
             } else if ( subid==="coolingSetpoint-up" ) {
-                nvpreq = getUpDownInfo("coolingSetpoint", "setCoolingSetpoint", 1);
+                nvpreq = getUpDownInfo("thermostatCoolingSetpoint", "setCoolingSetpoint", 1);
+                presult = {thermostatCoolingSetpoint: swval};
 
             } else if ( subid==="heatingSetpoint-up" ) {
-                nvpreq = getUpDownInfo("heatingSetpoint", "setHeatingSetpoint", 1);
+                nvpreq = getUpDownInfo("thermostatHeatingSetpoint", "setHeatingSetpoint", 1);
+                presult = {thermostatHeatingSetpoint: swval};
 
             } else if ( subid==="coolingSetpoint-dn" ) {
-                nvpreq = getUpDownInfo("coolingSetpoint", "setCoolingSetpoint", -1);
+                nvpreq = getUpDownInfo("thermostatCoolingSetpoint", "setCoolingSetpoint", -1);
+                presult = {thermostatCoolingSetpoint: swval};
 
             } else if ( subid==="heatingSetpoint-dn" ) {
-                nvpreq = getUpDownInfo("heatingSetpoint", "setHeatingSetpoint", -1);
+                nvpreq = getUpDownInfo("thermostatHeatingSetpoint", "setHeatingSetpoint", -1);
+                presult = {thermostatHeatingSetpoint: swval};
 
             } else if ( subid==="_volumeUp" || subid==="_groupVolumeUp" ) {
                 nvpreq = getUpDownInfo("audioVolume", "setVolume", 5);
@@ -6274,17 +6371,40 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                 nvpreq = {"commands": [ { component:"main", capability: "heatingSetpoint", command: "setHeatingSetpoint", arguments: [swval] } ] };
 
             // parset the music commands
+            } else if ( subid==="_mute" || subid==="_unmute" ) {
+                swval = subid.substr(1);
+                nvpreq = {"commands": [ { component:"main", capability: "audioMute", command: swval, arguments: [] } ] };
 
+            } else if ( subid==="_nextTrack" || subid==="_previousTrack" ) {
+                swval = subid.substr(1);
+                nvpreq = {"commands": [ { component:"main", capability: "mediaTrackControl", command: swval, arguments: [] } ] };
+
+            } else if ( subid==="_pause" || subid==="_play" || subid==="_stop" ) {
+                swval = subid.substr(1);
+                nvpreq = {"commands": [ { component:"main", capability: "mediaPlayback", command: swval, arguments: [] } ] };
+
+            } else if ( subid==="mute" || swval==="mute" ) {
+                swval = swval === "mute" ? "unmute" : "mute";
+                nvpreq = {"commands": [ { component:"main", capability: "audioMute", command: swval, arguments: [] } ] };
+
+            } else if ( subid.startsWith("supportedTrackControlCommands") ) {
+                nvpreq = {"commands": [ { component:"main", capability: "mediaTrackControl", command: swval, arguments: [] } ] };
+
+            } else if ( subid.startsWith("supportedPlaybackCommands") ) {
+                nvpreq = {"commands": [ { component:"main", capability: "mediaPlayback", command: swval, arguments: [] } ] };
 
             // direct commands processed here - setting presult to false skips the results push below
             } else if ( subid.startsWith("_") ) {
                 var thecmd = subid.substr(1);
+                if ( swtype === "audio" ) { cap = "mediaPlayback"; }
                 presult = false;
                 nvpreq = {"commands": [ { component:"main", capability: cap, command: thecmd, arguments: [] } ] };
 
             // default is we try to call the command - this usually will return nothing or an error
             } else {
                 if ( cap === "switchlevel" ) { cap = "switch"; }
+                if ( swtype === "audio" ) { cap = "mediaPlayback"; }
+                console.log( (ddbg()), "Default callHub - cap: ", cap, " command: ", swval);
                 nvpreq = {"commands": [ { component:"main", capability: cap, command: swval, arguments: [] } ] };
             }
 
@@ -7022,7 +7142,7 @@ function doAction(userid, hubid, thingid, configoptions, swid, swtype, swval, sw
             }
 
         } else {
-            console.log( (ddbg()), "callHub: ", hubindex, swid, thingid, swtype, swval, swattr, subid);
+            // console.log( (ddbg()), "callHub: ", hubindex, swid, thingid, swtype, swval, swattr, subid);
             callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, null, false);
             msg = pvalue;
         }
@@ -8084,6 +8204,13 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc += "<table class=\"roomoptions\">";
         $tc += "<tbody>";
 
+        devices = devices.sort(function(deva,devb) {
+            if ( !deva || !devb || typeof deva !== "object" || typeof devb !== "object" ) { return 0; }
+            else if ( deva["devices_name"] === devb["devices_name"] ) { return 0 }
+            else if ( deva["devices_name"] > devb["devices_name"] ) { return 1; }
+            else { return -1; }
+        });
+
         var $evenodd = true;
         for ( var i in devices) {
             var device = devices[i];
@@ -8434,24 +8561,6 @@ function saveFilters(userid, body) {
     return result;
 }
 
-// process username and password edits on Options page and Login page
-// TODO - update for DB
-function saveUserPw(userid, pname, req, res, body) {
-    if ( DEBUG3 ) {
-        console.log( (ddbg()), "password save request: ", body);
-    }
-
-    var result = {};
-
-    // make sure our default skin has a custom file
-    var fname = "user" + userid + "/" + pname + "/customtiles.css";
-    if ( !fs.existsSync(fname) ) {
-        writeCustomCss(userid, pname, "");
-    }
-
-    return result;
-}
-
 // process user options page
 // TODO - update to process into DB
 function processOptions(userid, panelid, optarray) {
@@ -8735,10 +8844,14 @@ function getIcons(userid, pname, skin, icondir, category) {
             var froot = path.basename(filename);
             var ext = path.extname(filename).slice(1);
             var filedir = path.join(activedir, froot);
-
+            if ( category.startsWith("User_") ) {
+                var showicon = path.join(icondir, froot);
+            } else {
+                showicon = filedir;
+            }
             if ( in_array(ext, allowed) ) {
                 $tc += '<div class="iconcat">';
-                $tc += '<img src="' + filedir +'" class="icon" title="' + froot + '" />';
+                $tc += '<img src="' + filedir +'" show="' + showicon + '" class="icon" title="' + froot + '" />';
                 $tc += '</div>';
             }
         });
@@ -9141,15 +9254,6 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                 }
             break;
 
-            case "saveuserpw":
-            case "userpw":
-                if ( protocol==="POST" ) {
-                    result = saveUserPw(userid, pname, req, res, body);
-                } else {
-                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-                }
-                break;
-
             case "saveoptions":
                 if ( protocol==="POST" ) {
                     result = processOptions(userid, panelid, body);
@@ -9261,7 +9365,6 @@ function apiCall(user, configoptions, body, protocol, req, res) {
                 }
                 break;
 
-            case "icons":
             case "geticons":
                 result = getIcons(userid, pname, skin, swval, swattr);
                 break;
@@ -10069,7 +10172,7 @@ if ( app && applistening ) {
                 mydb.getRow("hubs","*","hubid = '" + hubid + "'")
                 .then(hub => {
                     if ( hub ) {
-                        processHubMessage(hub.userid, hub, req.body);
+                        processHubMessage(hub.userid, hub, req.body, false);
                     }
                 }).catch(reason => {console.log("dberror 33a - app.post - msg update - ", reason);});
             }
@@ -10093,6 +10196,47 @@ if ( app && applistening ) {
             
             res.send("ISY msg done processing: " + req.body.utf8Data);
             res.end();
+
+        // handle events from Sonos connector
+        } else if ( req.path==="/" && req.body.type && req.body.type==="sonos" && req.body.sonosData && req.body.sonosDescription && req.body.sonosDevice ) {
+            var userid = req.body.userid;
+            var roomName = req.body.sonosDescription.roomName;
+            var sonosData = req.body.sonosData;
+            var sonosDevice = req.body.sonosDevice;
+
+            // set the values
+            // try getting audio device from DB with matching name
+            mydb.getRow("devices","*","userid = "+userid+" AND devicetype = 'audio' AND name LIKE '%"+roomName+"%'")
+            .then(device => {
+                if ( device ) {
+                    var pvalue = JSON.parse(decodeURI2(device.pvalue));
+                    pvalue.audioTrackData = {
+                        title: sonosData.title,
+                        artist: sonosData.artist,
+                        album: sonosData.album,
+                        albumArtUrl: sonosData.albumArtURI,
+                        mediaSource: "Sonos " + sonosDevice.host
+                    }
+                    
+                    if ( DEBUG19 ) {
+                        console.log(">>>> updating Sonos device with pvalue: ", pvalue);
+                    }
+                    pushClient(userid, device.deviceid, "audio", "trackImage", pvalue, null);
+
+                    // update device in DB
+                    pvalue = encodeURI2(JSON.stringify(pvalue));
+                    mydb.updateRow("devices",{pvalue: pvalue},"userid = "+userid+" AND id = "+device.id);
+
+                    res.send("Sonos msg received and applied to device: " + device.name);
+                    res.end();
+                } else {
+                    if ( DEBUG19 ) {
+                        console.log(">>>> error applying Sonos msg from ",roomName," to a Sonos device. sonosData:", sonosData);
+                    }
+                    res.send("error - Sonos msg received but no matching device found to apply it to");
+                    res.end();
+                }
+            });
         
         // handle events from new SmartThings
         } else if ( (req.path==="/" || req.path==="/sinks") && 
@@ -10103,6 +10247,11 @@ if ( app && applistening ) {
             events.forEach(function(eventgrp) {
                 var subscription = eventgrp.subscriptions[0];
                 var event = eventgrp.event;
+
+                // if ( DEBUG19 && event.deviceEvent && 
+                //      (event.deviceEvent.capability === 'mediaTrackControl' || event.deviceEvent.capability === 'audioTrackData') ) {
+                //     console.log( (ddbg()), "Audio newST: ", UTIL.inspect(event, false, null, false));
+                // }
                 if ( event.eventType==="DEVICE_EVENT" && event.deviceEvent.stateChange ) {
 
                     hubid = subscription.installedAppId;
@@ -10116,18 +10265,19 @@ if ( app && applistening ) {
                             var userid = hub.userid;
                             var swid = event.deviceEvent.deviceId;
                             var attr = event.deviceEvent.attribute;
+                            var valueType = event.deviceEvent.valueType;
                             var msg = {
                                 msgtype: "update", 
                                 hubid: hubid,
                                 change_name: "",
                                 change_device: swid,
                                 change_attribute: attr,
-                                change_type: "",
+                                change_type: valueType,
                                 change_value: event.deviceEvent.value
                             };
     
-                            processHubMessage(userid, hub, msg);
-                            if ( DEBUG19 ) {
+                            processHubMessage(userid, hub, msg, true);
+                            if ( DEBUG19s ) {
                                 console.log( (ddbg()), "Event sink msg from new ST hub: ", hubid, " msg: ", msg, 
                                 " stateChange: ", event.deviceEvent.stateChange,
                                 " filterNames: ", subscription.sinkFilterNames);
@@ -10163,7 +10313,7 @@ if ( app && applistening ) {
         // handle unknown requests
         } else {
             console.log( (ddbg()), "HousePanel received unknown POST message: ", req.body);
-            res.json('HousePanel server received an unknown message.');
+            res.json('HousePanel server received an unknown message.'+JSON.stringify(req.body));
             res.end();
         }
 

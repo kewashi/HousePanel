@@ -358,8 +358,10 @@ div.switchlevel.colorTemperature, div.switchlevel.hue, div.switchlevel.saturatio
     height: 16px;
 }
 div.switchlevel.level, div.bulb.level, div.music.level, div.audio.volume, div.audio.groupVolume {
-    height: 4px;
+    height: 24px;
+    margin-top: 4px;
     width: 99%;
+    color:rgba(0, 0, 0, 0.01);
 }
 div.colorTemperature-val, div.hue-val, div.saturation-val {
     background-color: #ffffff;
@@ -883,10 +885,6 @@ div.thing.lock-thing div.overlay.name div.lock.name {
 div.overlay {
     width: 100%;
     display: block;
-}
-div.overlay.level, div.audio-thing div.overlay.volume {
-    height: 28px;
-    margin-top: 4px;
 }
 
 /* remove slider from regular switches */
