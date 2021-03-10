@@ -117,7 +117,7 @@ div.inlinebutton {
 }
 #newthingcount {
     width: 1200px;
-    height: 30px;
+    height: 70px;
     border: 2px solid black;
     border-bottom: none;
     background-color: #eeeeee;
@@ -126,6 +126,7 @@ div.inlinebutton {
     font-weight: bold;
     font-size: 20px;
     margin-bottom: 0px;
+    overflow-wrap: break-word;
 }
 
 #showdocs {
@@ -1944,7 +1945,7 @@ div.rtsp {
     display: none;
 }
 img.trackImage {
-    width: 120px;
+    /* width: 120px; */
     height: auto;
 }
 
@@ -2005,4 +2006,16 @@ span.reddot {
     margin-left: 5px;
     background-color: "red";
     color: "white";
+}
+div.sonos-thing div.overlay.wss {
+    display: none;
+}
+div.overlay.Home div.location.Home, 
+div.overlay.Away div.location.Away, 
+div.overlay.Night div.location.Night, 
+div.overlay.Evening div.location.Evening {
+    display: none;
+}
+div.rule {
+    display: none;
 }

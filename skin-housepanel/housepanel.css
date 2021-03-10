@@ -358,7 +358,7 @@ div.switchlevel.colorTemperature, div.switchlevel.hue, div.switchlevel.saturatio
     height: 16px;
 }
 div.switchlevel.level, div.bulb.level, div.music.level, div.audio.volume, div.audio.groupVolume {
-    height: 24px;
+    height: 4px;
     margin-top: 4px;
     width: 99%;
     color:rgba(0, 0, 0, 0.01);
@@ -423,7 +423,7 @@ div.thing.audio-thing {
     height: auto;
 }
 
-div.audio-thing div.overlay._previousTrack,
+/* div.audio-thing div.overlay._previousTrack,
 div.audio-thing div.overlay._pause,
 div.audio-thing div.overlay._play,
 div.audio-thing div.overlay._stop,
@@ -431,22 +431,34 @@ div.audio-thing div.overlay._nextTrack,
 div.audio-thing div.overlay._muteGroup,
 div.audio-thing div.overlay._unmuteGroup,
 div.audio-thing div.overlay._volumeUp,
-div.audio-thing div.overlay._volumeDown
+div.audio-thing div.overlay._volumeDown */
+div.overlay._previousTrack,
+div.overlay._pause,
+div.overlay._play,
+div.overlay._stop,
+div.overlay._nextTrack,
+div.overlay._mute, div.overlay._unmute,
+div.overlay._muteGroup, div.overlay._unmuteGroup,
+div.overlay._volumeUp,
+div.overlay._volumeDown
 {
     display: inline;
 }
-div.audio-thing div.overlay._rewind,
+/* div.audio-thing div.overlay._rewind,
 div.audio-thing div.overlay._fastForward,
-div.audio-thing div.overlay._mute,
-div.audio-thing div.overlay._unmute,
 div.audio-thing div.overlay._groupVolumeUp,
-div.audio-thing div.overlay._groupVolumeDown {
+div.audio-thing div.overlay._groupVolumeDown, */
+div.overlay._rewind,
+div.overlay._fastForward,
+div.overlay._groupVolumeUp,
+div.overlay._groupVolumeDown {
     display: none;
 }
 
 div.music-previous, div.music-pause, div.music-stop, div.music-play, div.music-next,
-div.audio._previousTrack, div.audio._pause, div.audio._stop, div.audio._play, div.audio._nextTrack, 
-div.audio._rewind, div.audio._fastForward {
+div.audio._previousTrack, div.audio._pause, div.audio._stop, div.audio._play, div.audio._nextTrack, div.audio._rewind, div.audio._fastForward,
+div.sonos._previousTrack, div.sonos._pause, div.sonos._stop, div.sonos._play, div.sonos._nextTrack, div.sonos._rewind, div.sonos._fastForward 
+{
     color: rgba(255, 255, 255, 0.01);
     background-size: 38px;
     display: inline-block;
@@ -455,10 +467,11 @@ div.audio._rewind, div.audio._fastForward {
     width: 32px;
     margin-top: 5px;
 }
-div.audio._mute, div.audio._muteGroup,
-div.audio._unmute, div.audio._unmuteGroup,
-div.audio._volumeUp, div.audio._groupVolumeUp,
-div.audio._volumeDown, div.audio._groupVolumeDown{
+div.audio._mute, div.audio._muteGroup, div.audio._unmute, div.audio._unmuteGroup,
+div.audio._volumeUp, div.audio._groupVolumeUp, div.audio._volumeDown, div.audio._groupVolumeDown,
+div.sonos._mute, div.sonos._muteGroup, div.sonos._unmute, div.sonos._unmuteGroup,
+div.sonos._volumeUp, div.sonos._groupVolumeUp, div.sonos._volumeDown, div.sonos._groupVolumeDown
+{
     color: rgba(255, 255, 255, 0.01);
     background-size: 40px;
     display: inline-block;
@@ -467,43 +480,43 @@ div.audio._volumeDown, div.audio._groupVolumeDown{
     height:40px; 
     width: 40px;
 }
-div.music-pause, div.audio._pause {
+div.music-pause, div.audio._pause, div.sonos._pause {
     background-image: url("icons/pause.png");
 }
-div.music-stop, div.audio._stop {
+div.music-stop, div.audio._stop, div.sonos._stop {
     background-image: url("icons/stop.png");
 }
-div.music-play, div.audio._play {
+div.music-play, div.audio._play, div.sonos._play {
     background-image: url("icons/play.png");
 }
-div.music-previous, div.audio._previousTrack {
+div.music-previous, div.audio._previousTrack, div.sonos._previousTrack {
     background-image: url("icons/prev.png");
 }
-div.music-next, div.audio._nextTrack {
+div.music-next, div.audio._nextTrack, div.sonos._nextTrack {
     background-image: url("icons/next.png");
 }
-div.audio._mute, div.audio._muteGroup {
+div.audio._mute, div.audio._muteGroup, div.sonos._mute, div.sonos._muteGroup {
     background-image: url("icons/mute.png");
 }
-div.audio._unmute, div.audio._unmuteGroup {
+div.audio._unmute, div.audio._unmuteGroup, div.sonos._unmute, div.sonos._unmuteGroup {
     background-image: url("icons/unmute.png");
 }
-div.audio._rewind {
+div.audio._rewind, div.sonos._rewind {
     background-image: url("icons/rewind.png");
 }
-div.audio._fastForward {
+div.audio._fastForward, div.sonos._fastForward {
     background-image: url("icons/fastforward.png");
 }
-div.audio._volumeUp {
+div.audio._volumeUp, div.sonos._volumeUp {
     background-image: url("icons/up.png");
 }
-div.audio._volumeDown {
+div.audio._volumeDown, div.sonos._volumeDown {
     background-image: url("icons/down.png");
 }
-div.audio._groupVolumeUp {
+div.audio._groupVolumeUp, div.sonos._groupVolumeUp {
     background-image: url("icons/upgroup.png");
 }
-div.audio._groupVolumeDown {
+div.audio._groupVolumeDown, div.sonos._groupVolumeDown {
     background-image: url("icons/downgroup.png");
 }
 

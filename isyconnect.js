@@ -163,6 +163,7 @@ function setupISYSocket(hub) {
             // this will be ignored if the node isn't in our list
             connection.on("message", function(msg) {
                 if ( msg.type==="utf8" ) {
+                    msg.devicetype = "isy";
                     var headers = {
                         'Content-Type': "application/json"
                     };

@@ -278,20 +278,22 @@ $(document).ready(function() {
 
         var unamere = /^\D\S{3,}$/;      // start with a letter and be four long at least
         // $("#uname").val("default");
-        $("#uname").focus();
+        $("#emailid").focus();
         $("#loginform").on("keydown", function(e) {
             if ( e.which===27  ){
-                $("#uname").val("");
+                $("#emailid").val("");
+                $("#pname").val("");
                 $("#pword").val("");
+                $("#panelpword").val("");
             }
         });
 
-        $("#uname").on("keydown",function(e) {
-            var unameval = $("#uname").val();
-            if ( e.which===13 ){
+        $("#emailid").on("keydown",function(e) {
+            var unameval = $("#emailid").val();
+            if ( e.which===13 || e.which===9 ){
                 var msg = checkInpval("username", unameval, unamere);
                 if ( msg ) {
-                    $("#uname").focus();
+                    $("#emailid").focus();
                     alert(msg);
                 } else {
                     $("#pword").val("");
@@ -337,6 +339,22 @@ $(document).ready(function() {
         });
 
         $("#pword").on("keydown",function(e) {
+            if ( e.which===13 || e.which===9 ){
+                $("#pname").val("default");
+                $("#pname").focus();
+                e.stopPropagation();
+            }
+        });
+
+        $("#pname").on("keydown",function(e) {
+            if ( e.which===13 || e.which===9 ){
+                $("#panelpword").val("");
+                $("#panelpword").focus();
+                e.stopPropagation();
+            }
+        });
+
+        $("#panelpword").on("keydown",function(e) {
             if ( e.which===13 ){
                 execButton("dologin");
                 e.stopPropagation();
@@ -371,11 +389,11 @@ $(document).ready(function() {
     // handle interactions for main page
     // note that setupFilters will be called when entering edit mode
     if ( pagename==="main" ) {
-        initWebsocket();
         setupTabclick();
         cancelDraggable();
         cancelSortable();
         cancelPagemove();
+        initWebsocket();
 
         // repeat clock update every second
         setInterval( clockUpdater, 1000 );
@@ -406,81 +424,33 @@ function checkLogin() {
 }
 
 function initWebsocket() {
-
-    // get the webSocket info
     try {
         var userid = $("#userid").val();
         var webSocketUrl = $("input[name='webSocketUrl']").val();
+
+        if ( userid && webSocketUrl ) {
+            $.post(cm_Globals.returnURL, 
+                {useajax: "getwsport", userid: userid},
+                function (presult, pstatus) {
+                    if (pstatus==="success" && presult ) {
+                        webSocketUrl += ":" + presult;
+                        $("#infoport").html(presult);
+                        console.log(">>>> webSocketUrl: ", webSocketUrl);
+                        setupWebsocket(userid, presult, webSocketUrl);
+                    } else {
+                        console.log( "error - could not initialize websocket. pstatus: ", pstatus, " presult: ", presult );
+                    }
+                }
+            );
+        }
     } catch(err) {
-        webSocketUrl = null;
+        console.log( "error - could not initialize websocket. err: ", err);
     }
-    
-    // set up socket
-    if ( webSocketUrl ) {
-        setupWebsocket(userid, webSocketUrl);
-    }
-
-    // now try to set up web sockets for ISY hubs
-    // var isyhubhost = "ws://192.168.11.20:8182";
-    // cm_Globals.wsclient = setupISYSocket(isyhubhost);
-
-    if ( cm_Globals.wsclient && cm_Globals.wsclient.readyState === cm_Globals.wsclient.OPEN ) {
-        cm_Globals.wsclient.send("This is a test");
-    }
-}
-
-function setupISYSocket(hubhost) {
-    
-    // var userid = cm_Globals.options.userid;
-    // var hubs = JSON.parse(cm_Globals.options.hubs);
-    // hubs.forEach(function(hub) {
-    // if this hub is an ISY hub then set up a websocket to push results to our browser
-    try {
-        console.log("Creating webSocket for isyconnect on: ", hubhost);
-        var wsclient = new WebSocket(hubhost, "housepanel");
-    } catch(err) {
-        console.log("Error attempting to create webSocket for isyconnect on: ", hubhost," error: ", err);
-        return;
-    }
-    
-        // var buff = Buffer.from(hub.hubaccess);
-        // var base64 = buff.toString('base64');
-        // var origin = "com.universal-devices.websockets.isy";
-        // var header = {"Authorization": "Basic " + base64, "Sec-WebSocket-Protocol": "ISYSUB",  
-        //             "Sec-WebSocket-Version": "13", "Origin": "com.universal-devices.websockets.isy"};
-
-        wsclient.onopen = function(event) {
-            console.log( "isyconnect webSocket opened: ", event);
-        }
-
-        // handle incoming state messages from ISY
-        // this will be ignored if the node isn't in our list
-        wsclient.onmessage = function(event) {
-            var msg = event.data;
-            console.log("isyconnect webSocket message: ", msg);
-            // if ( msg.type==="utf8" ) {
-            //     processIsyMessage(msg.utf8Data);
-            // }
-        }
-        
-        wsclient.onerror = function(event) {
-            console.log( "webSocket error: ", event );
-        }
-        
-        wsclient.onclose = function(event) {
-            if ( event.wasClean ) {
-                console.log( "Connection closed to ISY socket: ");
-            } else {
-                console.log( "webSocket Error - closing connection to ISY socket: ", event);
-            }
-        }
-
-    return wsclient;
 }
 
 // new routine to set up and handle websockets
 // only need to do this once - I have no clue why it was done the other way before
-function setupWebsocket(userid, webSocketUrl) {
+function setupWebsocket(userid, wsport, webSocketUrl) {
     var wsSocket = null;
 
     try {
@@ -497,7 +467,7 @@ function setupWebsocket(userid, webSocketUrl) {
 
         function sendUser() {
             if ( wsSocket.readyState === wsSocket.OPEN ) {
-                wsSocket.send(userid.toString());
+                wsSocket.send(userid.toString() + "|" + wsport);
             }
         }
         // console.log( "ready state: ",  wsSocket.readyState );
@@ -874,6 +844,16 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
 
     // invoke response to click
     if ( addok ) {
+        $("#"+modalid).focus();
+        $("#"+modalid).on("keydown",function(e) {
+            if ( e.which===13 ) {
+                if ( responsefunction ) {
+                    responsefunction(this, modaldata);
+                }
+                closeModal(modalid);
+            }
+        });
+
         $("#"+modalid).on("click",".dialogbtn", function(evt) {
             if ( responsefunction ) {
                 responsefunction(this, modaldata);
@@ -942,10 +922,12 @@ function setupColors() {
                 var tile = '#t-'+aid;
                 var bid = $(tile).attr("bid");
                 var hubid = $(tile).attr("hub");
+                var hubindex = $(tile).attr("hubindex");
                 var thetype = $(tile).attr("type");
                 var userid = cm_Globals.options.userid;
                 var thingid = $(tile).attr("thingid");
                 var tileid = $(tile).attr("tile");
+                var hint = $(tile).attr("hint");
                 var pname = $("#showversion span#infoname").html();
 
                 var usertile =  $("#sb-"+aid+"-"+subid);
@@ -953,7 +935,7 @@ function setupColors() {
                 var linktype = thetype;
                 var linkval = "";
                 var linkbid = bid;
-                var linkhub = hubid;
+                var linkhub = hubindex;
                 var realsubid = subid;
     
                 if ( usertile && usertile.attr("command") ) {
@@ -978,8 +960,8 @@ function setupColors() {
                 }
                 console.log("setupColors doaction: id: ", linkbid, " type: ", linktype, " value: ", hslstr, " hex: ", hexval, " hubid: ", linkhub);
                 $.post(cm_Globals.returnURL, 
-                       {useajax: "doaction", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: hslstr, 
-                        subid: realsubid, attr: hexval, hubid: linkhub, tileid: tileid, command: command, linkval: linkval} );
+                       {useajax: "doaction", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: hslstr, hint: hint,
+                        subid: realsubid, attr: hexval, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval} );
             }
         });
     });
@@ -1001,12 +983,14 @@ function setupSliders() {
             var tile = '#t-'+aid;
             var bid = $(tile).attr("bid");
             var hubid = $(tile).attr("hub");
+            var hubindex = $(tile).attr("hubindex");
             var subid = thing.attr("subid");
             var thevalue = parseInt(ui.value);
             var thetype = $(tile).attr("type");
             var userid = cm_Globals.options.userid;
             var thingid = $(tile).attr("thingid");
             var tileid = $(tile).attr("tile");
+            var hint = $(tile).attr("hint");
             var pname = $("#showversion span#infoname").html();
             
             var usertile =  $("#sb-"+aid+"-"+subid);
@@ -1015,7 +999,7 @@ function setupSliders() {
             var linkval = thevalue;
             var linkbid = bid;
             var realsubid = subid;
-            var linkhub = hubid;
+            var linkhub = hubindex;
 
             if ( usertile && usertile.attr("command") ) {
                 command = usertile.attr("command");    // command type
@@ -1040,10 +1024,10 @@ function setupSliders() {
             }
 
             // console.log(ajaxcall + ": id= "+bid+" type= "+linktype+ " value= " + thevalue + " subid= " + subid + " command= " + command + " linkval: ", linkval);
-            console.log("setupSliders doaction: command= ", command, " bid= ", linkbid, " hub= ", linkhub, " type= ", linktype, " subid= ", realsubid, " value= ", thevalue, " linkval= ", linkval);
+            console.log("setupSliders doaction: command= ", command, " bid= ", linkbid, " hub= ", linkhub, " type= ", linktype, " subid= ", realsubid, " hint= ", hint, " value= ", thevalue, " linkval= ", linkval);
             $.post(cm_Globals.returnURL, 
-                {useajax: "doaction", userid: userid, pname: pname, id: bid, thingid: thingid, type: linktype, value: thevalue, attr: subid, 
-                subid: realsubid, hubid: linkhub, tileid: tileid, command: command, linkval: linkval} );
+                {useajax: "doaction", userid: userid, pname: pname, id: bid, thingid: thingid, type: linktype, value: thevalue, attr: subid, hint: hint,
+                subid: realsubid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval} );
         }
     });
 
@@ -1067,12 +1051,15 @@ function setupSliders() {
             var tile = '#t-'+aid;
             var bid = $(tile).attr("bid");
             var hubid = $(tile).attr("hub");
+            var hint = $(tile).attr("hint");
             var ajaxcall = "doaction";
             var subid = thing.attr("subid");
             var thevalue = parseInt(ui.value);
             var thetype = $(tile).attr("type");
             var usertile = thing.siblings(".user_hidden");
             var userid = cm_Globals.options.userid;
+            var thingid = $(tile).attr("thingid");
+            var tileid = $(tile).attr("tile");
             var pname = $("#showversion span#infoname").html();
             var command = "";
             var linktype = thetype;
@@ -1089,8 +1076,8 @@ function setupSliders() {
             // console.log(ajaxcall + ": command= " + command + " id= "+bid+" type= "+linktype+ " value= " + thevalue + " subid= " + subid + " command= " + command + " linkval: ", linkval);
             
             $.post(cm_Globals.returnURL, 
-                {useajax: ajaxcall, userid: userid, pname: pname, id: bid, type: thetype, value: parseInt(ui.value), 
-                          attr: "colorTemperature", subid: subid, hubid: hubid, command: command, linkval: linkval } );
+                {useajax: ajaxcall, userid: userid, pname: pname, id: bid, type: thetype, thingid: thingid, value: parseInt(ui.value), hint: hint,
+                          attr: "colorTemperature", subid: subid, hubid: hubid, tileid: tileid, command: command, linkval: linkval } );
         }
     });
 
@@ -2135,6 +2122,12 @@ function setupButtons() {
 
     } else if ( pagename==="auth" ) {
 
+        $("input[name='csecret']").each(function(i) {
+            var funkysecret = $(this).val();
+            var target = $(this).parent().parent().find("input[name='clientsecret']")
+            $(target).val(funkysecret);
+        });
+
         // now we use the DB index of the hub to ensure it is unique
         $("#pickhub").on('change',function(evt) {
             var hubindex = $(this).val();
@@ -2155,11 +2148,10 @@ function setupButtons() {
                 $("#newthingcount").html("The \"null\" hub for things not associated with a hub. It cannot be altered or authorized.");
                 $("input.hubdel").addClass("hidden");
                 $("input.hubauth").addClass("hidden");
-                $("#hubdiv_new > select[name='hubType']").addClass("hidden");
             } else {
+                $("#newthingcount").html("");
                 $("input.hubauth").removeClass("hidden");
                 $("input.hubdel").removeClass("hidden");
-                $("#newthingcount").html("");
             }
             $("div.authhub").each(function() {
                 if ( !$(this).hasClass("hidden") ) {
@@ -2169,10 +2161,10 @@ function setupButtons() {
             $(target).removeClass("hidden");
 
             // populate the clientSecret field that could have funky characters
-            if ( hubType!=="New" && hubindex ) {
-                var funkysecret = $("#csecret_"+hubindex).val();
-                $(target + " div.fixClientSecret >input").val(funkysecret);
-            }
+            // if ( hubindex ) {
+            //     var funkysecret = $("#csecret_"+hubindex).val();
+            //     $(target + " div.fixClientSecret >input").val(funkysecret);
+            // }
 
             evt.stopPropagation(); 
         });
@@ -2183,30 +2175,83 @@ function setupButtons() {
             var hubindex = $("#pickhub").val();
             var hideid = $("#hideid_"+hubindex);
             var hubTarget = $(this).parent().find("input[name='hubhost']");
+            var hubNameTarget = $(this).parent().parent().find("input[name='hubname']");
             if ( hubType=== "SmartThings" ) {
                 hideid.removeClass("hidden");
-                hubTarget.prop("disabled", false);
+                // hubTarget.prop("disabled", false);
+                hubTarget.val("https://graph.api.smartthings.com");
+                hubNameTarget.val("");
+                $("#newthingcount").html("Fill out the fields below to authorize your "+hubType+" hub. The hub ID and name will be obtained automatically.");
+            } else if ( hubType=== "NewSmartThings" ) {
+                hideid.addClass("hidden");
+                hubTarget.val("https://api.smartthings.com");
+                // hubTarget.prop("disabled", true);
+                hubNameTarget.val("SmartThings Home");
+                $("#newthingcount").html("Ready to authorize your SmartThings hub via the new API platform.");
+            } else if ( hubType=== "Sonos" ) {
+                hideid.addClass("hidden");
+                hubTarget.val("https://api.sonos.com");
+                // hubTarget.prop("disabled", true);
+                $(hubNameTarget).val("Sonos");
+                console.log(hubNameTarget.val(), hubTarget.val());
+                $("#newthingcount").html("Ready to authorize your "+hubType+" account. The hub name can be set to anything or the name Sonos will be assigned.");
+            } else if ( hubType==="Hubitat" ) {
+                hideid.removeClass("hidden");
+                hubTarget.val("https://oauth.cloud.hubitat.com");
+                hubNameTarget.val("");
+                // hubTarget.prop("disabled", false);
+                $("#newthingcount").html("Fill out the fields below to authorize your "+hubType+" hub. The hub ID and name will be obtained automatically.");
+            } else if ( hubType==="Ford" || hubType==="Lincoln" ) {
+                hideid.removeClass("hidden");
+                $("#newthingcount").html("Fill out the fields below to authorize your "+hubType+". Be sure to provide a valid App ID");
+                hubTarget.val("https://fordconnect.cv.ford.com");
+                // hubTarget.prop("disabled", true);
+                hubNameTarget.val(hubType);
+            } else if ( hubType==="ISY" ) {
+                hideid.removeClass("hidden");
+                // hubTarget.prop("disabled", false);
+                hubTarget.val("http://192.168.11.31");
+                hubNameTarget.val("ISY Home");
+            } else {
+                hideid.removeClass("hidden");
+                // hubTarget.prop("disabled", false);
+                hubTarget.val("");
+            }
+        });
+
+        $("select[name='hubtype']").each( function(i) {
+            var hubType = $(this).val();
+            var hubindex = $("#pickhub").val();
+            var hideid = $("#hideid_"+hubindex);
+            var hubTarget = $(this).parent().find("input[name='hubhost']");
+            if ( hubType=== "SmartThings" ) {
+                hideid.removeClass("hidden");
+                // hubTarget.prop("disabled", false);
                 hubTarget.val("https://graph.api.smartthings.com");
             } else if ( hubType=== "NewSmartThings" ) {
                 hideid.addClass("hidden");
                 hubTarget.val("https://api.smartthings.com");
-                hubTarget.prop("disabled", true);
+                // hubTarget.prop("disabled", true);
+            } else if ( hubType=== "Sonos" ) {
+                hideid.addClass("hidden");
+                hubTarget.val("https://api.sonos.com");
+                // hubTarget.prop("disabled", true);
             } else if ( hubType==="Hubitat" ) {
-                hubTarget.prop("disabled", false);
                 hideid.removeClass("hidden");
                 hubTarget.val("https://oauth.cloud.hubitat.com");
+                // hubTarget.prop("disabled", false);
             } else if ( hubType==="Ford" || hubType==="Lincoln" ) {
                 hideid.removeClass("hidden");
                 hubTarget.val("https://fordconnect.cv.ford.com");
-                hubTarget.prop("disabled", true);
+                // hubTarget.prop("disabled", true);
             } else if ( hubType==="ISY" ) {
                 hideid.removeClass("hidden");
-                hubTarget.prop("disabled", false);
                 hubTarget.val("http://192.168.11.31");
+                // hubTarget.prop("disabled", false);
             } else {
                 hideid.removeClass("hidden");
-                hubTarget.prop("disabled", false);
                 hubTarget.val("");
+                // hubTarget.prop("disabled", false);
             }
         });
         
@@ -2264,16 +2309,20 @@ function setupButtons() {
                     // "_postman_id": "a4dffc56-609b-4b97-9880-15e5b249b9ea",
                     // "name": "CA Ford-Connect Production",
                     // "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-                    else if ( obj.action === "fordoauth" ) {
-                        var nvpreq= "make=" + obj.model + "&application_id=" + obj.hubId + 
-                                    "&response_type=code&state=123&client_id=" + obj.clientId + 
-                                    "&scope=access&redirect_uri=" + encodeURI(obj.url);
-                        var location = obj.host + "/common/login/?" + nvpreq;
-                        
-                        alert("Ready to redirect to location: " + location);
-                        window.location.href = location;
-
-                    }
+                    // else if ( obj.action === "fordoauth" ) {
+                    //     var nvpreq = "response_type=code";
+                    //     nvpreq = nvpreq + "&make=" + obj.model + "&application_id=" + obj.appId;
+                    //     if ( obj.scope ) {
+                    //         nvpreq = nvpreq + "&scope=" + encodeURI(obj.scope);
+                    //     }
+                    //     if ( obj.state ) {
+                    //         nvpreq = nvpreq + "&state=" + encodeURI(obj.state);
+                    //     }
+                    //     nvpreq= nvpreq + "&client_id=" + encodeURI(obj.clientId) + "&redirect_uri=" + encodeURI(obj.url);
+                    //     var location = obj.host + "?" + nvpreq;
+                    //     // alert("Ready to authorize a " + obj.model + " vehicle redirect to location: " + location);
+                    //     window.location.href = location;
+                    // }
 
                     // if oauth flow then start the process with a redirection to site
                     // was updated to handle specific client_type values for user level auth and user scope values
@@ -2285,16 +2334,24 @@ function setupButtons() {
                         }
                         if ( obj.scope ) {
                             nvpreq = nvpreq + "&scope=" + encodeURI(obj.scope);
-                        } else {
-                            nvpreq = nvpreq + "&scope=app";
+                        }
+                        if ( obj.state ) {
+                            nvpreq = nvpreq + "&state=" + encodeURI(obj.state);
+                        }
+                        if ( obj.model ) {
+                            nvpreq = nvpreq + "&make=" + obj.model;
+                        }
+                        if ( obj.appId ) {
+                            nvpreq = nvpreq + "&application_id=" + obj.appId;
                         }
                         nvpreq= nvpreq + "&client_id=" + encodeURI(obj.clientId) + "&redirect_uri=" + encodeURI(obj.url);
 
                         // navigate over to the server to authorize
-                        var location = obj.host + "/oauth/authorize?" + nvpreq;
-                        
-                        // alert("Ready to redirect to location: " + location);
+                        var location = obj.host + "?" + nvpreq;
+                        // console.log("redirecting to: ", location, " obj: ", obj);
+                        // alert("redirecting to: " + location);
                         window.location.href = location;
+
                     }
                 } else {
                     if (typeof presult==="string" ) {
@@ -2326,8 +2383,10 @@ function setupButtons() {
                             if (pstatus==="success" && !presult.startsWith("error")) {
                                 $("#newthingcount").html(presult);
 
-                                // var location = cm_Globals.returnURL + "/reauth";
-                                // window.location.href = location;
+                                setTimeout(function() {
+                                    var location = cm_Globals.returnURL + "/reauth";
+                                    window.location.href = location;
+                                }, 3000);
 
                                 // $("#authhub_"+hubindex).remove();
                                 // $("#hubopt_"+hubindex).remove();
@@ -2438,7 +2497,7 @@ function addEditLink() {
         var userid = cm_Globals.options.userid;
         var pname = $("#showversion span#infoname").html();
 
-        createModal("modaladd","Remove: "+ tilename + " of type: "+thingtype+" from hub Id: " + hubid + " & room "+panel+"?<br>Are you sure?", "body" , true, pos, function(ui, content) {
+        createModal("modaladd","Remove: "+ tilename + " of type: "+thingtype+" from room "+panel+"?<br>Are you sure?", "body" , true, pos, function(ui, content) {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
                 $.post(cm_Globals.returnURL, 
@@ -2614,6 +2673,7 @@ function setupFilters() {
 
     // initial page load set up all rows
     $('input[name="useroptions[]"]').each(updateClick);
+    $('input[name="huboptpick[]"]').each(updateClick);
     
     // upon click update the right rows
     $('input[name="useroptions[]"]').click(updateClick);
@@ -2783,11 +2843,16 @@ function updateTile(aid, presult, skiplink) {
     
     // handle audio devices
     if ( presult["audioTrackData"] ) {
+        // console.log("audio track info: ", presult);
         var oldtrack = "";
         if ( $("#a-"+aid+"-trackDescription") ) {
             oldtrack = $("#a-"+aid+"-trackDescription").html();
         }
-        var audiodata = JSON.parse(presult["audioTrackData"]);
+        if ( typeof presult["audioTrackData"] === "string" ) {
+            var audiodata = JSON.parse(presult["audioTrackData"]);
+        } else {
+            audiodata = presult["audioTrackData"];
+        }
         presult["trackDescription"] = audiodata["title"] || "None";
         presult["currentArtist"] = audiodata["artist"];
         presult["currentAlbum"] = audiodata["album"];
@@ -2821,7 +2886,7 @@ function updateTile(aid, presult, skiplink) {
         if ( $("#a-"+aid+"-width") &&  $("#a-"+aid+"-width").html() && $("#a-"+aid+"-height") && $("#a-"+aid+"-height").html() ) {
             var wstr = " class='trackImage' width='" + $("#a-"+aid+"-width").html() + "' height= '" + $("#a-"+aid+"-height").html() + "' ";
         } else {
-            wstr = " class='trackImage'";
+            wstr = " class='trackImage' width='120px' height='120px' ";
         }
         // alert("aid= " + aid + " image width info: " + wstr );
         if ( trackImage.startsWith("http") ) {
@@ -3395,8 +3460,8 @@ function processClick(that, thingname) {
     var command = "";
     var bid = $(tile).attr("bid");
     var linkbid = bid;
-    var linkhub = $(tile).attr("hub");
-    // var linkhub = 0;
+    var hubid = $(tile).attr("hub");
+    var linkhub = $(tile).attr("hubindex");
     var userid = cm_Globals.options.userid;
     var thingid = $(tile).attr("thingid");
     var tileid = $(tile).attr("tile");
@@ -3413,6 +3478,7 @@ function processClick(that, thingname) {
     if ( thetype === "isy" ) {
         theattr = $("#a-"+aid+"-name").html();
     }
+    var hint = $(tile).attr("hint");
 
     // all hubs now use the same doaction call name
     var ajaxcall = "doaction";
@@ -3440,7 +3506,7 @@ function processClick(that, thingname) {
     }
 
     if ( typeof linkval === "string" && 
-         (linkval.startsWith("GET::") || linkval.startsWith("POST::") || 
+         (linkval.startsWith("GET::") || linkval.startsWith("POST::") || linkval.startsWith("TEXT::") ||
           linkval.startsWith("PUT::") || linkval.startsWith("LINK::") || 
           linkval.startsWith("RULE::") || linkval.startsWith("URL::")) )
     {
@@ -3479,11 +3545,13 @@ function processClick(that, thingname) {
 
     // no longer treat TEXT custom fields as passive since they could be relabeling of action fields which is fine
     // if they are not leaving them as an active hub call does no harm - it just returns false but you loose inspections
-    // to compensate for loss of inspection I added any custom field starting with "label" subid will inspect
+    // to compensate for loss of inspection I added any custom field starting with "label" or "text" subid will inspect
     var ispassive = (subid==="custom" || subid==="temperature" || subid==="feelsLike" || subid==="battery" || //  (command==="TEXT" && subid!=="allon" && subid!=="alloff") ||
-        subid==="presence" || subid==="motion" || subid==="contact" || subid==="status" ||
+        subid==="presence" || subid==="motion" || subid==="contact" || subid==="status" || subid==="deviceType" || subid==="localExec" ||
         subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" || subid==="name" || subid==="skin" ||
-        subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("label") ||
+        subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") ||
+        (command==="TEXT" && subid.startsWith("label")) || (command==="TEXT" && subid.startsWith("text")) ||
+        (thetype==="weather" && !subid.startsWith("_")) ||
         (thetype==="ford" && !subid.startsWith("_"))
     );
 
@@ -3507,11 +3575,11 @@ function processClick(that, thingname) {
         if ( thevalue==="on" || thevalue==="off" ) {
             thevalue = thevalue==="on" ? "off" : "on";
         }
-        console.log(ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" linkbid+ "+linkbid+" hub Id= " + linkhub + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
+        console.log(ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" linkbid+ "+linkbid+" linkhub= " + linkhub + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
 
         $.post(cm_Globals.returnURL, 
-            {useajax: ajaxcall, userid: userid, pname: pname, thingid: thingid, tileid: tileid, id: linkbid, type: thetype, value: thevalue,
-                attr: subid, subid: subid, hubid: linkhub, command: command, linkval: linkval},
+            {useajax: ajaxcall, userid: userid, pname: pname, thingid: thingid, tileid: tileid, id: linkbid, type: linktype, value: thevalue, hint: hint,
+                attr: subid, subid: realsubid, hubid: hubid, hubindex: linkhub, command: command, linkval: linkval},
             function(presult, pstatus) {
                 if (pstatus==="success") {
                     console.log( ajaxcall + ": POST returned:", presult );
@@ -3532,7 +3600,7 @@ function processClick(that, thingname) {
             }, 
         "json");
 
-    // process user provided allon or alloff fields that turn all lights on or off
+    // process user provided allon or alloff fields that turn all lights and switches on or off
     } else if ( command==="TEXT" && (subid==="allon" || subid==="alloff") ) {
         var panel = $(tile).attr("panel");
         thevalue = addOnoff(targetid, subid, thevalue);
@@ -3542,6 +3610,7 @@ function processClick(that, thingname) {
             var thetype = $(tile).attr("type");
             var bid = $(tile).attr("bid");
             var hubid = $(tile).attr("hub");
+            var linkhub = $(tile).attr("hubindex");
             var thingid = $(tile).attr("thingid");
             var tileid = $(tile).attr("tile");
             var roomid = $("#panel-"+panel).attr("roomid");
@@ -3567,8 +3636,8 @@ function processClick(that, thingname) {
             }
             if ( val ) {
                 $.post(cm_Globals.returnURL, 
-                    {useajax: ajaxcall, userid: userid, pname: pname, id: bid, thingid: thingid, tileid: tileid, type: thetype, value: val, roomid: roomid,
-                     attr: theattr, subid: "switch", hubid: hubid, command: command, linkval: linkval} );
+                    {useajax: ajaxcall, userid: userid, pname: pname, id: bid, thingid: thingid, tileid: tileid, type: thetype, value: val, roomid: roomid, hint: hint,
+                     attr: theattr, subid: "switch", hubid: hubid, hubindex: linkhub, command: command, linkval: linkval} );
             }
         });
 
@@ -3577,8 +3646,14 @@ function processClick(that, thingname) {
         $('div.overlay > div[aid="'+aid+'"]').each(function() {
             var inspectsubid = $(this).attr("subid");
             var strval = $(this).html();
-            if ( inspectsubid!=="battery" && strval.indexOf("<http")===-1 && strval.length < 40 && strval ) {
-                msg += inspectsubid + " = " + $(this).html() + "<br>";
+            if ( inspectsubid!=="battery" && strval ) {
+                if ( strval.indexOf("img src") !== -1 ) {
+                    msg += inspectsubid + " =  (image)<br>";
+                } else if ( strval.length > 40 ) {
+                    msg += inspectsubid + " = (too long)" + "<br>";
+                } else {
+                    msg += inspectsubid + " = " + $(this).html() + "<br>";
+                }
             }
         });
         // console.log("Inspecting passive tile subid: ", subid, " type: ", thetype, " aid: ", aid, " msg: ", msg);
@@ -3624,7 +3699,7 @@ function processClick(that, thingname) {
         }
 
         console.log("userid= ", userid, " thingid= ", thingid, "tileid= ", tileid, "thingname= ", thingname, 
-                    " command= ", command, " bid= ", bid, " linkbid= ", linkbid, " hub= ", linkhub,
+                    " command= ", command, " bid= ", bid, " linkbid= ", linkbid, " hub= ", hubid, " linkhub= ", linkhub,
                     " type= ", thetype, " linktype= ", linktype, " subid= ", subid, " value= ", thevalue, 
                     " linkval= ", linkval, " attr=", theattr);
 
@@ -3639,14 +3714,14 @@ function processClick(that, thingname) {
         // alert("API call: " + ajaxcall + " bid: " + bid + " type: " + thetype + " value: " + thevalue);
 
         $.post(cm_Globals.returnURL, 
-            {useajax: ajaxcall, userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: thevalue,
-                attr: theattr, subid: realsubid, hubid: linkhub, tileid: tileid, command: command, linkval: linkval},
+            {useajax: ajaxcall, userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: thevalue, hint: hint,
+                attr: theattr, subid: realsubid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval},
             function (presult, pstatus) {
                 if (pstatus==="success") {
                     if ( presult && typeof presult === "object" ) {
                         console.log("Success: ", presult);
                     } else if ( presult && typeof presult === "string" && !presult.startsWith("error") ) {
-                        console.log("Success: result will be pushed later.", presult);
+                        console.log(presult);
                     } else {
                         console.log("Unrecognized return from POST call. result: ", presult);
                     }

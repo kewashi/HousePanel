@@ -128,7 +128,9 @@ exports.sqlDatabase = class sqlDatabase {
                     if ( DEBUGsql ) {
                         console.log(">>>> updating row: ", result);
                     }
-                    resolve( doUpdate(that) );
+                    var str = buildUpdateStr();
+                    resolve (that.query(str) );
+                    // resolve( doUpdate(that) );
 
                 // otherwise add a new row and return the add promise
                 } else {
@@ -143,7 +145,7 @@ exports.sqlDatabase = class sqlDatabase {
 
         return promise;
 
-        function doUpdate(that) {
+        function buildUpdateStr() {
             var updatestr = "";
             for (var fieldkey in values) {
 
@@ -172,7 +174,7 @@ exports.sqlDatabase = class sqlDatabase {
             if ( conditions ) {
                 str += " WHERE " + conditions;
             }
-            return that.query(str);
+            return str; // that.query(str);
         }
     }
     
