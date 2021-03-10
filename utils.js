@@ -2,6 +2,10 @@
 const fs = require('fs');
 
 const devhistory =  ` 
+3.018   Support new location tile that contains modes in new ST
+3.017   Disabled Sonos as I can't get it working right
+3.016   Completed Sonos integration, clean up link hndling, bug fixes
+3.015   Experimental Sonos hubs and fix multiple clients to use own port
 3.014   Bugfix to color lights not working, fix clock updater for links
 3.013   Enable audio Sonos tiles to work properly including album art
 3.012   Revised icon logic for tile editor to work with multi users
