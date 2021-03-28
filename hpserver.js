@@ -104,9 +104,9 @@ GLB.ignoredAttributes = [
 // the keys here are unique to HousePanel and are used to define the type of thing on the panel
 GLB.capabilities = { 
     switch: [ ["switch"], ["_on","_off"]],
-    switchlevel: [ ["switchLevel","switch"], ["_on","_off"]],
+    switchlevel: [ ["switch","switchLevel"], ["_on","_off"]],
     bulb: [ ["colorControl","switch"],["_on","_off","color"]], 
-    button: [ ["button"],null],
+    button: [ ["button"],["_pushed","_held"]],
     presence: [ ["presenceSensor"],null], 
     motion: [ ["motionSensor"],null], 
     contact: [ ["contactSensor"],null], 
@@ -396,6 +396,19 @@ function writeCustomCss(userid, pname, str) {
         }
     } else {
         console.log( (ddbg()), "custom CSS file not saved to file:", fname);
+    }
+}
+
+function sendText(phone, msg) {
+    if ( twilioClient ) {
+        twilioClient.messages.create({   
+            messagingServiceSid: twilioService,  
+            to: phone,
+            body: msg
+        }) 
+        .then(message => {
+            console.log( (ddbg()), "Sent txt: ", msg," to: ", phone, " SID: ", message.sid);
+        });
     }
 }
 
@@ -1020,7 +1033,8 @@ function getAccessToken(userid, code, hub) {
             ];
             // use a hack to force any mode change to trigger an event
             var qitemdum = [
-                {"field": "modeEvent.modeId", "value": "11111111-aaaa-2222-3333-444455556666", "operator": "NE"}
+                // {"field": "modeEvent.modeId", "value": "11111111-aaaa-2222-3333-444455556666", "operator": "NE"}
+                {"field": "eventType", "value": "MODE_EVENT", "operator": "EQ"}
             ];
             var qgroups = [
                 {queryItems: qitem1}, 
@@ -1824,6 +1838,7 @@ function getDevices(hub, reload, reloadpath) {
                                 if ( locvalue.backgroundImage ) {
                                     delete locvalue.backgroundImage;
                                 }
+                                locvalue["deviceType"] = "location";
                             } else {
                                 devicecnt++;
                                 if ( devicecnt >= numlocations ) {
@@ -1976,37 +1991,50 @@ function getDevices(hub, reload, reloadpath) {
                     pvalue["profileId"] = stapp.profile.id;
                 }
 
-                // now get the device details
-                // curl_call(hubEndpt + "/devices/" + device.deviceId+"/status", stheader, params, false, "GET", function(err, res, bodyStatus) {
-                _curl(hubEndpt + "/devices/" + deviceid+"/status", stheader, null, "GET", function(err, res, bodyStatus) {
-
-                    if ( err && err !== 200 ) {
-                        jsonStatus = null;
-                        return;
+                // get the health status
+                _curl(hubEndpt + "/devices/" + deviceid+"/health", stheader, null, "GET")
+                .then(body => {
+                    if ( body ) {
+                        try {
+                            var healthStatus = JSON.parse(body);
+                            pvalue["status"] = healthStatus.state;
+                        } catch(e) {
+                            pvalue["status"] = "OFFLINE";
+                        }
                     }
 
-                    try {
-                        var jsonStatus = JSON.parse(bodyStatus);
-                    } catch (e) {
-                        console.log( (ddbg()), "error translating device status", e, " body: ", bodyStatus);
-                        jsonStatus = null;
-                        return;
-                    }
+                    // now get the device details
+                    // curl_call(hubEndpt + "/devices/" + device.deviceId+"/status", stheader, params, false, "GET", function(err, res, bodyStatus) {
+                    _curl(hubEndpt + "/devices/" + deviceid+"/status", stheader, null, "GET", function(err, res, bodyStatus) {
 
-                    // get all the components - this will typically only have "main"
-                    var subid;
-                    if ( jsonStatus && jsonStatus.components && is_object(jsonStatus.components) ) {
-                        for ( var complabel in jsonStatus.components ) {
-                            // go through the capabilities
-                            var capabilities = jsonStatus.components[complabel];
+                        if ( err && err !== 200 ) {
+                            jsonStatus = null;
+                            return;
+                        }
 
-                            for ( var cap in capabilities ) {
-                                
-                                // only pull the fields for this specific capability for switches, illuminance, and temperature
-                                // or all fields for sensor and actuator - also always get the battery and switch
-                                // if we are not reading a switch or illuminance or temperature then get all fields
-                                // if ( swtype==="other" || swtype==="actuator" || cap==="battery" || capabilitiesList.includes(cap) ) {
-                                if ( swtype==="other" || swtype==="actuator" || cap==="battery" || capabilitiesList.includes(cap) || true ) {
+                        try {
+                            var jsonStatus = JSON.parse(bodyStatus);
+                        } catch (e) {
+                            console.log( (ddbg()), "error translating device status", e, " body: ", bodyStatus);
+                            jsonStatus = null;
+                            return;
+                        }
+
+                        // get all the components - this will typically only have "main"
+                        var subid;
+                        if ( jsonStatus && jsonStatus.components && is_object(jsonStatus.components) ) {
+
+                            for ( var complabel in jsonStatus.components ) {
+                                // go through the capabilities
+                                var capabilities = jsonStatus.components[complabel];
+
+                                for ( var cap in capabilities ) {
+                                    
+                                    // only pull the fields for this specific capability for switches, illuminance, and temperature
+                                    // or all fields for sensor and actuator - also always get the battery and switch
+                                    // if we are not reading a switch or illuminance or temperature then get all fields
+                                    // if ( swtype==="other" || swtype==="actuator" || cap==="battery" || capabilitiesList.includes(cap) ) {
+                                    // if ( swtype==="other" || swtype==="actuator" || cap==="battery" || capabilitiesList.includes(cap) || true ) {
 
                                     // go through the attributes
                                     var attributes = capabilities[cap];
@@ -2034,11 +2062,11 @@ function getDevices(hub, reload, reloadpath) {
                                                             var l = pvalue.level || 50;
                                                             pvalue.color = utils.hsv2rgb(h, s, l);
                                                         }
-                                                    } else if ( othersub === "timestamp" ) {
-                                                        if ( pvalue["event_3"] ) { pvalue["event_4"] = pvalue["event_3"]; }
-                                                        if ( pvalue["event_2"] ) { pvalue["event_3"] = pvalue["event_2"]; }
-                                                        if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
-                                                        pvalue["event_1"] = attributes[attr]["value"] + " " + attributes[attr][othersub];
+                                                    // } else if ( othersub === "timestamp" ) {
+                                                        // if ( pvalue["event_3"] ) { pvalue["event_4"] = pvalue["event_3"]; }
+                                                        // if ( pvalue["event_2"] ) { pvalue["event_3"] = pvalue["event_2"]; }
+                                                        // if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
+                                                        // pvalue["event_1"] = attributes[attr]["value"] + " " + attributes[attr][othersub];
                                                     } else if ( othersub === "unit" ) {
                                                         pvalue["uom_"+subid] = attributes[attr]["unit"];
                                                     } else if ( othersub === "data" ) {
@@ -2060,71 +2088,75 @@ function getDevices(hub, reload, reloadpath) {
                                             }
                                         }
                                     }
+                                    
                                 }
                             }
                         }
-                    }
 
-                    // add commands
-                    if ( commands ) {
-                        for ( var i in commands ) {
-                            var csubid = commands[i];
-                            if ( csubid.substr(0,1)==="_" ) {
-                                pvalue[csubid] = csubid.substr(1);
-                            } else {
-                                pvalue[csubid] = "";
+                        // add a counter
+                        pvalue.count = "0";
+
+                        // add commands
+                        if ( commands ) {
+                            for ( var i in commands ) {
+                                var csubid = commands[i];
+                                if ( csubid.substr(0,1)==="_" ) {
+                                    pvalue[csubid] = csubid.substr(1);
+                                } else {
+                                    pvalue[csubid] = "";
+                                }
                             }
                         }
-                    }
 
-                    // for audio add placeholders for album info and art if not there
-                    if ( swtype === "audio" && pvalue.deviceType && pvalue.deviceType.startsWith("LAN Sonos") && !pvalue.audioTrackData ) {
-                        pvalue.audioTrackData = {
-                            title: "",
-                            artist: "",
-                            album: "",
-                            albumArtUrl: GLB.returnURL + "/media/Electronics/electronics13-icn@2x.png",
-                            mediaSource: "Sonos"
+                        // for audio add placeholders for album info and art if not there
+                        if ( swtype === "audio" && pvalue.deviceType && pvalue.deviceType.startsWith("LAN Sonos") && !pvalue.audioTrackData ) {
+                            pvalue.audioTrackData = {
+                                title: "",
+                                artist: "",
+                                album: "",
+                                albumArtUrl: GLB.returnURL + "/media/Electronics/electronics13-icn@2x.png",
+                                mediaSource: "Sonos"
+                            };
+                        }
+
+                        // // get the health state info
+                        // for ( var subid in jsonStatus.healthState ) {
+                        //     pvalue[subid] = jsonStatus.healthState[subid];
+                        // }
+                        if ( DEBUG20 ) {
+                            console.log( (ddbg()), "New SmartThings device type: ", swtype, " pvalue: ", pvalue);
+                        }
+
+                        var pname = pvalue.name;
+                        pvalue = encodeURI2(JSON.stringify(pvalue));
+                        var rowdevice = {
+                            userid: userid,
+                            hubid: hubindex,
+                            deviceid: deviceid,
+                            name: pname, 
+                            devicetype: swtype,
+                            hint: hubType, 
+                            refresh: "normal",
+                            pvalue: pvalue
                         };
-                    }
+                            
+                        mydb.updateRow("devices", rowdevice, "userid = "+userid+" AND hubid = "+hubindex+
+                            " AND devicetype = '"+swtype+"' AND deviceid = '"+deviceid+"'")
+                        .then(result => {
+                            devicecnt++;
 
-                    // // get the health state info
-                    // for ( var subid in jsonStatus.healthState ) {
-                    //     pvalue[subid] = jsonStatus.healthState[subid];
-                    // }
-                    if ( DEBUG20 ) {
-                        console.log( (ddbg()), "New SmartThings device type: ", swtype, " pvalue: ", pvalue);
-                    }
-
-                    var pname = pvalue.name;
-                    pvalue = encodeURI2(JSON.stringify(pvalue));
-                    var rowdevice = {
-                        userid: userid,
-                        hubid: hubindex,
-                        deviceid: deviceid,
-                        name: pname, 
-                        devicetype: swtype,
-                        hint: hubType, 
-                        refresh: "normal",
-                        pvalue: pvalue
-                    };
-                        
-                    mydb.updateRow("devices", rowdevice, "userid = "+userid+" AND hubid = "+hubindex+
-                        " AND devicetype = '"+swtype+"' AND deviceid = '"+deviceid+"'")
-                    .then(result => {
-                        devicecnt++;
-
-                        // check if this is our last one
-                        if ( devicecnt >= numdevices ) {
-                            if ( DEBUG20 ) {
-                                console.log( (ddbg()), "new ST numdevices = ", numdevices);
+                            // check if this is our last one
+                            if ( devicecnt >= numdevices ) {
+                                if ( DEBUG20 ) {
+                                    console.log( (ddbg()), "new ST numdevices = ", numdevices);
+                                }
+                                checkNewSTDone(swtype);
                             }
-                            checkNewSTDone(swtype);
-                        }
-                    }).catch(reason => {console.log("dberror 5 - newSTCallback - ", reason);});
-                    
-                });  // end of this device node detail curl callback
-            
+                        }).catch(reason => {console.log("dberror 5 - newSTCallback - ", reason);});
+                        
+                    });  // end of this device node detail curl callback
+
+                }); // end of health check
 
             }); // end of all devices of this type
 
@@ -2179,14 +2211,6 @@ function getDevices(hub, reload, reloadpath) {
                     if ( thetype==="presence" && pvalue["presence"]==="not present" ) {
                         pvalue["presence"] = "absent";
                     }
-                    // handle audio tiles
-                    if ( thetype==="audio" || thetype==="sonos"  ) {
-                        pvalue = translateAudio(pvalue);
-                    } else if ( thetype==="music" ) {
-                        pvalue = translateMusic(pvalue);
-                    } else if ( thetype==="weather" ) {
-                        pvalue = translateWeather(origname, pvalue);
-                    }
 
                     // remove ignored items from pvalue
                     for (var field in pvalue) {
@@ -2196,7 +2220,19 @@ function getDevices(hub, reload, reloadpath) {
                         }
                     }
 
+                    // add a counter
+                    pvalue.count = "0";
                     var pvalstr = encodeURI2(JSON.stringify(pvalue));
+
+                    // handle audio and weather tiles
+                    if ( thetype==="audio" || thetype==="sonos"  ) {
+                        pvalue = translateAudio(pvalue);
+                    } else if ( thetype==="music" ) {
+                        pvalue = translateMusic(pvalue);
+                    } else if ( thetype==="weather" ) {
+                        pvalue = translateWeather(origname, pvalue);
+                    }
+
                     var device = {userid: userid, hubid: hubindex, deviceid: deviceid, name: origname, 
                         devicetype: thetype, hint: hint, refresh: refresh, pvalue: pvalstr};
                     
@@ -3124,7 +3160,7 @@ function getSpecials(configoptions) {
     return obj;
 }
 
-function getLoginPage(userid, usertype, emailid, hostname, skin) {
+function getLoginPage(userid, usertype, emailname, mobile, hostname, skin) {
     var tc = "";
     var pname = "default";
     tc+= utils.getHeader(userid, null, skin, true);
@@ -3142,8 +3178,13 @@ function getLoginPage(userid, usertype, emailid, hostname, skin) {
     tc+= "<h2 class='login'>" + utils.APPNAME + "</h2>";
 
     tc+= "<div class='loginline'>";
-    tc+= "<label for=\"emailid\" class=\"startupinp\">Email or username: </label><br>";
-    tc+= "<input id=\"emailid\" name=\"emailid\" width=\"60\" type=\"text\" value=\"" + emailid + "\"/>"; 
+    tc+= "<label for=\"emailid\" class=\"startupinp\">Email or Username: </label><br>";
+    tc+= "<input id=\"emailid\" name=\"emailid\" width=\"60\" type=\"text\" value=\"" + emailname + "\"/>"; 
+    tc+= "</div>";
+    
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"mobileid\" class=\"startupinp\">Mobile: </label><br>";
+    tc+= "<input id=\"mobileid\" name=\"mobile\" width=\"60\" type=\"text\" value=\"" + mobile + "\"/>"; 
     tc+= "</div>";
     
     tc+= "<div class='loginline'>";
@@ -3167,9 +3208,10 @@ function getLoginPage(userid, usertype, emailid, hostname, skin) {
     tc+= '<div id="dologin" class="formbutton">Sign In</div>';
     tc+= "</div>";
 
+    // the forgot pw link only uses the email and mobile fields
     tc+= "<hr>";
     tc+= "<div class='loginline'>";
-    tc+= "Forgot Password? Enter email address above and then";
+    tc+= "Forgot Password? Ente email and mobile phone number above and then";
     tc+= '<div id="forgotpw" class="inlinebutton">Click Here to Reset</div>';
     tc+= "</div>";
 
@@ -3203,14 +3245,19 @@ function getLoginPage(userid, usertype, emailid, hostname, skin) {
     var webSocketUrl = getSocketUrl(hostname);
     tc+= utils.hidden("webSocketUrl", webSocketUrl);
     tc+= utils.hidden("api", "newuser");
-    tc+= utils.hidden("userid", userid);
+    // tc+= utils.hidden("userid", userid);
 
     tc+= "<div class='logingreeting'>";
     tc+= "<h2 class='login'>" + utils.APPNAME + "</h2>";
 
     tc+= "<div class='loginline'>";
-    tc+= "<label for=\"newemailid\" class=\"startupinp\">Email: </label><br>";
+    tc+= "<label for=\"newemailid\" class=\"startupinp\">Email (required): </label><br>";
     tc+= "<input id=\"newemailid\" name=\"newemailid\" width=\"60\" type=\"text\" value=\"\"/>"; 
+    tc+= "</div>";
+
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"newmobileid\" class=\"startupinp\">Mobile phone (required): </label><br>";
+    tc+= "<input id=\"newmobileid\" name=\"newmobile\" width=\"60\" type=\"text\" value=\"\"/>"; 
     tc+= "</div>";
 
     tc+= "<div class='loginline'>";
@@ -3285,38 +3332,50 @@ function createNewUser(body) {
 
     var emailname = body.email;
     var username = body.uname;
+    var pname = "default";
+    var mobile = body.mobile;
     var pword = body.pword;
     var userid;
     var panelid;
     var newuser;
     var nullhub;
     var defaultpanel;
+    var rooms;
 
-    if ( !emailname ) {
-        return "error - A valid email address must be provided to create a new account.";
+    if ( !emailname || !mobile ) {
+        return "error - A valid email address and mobile number must be provided to create a new account.";
+    }
+
+    // change username to email if none given
+    if ( !username ) {
+        username = emailname;
     }
 
     // first check to see if this user exists
-    return mydb.getRow("users","*","email = '"+emailname+"'")
+    return mydb.getRow("users","*","email = '"+emailname+"' OR mobile = '"+mobile+"'")
     .then(row => {
-        if ( row ) { return "error - user with email " + emailname + " already exists"; }
+        if ( row ) { return "error - user with email [" + emailname + "] or mobile [" + mobile + "] already exists"; }
 
         // create confirmation code
         var d = new Date();
         var time = d.toLocaleTimeString();
-        var logincode = pw_hash(emailname + ":" + time);
+        var logincode = pw_hash(mobile + time).toUpperCase();
+        var len = logincode.length;
+        var mid = len / 2;
+        var thecode = logincode.substr(0,1) + logincode.substr(mid,1) + logincode.substr(len-4);
+        console.log( (ddbg()), ">>>> thecode: ", thecode);
+        var msg = "HousePanel confirmation code: " + thecode;
+        sendText(mobile, msg);
 
-        // change username to email if none given
-        if ( !username ) {
-            username = emailname;
-        }
-
-        // create new user but set type to 0 until we get an email confirmation
-        newuser = {email: emailname, uname: username, password: pw_hash(pword), usertype: 0, defhub: "", hpcode: logincode };
+        // create new user but set type to 0 until we get validation
+        newuser = {email: emailname, uname: username, mobile: mobile, password: pw_hash(pword), usertype: 0, defhub: "", hpcode: thecode };
         return mydb.addRow("users", newuser)
         .then(result => {
 
-            if ( !result ) { return "error - encountered a problem adding a new user to the HousePanel user community."; }
+            if ( !result ) { 
+                newuser = null;
+                return "error - encountered a problem adding a new user to the HousePanel user community."; 
+            }
 
             userid = result.getAutoIncrementValue();
             newuser.id = userid;
@@ -3324,7 +3383,10 @@ function createNewUser(body) {
         })
         .then(result => {
 
-            if ( !result || typeof result !== "object" ) { return result; }
+            if ( !result || typeof result !== "object" ) {
+                nullhub = null;
+                return result; 
+            }
 
             // make a directory for this user with a default panel folder
             makeDefaultFolder(userid, pname);
@@ -3334,10 +3396,13 @@ function createNewUser(body) {
                 clientid: "", clientsecret: "", hubaccess: "", hubendpt: "", hubrefresh: "", 
                 useraccess: "", userendpt: "", hubtimer: "0" };
             return mydb.addRow("hubs", nullhub)
-            .then(result => {
-                if ( !result || typeof result !== "object" ) { return result; }
-                nullhub.id = result.getAutoIncrementValue();
-                return nullhub;
+            .then(resnull => {
+                if ( !resnull || typeof resnull !== "object" ) {
+                    nullhub = null;
+                    return  "error - encountered a problem adding a new null hub to the HousePanel user " + userid; 
+                }
+                nullhub.id = resnull.getAutoIncrementValue();
+                return result;
             });
         })
         .then(result => {
@@ -3366,28 +3431,36 @@ function createNewUser(body) {
             return result;
         })
         .then(result => {
-            if ( !result || typeof result !== "object" ) { return result; }
+            if ( !result || typeof result !== "object" ) { 
+                defaultpanel = null;
+                rooms = null;
+                return result; 
+            }
 
             // now create a default panel and add a default set of rooms with a clock
-            defaultpanel = {userid: userid, pname: "default", password: "", skin: "skin-housepanel"};
+            defaultpanel = {userid: userid, pname: pname, password: "", skin: "skin-housepanel"};
             return mydb.addRow("panels", defaultpanel)
-            .then(result => {
+            .then(resultPanel => {
 
-                if ( !result || typeof result !== "object" ) { return result; }
+                if ( !resultPanel || typeof resultPanel !== "object" ) { 
+                    defaultpanel = null;
+                    rooms = null;
+                    return "error -  encountered a problem adding a new default panel to HousePanel for user " + userid; 
+                }
 
                 // if we added a default panel okay create a set of default rooms
-                panelid = result.getAutoIncrementValue();
+                panelid = resultPanel.getAutoIncrementValue();
                 defaultpanel.id = panelid;
 
                 var k = 1;
-                var rooms = [];
+                rooms = [];
                 for ( var roomname in GLB.defaultrooms ) {
                     var room = {userid: userid, panelid: panelid, rname: roomname, rorder: k};
                     k++;
                     mydb.addRow("rooms", room)
-                    .then(result => {
-                        if ( result ) {
-                            room.id = result.getAutoIncrementValue();
+                    .then(resultRoom => {
+                        if ( resultRoom ) {
+                            room.id = resultRoom.getAutoIncrementValue();
                             rooms.push(room);
                         }
                     });
@@ -3395,111 +3468,125 @@ function createNewUser(body) {
 
                 // send email to confirm
                 if ( DEBUG15 ) {
-                    console.log( (ddbg()), "newuser: ", newuser, "hub: ", nullhub, "panel: ", defaultpanel, "rooms: ", rooms);
+                    console.log( (ddbg()), "newuser: ", newuser, "hub: ", nullhub, "panel: ", defaultpanel, "rooms: ", rooms, " result: ", result);
                 }
-                return [newuser, nullhub, defaultpanel, rooms];
+                return result;
+                // return [newuser, nullhub, defaultpanel, rooms];
 
             });
-        })
-        .then(result => {
-
-            // send email to user with information about the new account requesting confirmation
-            var transporter;
-            if ( GLB.dbinfo.service && GLB.dbinfo.service==="gmail" ) {
-                transporter = nodemailer.createTransport({
-                    secure: false,
-                    host: GLB.dbinfo.gmailhost,
-                    port: GLB.dbinfo.gmailport,
-                    auth: {
-                        user: GLB.dbinfo.gmailuser,
-                        pass: GLB.dbinfo.gmailpass
-                    },
-                    tls: {rejectUnauthorized: false}
-                });
-            } else {
-                transporter = nodemailer.createTransport({
-                    secure: false,
-                    host: GLB.dbinfo.emailhost,
-                    port: GLB.dbinfo.emailport,
-                    auth: {
-                        user: GLB.dbinfo.emailuser,
-                        pass: GLB.dbinfo.emailpass
-                    },
-                    tls: {rejectUnauthorized: false}
-                });
-            }
-
-            // setup the message
-            var textmsg = "If you did not request a new HousePanel acount for user [" + emailname + "] please ignore this email.\n\n";
-            textmsg+= "To confirm and activate your HousePanel account, paste this into your browser window:\n\n";
-            textmsg+= GLB.returnURL + "/activateuser?userid="+userid+"&hpcode="+logincode;
-            textmsg+= "This link expires in 15 minutes.";
-            var htmlmsg = "<strong>If you did not request a new HousePanel account for user [" + emailname + "] please ignore this email.</strong><br><br>";
-            htmlmsg+= "To confirm and activate your HousePanel account, <a href=\"" + GLB.returnURL + "/activateuser?userid="+userid+"&hpcode="+logincode+"\">click here</a><br><br>";
-            htmlmsg+= "This link expires in 15 minutes.";
-
-            var message = {
-                from: GLB.dbinfo.emailuser,
-                to: emailname,
-                subject: "HousePanel new user confirmation",
-                text: textmsg,
-                html: htmlmsg
-            };
-
-            // send the email
-            transporter.sendMail(message, function(err, info) {
-                if ( err ) {
-                    console.log( (ddbg()), "error sending email to: ", emailname, " error: ", err);
-                    mydb.updateRow("users",{hpcode: ""},"id = "+userid);
-                } else {
-                    console.log( (ddbg()), "email successfully sent to: ", emailname, " response: ", info.response);
-                    // make the hpcode expire after 15 minutes
-                    var delay = 15 * 60000;
-                    setTimeout(function() {
-                        mydb.updateRow("users",{hpcode: ""},"id = "+userid);
-                    }, delay);
-                }
-            });
-
-            return result;
         });
+
+        // .then(result => {
+
+            // var transporter;
+            // if ( GLB.dbinfo.service && GLB.dbinfo.service==="gmail" ) {
+            //     transporter = nodemailer.createTransport({
+            //         secure: false,
+            //         host: GLB.dbinfo.gmailhost,
+            //         port: GLB.dbinfo.gmailport,
+            //         auth: {
+            //             user: GLB.dbinfo.gmailuser,
+            //             pass: GLB.dbinfo.gmailpass
+            //         },
+            //         tls: {rejectUnauthorized: false}
+            //     });
+            // } else {
+            //     transporter = nodemailer.createTransport({
+            //         secure: false,
+            //         host: GLB.dbinfo.emailhost,
+            //         port: GLB.dbinfo.emailport,
+            //         auth: {
+            //             user: GLB.dbinfo.emailuser,
+            //             pass: GLB.dbinfo.emailpass
+            //         },
+            //         tls: {rejectUnauthorized: false}
+            //     });
+            // }
+
+            // // setup the message
+            // var textmsg = "If you did not request a new HousePanel acount for user [" + emailname + "] please ignore this email.\n\n";
+            // textmsg+= "To confirm and activate your HousePanel account, paste this into your browser window:\n\n";
+            // textmsg+= GLB.returnURL + "/activateuser?userid="+userid+"&hpcode="+logincode;
+            // textmsg+= "This link expires in 15 minutes.";
+            // var htmlmsg = "<strong>If you did not request a new HousePanel account for user [" + emailname + "] please ignore this email.</strong><br><br>";
+            // htmlmsg+= "To confirm and activate your HousePanel account, <a href=\"" + GLB.returnURL + "/activateuser?userid="+userid+"&hpcode="+logincode+"\">click here</a><br><br>";
+            // htmlmsg+= "This link expires in 15 minutes.";
+
+            // var message = {
+            //     from: GLB.dbinfo.emailuser,
+            //     to: emailname,
+            //     subject: "HousePanel new user confirmation",
+            //     text: textmsg,
+            //     html: htmlmsg
+            // };
+
+            // // send the email
+            // transporter.sendMail(message, function(err, info) {
+            //     if ( err ) {
+            //         console.log( (ddbg()), "error sending email to: ", emailname, " error: ", err);
+            //         mydb.updateRow("users",{hpcode: ""},"id = "+userid);
+            //     } else {
+            //         console.log( (ddbg()), "email successfully sent to: ", emailname, " response: ", info.response);
+            //         // make the hpcode expire after 15 minutes
+            //         var delay = 15 * 60000;
+            //         setTimeout(function() {
+            //             mydb.updateRow("users",{hpcode: ""},"id = "+userid);
+            //         }, delay);
+            //     }
+            // });
+
+        //     return result;
+        // });
 
     });
 
 }
 
-function getNewUserPage(user, hostname) {
+function validateUserPage(user, hostname) {
     var userid = user.id;
     var tc = "";
     tc+= utils.getHeader(userid, null, null, true);
-    tc+= "<h2>Congratulations. You have activated your new HousePanel account.</h2>";
+    tc+= "<h2>Activate HousePanel Account</h2>";
+    tc+= "<div>A security code was sent as a txt to your mobile number. Enter it below to activate your account.";
+    tc+= "This will log you into the default panel named \"default\" with a blank password. You can configure your panels later.</div>";
     tc+= "<hr>";
 
-    tc+= "<form name=\"newuserpage\" action=\"#\"  method=\"POST\">";
+    tc+= "<form id=\"validateuserpage\" name=\"validateuserpage\" action=\"#\"  method=\"POST\">";
     tc+= utils.hidden("returnURL", GLB.returnURL);
     tc+= utils.hidden("pagename", "login");
     tc+= utils.hidden("userid", userid);
+    tc+= utils.hidden("email", user.email);
+    tc+= utils.hidden("uname", user.uname);
+    tc+= utils.hidden("mobile", user.mobile);
+    tc+= utils.hidden("hpcode", user.hpcode);
     // var webSocketUrl = getSocketUrl(hostname);
     // tc+= utils.hidden("webSocketUrl", webSocketUrl);
 
     tc+= "<div class='logingreeting'>";
     tc+= "<h2 class='login'>" + utils.APPNAME + "</h2>";
 
+    tc+= "<div class='userinfo'><strong>User ID:</strong>" + userid + "</div>";
     tc+= "<div class='userinfo'><strong>Email: </strong>" + user.email + "</div>";
     tc+= "<div class='userinfo'><strong>Username:</strong>" + user.uname + "</div>";
-    tc+= "<div class='userinfo'><strong>User ID:</strong>" + user.id + "</div>";
+    tc+= "<div class='userinfo'><strong>Mobile:</strong>" + user.mobile + "</div>";
 
-    tc+= "<hr><br><div><a href=\"" + GLB.returnURL + "\">Click Here</a> to log in with your new credentials. ";
-    tc+= "This will log you into the default panel named \"default\" with a blank password. You can configure your panels later.</div>";
-
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"newhpcode\" class=\"startupinp\">Security Code: </label><br>";
+    tc+= "<input id=\"newhpcode\" name=\"newhpcode\" width=\"40\" type=\"text\" value=\"\"/>"; 
     tc+= "</div>";
+
+    tc+= "<div class='loginline'>";
+    tc+= '<div id="newuservalidate" class="formbutton">Validate User</div>';
+    tc+= "</div>";
+
+    tc+= "<div><a href=\"" + GLB.returnURL + "\">Click Here</a> to abort and log in with existing credentials.</div>";
     tc+= "</form>";
     tc+= utils.getFooter();
 
     return tc;
 }
 
-function getNewPasswordPage(user, hostname) {
+function validatePasswordPage(user, hostname) {
     var userid = user.id;
     var tc = "";
     tc+= utils.getHeader(userid, null, null, true);
@@ -3514,20 +3601,35 @@ function getNewPasswordPage(user, hostname) {
     tc+= utils.hidden("userid", userid);
     tc+= utils.hidden("email", user.email);
     tc+= utils.hidden("uname", user.uname);
+    tc+= utils.hidden("mobile", user.mobile);
+    tc+= utils.hidden("hpcode", user.hpcode);
     // var webSocketUrl = getSocketUrl(hostname);
     // tc+= utils.hidden("webSocketUrl", webSocketUrl);
 
     tc+= "<div class='logingreeting'>";
     tc+= "<h2 class='login'>" + utils.APPNAME + "</h2>";
 
+    // tc+= "<div class='loginline'>";
+    // tc+= "<label class=\"startupinp\">Email: " + user.email + "</label><br>";
+    // tc+= "</div>";
+
+    // tc+= "<div class='loginline'>";
+    // tc+= "<label class=\"startupinp\">Username: " + user.uname + "</label><br>";
+    // tc+= "</div>";
+
+    // tc+= "<div class='loginline'>";
+    // tc+= "<label class=\"startupinp\">Mobile: " + user.mobile + "</label><br>";
+    // tc+= "</div>";
+    tc+= "<div class='userinfo'><strong>User ID:</strong>" + userid + "</div>";
+    tc+= "<div class='userinfo'><strong>Email: </strong>" + user.email + "</div>";
+    tc+= "<div class='userinfo'><strong>Username:</strong>" + user.uname + "</div>";
+    tc+= "<div class='userinfo'><strong>Mobile:</strong>" + user.mobile + "</div>";
+    
     tc+= "<div class='loginline'>";
-    tc+= "<label class=\"startupinp\">Email: " + user.email + "</label><br>";
+    tc+= "<label for=\"newhpcode\" class=\"startupinp\">Security Code: </label><br>";
+    tc+= "<input id=\"newhpcode\" name=\"newhpcode\" width=\"40\" type=\"text\" value=\"\"/>"; 
     tc+= "</div>";
 
-    tc+= "<div class='loginline'>";
-    tc+= "<label for=\"newunameid\" class=\"startupinp\">Username: " + user.uname + "</label><br>";
-    tc+= "</div>";
-    
     tc+= "<div class='loginline'>";
     tc+= "<label for=\"newpword\" class=\"startupinp\">New Password: </label><br>";
     tc+= "<input id=\"newpword\" name=\"newpword\" width=\"60\" type=\"password\" value=\"\"/>"; 
@@ -3535,7 +3637,7 @@ function getNewPasswordPage(user, hostname) {
     
     tc+= "<div class='loginline'>";
     tc+= "<label for=\"newpword2\" class=\"startupinp\">Confirm Password: </label><br>";
-    tc+= "<input id=\"newpword2\" name=\"newpword2\" width=\"60\" type=\"password\" value=\"skin-housepanel\"/>"; 
+    tc+= "<input id=\"newpword2\" name=\"newpword2\" width=\"60\" type=\"password\" value=\"\"/>"; 
     tc+= "</div>";
     
     tc+= "<hr>";
@@ -3551,7 +3653,7 @@ function getNewPasswordPage(user, hostname) {
     tc+= "</div>";
     
     tc+= "<div class='loginline'>";
-    tc+= '<div id="newpassword" class="formbutton">Update Credentials</div>';
+    tc+= '<div id="newpassword" class="formbutton">Save Credentials</div>';
     tc+= "</div>";
 
     tc+= "<br><hr>";
@@ -3569,80 +3671,39 @@ function getNewPasswordPage(user, hostname) {
 
 }
 
-function forgotPassword(emailname) {
+// this now uses a mobile phone number
+// returns the user object
+function forgotPassword(userfield, mobilefield) {
 
     // get the user from the database and send reminder if user exists
-    return mydb.getRow("users","*","email = '"+emailname+"'")
+    return mydb.getRow("users","*","email = '"+userfield+"' OR mobile = '"+mobilefield+"'")
     .then(row => {
-        if ( !row ) { return "error - user with email " + emailname + " does not exist"; }
+        if ( !row ) { return "error - user with email or mobile = " + userfield + " does not exist"; }
 
+        // allow mobile to be reset here if it is different than before and if email matches
+        var mobile = row.mobile;
+        if ( mobilefield && mobilefield!==row.mobile ) { mobile = mobilefield; }
+        
         // compute a special code to check later
+        var emailname = row.email;
         var d = new Date();
         var time = d.toLocaleTimeString();
-        var logincode = pw_hash(emailname + ":" + time);
-    
-        // save this in the DB for confirming later
+        var logincode = pw_hash(mobile + time).toUpperCase();
+        var len = logincode.length;
+        var mid = len / 2;
+        var thecode = logincode.substr(0,1) + logincode.substr(mid,1) + logincode.substr(len-4);
+        console.log( (ddbg()), ">>>> thecode: ", thecode);
+
+        // save code to the DB for confirming later, also update mobile number
         var userid = row.id;
-        return mydb.updateRow("users",{hpcode: logincode},"id = "+userid)
+        return mydb.updateRow("users",{hpcode: thecode, mobile: mobile},"id = "+userid)
         .then(result => {
             if ( !result ) { return "error - could not process password reset for user " + emailname; }
 
-            // setup the transport to send email
-            var transporter;
-            var fromuser;
-            console.log(">>>> info: ", GLB.dbinfo);
-            if ( GLB.dbinfo.service && GLB.dbinfo.service==="gmail" ) {
-                fromuser = GLB.dbinfo.gmailuser;
-                transporter = nodemailer.createTransport({
-                    // service: GLB.dbinfo.service,
-                    secure: true,
-                    host: GLB.dbinfo.gmailhost,
-                    port: 465,                       // GLB.dbinfo.gmailport,
-                    auth: {
-                        user: fromuser,
-                        pass: GLB.dbinfo.gmailpass
-                    },
-                    tls: {rejectUnauthorized: false}
-                });
-            } else {
-                fromuser = GLB.dbinfo.emailuser;
-                transporter = nodemailer.createTransport({
-                    secure: false,
-                    host: GLB.dbinfo.emailhost,
-                    port: GLB.dbinfo.emailport,
-                    auth: {
-                        user: fromuser,
-                        pass: GLB.dbinfo.emailpass
-                    },
-                    tls: {rejectUnauthorized: false}
-                });
+            if ( mobile ) {
+                var msg = "HousePanel Security Code: " + thecode;
+                sendText(mobile, msg);
             }
-
-            // setup the message
-            var textmsg = "If you did not request a HousePanel login reset for user [" + emailname + "] please ignore this email.\n\n";
-            textmsg+= "To reset your HousePanel login, paste this into your browser window:\n\n";
-            textmsg+= GLB.returnURL + "/confirmreset?userid="+userid+"&hpcode="+logincode;
-            textmsg+= "This link expires in 15 minutes.";
-            var htmlmsg = "<strong>If you did not request a HousePanel login reset for user [" + emailname + "] please ignore this email.</strong><br><br>";
-            htmlmsg+= "To reset your HousePanel login, <a href=\"" + GLB.returnURL + "/confirmreset?userid="+userid+"&hpcode="+logincode+"\">click here</a><br><br>";
-            htmlmsg+= "This link expires in 15 minutes.<br>";
-
-            var message = {
-                from: fromuser,
-                to: emailname,
-                subject: "HousePanel login reset",
-                text: textmsg,
-                html: htmlmsg
-            };
-
-            // send the email
-            transporter.sendMail(message, function(err, info) {
-                if ( err ) {
-                    console.log( (ddbg()), "error sending email to: ", emailname, " error: ", jsonshow(err));
-                } else {
-                    console.log( (ddbg()), "email successfully sent to: ", emailname, " response: ", info.response);
-                }
-            });
 
             // make the hpcode expire after 15 minutes
             var delay = 15 * 60000;
@@ -3650,45 +3711,92 @@ function forgotPassword(emailname) {
                 mydb.updateRow("users",{hpcode: ""},"id = "+userid);
             }, delay);
 
-            row.hpcode = logincode;
+            row.hpcode = thecode;
             return row;
-
         });
-
     });
+}
 
+function validateUser(body) {
+    
+    var userid = body.userid;
+    var emailname = body.email;
+    var mobile = body.mobile;
+
+    if ( !userid || !emailname ) {
+        return "error - invalid user or the user account was not found - password cannot be updated.";
+    }
+
+    // user has been validated so lets update their usertype from 0 to 1 and clear out the code
+    var upduser = {email: emailname, mobile: mobile, hpcode: "", usertype: 1};
+
+    // check hpcode to see if it matches
+    // and then update the designated user
+    return mydb.updateRow("users", upduser, "id = " + userid)
+    .then( row => {
+        if ( row ) {
+            return upduser;
+        } else {
+            return "error - problem validating user = " + userid;
+        }
+    })
+    .catch(reason => {
+        console.log( (ddbg()), reason );
+        return "error - problem with DB in when validating user = " + userid;
+    });
 }
 
 function updatePassword(body) {
     
     var userid = body.userid;
+    var emailname = body.email;
+    var uname = body.uname;
+    var mobile = body.mobile;
     var pname = body.pname;
+    var hpcode = body.hpcode;
     var pword = pw_hash(body.pword);
     var panelpw = pw_hash(body.panelpw);
 
-    if ( !userid ) {
-        return "error - existing userid not found - password cannot be updated.";
+    if ( !userid || !emailname ) {
+        return "error - invalid user or the user account was not found - password cannot be updated.";
+    }
+    if ( !hpcode ) {
+        return "error - a valid security code was not provided - password cannot be updated.";
     }
 
-    // update the designated user
-    var upduser = {password: pword, defhub: "", hpcode: ""};
-    return mydb.updateRow("users", upduser, "id = " + userid)
-    .then( row => {
+    // check hpcode to see if it matches
+    // and then update the designated user
+    var retobj = mydb.getRow("users","*","id = " + userid + " AND hpcode = '" + hpcode + "'")
+    .then(row => {
         if ( row ) {
-            var updpanel = {userid: userid, pname: pname, password: panelpw};
-            return mydb.updateRow("panels", updpanel, "userid = " + userid + " AND pname = '"+pname+"'")
+            var upduser = {email: emailname, uname: uname, mobile: mobile, password: pword, defhub: "", hpcode: ""};
+            return mydb.updateRow("users", upduser, "id = " + userid)
             .then( row => {
                 if ( row ) {
-                    return {pword: pword, pname: pname, panelpw: panelpw};
+                    var updpanel = {userid: userid, pname: pname, password: panelpw};
+                    return mydb.updateRow("panels", updpanel, "userid = " + userid + " AND pname = '"+pname+"'")
+                    .then( row => {
+                        if ( row ) {
+                            return {pword: pword, pname: pname, panelpw: panelpw};
+                        } else {
+                            return "error - problem updating or creating a new panel for user = " + userid;
+                        }
+                    });
                 } else {
-                    return "error - problem updating or creating a new panel";
+                    return "error - problem updating user password for user = " + userid;
                 }
             });
         } else {
-            return "error - problem updating user password";
+            return "error - the provided security code is invalid for user = " + userid;
         }
+    })
+    .catch(reason => {
+        console.log( (ddbg()), reason );
+        return "error - problem with DB in password reset for user = " + userid;
     });
 
+    // console.log("retobj in updatepassord: ", retobj);
+    return retobj;
 }
 
 function processLogin(body, res) {
@@ -3712,9 +3820,9 @@ function processLogin(body, res) {
     // get all the users and check for one that matches the hashed email address
     // emails for all users must be unique
     if ( pname ) {
-        var conditions = "panels.pname = '" + pname + "' AND panels.password = '"+phash+"' AND ( users.email = '"+uname+"' OR users.uname ='"+uname+"' ) AND users.password = '"+uhash+"'";
+        var conditions = "panels.pname = '" + pname + "' AND panels.password = '"+phash+"' AND ( users.email = '"+uname+"' OR users.uname ='"+uname+"' OR users.mobile = '"+uname+"' ) AND users.password = '"+uhash+"'";
     } else {
-        conditions = "panels.password = '"+phash+"' AND ( users.email = '"+uname+"' OR users.uname ='"+uname+"' ) AND users.password = '"+uhash+"'";
+        conditions = "panels.password = '"+phash+"' AND ( users.email = '"+uname+"' OR users.uname ='"+uname+"' OR users.mobile = '"+uname+"' ) AND users.password = '"+uhash+"'";
     }
     var joinstr = mydb.getJoinStr("panels", "userid", "users", "id");
     var results = mydb.getRow("panels", "*", conditions, joinstr)
@@ -4741,11 +4849,13 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     var bid = thesensor["id"];
     if ( thingtype==="audio" || thingtype==="sonos"  ) {
         thesensor.value = translateAudio(thesensor.value);
-        // console.log("audio data: ", UTIL.inspect(thesensor.value, false, null, false));
     } else if ( thingtype==="music" ) {
         thesensor.value = translateMusic(thesensor.value);
+    // } else if ( thingtype==="weather" ) {
+    //     var origname = thesensor.name || "";
+    //     thesensor.value = translateWeather(origname, thesensor.value);
     }
-    
+
     // add in customizations here
     if ( configoptions ) {
         thesensor.value = getCustomTile(userid, configoptions, thesensor.value, thingtype, bid);
@@ -5368,16 +5478,21 @@ function getFormattedDate(fmtdate, d) {
     return retobj;
 }
 
+// if tzone isn't given the time in CA is provided
+// since the server sits in California
+// when providing a tzone you must account for daylight savings for your location
 function getFormattedTime(fmttime, old, tzone) {
     if ( typeof old=== "undefined" || !old ) {
         old = new Date();
     }
-    var utc = old.getTime() + (old.getTimezoneOffset() * 60000);
-    
-    var tz = parseInt(tzone);
-    if ( isNaN(tz) ) { tz = old.getTimezoneOffset(); }
-    var d = new Date(utc - (tz * 60000));
-    // console.log("tz = ", tzone, tz);
+
+    if ( !tzone || isNaN(parseInt(tzone)) ) {
+        var d = old;
+    } else {
+        var tz = parseInt(tzone);
+        var utc = old.getTime() + (old.getTimezoneOffset() * 60000);
+        d = new Date(utc - tz*60000);
+    }
 
     var hour24 = d.getHours();
     var hour = hour24;
@@ -5457,14 +5572,14 @@ function getClock(userid, clockid, configoptions) {
     // TODO - enable user timezone settings in options
     var fmttime = "h:I:S A";
     var timezone = d.getTimezoneOffset();
-    var timeofday = getFormattedTime(fmttime, d, timezone);
+    var timeofday = getFormattedTime(fmttime, d, 0);
 
     var dclock = {"name": clockname, "skin": clockskin, "weekday": weekday,
         "date": dateofmonth, "time": timeofday, "tzone": timezone,
         "fmt_date": fmtdate, "fmt_time": fmttime};
 
     // dclock = getCustomTile(userid, configoptions, dclock, "clock", clockid);
-    // console.log("in getclock... clock = ", dclock, " ... configoptions: ", configoptions);
+    // console.log("in getclock... clock = ", dclock, " ... configoptions: ", jsonshow(configoptions));
     return dclock;
 }
 
@@ -5708,8 +5823,10 @@ function getCustomTile(userid, configoptions, custom_val, customtype, bid) {
                 custom_val["date"] = dates.date;
                 custom_val["weekday"] = dates.weekday;
             }
-            if ( array_key_exists("time", custom_val) && array_key_exists("fmt_time", custom_val) ) {
-                custom_val["time"] = getFormattedTime(custom_val["fmt_time"], d, custom_val["tzone"]);
+            if ( array_key_exists("time", custom_val) && ( array_key_exists("fmt_time", custom_val) || array_key_exists("tzone", custom_val) ) ) {
+                var tz = custom_val["tzone"] || 0;
+                var tfmt = custom_val["fmt_time"] || "";
+                custom_val["time"] = getFormattedTime(tfmt, d, tz);
             }
         } catch (e) {
             console.log((ddbg()), "error - setting custom date format for clock");
@@ -5794,13 +5911,6 @@ function processHubMessage(userid, hubmsg, newST) {
     } else {
         change_type = "string";
     }
-    // msgtype: "update", 
-    // hubid: hubId,
-    // change_name: "",
-    // change_device: swid,
-    // change_attribute: attr,
-    // change_type: "",
-    // change_value: event.deviceEvent.value
 
     var pvalue;
     // pvalue[subid] = hubmsg['change_value'];
@@ -5812,7 +5922,7 @@ function processHubMessage(userid, hubmsg, newST) {
 
     // update all devices from our list belonging to this user
     // the root device values are updated in the DB which causes all instances to update when pushClient is called below
-    // this should take care of all links too
+    // all links are handled by code in the js updateTile function
     var devid = null;
 
     if ( hubmsgid.indexOf("%") !== -1 ) {
@@ -5834,35 +5944,51 @@ function processHubMessage(userid, hubmsg, newST) {
             }
             pvalue[subid] = hubmsg['change_value'];
 
-            var swtype = device.devicetype;
-            var newval;
+            // increment the count if this is not the inverse of a turn on action
+            if ( pvalue[subid]!=="off" && pvalue[subid]!=="inactive" && pvalue[subid]!=="closed" && pvalue[subid]!=="locked" && pvalue[subid]!=="absent" ) {
+                if ( pvalue.count ) {
+                    var n = parseInt(pvalue.count) + 1;
+                    pvalue.count = n.toString();
+                } else {
+                    pvalue.count = "1";
+                }
+            }
 
-            // handle special audio updates
-            if ( swtype==="audio" || swtype==="sonos"  ) {
-                newval = translateAudio(pvalue);
-            } else if ( swtype==="music" ) {
-                newval = translateMusic(pvalue);
-            } else if ( swtype==="weather" ) {
-                var thisorigname = origname || device.name;
-                newval = translateWeather(thisorigname, pvalue);
+            var swtype = device.devicetype;
+            var newval = pvalue;
+
+            // set the event string to this time
+            var d = new Date();
+            var timestr = d.toLocaleTimeString();
+            if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
+            if ( typeof pvalue[subid] === "string" && pvalue[subid].length < 20 ) {
+                pvalue["event_1"] = subid + " " + pvalue[subid] + " " + timestr;
             } else {
-                newval = pvalue;
+                pvalue["event_1"] = subid + " " + timestr;
             }
 
             if ( DEBUG12 ) {
                 console.log( (ddbg()), "processHubMessage - hubmsgid: ", hubmsgid, " swtype: ", swtype, " subid: ", subid, " pvalue: ", newval);
             }
 
-            if ( ! array_key_exists("skip_push", hubmsg) ) {
-                pushClient(userid, hubmsgid, swtype, subid, newval);
-            }
-            newval.subid = subid;
-            processRules(userid, device.id, hubmsgid, swtype, subid, newval, "processMsg");
-            delete pvalue.subid;
-
             // update the DB
-            device.pvalue = encodeURI2(JSON.stringify(newval));
+            device.pvalue = encodeURI2(JSON.stringify(pvalue));
             mydb.updateRow("devices", device, "id = "+device.id);
+
+            // handle special audio updates
+            if ( swtype==="audio" || swtype==="sonos"  ) {
+                pvalue = translateAudio(pvalue);
+            } else if ( swtype==="music" ) {
+                pvalue = translateMusic(pvalue);
+            } else if ( swtype==="weather" ) {
+                var thisorigname = origname || device.name;
+                pvalue = translateWeather(thisorigname, pvalue);
+            }
+
+            pushClient(userid, hubmsgid, swtype, subid, pvalue);
+            pvalue.subid = subid;
+            processRules(userid, device.id, hubmsgid, swtype, subid, pvalue, "processMsg");
+            delete pvalue.subid;
 
             // save the first device that matches
             if ( !devid ) {
@@ -5886,9 +6012,8 @@ function processHubMessage(userid, hubmsg, newST) {
 // this function handles processing of all websocket calls from ISY
 // used to keep clients in sync with the status of ISY operation
 // because ISY hubs are local, this function must be invoked locally
-// TODO - figure out a way to support this once the code is on my server
-//        one solution will be to provide a local connecter Node.js app
-function processIsyMessage(userid, hub, isymsg) {
+// this magic is handled by the hpconnect.js helper app user must run
+function processIsyMessage(userid, isymsg) {
     var newval;
     var pvalue;
 
@@ -5949,6 +6074,25 @@ function processIsyMessage(userid, hub, isymsg) {
 
                     var subid = mapIsy(control[0], uom);
                     pvalue = translateIsy(bid, control[0], uom, subid, pvalue, newval, "");
+
+                    if ( pvalue[subid]!=="off" && pvalue[subid]!=="DOF" ) {
+                        if ( pvalue.count ) {
+                            var n = parseInt(pvalue.count) + 1;
+                            pvalue.count = n.toString();
+                        } else {
+                            pvalue.count = "1";
+                        }
+                    }
+                    // set the event string to this time
+                    var d = new Date();
+                    var timestr = d.toLocaleTimeString();
+                    if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
+                    if ( typeof pvalue[subid] === "string" && pvalue[subid].length < 10 ) {
+                        pvalue["event_1"] = timestr + " " + subid + " " + pvalue[subid];
+                    } else {
+                        pvalue["event_1"] = timestr + " " + subid;
+                    }
+
                     pushClient(userid, bid, "isy", subid, pvalue);
 
                     pvalue.subid = subid;
@@ -6956,7 +7100,15 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
         if ( DEBUG7 ) {
             console.log( (ddbg()), "callHub: access: ", access_token, " endpt: ", endpt, " swval: ", swval, " subid: ", subid, " swtype: ", swtype, " attr: ", swattr, " hub: ", hub);
         }
-        
+
+        // reset count if clicked on
+        if ( subid==="count" ) {
+            var body = {};
+            body[subid] = "0";
+            getHubResponse(body);
+            return result;
+        }
+
         // this function calls the Groovy hub api
         if ( hub.hubtype==="SmartThings" || hub.hubtype==="Hubitat" ) {
             var host = endpt + "/doaction";
@@ -7000,7 +7152,7 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
             
             // handle commands for switches and doors
             // the majority of all calls will be of this type
-            if ( (swval==="on" || swval==="off") || 
+            if ((subid==="switch" && (swval==="on" || swval==="off")) || 
                 (subid==="door" && (swval==="open" || swval==="close")) ||
                 (subid==="lock" && (swval==="unlock" || swval==="lock")) ) {
                 nvpreq = {"commands": [ { component:"main", capability: cap, command: swval, arguments: [] } ] };
@@ -7008,14 +7160,41 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                     console.log( (ddbg()), "Calling New ST callHub with: ", UTIL.inspect(nvpreq, false, null, false));
                 }
             
+            } else if ( swtype==="location" && subid.substr(0,1)==="_" ) {
+
+                var joinstr = mydb.getJoinStr("things", "tileid", "devices", "id");
+                mydb.getRow("things","*","things.userid = "+userid+" AND things.id = "+ deviceid, joinstr)
+                .then(row => {
+
+                    // get the mode name and retrieve the ID from the location device for the requested mode
+                    if ( row ) {
+                        var devicepval = row["devices_pvalue"];
+                        var pvalue = JSON.parse(decodeURI2(devicepval));
+                        var modename = subid.substr(1);
+                        var modeId = pvalue[modename];
+
+                        var host = endpt + "/v1/locations/" + swid + "/modes/current";
+                        nvpreq = {"modeId": modeId};
+                        // console.log(">>>> host: ", host, " deviceid: ", deviceid, " swid: ", swid, " body: ", nvpreq, " subid: ", subid, " modename: ", modename, " pvalue: ", pvalue);
+                        _curl(host, header, nvpreq, "PUT")
+                        .then( result => {
+
+                            // set the mode and handle resposne
+                            pvalue.themode = modename;
+                            getHubResponse(pvalue);
+                        });
+                    }
+                });
+
             // support toggle commands
             } else if ( subid==="switch" && swval==="toggle" ) {
 
                 nvpreq = null;
-
-                mydb.getRow("devices","*","userid = "+userid+" AND id = "+deviceid)
-                .then(device => {
-                    var pvalue = JSON.parse(decodeURI2(device.pvalue));
+                var joinstr = mydb.getJoinStr("things", "tileid", "devices", "id");
+                mydb.getRow("things","*","things.userid = "+userid+" AND things.id = "+deviceid, joinstr)
+                .then(row => {
+                    var devicepval = row["devices_pvalue"];
+                    var pvalue = JSON.parse(decodeURI2(devicepval));
                     var curval = pvalue[subid];
                     swval = curval==="off" ? "on" : "off";
                     var nvpreq = {"commands": [ { component:"main", capability: "switch", command: swval, arguments: [] } ] };
@@ -7049,6 +7228,11 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                     });
                 });
         
+            // handle button pushes
+            // } else if ( swtype==="button" && subid==="_pushed") {
+            //     nvpreq = {"commands": [ { component:"main", capability: "button", command: "pushed", arguments: [1] } ] };
+            //     presult = {button: "pushed", button1_button: "pushed"};
+    
             // handle slider light levels
             } else if ( subid==="level" ) {
                 swval = valint;
@@ -7123,7 +7307,20 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                 nvpreq = {"commands": [ { component:"main", capability: "heatingSetpoint", command: "setHeatingSetpoint", arguments: [swval] } ] };
                 presult = {heatingSetpoint: swval};
 
-            // parset the music commands
+            // parse the music commands
+            // reverse of translateAudio
+            // audiomap = {"title": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
+            // "albumArtUrl": "trackImage", "mediaSource": "mediaSource"};
+            } else if ( subid==="trackDescription" || subid==="currentArtis" || subid==="currentAlbum" ||
+                        subid==="trackImage" || subid==="mediaSource" ) {
+                return queryNewST(hub, swid, swtype).then(presult => {
+                    // console.log( (ddbg()),"Sonos query - hub: ", hub, " swid: ", swid, " swtype: ", swtype, " presult: ", jsonshow(presult));
+                    if ( presult && typeof presult === "object" ) {
+                        getHubResponse(presult);
+                    }
+                    return presult;
+                });
+
             } else if ( subid==="_mute" || subid==="_unmute" ) {
                 swval = subid.substr(1);
                 nvpreq = {"commands": [ { component:"main", capability: "audioMute", command: swval, arguments: [] } ] };
@@ -7151,12 +7348,13 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                 nvpreq = null;
                 return queryNewST(hub, swid, swtype).then(presult => {
                     if ( presult && typeof presult === "object" ) {
+                        console.log(">>>> refresh presult: ", jsonshow(presult));
                         getHubResponse(presult);
                     }
                     if ( DEBUG20 ) {
                         console.log((ddbg()), "Refresh tile: ", swid," of type: " , swtype, " result: ", presult);
                     }
-                    return result;
+                    return presult;
                 });
 
             // direct commands processed here - setting presult to false skips the results push below
@@ -7592,19 +7790,9 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
             console.log( (ddbg()), "failed converting hub call return to JSON object. body: ", body, " error: ", e);
             return;
         }
-        // console.log(">>>> body in getHubResponse: ", body, " pvalue: ", pvalue);
-
-        // deal with audio tiles
-        if ( swtype==="audio" || swtype==="sonos"  ) {
-            pvalue = translateAudio(pvalue);
-        } else if ( swtype==="music" ) {
-            pvalue = translateMusic(pvalue);
-        } else if ( swtype==="weather" && is_object(pvalue.forecast) ) {
-            var thisorigname = pvalue.name;
-            pvalue = translateWeather(thisorigname, pvalue);
 
         // pluck out just vehicle data and good status for info call
-        } else if ( swtype==="ford" && subid==="_info" && pvalue.vehicle && pvalue.status && pvalue.status==="SUCCESS" ) {
+        if ( swtype==="ford" && subid==="_info" && pvalue.vehicle && pvalue.status && pvalue.status==="SUCCESS" ) {
             var vehicle = clone(pvalue["vehicle"]);
             pvalue = {status: "SUCCESS"};
             for (var key in vehicle) {
@@ -7663,7 +7851,7 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
 
         // for save to DB - we must read all the devices and merge the pvalue with existing
         // we only do this for Sonos and Ford since they don't generate subscription events
-        if ( swtype==="ford" || swtype==="sonos" ) {
+        if ( swtype==="ford" || swtype==="sonos" || subid==="count") {
             mydb.getRows("devices","*", "userid = " + userid + " AND deviceid = '" + swid +"'")
             .then(devices => {
         
@@ -7678,6 +7866,7 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                     for (var skey in pvalue) {
                         newpvalue[skey] = pvalue[skey];
                     }
+                    pvalue = clone(newpvalue);
                     var pvalstr = encodeURI2(JSON.stringify(newpvalue));
                     
                     mydb.updateRow("devices", {pvalue: pvalstr}, "userid = "+userid+" AND id = "+device.id);
@@ -7687,6 +7876,17 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
 
         // push new values to all clients and execute rules
         if ( pvalue ) {
+
+            if ( swtype==="audio" || swtype==="sonos" || pvalue.audioTrackData  ) {
+                pvalue = translateAudio(pvalue);
+            } else if ( swtype==="music" || pvalue.trackData ) {
+                pvalue = translateMusic(pvalue);
+            } else if ( swtype==="weather" && is_object(pvalue.forecast) ) {
+                var thisorigname = pvalue.name;
+                pvalue = translateWeather(thisorigname, pvalue);
+            }
+    
+            // console.log(">>>> pushing to client: ", jsonshow(pvalue));
             pushClient(userid, swid, swtype, subid, pvalue);
             if ( !inrule ) {
                 pvalue.subid = subid;
@@ -7740,6 +7940,11 @@ function queryHub(userid, thingid, hubindex, swid, swtype, thingname ) {
                 if ( swtype==="presence" && pvalue["presence"]==="not present" ) {
                     pvalue["presence"] = "absent";
                 }
+
+                // store results back in DB
+                var pvaluestr = encodeURI2(JSON.stringify(pvalue));
+                mydb.updateRow("devices", {pvalue: pvaluestr}, "id = " + thingid + " AND userid = " + userid);
+
                 // deal with audio tiles
                 if ( swtype==="audio" || swtype==="sonos"  ) {
                     pvalue = translateAudio(pvalue);
@@ -7749,19 +7954,8 @@ function queryHub(userid, thingid, hubindex, swid, swtype, thingname ) {
                     pvalue = translateWeather(thingname, pvalue);
                 }
 
-                // store results back in DB
-                mydb.updateRow("devices", {pvalue: encodeURI2(JSON.stringify(pvalue))}, "id = " + thingid + " AND userid = " + userid);
-
                 // push results to all clients
                 pushClient(userid, swid, swtype, "none", pvalue);
-
-                // force processing of rules for weather and clocks on a query
-                // no longer do this because we don't know the weather and clock device id easily
-                // if ( swtype==="weather" || swtype==="clock" ) {
-                //     pvalue.subid = "timer";
-                //     processRules(swid, swtype, "timer", pvalue, "queryHub");
-                //     delete pvalue.subid;
-                // }
             }
         }
     }
@@ -8086,7 +8280,6 @@ function doQuery(userid, thingid, protocol) {
 
         var rtype = swid==="all" ? "normal" : swid;
         var conditions = "userid = " + userid + " AND refresh = " + rtype;
-        var joinstr = mydb.getJoinStr("devices","hubid","hubs","id");
         result = mydb.getRows("devices","*", conditions)
         .then(devices => {
 
@@ -8102,7 +8295,6 @@ function doQuery(userid, thingid, protocol) {
                     pvalue = translateAudio(pvalue);
                 } else if ( swtype==="music" ) {
                     pvalue = translateMusic(pvalue);
-                // deal with accuweather
                 } else if ( swtype==="weather" ) {
                     pvalue = translateWeather(devicename, pvalue);
                 }
@@ -8123,7 +8315,7 @@ function doQuery(userid, thingid, protocol) {
         .then(device => {
 
             if ( !device ) {
-                return "error - invalid device: " + thingid + " hubid: " + hubid;
+                return "error - invalid device: " + thingid;
             } else {
 
                 // query the hub which pushes update to GUI if we queried using POST
@@ -8511,8 +8703,8 @@ function getInfoPage(user, configoptions, hubs, req) {
                 for ( var hubattr in hub ) {
 
                     if ( (hub.hubtype==="NewSmartThings" || hub.hubtype==="Sonos") && 
-                         (hubattr==="clientsecret" || hubattr==="clientid" || hubattr==="clientsecret" || hubattr==="hubaccess" ||
-                          hubattr==="hubendpt" || hubattr==="hubrefresh" || hubattr==="useraccess" || hubattr==="userendpt") )
+                         (hubattr==="clientid" || hubattr==="clientsecret" || 
+                          hubattr==="hubendpt" || hubattr==="useraccess" || hubattr==="userendpt") )
                     {
                         skip = true;
                     } else {
@@ -9372,28 +9564,24 @@ function saveFilters(userid, body) {
     if ( DEBUG4 ) {
         console.log( (ddbg()), "filters save request for user: ", userid, " body: ", body);
     }
-    var result;
     
-    if ( typeof body.useroptions === "object" ) {
-        var updval = {userid: userid, configkey: 'useroptions', configval: JSON.stringify(body.useroptions)};
-        result = mydb.updateRow("configs", updval, "userid = " + userid + " AND configkey = 'useroptions'")
-        .then(result => {
-            if ( result ) {
-                return body.useroptions; //  "success - updated filters";
-            } else {
-                return "error - could not update filters";
-            }
-        });
+    if ( body.useroptions && typeof body.useroptions === "object" ) {
+        var filterobj = body.useroptions;
     } else {
-        result = "error - something went wrong with updating useroptions filters";
+        filterobj = [];
     }
+    // console.log(">>>> body: ", jsonshow(body) );
 
-    if ( typeof body.huboptpick === "string" ) {
-        var updhub = {userid: userid, configkey: 'hubpick', configval: body.huboptpick};
-        mydb.updateRow("configs", updhub, "userid = " + userid + " AND configkey = 'hubpick'");
-    }
+    var updval = {userid: userid, configkey: 'useroptions', configval: JSON.stringify(filterobj)};
+    return mydb.updateRow("configs", updval, "userid = " + userid + " AND configkey = 'useroptions'")
+    .then(result => {
+        if ( body.huboptpick && typeof body.huboptpick === "string" ) {
+            var updhub = {userid: userid, configkey: 'hubpick', configval: body.huboptpick};
+            mydb.updateRow("configs", updhub, "userid = " + userid + " AND configkey = 'hubpick'");
+        }
+        return filterobj;
+    });
 
-    return result;
 }
 
 // process user options page
@@ -10142,18 +10330,17 @@ function apiCall(user, body, protocol, req, res) {
                 }
                 break;
 
-            case "forgotpw":
+            case "createuser":
                 if ( protocol==="POST" ) {
-                    var useremail = body.email;
-                    result = forgotPassword(useremail);
+                    result = createNewUser(body);
                 } else {
                     result = "error - api call [" + api + "] is not supported";
                 }
                 break;
 
-            case "createuser":
+            case "validateuser":
                 if ( protocol==="POST" ) {
-                    result = createNewUser(body);
+                    result = validateUser(body);
                 } else {
                     result = "error - api call [" + api + "] is not supported";
                 }
@@ -10167,6 +10354,14 @@ function apiCall(user, body, protocol, req, res) {
                 }
                 break;
 
+            case "forgotpw":
+                if ( protocol==="POST" ) {
+                    result = forgotPassword(body.email, body.mobile);
+                } else {
+                    result = "error - api call [" + api + "] is not supported";
+                }
+                break;
+    
             case "pwhash":
                 if ( swtype==="hash" ) {
                     result = pw_hash(swval);
@@ -10407,9 +10602,9 @@ function apiCall(user, body, protocol, req, res) {
                                     var hosturl = host + "/oauth/authorize";
                                     result = {action: "oauth", userid: userid, host: hosturl, hubName: hubName, 
                                               clientId: clientId, clientSecret: clientSecret, hubType: hubType,
-                                              scope: "r:devices:* x:devices:* r:scenes:* x:scenes:* r:locations:*", 
+                                              scope: "r:devices:* x:devices:* r:scenes:* x:scenes:* r:locations:* x:locations:*", 
                                               client_type: "USER_LEVEL", url: returnloc};
-            
+                                    // console.log(">>>> result: ", result);
             
                                 // handle new OAUTH flow for SmartThings
                                 } else if ( hubType==="Sonos" ) {
@@ -10660,6 +10855,16 @@ function setupBrowserSocket() {
 // open the database
 GLB.dbinfo = JSON.parse(fs.readFileSync("dbinfo.cfg","utf8"));
 
+// setup the txt message service
+var twilioSid =  GLB.dbinfo["twilio_sid"];
+var twilioToken =  GLB.dbinfo["twilio_token"];
+var twilioService = GLB.dbinfo["twilio_service"];
+if ( twilioSid && twilioToken && twilioService ) {
+    var twilioClient = require('twilio')(twilioSid, twilioToken); 
+} else {
+    twilioClient = null;
+}
+
 var port = GLB.port;
 GLB.defhub = "new";
 GLB.newcss = {};
@@ -10752,54 +10957,78 @@ if ( app && applistening ) {
         // handle ngrok which thinks it is http but is really https
         var hostname = req.headers.host;
         if ( req.headers.host.endsWith("ngrok.io") ) {
-
             GLB.returnURL = "https://" + hostname;
         } else {
             GLB.returnURL = req.protocol + "://" + hostname;
         }
 
-        // first check to see if user is requesting a password reset or new account confirmation
-        // in both cases a cookie will not be set but we can check for valid user from hpcode query parameter
-        if ( req.path === "/activateuser" || req.path === "/confirmreset" ) {
-
-            
+        // handle special cases of new user and forgot password
+        if ( req.path === "/activateuser" || req.path === "/forgotpw"  ) {
             var queryobj = req.query || {};
-            var result;
-            if ( queryobj.userid && queryobj.hpcode ) {
+            if ( queryobj.userid ) {
                 var userid = queryobj.userid;
                 mydb.getRow("users","*", "id = "+userid)
                 .then(row => {
-                    if ( row && row.hpcode === queryobj.hpcode ) {
-                        // set the cookies to log the user in
+                    if ( row ) {
                         if ( req.path === "/activateuser" ) {
-                            setCookie(res, "uname", pw_hash(row.email));
-                            setCookie(res, "pname", pw_hash("default"));
-
-                            // update the user type to valided type
-                            mydb.updateRow("users",{usertype: 1},"id="+userid)
-                            .then( () => {
-                                result = getNewUserPage(row, hostname);
-                                res.send(result);
-                                res.end();
-                                return;
-                            });
+                            var result = validateUserPage(row, hostname);
                         } else {
-                            result = getNewPasswordPage(row, hostname);
+                            result = validatePasswordPage(row, hostname);
                         }
                     } else {
-                        result = getLoginPage(0, 0, "", hostname, "skin-housepanel");
+                        result = getLoginPage(0, 0, "", "", hostname, "skin-housepanel");
                     }
                     res.send(result);
                     res.end();
-                })
+                });
             } else {
-                result = getLoginPage(0, 0, "", hostname, "skin-housepanel");
+                result = getLoginPage(0, 0, "", "", hostname, "skin-housepanel");
                 res.send(result);
                 res.end();
             }
             return;
-
         }
+
+        // first check to see if user is requesting a password reset or new account confirmation
+        // in both cases a cookie will not be set but we can check for valid user from hpcode query parameter
+        // if ( req.path === "/activateuser" || req.path === "/forgotpw" ) {
+        //     var queryobj = req.query || {};
+        //     var result;
+        //     if ( queryobj.userid && queryobj.hpcode ) {
+        //         var userid = queryobj.userid;
+        //         mydb.getRow("users","*", "id = "+userid)
+        //         .then(row => {
+        //             if ( row && row.hpcode === queryobj.hpcode ) {
+        //                 // set the cookies to log the user in
+        //                 if ( req.path === "/activateuser" ) {
+        //                     setCookie(res, "uname", pw_hash(row.email));
+        //                     setCookie(res, "pname", pw_hash("default"));
+
+        //                     // update the user type to valided type
+        //                     mydb.updateRow("users",{usertype: 1},"id="+userid)
+        //                     .then( () => {
+        //                         result = validateUserPage(row, hostname);
+        //                         res.send(result);
+        //                         res.end();
+        //                         return;
+        //                     });
+        //                 } else {
+        //                     result = validatePasswordPage(row, hostname);
+        //                 }
+        //             } else {
+        //                 result = getLoginPage(0, 0, "", "", hostname, "skin-housepanel");
+        //             }
+        //             res.send(result);
+        //             res.end();
+        //         })
+        //     } else {
+        //         result = getLoginPage(0, 0, "", "", hostname, "skin-housepanel");
+        //         res.send(result);
+        //         res.end();
+        //     }
+        //     return;
+
+        // }
 
 
         // everything starts with finding the username which drives which rows we read from the DB
@@ -10812,7 +11041,7 @@ if ( app && applistening ) {
                     console.log( (ddbg()), "login rejected.");
                 }
 
-                var result = getLoginPage(0, 0, "", hostname, "skin-housepanel");
+                var result = getLoginPage(0, 0, "", "", hostname, "skin-housepanel");
                 res.send(result);
                 res.end();
         
@@ -10901,7 +11130,7 @@ if ( app && applistening ) {
                         // clear the cookie to force repeat of login page
                         res.clearCookie("uname");
                         res.clearCookie("pname");
-                        var result = getLoginPage(userid, usertype, "", hostname, "skin-housepanel");
+                        var result = getLoginPage(userid, usertype, "", "", hostname, "skin-housepanel");
                         res.send(result);
                         res.end();
 
@@ -11002,26 +11231,29 @@ if ( app && applistening ) {
         // get user name
         var hubid;
 
-        // handle two types of messages posted from hub
-        // the first initialize type tells Node.js to update elements
+        // handle initialize events from Groovy legacy SmartThings and Hubitat here
+        // these message can now only come from the connector
         if ( req.path==="/" && req.body['msgtype'] === "initialize" ) {
             hubid = req.body['hubid'] || null;
 
             if ( hubid ) {
                 mydb.getRow("hubs","*","hubid = " + hubid)
                 .then(hub => {
-                    getDevices(hub, true, "/");
+                    if ( hub ) {
+                        getDevices(hub, true, "/");
+                    }
                 }).catch(reason => {console.log("dberror 32 - app.post - msg initialize - ", reason);});
                 if ( DEBUG2 ) {
                     console.log( (ddbg()), "New hub authorized: ", hubid);
                 }
-                res.json('hub info updated');
+                res.send('hub info updated');
             } else {
-                res.json('error - hubid not provided');
+                res.send('error - hubid not provided');
             }
             res.end();
 
-        // handle register events callbacks from Groovy - legacy SmartThings and Hubitat here
+        // handle msg events from Groovy legacy SmartThings and Hubitat here
+        // these message can now only come from the connector
         } else if ( req.path==="/" && req.body['msgtype'] === "update" ) {
             if ( DEBUG19 ) {
                 console.log( (ddbg()), "Received update msg from hub: ", req.body["hubid"], " msg: ", req.body);
@@ -11035,27 +11267,28 @@ if ( app && applistening ) {
                     }
                 }).catch(reason => {console.log("dberror 33a - app.post - msg update - ", reason);});
             }
-            res.json("msg received and processed");
+            res.send("Hub msg received and processed");
             res.end();
 
         // handle connector for ISY hubs that process webSockets locally
         // there is a little local connector app that sends a post with the message to our server
         // only works with a single ISY hub as there is no elegant way to pass the hub IP here
-        } else if ( req.path==="/" && req.body.type && req.body.type==="utf8" && 
-                    // req.body.devicetype && req.body.devicetype==="isy" && 
+        } else if ( req.path==="/" && req.body.type && req.body.type==="utf8" && req.body.email && req.body.password &&
                     req.body.utf8Data ) {
             if ( DEBUG19 ) {
                 console.log( (ddbg()), "Received msg from ISY hub. msg: \n", req.body);
             }
 
-            mydb.getRow("hubs","*","hubtype = 'ISY'")
-            .then(hub => {
-                if ( hub ) {
-                    processIsyMessage(hub.userid, hub, req.body.utf8Data);
+            // ensure user exists and proper password is given
+            var pwcheck = pw_hash(req.body.password);
+            mydb.getRow("users","*","email = '"+req.body.email+"' AND password = '"+pwcheck+"'")
+            .then(user => {
+                if ( user ) {
+                    processIsyMessage(user.id, req.body.utf8Data);
                 }
             }).catch(reason => {console.log("dberror 33b - app.post - msg update - ", reason);});
             
-            res.send("ISY msg done processing: " + req.body.utf8Data);
+            res.send("ISY msg received and processed");
             res.end();
 
         // // handle events from Sonos service
@@ -11108,10 +11341,6 @@ if ( app && applistening ) {
                 var subscription = eventgrp.subscriptions[0];
                 var event = eventgrp.event;
 
-                // if ( DEBUG19 && event.deviceEvent && 
-                //      (event.deviceEvent.capability === 'mediaTrackControl' || event.deviceEvent.capability === 'audioTrackData') ) {
-                //     console.log( (ddbg()), "Audio newST: ", UTIL.inspect(event, false, null, false));
-                // }
                 if ( event.eventType==="DEVICE_EVENT" && event.deviceEvent && event.deviceEvent.stateChange ) {
                     var hubid = subscription.installedAppId;
                     var swid = event.deviceEvent.deviceId;
@@ -11137,7 +11366,7 @@ if ( app && applistening ) {
                             change_value: value
                         };
                         processHubMessage(userid, msg, true);
-                        if ( DEBUG21 ) {
+                        if ( DEBUG21 || (DEBUGtmp && attr==="audioTrackData") ) {
                             console.log( (ddbg()), "Event sink msg from new ST hub: ", hubid, " msg: ", msg );
                         }
 
@@ -11206,9 +11435,15 @@ if ( app && applistening ) {
                                     };
                                     processHubMessage(userid, modemsg, true);
 
-                                    // support legacy ST as long as "st_" is used as the prefix for the mode tile
-                                    modemsg["change_device"] = "st_mode";
-                                    processHubMessage(userid, modemsg, true);
+                                    // support legacy ST mode tile by making it react to a Location sink message
+                                    mydb.getRow("devices","*","devices.deviceid LIKE '%_mode' AND hint='SmartThings'", joinstr)
+                                    .then(strow => {
+                                        if ( strow ) {
+                                            modemsg["hubid"] = strow["hubs_hubid"];
+                                            modemsg["change_device"] = strow["devices_deviceid"];
+                                            processHubMessage(userid, modemsg, true);
+                                        }
+                                    });
                                 } else {
                                     modemsg = "mode not found for modeId = " + modeId;
                                 }

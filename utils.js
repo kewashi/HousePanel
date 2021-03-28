@@ -2,6 +2,9 @@
 const fs = require('fs');
 
 const devhistory =  ` 
+3.021   Support Hubitat using connector helper app; add counter field
+3.020   Fix link updates and linked audio tiles to have right size
+3.019   Use txt message to confirm new user and forgot passwords
 3.018   Support new location tile that contains modes in new ST
 3.017   Disabled Sonos as I can't get it working right
 3.016   Completed Sonos integration, clean up link hndling, bug fixes
@@ -628,7 +631,9 @@ exports.getHeader = function getHeader(userid, pname, skin, skip) {
     }
     
     // load main script file
-    $tc += '<script type="text/javascript" src="housepanel.js"></script>';  
+    var customhash = "js001_" + version;
+    // $tc.= "<link id=\"customtiles\" rel=\"stylesheet\" type=\"text/css\" href=\"$skin/customtiles.css?v=". $customhash ."\">";
+    $tc += '<script type="text/javascript" src="housepanel.js?v='+customhash+'"></script>';  
 
     if ( !skip ) {
         // load tile editor and customizer
