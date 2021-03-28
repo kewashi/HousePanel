@@ -600,64 +600,66 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                 // update all the tiles that match this type and id
                 // this now works even if tile isn't on the panel
                 // $('div.panel div.thing[bid="'+bid+'"][type="'+thetype+'"]').each(function() {
-                $('div.panel div.thing[bid="'+bid+'"]').each(function() {
-                    try {
-                        var aid = $(this).attr("aid");
-                        updateTile(aid, pvalue);
-                    } catch (e) {
-                        console.log("Error updating tile of type: "+ thetype + " and id: " + bid + " with value: ", pvalue);
-                        console.log(e);
-                    }
-                });
+                var panelItems = $('div.panel div.thing[bid="'+bid+'"]');
+                if ( panelItems ) {
+                    panelItems.each(function() {
+                        try {
+                            var aid = $(this).attr("aid");
+                            updateTile(aid, pvalue);
+                        } catch (e) {
+                            console.log("Error updating tile of type: "+ thetype + " and id: " + bid + " with value: ", pvalue);
+                            // console.log(e);
+                        }
+                    });
+                }
 
+                // we now handle links in the updateTile function which is more consistent
                 // handle links - loop through all tiles that have a link to see if they match
                 // because this link shadow field has the real subid triggered we dont have to check subid below
                 // fixed old bug that assumed sibling was next item, which isn't true for variables
-                // console.log("linkbid= ", bid, "subid= ", subid, " pvalue: ", pvalue);
-                $('div.panel div[command="LINK"][linkbid="' + bid + '"][subid="' + subid + '"]').each(function() {
+                // $('div.panel div[command="LINK"][linkbid="' + bid + '"][subid="' + subid + '"]').each(function() {
+                //     // get the id to see if it is the thing being updated
+                //     var linkedtile = $(this).attr("linkid");
+                //     var sibid = $(this).attr("aid");
+                //     var sibling = $(this).next();
 
-                    // get the id to see if it is the thing being updated
-                    var linkedtile = $(this).attr("linkid");
-                    var sibid = $(this).attr("aid");
-                    var sibling = $(this).next();
+                //     // if we have a match, update the sibling field
+                //     if ( sibling && sibling.attr("aid")=== sibid ) {
+                //         var oldvalue = sibling.html();
+                //         var oldclass = sibling.attr("class");
+                //         var value = pvalue[subid];
 
-                    // if we have a match, update the sibling field
-                    if ( sibling && sibling.attr("aid")=== sibid ) {
-                        var oldvalue = sibling.html();
-                        var oldclass = sibling.attr("class");
-                        var value = pvalue[subid];
+                //         // swap out the class and change value
+                //         // this should match logic in hpserver.js in putElement routine
+                //         if ( oldclass && oldvalue && value && typeof value==="string" &&
+                //             subid!=="name" && subid!=="trackImage" && subid!=="color" && subid!=='ERR' && subid!=="date" && subid!=="time" &&
+                //             !subid.startsWith("_") && subid.substr(0,6)!=="event_" &&
+                //             subid!=="trackDescription" && subid!=="mediaSource" &&
+                //             subid!=="currentArtist" && subid!=="currentAlbum" && subid!=="groupRole" &&
+                //             value.indexOf(" ")===-1 && oldvalue.indexOf(" ")===-1 &&
+                //             value.substr(0,7)!=="number_" &&
+                //             value.indexOf("://")===-1 &&
+                //             value.indexOf("::")===-1 &&
+                //             value.indexOf("rgb(")===-1 &&
+                //             value.length < 30 &&
+                //             $.isNumeric(value)===false && 
+                //             $.isNumeric(oldvalue)===false &&
+                //             oldclass.indexOf(oldvalue)>=0 ) 
+                //         {
+                //                 sibling.removeClass(oldvalue);
+                //                 sibling.addClass(value);
+                //         }
 
-                        // swap out the class and change value
-                        // this should match logic in hpserver.js in putElement routine
-                        if ( oldclass && oldvalue && value && typeof value==="string" &&
-                            subid!=="name" && subid!=="trackImage" && subid!=="color" && subid!=='ERR' && subid!=="date" && subid!=="time" &&
-                            !subid.startsWith("_") && subid.substr(0,6)!=="event_" &&
-                            subid!=="trackDescription" && subid!=="mediaSource" &&
-                            subid!=="currentArtist" && subid!=="currentAlbum" && subid!=="groupRole" &&
-                            value.indexOf(" ")===-1 && oldvalue.indexOf(" ")===-1 &&
-                            value.substr(0,7)!=="number_" &&
-                            value.indexOf("://")===-1 &&
-                            value.indexOf("::")===-1 &&
-                            value.indexOf("rgb(")===-1 &&
-                            value.length < 30 &&
-                            $.isNumeric(value)===false && 
-                            $.isNumeric(oldvalue)===false &&
-                            oldclass.indexOf(oldvalue)>=0 ) 
-                        {
-                                sibling.removeClass(oldvalue);
-                                sibling.addClass(value);
-                        }
-
-                        if ( subid==="level" || subid==="onlevel" || subid==="colortemperature" || subid==="volume"  && $(sibling).slider ) {
-                            sibling.slider("value", value);
-                        } else {
-                            sibling.html( value );
-                        }
-                    }
-                });
+                //         if ( subid==="level" || subid==="onlevel" || subid==="colortemperature" || subid==="volume"  && $(sibling).slider ) {
+                //             sibling.slider("value", value);
+                //         } else {
+                //             sibling.html( value );
+                //         }
+                //     }
+                // });
 
                 // blank screen if night mode set
-                if ( (thetype==="mode" ) && 
+                if ( (thetype==="mode" || thetype==="location" ) && 
                      (blackout==="true" || blackout===true) && (priorOpmode === "Operate" || priorOpmode === "Sleep") ) {
                     if ( pvalue.themode === "Night" ) {
                         execButton("blackout");
@@ -1648,28 +1650,30 @@ function execForgotPassword() {
 
     var genobj = formToObject("loginform");
     var emailname = genobj.emailid;
-    if ( emailname.length < 3 || emailname.indexOf("@") === -1 ) {
-        alert("Enter a valide email address before requesting a reset.");
+    var mobile = genobj.mobile;
+    if ( emailname.length < 5 ) {
+        alert("Enter a valid email or mobile phone number before requesting a reset. You will be sent a txt message.");
     } else {
         // alert(emailname);
         $.post(cm_Globals.returnURL, 
-            {useajax: "forgotpw", email: emailname}, 
+            {useajax: "forgotpw", email: emailname, mobile: mobile}, 
             function(presult, pstatus) {
-                if ( pstatus==="success" && presult && typeof presult === "object" ) {
+                if ( pstatus==="success" && presult && typeof presult === "object" && presult.id ) {
                     var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 100px; padding-top: 50px; text-align: center;";
                     var pos = {style: pstyle};
+                    var userid = presult.id;
                     console.log("user: ", presult);
-                    createModal("loginfo","Login reset link send to " + emailname + "<br><br>", "body", "Done", pos, function(ui) {
-                        window.location.href = cm_Globals.returnURL;
+                    createModal("loginfo","Login reset code sent via txt message.<br>On the next screen please provide that code <br>along with the new password information.<br>", "body", "Done", pos, function(ui) {
+                        window.location.href = cm_Globals.returnURL + "/forgotpw?userid="+userid;
                     });
-                    setTimeout(function() {
-                        closeModal("loginfo");
-                        window.location.href = cm_Globals.returnURL;
-                    },60000);
+                    // setTimeout(function() {
+                    //     closeModal("loginfo");
+                    //     window.location.href = cm_Globals.returnURL;
+                    // },60000);
                 } else {
-                    console.log("forgot error: ", presult);
-                    alert("There was a problem attempting to reset login. Try again.");
-                    // window.location.href = cm_Globals.returnURL;
+                    console.log("presult = ", presult);
+                    alert("There was a problem attempting to reset your password.");
+                    window.location.href = cm_Globals.returnURL;
                 }
             }
         );
@@ -1681,6 +1685,7 @@ function execCreateUser() {
 
     var genobj = formToObject("newuserform");
     var emailname = genobj.newemailid;
+    var mobile = genobj.newmobile;
     var username = genobj.newuname;
     var newpw = genobj.newpword;
     var newpw2 = genobj.newpword2;
@@ -1691,18 +1696,20 @@ function execCreateUser() {
         alert("Passwords do not match. Try again.");
     } else {
         $.post(cm_Globals.returnURL, 
-            {useajax: "createuser", email: emailname, uname: username, pword: newpw}, 
+            {useajax: "createuser", email: emailname, uname: username, mobile: mobile, pword: newpw}, 
             function(presult, pstatus) {
-                if ( pstatus==="success" && presult && typeof presult === "object" ) {
+                if ( pstatus==="success" && presult && typeof presult === "object" && presult.userid ) {
                     var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
                     var pos = {style: pstyle};
-                    createModal("loginfo","New user created successfully.<br>Please log in with the new credentials.<br>email = " + emailname+ "<br><br>", "body", "Done", pos, function(ui) {
-                        window.location.href = cm_Globals.returnURL;
+                    console.log("new user created: ", presult);
+                    var userid = presult.userid;
+                    createModal("loginfo","New user created. Next, please validate using code <br>sent to mobile: " + mobile+ " to activate this account.<br><br>", "body", "Done", pos, function(ui) {
+                        window.location.href = cm_Globals.returnURL + "/activateuser?userid="+userid;
                     });
-                    setTimeout(function() {
-                        closeModal("loginfo");
-                        window.location.href = cm_Globals.returnURL;
-                    },60000);
+                    // setTimeout(function() {
+                    //     closeModal("loginfo");
+                    //     window.location.href = cm_Globals.returnURL + "/activateuser?userid="+userid;
+                    // },60000);
                 } else {
                     pstyle = "position: absolute; border: 6px black solid; background-color: red; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
                     pos = {style: pstyle};
@@ -1718,8 +1725,7 @@ function execCreateUser() {
 
 }
 
-function execNewPassword() {
-
+function execValidatePassword() {
     var genobj = formToObject("newpwform");
     var userid = genobj.userid;
     var newpw = genobj.newpword;
@@ -1728,14 +1734,21 @@ function execNewPassword() {
     var panelpw = genobj.panelpword;
     var emailname = genobj.email;
     var uname = genobj.uname;
+    var hpcode = genobj.hpcode;
+    var newhpcode = genobj.newhpcode;
+    var mobile = genobj.mobile;
+
+    console.log("genobj: ", genobj);
 
     if ( newpw.length < 6 ) {
         alert("Password provided is too short. Must be 6 or more characters in length");
     } else if ( newpw !== newpw2 ) {
         alert("Passwords do not match. Try again.");
+    } else if ( hpcode !== newhpcode ) {
+        alert("Security code is incorrect.");
     } else {
         $.post(cm_Globals.returnURL, 
-            {useajax: "updatepassword", userid: userid, email:emailname, uname: uname, pword: newpw, pname: pname, panelpw: panelpw}, 
+            {useajax: "updatepassword", userid: userid, email:emailname, mobile:mobile, uname: uname, pword: newpw, pname: pname, panelpw: panelpw, hpcode: newhpcode}, 
             function(presult, pstatus) {
                 if ( pstatus==="success" && presult && typeof presult === "object" ) {
                     var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
@@ -1743,10 +1756,10 @@ function execNewPassword() {
                     createModal("loginfo","User and panel passwords updated successfully.<br>Please log in with the new credentials.<br>email = " + emailname+ "<br><br>", "body", "Done", pos, function(ui) {
                         window.location.href = cm_Globals.returnURL;
                     });
-                    setTimeout(function() {
-                        closeModal("loginfo");
-                        window.location.href = cm_Globals.returnURL;
-                    },60000);
+                    // setTimeout(function() {
+                    //     closeModal("loginfo");
+                    //     window.location.href = cm_Globals.returnURL;
+                    // },60000);
                 } else {
                     pstyle = "position: absolute; border: 6px black solid; background-color: red; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
                     pos = {style: pstyle};
@@ -1759,7 +1772,41 @@ function execNewPassword() {
             }
         );
     }
+}
 
+function execValidateUser() {
+    var genobj = formToObject("validateuserpage");
+    var userid = genobj.userid;
+    var emailname = genobj.email;
+    var mobile = genobj.mobile;
+    var hpcode = genobj.hpcode;
+    var newhpcode = genobj.newhpcode;
+    console.log("validateUser genobj: ", genobj);
+
+    if ( hpcode !== newhpcode ) {
+        alert("Security code is incorrect.");
+    } else {
+        $.post(cm_Globals.returnURL, 
+            {useajax: "validateuser", userid: userid, email:emailname, mobile:mobile}, 
+            function(presult, pstatus) {
+                if ( pstatus==="success" && presult && typeof presult === "object" ) {
+                    var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
+                    var pos = {style: pstyle};
+                    createModal("loginfo","User with email: " + emailname + " successfully validated. <br><br>", "body", "Done", pos, function(ui) {
+                        window.location.href = cm_Globals.returnURL;
+                    });
+                } else {
+                    pstyle = "position: absolute; border: 6px black solid; background-color: red; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
+                    pos = {style: pstyle};
+                    var errstr = "";
+                    if ( typeof presult === "string" ) { errstr = "<br>" + presult; }
+                    createModal("loginfo","There was a problem with updating a new password." + errstr + "<br><br>Please try again.", "body", "Okay", pos, function(ui) {
+                        window.location.href = cm_Globals.returnURL;
+                    });
+                }
+            }
+        );
+    }
 }
 
 function execButton(buttonid) {
@@ -1769,26 +1816,25 @@ function execButton(buttonid) {
         // if ( !checkInputs() ) { return; }
 
         var fobj = formToObject("filteroptions");
-        // var uobj = formToObject("userpw");
         var oobj = formToObject("optionspage");
 
         try {
             dynoPost("filteroptions", fobj, function(presult, pstatus) {
-                if ( typeof presult==="object" ) {
+                if ( pstatus === "success" ) {
                     console.log("processed filteroptions:", presult);
-                    dynoPost("saveoptions", oobj, function(presult, pstatus) {
-                        if ( presult==="success" ) {
-                            window.location.href = cm_Globals.returnURL;
-                        } else {
-                            throw "Problem with saving room and thing options";
-                        }
-                    });
-                } else {
-                    throw "Problem with saving filters";
                 }
+                dynoPost("saveoptions", oobj, function(presult, pstatus) {
+                    if ( pstatus!=="success" ) {
+                        console.log(pstatus, " result: ", presult, " optionsobj: ", oobj);
+                        alert("Options page failed to save properly");
+                    }
+                    window.location.href = cm_Globals.returnURL;
+                });
             });
         } catch (e) {
-            console.log("Failed to properly save Options page. ", e);
+            console.log("Options page failed to save properly", e);
+            alert("Options page failed to save properly");
+            window.location.href = cm_Globals.returnURL;
         }
 
     } else if ( buttonid==="optCancel" ) {
@@ -1803,8 +1849,11 @@ function execButton(buttonid) {
     } else if ( buttonid==="createuser" ) {
         execCreateUser();
 
+    } else if ( buttonid==="newuservalidate" ) {
+        execValidateUser();
+
     } else if ( buttonid==="newpassword") {
-        execNewPassword();
+        execValidatePassword();
 
     } else if ( buttonid==="dologin") {
 
@@ -2282,7 +2331,8 @@ function setupButtons() {
             formData["api"] = "hubauth";
             formData.pname = pname;
             $.post(cm_Globals.returnURL, formData,  function(presult, pstatus) {
-                // console.log("hubauth: ", presult);
+                console.log("hubauth: ", presult);
+                // alert("wait... presult.action = " + presult.action);
 
                 if ( pstatus==="success" && typeof presult==="object") {
                     var obj = presult;
@@ -2345,6 +2395,7 @@ function setupButtons() {
                             nvpreq = nvpreq + "&application_id=" + obj.appId;
                         }
                         nvpreq= nvpreq + "&client_id=" + encodeURI(obj.clientId) + "&redirect_uri=" + encodeURI(obj.url);
+                        // alert("preparing to launch with nvpreq = "+ nvpreq);
 
                         // navigate over to the server to authorize
                         var location = obj.host + "?" + nvpreq;
@@ -2835,11 +2886,10 @@ function fixTrack(tval) {
 // note that some sub-items can update the values of other subitems
 // this is exactly what happens in music tiles when you hit next and prev song
 // third parameter will skip links - but this is not used for now
-function updateTile(aid, presult, skiplink) {
+function updateTile(aid, presult) {
 
     // do something for each tile item returned by ajax call
     var isclock = false;
-    var nativeimg = false;
     
     // handle audio devices
     if ( presult["audioTrackData"] ) {
@@ -2854,15 +2904,14 @@ function updateTile(aid, presult, skiplink) {
             audiodata = presult["audioTrackData"];
         }
         presult["trackDescription"] = audiodata["title"] || "None";
-        presult["currentArtist"] = audiodata["artist"];
-        presult["currentAlbum"] = audiodata["album"];
-        presult["trackImage"] = audiodata["albumArtUrl"];
-        presult["mediaSource"] = audiodata["mediaSource"];
+        presult["currentArtist"] = audiodata["artist"] || "";
+        presult["currentAlbum"] = audiodata["album"] || "";
+        presult["trackImage"] = audiodata["albumArtUrl"] || "";
+        presult["mediaSource"] = audiodata["mediaSource"] || "";
         delete presult["audioTrackData"];
-        // if ( oldtrack !== presult["trackDescription"] ) {
-        //     console.log("audio track changed from: ["+oldtrack+"] to: ["+ presult["trackDescription"] +"]");
-        // }
     }
+
+    // change the key names for the legacy audio items
     if ( presult["title"] && presult["trackDescription"] ) {
         presult["trackDescription"] = presult["title"];
         delete presult["title"];
@@ -2880,24 +2929,12 @@ function updateTile(aid, presult, skiplink) {
         delete presult["albumArtUrl"];
     }
     
-    // handle native track images - including audio devices above
-    if ( presult["trackImage"] ) {
-        var trackImage = presult["trackImage"].trim();
-        if ( $("#a-"+aid+"-width") &&  $("#a-"+aid+"-width").html() && $("#a-"+aid+"-height") && $("#a-"+aid+"-height").html() ) {
-            var wstr = " class='trackImage' width='" + $("#a-"+aid+"-width").html() + "' height= '" + $("#a-"+aid+"-height").html() + "' ";
-        } else {
-            wstr = " class='trackImage' width='120px' height='120px' ";
-        }
-        // alert("aid= " + aid + " image width info: " + wstr );
-        if ( trackImage.startsWith("http") ) {
-            presult["trackImage"] = "<img" + wstr + "src='" + trackImage + "'>";
-            nativeimg = true;
-        }
-    }
-
     // var dupcheck = {};
-    $.each( presult, function( key, value ) {
-
+    // var swid = $("#t-"+aid).attr("bid");
+    var tileid = $("#t-"+aid).attr("tile");
+    // $.each( presult, function( key, value ) {
+    for (var key in presult) {
+        var value = presult[key];
         var targetid = '#a-'+aid+'-'+key;
         var dothis = $(targetid);
         
@@ -2906,139 +2943,153 @@ function updateTile(aid, presult, skiplink) {
             value = value.replace(/\n/g, "<br>");
         }
 
-        // check for dups
-        // if ( typeof dupcheck[key]!=="undefined" ) {
-        //     dothis = false;
-        // }
-
-        if ( skiplink && dothis && dothis.siblings("div.user_hidden").length > 0  ) {
-            if ( dothis.siblings("div.user_hidden").attr("command")==="LINK" ) {
-                dothis = false;
-            }
-        }
-
         // skip objects except single entry arrays
         if ( dothis && ( typeof value==="object" || ( typeof value==="string" && value.startsWith("{") ) ) ) {
             dothis = false;
         }
 
-        // only take action if this key is found in this tile and not a dup
+        // only take action if this key is found in this tile
         if ( dothis ) {
-            dothis[key] = true;
-            var oldvalue = $(targetid).html();
-            var oldclass = $(targetid).attr("class");
 
-            // swap out blanks from old value and value
-            if ( oldvalue && typeof oldvalue === "string" ) {
-                oldvalue = oldvalue.replace(/ /g,"_");
-            }
+            // push to this tile
+            processKeyVal(targetid, aid, key, value);
 
-            // remove spaces from class
-            var extra = value;
-            if ( value && typeof value === "string" ) {
-                value = value.trim();
-                extra = extra.trim();
-                extra = extra.replace(/ /g,"_");
-            }
-
-            // remove the old class type and replace it if they are both
-            // single word text fields like open/closed/on/off
-            // this avoids putting names of songs into classes
-            // also only do this if the old class was there in the first place
-            // also handle special case of battery and music elements
-            if ( key==="battery") {
-                var powmod = parseInt(value);
-                powmod = powmod - (powmod % 10);
-                value = "<div style=\"width: " + powmod.toString() + "%\" class=\"ovbLevel L" + powmod.toString() + "\"></div>";
-
-            // handle weather icons that were not converted
-            // updated to address new integer indexing method in ST
-            } else if ( (key==="weatherIcon" || key==="forecastIcon") && !isNaN(+value) ) {
-                var icondigit = parseInt(value,10);
-                var iconimg;
-                if ( Number.isNaN(icondigit) ) {
-                    iconimg = value;
-                } else {
-                    var iconstr = icondigit.toString();
-                    if ( icondigit < 10 ) {
-                        iconstr = "0" + iconstr;
-                    }
-                    iconimg = "media/Weather/" + iconstr + ".png";
-                }
-                value = "<img src=\"" + iconimg + "\" alt=\"" + iconstr + "\" width=\"80\" height=\"80\">";
-            } else if ( (key === "level" || key=== "onlevel" || key === "colorTemperature" || key==="volume" || key==="groupVolume") && $(targetid).slider ) {
-                // console.log("aid= ", aid, " targetid= ", targetid, " value= ", value);
-                $(targetid).slider("value", value);
-                $(targetid).attr("value",value);
-                // disable putting values in the slot
-                value = false;
-                oldvalue = false;
-
-            // we now make color values work by setting the mini colors circle
-            } else if ( key==="color") {
-                $(targetid).html(value);
-                $(targetid).attr("value", value);
-                $(targetid).minicolors('value', {color: value});
-                oldvalue = "";
-
-                // var rgb = $(targetid).minicolors('rgbString');
-                // console.log( "new color rgb: ", rgb);
-                // var swatch = $(targetid).find("span.minicolors-swatch-color");
-                // if ( swatch ) {
-                //     swatch.attr("style","background-color: "+rgb+";");
-                // }
-                
-            // special case for numbers for KuKu Harmony things
-            } else if ( key.startsWith("_number_") && value.startsWith("number_") ) {
-                value = value.substring(7);
-            } else if ( key === "skin" && value.startsWith("CoolClock") ) {
-                value = '<canvas id="clock_' + aid + '" class="' + value + '"></canvas>';
-                isclock = ( oldvalue !== value );
-            // handle updating album art info
-            } else if ( key === "trackDescription" && !nativeimg) {
-                var forceit = false;
-                if ( !oldvalue ) { 
-                    oldvalue = "None" ;
-                    forceit = true;
-                } else {
-                    oldvalue = oldvalue.trim();
-                }
-                // this is the same as fixTrack in php code
-                if ( !value || value==="None" || (value && value.trim()==="") ) {
-                    value = "None";
-                    forceit = false;
-                    try {
-                        $("#a-"+aid+"-currentArtist").html("");
-                        $("#a-"+aid+"-currentAlbum").html("");
-                        $("#a-"+aid+"-trackImage").html("");
-                    } catch (err) { console.log(err); }
-                } 
-
-            // add status of things to the class and remove old status
-            } else if ( oldclass && oldvalue && extra &&
-                    key!=="name" && key!=="trackImage" && 
-                    key!=="trackDescription" && key!=="mediaSource" &&
-                    key!=="currentArtist" && key!=="currentAlbum" &&
-                    $.isNumeric(extra)===false && 
-                    $.isNumeric(oldvalue)===false &&
-                    oldclass.indexOf(oldvalue)>=0 ) 
-            {
-                    $(targetid).removeClass(oldvalue);
-                    $(targetid).addClass(extra);
-            }
-
-            // update the content 
-            if (oldvalue || value) {
-                try {
-                    $(targetid).html(value);
-                } catch (err) {}
+            // push to all tiles that link to this item
+            var items = $("div.user_hidden[command='LINK'][subid='"+key+"'][linkid='"+tileid+"']");
+            if (items) {
+                items.each( function(itemindex) {
+                    var linkaid = $(this).attr("aid");
+                    var linktargetid = '#a-'+linkaid+'-'+key;
+                    processKeyVal(linktargetid, linkaid, key, value);
+                });
             }
         }
-    });
+    }
     
     // if we updated a clock skin render it on the page
     if ( isclock ) {
         CoolClock.findAndCreateClocks();
+    }
+
+    function processKeyVal(targetid, aid, key, value) {
+
+        // fix images to use width and height if custom items are in this tile
+        // handle native track images - including audio devices above
+        var oldvalue = $(targetid).html();
+        var oldclass = $(targetid).attr("class");
+
+        // swap out blanks from old value and value
+        if ( oldvalue && typeof oldvalue === "string" ) {
+            oldvalue = oldvalue.trim();
+            oldvalue = oldvalue.replace(/ /g,"_");
+        }
+
+        // remove spaces from class
+        var extra = value;
+        if ( value && typeof value === "string" ) {
+            value = value.trim();
+            extra = extra.trim();
+            extra = extra.replace(/ /g,"_");
+        }
+
+        // remove the old class type and replace it if they are both
+        // single word text fields like open/closed/on/off
+        // this avoids putting names of songs into classes
+        // also only do this if the old class was there in the first place
+        // also handle special case of battery and music elements
+        if ( key==="battery") {
+            var powmod = parseInt(value);
+            powmod = powmod - (powmod % 10);
+            value = "<div style=\"width: " + powmod.toString() + "%\" class=\"ovbLevel L" + powmod.toString() + "\"></div>";
+
+        // handle weather icons that were not converted
+        // updated to address new integer indexing method in ST
+        } else if ( (key==="weatherIcon" || key==="forecastIcon") && !isNaN(+value) ) {
+            var icondigit = parseInt(value,10);
+            var iconimg;
+            if ( Number.isNaN(icondigit) ) {
+                iconimg = value;
+            } else {
+                var iconstr = icondigit.toString();
+                if ( icondigit < 10 ) {
+                    iconstr = "0" + iconstr;
+                }
+                iconimg = "media/Weather/" + iconstr + ".png";
+            }
+            value = "<img src=\"" + iconimg + "\" alt=\"" + iconstr + "\" width=\"80\" height=\"80\">";
+        } else if ( (key === "level" || key=== "onlevel" || key === "colorTemperature" || key==="volume" || key==="groupVolume") && $(targetid).slider ) {
+            // console.log("aid= ", aid, " targetid= ", targetid, " value= ", value);
+            $(targetid).slider("value", value);
+            $(targetid).attr("value",value);
+            // disable putting values in the slot
+            value = false;
+            oldvalue = false;
+
+        // we now make color values work by setting the mini colors circle
+        } else if ( key==="color") {
+            $(targetid).html(value);
+            $(targetid).attr("value", value);
+            $(targetid).minicolors('value', {color: value});
+            oldvalue = "";
+
+            // var rgb = $(targetid).minicolors('rgbString');
+            // console.log( "new color rgb: ", rgb);
+            // var swatch = $(targetid).find("span.minicolors-swatch-color");
+            // if ( swatch ) {
+            //     swatch.attr("style","background-color: "+rgb+";");
+            // }
+            
+        // special case for numbers for KuKu Harmony things
+        } else if ( key.startsWith("_number_") && value.startsWith("number_") ) {
+            value = value.substring(7);
+        } else if ( key === "skin" && value.startsWith("CoolClock") ) {
+            value = '<canvas id="clock_' + aid + '" class="' + value + '"></canvas>';
+            isclock = ( oldvalue !== value );
+
+        // handle updating album art info
+        } else if ( key ==="trackImage" && value.startsWith("http") ) {
+            var trackImage = value;
+            if ( $("#a-"+aid+"-width") &&  $("#a-"+aid+"-width").html() && $("#a-"+aid+"-height") && $("#a-"+aid+"-height").html() ) {
+                var wstr = " class='trackImage' width='" + $("#a-"+aid+"-width").html() + "' height= '" + $("#a-"+aid+"-height").html() + "' ";
+            } else {
+                wstr = " class='trackImage' width='120px' height='120px' ";
+            }
+            // alert("aid= " + aid + " image width info: " + wstr );
+            value = "<img" + wstr + "src='" + trackImage + "'>";
+
+        } else if ( key === "trackDescription" ) {
+            if ( !oldvalue ) { 
+                oldvalue = "None" ;
+            }
+            // this is the same as fixTrack in php code
+            if ( !value || value==="None" ) {
+                value = "None";
+                try {
+                    $("#a-"+aid+"-currentArtist").html("");
+                    $("#a-"+aid+"-currentAlbum").html("");
+                    $("#a-"+aid+"-trackImage").html("");
+                } catch (err) { console.log(err); }
+            } 
+
+        // add status of things to the class and remove old status
+        } else if ( oldclass && oldvalue && extra &&
+                key!=="name" && key!=="trackImage" && 
+                key!=="trackDescription" && key!=="mediaSource" &&
+                key!=="currentArtist" && key!=="currentAlbum" &&
+                $.isNumeric(extra)===false && 
+                $.isNumeric(oldvalue)===false &&
+                oldclass.indexOf(oldvalue)>=0 ) 
+        {
+                $(targetid).removeClass(oldvalue);
+                $(targetid).addClass(extra);
+        }
+
+        // update the content 
+        if (oldvalue || value) {
+            try {
+                $(targetid).html(value);
+            } catch (err) {}
+        }
     }
 }
 
