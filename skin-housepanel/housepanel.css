@@ -1121,3 +1121,29 @@ div.thermostat._off
 {
     display: none;
 }
+
+div.thing.switchlevel-thing div.overlay.alarmstat div.alarmstat {
+        background-image: none;
+        height: 45px;
+        padding-top: 30px;
+        top: 0px;
+        font-family: "Droid Sans", Arial, Helvetica, sans-serif;
+        font-style: normal;
+        font-weight: bold;
+        background-position-x: 100%;
+        text-align: left;
+        padding-left: 5px;
+        left: 0px;
+        font-size: 24px;
+        background-size: 65px;
+        background-repeat: no-repeat;
+}
+div.thing.switchlevel-thing div.overlay.alarmstat div.alarmstat.Off {
+    background-image: url("../../skin-housepanel/icons/security-green.png");
+}
+div.thing.switchlevel-thing div.overlay.alarmstat div.alarmstat.Stay {
+    background-image: url("../../skin-housepanel/icons/security-blue.png");
+}
+div.thing.switchlevel-thing div.overlay.alarmstat div.alarmstat.Away {
+    background-image: url("../../skin-housepanel/icons/security-red.png");
+}

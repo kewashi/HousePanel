@@ -3,20 +3,17 @@ process.title = 'hpserver';
 
 // debug options
 const DEBUG1 = false;               // basic debug info - file loading, hub loading
-const DEBUGisy = false;             // ISY node return details
 const DEBUG2 = false;               // authorization flow and ISY programs
 const DEBUG3 = false;               // passwords
 const DEBUG4 = false;               // filters and options
 const DEBUG5 = false;               // hub node detail
 const DEBUG6 = false;               // tile position moves
 const DEBUG7 = false;               // hub responses
-const DEBUGvar = false;             // ISY variables
 const DEBUG8 = false;               // API calls
 const DEBUG9 =  false;              // ISY webSocket success
-const DEBUG9a = false;              // ISY webSocket details
 const DEBUG10 = false;              // sibling tag
 const DEBUG11 = false;              // rules
-const DEBUG12 = false;              // hub push updates
+const DEBUG12 = true;              // hub push updates
 const DEBUG13 = false;              // URL callbacks
 const DEBUG14 = false;              // tile link details
 const DEBUG15 = false;              // new user and forgot password
@@ -24,9 +21,11 @@ const DEBUG16 = false;              // customtiles writing and custom names
 const DEBUG17 = false;              // push client
 const DEBUG18 = false;              // ST, HE, and Ford messages in callHub -> getHubResponse
 const DEBUG19 = false;              // ST and HE callback from Groovy or new ST Event Sink
+const DEBUG20 = false;               // New SmartThings detail
 const DEBUG21 = false;              // New ST sink message debug
-const DEBUG20 = false;              // New SmartThings detail
 const DEBUGcurl = false;            // detailed inspection
+const DEBUGsonos = false;           // Sonos hub debugging
+const DEBUGisy = false;             // ISY HP connect pushes
 const DEBUGtmp =  true;             // used to debug anything temporarily using ||
 
 // various control options
@@ -43,7 +42,7 @@ const https = require('https');
 const fs = require('fs');
 const express = require('express');
 // const bodyParser = require('body-parser');
-const xml2js = require('xml2js').parseString;
+// const xml2js = require('xml2js').parseString;
 const crypto = require('crypto');
 const UTIL = require('util');
 // const mqtt = require('mqtt');
@@ -122,8 +121,8 @@ GLB.capabilities = {
     thermostat: [ ["temperatureMeasurement","thermostatMode","thermostatHeatingSetpoint","thermostatCoolingSetpoint","thermostatOperatingState"],null],
                 //   ["heatingSetpoint-up","heatingSetpoint-dn","coolingSetpoint-up","coolingSetpoint-dn"]], 
     temperature: [ ["temperatureMeasurement"],null], 
-    power: [ ["powerMeter"],null],
-    energy: [ ["energyMeter"],null],
+    power: [ ["powerMeter","energyMeter"],null],
+    // energy: [ ["energyMeter"],null],
     fan: [ ["fanSpeed"],null],
     smoke: [ ["smokeDetector"],null], 
     sound: [ ["soundSensor"],null], 
@@ -132,22 +131,22 @@ GLB.capabilities = {
     co2sensor: [ ["carbonDioxideMeasurement"],null], 
     valve: [ ["valve"],["_open","_close"]], 
     weather: [ ["temperatureMeasurement","relativeHumidityMeasurement","illuminanceMeasurement"],["_refresh"]],
-    audio: [ ["mediaPlayback","audioVolume","audioMute"],["_previousTrack","_pause","_play","_stop","_nextTrack","_volumeDown","_volumeUp","_mute","_unmute"]], 
-    shade: [ ["windowShade","switchLevel"],["_open","_close","_presetPosition"]], 
+    audio: [ ["mediaPlayback","audioVolume","audioMute"],["_previousTrack","_pause","_play","_stop","_nextTrack","_volumeDown","_volumeUp","_mute","_unmute","_refresh"]], 
+    shade: [ ["windowShade","switchLevel"],["_open","_close","_pause","_presetPosition"]], 
     tone: [ ["tone"],["_beep"]], 
     uvindex: [["ultravioletIndex"],null],
     voltage: [["voltageMeasurement"],null],
     washer: [ ["washerOperatingState","washerMode","switch"],["_on","_off","_pause","_run","_stop","_setWasherMode"]],
     vacuum: [ ["robotCleanerCleaningMode"],["_auto","_part","_repeat","_manual","_stop"]],
     water: [ ["waterSensor"],null],
-    location: [ ["location"],null]
+    location: [ ["location"],["_refresh"]]
     // , other: ["sensor",null], 
     // actuator: ["actuator",null] 
 };
 
 // list of capabilities that generate an event
 GLB.trigger1 = [
-    "audioMute", "audioVolume", "colorControl", "contactSensor", "doorControl",
+    "audioMute", "audioVolume", "battery", "colorControl", "colorTemperature", "contactSensor", "doorControl",
     "lock", "motionSensor", "mediaInputSource", 
     "powerMeter", "presence", "switch", "switchLevel", 
     "windowShade", "windowShadeLevel"
@@ -420,20 +419,29 @@ function _curl(host, headers, nvpstr, calltype, callback) {
         // add query string if given separately
         var formbuff;
         if ( typeof nvpstr === "string" || typeof nvpstr === "number" ) {
+            nvpstr = nvpstr.toString();
             if ( calltype==="GET" ) {
                 if ( nvpstr!=="" ) { host = host + "?" + nvpstr; }
             } else {
-                formbuff = Buffer.from(nvpstr);
+                formbuff = nvpstr; // Buffer.from(nvpstr);
             }
         } else if ( typeof nvpstr === "object" ) {
             formbuff = Buffer.from(JSON.stringify(nvpstr));
         } 
 
+        if ( DEBUGcurl ) {
+            console.log((ddbg()), "_curl buffer: ", formbuff);
+        }
+
         if ( formbuff ) {
             if ( !headers ) {
                 headers = {};
             }
-            headers['Content-Length'] = Buffer.byteLength(formbuff);
+            if ( typeof nvpstr === "string" ) {
+                headers['Content-Length'] = nvpstr.length;
+            } else {
+                headers['Content-Length'] = Buffer.byteLength(formbuff);
+            }
         }
 
         var myport = myURL.port;
@@ -473,7 +481,7 @@ function _curl(host, headers, nvpstr, calltype, callback) {
                 } else {
                     errmsg = e;
                 }
-                callback(errmsg, null, null);
+                callback(errmsg, null);
             }
         });
         
@@ -486,11 +494,18 @@ function _curl(host, headers, nvpstr, calltype, callback) {
             var statusMsg = res.statusMessage;
             res.on("data", (body) => {
                 totalbody+= body;
+                if ( DEBUGcurl ) {
+                    console.log(">>>> _curl debug: body: ", body, " totalbody: ", totalbody);
+                }
             });
             res.on("end", ()=> {
                 resolve(totalbody);
                 if ( callback && typeof callback === "function"  ) {
-                    callback(statusCode, res, totalbody);
+                    if ( statusCode === 200 ) {
+                        callback(statusCode, totalbody);
+                    } else {
+                        callback(statusCode, null);
+                    }
                 }
                 if ( DEBUGcurl ) {
                     console.log((ddbg()), "end of _curl message. status: ", statusCode, statusMsg, " body: ", totalbody);
@@ -502,7 +517,7 @@ function _curl(host, headers, nvpstr, calltype, callback) {
 
 }
 
-async function curl_call(host, headertype, nvpstr, formdata, calltype, callback) {
+function curl_call(host, headertype, nvpstr, formdata, calltype, callback) {
     var opts = {url: host};
     if ( !calltype ) {
         calltype = "GET";
@@ -522,7 +537,7 @@ async function curl_call(host, headertype, nvpstr, formdata, calltype, callback)
     if ( headertype ) {
         opts.headers = headertype;
     }
-    await request(opts, callback);
+    request(opts, callback);
 }
 
 function getHubInfo(hub, reload) {
@@ -566,11 +581,11 @@ function getHubInfo(hub, reload) {
                       "Authorization": "Bearer " + access_token,
                       "Content-Length": 0};
 
-        _curl(namehost, header, "", "GET", function(err, res, body) {
+        _curl(namehost, header, "", "GET", function(err, body) {
         // curl_call(namehost, header, null, null, "GET", function(err, res, body) {
             // console.log("sonos households returned err: ", err, " body: ", body);
             var jsonbody = body ? JSON.parse(body) : null;
-            if ( jsonbody ) {
+            if ( (!err || err === 200) && jsonbody ) {
                 var households = jsonbody.households;
                 sonoscount = households.length;
                 hub.hubid = households[0].id;
@@ -797,7 +812,15 @@ function getAccessToken(userid, code, hub) {
             console.log( (ddbg()), "clientId: ", clientId," clientSecret: ", clientSecret);
             console.log( (ddbg()), "tokenhost: ", tokenhost, " nvpreq: ", nvpreq);
         }
-        _curl(tokenhost, header, nvpreq, "POST", tokenCallback);
+        _curl(tokenhost, header, nvpreq, "POST")
+        .then( body => {
+            newTokenCallback(body);
+        })
+        .catch( reason => {
+            console.log( (ddbg()), reason);
+            pushClient(userid, "reload", "auth", "/reauth");
+            return;
+        });
 
     // get token for Sonos cloud account using basic auth method
     } else if ( hubType === "Sonos" ) {
@@ -814,7 +837,6 @@ function getAccessToken(userid, code, hub) {
             console.log( (ddbg()), "tokenhost: ", tokenhost, " nvpreq: ", nvpreq, " formData: ", formData);
         }
         curl_call(tokenhost, header, false, formData, "POST", tokenCallback);
-        // _curl(tokenhost, header, nvpreq, "POST", tokenCallback);
 
     // ST and HE functions to get accesstoken and endpoint
     } else {
@@ -825,7 +847,6 @@ function getAccessToken(userid, code, hub) {
             console.log( (ddbg()), "calling with nvpreq: ", nvpreq);
         }
         curl_call(tokenhost, header, nvpreq, false, "POST", tokenCallback);
-        // _curl(tokenhost, header, nvpreq, "POST", tokenCallback);
     }
 
     function fordCallback(err, res, body) {
@@ -925,44 +946,9 @@ function getAccessToken(userid, code, hub) {
                     // assign random hub id and save our info
                     getHubInfo(hub, true);
 
-                } else if ( hubType === "NewSmartThings" ) {
-                    refresh_token = jsonbody["refresh_token"];
-                    hub.hubendpt = hubHost;
-                    // hub["sinkFilterId"] = "";
-                    if ( !hub.hubname ) {
-                        hub.hubname = hub.hubtype;
-                    }
-
-                    // we can safely ignore the legacy device_id field
-                    hub.hubid = jsonbody["installed_app_id"];
-                    var expiresin = jsonbody["expires_in"];
-
-                    // convert refresh token from seconds to msec and two minutes before expiration
-                    expiresin = (parseInt(expiresin) - 3600) * 1000;
-                    hub.hubtimer = expiresin.toString();
-
-                    if ( DEBUG2 ) {
-                        console.log( (ddbg()),"tokenCallback: New SmartThings access_token: ", access_token, " refresh_token: ", refresh_token, 
-                                              " endpoint: ", endpt, " expiresin: ", expiresin);
-                    }
-
-                    // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
-                    if ( expiresin ) {
-                        setTimeout( function() {
-                            refreshSTToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, true, null);
-                        }, expiresin);
-                    }
-
-                    // register the sinks to cause events to come back to me
-                    newSTRegisterEvents(hub);
-
-                    // save our info - could skip this and save options and reload screen
-                    getHubInfo(hub, true);
-
                 } else {
                     console.log( (ddbg()), "Invalid hub type: ", hubType, " in access_token request call");
                     pushClient(userid, "reload", "auth", "/reauth");
-                    return;
                 }
 
             }
@@ -970,6 +956,56 @@ function getAccessToken(userid, code, hub) {
             console.log( (ddbg()), "Unknown error authorizing hub: ", hubName, " error: ", err, " body: ", body);
             pushClient(userid, "reload", "auth", "/reauth");
         }
+    }
+
+    function newTokenCallback(body) {
+        try {
+            var jsonbody = JSON.parse(body);
+        } catch(e) {
+            jsonbody = null;
+        }
+        
+        if ( !jsonbody ) {
+            console.log( (ddbg()), "error authorizing ", hubType, " error: ", err);
+            pushClient(userid, "reload", "auth", "/reauth");
+            return;
+        }
+
+        access_token = jsonbody["access_token"];
+        refresh_token = jsonbody["refresh_token"];
+        hub.hubendpt = hubHost;
+        hub.hubaccess = access_token;
+        hub.hubrefresh = refresh_token;
+        hub.hubtype = hubType;
+        if ( !hub.hubname ) {
+            hub.hubname = hubType;
+        }
+
+        // we can safely ignore the legacy device_id field
+        hub.hubid = jsonbody["installed_app_id"];
+        var expiresin = jsonbody["expires_in"];
+
+        // convert refresh token from seconds to msec and two minutes before expiration
+        expiresin = (parseInt(expiresin) - 3600) * 1000;
+        hub.hubtimer = expiresin.toString();
+
+        if ( DEBUG2 ) {
+            console.log( (ddbg()),"newTokenCallback: New SmartThings access_token: ", access_token, " refresh_token: ", refresh_token, 
+                                  " endpoint: ", endpt, " expiresin: ", expiresin);
+        }
+
+        // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
+        if ( expiresin ) {
+            setTimeout( function() {
+                refreshSTToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, true, null);
+            }, expiresin);
+        }
+
+        // register the sinks to cause events to come back to me
+        newSTRegisterEvents(hub);
+
+        // save our info - could skip this and save options and reload screen
+        getHubInfo(hub, true);
     }
     
     function newSTRegisterEvents(hub) {
@@ -984,7 +1020,7 @@ function getAccessToken(userid, code, hub) {
 
         // get all existing sinks and delete them and re-register new sink for this hub
         // check for a prior registration tied to our sink and this hub
-        _curl(host, header, null, "GET", function(err, res, body) {
+        _curl(host, header, null, "GET", function(err, body) {
             if (err && err !== 200) { 
                 console.log((ddbg()), "error - attempting to check for previously registered sink events: ", err);
                 regNewFilter();                    
@@ -1057,7 +1093,7 @@ function getAccessToken(userid, code, hub) {
                 "Accept": "application/vnd.smartthings+json;v=20200812"
             };
 
-            _curl(host, header, sinkdata, "POST", function(err, res, body) {
+            _curl(host, header, sinkdata, "POST", function(err, body) {
                 if ( err && err !== 200 ) {
                     // hub["sinkFilterId"] = "";
                     console.log((ddbg()), "error in registerEvents: ", err);
@@ -1118,7 +1154,7 @@ function refreshSTToken(userid, hub, refresh_token, clientId, clientSecret, refr
         console.log( (ddbg()), "Refreshing ST token via call with nvpreq: ", nvpreq);
     }
 
-    _curl(tokenhost, header, nvpreq, "POST", function(err, res, body) {
+    _curl(tokenhost, header, nvpreq, "POST", function(err, body) {
         if ( err && err !== 200 ) {
             console.log((ddbg()), "error - _curl call in refresh token: ", err);
             return;
@@ -1416,8 +1452,8 @@ function getDevices(hub, reload, reloadpath) {
         var sonosPlayers;
         var sonosGroups;
         var namehost = hubEndpt + "/v1/households/" + hubid + "/groups";
-        _curl(namehost, header, "", "GET", function(err, res, body) {
-            if ( (!err || ( err && err.toString() === "200" )) && body ) {
+        _curl(namehost, header, "", "GET", function(err, body) {
+            if ( (!err || err === 200) && body ) {
                 var jsonbody = JSON.parse(body);
                 if ( DEBUG2 ) {
                     console.log((ddbg()), "Sonos devices for house: ", hubid, " devices: ", jsonshow(jsonbody));
@@ -1472,11 +1508,11 @@ function getDevices(hub, reload, reloadpath) {
 
                         // obtain the meta data of the device
                         namehost = hubEndpt + "/v1/groups/" + group.id + "/playbackMetadata";
-                        _curl(namehost, header, "", "GET", function(err, res, metabody) {
+                        _curl(namehost, header, "", "GET", function(err, metabody) {
                             if ( DEBUG2 ) {
                                 console.log((ddbg()), "Sonos metadata for: ", group, " metadata: ", jsonshow(metabody));
                             }
-                            if ( (err && err.toString()!=="200") || !metabody ) { return false; }
+                            if ( (err && err!==200) || !metabody ) { return false; }
                             try {
                                 var metadata = JSON.parse(metabody);
                             } catch (e) {
@@ -1526,7 +1562,7 @@ function getDevices(hub, reload, reloadpath) {
 
                             // get the volume
                             namehost = hubEndpt + "/v1/groups/" + group.id + "/groupVolume";
-                            _curl(namehost, header, "", "GET")  // , function(err, res, body) {
+                            _curl(namehost, header, "", "GET")
                             .then( body => {
                                 try {
                                     var groupVolume = JSON.parse(body);
@@ -2005,7 +2041,7 @@ function getDevices(hub, reload, reloadpath) {
 
                     // now get the device details
                     // curl_call(hubEndpt + "/devices/" + device.deviceId+"/status", stheader, params, false, "GET", function(err, res, bodyStatus) {
-                    _curl(hubEndpt + "/devices/" + deviceid+"/status", stheader, null, "GET", function(err, res, bodyStatus) {
+                    _curl(hubEndpt + "/devices/" + deviceid+"/status", stheader, null, "GET", function(err, bodyStatus) {
 
                         if ( err && err !== 200 ) {
                             jsonStatus = null;
@@ -2057,8 +2093,8 @@ function getDevices(hub, reload, reloadpath) {
                                                         pvalue[subid] = attributes[attr]["value"];
                                                         
                                                         if ( swtype==="bulb" && (subid==="hue" || subid==="saturation" || subid==="level" ) ) {
-                                                            var h = pvalue.hue || 0;
-                                                            var s = pvalue.saturation || 0;
+                                                            var h = pvalue.hue || 1;
+                                                            var s = pvalue.saturation || 1;
                                                             var l = pvalue.level || 50;
                                                             pvalue.color = utils.hsv2rgb(h, s, l);
                                                         }
@@ -2225,12 +2261,15 @@ function getDevices(hub, reload, reloadpath) {
                     var pvalstr = encodeURI2(JSON.stringify(pvalue));
 
                     // handle audio and weather tiles
-                    if ( thetype==="audio" || thetype==="sonos"  ) {
+                    if ( thetype==="audio" || thetype==="sonos" || pvalue.audioTrackData ) {
                         pvalue = translateAudio(pvalue);
-                    } else if ( thetype==="music" ) {
+                    } else if ( thetype==="music" || pvalue.trackData ) {
                         pvalue = translateMusic(pvalue);
                     } else if ( thetype==="weather" ) {
-                        pvalue = translateWeather(origname, pvalue);
+                        var thisorigname = pvalue.name || "Weather";
+                        pvalue = translateWeather(thisorigname, pvalue);
+                    } else {
+                        pvalue = translateObjects(pvalue);
                     }
 
                     var device = {userid: userid, hubid: hubindex, deviceid: deviceid, name: origname, 
@@ -2385,529 +2424,541 @@ function getDevices(hub, reload, reloadpath) {
     }
 
     // function for loading ISY hub devices
+    // this functionality was moved to the HPconnect helper app which must run locally
+    // when this request is made on the server we call the Refresh IFTTT webhook 
+    // which must be installed in a Users my.isy.io portal account to query all to work
     function getIsyDevices() {
-        var buff = Buffer.from(hubAccess);
-        var base64 = buff.toString('base64');
-        var stheader = {"Authorization": "Basic " + base64};
-        var pvariables = {name: "ISY Variables"};
-        var vardefs = {
-            userid: userid,
-            name: "ISY Variables", 
-            hubid: hubindex,
-            deviceid: "vars",
-            devicetype: "isy",
-            hint: "ISY_variable",
-            refresh: "never",
-            pvalue: encodeURI(JSON.stringify(pvariables))
-        };
-
-        // use this object to keep track of which things are done
-        var done = {"Int" : false, "State" : false, "Int_defs" : false, "State_defs" : false, 
-                    "Nodes": false, "Progs": false, "Vars": false };
-
+        var hookname = "Refresh";
+        var hookurl = "https://my.isy.io/api/ifttt/" + hookname + "/key/" + hub.hubrefresh;
+        var header = {"Content-Type": "text/plain"};
+        _curl(hookurl, header, "", "POST");
         if ( DEBUGisy ) {
-            console.log("endpoint = ", hubEndpt, " stheader = ", stheader, " hubAccess: ", hubAccess);
+            console.log( (ddbg()), "Called webhook to refresh ISY for userid: ", userid, " hookurl: ", hookurl);
         }
-
-        // get all the variables to put into a single tile
-        curl_call(hubEndpt + "/vars/definitions/1", stheader, false, false, "GET", getIntVarsDef);
-        curl_call(hubEndpt + "/vars/definitions/2", stheader, false, false, "GET", getStateVarsDef);
-        curl_call(hubEndpt + "/vars/get/1", stheader, false, false, "GET", getIntVars);
-        curl_call(hubEndpt + "/vars/get/2", stheader, false, false, "GET", getStateVars);
-
-        // also get programs - each going into its own unique tile
-        curl_call(hubEndpt + "/programs?subfolders=true", stheader, false, false, "GET", getAllProgs);
-
-        // now get all the nodes - each going into its own unique tile
-        curl_call(hubEndpt + "/nodes", stheader, false, false, "GET", getAllNodes);
-
-        // handle setting the variable tile
-        // the four calls to curl above all land here to check if everything is done
-        function checkDone( stage ) {
-
-            // mark this stage done if passed in as a parameter
-            if ( stage ) {
-                done[ stage ] = true;
-            }
-
-            // check for finishing all the vars stages
-            if ( !done["Vars"] && (done["Int"] && done["State"] && done["Int_defs"] && done["State_defs"]) ) {
-
-                // Now that we have all the isy variables and names, create a mapping of ids to names
-                done["Vars"] = true;
-                vardefs.pvalue = encodeURI2(JSON.stringify(pvariables));
-                if ( DEBUGisy ) {
-                    console.log( (ddbg()), "updating vars: ", vardefs);
-                }
-                mydb.updateRow("devices", vardefs, "userid="+userid+" AND deviceid='vars'")
-                .then(resvars => {
-                    checkDone();
-                });
-            }
-
-            if ( done["Vars"] && done["Progs"] && done["Nodes"] ) {
-                updateOptions(userid, reload, reloadpath);
-            }
-
-        }
-
-        function getIntVarsDef(err, res, body ) {
-            if ( err ) {
-                console.log( (ddbg()), "error retrieving ISY int definitions: ", err);
-                checkDone("Int_defs");
-            } else {
-                getISY_Defs(body, "Int");
-            }
-        }
-        
-        function getStateVarsDef(err, res, body ) {
-            if ( err ) {
-                console.log( (ddbg()), "error retrieving ISY state definitions: ", err);
-                checkDone("State_defs");
-            } else {
-                getISY_Defs(body, "State");
-            }
-        }
-        
-        async function getISY_Defs( body, vartype ) {
-
-            await xml2js(body, function(err, result) {
-                if (DEBUGvar) {
-                    console.log( (ddbg()), vartype, vartype + " variables defs: ", UTIL.inspect(result, false, null, false) );
-                }
-                try {
-                    var varobj = result.CList.e;
-                } catch(e) {
-                    return;
-                }
-                if ( !is_object(varobj) ) {
-                    return;
-                }
-
-                // convert single variable object into an array of variable objects
-                if ( !is_array(varobj) ) {
-                    varobj = [varobj];
-                }
-                varobj.forEach(function( obj) {
-                    var defname = vartype + "_";
-                    try {
-                        var varid = obj["$"]["id"];
-                        var varname = obj["$"]["name"];
-                        if ( !varname ) {
-                            varname = defname + varid;
-                        }
-                        
-                        // remove spaces from name
-                        // varname = varname.replace(/ /g,"_");
-
-                        // var prec = obj["val"][0]["_"];
-                    } catch (e) {
-                        varid = 0;
-                        varname = "";
-                    }
-                    var defaultname = defname+varid;
-                    if ( varid > 0 && varname !== defaultname) {
-                        pvariables["def_"+defaultname] = varname;
-                        // vardefs["prec_" + vartype + "_" + varid] = prec;
-                    }
-                });
-            });
-            checkDone(vartype + "_defs");
-        }
-        
-        function getIntVars(err, res, body) {
-            if ( err ) {
-                console.log( (ddbg()), "error retrieving ISY Int variables: ", err);
-                checkDone("Int");
-            } else {
-                getISY_Vars(body, "Int");
-            }
-        }
-        
-        function getStateVars(err, res, body) {
-            if ( err ) {
-                console.log( (ddbg()), "error retrieving ISY State variables: ", err);
-                checkDone("State");
-            } else {
-                getISY_Vars(body, "State");
-            }
-        }
-
-        async function getISY_Vars(body, vartype) {
-            // make a single tile with all the variables in it
-            var vartypes = ["", "Int", "State"];
-            if (DEBUGvar) {
-                console.log( (ddbg()), body );
-            }
-
-            await xml2js(body, function(err, result) {
-                if (DEBUGvar) {
-                    console.log( (ddbg()), vartype, "variables: ", UTIL.inspect(result, false, null, false) );
-                }
-
-                if ( !result || !result.vars ) {
-                    return;
-                }
-
-                var varobj = result.vars.var;
-                if ( !is_object(varobj) ) {
-                    return;
-                }
-
-                // convert single variable object into an array of variable objects
-                if ( !is_array(varobj) ) {
-                    varobj = [varobj];
-                }
-                    
-                varobj.forEach(function( obj) {
-                    try {
-                        var varid = obj["$"]["id"];
-                        var vartypeid = parseInt(obj["$"]["type"]);
-                    } catch (e) {
-                        varid = 0;
-                        vartypeid = 0;
-                    }
-                    if ( varid > 0 && vartype === vartypes[vartypeid] ) {
-                        var prec = parseInt(obj.prec[0]);
-                        var val10 = obj.val[0];
-                        if ( !isNaN(prec) && prec !== 0 ) {
-                            val10 = parseFloat(val10) / Math.pow(10, prec);
-                        }
-                        pvariables[vartype+"_"+varid] = val10.toString();
-                        pvariables["prec_"+vartype+"_"+varid] = prec.toString();
-                    }
-                });
-
-                if ( DEBUGvar ) {
-                    console.log( (ddbg()), "New variable value: ", pvariables);
-                }
-            });
-
-            // move this to outside await so it can proceed if async returns prematurely
-            // the await ensures everything is done before getting here
-            checkDone(vartype);
-        }
-
-        // get programs and setup program tiles much like how Piston tiles are done in ST and HE
-        function getAllProgs(err, res, body) {
-            if ( err ) {
-                console.log( (ddbg()), "error retrieving ISY programs: ", err);
-                checkDone("Progs");
-            } else {
-
-                // have to use the full parsing function here
-                xml2js(body, function(xmlerr, result) {
-                    var thetype = "isy";
-                    if ( result ) {
-                        try {
-                            var programlist = result.programs.program;
-                            if ( !is_object(programlist) ) {
-                                checkDone("Progs");
-                                return;
-                            }
-
-                            // // convert single variable object into an array of variable objects
-                            if ( !is_array(programlist) ) {
-                                programlist = [programlist];
-                            }
-
-                            // now lets get all the master program nodes
-                            // and create a tile for any program that is not a folder
-                            // TODO: recurse into folders and get programs there too
-                            var pvalue;
-                            var numprogs = programlist.length;
-                            var progcount = 0;
-                            if ( numprogs === 0 ) {
-                                checkDone("Progs");
-                                return;
-                            }
-
-                            programlist.forEach(function(prog) {
-                                var proginfo = prog["$"];
-                                var isfolder = proginfo.folder;
-                                if ( DEBUG7 ) {
-                                    console.log( (ddbg()), "Program details: ", UTIL.inspect(prog, false, null, false) );
-                                }
-
-                                // if we have a folder don't add it - but flag the count to keep track of load status
-                                if ( isfolder==="true" ) {
-                                    if ( DEBUG7 ) {
-                                        console.log( (ddbg()), "Program ", prog.name, " is a folder. id: ", proginfo.id, " Status: ", proginfo.status);
-                                    }
-                                    progcount++;
-                                    if ( progcount >= numprogs ) {
-                                        checkDone("Progs");
-                                    }
-
-                                // create tile for programs that are not folders
-                                } else {
-                                    if ( DEBUG7 ) {
-                                        console.log( (ddbg()), "Program ", prog.name, " id: ", proginfo.id, " Status: ", proginfo.status, " Last run: ", prog.lastRunTime );
-                                    }
-                                    var progid = "prog_" + proginfo.id;
-
-                                    // set the program name. Add Program if it isn't there
-                                    // this will help make program names unique from tiles
-                                    var progname;
-                                    if ( is_array(prog.name) ) {
-                                        progname = prog.name[0];
-                                    } else {
-                                        progname = prog.name;
-                                    }
-                                    if ( progname.toLowerCase().indexOf("program") === -1 ) {
-                                        progname = "Program " + progname;
-                                    }
-
-                                    // var progcommands = "run|runThen|runElse|stop|enable|disable";
-                                    // var progarr = progcommands.split("|");
-                                    var progarr = ["run","runThen","runElse","stop","enable","disable"];
-                                    pvalue = {name: progname};
-                                    progarr.forEach(function(command) {
-                                        pvalue[command] = command;
-                                    });
-                                    for ( var key in prog ) {
-                                        if ( key!=="$" && key!=="name" ) {
-                                            var val = prog[key];
-                                            if ( is_array(val) ) {
-                                                pvalue[key] = val[0];
-                                            } else {
-                                                pvalue[key] = val;
-                                            }
-                                        }
-                                    }
-                                    pvalue.status = proginfo.status;
-
-                                    // get the enabled and runat states
-                                    pvalue.enabled  = proginfo.enabled;
-                                    pvalue.runAtStartup = proginfo.runAtStartup;
-                                    var device = {
-                                        userid: userid,
-                                        name: progname, 
-                                        hubid: hubindex,
-                                        deviceid: progid,
-                                        devicetype: thetype,
-                                        hint: "ISY_program",
-                                        refresh: "never",
-                                        pvalue: encodeURI2(JSON.stringify(pvalue))
-                                    };
-                                    mydb.updateRow("devices", device, "userid="+userid+" AND deviceid='"+progid+"'")
-                                    .then(resprogs => {
-                                        progcount++;
-                                        if ( progcount >= numprogs ) {
-                                            checkDone("Progs");
-                                        }
-                                    });
-                                }
-                            });
-                        } catch (e) {
-                            console.log( (ddbg()), "error - failed loading ISY programs. ", e);
-                            checkDone("Progs");
-                        }
-                    }
-                });
-            }
-
-        }
-
-        function getAllNodes(err, res, body) {
-            var thetype = "isy";
-            if ( err ) {
-                console.log( (ddbg()), "error retrieving ISY nodes: ", err);
-                checkDone("Nodes");
-            } else {
-
-                // note - changed to use xml2js
-                xml2js(body, function(xmlerr, result) {
-                    if ( DEBUG7 && DEBUGisy ) {
-                        console.log( (ddbg()), "xml2js nodes: ", body, UTIL.inspect(result, false, null, false) );
-                    }
-                    if ( !result ) {
-                        checkDone("Nodes");
-                        return;
-                    }
-
-                    // set our flags for handling asyncronous update status
-                    var newdevices = {nodecount: 0, groupcount: 0, statuscount: 0, ranstatus: false};
-                    var thenodes = result.nodes["node"];
-                    var groups = result.nodes["group"];
-                    var numnodes = utils.count(thenodes);
-                    var numgroups = utils.count(groups);
-
-                    // we run this after every node is updated to see if all are done
-                    // and if all are updated then we get status details of each
-                    // removing any that failed to update for whatever reason
-                    function checkNodesDone() {
-                        if ( newdevices.nodecount === numnodes && !newdevices.ranstatus ) {
-                            getNodesStatus();
-                        }
-
-                        // if we have read in all nodes and all groups, refresh the screen
-                        if ( newdevices.nodecount >= numnodes && 
-                             newdevices.groupcount >= numgroups &&
-                             newdevices.statuscount >= numnodes ) {
-                            if ( DEBUGisy ) {
-                                console.log( (ddbg()), "finished loading all nodes.");
-                            }
-                            checkDone("Nodes");
-                        }
-                    }
-
-                    for ( var obj in thenodes ) {
-                        var node = thenodes[obj];
-                        var id = fixISYid(node["address"][0].toString());
-    
-                        // var idx = thetype + "|" + id;
-                        var hint = node["type"][0].toString();
-    
-                        // set hint to nothing if default of zeros is provided
-                        // TODO - provide a more useful mapping of hints to type names
-                        // until then user can still style hints using CSS
-                        if ( hint ) {
-                            hint.replace( /\./g, "_" );
-                            hint = "ISY " + hint;
-                        }
-    
-                        var name = node["name"][0];
-                        var pvalue = {"name": name};
-                        if ( !name ) {
-                            name = pvalue["name"];
-                        }
-                        
-                        // set bare minimum info
-                        // this is updated below in the callback after getting node details
-                        var device = {
-                                userid: userid,
-                                name: name, 
-                                hubid: hubindex,
-                                deviceid: id,
-                                devicetype: thetype,
-                                hint: hint,
-                                refresh: "never",
-                                pvalue: encodeURI2(JSON.stringify(pvalue))
-                        };
-                        if ( DEBUGisy ) {
-                            console.log((ddbg()),"updating node after reading device: ", device);
-                        }
-                        newdevices[id] = device;
-
-                        mydb.updateRow("devices", device, "userid = "+userid + " AND devicetype = '" + thetype +"' AND deviceid = '"+id+"'")
-                        .then(result => {
-                            if ( !result ) {
-                                console.log( (ddbg()), "error - device update failed for id: ", id);
-                                newdevices[id] = null;
-                            } else {
-                                newdevices[id] = device;
-                            }
-                            newdevices.nodecount++;
-                            checkNodesDone();
-                        });
-
-                        if (DEBUGisy) {
-                            console.log( (ddbg()), "id= ", id," hint= ", hint, " node: ", node, " pvalue: ", pvalue);
-                        }
-                    }
-
-                    // now that we have all the nodes identified, get the details
-                    // this makes a second write to the database for each node
-                    function getNodesStatus() {
-                        
-                        newdevices.ranstatus = true;
-
-                        curl_call(hubEndpt + "/status", stheader, false, false, "GET", callbackStatusInfo);
-                        function callbackStatusInfo(err, res, body) {
-                            xml2js(body, function(xmlerr, result) {
-                                try {
-                                    if ( result ) {
-
-                                        var nodes = result.nodes.node;
-                                        if ( nodes ) {
-                                            nodes.forEach(function(node) {
-                                                // var nodename = node["name"][0];
-                                                var nodeid = fixISYid(node["$"]["id"]);
-                                                var props = node["property"];
-
-                                                var device = newdevices[nodeid];
-
-                                                // if there are props set values
-                                                // otherwise just flag that we tried by incrementing the count
-                                                if ( props && device ) {
-                                                    setIsyFields(userid, nodeid, device, props, false)
-                                                    .then(res2 => {
-                                                        newdevices.statuscount++;
-                                                        checkNodesDone();
-                                                    });
-                                                } else {
-                                                    newdevices.statuscount++;
-                                                    checkNodesDone();
-                                                }
-
-                                            });
-                                        } else {
-                                            throw "Something went wrong reading status from ISY";
-                                        }
-                                    }
-                                } catch(e) { 
-                                    console.log( (ddbg()), "error - ", e);
-                                }
-                            });
-                        }
-                    }
-
-                    // now get groups
-                    if ( groups ) {
-                        for ( var obj in groups ) {
-                            var node = groups[obj];
-                            var id = fixISYid(node["address"][0].toString());
-                            var hint = "ISY_scene";
-                            var name = node["name"][0];
-            
-                            // set the base tile to include name and items to turn scene on and off
-                            var pvalue = {"name": name, "DON": "DON", "DOF":"DOF"};
-                            var members = node.members[0];
-            
-                            // load up pvalue with links
-                            if ( members && array_key_exists("link", members) && is_array(members.link) ) {
-                                for ( var sceneitem in members.link ) {
-                                    pvalue["scene_"+sceneitem] = members.link[sceneitem]["_"];
-                                }
-                            }
-            
-                            if ( !name ) {
-                                name = pvalue["name"];
-                            }
-            
-                            // set tile up
-                            var device = {
-                                userid: userid,
-                                name: name, 
-                                hubid: hubindex,
-                                deviceid: id,
-                                devicetype: thetype,
-                                hint: hint,
-                                refresh: "never",
-                                pvalue: encodeURI2(JSON.stringify(pvalue))
-                            };
-                            if (DEBUGisy) {
-                                console.log( (ddbg()), "id= ", id," hint= ", hint, " node: ", node, " pvalue: ", pvalue);
-                            }
-                            mydb.updateRow("devices", device, "userid="+userid+" AND deviceid='"+id+"'")
-                            .then(res3 => {
-                                newdevices.groupcount++;
-                                checkNodesDone();
-                            });
-                        }
-                    }
-
-                    // in case nothing is done above check here for update
-                    checkNodesDone();
-            
-                });
-            }
-        }
-        // ------ end of getAllNodes
-
+        return "success";
     }
-    // ------ end of getIsyDevices
+
+    // function getIsyDevices() {
+    //     var buff = Buffer.from(hubAccess);
+    //     var base64 = buff.toString('base64');
+    //     var stheader = {"Authorization": "Basic " + base64};
+    //     var pvariables = {name: "ISY Variables"};
+    //     var vardefs = {
+    //         userid: userid,
+    //         name: "ISY Variables", 
+    //         hubid: hubindex,
+    //         deviceid: "vars",
+    //         devicetype: "isy",
+    //         hint: "ISY_variable",
+    //         refresh: "never",
+    //         pvalue: encodeURI(JSON.stringify(pvariables))
+    //     };
+
+    //     // use this object to keep track of which things are done
+    //     var done = {"Int" : false, "State" : false, "Int_defs" : false, "State_defs" : false, 
+    //                 "Nodes": false, "Progs": false, "Vars": false };
+
+    //     if ( DEBUGisy ) {
+    //         console.log("endpoint = ", hubEndpt, " stheader = ", stheader, " hubAccess: ", hubAccess);
+    //     }
+
+    //     // get all the variables to put into a single tile
+    //     curl_call(hubEndpt + "/vars/definitions/1", stheader, false, false, "GET", getIntVarsDef);
+    //     curl_call(hubEndpt + "/vars/definitions/2", stheader, false, false, "GET", getStateVarsDef);
+    //     curl_call(hubEndpt + "/vars/get/1", stheader, false, false, "GET", getIntVars);
+    //     curl_call(hubEndpt + "/vars/get/2", stheader, false, false, "GET", getStateVars);
+
+    //     // also get programs - each going into its own unique tile
+    //     curl_call(hubEndpt + "/programs?subfolders=true", stheader, false, false, "GET", getAllProgs);
+
+    //     // now get all the nodes - each going into its own unique tile
+    //     curl_call(hubEndpt + "/nodes", stheader, false, false, "GET", getAllNodes);
+
+    //     // handle setting the variable tile
+    //     // the four calls to curl above all land here to check if everything is done
+    //     function checkDone( stage ) {
+
+    //         // mark this stage done if passed in as a parameter
+    //         if ( stage ) {
+    //             done[ stage ] = true;
+    //         }
+
+    //         // check for finishing all the vars stages
+    //         if ( !done["Vars"] && (done["Int"] && done["State"] && done["Int_defs"] && done["State_defs"]) ) {
+
+    //             // Now that we have all the isy variables and names, create a mapping of ids to names
+    //             done["Vars"] = true;
+    //             vardefs.pvalue = encodeURI2(JSON.stringify(pvariables));
+    //             if ( DEBUGisy ) {
+    //                 console.log( (ddbg()), "updating vars: ", vardefs);
+    //             }
+    //             mydb.updateRow("devices", vardefs, "userid="+userid+" AND deviceid='vars'")
+    //             .then(resvars => {
+    //                 checkDone();
+    //             });
+    //         }
+
+    //         if ( done["Vars"] && done["Progs"] && done["Nodes"] ) {
+    //             updateOptions(userid, reload, reloadpath);
+    //         }
+
+    //     }
+
+    //     function getIntVarsDef(err, res, body ) {
+    //         if ( err ) {
+    //             console.log( (ddbg()), "error retrieving ISY int definitions: ", err);
+    //             checkDone("Int_defs");
+    //         } else {
+    //             getISY_Defs(body, "Int");
+    //         }
+    //     }
+        
+    //     function getStateVarsDef(err, res, body ) {
+    //         if ( err ) {
+    //             console.log( (ddbg()), "error retrieving ISY state definitions: ", err);
+    //             checkDone("State_defs");
+    //         } else {
+    //             getISY_Defs(body, "State");
+    //         }
+    //     }
+        
+    //     async function getISY_Defs( body, vartype ) {
+
+    //         await xml2js(body, function(err, result) {
+    //             if (DEBUGisy) {
+    //                 console.log( (ddbg()), vartype, vartype + " variables defs: ", UTIL.inspect(result, false, null, false) );
+    //             }
+    //             try {
+    //                 var varobj = result.CList.e;
+    //             } catch(e) {
+    //                 return;
+    //             }
+    //             if ( !is_object(varobj) ) {
+    //                 return;
+    //             }
+
+    //             // convert single variable object into an array of variable objects
+    //             if ( !is_array(varobj) ) {
+    //                 varobj = [varobj];
+    //             }
+    //             varobj.forEach(function( obj) {
+    //                 var defname = vartype + "_";
+    //                 try {
+    //                     var varid = obj["$"]["id"];
+    //                     var varname = obj["$"]["name"];
+    //                     if ( !varname ) {
+    //                         varname = defname + varid;
+    //                     }
+                        
+    //                     // remove spaces from name
+    //                     // varname = varname.replace(/ /g,"_");
+
+    //                     // var prec = obj["val"][0]["_"];
+    //                 } catch (e) {
+    //                     varid = 0;
+    //                     varname = "";
+    //                 }
+    //                 var defaultname = defname+varid;
+    //                 if ( varid > 0 && varname !== defaultname) {
+    //                     pvariables["def_"+defaultname] = varname;
+    //                     // vardefs["prec_" + vartype + "_" + varid] = prec;
+    //                 }
+    //             });
+    //         });
+    //         checkDone(vartype + "_defs");
+    //     }
+        
+    //     function getIntVars(err, res, body) {
+    //         if ( err ) {
+    //             console.log( (ddbg()), "error retrieving ISY Int variables: ", err);
+    //             checkDone("Int");
+    //         } else {
+    //             getISY_Vars(body, "Int");
+    //         }
+    //     }
+        
+    //     function getStateVars(err, res, body) {
+    //         if ( err ) {
+    //             console.log( (ddbg()), "error retrieving ISY State variables: ", err);
+    //             checkDone("State");
+    //         } else {
+    //             getISY_Vars(body, "State");
+    //         }
+    //     }
+
+    //     async function getISY_Vars(body, vartype) {
+    //         // make a single tile with all the variables in it
+    //         var vartypes = ["", "Int", "State"];
+    //         if (DEBUGisy) {
+    //             console.log( (ddbg()), body );
+    //         }
+
+    //         await xml2js(body, function(err, result) {
+    //             if (DEBUGisy) {
+    //                 console.log( (ddbg()), vartype, "variables: ", UTIL.inspect(result, false, null, false) );
+    //             }
+
+    //             if ( !result || !result.vars ) {
+    //                 return;
+    //             }
+
+    //             var varobj = result.vars.var;
+    //             if ( !is_object(varobj) ) {
+    //                 return;
+    //             }
+
+    //             // convert single variable object into an array of variable objects
+    //             if ( !is_array(varobj) ) {
+    //                 varobj = [varobj];
+    //             }
+                    
+    //             varobj.forEach(function( obj) {
+    //                 try {
+    //                     var varid = obj["$"]["id"];
+    //                     var vartypeid = parseInt(obj["$"]["type"]);
+    //                 } catch (e) {
+    //                     varid = 0;
+    //                     vartypeid = 0;
+    //                 }
+    //                 if ( varid > 0 && vartype === vartypes[vartypeid] ) {
+    //                     var prec = parseInt(obj.prec[0]);
+    //                     var val10 = obj.val[0];
+    //                     if ( !isNaN(prec) && prec !== 0 ) {
+    //                         val10 = parseFloat(val10) / Math.pow(10, prec);
+    //                     }
+    //                     pvariables[vartype+"_"+varid] = val10.toString();
+    //                     pvariables["prec_"+vartype+"_"+varid] = prec.toString();
+    //                 }
+    //             });
+
+    //             if ( DEBUGisy ) {
+    //                 console.log( (ddbg()), "New variable value: ", pvariables);
+    //             }
+    //         });
+
+    //         // move this to outside await so it can proceed if async returns prematurely
+    //         // the await ensures everything is done before getting here
+    //         checkDone(vartype);
+    //     }
+
+    //     // get programs and setup program tiles much like how Piston tiles are done in ST and HE
+    //     function getAllProgs(err, res, body) {
+    //         if ( err ) {
+    //             console.log( (ddbg()), "error retrieving ISY programs: ", err);
+    //             checkDone("Progs");
+    //         } else {
+
+    //             // have to use the full parsing function here
+    //             xml2js(body, function(xmlerr, result) {
+    //                 var thetype = "isy";
+    //                 if ( result ) {
+    //                     try {
+    //                         var programlist = result.programs.program;
+    //                         if ( !is_object(programlist) ) {
+    //                             checkDone("Progs");
+    //                             return;
+    //                         }
+
+    //                         // // convert single variable object into an array of variable objects
+    //                         if ( !is_array(programlist) ) {
+    //                             programlist = [programlist];
+    //                         }
+
+    //                         // now lets get all the master program nodes
+    //                         // and create a tile for any program that is not a folder
+    //                         // TODO: recurse into folders and get programs there too
+    //                         var pvalue;
+    //                         var numprogs = programlist.length;
+    //                         var progcount = 0;
+    //                         if ( numprogs === 0 ) {
+    //                             checkDone("Progs");
+    //                             return;
+    //                         }
+
+    //                         programlist.forEach(function(prog) {
+    //                             var proginfo = prog["$"];
+    //                             var isfolder = proginfo.folder;
+    //                             if ( DEBUG7 ) {
+    //                                 console.log( (ddbg()), "Program details: ", UTIL.inspect(prog, false, null, false) );
+    //                             }
+
+    //                             // if we have a folder don't add it - but flag the count to keep track of load status
+    //                             if ( isfolder==="true" ) {
+    //                                 if ( DEBUG7 ) {
+    //                                     console.log( (ddbg()), "Program ", prog.name, " is a folder. id: ", proginfo.id, " Status: ", proginfo.status);
+    //                                 }
+    //                                 progcount++;
+    //                                 if ( progcount >= numprogs ) {
+    //                                     checkDone("Progs");
+    //                                 }
+
+    //                             // create tile for programs that are not folders
+    //                             } else {
+    //                                 if ( DEBUG7 ) {
+    //                                     console.log( (ddbg()), "Program ", prog.name, " id: ", proginfo.id, " Status: ", proginfo.status, " Last run: ", prog.lastRunTime );
+    //                                 }
+    //                                 var progid = "prog_" + proginfo.id;
+
+    //                                 // set the program name. Add Program if it isn't there
+    //                                 // this will help make program names unique from tiles
+    //                                 var progname;
+    //                                 if ( is_array(prog.name) ) {
+    //                                     progname = prog.name[0];
+    //                                 } else {
+    //                                     progname = prog.name;
+    //                                 }
+    //                                 if ( progname.toLowerCase().indexOf("program") === -1 ) {
+    //                                     progname = "Program " + progname;
+    //                                 }
+
+    //                                 // var progcommands = "run|runThen|runElse|stop|enable|disable";
+    //                                 // var progarr = progcommands.split("|");
+    //                                 var progarr = ["run","runThen","runElse","stop","enable","disable"];
+    //                                 pvalue = {name: progname};
+    //                                 progarr.forEach(function(command) {
+    //                                     pvalue[command] = command;
+    //                                 });
+    //                                 for ( var key in prog ) {
+    //                                     if ( key!=="$" && key!=="name" ) {
+    //                                         var val = prog[key];
+    //                                         if ( is_array(val) ) {
+    //                                             pvalue[key] = val[0];
+    //                                         } else {
+    //                                             pvalue[key] = val;
+    //                                         }
+    //                                     }
+    //                                 }
+    //                                 pvalue.status = proginfo.status;
+
+    //                                 // get the enabled and runat states
+    //                                 pvalue.enabled  = proginfo.enabled;
+    //                                 pvalue.runAtStartup = proginfo.runAtStartup;
+    //                                 var device = {
+    //                                     userid: userid,
+    //                                     name: progname, 
+    //                                     hubid: hubindex,
+    //                                     deviceid: progid,
+    //                                     devicetype: thetype,
+    //                                     hint: "ISY_program",
+    //                                     refresh: "never",
+    //                                     pvalue: encodeURI2(JSON.stringify(pvalue))
+    //                                 };
+    //                                 mydb.updateRow("devices", device, "userid="+userid+" AND deviceid='"+progid+"'")
+    //                                 .then(resprogs => {
+    //                                     progcount++;
+    //                                     if ( progcount >= numprogs ) {
+    //                                         checkDone("Progs");
+    //                                     }
+    //                                 });
+    //                             }
+    //                         });
+    //                     } catch (e) {
+    //                         console.log( (ddbg()), "error - failed loading ISY programs. ", e);
+    //                         checkDone("Progs");
+    //                     }
+    //                 }
+    //             });
+    //         }
+
+    //     }
+
+    //     function getAllNodes(err, res, body) {
+    //         var thetype = "isy";
+    //         if ( err ) {
+    //             console.log( (ddbg()), "error retrieving ISY nodes: ", err);
+    //             checkDone("Nodes");
+    //         } else {
+
+    //             // note - changed to use xml2js
+    //             xml2js(body, function(xmlerr, result) {
+    //                 if ( DEBUG7 && DEBUGisy ) {
+    //                     console.log( (ddbg()), "xml2js nodes: ", body, UTIL.inspect(result, false, null, false) );
+    //                 }
+    //                 if ( !result ) {
+    //                     checkDone("Nodes");
+    //                     return;
+    //                 }
+
+    //                 // set our flags for handling asyncronous update status
+    //                 var newdevices = {nodecount: 0, groupcount: 0, statuscount: 0, ranstatus: false};
+    //                 var thenodes = result.nodes["node"];
+    //                 var groups = result.nodes["group"];
+    //                 var numnodes = utils.count(thenodes);
+    //                 var numgroups = utils.count(groups);
+
+    //                 // we run this after every node is updated to see if all are done
+    //                 // and if all are updated then we get status details of each
+    //                 // removing any that failed to update for whatever reason
+    //                 function checkNodesDone() {
+    //                     if ( newdevices.nodecount === numnodes && !newdevices.ranstatus ) {
+    //                         getNodesStatus();
+    //                     }
+
+    //                     // if we have read in all nodes and all groups, refresh the screen
+    //                     if ( newdevices.nodecount >= numnodes && 
+    //                          newdevices.groupcount >= numgroups &&
+    //                          newdevices.statuscount >= numnodes ) {
+    //                         if ( DEBUGisy ) {
+    //                             console.log( (ddbg()), "finished loading all nodes.");
+    //                         }
+    //                         checkDone("Nodes");
+    //                     }
+    //                 }
+
+    //                 for ( var obj in thenodes ) {
+    //                     var node = thenodes[obj];
+    //                     var id = fixISYid(node["address"][0].toString());
+    
+    //                     // var idx = thetype + "|" + id;
+    //                     var hint = node["type"][0].toString();
+    
+    //                     // set hint to nothing if default of zeros is provided
+    //                     // TODO - provide a more useful mapping of hints to type names
+    //                     // until then user can still style hints using CSS
+    //                     if ( hint ) {
+    //                         hint.replace( /\./g, "_" );
+    //                         hint = "ISY " + hint;
+    //                     }
+    
+    //                     var name = node["name"][0];
+    //                     var pvalue = {"name": name};
+    //                     if ( !name ) {
+    //                         name = pvalue["name"];
+    //                     }
+                        
+    //                     // set bare minimum info
+    //                     // this is updated below in the callback after getting node details
+    //                     var device = {
+    //                             userid: userid,
+    //                             name: name, 
+    //                             hubid: hubindex,
+    //                             deviceid: id,
+    //                             devicetype: thetype,
+    //                             hint: hint,
+    //                             refresh: "never",
+    //                             pvalue: encodeURI2(JSON.stringify(pvalue))
+    //                     };
+    //                     if ( DEBUGisy ) {
+    //                         console.log((ddbg()),"updating node after reading device: ", device);
+    //                     }
+    //                     newdevices[id] = device;
+
+    //                     mydb.updateRow("devices", device, "userid = "+userid + " AND devicetype = '" + thetype +"' AND deviceid = '"+id+"'")
+    //                     .then(result => {
+    //                         if ( !result ) {
+    //                             console.log( (ddbg()), "error - device update failed for id: ", id);
+    //                             newdevices[id] = null;
+    //                         } else {
+    //                             newdevices[id] = device;
+    //                         }
+    //                         newdevices.nodecount++;
+    //                         checkNodesDone();
+    //                     });
+
+    //                     if (DEBUGisy) {
+    //                         console.log( (ddbg()), "id= ", id," hint= ", hint, " node: ", node, " pvalue: ", pvalue);
+    //                     }
+    //                 }
+
+    //                 // now that we have all the nodes identified, get the details
+    //                 // this makes a second write to the database for each node
+    //                 function getNodesStatus() {
+                        
+    //                     newdevices.ranstatus = true;
+
+    //                     curl_call(hubEndpt + "/status", stheader, false, false, "GET", callbackStatusInfo);
+    //                     function callbackStatusInfo(err, res, body) {
+    //                         xml2js(body, function(xmlerr, result) {
+    //                             try {
+    //                                 if ( result ) {
+
+    //                                     var nodes = result.nodes.node;
+    //                                     if ( nodes ) {
+    //                                         nodes.forEach(function(node) {
+    //                                             // var nodename = node["name"][0];
+    //                                             var nodeid = fixISYid(node["$"]["id"]);
+    //                                             var props = node["property"];
+
+    //                                             var device = newdevices[nodeid];
+
+    //                                             // if there are props set values
+    //                                             // otherwise just flag that we tried by incrementing the count
+    //                                             if ( props && device ) {
+    //                                                 setIsyFields(userid, nodeid, device, props, false)
+    //                                                 .then(res2 => {
+    //                                                     newdevices.statuscount++;
+    //                                                     checkNodesDone();
+    //                                                 });
+    //                                             } else {
+    //                                                 newdevices.statuscount++;
+    //                                                 checkNodesDone();
+    //                                             }
+
+    //                                         });
+    //                                     } else {
+    //                                         throw "Something went wrong reading status from ISY";
+    //                                     }
+    //                                 }
+    //                             } catch(e) { 
+    //                                 console.log( (ddbg()), "error - ", e);
+    //                             }
+    //                         });
+    //                     }
+    //                 }
+
+    //                 // now get groups
+    //                 if ( groups ) {
+    //                     for ( var obj in groups ) {
+    //                         var node = groups[obj];
+    //                         var id = fixISYid(node["address"][0].toString());
+    //                         var hint = "ISY_scene";
+    //                         var name = node["name"][0];
+            
+    //                         // set the base tile to include name and items to turn scene on and off
+    //                         var pvalue = {"name": name, "DON": "DON", "DOF":"DOF"};
+    //                         var members = node.members[0];
+            
+    //                         // load up pvalue with links
+    //                         if ( members && array_key_exists("link", members) && is_array(members.link) ) {
+    //                             for ( var sceneitem in members.link ) {
+    //                                 pvalue["scene_"+sceneitem] = members.link[sceneitem]["_"];
+    //                             }
+    //                         }
+            
+    //                         if ( !name ) {
+    //                             name = pvalue["name"];
+    //                         }
+            
+    //                         // set tile up
+    //                         var device = {
+    //                             userid: userid,
+    //                             name: name, 
+    //                             hubid: hubindex,
+    //                             deviceid: id,
+    //                             devicetype: thetype,
+    //                             hint: hint,
+    //                             refresh: "never",
+    //                             pvalue: encodeURI2(JSON.stringify(pvalue))
+    //                         };
+    //                         if (DEBUGisy) {
+    //                             console.log( (ddbg()), "id= ", id," hint= ", hint, " node: ", node, " pvalue: ", pvalue);
+    //                         }
+    //                         mydb.updateRow("devices", device, "userid="+userid+" AND deviceid='"+id+"'")
+    //                         .then(res3 => {
+    //                             newdevices.groupcount++;
+    //                             checkNodesDone();
+    //                         });
+    //                     }
+    //                 }
+
+    //                 // in case nothing is done above check here for update
+    //                 checkNodesDone();
+            
+    //             });
+    //         }
+    //     }
+    //     // ------ end of getAllNodes
+    // }
 }
 // ------ end of getDevices
 
@@ -3094,7 +3145,7 @@ function setIsyFields(userid, nodeid, device, props, screenupd) {
             console.log( (ddbg()), "in setIsyFields - userid: ", userid, " nodeid: ", nodeid, " device: ", device, " value: ", value, " props: ", props);
         }
         device.pvalue = encodeURI2(JSON.stringify(value));
-        var pr = mydb.updateRow("devices", device, "userid="+userid+" AND deviceid = '"+nodeid+"'")
+        var pr = mydb.updateRow("devices", device, "userid=" + userid + " AND deviceid = '"+nodeid+"'")
         .then(results => {
             if ( results && screenupd ) {
                 pushClient(userid, nodeid, "isy", "none", value);
@@ -4847,13 +4898,15 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     var $tc = "";
     var thingtype = thesensor["type"];
     var bid = thesensor["id"];
-    if ( thingtype==="audio" || thingtype==="sonos"  ) {
+    if ( thingtype==="audio" || thingtype==="sonos" || thesensor.value.audioTrackData ) {
         thesensor.value = translateAudio(thesensor.value);
-    } else if ( thingtype==="music" ) {
+    } else if ( thingtype==="music" || thesensor.value.trackData ) {
         thesensor.value = translateMusic(thesensor.value);
-    // } else if ( thingtype==="weather" ) {
-    //     var origname = thesensor.name || "";
-    //     thesensor.value = translateWeather(origname, thesensor.value);
+    } else if ( thingtype==="weather" ) {
+        var thisorigname = thesensor.name || "Weather";
+        thesensor.value = translateWeather(thisorigname, thesensor.value);
+    } else {
+        thesensor.value = translateObjects(thesensor.value);
     }
 
     // add in customizations here
@@ -4912,20 +4965,19 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     // now we use custom name in both places
     // var thingname = thingvalue["name"];
     var thingname = thesensor["name"];
-            
-    // check if there is a color key - use to set color
-    // no longer print this first since we need to include in custom logic
+
+    // no longer do this because it is stupid
     var bgcolor= "";
-    if ( array_key_exists("color", thingvalue) ) {
-        var cval = thingvalue["color"];
-        try {
-            if ( cval && (cval.match(/^#[abcdefABCDEF\d]{6}/) !== null || cval.startsWith("rgb")) ) {
-                bgcolor = " style=\"background-color:"+cval+";\"";
-            }
-        } catch (e) {
-            bgcolor = "";
-        }
-    }
+    // if ( array_key_exists("color", thingvalue) ) {
+    //     var cval = thingvalue["color"];
+    //     try {
+    //         if ( cval && (cval.match(/^#[abcdefABCDEF\d]{6}/) !== null || cval.startsWith("rgb")) ) {
+    //             bgcolor = " style=\"background-color:"+cval+";\"";
+    //         }
+    //     } catch (e) {
+    //         bgcolor = "";
+    //     }
+    // }
     
     // wrap thing in generic thing class and specific type for css handling
     // include the new thingid value for direct access to the specific thing in the DB
@@ -4967,7 +5019,7 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     // special handling for weather tiles
     // this allows for feels like and temperature to be side by side
     // and it also handles the inclusion of the icons for status
-    if (thingtype==="weather" && array_key_exists("feelsLike", thingvalue) ) {
+    if (thingtype==="weatherxxx" && array_key_exists("feelsLike", thingvalue) ) {
         if ( !thingvalue["name"] ) {
             thingvalue["name"] = thingname;
         }
@@ -5172,14 +5224,26 @@ function putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, s
                 
                 // replace the place holder value with the linked value
                 try {
+                    linktype = linkdev["devices_devicetype"];
+                    linkid = linkdev["devices_id"];
+                    linkbid = linkdev["devices_deviceid"];
+                    linkhub = linkdev["hubs_id"];
                     var linktileval = JSON.parse(decodeURI2(linkdev["devices_pvalue"]));
+
+                    // handle special audio updates
+                    if ( linktype==="audio" || linktype==="sonos" || linktileval.audioTrackData ) {
+                        linktileval = translateAudio(linktileval);
+                    } else if ( linktype==="music" || linktileval.trackData ) {
+                        linktileval = translateMusic(linktileval);
+                    } else if ( linktype==="weather" ) {
+                        linktileval = translateWeather("Weather", linktileval);
+                    } else {
+                        linktileval = translateObjects(linktileval);
+                    }
+
                 } catch(e) {
                     linktileval = {};
                 }
-                linkid = linkdev["devices_id"];
-                linkbid = linkdev["devices_deviceid"];
-                linktype = linkdev["devices_devicetype"];
-                linkhub = linkdev["hubs_id"];
                 
                 // now look for the real value in this device
                 // use the link value - if subid isn't there look for subid's that form the beginning of our link subid
@@ -5253,9 +5317,11 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
     } else if ( typeof subtype === "string" && subtype.substr(0,1)!==" " ) {
         subtype = " " + subtype;
     }
-    if ( bgcolor && (tkey==="hue" || tkey==="saturation") ) {
-        colorval = bgcolor;
-    }
+
+    // note - disabled this stupid color background thingy
+    // if ( bgcolor && (tkey==="hue" || tkey==="saturation") ) {
+    //     colorval = bgcolor;
+    // }
     if ( tval===0 ) { tval = "0"; }
     else if ( typeof tval === "undefined" ) { tval = ""; }
 
@@ -5612,7 +5678,7 @@ function updSpecials(userid, configoptions, hubindex, devices, clockonly) {
     var digitalClock = makeClock("clockdigital");
     var id = findDevice("clockdigital", "clock", devices);
     if ( id ) {
-        mydb.updateRow("devices", digitalClock, "id = "+id);
+        mydb.updateRow("devices", digitalClock, "userid = " + userid + " AND id = "+id);
     } else {
         mydb.addRow("devices", digitalClock);        
     }
@@ -5620,7 +5686,7 @@ function updSpecials(userid, configoptions, hubindex, devices, clockonly) {
     var analogClock = makeClock("clockanalog");
     id = findDevice("clockanalog", "clock", devices);
     if ( id ) {
-        mydb.updateRow("devices", analogClock, "id = "+id);
+        mydb.updateRow("devices", analogClock, "userid = " + userid + " AND id = "+id);
     } else {
         mydb.addRow("devices", analogClock);        
     }
@@ -5842,7 +5908,7 @@ function getCustomTile(userid, configoptions, custom_val, customtype, bid) {
 // this little gem makes sure items are in the proper order
 function setValOrder(val) {
     const order = {"name": 1, "battery": 2, "color": 3, "switch": 7, "momentary": 7, "presence": 7,
-                   "contact": 8, "door": 8, "motion": 9, "themode": 10, "temperature": 7, 
+                   "contact": 8, "door": 8, "motion": 9, "themode": 10,  
                    "make": 11, "modelName":12, "modelYear": 13, "vehiclecolor": 14, "nickName": 15,
                    "coolingSetpoint": 11, "heatingSetpoint": 12,
                    "thermostatMode": 21, "thermostatFanMode": 22, 
@@ -5855,8 +5921,9 @@ function setValOrder(val) {
                    "_previousTrack": 21, "_pause": 22, "_play": 23, "_stop": 24, "_nextTrack": 25,
                    "_number_0":60, "_number_1":61, "_number_2":62, "_number_3":63, "_number_4":64, 
                    "_number_5":65, "_number_6":66, "_number_7":67, "_number_8":68, "_number_9":69, 
-                   "onlevel": 150, "level": 151, "volume": 152, "colorTemperature": 153,
-                   "allon": 41, "alloff": 42 };
+                   "onlevel": 150, "level": 151, "volume": 152, "colorTemperature": 153, "hue": 141, "saturation": 142,
+                   "allon": 41, "alloff": 42, "count": 149,
+                   "temperature": 7, "feelsLike":8, "weatherIcon":20, "forecastIcon":21 };
 
     function getComp(vala) {
         var comp;
@@ -5865,13 +5932,13 @@ function setValOrder(val) {
         } else if ( vala.startsWith("_number_") ) {
             comp = 60;
         } else if ( vala.startsWith("_") ) {
-            comp = 50;
+            comp = 140;
         } else if ( vala.startsWith("user_") ) {
-            comp = 70;
+            comp = 140;
         } else if ( vala.startsWith("event_") ) {
-            comp = 100;
+            comp = 200;
         } else {
-            comp = 30;
+            comp = 100;
         }
         return comp;
     }
@@ -5905,11 +5972,13 @@ function processHubMessage(userid, hubmsg, newST) {
     // that was also used in the old housepanel.push app
     var subid = hubmsg['change_attribute'];
     var hubmsgid = hubmsg['change_device'].toString();
-    var origname = hubmsg['change_name'] || "";
     if ( newST && hubmsg["change_type"] ) {
         var change_type = hubmsg["change_type"];
     } else {
         change_type = "string";
+    }
+    if ( DEBUG12 ) {
+        console.log( (ddbg()), "processHubMessage - userid: ", userid, " hubmsg: ", hubmsg);
     }
 
     var pvalue;
@@ -5973,16 +6042,17 @@ function processHubMessage(userid, hubmsg, newST) {
 
             // update the DB
             device.pvalue = encodeURI2(JSON.stringify(pvalue));
-            mydb.updateRow("devices", device, "id = "+device.id);
+            mydb.updateRow("devices", device, "userid = " + userid + " AND id = "+device.id);
 
             // handle special audio updates
-            if ( swtype==="audio" || swtype==="sonos"  ) {
+            if ( swtype==="audio" || swtype==="sonos" || pvalue.audioTrackData ) {
                 pvalue = translateAudio(pvalue);
-            } else if ( swtype==="music" ) {
+            } else if ( swtype==="music" || pvalue.trackData ) {
                 pvalue = translateMusic(pvalue);
             } else if ( swtype==="weather" ) {
-                var thisorigname = origname || device.name;
-                pvalue = translateWeather(thisorigname, pvalue);
+                pvalue = translateWeather("Weather", pvalue);
+            } else {
+                pvalue = translateObjects(pvalue);
             }
 
             pushClient(userid, hubmsgid, swtype, subid, pvalue);
@@ -5999,11 +6069,11 @@ function processHubMessage(userid, hubmsg, newST) {
         });
         return devices;
     })
-    .then(devices => {
-        if ( DEBUG12 ) {
-            console.log( (ddbg()), "processHubMessage - hubmsg: ", hubmsg, " devices: ", devices);
-        }
-    })
+    // .then(devices => {
+    //     if ( DEBUG12 ) {
+    //         console.log( (ddbg()), "processHubMessage - hubmsg: ", hubmsg, " devices: ", devices);
+    //     }
+    // })
     .catch(reason => {
         console.log( (ddbg()), "processHubMessage - DB error: ", reason);
     });
@@ -6013,24 +6083,32 @@ function processHubMessage(userid, hubmsg, newST) {
 // used to keep clients in sync with the status of ISY operation
 // because ISY hubs are local, this function must be invoked locally
 // this magic is handled by the hpconnect.js helper app user must run
-function processIsyMessage(userid, isymsg) {
+// function processIsyMessage(userid, isymsg) {
+function processIsyMessage(userid, jsondata) {
     var newval;
     var pvalue;
 
-    xml2js(isymsg, function(err, result) {
-        if ( !err && result.Event ) {
-            var control = result.Event.control;
-            var action = result.Event.action;
-            var node = result.Event.node;
-            var eventInfo = result.Event.eventInfo;
+    // xml2js(isymsg, function(err, result) {
+    //     if ( !err && result.Event ) {
+    //         var control = result.Event.control;
+    //         var action = result.Event.action;
+    //         var node = result.Event.node;
+    //         var eventInfo = result.Event.eventInfo;
+        if ( jsondata ) {
+            var control = jsondata.control;
+            var action = jsondata.action;
+            var node = jsondata.node;
+            var eventInfo = jsondata.eventInfo;
+
             var uom;
-            if ( DEBUG9a ) {
-                console.log( (ddbg()), "ISY event json result: ", UTIL.inspect(result, false, null, false) );
+            if ( DEBUG9 ) {
+                console.log( (ddbg()), "ISY event json result: ", jsonshow(result) );
             }
 
             if ( is_array(node) && node.length && node[0]!=="" &&
                  is_array(control) && control.length && control[0]!=="" &&
-                 action[0] && action[0]["$"] && action[0]["_"] ) {
+                 action[0] && action[0]["$"] && action[0]["_"] ) 
+            {
                 var bid = node[0];
 
                 var conditions = "userid = "+userid+" AND devicetype = 'isy' AND deviceid = '"+bid+"'";
@@ -6100,12 +6178,12 @@ function processIsyMessage(userid, isymsg) {
                     delete pvalue.subid;
                     
                     // update the DB
-                    device.pvalue = encodeURI2(JSON.stringify(pvalue));
-                    mydb.updateRow("devices", device, "id = "+device.id);
-                    
                     if ( DEBUG9 ) {
                         console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " uom: ", uom, " newval: ", newval, " pvalue: ", pvalue);
                     }
+                    device.pvalue = encodeURI2(JSON.stringify(pvalue));
+                    mydb.updateRow("devices", device, "userid = "+userid+" AND devicetype = 'isy' AND id = "+device.id);
+                    
                 }).catch(reason => {
                     console.log("dberror 10 - processIsyMessage - ", reason);
                 });
@@ -6114,11 +6192,7 @@ function processIsyMessage(userid, isymsg) {
             // include test for an init action which is skipped (kudos to @KMan)
             } else if ( is_object(eventInfo[0]) && array_key_exists("var", eventInfo[0]) && action && action[0]==="6" ) {
                 var varobj = eventInfo[0].var[0];
-                if ( DEBUG9 ) {
-                    console.log( (ddbg()), "Action: ", action, " Event info: ", UTIL.inspect(varobj, false, null, false) );
-                }
                 var bid = "vars";
-
                 mydb.getRow("devices", "*", "userid = "+userid+" AND devicetype = 'isy' AND deviceid = '"+bid+"'")
                 .then(results => {
 
@@ -6162,12 +6236,11 @@ function processIsyMessage(userid, isymsg) {
                             delete pvalue.subid;
 
                             // update the DB
-                            device.pvalue = encodeURI2(JSON.stringify(pvalue));
-                            mydb.updateRow("devices", device, "id = "+device.id);
-
                             if ( DEBUG9 ) {
                                 console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " newval: ", newval, " pvalue: ", pvalue);
                             }
+                            device.pvalue = encodeURI2(JSON.stringify(pvalue));
+                            mydb.updateRow("devices", device, "userid = "+userid+" AND devicetype = 'isy' AND id = "+device.id);
 
                         }
                     } catch (e) {
@@ -6181,7 +6254,7 @@ function processIsyMessage(userid, isymsg) {
                         array_key_exists("r",  eventInfo[0]) && array_key_exists("f",  eventInfo[0]) ) {
                 // var idsymbol = parseInt(eventInfo[0]["id"]);
                 // idsymbol = idsymbol.toString();
-                var idsymbol = eventInfo[0]["id"].toString().trim();
+                var idsymbol = eventInfo[0]["id"][0].toString().trim();
                 var len = 4 - idsymbol.length;
                 var bid = "prog_" + "0000".substr(0,len) + idsymbol;
                 var subid = "status";
@@ -6232,12 +6305,12 @@ function processIsyMessage(userid, isymsg) {
                         delete pvalue.subid;
 
                         // update the DB
-                        device.pvalue = encodeURI2(JSON.stringify(pvalue));
-                        mydb.updateRow("devices", device, "id = "+device.id);
-                        
                         if ( DEBUG9 ) {
                             console.log( (ddbg()), "ISY webSocket updated program: ", bid, " pvalue: ", device);
                         }
+                        device.pvalue = encodeURI2(JSON.stringify(pvalue));
+                        mydb.updateRow("devices", device, "userid = "+userid+" AND devicetype = 'isy' AND id = "+device.id);
+                        
                     } catch(e) {
                         console.log( (ddbg()), "warning - program // processIsyMessage: ", e, device);
                         return;
@@ -6246,11 +6319,9 @@ function processIsyMessage(userid, isymsg) {
                     console.log("dberror 12 - processIsyMessage - ", reason);
                 });
 
-            } else if (DEBUG9a) {
-                console.log( (ddbg()), "Unhandled ISY event: ", UTIL.inspect(result.Event, false, null, false) );
             }
         }
-    });
+    // });
 }
 
 function processSonosMessage(userid, hub, req) {
@@ -6342,7 +6413,7 @@ function processSonosMessage(userid, hub, req) {
         });
     }
 
-    if ( DEBUG12 ) {
+    if ( DEBUGsonos ) {
         console.log( (ddbg()),"Sonos event processed. headers: ", req.headers, "\n body: ", req.body,"\n pvalue: ", pvalue, 
         "\n namespace: ", namespace, " deviceid: ", deviceid, " deviceytpe: ", devicetype, " trigger: ", trigger,"\n hub: ", hub);
     }
@@ -6358,7 +6429,7 @@ function processSonosMessage(userid, hub, req) {
             newpvalue[skey] = pvalue[skey];
         }
         var pvalstr = encodeURI2(JSON.stringify(newpvalue));
-        mydb.updateRow("devices", {pvalue: pvalstr}, "id = "+device.id);
+        mydb.updateRow("devices", {pvalue: pvalstr}, "userid = " + userid + " AND id = "+device.id);
         pushClient(device.userid, device.deviceid, device.devicetype, trigger, pvalue);
 
         // push new values to all clients and execute rules
@@ -6515,9 +6586,6 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
     }
 
     function invokeRules(tileid, items, hubs, devices) {
-        // go through all tiles with a new rule type
-        var idx = thetype + "|" + bid;
-        
         // rule structure
         // delay and attr are optional, but must give a delay to give an attr; just set it to 0 or false to skip delay
         // you cannot safely mix the logic of "or" with the logic of "and" but it sometimes works
@@ -6552,6 +6620,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
 
                 // split the test line between commas and semi-colons
                 var testcommands = linkval.split(regsplit);
+                // console.log(">>>> rule: ", testcommands);
 
                 // only proceed if there are at least two parts and the first part starts with "if "
                 if ( testcommands.length > 1 && testcommands[0].trim().startsWith("if") ) {
@@ -6638,6 +6707,10 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                                     }
                                 }
 
+                                if ( DEBUG11 ) {
+                                    console.log( (ddbg()), "    >>>> rulevalue: ", rulevalue, " ruleparts: ", ruleparts, " pvalue: ", pvalue);
+                                }
+
                                 // use this tile's existing value for check if $ symbol given
                                 var jv = rulevalue.substr(0,1);
                                 var kv = rulevalue.indexOf("$");
@@ -6647,6 +6720,9 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                                     if ( array_key_exists(rvindex, pvalue) ) {
                                         rulevalue = pvalue[rvindex];
                                     }
+                                    if ( DEBUG11 ) {
+                                        console.log( (ddbg()), "    >>>> rvindex = ", rvindex, " rulevalue= ", rulevalue, " pvalue: ", pvalue);
+                                    }
 
                                 // use another tile's existing value for check using @tilenum$fieldname syntax
                                 } else if ( jv === "@" && kv !== -1 ) {
@@ -6655,7 +6731,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                                     var rulepvalue = JSON.parse(decodeURI2(devices[rvtile].pvalue));
                                     rulevalue = rulepvalue[rvindex];
                                     if ( DEBUG11 ) {
-                                        console.log( (ddbg()), "rvtile = ", rvtile, " rulevalue= ", rulevalue);
+                                        console.log( (ddbg()), "    >>>> rvtile = ", rvtile, " rulevalue= ", rulevalue);
                                     }
                                 }
 
@@ -6773,15 +6849,18 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                             rulenum++;
                 
                         });
+
+                        if ( isrule ) {
+                            // console.log(">>>> executing rule: ", testcommands);
+                            execRules(userid, rulecaller, deviceid, thetype, 1, testcommands, pvalue, hubs, devices);
+                        }
                     }
-                } else {
-                    isrule = false;
                 }
 
                 // execute the statements after if for the cases that pass the logic test above
-                if ( isrule ) {
-                    execRules(userid, rulecaller, deviceid, thetype, 1, testcommands, pvalue, hubs, devices);
-                }
+                // if ( isrule ) {
+                //     execRules(userid, rulecaller, deviceid, thetype, 1, testcommands, pvalue, hubs, devices);
+                // }
 
             }
 
@@ -6827,16 +6906,6 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                     }
                 }
                 var rswattr = len > 5 ? autoexec[5].trim() : "";
-                // var ridx = false;
-
-                // check for a stop all other timer rules command
-                // this is done by entering 0=__delay as a rule segment
-                // if ( rsubid==="__delay" ) {
-                //     resetRuleTimers();
-                // } else {
-                //     // find the tile index and proceed with activating the rule
-                //     ridx = array_search(rtileid, GLB.options["index"]);
-                // }
                 if ( DEBUG11 ) {
                     console.log( (ddbg()), "RULE debug: exec step #", i, " rtileid: ", rtileid, " rsubid: ", rsubid, " rvalue: ", rvalue, " rswattr: ", rswattr, " delay: ", delay);
                 }
@@ -6855,11 +6924,16 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                     var trigtype = rvalue.substr(0,1);
                     if ( trigtype==="$" || trigtype==="@" ) {
                         var trigsubid = rvalue.substr(1);
+
                         if ( trigtype==="$" && array_key_exists(trigsubid, pvalue) ) {
                             rvalue = pvalue[trigsubid];
                         } else if ( trigtype==="@" && array_key_exists(trigsubid, devpvalue) ) {
                             rvalue = devpvalue[trigsubid];
                         }
+                    }
+                    rvalue = rvalue.toString();
+                    if ( DEBUG11 ) {
+                        console.log(">>>> trigtype: ", trigtype, " trigsubid: ", trigsubid, " rvalue: ", rvalue, " pvalue: ", pvalue, " devpvalue: ", devpvalue)
                     }
 
                     // fix up ISY hubs and handle toggle
@@ -6900,11 +6974,11 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                         }
 
                     // if destination subid isn't found make a user TEXT field (disabled)
-                    } else if ( !array_key_exists(rsubid, devpvalue) ) {
-                        // addCustom(userid, deviceid, rswid, rswtype, "TEXT", rvalue, rsubid);
-                        if ( DEBUG11 ) {
-                            console.log( (ddbg()), "custom field: ", rsubid, " not found in tile: ", devpvalue);
-                        }
+                    // } else if ( !array_key_exists(rsubid, devpvalue) ) {
+                    //     // addCustom(userid, deviceid, rswid, rswtype, "TEXT", rvalue, rsubid);
+                    //     if ( DEBUG11 ) {
+                    //         console.log( (ddbg()), "custom field: ", rsubid, " not found in tile: ", devpvalue);
+                    //     }
                         // restart all clients to show the newly created field
                         // this only happens the first time the rule is triggered
                         // pushClient(userid, "reload", "main", "/");
@@ -6921,32 +6995,32 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                             rswattr= "onlevel";
                         } else if ( rsubid==="volume" ) {
                             rswattr= "volume";
-                        } else if ( rsubid==="switch" || swtype==="isy" || (swval!=="on" && swval!=="off") ) {
+                        } else if ( rsubid==="switch" || rswtype==="isy" || (swval!=="on" && swval!=="off") ) {
                             rswattr="";
                         } else if ( !rswattr && rswtype!=="isy" ) {
                             var swval = rvalue==="on" ? "off" : "on";
-                            rswattr= swtype + " p_" + rtileid + " " + swval;
+                            rswattr= rswtype + " p_" + rtileid + " " + swval;
                         }
-                        var thandle;
 
                         // make the hub call now or delayed
                         // if delayed we store the handle in our rules array so that
                         // should the same rule come along again we cancel this one first
                         // this way delay light on and off will stay on if trigger keeps happening
+                        if ( DEBUG11 ) {
+                            console.log("final rule step: id=",  rswid, "type=", rswtype, "value=", rvalue, "attr=", rswattr, "subid=", rsubid, " hubid: ", hub.id, " deviceid: ", deviceid);
+                        }
+
                         if ( delay && delay > 0 ) {
                             thandle = setTimeout( function() {
                                 try {
-                                    callHub(userid, hub.id, rswid, deviceid, rswtype, rvalue, rswattr, rsubid, rhint, true);
+                                    callHub(userid, hub.id, rswid, 0, rswtype, rvalue, rswattr, rsubid, rhint, true);
                                 } catch (e) {
                                     console.log( (ddbg()), "error calling hub from rule for userid: ", userid, " hub.id, rswid,rswtype,rvalue,rsattr,rsubid,rhint: ", hub.id, rswid, rswtype, rvalue, rswattr, rsubid, rhint, " error: ", e);
                                 }
                             }, delay);
                         } else {
                             try {
-                                if ( DEBUG11 ) {
-                                    console.log("final rule step: id=",  rswid, "type=", rswtype, "value=", rvalue, "attr=", rswattr, "subid=", rsubid);
-                                }
-                                callHub(userid, hub.id, rswid, deviceid, rswtype, rvalue, rswattr, rsubid, rhint, true);
+                                callHub(userid, hub.id, rswid, 0, rswtype, rvalue, rswattr, rsubid, rhint, true);
                             } catch (e) {
                                 console.log( (ddbg()), "error calling hub from rule for userid: ", userid, " hub.id, rswid,rswtype,rvalue,rsattr,rsubid,rhint: ", hub.id, rswid, rswtype, rvalue, rswattr, rsubid, rhint, " error: ", e);
                             }
@@ -7043,8 +7117,8 @@ function queryNewST(hub, deviceid, swtype) {
                                         pvalue[subid] = attributes[attr]["value"];
                                         
                                         if ( swtype==="bulb" && (subid==="hue" || subid==="saturation" || subid==="level" ) ) {
-                                            var h = pvalue.hue || 0;
-                                            var s = pvalue.saturation || 0;
+                                            var h = pvalue.hue || 1;
+                                            var s = pvalue.saturation || 1;
                                             var l = pvalue.level || 50;
                                             pvalue.color = utils.hsv2rgb(h, s, l);
                                         }
@@ -7079,8 +7153,7 @@ function queryNewST(hub, deviceid, swtype) {
 
 }
 
-// TODO - activate Mode calls
-function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid, hint, inrule) {
+function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, hint, inrule) {
 
     // first get the hub from the DB
     var result = mydb.getRow("hubs","*","userid="+userid+" AND id = " + hubindex)
@@ -7129,10 +7202,8 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
             });
 
         // make the call to the new ST API to control the device clicked on
-        // TODO - implement logic that mirrors Groovy app behavior here
         } else if ( hub.hubtype==="NewSmartThings" ) {
             var header = {"Authorization": "Bearer " + access_token};
-            var result = "success";
             var presult;
             var cap = subid;
             try {
@@ -7149,267 +7220,256 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
 
             // first handle requests to call any function
             var nvpreq;
-            
-            // handle commands for switches and doors
-            // the majority of all calls will be of this type
-            if ((subid==="switch" && (swval==="on" || swval==="off")) || 
-                (subid==="door" && (swval==="open" || swval==="close")) ||
-                (subid==="lock" && (swval==="unlock" || swval==="lock")) ) {
-                nvpreq = {"commands": [ { component:"main", capability: cap, command: swval, arguments: [] } ] };
-                if ( DEBUG7 ) {
-                    console.log( (ddbg()), "Calling New ST callHub with: ", UTIL.inspect(nvpreq, false, null, false));
+            // var joinstr = mydb.getJoinStr("things", "tileid", "devices", "id");
+            var result = mydb.getRow("devices","*","userid = "+userid+" AND deviceid = '"+swid+"'")
+            .then(row => {
+                
+                if ( !row ) {
+                    console.log( (ddbg()),"error - DB read error in callHub for NewSmartThings hub action, user: ", userid," deviceid: ", swid);
+                    return "error - DB read errror";
                 }
-            
-            } else if ( swtype==="location" && subid.substr(0,1)==="_" ) {
+                
+                // retrieve the current pvalue of the item clicked on
+                var devicepval = row["pvalue"];
+                presult = JSON.parse(decodeURI2(devicepval));
+                var curval = presult[subid];
+        
+                // handle commands for switches and doors
+                // the majority of all calls will be of this type
+                if ((subid==="switch" && (swval==="on" || swval==="off")) || 
+                    (subid==="door" && (swval==="open" || swval==="close")) ||
+                    (subid==="lock" && (swval==="unlock" || swval==="lock")) ) {
+                    nvpreq = {"commands": [ { component:"main", capability: cap, command: swval, arguments: [] } ] };
+                    var astat = swval;
+                    if ( astat==="close" ) { astat = "closed"; }
+                    else if ( astat==="lock" ) { astat = "locked"; }
+                    else if ( astat==="unlock" ) { astat = "unlocked"; }
+                    presult[subid] = astat;
+                
+                } else if ( swtype==="location" && subid.substr(0,1)==="_" ) {
 
-                var joinstr = mydb.getJoinStr("things", "tileid", "devices", "id");
-                mydb.getRow("things","*","things.userid = "+userid+" AND things.id = "+ deviceid, joinstr)
-                .then(row => {
+                    var modename = subid.substr(1);
+                    var modeId = presult[modename];
+                    var host = endpt + "/v1/locations/" + swid + "/modes/current";
+                    var modeval = {"modeId": modeId};
+                    _curl(host, header, modeval, "PUT")
+                    .then( () => {
+                        // set the mode and handle resposne
+                        presult.themode = modename;
+                        getHubResponse(presult);
+                    });
+                    return "success";
 
-                    // get the mode name and retrieve the ID from the location device for the requested mode
-                    if ( row ) {
-                        var devicepval = row["devices_pvalue"];
-                        var pvalue = JSON.parse(decodeURI2(devicepval));
-                        var modename = subid.substr(1);
-                        var modeId = pvalue[modename];
+                // support toggle commands
+                } else if ( subid==="switch" && swval==="toggle" ) {
 
-                        var host = endpt + "/v1/locations/" + swid + "/modes/current";
-                        nvpreq = {"modeId": modeId};
-                        // console.log(">>>> host: ", host, " deviceid: ", deviceid, " swid: ", swid, " body: ", nvpreq, " subid: ", subid, " modename: ", modename, " pvalue: ", pvalue);
-                        _curl(host, header, nvpreq, "PUT")
-                        .then( result => {
-
-                            // set the mode and handle resposne
-                            pvalue.themode = modename;
-                            getHubResponse(pvalue);
-                        });
-                    }
-                });
-
-            // support toggle commands
-            } else if ( subid==="switch" && swval==="toggle" ) {
-
-                nvpreq = null;
-                var joinstr = mydb.getJoinStr("things", "tileid", "devices", "id");
-                mydb.getRow("things","*","things.userid = "+userid+" AND things.id = "+deviceid, joinstr)
-                .then(row => {
-                    var devicepval = row["devices_pvalue"];
-                    var pvalue = JSON.parse(decodeURI2(devicepval));
-                    var curval = pvalue[subid];
                     swval = curval==="off" ? "on" : "off";
-                    var nvpreq = {"commands": [ { component:"main", capability: "switch", command: swval, arguments: [] } ] };
+                    nvpreq = {"commands": [ { component:"main", capability: "switch", command: swval, arguments: [] } ] };
+                    presult[subid] = swval;
+            
+                // handle slider light levels
+                } else if ( subid==="level" ) {
+                    swval = valint;
+                    nvpreq = {"commands": [ { component:"main", capability: "switchLevel", command: "setLevel", arguments: [swval] } ] };
+                    presult[subid] = swval;
+                
+                // handle slider volume levels
+                } else if ( subid==="volume" ) {
+                    swval = valint;
+                    nvpreq = {"commands": [ { component:"main", capability: "audioVolume", command: "setVolume", arguments: [swval] } ] };
+                    presult[subid] = swval;
 
-                    var host = endpt + "/devices/" + swid + "/commands";
-                    if ( DEBUG7 ) {
-                        console.log( (ddbg()), "Calling New ST callHub with: ", UTIL.inspect(nvpreq, false, null, false));
+                } else if ( subid==="colorTemperature" ) {
+                    swval = valint;
+                    nvpreq = {"commands": [ { component:"main", capability: "colorTemperature", command: "setColorTemperature", arguments: [swval] } ] };
+                    presult[subid] = swval;
+            
+                // handle midway setting for shades - also will work for dimmer light levels
+                } else if ( subid==="_presetPosition" ) {
+                    nvpreq = {"commands": [ { component:"main", capability: "windowShade", command: "presetPosition", arguments: [] } ] };
+            
+                // process color swaps
+                } else if ( subid==="color" && swval.startsWith("hsl(") && swval.length==16 ) {
+                    var hue = swval.substring(4,7);
+                    hue= parseInt(hue);
+                    var saturation = swval.substring(8,11);
+                    saturation = parseInt(saturation);
+                    var v = swval.substring(12,15);
+                    v = parseInt(v);
+                    // var cargs = {hex: swattr, switch: "on"};
+                    var cargs = {hue: hue, saturation: saturation, level: v, switch: "on"};
+                    nvpreq = {"commands": [ { component:"main", capability: "colorControl", command: "setColor", arguments: [cargs] } ] };
+                    var hex = utils.hsv2rgb(hue, saturation, v);
+                    presult.color = swattr;
+                    presult.hue = hue;
+                    presult.saturation = saturation;
+                    presult.level = v;
+
+                // process the thermostat commands
+                } else if ( subid==="coolingSetpoint-up" ) {
+                    nvpreq = getUpDownInfo("thermostatCoolingSetpoint", "setCoolingSetpoint", 1);
+                    presult.coolingSetpoint = swval;
+
+                } else if ( subid==="heatingSetpoint-up" ) {
+                    nvpreq = getUpDownInfo("thermostatHeatingSetpoint", "setHeatingSetpoint", 1);
+                    presult.heatingSetpoint = swval;
+
+                } else if ( subid==="coolingSetpoint-dn" ) {
+                    nvpreq = getUpDownInfo("thermostatCoolingSetpoint", "setCoolingSetpoint", -1);
+                    presult.coolingSetpoint = swval;
+
+                } else if ( subid==="heatingSetpoint-dn" ) {
+                    nvpreq = getUpDownInfo("thermostatHeatingSetpoint", "setHeatingSetpoint", -1);
+                    presult.heatingSetpoint = swval;
+
+                } else if ( subid==="_volumeUp" || subid==="_groupVolumeUp" ) {
+                    nvpreq = getUpDownInfo("audioVolume", "setVolume", 5);
+                    presult.volume = swval;
+
+                } else if ( subid==="_volumeDown" || subid==="_groupVolumeDown" ) {
+                    nvpreq = getUpDownInfo("audioVolume", "setVolume", -5);
+                    presult.volume = swval;
+
+                } else if ( subid==="hue-up" ) {
+                    nvpreq = getUpDownInfo("hue", "setHue", 5);
+                    presult.hue = swval;
+
+                } else if ( subid==="hue-dn" ) {
+                    nvpreq = getUpDownInfo("hue", "setHue", -5);
+                    presult.hue = swval;
+
+                } else if ( subid==="saturation-up" ) {
+                    nvpreq = getUpDownInfo("saturation", "setSaturation", 5);
+                    presult.saturation = swval;
+
+                } else if ( subid==="saturation-dn" ) {
+                    nvpreq = getUpDownInfo("saturation", "setSaturation", -5);
+                    presult.saturation = swval;
+
+                } else if ( subid==="thermostatMode" ) {
+                    const themodes = ["heat","cool","auto","off"];
+                    nvpreq = getFromList("thermostatMode", "setThermostatMode", themodes);
+                    
+                } else if ( subid==="thermostatFanMode" ) {
+                    const themodes = ["auto","on","followschedule","circulate"];
+                    nvpreq = getFromList("thermostatFanMode", "setThermostatFanMode", themodes);
+
+                // handle API call options for legacy HP the used attr for value
+                } else if ( (swval==="cool" || swval==="coolingSetpoint") && !isNAN(parseInt(swattr)) ) {
+                    swval = parseInt(swattr);
+                    nvpreq = {"commands": [ { component:"main", capability: "coolingSetpoint", command: "setCoolingSetpoint", arguments: [swval] } ] };
+                    presult.coolingSetpoint = swval;
+
+                } else if ( (swval==="heat" || swval==="heatingSetpoint") && !isNAN(parseInt(swattr)) ) {
+                    swval = parseInt(swattr);
+                    nvpreq = {"commands": [ { component:"main", capability: "heatingSetpoint", command: "setHeatingSetpoint", arguments: [swval] } ] };
+                    presult.heatingSetpoint = swval;
+
+                // parse the music commands
+                // reverse of translateAudio
+                // audiomap = {"title": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
+                // "albumArtUrl": "trackImage", "mediaSource": "mediaSource"};
+                } else if ( subid==="trackDescription" || subid==="currentArtis" || subid==="currentAlbum" ||
+                            subid==="trackImage" || subid==="mediaSource" ) {
+                    return queryNewST(hub, swid, swtype).then(presult => {
+                        // console.log( (ddbg()),"Sonos query - hub: ", hub, " swid: ", swid, " swtype: ", swtype, " presult: ", jsonshow(presult));
+                        if ( presult && typeof presult === "object" ) {
+                            getHubResponse(presult);
+                        }
+                        return presult;
+                    });
+
+                } else if ( subid==="_mute" || subid==="_unmute" ) {
+                    swval = subid.substr(1);
+                    nvpreq = {"commands": [ { component:"main", capability: "audioMute", command: swval, arguments: [] } ] };
+
+                } else if ( subid==="_nextTrack" || subid==="_previousTrack" ) {
+                    swval = subid.substr(1);
+                    nvpreq = {"commands": [ { component:"main", capability: "mediaTrackControl", command: swval, arguments: [] } ] };
+
+                } else if ( subid==="_pause" || subid==="_play" || subid==="_stop" ) {
+                    swval = subid.substr(1);
+                    nvpreq = {"commands": [ { component:"main", capability: "mediaPlayback", command: swval, arguments: [] } ] };
+
+                } else if ( subid==="mute" || swval==="mute" ) {
+                    swval = swval === "mute" ? "unmute" : "mute";
+                    nvpreq = {"commands": [ { component:"main", capability: "audioMute", command: swval, arguments: [] } ] };
+
+                } else if ( subid.startsWith("supportedTrackControlCommands") ) {
+                    nvpreq = {"commands": [ { component:"main", capability: "mediaTrackControl", command: swval, arguments: [] } ] };
+
+                } else if ( subid.startsWith("supportedPlaybackCommands") ) {
+                    nvpreq = {"commands": [ { component:"main", capability: "mediaPlayback", command: swval, arguments: [] } ] };
+
+                // handle refresh command that updates the tile
+                } else if ( subid === "_refresh" ) {
+                    return queryNewST(hub, swid, swtype).then(pquery => {
+                        if ( pquery && typeof pquery === "object" ) {
+                            getHubResponse(pquery);
+                        }
+                        if ( DEBUG20 ) {
+                            console.log((ddbg()), "Refresh tile: ", swid," of type: " , swtype, " result: ", pquery);
+                        }
+                        return pquery;
+                    });
+
+                // commands based on "supported" subid settings
+                // works for WindowShade for example
+                } else if ( subid.startsWith("supported") && (subid.indexOf("Commands")!== -1) ) {
+                   if ( cap === subid ) {
+                        ipos = subid.indexOf("Commands");
+                        cap = subid.substr(9,1).toLowerCase() + subid.substring(10,ipos);
                     }
-    
-                    // curl_call(host, header, nvpreq, false, "POST", getHubResponse);
-                    _curl(host, header, nvpreq, "POST", function(err, res, body) {
+                    nvpreq = {"commands": [ { component:"main", capability: cap, command: swval, arguments: [] } ] };
 
-                        // if we get an unauthorized message error, refresh the token and try again
+                // direct commands processed here - setting presult to false skips the results push below
+                } else if ( subid.startsWith("_") ) {
+                    var thecmd = subid.substr(1);
+                    if ( swtype === "audio" ) { cap = "mediaPlayback"; }
+                    presult = false;
+                    nvpreq = {"commands": [ { component:"main", capability: cap, command: thecmd, arguments: [] } ] };
+
+                // we have an bad command so record in log
+                } else {
+                    nvpreq = null;
+                }
+
+
+                if ( nvpreq ) {
+                    var host = endpt + "/devices/" + swid + "/commands";
+                    if ( DEBUG20 ) {
+                        console.log( (ddbg()), "Calling New ST callHub with: ", jsonshow(nvpreq) );
+                    }
+
+                    _curl(host, header, nvpreq, "POST", function(err, body) {
+                        if ( DEBUG20 ) {
+                            console.log( (ddbg()), "New ST callHub result: ", err, body);
+                        }
+
+                        // if we get an unauthorized message error, refresh the token and try again later
                         if ( err === 401 && inrule!=="refresh" ) {
                             console.log((ddbg()), "Obtaining refresh token for user: ", userid);
-                            refreshSTToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, false, function() {
-                                callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid, hint, "refresh");
+                            refreshSTToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, false, function () {
+                                callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, hint, "refresh");
                             });
                             return;
                         }
 
                         // push results immediately to give user a responsive feel
-                        // emulate the callback to getHubResponse done for other hubs
-                        if ( (!err || err===200) ) {
-                            pvalue = {};
-                            pvalue[subid] = swval;
-                            getHubResponse(pvalue);
-                        } else {
-                            console.log((ddbg()), "error - hub not authorized and refresh token failed");
+                        if ( presult && typeof presult === "object" ) {
+                            presult[subid] = swval;
+                            getHubResponse(presult);
                         }
                     });
-                });
-        
-            // handle button pushes
-            // } else if ( swtype==="button" && subid==="_pushed") {
-            //     nvpreq = {"commands": [ { component:"main", capability: "button", command: "pushed", arguments: [1] } ] };
-            //     presult = {button: "pushed", button1_button: "pushed"};
-    
-            // handle slider light levels
-            } else if ( subid==="level" ) {
-                swval = valint;
-                nvpreq = {"commands": [ { component:"main", capability: "switchLevel", command: "setLevel", arguments: [swval] } ] };
-                presult = false;    // {level: swval};
-            
-            // handle slider volume levels
-            } else if ( subid==="volume" ) {
-                swval = valint;
-                nvpreq = {"commands": [ { component:"main", capability: "audioVolume", command: "setVolume", arguments: [swval] } ] };
-                presult = {volume: swval};
-        
-            // handle midway setting for shades - also will work for dimmer light levels
-            } else if ( subid==="_presetPosition" ) {
-                nvpreq = {"commands": [ { component:"main", capability: "windowShade", command: "presetPosition", arguments: [] } ] };
-        
-            // process color swaps
-            } else if ( subid==="color" && swval.startsWith("hsl(") && swval.length==16 ) {
-                var hue = swval.substring(4,7);
-                hue= parseInt(hue);
-                var saturation = swval.substring(8,11);
-                saturation = parseInt(saturation);
-                var v = swval.substring(12,15);
-                v = parseInt(v);
-                swval = swattr;
-                var cargs = {level: v, hex: swattr, switch: "on"};
-                nvpreq = {"commands": [ { component:"main", capability: "colorControl", command: "setColor", arguments: [cargs] } ] };
-                // var hex = utils.hsv2rgb(hue, saturation, v);
-                // presult = {hue: hue, saturation: saturation, level: v, hex: swval, switch: "on"};
-
-            // process the thermostat commands
-            } else if ( subid==="coolingSetpoint-up" ) {
-                nvpreq = getUpDownInfo("thermostatCoolingSetpoint", "setCoolingSetpoint", 1);
-                presult = {coolingSetpoint: swval};
-
-            } else if ( subid==="heatingSetpoint-up" ) {
-                nvpreq = getUpDownInfo("thermostatHeatingSetpoint", "setHeatingSetpoint", 1);
-                presult = {heatingSetpoint: swval};
-
-            } else if ( subid==="coolingSetpoint-dn" ) {
-                nvpreq = getUpDownInfo("thermostatCoolingSetpoint", "setCoolingSetpoint", -1);
-                presult = {coolingSetpoint: swval};
-
-            } else if ( subid==="heatingSetpoint-dn" ) {
-                nvpreq = getUpDownInfo("thermostatHeatingSetpoint", "setHeatingSetpoint", -1);
-                presult = {heatingSetpoint: swval};
-
-            } else if ( subid==="_volumeUp" || subid==="_groupVolumeUp" ) {
-                nvpreq = getUpDownInfo("audioVolume", "setVolume", 5);
-                presult = {volume: swval};
-
-            } else if ( subid==="_volumeDown" || subid==="_groupVolumeDown" ) {
-                nvpreq = getUpDownInfo("audioVolume", "setVolume", -5);
-                presult = {volume: swval};
-
-            } else if ( subid==="thermostatMode" ) {
-                const themodes = ["heat","cool","auto","off"];
-                nvpreq = getFromList("thermostatMode", "setThermostatMode", themodes);
-                
-            } else if ( subid==="thermostatFanMode" ) {
-                const themodes = ["auto","on","followschedule","circulate"];
-                nvpreq = getFromList("thermostatFanMode", "setThermostatFanMode", themodes);
-
-            // handle API call options for legacy HP the used attr for value
-            } else if ( (swval==="cool" || swval==="coolingSetpoint") && !isNAN(parseInt(swattr)) ) {
-                swval = parseInt(swattr);
-                nvpreq = {"commands": [ { component:"main", capability: "coolingSetpoint", command: "setCoolingSetpoint", arguments: [swval] } ] };
-                presult = {coolingSetpoint: swval};
-
-            } else if ( (swval==="heat" || swval==="heatingSetpoint") && !isNAN(parseInt(swattr)) ) {
-                swval = parseInt(swattr);
-                nvpreq = {"commands": [ { component:"main", capability: "heatingSetpoint", command: "setHeatingSetpoint", arguments: [swval] } ] };
-                presult = {heatingSetpoint: swval};
-
-            // parse the music commands
-            // reverse of translateAudio
-            // audiomap = {"title": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
-            // "albumArtUrl": "trackImage", "mediaSource": "mediaSource"};
-            } else if ( subid==="trackDescription" || subid==="currentArtis" || subid==="currentAlbum" ||
-                        subid==="trackImage" || subid==="mediaSource" ) {
-                return queryNewST(hub, swid, swtype).then(presult => {
-                    // console.log( (ddbg()),"Sonos query - hub: ", hub, " swid: ", swid, " swtype: ", swtype, " presult: ", jsonshow(presult));
-                    if ( presult && typeof presult === "object" ) {
-                        getHubResponse(presult);
-                    }
-                    return presult;
-                });
-
-            } else if ( subid==="_mute" || subid==="_unmute" ) {
-                swval = subid.substr(1);
-                nvpreq = {"commands": [ { component:"main", capability: "audioMute", command: swval, arguments: [] } ] };
-
-            } else if ( subid==="_nextTrack" || subid==="_previousTrack" ) {
-                swval = subid.substr(1);
-                nvpreq = {"commands": [ { component:"main", capability: "mediaTrackControl", command: swval, arguments: [] } ] };
-
-            } else if ( subid==="_pause" || subid==="_play" || subid==="_stop" ) {
-                swval = subid.substr(1);
-                nvpreq = {"commands": [ { component:"main", capability: "mediaPlayback", command: swval, arguments: [] } ] };
-
-            } else if ( subid==="mute" || swval==="mute" ) {
-                swval = swval === "mute" ? "unmute" : "mute";
-                nvpreq = {"commands": [ { component:"main", capability: "audioMute", command: swval, arguments: [] } ] };
-
-            } else if ( subid.startsWith("supportedTrackControlCommands") ) {
-                nvpreq = {"commands": [ { component:"main", capability: "mediaTrackControl", command: swval, arguments: [] } ] };
-
-            } else if ( subid.startsWith("supportedPlaybackCommands") ) {
-                nvpreq = {"commands": [ { component:"main", capability: "mediaPlayback", command: swval, arguments: [] } ] };
-
-            // handle refresh command that updates the tile
-            } else if ( subid === "_refresh" ) {
-                nvpreq = null;
-                return queryNewST(hub, swid, swtype).then(presult => {
-                    if ( presult && typeof presult === "object" ) {
-                        console.log(">>>> refresh presult: ", jsonshow(presult));
-                        getHubResponse(presult);
-                    }
-                    if ( DEBUG20 ) {
-                        console.log((ddbg()), "Refresh tile: ", swid," of type: " , swtype, " result: ", presult);
-                    }
-                    return presult;
-                });
-
-            // direct commands processed here - setting presult to false skips the results push below
-            } else if ( subid.startsWith("_") ) {
-                var thecmd = subid.substr(1);
-                if ( swtype === "audio" ) { cap = "mediaPlayback"; }
-                presult = false;
-                nvpreq = {"commands": [ { component:"main", capability: cap, command: thecmd, arguments: [] } ] };
-
-            // default is we try to call the command - this usually will return nothing or an error
-            } else {
-                if ( cap === "switchlevel" ) { cap = "switch"; }
-                if ( swtype === "audio" ) { cap = "mediaPlayback"; }
-                // console.log( (ddbg()), "Default callHub - cap: ", cap, " command: ", swval);
-                nvpreq = {"commands": [ { component:"main", capability: cap, command: swval, arguments: [] } ] };
-                presult = {};
-                presult[subid] = swval;
-            }
-
-            if ( nvpreq ) {
-                var host = endpt + "/devices/" + swid + "/commands";
-                if ( DEBUG20 ) {
-                    console.log( (ddbg()), "Calling New ST callHub with: ", UTIL.inspect(nvpreq, false, null, false));
+                    result = "success";
+                } else {
+                    presult[subid] = swval;
+                    getHubResponse(presult);
+                    result = "success";
+                    console.log( (ddbg()),"Unrecognized command for user: ", userid, " hub: ", hubindex, " deviceid: ", swid, " subid: ", subid, " type: ", swtype, " value: ", swval, " attr: ", swattr, " inrule: ", inrule);
                 }
-
-                // curl_call(host, header, nvpreq, false, "POST", getHubResponse);
-                _curl(host, header, nvpreq, "POST", function(err, res, body) {
-                    if ( DEBUG20 ) {
-                        console.log( (ddbg()), "New ST callHub result: ", err, body);
-                    }
-
-                    // if we get an unauthorized message error, refresh the token and try again later
-                    if ( err === 401 && inrule!=="refresh" ) {
-                        console.log((ddbg()), "Obtaining refresh token for user: ", userid);
-                        refreshSTToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, false, function () {
-                            callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid, hint, "refresh");
-                        });
-                        return;
-                    }
-
-                    // push results immediately to give user a responsive feel
-                    // emulate the callback to getHubResponse done for other hubs
-                    if ( (!err || err===200) && presult!==false ) {
-                        if ( !presult ) {
-                            presult = {};
-                            presult[subid] = swval;
-                        }
-                        getHubResponse(presult);
-                    } else {
-                        console.log((ddbg()), "error - hub not authorized and refresh token failed. swtype: ", swtype, " subid: ", subid);
-                    }
-                });
-            } else {
-                result = "error - unknown hub call for new ST hub: " + hub.hubname + " id: " + hub.hubid;
-            }
+                return result;
+            });
 
         } else if ( hub.hubtype==="Sonos" ) {
             var header = {
@@ -7592,16 +7652,15 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                     hookname = hookname.replace(/ /g,"");
                     var hookon = hookname + "_DON";
                     hookname+= "_level";
-
-                    // set the level
-                    var hookurl = "https://my.isy.io/api/ifttt/" + hookname + "/key/" + hub.hubrefresh;
                     var header = {"Content-Type": "text/plain"};
-                    _curl(hookurl, header, irange, "POST");
-                    
+
                     // turn light on
                     var hookurlon = "https://my.isy.io/api/ifttt/" + hookon + "/key/" + hub.hubrefresh;
                     _curl(hookurlon, header, "", "POST");
-                    
+
+                    // set the level
+                    var hookurl = "https://my.isy.io/api/ifttt/" + hookname + "/key/" + hub.hubrefresh;
+                    _curl(hookurl, header, irange, "POST");
                     if ( DEBUG20 ) {
                         console.log( (ddbg()), "hookurl: ", hookurl, "subid: ", subid, " irange: ", irange, " swid: ", swid);
                     }
@@ -7625,20 +7684,30 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                         console.log( (ddbg()), "hookurl: ", hookurl, "subid: ", subid, " swid: ", swid);
                     }
                     break;
+
+                case "run":
+                case "runThen":
+                case "runElse":
+                case "stop":
+                    var hookname = swid+"_"+subid;
+                    var hookurl = "https://my.isy.io/api/ifttt/" + hookname + "/key/" + hub.hubrefresh;
+                    var header = {"Content-Type": "text/plain"};
+                    _curl(hookurl, header, "", "POST");
+                    if ( DEBUG20 ) {
+                        console.log( (ddbg()), "hookurl: ", hookurl, "subid: ", subid, " swid: ", swid);
+                    }
+                    break;
        
                 default:
 
-                    // handle arrows for variable changes
+                    // for int variables there is no webhook method so we just save in DB
                     if ( subid.startsWith("Int_") ) {
                         // get the real subid that the arrows are pointing toward
+                        var realsubid = subid;
                         var intvar = parseInt(swval);
                         if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
-                            var varnum = subid.substr(4, subid.length-7);
-                            var realsubid = subid.substr(0, subid.length-3);
+                            realsubid = subid.substr(0, subid.length-3);
                             intvar = subid.endsWith("-up") ? intvar + 1 : intvar - 1;
-                        } else {
-                            varnum = subid.substr(4);
-                            realsubid = subid;
                         }
 
                         // get the Variable device
@@ -7651,12 +7720,50 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                             row.pvalue = newpvalstr;
 
                             // update the row;
-                            mydb.updateRow("devices", row, "id = "+row.id);
+                            mydb.updateRow("devices", row, "userid = " + userid + " AND id = "+row.id);
 
-                            // show result on screen
+                            // show result on screen and handle rules for Ints
                             pushClient(userid, swid, swtype, realsubid, pvalue);
-
+                            if ( !inrule && thingid ) {
+                                pvalue.subid = realsubid;
+                                processRules(userid, thingid, swid, swtype, realsubid, pvalue, "callHub");
+                                delete pvalue.subid;
+                            }
+        
                         });
+
+                    } else if ( subid.startsWith("State_") ) {
+
+                        var realsubid = subid;
+                        if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
+                            var floatvar = parseFloat(swval);
+                            realsubid = subid.substr(0, subid.length-3);
+                            swval = subid.endsWith("-up") ? floatvar + 1.0 : floatvar - 1.0;
+                        } else {
+                            swval = parseFloat(swval);
+                        }
+
+                        // for state variables we can use the IFTTT webhook method
+                        var hookname = realsubid;
+                        var header = {"Content-Type": "text/plain"};
+                        var hookurl = "https://my.isy.io/api/ifttt/" + hookname + "/key/" + hub.hubrefresh;
+                        
+                        // var floatstr = swval.toString();
+                        var floatstr = Math.floor(swval + 0.5).toString();
+
+                        _curl(hookurl, header, floatstr, "POST")
+                        .then( () => {
+                            var pvalue = {};
+                            pvalue[realsubid] = floatstr;
+                            pushClient(userid, swid, swtype, realsubid, pvalue);
+                        })
+                        .catch( err => {
+                            console.log( ">>>> curl error: ", err);
+                        });
+                        if ( DEBUG20 ) {
+                            console.log( (ddbg()), "hookurl: ", hookurl, "subid: ", realsubid, " swval: ", floatstr, " swid: ", swid);
+                        }
+
                     }
                 }
 
@@ -7721,7 +7828,7 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
             if ( err && inrule!=="refresh" ) {
                 console.log((ddbg()), "Obtaining Sonos refresh token for user: ", userid, " err: ", err);
                 refreshSonosToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, false, function () {
-                    callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid, hint, "refresh");
+                    callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, hint, "refresh");
                 });
                 return;
             }
@@ -7787,9 +7894,10 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
                 throw "Invalid object in getHubResponse.";
             }
         } catch (e) {
-            console.log( (ddbg()), "failed converting hub call return to JSON object. body: ", body, " error: ", e);
+            console.error( (ddbg()), "failed converting hub call return to JSON object. body: ", body, " error: ", e);
             return;
         }
+        if ( !pvalue ) { return; }
 
         // pluck out just vehicle data and good status for info call
         if ( swtype==="ford" && subid==="_info" && pvalue.vehicle && pvalue.status && pvalue.status==="SUCCESS" ) {
@@ -7849,51 +7957,61 @@ function callHub(userid, hubindex, swid, deviceid, swtype, swval, swattr, subid,
             }
         }
 
+        if ( swtype==="audio" || swtype==="sonos" || pvalue.audioTrackData  ) {
+            pvalue = translateAudio(pvalue);
+        } else if ( swtype==="music" || pvalue.trackData ) {
+            pvalue = translateMusic(pvalue);
+        } else if ( swtype==="weather" && is_object(pvalue.forecast) ) {
+            var thisorigname = pvalue.name || "Weather";
+            pvalue = translateWeather(thisorigname, pvalue);
+        } else {
+            pvalue = translateObjects(pvalue);
+        }
+
         // for save to DB - we must read all the devices and merge the pvalue with existing
         // we only do this for Sonos and Ford since they don't generate subscription events
-        if ( swtype==="ford" || swtype==="sonos" || subid==="count") {
+        if ( swtype==="ford" || swtype==="sonos" || swtype==="isy" || subid==="count") {
             mydb.getRows("devices","*", "userid = " + userid + " AND deviceid = '" + swid +"'")
             .then(devices => {
         
                 if ( !devices ) { return; }
+                var ndev = 0;
                 devices.forEach(function(device) {
         
                     if ( device.pvalue && typeof device.pvalue === "string" && device.pvalue!=="undefined" ) {
                         var newpvalue = JSON.parse(decodeURI2(device.pvalue));
+                        newpvalue.count = (parseInt(newpvalue.count) + 1).toString();
                     } else {
                         newpvalue = {};
                     }
                     for (var skey in pvalue) {
                         newpvalue[skey] = pvalue[skey];
                     }
-                    pvalue = clone(newpvalue);
+                    // pvalue = clone(newpvalue);
+                    pushClient(userid, swid, swtype, subid, newpvalue);
+                    if ( !inrule && ndev===0 ) {
+                        newpvalue.subid = subid;
+                        processRules(userid, device.id, swid, swtype, subid, newpvalue, "callHub");
+                        delete newpvalue.subid;
+                    }
+                    ndev++;
+    
                     var pvalstr = encodeURI2(JSON.stringify(newpvalue));
-                    
                     mydb.updateRow("devices", {pvalue: pvalstr}, "userid = "+userid+" AND id = "+device.id);
                 });
             });
-        }
+        } else {
 
-        // push new values to all clients and execute rules
-        if ( pvalue ) {
-
-            if ( swtype==="audio" || swtype==="sonos" || pvalue.audioTrackData  ) {
-                pvalue = translateAudio(pvalue);
-            } else if ( swtype==="music" || pvalue.trackData ) {
-                pvalue = translateMusic(pvalue);
-            } else if ( swtype==="weather" && is_object(pvalue.forecast) ) {
-                var thisorigname = pvalue.name;
-                pvalue = translateWeather(thisorigname, pvalue);
-            }
-    
+            // push new values to all clients and execute rules
             // console.log(">>>> pushing to client: ", jsonshow(pvalue));
             pushClient(userid, swid, swtype, subid, pvalue);
-            if ( !inrule ) {
-                pvalue.subid = subid;
-                processRules(userid, deviceid, swid, swtype, subid, pvalue, "callHub");
-                delete pvalue.subid;
-            }
+            // if ( !inrule ) {
+            //     pvalue.subid = subid;
+            //     processRules(userid, device.id, swid, swtype, subid, pvalue, "callHub");
+            //     delete pvalue.subid;
+            // }
         }
+     
     }
 }
 
@@ -7917,12 +8035,12 @@ function queryHub(userid, thingid, hubindex, swid, swtype, thingname ) {
             var nvpreq = {"swid": swid, "swtype": swtype};
             curl_call(host, header, nvpreq, false, "POST", getQueryResponse);
 
-        } else if ( hub.hubtype==="ISY" ) {
-            var buff = Buffer.from(access_token);
-            var base64 = buff.toString('base64');
-            var header = {"Authorization": "Basic " + base64};
-            var cmd = "/nodes/" + swid;
-            curl_call(endpt + cmd, header, false, false, "GET", getNodeQueryResponse);
+        // } else if ( hub.hubtype==="ISY" ) {
+        //     var buff = Buffer.from(access_token);
+        //     var base64 = buff.toString('base64');
+        //     var header = {"Authorization": "Basic " + base64};
+        //     var cmd = "/nodes/" + swid;
+        //     curl_call(endpt + cmd, header, false, false, "GET", getNodeQueryResponse);
 
         }
 
@@ -7943,15 +8061,18 @@ function queryHub(userid, thingid, hubindex, swid, swtype, thingname ) {
 
                 // store results back in DB
                 var pvaluestr = encodeURI2(JSON.stringify(pvalue));
-                mydb.updateRow("devices", {pvalue: pvaluestr}, "id = " + thingid + " AND userid = " + userid);
+                mydb.updateRow("devices", {pvalue: pvaluestr}, "userid = " + userid + " AND id = " + thingid);
 
                 // deal with audio tiles
-                if ( swtype==="audio" || swtype==="sonos"  ) {
+                if ( swtype==="audio" || swtype==="sonos" || pvalue.audioTrackData ) {
                     pvalue = translateAudio(pvalue);
-                } else if ( swtype==="music" ) {
+                } else if ( swtype==="music" || pvalue.trackData ) {
                     pvalue = translateMusic(pvalue);
                 } else if ( swtype==="weather" ) {
-                    pvalue = translateWeather(thingname, pvalue);
+                    var thisorigname = pvalue.name || "Weather";
+                    pvalue = translateWeather(thisorigname, pvalue);
+                } else {
+                    pvalue = translateObjects(pvalue);
                 }
 
                 // push results to all clients
@@ -7960,39 +8081,39 @@ function queryHub(userid, thingid, hubindex, swid, swtype, thingname ) {
         }
     }
 
-    function getNodeQueryResponse(err, res, body) {
-        if ( err ) {
-            console.log( (ddbg()), "error requesting ISY node query: ", err);
-        } else {
-            xml2js(body, function(xmlerr, result) {
-                try {
-                    if ( result ) {
-                        var nodeid = result.nodeInfo.node[0]["address"];
-                        nodeid = fixISYid(nodeid);
-                        if ( nodeid ) {
+//     function getNodeQueryResponse(err, res, body) {
+//         if ( err ) {
+//             console.log( (ddbg()), "error requesting ISY node query: ", err);
+//         } else {
+//             xml2js(body, function(xmlerr, result) {
+//                 try {
+//                     if ( result ) {
+//                         var nodeid = result.nodeInfo.node[0]["address"];
+//                         nodeid = fixISYid(nodeid);
+//                         if ( nodeid ) {
 
-                            var props = result.nodeInfo.properties[0].property;
+//                             var props = result.nodeInfo.properties[0].property;
 
-                            // first read the existing field data to update the json string
-                            // pass to our field updater which does the screen update
-                            mydb.getRow("devices","*","userid = " + userid + " AND deviceid = '"+nodeid+"'")
-                            .then(device => {
-                                if (device) {
-                                    setIsyFields(userid, nodeid, device, props, true);
-                                }
-                            }).catch(reason => {console.log("dberror 16 - getNodeQueryResponse - ", reason);});
+//                             // first read the existing field data to update the json string
+//                             // pass to our field updater which does the screen update
+//                             mydb.getRow("devices","*","userid = " + userid + " AND deviceid = '"+nodeid+"'")
+//                             .then(device => {
+//                                 if (device) {
+//                                     setIsyFields(userid, nodeid, device, props, true);
+//                                 }
+//                             }).catch(reason => {console.log("dberror 16 - getNodeQueryResponse - ", reason);});
 
-                        } else {
-                            throw "Something went wrong reading node from ISY in getNodeQueryResponse";
-                        }
-                    }
-                } catch(e) { 
-                    console.log( (ddbg()), "error in getNodeQueryResponse: ", e);
-                }
-            });
-        }
+//                         } else {
+//                             throw "Something went wrong reading node from ISY in getNodeQueryResponse";
+//                         }
+//                     }
+//                 } catch(e) { 
+//                     console.log( (ddbg()), "error in getNodeQueryResponse: ", e);
+//                 }
+//             });
+//         }
 
-    }
+//     }
 }
 
 function translateAudio(pvalue, specialkey, audiomap) {
@@ -8092,6 +8213,28 @@ function translateMusic(pvalue) {
     return nvalue;
 }
 
+function translateObjects(pvalue) {
+    var nvalue = {};
+    for  (var tkey in pvalue) {
+        var tval = pvalue[tkey];
+        if ( typeof tval==="object" ) {
+            for (var jtkey in tval ) {
+                var jtval = tval[jtkey];
+                // expand arrays and objects onto the base
+                var newkey = tkey + "_" + jtkey.toString();
+
+                // skip adding an object element if it duplicates an existing one
+                if ( typeof jtval!=="object" ) {
+                    nvalue[newkey] = jtval;
+                }
+            }
+        } else {
+            nvalue[tkey] = tval;
+        }
+    }
+    return nvalue;
+}
+
 function findHub(hubid) {
     var hub = mydb.getRow("hubs","*","hubid='"+hubid+"'");
     return hub;
@@ -8147,7 +8290,7 @@ function doAction(userid, hubid, hubindex, thingid, swid, swtype, swval, swattr,
                     var pvalue = JSON.parse(decodeURI2(device.pvalue));
                     pushClient(userid, swid, swtype, subid, pvalue);
                     pvalue.subid = subid;
-                    processRules(userid, thingid, swid, swtype, subid, pvalue, "callHub");
+                    processRules(userid, device.id, swid, swtype, subid, pvalue, "callHub");
                     delete pvalue.subid;
                     msg = pvalue;
                 } else {
@@ -8291,12 +8434,15 @@ function doQuery(userid, thingid, protocol) {
                 var devicename = devices[i]["name"];
     
                 // deal with audio tiles
-                if ( swtype==="audio" || swtype==="sonos" ) {
+                if ( swtype==="audio" || swtype==="sonos" || pvalue.audioTrackData ) {
                     pvalue = translateAudio(pvalue);
-                } else if ( swtype==="music" ) {
+                } else if ( swtype==="music" || pvalue.trackData ) {
                     pvalue = translateMusic(pvalue);
                 } else if ( swtype==="weather" ) {
-                    pvalue = translateWeather(devicename, pvalue);
+                    var thisorigname = devicename || "Weather";
+                    pvalue = translateWeather(thisorigname, pvalue);
+                } else {
+                    pvalue = translateObjects(pvalue);
                 }
                 var firstsubid = Object.keys(pvalue)[0];
 
@@ -8355,7 +8501,7 @@ function setOrder(userid, swtype, swval) {
             var roomid = swval[k].id;
             var updval = { rorder: swval[k]["rorder"], rname: swval[k]["rname"] };
             // console.log("roomid: ", roomid, " updval: ", updval);
-            mydb.updateRow("rooms", updval, "id = "+roomid)
+            mydb.updateRow("rooms", updval, "userid = " + userid + " AND id = "+roomid)
             .then(results => {
                 if ( results ) {
                     // console.log(results.getAffectedItemsCount() );
@@ -8373,7 +8519,7 @@ function setOrder(userid, swtype, swval) {
             var updval = {tileid: swval[kk].tileid, torder: swval[kk].torder};
             if ( updval ) {
                 // console.log("setOrder of tiles.  thingid: ", thingid, " updval: ", updval);
-                mydb.updateRow("things", updval, "id = "+thingid)
+                mydb.updateRow("things", updval, "userid = " + userid + " AND id = "+thingid)
                 .then(results => {
                     if ( results && swval[kk].position==="relative" ) {
                         num++;
@@ -8419,7 +8565,7 @@ function setPosition(userid, swid, swtype, panel, swattr, tileid, thingid) {
             //  this id value should be exactly the same as thingid
             // update the location permanently and also push new location to all other panels
             var id = thing.id;
-            mydb.updateRow("things", thing, "id = " + id)
+            mydb.updateRow("things", thing, "userid = " + userid + " AND id = " + id)
             .then(result => {
                 if ( result ) {
                     var tileloc = {left: left, top: top, "z-index": zindex, position: postype};
@@ -10235,7 +10381,20 @@ function apiCall(user, body, protocol, req, res) {
                         var devices = {};
                         if ( rows ) {
                             rows.forEach(row => {
-                                row.pvalue = JSON.parse(decodeURI2(row.pvalue));
+                                var pvalue = JSON.parse(decodeURI2(row.pvalue));
+
+                                // handle special audio updates
+                                if ( swtype==="audio" || swtype==="sonos" || pvalue.audioTrackData ) {
+                                    pvalue = translateAudio(pvalue);
+                                } else if ( swtype==="music" || pvalue.trackData ) {
+                                    pvalue = translateMusic(pvalue);
+                                } else if ( swtype==="weather" ) {
+                                    var thisorigname = pvalue.name || "Weather";
+                                    pvalue = translateWeather(thisorigname, pvalue);
+                                } else {
+                                    pvalue = translateObjects(pvalue);
+                                }
+                                row.pvalue = pvalue;
                                 devices[row.id] = row;
                             });
                         }
@@ -10514,7 +10673,7 @@ function apiCall(user, body, protocol, req, res) {
                             if ( DEBUG2 ) {
                                 console.log((ddbg()),"Authorizing existing hub at row: ", id," hubid= ", hub.hubid);
                             }
-                            mydb.updateRow("hubs", hub, "id = "+id)
+                            mydb.updateRow("hubs", hub, "userid = " + userid + " AND id = "+id)
                             .then(res3 => {
                                 if ( res3 ) {
                                     mydb.updateRow("users",{defhub: hubid},"id = "+userid);
@@ -10820,7 +10979,19 @@ function setupBrowserSocket() {
                     }
                 }
                 var index = clients[userid].push(connection) - 1;
-                console.log( (ddbg()), "Connection #",index," accepted from host: ", browserurl, " port: ", wsport, " userid: ", userid);
+
+                clients[userid].forEach(function(client, i) {
+                    var clientUrl = client.socket.remoteAddress;
+                    var clientPort = client.socket.server["_connectionKey"];
+                    var str = "User #"+userid;
+                    if ( i===index ) {
+                        str += " New Connection #"+i;
+                    } else {
+                        str += " Old Connection #"+i;
+                    }
+                    console.log( (ddbg()), str, "from host:", clientUrl, "port:", clientPort);
+                });
+                // console.log( (ddbg()), "Connection #" + index + " accepted from host: ", browserurl, " port: ", wsport, " userid: ", userid);
             });
         
             // user disconnected - remove all clients that match this socket
@@ -11273,8 +11444,9 @@ if ( app && applistening ) {
         // handle connector for ISY hubs that process webSockets locally
         // there is a little local connector app that sends a post with the message to our server
         // only works with a single ISY hub as there is no elegant way to pass the hub IP here
-        } else if ( req.path==="/" && req.body.type && req.body.type==="utf8" && req.body.email && req.body.password &&
-                    req.body.utf8Data ) {
+        // converted this to use json data because XML conversion is done on the connector now
+        } else if ( req.path==="/" && req.body.type && req.body.type==="utf8" && req.body.email && req.body.password ) {
+                    // req.body.jsondata && req.body.utf8Data ) {
             if ( DEBUG19 ) {
                 console.log( (ddbg()), "Received msg from ISY hub. msg: \n", req.body);
             }
@@ -11284,12 +11456,19 @@ if ( app && applistening ) {
             mydb.getRow("users","*","email = '"+req.body.email+"' AND password = '"+pwcheck+"'")
             .then(user => {
                 if ( user ) {
-                    processIsyMessage(user.id, req.body.utf8Data);
+                    // processIsyMessage(user.id, req.body.utf8Data);
+                    processIsyMessage(user.id, req.body.jsondata);
+                    res.send("success");
+                } else {
+                    res.send("error - failed authorization");
                 }
-            }).catch(reason => {console.log("dberror 33b - app.post - msg update - ", reason);});
+                res.end();
+            }).catch(reason => {
+                console.log("dberror 33b - app.post - msg update - ", reason);
+                res.send(reason);
+                res.end();
+            });
             
-            res.send("ISY msg received and processed");
-            res.end();
 
         // // handle events from Sonos service
         } else if ( req.path === "/sonos" ) {
@@ -11356,8 +11535,6 @@ if ( app && applistening ) {
                         var userid = row["hubs_userid"];
                         var msg = {
                             msgtype: "update", 
-                                msgtype: "update", 
-                            msgtype: "update", 
                             hubid: hubid,
                             change_name: "",
                             change_device: swid,
@@ -11366,7 +11543,7 @@ if ( app && applistening ) {
                             change_value: value
                         };
                         processHubMessage(userid, msg, true);
-                        if ( DEBUG21 || (DEBUGtmp && attr==="audioTrackData") ) {
+                        if ( DEBUG21 ) {
                             console.log( (ddbg()), "Event sink msg from new ST hub: ", hubid, " msg: ", msg );
                         }
 
@@ -11391,7 +11568,7 @@ if ( app && applistening ) {
                             }
                             setTimeout(function() {
                                 processHubMessage(userid, msg, true);
-                            }, 1000);
+                            }, 500);
                         }
             
                         // }
@@ -11464,6 +11641,91 @@ if ( app && applistening ) {
             });
             res.end();
 
+        // handle calls from hpconnect for ISY hub definition
+        } else if ( req.path==="/" && req.body.msgtype==="isyhub" ) {
+
+            var email = req.body.email;
+            var hub = req.body.hub;
+
+            mydb.getRow("users","*","email = '"+req.body.email+"'")
+            .then(row => {
+                if ( row ) {
+                    var userid = row.id;
+                    hub.userid = userid;
+
+                    // now see if we have an ISY hub already and if so, update it and return index
+                    mydb.getRow("hubs","*","userid = " + userid + " AND hubtype = 'ISY'")
+                    .then(hubrow => {
+                        if ( hubrow ) {
+                            hub.id = hubrow.id;
+                            hub.hubid = hubrow.hubid;
+                            mydb.updateRow("hubs", hub, "userid = "+userid + " AND hubtype = 'ISY'")
+                            .then( () => {
+                                res.json(hub);
+                                res.end();
+                            });
+                        } else {
+                            if ( !hub.hubid ) {
+                                hub.hubid = "isy01";
+                            }
+                            mydb.addRow("hubs", hub)
+                            .then(result => {
+                                hub.id = result.getAutoIncrementValue();
+                                res.json(hub);
+                                res.end();
+                            })
+                        }
+                    })
+                } else {
+                    res.json("error - user with email " + email + " not found");
+                    res.end();
+                }
+
+            });
+            
+        } else if ( req.path==="/" && req.body.msgtype==="isydone" ) {
+
+            // finish up ISY hub push from HP connector
+            var userid = req.body.userid;
+            var pvalue = req.body.msgvalue;
+            if ( DEBUGisy ) {
+                console.log( (ddbg()), "HP Connect final push for ISY device, userid: ", userid, " pvalue: ", pvalue);
+            }
+            updateOptions(userid, true, "/");
+            res.json("success");
+            res.end();
+
+        } else if ( req.path==="/" && req.body.msgtype==="isynode" ) {
+
+            // handle node read from HP connector
+            var userid = req.body.userid;
+            var deviceid = req.body.deviceid;
+            var pvalue = req.body.msgvalue;
+            var device = {
+                userid: userid,
+                name: req.body.name, 
+                hubid: req.body.hubid,
+                deviceid: deviceid,
+                devicetype: "isy",
+                hint: req.body.hint,
+                refresh: "never",
+                pvalue: encodeURI2(JSON.stringify(pvalue))
+            };
+            if ( DEBUGisy ) {
+                console.log( (ddbg()), "HP Connect update of ISY node: ", device);
+            }
+
+            mydb.updateRow("devices", device, "userid="+userid+" AND deviceid='"+deviceid+"'")
+            .then( () => {
+                res.json("success");
+                res.end();
+            })
+            .catch( reason => {
+                console.log((ddbg()), "ISY HP connect error: ", reason);
+                res.send(reason);
+                res.end();
+            });
+
         // handle all api calls upon the server from js client and external api calls here
         // note - if user calls this externally then the userid and thingid values must be provided
         // most users won't know these values but they are shown on the showid page
@@ -11488,7 +11750,7 @@ if ( app && applistening ) {
         // handle unknown requests
         } else {
             console.log( (ddbg()), "HousePanel received unknown POST message - path: ", req.path, " headers: ", req.headers, " body:", req.body);
-            res.send('200 OK');
+            res.send("unknonwn message sent to HousePanel");
             res.end();
         }
 
