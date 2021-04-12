@@ -1988,6 +1988,7 @@ div.isy-thing.program div.overlay.disable,
 div.isy-thing.program div.overlay.status,
 div.isy-thing.program div.overlay.enabled,
 div.isy-thing.program div.overlay.runAtStartup, */
+div.overlay.state,
 div.isy-thing.program div.overlay.lastRunTime,
 div.isy-thing.program div.overlay.lastFinishTime {
     display: none;
@@ -1999,6 +2000,8 @@ div.ford-thing div.overlay.status {
 }
 div.overlay.deviceType,
 div.overlay.localExec,
+div.overlay.availableVersion,
+div.overlay.currentVersion,
 div.overlay.appId {
     display: none;
 }

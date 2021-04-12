@@ -181,7 +181,7 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
                         // var allthings = cm_Globals.allthings;
                         // var thing = allthings[idx];
                         var thing = cm_Globals.devices[tileid];
-                        console.log(">>>> thing: ", thing);
+                        // console.log(">>>> thing: ", thing);
                         $("#cm_subheader").html(thing.devicename);
                         initCustomActions();
                         handleBuiltin(cm_Globals.defaultclick);
@@ -288,7 +288,7 @@ function sortedSensors(unsorted, one, two, three) {
     return sensors;
 }
 
-function loadLinkPanel(tileid) {
+function loadLinkPanel(tileid, curval) {
     
     // section for LINK types - Drop down list, ID display, Field list, and a test button
     var dh = "";
@@ -311,12 +311,12 @@ function loadLinkPanel(tileid) {
         if ( id !== tileid ) {
             var thingname = sensor["name"];
             var thingtype = sensor["devicetype"];
-            if ( id === cm_Globals.currentid ) {
+            if ( id === curval ) {  // cm_Globals.currentid ) {
                 selected = " selected";
             } else {
                 selected = "";
             }
-            results+= "<option value='" + id + "'" + selected + ">" + thingname + " (" + thingtype + ")</option>";
+            results+= "<option value='" + id + "'" + selected + ">" + thingname + " (" + thingtype + " #"+id+")</option>";
         }
     }
     
@@ -454,126 +454,93 @@ function loadUrlPanel() {
     return dh;
 }
 
-// returns an options list of available fields of a given tile
+// returns an options list and subid list of available fields of a given tile
 function loadLinkItem(linkid, allowuser, sortval, sortup) {
-    // var thing = cm_Globals.allthings[idx];
-    // if ( !thing ) {
-    //     idx = "clock|clockdigital";
-    //     thing = cm_Globals.allthings[idx];
-    // }
     try {
         var thing = cm_Globals.devices[linkid];
         var thevalue = thing.pvalue;
     } catch(e) {
-        return;
+        return null;
     }
 
-    // console.log("idx= ", idx, " loadLinkItem - thevalue= ", thevalue, " allowuser= ", allowuser);
-    // var initialsubids = Object.keys(thevalue);
     var subids = [];
-    var numthings = 0;
     var results = "";
-    var firstitem = "";  // (sortval===false) ? "" : sortval;
     var lines = cm_Globals.rules;
 
     // first load the native items
     for ( var tkey in thevalue ) {
-        // companion = "user_" + tkey;
         var tval = thevalue[tkey];
 
-        // check if this item has a custom field
+        // skip if this item was replaced by a custom field handled below
         var iscustom = false;
-        if ( lines ) {
+        if ( lines && allowuser ) {
             lines.forEach(function(val) {
                 iscustom = iscustom || ( val[2] === tkey );
             });
         }
 
-        // skip user configuration items
-        // and skip prec values for ISY since those should never be modified by user
-        // if ( (!tkey.startsWith("prec_") || devtype!=="isy" ) && 
-        //      (!tkey.startsWith("user_") && !initialsubids.includes(companion)) ) {
-
         if ( !iscustom ) {
             // check value for "json" strings
             // to handle objects and arrays
-            try {
-                var jsontval = JSON.parse(tval);
-            } catch (jerr) {
-                jsontval = null;
+            if ( typeof tval === "string" && tval.startsWith("{") && tval.endsWith("}") ) {
+                try {
+                    var jsontval = JSON.parse(tval);
+                } catch (jerr) {
+                    jsontval = null;
+                }
             }
-            if ( jsontval && typeof jsontval==="object" ) {
+            if ( typeof tval==="object" ) {
 
                 // var isarr = Array.isArray(jsontval);
-                for (var jtkey in jsontval ) {
-                    // var jtval = jsontval[jtkey];
+                for (var jtkey in tval ) {
+                    var jtval = tval[jtkey];
 
                     // expand arrays and objects onto the base
                     // need to include objects so we can retrieve the original info
-                    // shouldn't be needed for known types that do objects like audio and weather
-                    // but if something unknown comes in we need to handle it
-                    // arrays are also handled by adding the index to the base
-                    // for example, this happens for buttons reporting acceptable values
-                    jtkey = tkey + "_" + jtkey.toString();
-                    // companion = "user_" + jtkey;
+                    var newkey = tkey + "_" + jtkey.toString();
 
                     // skip adding an object element if it duplicates an existing one
-                    if ( !subids.includes(jtkey) ) {  // && !initialsubids.includes(companion) ) {
-                        var opttext = tkey;
-                        // if (('alias' in thing) && (jtkey in thing.alias)) {
-                        //     opttext = thing.alias[jtkey];
-                        // }
-                        results+= "<option value='" + jtkey + "'>" + opttext + "</option>";
-                        subids.push(jtkey);
-                        numthings++;
-                        if ( !firstitem  ) {
-                            firstitem = jtkey;
-                        }
+                    if ( typeof jtval!=="object" && !subids.includes(newkey) ) {
+                        results+= "<option command='' linkval='"+jtval+"' value='" + newkey + "'>" + newkey + "</option>";
+                        subids.push(newkey);
                     }
                 }
 
-            } else if ( !subids.includes(tkey) ) {
+            } else {  // } if ( !subids.includes(tkey) ) {
                 // If an alias name exists, then use it instead of the key
-                var opttext = tkey;
-                // if (('alias' in thing) && (tkey in thing.alias)) {
-                //     opttext = thing.alias[tkey];
-                // }
-                results+= "<option command='' linkval='' value='" + tkey + "'>" + opttext + "</option>";
-
+                results+= "<option command='' linkval='"+tval+"' value='" + tkey + "'>" + tkey + "</option>";
                 subids.push(tkey);
-                numthings++;
-                if ( !firstitem  ) {
-                    firstitem = tkey;
-                }
             }
         }
     }
     
     // now load the custom fields
-    // first sort and make sure we get rid of dups
-    if ( allowuser ) {
+    if ( lines && allowuser ) {
+        // first sort and make sure we get rid of dups
         // sortExistingFields(sortval, sortup);
 
         // get the custom rules for this tile if any exist
-        if ( lines ) {
-            lines.forEach(function(val) {
-                var subid = val[2];
-                var command = val[0];
-                var linkval = val[1];
-                // if ( val[0] == "LINK" ) {
-                //     var linkid = val[1];
-                //     var linkthing = cm_Globals.devices[linkid];  //  cm_Globals.allthings[idx];
-                // }
-                results+= "<option command='"+command+"' linkval='"+linkval+"' value='" + subid + "'><span class='reddot'>" + subid + " *</span></option>";
-                numthings++;
-                if ( !firstitem  ) {
-                    firstitem = subid;
-                }
-            });
-        }
+        lines.forEach(function(val) {
+            var subid = val[2];
+            var command = val[0];
+            var linkval = val[1];
+            // if ( val[0] == "LINK" ) {
+            //     var linkid = val[1];
+            //     var linkthing = cm_Globals.devices[linkid];  //  cm_Globals.allthings[idx];
+            // }
+            results+= "<option command='"+command+"' linkval='"+linkval+"' value='" + subid + "'>" + subid + "<span class='reddot'> *</span></option>";
+            subids.push(subid);
+        });
+    }
+
+    if ( subids.length ) {
+        var firstitem = subids[0];
+    } else {
+        firstitem = null;
     }
     
-    return {fields: results, num: numthings, firstitem: firstitem};
+    console.log("loadLinkItem - linkid: ", linkid, " thevlaue: ", thevalue, " allowuser: ", allowuser," subids: ", subids, " fields: ", results);
+    return {fields: results, subids: subids, firstitem: firstitem};
 }
  
  function initLinkActions(linkid, subid) {
@@ -593,6 +560,8 @@ function loadLinkItem(linkid, allowuser, sortval, sortup) {
     // var bid = linkidx.substring(n+1);
     // linkid = options.index[linkidx];
     var device = cm_Globals.devices[linkid];
+    if ( !device ) { return; }
+
     var bid = device.deviceid;
     // var values = device.pvalue;
     
@@ -604,18 +573,23 @@ function loadLinkItem(linkid, allowuser, sortval, sortup) {
     
     // read the existing fields of the linked tile, excluded user items
     var results = loadLinkItem(linkid, false, false, false);
-    $("#cm_linkfields").html(results.fields);
-    
-    // highlight the selected item. if nothing preselected use first item
-    if ( !subid ) {
-        subid = results.firstitem;
-    }
-    $("#cm_linkfields option[value='" + subid + "']").prop('selected',true);
+    if ( results ) {
+        $("#cm_linkfields").html(results.fields);
+        
+        // highlight the selected item. if nothing preselected use first item
+        if ( !subid && results.firstitem ) {
+            subid = results.firstitem;
+        }
+        if ( subid ) {
+            $("#cm_linkfields option[value='" + subid + "']").prop('selected',true);
 
-    // put this in the user field on the left for editing
-    $("#cm_userfield").attr("value",results.firstitem);
-    $("#cm_userfield").prop("value",results.firstitem);
-    $("#cm_userfield").val(subid);
+            // put this in the user field on the left for editing
+            // $("#cm_userfield").prop("value", subid);
+            $("#cm_userfield").attr("value", subid);
+            $("#cm_userfield").val(subid);
+        }
+        initLinkSelect(results.subids);
+    }
     
     // activate clicking on item by getting the id of the item selected
     // and save it in our global for later use 
@@ -632,13 +606,16 @@ function loadLinkItem(linkid, allowuser, sortval, sortup) {
         // var linkid = options.index[cm_Globals.currentid];
         $("#cm_linkbid").html(bid + " => Tile #" + linkid);
         var results = loadLinkItem(linkid, false, false, false);
-        $("#cm_linkfields").html(results.fields);
-        initLinkSelect();
-        $("#cm_linkfields option[value='" + results.firstitem + "']").prop('selected',true).click();
+        if ( results ) {
+            $("#cm_linkfields").html(results.fields);
+            initLinkSelect(results.subids);
+            if ( results.firstitem ) {
+                $("#cm_linkfields option[value='" + results.firstitem + "']").prop('selected',true).click();
+            }
+        }
         event.stopPropagation();
     });
  
-    initLinkSelect();
 }
 
 function initLinkSelect() {
@@ -649,27 +626,33 @@ function initLinkSelect() {
         $("#cm_userfield").prop("value",subid);
         $("#cm_userfield").val(subid);
         
-        // get the subids of the tile being customized
-        // var allthings = cm_Globals.allthings;
-        // var idx = cm_Globals.thingidx;
-        // var thing = allthings[idx];
-        var tileid = cm_Globals.tileid;
-        var thing = cm_Globals.devices[tileid];
-        var value = thing.pvalue;
-        var subids = Object.keys(value);
+        // var tileid = cm_Globals.tileid;
+        // var thing = cm_Globals.devices[tileid];
+        // var value = thing.pvalue;
+        // var subids = Object.keys(value);
 
-        // disable or enable the Del button based on user status
-        var companion = "user_" + subid;
-        if ( subids.includes(companion) ) {
-            $("#cm_delButton").removeClass("disabled").prop("disabled",false);
-        } else {
+        // check the builtin list for this subid
+        var subids = [];
+        var natives = [];
+        $("#cm_builtinfields option").each(function() {
+            var thissub = $(this).val();
+            if ( !$(this).attr("command") ) {
+                natives.push( thissub );                
+            }
+            subids.push( thissub );
+        });
+
+        if ( natives.includes(subid) ) {
             $("#cm_delButton").addClass("disabled").prop("disabled",true);
+        } else {
+            $("#cm_delButton").removeClass("disabled").prop("disabled",false);
         }
         
         // change button label to Add or Replace based on existing or not
         if ( subids.includes(subid) ) {
             $("#cm_addButton").text("Replace");
         } else {
+            $("#cm_delButton").addClass("disabled").prop("disabled",true);
             $("#cm_addButton").text("Add");
         }
         
@@ -692,7 +675,7 @@ function initCustomActions() {
         
         // load the dynamic panel with the right content
         if ( customType === "LINK" ) {
-            content = loadLinkPanel(tileid);
+            content = loadLinkPanel(tileid, cm_Globals.currentid);
             $("#cm_dynoContent").html(content);
             initLinkActions(null, null);
         } else if ( customType ==="URL" ) {
@@ -759,12 +742,14 @@ function loadExistingFields(tileid, sortval, sortup) {
         var subid = results.firstitem;
         cm_Globals.defaultclick = subid;
         
-        // set the default click
-        $("#cm_builtinfields option[value='"+subid+"']").prop('selected',true);
-        
-        // text input for user values
-        $("#cm_userfield").attr("value",subid);
-        $("#cm_userfield").val(subid);
+        if ( subid ) {
+            // set the default click
+            $("#cm_builtinfields option[value='"+subid+"']").prop('selected',true);
+            
+            // text input for user values
+            $("#cm_userfield").attr("value",subid);
+            $("#cm_userfield").val(subid);
+        }
     }
     
     showPreview();
@@ -838,29 +823,39 @@ function initExistingFields() {
     $("#cm_userfield").prop("readonly",false).removeClass("readonly");
     $("#cm_builtinfields").prop("readonly",false).prop("disabled",false).removeClass("readonly");
 
+    // check the builtin list for this subid
+    var subids = [];
+    var natives = [];
+    $("#cm_builtinfields option").each(function() {
+        var thissub = $(this).val();
+        if ( !$(this).attr("command") ) {
+            natives.push( thissub );                
+        }
+        subids.push( thissub );
+    });
+
     $("#cm_userfield").off('input');
     $("#cm_userfield").on('input', function(event) {
         var tileid = cm_Globals.tileid;
         var subid = $("#cm_userfield").val();
-        // var allthings = cm_Globals.allthings;
-        // var thing = allthings[idx];
-        var thing = cm_Globals.devices[tileid]
-        var value = thing.pvalue;
-        var subids = Object.keys(value);
+
+        // var thing = cm_Globals.devices[tileid]
+        // var value = thing.pvalue;
+        // var subids = Object.keys(value);
         
         // change button label to Add or Replace based on existing or not
+        if ( natives.includes(subid) ) {
+            $("#cm_delButton").addClass("disabled").prop("disabled",true);
+        } else {
+            $("#cm_delButton").removeClass("disabled").prop("disabled", false);
+        }
         if ( subids.includes(subid) ) {
-            var companion = "user_" + subid;
-            if ( subids.includes(companion) ) {
-                $("#cm_delButton").removeClass("disabled").prop("disabled", false);
-            } else {
-                $("#cm_delButton").addClass("disabled").prop("disabled",true);
-            }
             $("#cm_addButton").text("Replace");
         } else {
             $("#cm_addButton").text("Add");
             $("#cm_delButton").addClass("disabled").prop("disabled",true);
         }
+
     });
     
     $("#cm_upfield").off('click');
@@ -869,6 +864,7 @@ function initExistingFields() {
             event.stopPropagation;
             return;
         }
+        var tileid = cm_Globals.tileid;
         var sortval = $("#cm_userfield").val();
         loadExistingFields(tileid, sortval, "up");
         initExistingFields();
@@ -910,22 +906,39 @@ function handleBuiltin(subid) {
     var tileid = cm_Globals.tileid;
     var thing = cm_Globals.devices[tileid]
     var value = thing.pvalue;
+    var cmtext = value[subid];
 
     var item = $("#cm_builtinfields option[value='"+subid+"']");
     var cmtype = $(item).attr("command");
     var iscustom = ( cmtype && cmtype.length );
     var linkval = $(item).attr("linkval");
+    // if ( !cmtype ) {
+    //     cmtype = "TEXT";
+    // }
 
     // console.log(">>>> subid: ", subid,"tileid: ", tileid, "thing: ", thing, "value: ", value, " cmtype: ", cmtype, " linkval: ", linkval);
 
-    var subids = Object.keys(value);
-    if ( cm_Globals.rules ) {
-        cm_Globals.rules.forEach(rule => {
-            subids.push(rule[2]);
-        });
-    }
+    // var subids = Object.keys(value);
+    // if ( cm_Globals.rules ) {
+    //     cm_Globals.rules.forEach(rule => {
+    //         subids.push(rule[2]);
+    //         if ( rule[2] === subid ) {
+    //             cmtext = rule[1];
+    //         }
+    //     });
+    // }
 
-    var companion = "user_" + subid;
+    // check the builtin list for this subid
+    var subids = [];
+    var natives = [];
+    $("#cm_builtinfields option").each(function() {
+        var thissub = $(this).val();
+        if ( !$(this).attr("command") ) {
+            natives.push( thissub );                
+        }
+        subids.push( thissub );
+    });
+
     cm_Globals.defaultclick = subid;
 
     // put the field clicked on in the input box
@@ -933,41 +946,41 @@ function handleBuiltin(subid) {
     $("#cm_userfield").val(subid);
 
     // check for an object
-    var cmtext;
-    if ( typeof(value[subid])==="undefined" ) {
-        var ipos = subid.indexOf("_");
-        if ( ipos===-1 || ipos===0 ) {
-            cmtext = "unknown";
-        } else {
-            var subid1 = subid.substr(0, ipos);
-            var subid2 = subid.substr(ipos+1);
-            try {
-                var jsontval = JSON.parse(value[subid1]);
-            } catch (jerr) {
-                jsontval = null;
-            }
-    
-            if ( typeof jsontval==="object" ) {
-                cmtext = jsontval[subid2];
-                // alert("cmtext = " + cmtext + " subid1= " + subid1 + " value: " + value[subid1]);
-            } else {
-                cmtext = "unknown";
-            }
-        }
-    } else {
-        cmtext = value[subid];
-        if ( !linkval ) {
-            linkval = cmtext;
-        }
-    }
+    // if ( cmtype!=="LINK" ) {
+    //     var jsontval;
+    //     var ipos = 0;
+    //     if ( typeof(value[subid])==="undefined" ) {
+    //         ipos = subid.indexOf("_");
+    //         if ( ipos > 0 ) {
+    //             var subid1 = subid.substr(0, ipos);
+    //             var subid2 = subid.substr(ipos+1);
+    //             try {
+    //                 jsontval = value[subid1];
+    //             } catch ( err ) {
+    //                 jsontval = null;
+    //             }
+        
+    //             if ( typeof jsontval==="object" ) {
+    //                 cmtext = jsontval[subid2];
+    //             // } else {
+    //             //     cmtext = "unknown";
+    //             }
+    //         }
+    //     } else {
+    //         cmtext = value[subid];
+    //     }
+    //     linkval = cmtext;
+    // }
+    console.log("subids: ", subids, " natives: ", natives, " value: ", value[subid], " linkval: ", linkval, " cmtext: ", cmtext);
 
     // update dyno panel
     if ( cmtype==="LINK" ) {
         // var oldval = $("#cm_customtype").val();
         $("#cm_customtype").prop("value", "LINK");
         $("#cm_customtype option[value='LINK']").prop('selected',true);
-        // var content = loadLinkPanel(cm_Globals.tileid);
-        var content = loadLinkPanel(linkval);
+        // cm_Globals.currentid = linkval;
+        var content = loadLinkPanel(tileid, linkval);
+        // var content = loadLinkPanel(linkval);
         $("#cm_dynoContent").html(content);
         initLinkActions(linkval, subid);
     } else {
@@ -987,7 +1000,7 @@ function handleBuiltin(subid) {
         } else if ( cmtype==="URL") {
             content = loadUrlPanel();
             $("#cm_dynoContent").html(content);
-        } else if ( ENABLERULES && cmtype==="RULE") {
+        } else if ( cmtype==="RULE") {
             content = loadRulePanel();
             $("#cm_dynoContent").html(content);
         } else {
@@ -1008,17 +1021,23 @@ function handleBuiltin(subid) {
         $("#cm_delButton").addClass("disabled").prop("disabled", true);
         $("#cm_upfield").addClass("disabled").prop("disabled",true);
         $("#cm_dnfield").addClass("disabled").prop("disabled",true);
-        $("#cm_text").val(cmtext);
-        cm_Globals.usertext = cmtext;
     }
 
     // change button label to Add or Replace based on existing or not
     // console.log("subid = ",subid," subids = ", subids);
+    if ( natives.includes(subid) ) {
+        $("#cm_delButton").addClass("disabled").prop("disabled",true);
+    } else {
+        $("#cm_delButton").removeClass("disabled").prop("disabled", false);
+    }
     if ( subids.includes(subid) ) {
         $("#cm_addButton").text("Replace");
     } else {
         $("#cm_addButton").text("Add");
+        $("#cm_delButton").addClass("disabled").prop("disabled",true);
     }
+
+
 }
 
 // function uses php to save the custom info to hmoptions.cfg
@@ -1034,22 +1053,29 @@ function applyCustomField(action, subid) {
     } else {
         var oldrules = [];
     }
-    console.log(">>>> rules before update: ", oldrules);
+    // console.log(">>>> rules before update: ", oldrules);
 
     // var value = thing.pvalue;
     var customtype = $("#cm_customtype").val();
-    // var options = cm_Globals.options;
-    if ( customtype==="LINK" ) {
-        var content = cm_Globals.devices[cm_Globals.currentid].id;  //  options.index[cm_Globals.currentid];
-    } else {
-        content = $("#cm_text").val();
-    }
+    var content = null;
+
 
     var errors = [];
 
     var existing = false;
-    var therule = [customtype, content, subid];
     if ( action==="addcustom" ) {
+
+        // var options = cm_Globals.options;
+        if ( customtype==="LINK" ) {
+            var olditem = cm_Globals.devices[cm_Globals.currentid];
+            if ( olditem ) {
+                content = olditem.id;
+            }
+        } else {
+            content = $("#cm_text").val();
+        }
+
+        var therule = [customtype, content, subid];
         if ( !cm_Globals.rules ) {
             cm_Globals.rules = [];
         }
@@ -1070,7 +1096,7 @@ function applyCustomField(action, subid) {
         var i = 0;
         while ( i < cm_Globals.rules.length ) {
             var rule = cm_Globals.rules[i];
-            console.log("i, rule[2], subid: ", i, rule[2], subid);
+            // console.log("i, rule[2], subid: ", i, rule[2], subid);
             if ( (rule && rule.length && rule.length > 2 && rule[2]===subid) ||  !rule || !rule.length || rule.length < 3  ) {
                 cm_Globals.rules.splice(i,1);
                 existing = true;
@@ -1082,7 +1108,7 @@ function applyCustomField(action, subid) {
     } else {
         existing = false;
     }
-    console.log(">>>> rules after update: ", subid, cm_Globals.rules);
+    // console.log(">>>> rules after update: ", subid, cm_Globals.rules);
     
     // check for valid entries
     // skip URL check to enable Android stuff
@@ -1092,7 +1118,7 @@ function applyCustomField(action, subid) {
     if ( subid && subid.length < 2 && subid!=="password" ) {
         errors.push("Your selected user field name [" + subid + "] is too short. Must be at least 2 characters");
     }
-    if ( (customtype==="POST" || customtype==="GET" || customtype==="PUT") && 
+    if ( content && (customtype==="POST" || customtype==="GET" || customtype==="PUT") && 
          ( !content.startsWith("http://") && !content.startsWith("https://") ) ) {
         errors.push("User content for web type entries must begin with http or https"); 
     }
@@ -1116,23 +1142,13 @@ function applyCustomField(action, subid) {
         // var pos = {top: 5, left: 5, zindex: 9999, background: "red", color: "white"};
         // createModal("waitbox", "Processing " + action + " Please wait...", "table.cm_table", false, pos);
         var rules = encodeURI(JSON.stringify(cm_Globals.rules));
-        console.log(">>>> rules : ", rules);
+        // console.log(">>>> rules : ", rules);
         $.post(cm_Globals.returnURL, 
             {useajax: action, userid: cm_Globals.options.userid, id: bid, value: customtype, 
                 rules: rules, tileid: tileid, subid: subid},
             function (presult, pstatus) {
                 if (pstatus==="success") {
                     cm_Globals.reload = true;
-                    
-                    // we return updated set of config rules
-                    console.log (action + " performed successfully. presult: ", presult);
-
-                    // update content since pw could have changed it
-                    // if ( subid==="password" && customtype!=="LINK" ) {
-                    //     content = presult[subid];
-                    //     $("#cm_text").val(content);
-                    //     cm_Globals.usertext = content;
-                    // }
                     
                     // update the visual boxes on screen
                     if ( action==="addcustom" ) {

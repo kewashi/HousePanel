@@ -206,9 +206,9 @@ function getOnOff(str_type, subid, val) {
         onoff = ["firing","idle"];
     } else if ( subid.startsWith("thermostatFanMode" ) ) {
         if ( hubType==="ISY" || str_type==="isy" ) {
-            onoff = ["Auto","Circulate","On"];
+            onoff = ["Auto", "On", "Circulate"];
         } else {
-            onoff = ["auto","circulate","on"];
+            onoff = ["auto","on","followschedule","circulate"];
         }
     } else if ( subid.startsWith("thermostatMode" ) ) {
         if ( hubType==="ISY" || str_type==="isy" ) {
@@ -1615,20 +1615,28 @@ function initColor(str_type, subid, thingindex) {
     // $("#leftPadding").val(pleft);
 
     // var txtBefore = $(target+"::before").css("content");
-    var txtBefore = window.getComputedStyle(document.querySelector(target), "::"+"before").getPropertyValue('content');
-    if ( txtBefore==="none" ) {
+    try {
+        var txtBefore = window.getComputedStyle(document.querySelector(target), "::"+"before").getPropertyValue('content');
+        if ( txtBefore==="none" ) {
+            txtBefore = "";
+        } else if ( txtBefore.startsWith('"') ) {
+            txtBefore = txtBefore.substr(1, txtBefore.length-2);
+        }
+    } catch (e) {
         txtBefore = "";
-    } else if ( txtBefore.startsWith('"') ) {
-        txtBefore = txtBefore.substr(1, txtBefore.length-2);
     }
     $("#beforeText").val(txtBefore);
 
     // var txtAfter = $(target+"::after").css("content");
-    var txtAfter = window.getComputedStyle(document.querySelector(target), "::"+"after").getPropertyValue('content');
-    if ( txtAfter==="none" ) {
+    try {
+        var txtAfter = window.getComputedStyle(document.querySelector(target), "::"+"after").getPropertyValue('content');
+        if ( txtAfter==="none" ) {
+            txtAfter = "";
+        } else if ( txtAfter.startsWith('"') ) {
+            txtAfter = txtAfter.substr(1, txtAfter.length-2);
+        }
+    } catch (e) {
         txtAfter = "";
-    } else if ( txtAfter.startsWith('"') ) {
-        txtAfter = txtAfter.substr(1, txtAfter.length-2);
     }
     $("#afterText").val(txtAfter);
 

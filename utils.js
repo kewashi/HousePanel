@@ -2,11 +2,16 @@
 const fs = require('fs');
 
 const devhistory =  ` 
-3.021   Support Hubitat using connector helper app; add counter field
+3.026   HPConnect and callHub now work with ISY resfresh and ISY programs
+3.025   Fixed links to work when linked to tile is not on a panel
+3.024   Stability updates and include in HPConnect ISY devices load
+3.023   Add default hub to cookie to restore for new sessions
+3.022   Tidy up weather tile and bug fixes
+3.021   Support Hubitat and ISY using connector helper app; add counter field
 3.020   Fix link updates and linked audio tiles to have right size
 3.019   Use txt message to confirm new user and forgot passwords
 3.018   Support new location tile that contains modes in new ST
-3.017   Disabled Sonos as I can't get it working right
+3.017   Disabled Sonos hubs as I can't get it working right
 3.016   Completed Sonos integration, clean up link hndling, bug fixes
 3.015   Experimental Sonos hubs and fix multiple clients to use own port
 3.014   Bugfix to color lights not working, fix clock updater for links
