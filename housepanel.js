@@ -17,7 +17,7 @@ cm_Globals.wsclient = null;
 
 var modalStatus = 0;
 var modalWindows = {};
-var priorOpmode = "Operate";
+var priorOpmode = "operate";
 var pagename = "main";
 
 // set a global socket variable to manage two-way handshake
@@ -148,17 +148,21 @@ function clone(obj) {
 // obtain options using an ajax api call
 // could probably read Options file instead
 // but doing it this way ensure we get what main app sees
-function getOptions(dosetup) {
+function getOptions() {
     var doreload = "";
+    priorOpmode = getCookie("opmode") || "operate";
     try {
         var userid = $("#userid").val();
         var email = $("#emailid").val();
         var skin = $("#skinid").val();
         var config = $("#configsid").val();
+        console.log("config = ", config,"\n userid = ", userid);
         var pname = $("#showversion span#infoname").html();
         config = JSON.parse(config);
         cm_Globals.options = {userid: userid, email: email, skin: skin, config: config, rules: null};
-        setFastSlow(config);
+
+        // disabled timer based refreshes since we no longer need this
+        // setFastSlow(config);
 
         // set the customization list
         $.post(cm_Globals.returnURL, 
@@ -167,14 +171,31 @@ function getOptions(dosetup) {
                 if (pstatus==="success" ) {
                     cm_Globals.options.rules = presult;
                     var indexkeys = Object.keys(presult);
-                    console.log("getOptions returned: " + indexkeys.length + " configuration rules/links: ", presult);
+
+                    if ( cm_Globals.options.config.blackout ) {
+                        var blackout = cm_Globals.options.config.blackout;
+                        blackout = (blackout === "true") || (blackout === true) ? true : false;
+                    } else {
+                        blackout = false;
+                    }
+        
+                    // handle black screen
+                    if ( priorOpmode === "sleep" && blackout ) {
+                        execButton("blackout");
+                    } else {
+                        priorOpmode = "operate";
+                        setCookie("opmode", priorOpmode);
+                    }
+
+
+                    console.log("getOptions returned: " + indexkeys.length," opmode: ", priorOpmode, " config rules/links: ", presult);
                 } else {
                     console.log("error - failure reading config options from database for user = " + userid);
                 }
             }, "json"
         );
     } catch(e) {
-        console.log("error - failure reading your hmoptions.cfg file");
+        console.log("error - failure reading your hmoptions.cfg file", e);
     }
 
     function setFastSlow(config) {
@@ -237,9 +258,9 @@ $(document).ready(function() {
         var tabcount = $("li.ui-tabs-tab").length;
 
         // hide tabs if there is only one room
-        if ( tabcount === 1 ) {
-            toggleTabs();
-        }
+        // if ( tabcount === 1 ) {
+        //     toggleTabs();
+        // }
     
         // get default tab from cookie and go to that tab
         var defaultTab = getCookie( 'defaultTab' );
@@ -361,9 +382,9 @@ $(document).ready(function() {
     }
 
     // load things and options
-    if ( pagename==="main" || pagename==="auth" ) {
+    if ( pagename==="main" || pagename==="auth" || pagename==="options" ) {
 
-        getOptions(true);
+        getOptions();
         
         // disable return key
         $("body").off("keypress");
@@ -378,11 +399,11 @@ $(document).ready(function() {
     setupButtons();
     
     // handle interactions for the options page
-    if (pagename==="options") {
-        getOptions();
-        setupCustomCount();
-        setupFilters();
-    }
+    // if (pagename==="options") {
+    //     getOptions();
+    //     setupCustomCount();
+    //     setupFilters();
+    // }
 
     // handle interactions for main page
     // note that setupFilters will be called when entering edit mode
@@ -393,12 +414,21 @@ $(document).ready(function() {
         cancelPagemove();
         initWebsocket();
 
+        // run initial clock updater forcing read
+        clockUpdater("clockdigital", true);
+        clockUpdater("clockanalog", true);
+
         // repeat digital clock update every second and analog clock every minute
         setInterval( function() 
-            { clockUpdater("clockdigital") }, 1000
+            { clockUpdater("clockdigital", false) }, 1000
         );
+
+        // run clockdigital and clockanalog once every minute for rules
         setInterval( function() 
-            { clockUpdater("clockanalog") }, 60000
+            { 
+                clockUpdater("clockdigital", true);
+                clockUpdater("clockanalog", true);
+            }, 60000
         );
 
         // finally we wait a moment then setup page clicks
@@ -407,7 +437,6 @@ $(document).ready(function() {
                 setupPage(); 
                 setupSliders();
                 setupColors();
-                // now handle blackout differently in the proceessHub function on server
             }, 200);
         }
     }
@@ -432,19 +461,36 @@ function initWebsocket() {
         var webSocketUrl = $("input[name='webSocketUrl']").val();
 
         if ( userid && webSocketUrl ) {
-            $.post(cm_Globals.returnURL, 
-                {useajax: "getwsport", userid: userid},
-                function (presult, pstatus) {
-                    if (pstatus==="success" && presult ) {
-                        webSocketUrl += ":" + presult;
-                        $("#infoport").html("#"+presult.toString().substr(3));
-                        console.log(">>>> webSocketUrl: ", webSocketUrl);
-                        setupWebsocket(userid, presult, webSocketUrl);
-                    } else {
-                        console.log( "error - could not initialize websocket. pstatus: ", pstatus, " presult: ", presult );
-                    }
-                }
-            );
+
+            // get the port from the panel name cookie
+            var pname = getCookie("pname");
+            if ( pname.substr(1,1)!==":" ) {
+                pname = "1:" + pname;
+            }
+            var portnum = pname.substr(0,1);
+            var port = 8180 + parseInt(portnum);
+            webSocketUrl += ":" + port;
+            $("#infoport").html("#"+portnum);
+            // alert("webSocketUrl: " + webSocketUrl);
+            console.log(">>>> port:", port, " webSocketUrl:", webSocketUrl);
+            setupWebsocket(userid, port, webSocketUrl);
+
+            // $.post(cm_Globals.returnURL, 
+            //     {useajax: "getwsport", userid: userid},
+            //     function (presult, pstatus) {
+            //         if (pstatus==="success" && presult ) {
+            //             var port = presult.port;
+            //             var usedports = presult.used;
+            //             webSocketUrl += ":" + port;
+            //             $("#infoport").html("#"+port.toString().substr(3));
+            //             // alert("webSocketUrl: " + webSocketUrl);
+            //             // console.log(">>>> port: ", port, " used: ", usedports);
+            //             setupWebsocket(userid, port, webSocketUrl);
+            //         } else {
+            //             console.log( "error - could not initialize websocket. pstatus: ", pstatus, " presult: ", presult );
+            //         }
+            //     }
+            // );
         }
     } catch(err) {
         console.log( "error - could not initialize websocket. err: ", err);
@@ -457,7 +503,7 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
     var wsSocket = null;
 
     try {
-        console.log("Creating webSocket for: ", webSocketUrl);
+        // console.log("Creating webSocket for: ", webSocketUrl);
         wsSocket = new WebSocket(webSocketUrl, "housepanel");
     } catch(err) {
         console.log("Error attempting to create webSocket for: ", webSocketUrl," error: ", err);
@@ -478,8 +524,7 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
     };
     
     wsSocket.onerror = function(evt) {
-        console.log(">>>> webSocketUrl: ", webSocketUrl);
-        console.error("webSocket error: ", evt);
+        console.error("webSocket error: ", evt, " webSocketUrl: ", webSocketUrl);
     };
     
     wsSocket.onclose = function() {
@@ -501,6 +546,7 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
             var subid = presult.trigger;
             if ( cm_Globals.options && cm_Globals.options.config && cm_Globals.options.config.blackout ) {
                 var blackout = cm_Globals.options.config.blackout;
+                blackout = (blackout === "true") || (blackout === true) ? true : false;
             } else {
                 blackout = false;
             }
@@ -509,7 +555,7 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
             if ( bid==="reload" ) {
 
                 // skip reload if we are asleep
-                if ( priorOpmode !== "Operate" ) {
+                if ( priorOpmode !== "operate" ) {
                     return;
                 }
 
@@ -526,7 +572,7 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                             subid = "/" + subid;
                         }
                         reloadpage =  cm_Globals.returnURL + subid;
-                        alert("reloading to: " + reloadpage);
+                        // alert("reloading to: " + reloadpage);
                         window.location.href = reloadpage;
                         
                     }
@@ -641,14 +687,18 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
 
                 // blank screen if night mode set
                 if ( (thetype==="mode" || thetype==="location" ) && 
-                     (blackout==="true" || blackout===true) && (priorOpmode === "Operate" || priorOpmode === "Sleep") ) {
+                     (blackout==="true" || blackout===true) && (priorOpmode === "operate" || priorOpmode === "sleep") ) {
+
+                    // console.log("mode: ", pvalue.themode, " priorMode: ", priorOpmode);
                     if ( pvalue.themode === "Night" ) {
                         execButton("blackout");
+                        priorOpmode = "sleep";
                     } else if ( $("#blankme") ) {
                         $("#blankme").off("click");
                         $("#blankme").remove(); 
-                        priorOpmode = "Operate";
+                        priorOpmode = "operate";
                     }
+                    setCookie("opmode", priorOpmode);
                 }
             }
 
@@ -977,6 +1027,7 @@ function setupSliders() {
         var linkbid = bid;
         var realsubid = subid;
         var linkhub = hubindex;
+        var linkid = 0;
 
         if ( usertile && usertile.attr("command") ) {
             command = usertile.attr("command");    // command type
@@ -985,24 +1036,26 @@ function setupSliders() {
             linkhub = usertile.attr("linkhub");
             linktype = usertile.attr("linktype");
             realsubid = usertile.attr("subid");
+            linkid = usertile.attr("linkid");
+            hint = usertile.attr("hint");
         }
 
         if ( typeof linkval === "string" && 
             (linkval.startsWith("GET::") || linkval.startsWith("POST::") || 
-             linkval.startsWith("PUT::") || linkval.startsWith("LINK::") || 
+             linkval.startsWith("PUT::") || 
              linkval.startsWith("RULE::") || linkval.startsWith("URL::")) )
         {
             var jcolon = linkval.indexOf("::");
             command = linkval.substr(0, jcolon);
             linkval = linkval.substr(jcolon+2);
-        } else {
-            command = "";
-            linkval = "";
+        // } else {
+        //     command = "";
+        //     linkval = "";
         }
 
-        console.log("Slider action: command= ", command, " bid= ", linkbid, " hub= ", linkhub, " type= ", linktype, " subid= ", realsubid, " hint= ", hint, " value= ", thevalue, " linkval= ", linkval);
+        console.log("Slider action: command= ", command, " bid= ", bid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", linkhub, " type= ", linktype, " subid= ", realsubid, " hint= ", hint, " value= ", thevalue, " linkval= ", linkval);
         $.post(cm_Globals.returnURL, 
-            {useajax: "doaction", userid: userid, pname: pname, id: bid, thingid: thingid, type: linktype, value: thevalue, attr: subid, hint: hint,
+            {useajax: "doaction", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: thevalue, attr: subid, hint: hint,
             subid: realsubid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval},
             function(presult, pstatus) {
                 if (pstatus==="success") {
@@ -1809,7 +1862,8 @@ function execButton(buttonid) {
         } catch(e) {
             phototimer = 0;
         }
-        priorOpmode = "Sleep";
+        priorOpmode = "sleep";
+        setCookie("opmode", priorOpmode);
         $("div.maintable").after("<div id=\"blankme\"></div>");
         var photos;
 
@@ -1852,7 +1906,6 @@ function execButton(buttonid) {
                 }
             );
         }
-            // photos = {0: "Nascar Race-18.JPG", 1: "Nascar Race-49.JPG", 2: "ford2020mustang.png", 3: "Techonomy 2015-2.JPG"};
 
         // clicking anywhere will restore the window to normal
         $("#blankme").off("click");
@@ -1861,13 +1914,14 @@ function execButton(buttonid) {
                 clearInterval(photohandle);
             }
             $("#blankme").remove(); 
-            priorOpmode = "Operate";
+            priorOpmode = "operate";
+            setCookie("opmode",priorOpmode);
             evt.stopPropagation();
         });
     } else if ( buttonid === "toggletabs") {
         toggleTabs();
     } else if ( buttonid === "reorder" ) {
-        if ( priorOpmode === "DragDrop" ) {
+        if ( priorOpmode === "edit" ) {
             updateFilters();
             cancelDraggable();
             delEditLink();
@@ -1875,35 +1929,38 @@ function execButton(buttonid) {
         setupSortable();
         setupPagemove();
         $("#mode_Reorder").prop("checked",true);
-        priorOpmode = "Reorder";
+        priorOpmode = "reorder";
+        setCookie("opmode", priorOpmode);
     } else if ( buttonid === "edit" ) {
-        if ( priorOpmode === "Reorder" ) {
+        if ( priorOpmode === "reorder" ) {
             cancelSortable();
             cancelPagemove();
         }
         setupDraggable();
         addEditLink();
         $("#mode_Edit").prop("checked",true);
-        priorOpmode = "DragDrop";
+        priorOpmode = "edit";
+        setCookie("opmode", priorOpmode);
     } else if ( buttonid==="showdoc" ) {
         window.open("https://housepanel.net",'_blank');
         return;
     // } else if ( buttonid==="name" ) {
     //     return;
     } else if ( buttonid==="operate" ) {
-        if ( priorOpmode === "Reorder" ) {
+        if ( priorOpmode === "reorder" ) {
             cancelSortable();
             cancelPagemove();
             if ( reordered ) {
                 window.location.href = cm_Globals.returnURL;
             }
-        } else if ( priorOpmode === "DragDrop" ) {
+        } else if ( priorOpmode === "edit" ) {
             updateFilters();
             cancelDraggable();
             delEditLink();
         }
         $("#mode_Operate").prop("checked",true);
-        priorOpmode = "Operate";
+        priorOpmode = "operate";
+        setCookie("opmode", priorOpmode);
     } else if ( buttonid==="snap" ) {
         var snap = $("#mode_Snap").prop("checked");
         // console.log("Tile movement snap mode: ",snap);
@@ -1941,10 +1998,10 @@ function checkInputs() {
 
     // var port = $("input[name='port']").val().trim();
     // var webSocketServerPort = $("input[name='webSocketServerPort']").val().trim();
-    // var fast_timer = $("input[name='fast_timer']").val();
-    // var slow_timer = $("input[name='slow_timer']").val().trim();
-    var uname = $("input[name='uname']").val().trim();
-    var pword = $("input[name='pword']").val().trim();
+    var fast_timer = $("input[name='fast_timer']").val().trim();
+    var slow_timer = $("input[name='slow_timer']").val().trim();
+    // var uname = $("input[name='uname']").val().trim();
+    // var pword = $("input[name='pword']").val().trim();
 
     var errs = {};
     var isgood = true;
@@ -1952,12 +2009,12 @@ function checkInputs() {
     var unamere = /^\D\S{3,}$/;      // start with a letter and be four long at least
     var pwordre = /^\S{6,}$/;        // start with anything but no white space and at least 6 digits 
 
-    errs.webSocketServerPort = checkInpval("webSocketServerPort", webSocketServerPort, intre);
-    errs.port = checkInpval("port", port, intre);
+    // errs.webSocketServerPort = checkInpval("webSocketServerPort", webSocketServerPort, intre);
+    // errs.port = checkInpval("port", port, intre);
     errs.fast_timer = checkInpval("fast_timer", fast_timer, intre);
     errs.slow_timer = checkInpval("slow_timer", slow_timer, intre);
-    errs.uname = checkInpval("username", uname, unamere);
-    errs.pword = pword==="" ? "" : checkInpval("password", pword, pwordre);
+    // errs.uname = checkInpval("username", uname, unamere);
+    // errs.pword = pword==="" ? "" : checkInpval("password", pword, pwordre);
 
     // show all errors
     var str = "";
@@ -2075,6 +2132,66 @@ function setupButtons() {
                 $(this).html("Show Customizations");
             }
         });
+
+    } else if ( pagename==="options") {
+        setupCustomCount();
+        setupFilters();
+        var pos = {position: "absolute", top: 100, left: 100, width: 600, height: 120, border: "4px solid"};
+        $("#showpanelname").hide();
+        $("#userpanel").on("change", function(evt) {
+            var panelid = $(this).val();
+            if ( panelid === "new" ) {
+                $("#showpanelname").show(); // removeClass("hidden");
+                $("#panelname").val("");
+                // $("#delPanel").html("Add Panel");
+                $("#delPanel").hide();
+            } else {
+                var panelname = $("#userpanel option[value='"+panelid+"']").html();
+                $("#showpanelname").hide(); // addClass("hidden");
+                $("#panelname").val(panelname);
+                // $("#delPanel").html("Delete Panel");
+                $("#delPanel").show();
+            }
+        });
+        $("#delPanel").on("click", function(evt) {
+            const pname = $("#panelname").val();
+            createModal("modalhub","Delete Panel: " + pname + " Are you sure?", "body" , true, pos, function(ui) {
+                var clk = $(ui).attr("name");
+                if ( clk==="okay" ) {
+                    alert("Removing panel: " + pname);
+                    $.post(cm_Globals.returnURL, 
+                        {useajax: "delpanel", userid: cm_Globals.options.userid, pname: pname}
+                    );
+                }
+            });
+        });
+        $("#usePanel").on("click", function(evt) {
+            const pname = $("#panelname").val();
+            createModal("modalhub","Activate and switch to Panel: " + pname + " Are you sure?", "body" , true, pos, function(ui) {
+                var clk = $(ui).attr("name");
+                if ( clk==="okay" ) {
+                    alert("Using panel: " + pname);
+                    $.post(cm_Globals.returnURL, 
+                        {useajax: "usepanel", userid: cm_Globals.options.userid, pname: pname}
+                    );
+                }
+            });
+        });
+        $("#delUser").on("click", function(evt) {
+            const uname = $("#unameid").val();
+            const emailname = $("#emailid").val();
+            const userid = cm_Globals.options.userid;
+            createModal("modalhub","Remove User #" + userid + " uname: " + uname + " email: " + emailname + " Are you sure?", "body" , true, pos, function(ui) {
+                var clk = $(ui).attr("name");
+                if ( clk==="okay" ) {
+                    alert("Removing user: " + uname + " | " + emailname);
+                    $.post(cm_Globals.returnURL, 
+                        {useajax: "deluser", userid: cm_Globals.options.userid, uname: uname, email: emailname}
+                    );
+                }
+            });
+        });
+
 
     } else if ( pagename==="auth" ) {
 
@@ -2425,10 +2542,8 @@ function addEditLink() {
             var tile = $(thing).attr("tile");
             var bid = $(thing).attr("bid");
             var hubid = $(thing).attr("hub");
-            // var thingid = $(thing).attr("thingid");
             customizeTile(userid, tile, aid, bid, str_type, hubid);
         }
-        // customizeTile(tile, aid, bid, str_type, hubid);
     });
     
     $("div.dellink").on("click",function(evt) {
@@ -2493,10 +2608,8 @@ function addEditLink() {
                     {useajax: "pagedelete", userid: cm_Globals.options.userid, id: roomnum, type: "none", value: roomname, roomid: roomid, attr: "none", pname: pname},
                     function (presult, pstatus) {
                         if (pstatus==="success" && !presult.startsWith("error")) {
-                            // remove it visually - although we do a refresh so not really needed
+                            // remove it visually
                             $("li[roomnum="+roomnum+"]").remove();
-                            // getOptions();
-                            // console.log(presult);
                         }
                     }
                 );
@@ -2873,6 +2986,9 @@ function updateTile(aid, presult) {
                 items.each( function(itemindex) {
                     var sibid = $(this).attr("aid");
                     var sibling = $(this).next();
+                    if ( sibling.hasClass("arrow-dn") ) {
+                        sibling = sibling.next();
+                    }
                     if ( sibling && sibling.attr("aid")=== sibid ) {
                         // var linkaid = $(this).attr("aid");
                         // var linktargetid = '#a-'+linkaid+'-'+key;
@@ -2984,16 +3100,18 @@ function processKeyVal(targetid, aid, key, value) {
         } 
 
     // add status of things to the class and remove old status
-    } else if ( oldclass && oldvalue && extra &&
+    } else if ( oldvalue && extra && 
             key!=="name" && key!=="trackImage" && 
             key!=="trackDescription" && key!=="mediaSource" &&
             key!=="currentArtist" && key!=="currentAlbum" &&
             $.isNumeric(extra)===false && 
             $.isNumeric(oldvalue)===false &&
-            oldclass.indexOf(oldvalue)>=0 ) 
+            $(targetid).hasClass(oldvalue) ) 
     {
+        if ( key !== oldvalue ) {
             $(targetid).removeClass(oldvalue);
-            $(targetid).addClass(extra);
+        }
+        $(targetid).addClass(extra);
     }
 
     // update the content 
@@ -3088,13 +3206,20 @@ function getFormattedTime(fmttime, tz) {
     return timestr;
 }
 
-function clockUpdater(whichclock) {
+function clockUpdater(whichclock, forceget) {
 
     if ( whichclock !=="clockdigital" && whichclock !=="clockanalog" ) {
         return;
     }
 
-    if ( !cm_Globals.options || !cm_Globals.options.rules || !cm_Globals[whichclock] ) {
+    if ( !cm_Globals.options || !cm_Globals.options.rules ) {
+        return;
+    }
+    var tile = $("div.panel div.thing[bid='"+whichclock+"']");
+    if ( tile ) {
+        var thingid = $(tile).attr("thingid");
+        var tileid = $(tile).attr("tile");
+    } else {
         return;
     }
 
@@ -3109,11 +3234,11 @@ function clockUpdater(whichclock) {
     clockoptions.push(opt2);
 
     // get the global clock devices if not previously set
-    if ( cm_Globals[whichclock] ) {
+    if ( cm_Globals[whichclock] && !forceget ) {
         updateClock(whichclock, cm_Globals[whichclock]);
     } else {
         $.post(cm_Globals.returnURL, 
-            {useajax: "getclock", userid: userid, pname: pname, id: whichclock, type: "clock", attr: clockoptions},
+            {useajax: "getclock", userid: userid, pname: pname, id: whichclock, thingid: thingid, tileid: tileid, type: "clock", attr: clockoptions},
             function (presult, pstatus) {
                 if ( pstatus==="success" && presult && typeof presult==="object" ) {
                     cm_Globals[whichclock] = presult;
@@ -3152,7 +3277,7 @@ function setupTimer(timertype, timerval, hubid) {
         // console.log("hub #" + that[2] + " timer = " + that[1] + " timertype = " + that[0] + " priorOpmode= " + priorOpmode + " modalStatus= " + modalStatus);
         var err;
 
-        if ( priorOpmode === "Operate" && modalStatus === 0 ) {
+        if ( priorOpmode === "operate" && modalStatus === 0 ) {
 
             try {
                 // just do the post and nothing else since the post call pushClient to refresh the tiles
@@ -3215,7 +3340,7 @@ function setupPage() {
         
         // handle special control type tiles that perform javascript actions
         // if we are not in operate mode only do this if click is on operate
-        if ( thetype==="control" && (priorOpmode==="Operate" || subid==="operate") ) {
+        if ( thetype==="control" && (priorOpmode==="operate" || subid==="operate") ) {
             if ( $(this).hasClass("confirm") ) {
                 var pos = {top: 100, left: 100};
                 createModal("modalexec","<p>Perform " + subid + " operation ... Are you sure?</p>", "body", true, pos, function(ui) {
@@ -3234,7 +3359,7 @@ function setupPage() {
 
         // ignore all other clicks if not in operate mode
         // including any password protected ones
-        if ( priorOpmode!=="Operate" ) {
+        if ( priorOpmode!=="operate" ) {
             return;
         }
 
@@ -3249,10 +3374,6 @@ function setupPage() {
             }
         }
 
-        // if ( ro ) {
-        //     return;
-        // }
-        
         // check for clicking on a password field
         // or any other field of a tile with a password sibling
         // this can only be true if user has added one using tile customizer
@@ -3402,6 +3523,7 @@ function processClick(that, thingname, ro) {
     var userid = cm_Globals.options.userid;
     var thingid = $(tile).attr("thingid");
     var tileid = $(tile).attr("tile");
+    var hubtype = $(tile).attr('hubtype') || "";
     var pname = $("#showversion span#infoname").html();
     var targetid;
     if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
@@ -3431,8 +3553,13 @@ function processClick(that, thingname, ro) {
     // determine if this is a LINK or RULE by checking for sb-aid sibling element
     // this includes setting the bid of the linked tile if needed
     // new logic based on DB version
-    var usertile =  $("#sb-"+aid+"-"+subid);
+    var triggersubid = subid;
+    if ( subid.endsWith("-dn") || subid.endsWith("up") ) {
+        triggersubid = subid.substr(0,subid.length - 3);
+    }
+    var usertile =  $("#sb-"+aid+"-"+triggersubid);
     var linkval = thevalue;
+    var linkid = 0;
     if ( usertile && usertile.attr("linkval") ) {
         command = usertile.attr("command");
         linkval = usertile.attr("linkval");
@@ -3440,19 +3567,25 @@ function processClick(that, thingname, ro) {
         linkhub = usertile.attr("linkhub");
         linktype = usertile.attr("linktype");
         realsubid = usertile.attr("subid");
+        if ( subid.endsWith("-dn") || subid.endsWith("up") ) {
+            realsubid += subid.substr(subid.length-3);
+        }
+        linkid = usertile.attr("linkid");
+        hint = usertile.attr("hint");
     }
+    // console.log("triggersubid = ", triggersubid, " command = ", command, " usertile= ", usertile);
 
     if ( typeof linkval === "string" && 
          (linkval.startsWith("GET::") || linkval.startsWith("POST::") || linkval.startsWith("TEXT::") ||
-          linkval.startsWith("PUT::") || linkval.startsWith("LINK::") || 
+          linkval.startsWith("PUT::") || 
           linkval.startsWith("RULE::") || linkval.startsWith("URL::")) )
     {
         var jcolon = linkval.indexOf("::");
         command = linkval.substr(0, jcolon);
         linkval = linkval.substr(jcolon+2);
     } else {
-        command = "";
-        linkval = "";
+        // command = "";
+        linkval = thevalue;
     }
     
     if ( command === "URL" ) {
@@ -3580,6 +3713,14 @@ function processClick(that, thingname, ro) {
 
     } else if ( ispassive ) {
         var msg = "";
+        msg += "thingname = " + thingname + "<br>";
+        msg += "type = " + thetype + "<br>";
+        msg += "hubtype = " + hubtype + "<br>";
+        msg += "tileid = " + tileid + "<br>";
+        if ( hint && hint !== hubtype ) {
+            msg += "hint = "+hint + "<br>";
+        }
+        msg += "<hr>";
         $('div.overlay > div[aid="'+aid+'"]').each(function() {
             var inspectsubid = $(this).attr("subid");
             var strval = $(this).html();
@@ -3637,8 +3778,8 @@ function processClick(that, thingname, ro) {
             thevalue = $(targetvol).attr("value");
         }
 
-        console.log("userid= ", userid, " thingid= ", thingid, "tileid= ", tileid, "thingname= ", thingname, 
-                    " command= ", command, " bid= ", bid, " linkbid= ", linkbid, " hub= ", hubid, " linkhub= ", linkhub,
+        console.log("userid= ", userid, " thingid= ", thingid, " tileid= ", tileid, " thingname= ", thingname, " hint= ", hint,
+                    " command= ", command, " bid= ", bid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", hubid, " linkhub= ", linkhub,
                     " type= ", thetype, " linktype= ", linktype, " subid= ", subid, " value= ", thevalue, 
                     " linkval= ", linkval, " attr=", theattr);
 

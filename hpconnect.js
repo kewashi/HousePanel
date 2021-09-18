@@ -13,7 +13,8 @@ const UTIL = require('util');
 
 const DEBUGcurl = false;
 const DEBUGpush = false;
-const DEBUGmsg = true;
+const DEBUGgroovypush = true;
+const DEBUGisypush = false;
 const DEBUGisy = false;
 
 // user must provide their email and password used for their hpserver account for the connector to work
@@ -239,8 +240,8 @@ function setupISYSocket() {
                         msg.password = password;
                         msg.jsondata = result.Event;
                         delete msg.utf8Data;
-                        if ( DEBUGmsg) {
-                            console.log( (ddbg()), " ISY json: ", jsonshow(msg.jsondata));
+                        if ( DEBUGisypush) {
+                            console.log( (ddbg()), " ISY: ", jsonshow(msg.jsondata));
                         }
 
                         // check for signal to refresh the server or push message to server
@@ -316,8 +317,12 @@ function setupGroovyListener() {
         // actually we don't really need this because hubid will be unique to this user
         // but I provide it anyway just to be sure
         if ( req.path==="/" && (req.body['msgtype'] === "initialize" || req.body['msgtype'] === "update") ) {
-            req.body.email = email;
-            req.body.password = password;
+            // req.body.email = email;
+            // req.body.password = password;
+            // var msg = {type: "groovy", msgtype: req.body.msgtype, email: email, password: password, jsondata: req.body};
+            if ( DEBUGgroovypush) {
+                console.log( (ddbg()), " Groovy: ", jsonshow(req.body));
+            }
             pushServer(req.body);
         }
         res.json("200 OK");

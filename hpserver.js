@@ -13,7 +13,7 @@ const DEBUG8 = false;               // API calls
 const DEBUG9 =  false;              // ISY webSocket success
 const DEBUG10 = false;              // sibling tag
 const DEBUG11 = false;              // rules
-const DEBUG12 = true;              // hub push updates
+const DEBUG12 = false;              // hub push updates
 const DEBUG13 = false;              // URL callbacks
 const DEBUG14 = false;              // tile link details
 const DEBUG15 = false;              // new user and forgot password
@@ -21,7 +21,7 @@ const DEBUG16 = false;              // customtiles writing and custom names
 const DEBUG17 = false;              // push client
 const DEBUG18 = false;              // ST, HE, and Ford messages in callHub -> getHubResponse
 const DEBUG19 = false;              // ST and HE callback from Groovy or new ST Event Sink
-const DEBUG20 = false;               // New SmartThings detail
+const DEBUG20 = false;              // New SmartThings detail
 const DEBUG21 = false;              // New ST sink message debug
 const DEBUGcurl = false;            // detailed inspection
 const DEBUGsonos = false;           // Sonos hub debugging
@@ -147,7 +147,7 @@ GLB.capabilities = {
 // list of capabilities that generate an event
 GLB.trigger1 = [
     "audioMute", "audioVolume", "battery", "colorControl", "colorTemperature", "contactSensor", "doorControl",
-    "lock", "motionSensor", "mediaInputSource", 
+    "lock", "motionSensor", "mediaInputSource",
     "powerMeter", "presence", "switch", "switchLevel", 
     "windowShade", "windowShadeLevel"
 ];
@@ -161,10 +161,6 @@ GLB.trigger2 = [
 // list of currently connected clients (users)
 var clients = {};
 
-// TODO - remove this once I update everything to the DB version
-// array of all tiles in all hubs
-// var allthings = {};
-
 // server variables
 var app;
 var applistening = false;
@@ -176,6 +172,15 @@ function setCookie(res, thevar, theval, days) {
     }
     options.maxAge = days*24*3600*1000;
     res.cookie(thevar, theval, options);
+}
+
+function getCookie(cookies, name) {
+    if ( is_object(cookies) && typeof cookies[name]==="string" ) {
+        var val = cookies[name];
+    } else {
+        val = null;
+    }
+    return val;
 }
 
 function getRandomInt(min, max) {
@@ -195,6 +200,14 @@ function encodeURI2(str) {
 
 function decodeURI2(str) {
     return decodeURI(str);
+}
+
+function objCount(obj) {
+    if ( typeof obj === "object" )  {
+        return Object.keys(obj).length;
+    } else {
+        return 0;
+    }
 }
 
 function getConfigItem(configoptions, tag) {
@@ -241,8 +254,12 @@ async function getUserName(cookies) {
     }
 
     // if a panel is named then we use it, otherwise we use the first panel in the user record
+    // if the port is a prefix with ":" then extract the actual hash
     if ( is_object(cookies) && typeof cookies.pname==="string"  ) {
         var phash = cookies.pname;
+        if ( phash.substr(1,1) === ":" ) {
+            phash = phash.substr(2);
+        }
     } else {
         phash = null;
     }
@@ -677,7 +694,7 @@ function getHubInfo(hub, reload) {
         }
 
         if ( DEBUG2 ) {
-            console.log( (ddbg()), "getHubInfo - hub: ", UTIL.inspect(hub,false,null,false));
+            console.log( (ddbg()), "getHubInfo - hub: ", jsonshow(hub) );
         }
 
         // save the hubid in our user default for use later
@@ -1060,22 +1077,29 @@ function getAccessToken(userid, code, hub) {
             // gather all the capability events as groups
             // for now just get a few categories to limit things
             var qitem1 = [
+                {"field": "eventType", "value": "DEVICE_EVENT", "operator": "EQ"},
                 {"field": "deviceEvent.capability", "value": GLB.trigger1, "operator": "IN"},
                 {"field": "deviceEvent.stateChange", "value": true, "operator": "EQ"}
             ];
             var qitem2 = [
+                {"field": "eventType", "value": "DEVICE_EVENT", "operator": "EQ"},
                 {"field": "deviceEvent.capability", "value": GLB.trigger2, "operator": "IN"},
                 {"field": "deviceEvent.stateChange", "value": true, "operator": "EQ"}
             ];
-            // use a hack to force any mode change to trigger an event
-            var qitemdum = [
-                // {"field": "modeEvent.modeId", "value": "11111111-aaaa-2222-3333-444455556666", "operator": "NE"}
+            // don't require mode change for buttons
+            var qitembutton = [
+                {"field": "eventType", "value": "DEVICE_EVENT", "operator": "EQ"},
+                {"field": "deviceEvent.capability", "value": "button", "operator": "EQ"}
+            ];
+            // register for mode changes
+            var qitemmode = [
                 {"field": "eventType", "value": "MODE_EVENT", "operator": "EQ"}
             ];
             var qgroups = [
                 {queryItems: qitem1}, 
                 {queryItems: qitem2},
-                {queryItems: qitemdum}
+                {queryItems: qitembutton},
+                {queryItems: qitemmode}
             ];
 
             // set up event sinks for the new ST app
@@ -1661,6 +1685,7 @@ function getDevices(hub, reload, reloadpath) {
 
         // first get all the devices
         var doneNewST = {};
+        var currentDevices = [];
         for ( var swtype in GLB.capabilities ) {
             doneNewST[swtype] = false;
         }
@@ -1856,6 +1881,9 @@ function getDevices(hub, reload, reloadpath) {
                         var locationId = location.locationId;
                         var locationName = location.name;
                         var locvalue = null;
+                        if ( !currentDevices.includes(locationId) ) {
+                            currentDevices.push(locationId);
+                        }
 
                         _curl(hubEndpt + "/locations/" + locationId, stheader, null, "GET")
                         .then(body => {
@@ -1916,6 +1944,8 @@ function getDevices(hub, reload, reloadpath) {
                                     if ( is_object(themode) ) {
                                         locvalue.themode = themode.label;
                                     }
+                                    // add a counter
+                                    locvalue.count = "0";
 
                                     var pvalue = encodeURI2(JSON.stringify(locvalue));
                                     var rowdevice = {
@@ -1974,6 +2004,7 @@ function getDevices(hub, reload, reloadpath) {
                 if ( DEBUG20 ) {
                     console.log( (ddbg()), "finished reading all newST types");
                 }
+                removeDeadNodes(userid, hubindex, currentDevices);
                 updateOptions(userid, reload, reloadpath);
             }
         }
@@ -2175,7 +2206,11 @@ function getDevices(hub, reload, reloadpath) {
                             refresh: "normal",
                             pvalue: pvalue
                         };
-                            
+
+                        if ( !currentDevices.includes(deviceid) ) {
+                            currentDevices.push(deviceid);
+                        }
+                                
                         mydb.updateRow("devices", rowdevice, "userid = "+userid+" AND hubid = "+hubindex+
                             " AND devicetype = '"+swtype+"' AND deviceid = '"+deviceid+"'")
                         .then(result => {
@@ -2220,13 +2255,17 @@ function getDevices(hub, reload, reloadpath) {
             // configure returned array with the "id"
             var devicecnt = 0;
             if (jsonbody && is_array(jsonbody) ) {
-
+                
                 var numdevices = jsonbody.length;
+                var currentDevices = [];
 
                 // now add them one at a time until we have them all
                 jsonbody.forEach(function(content) {
                     var thetype = content["type"];
                     var deviceid = content["id"];
+                    if ( !currentDevices.includes(deviceid) ) {
+                        currentDevices.push(deviceid);
+                    }
                     var origname = content["name"] || "";
                     var pvalue = content["value"];
                     var hint = hubType;
@@ -2251,14 +2290,12 @@ function getDevices(hub, reload, reloadpath) {
                     // remove ignored items from pvalue
                     for (var field in pvalue) {
                         if ( GLB.ignoredAttributes.includes(field) || field.startsWith("supportedWasher") ) {
-                            // console.log(">>>> ignoring: ", field);
                             delete pvalue[field];
                         }
                     }
 
                     // add a counter
                     pvalue.count = "0";
-                    var pvalstr = encodeURI2(JSON.stringify(pvalue));
 
                     // handle audio and weather tiles
                     if ( thetype==="audio" || thetype==="sonos" || pvalue.audioTrackData ) {
@@ -2271,6 +2308,7 @@ function getDevices(hub, reload, reloadpath) {
                     } else {
                         pvalue = translateObjects(pvalue);
                     }
+                    var pvalstr = encodeURI2(JSON.stringify(pvalue));
 
                     var device = {userid: userid, hubid: hubindex, deviceid: deviceid, name: origname, 
                         devicetype: thetype, hint: hint, refresh: refresh, pvalue: pvalstr};
@@ -2282,15 +2320,30 @@ function getDevices(hub, reload, reloadpath) {
 
                         // check if this is our last one
                         if ( devicecnt >= numdevices ) {
+                            removeDeadNodes(userid, hubindex, currentDevices);
                             updateOptions(userid, reload, reloadpath);
                         }
-                    }).catch(reason => {console.log("dberror 6 - hubInfoCallback - ", reason);});
+                    }).catch(reason => {console.log("dberror 6 - hubInfoCallback - userid = ", userid, " reason = ", reason);});
                 });
 
             } else {
+                // an error occurred with this hub so remove all devices tied to it
+                mydb.deleteRow("devices", "userid = "+userid+" AND hubid = "+hubindex);
                 updateOptions(userid, reload, reloadpath);
             }
         }
+    }
+    
+    // remove any devices that are no longer on the hub
+    function removeDeadNodes(userid, hubindex, currentDevices) {
+        mydb.getRows("devices", "*", "userid = "+userid+" AND hubid = "+hubindex)
+        .then(devices => {
+            devices.forEach(device => {
+                if ( !currentDevices.includes(device.deviceid) ) {
+                    mydb.deleteRow("devices", "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '"+device.deviceid+"'");
+                }
+            })
+        }).catch(reason => {console.log("dberror 6b - removeDeadNodes - userid = ", userid, " reason = ", reason)});
     }
 
     function getFordVehicles() {
@@ -2438,527 +2491,6 @@ function getDevices(hub, reload, reloadpath) {
         return "success";
     }
 
-    // function getIsyDevices() {
-    //     var buff = Buffer.from(hubAccess);
-    //     var base64 = buff.toString('base64');
-    //     var stheader = {"Authorization": "Basic " + base64};
-    //     var pvariables = {name: "ISY Variables"};
-    //     var vardefs = {
-    //         userid: userid,
-    //         name: "ISY Variables", 
-    //         hubid: hubindex,
-    //         deviceid: "vars",
-    //         devicetype: "isy",
-    //         hint: "ISY_variable",
-    //         refresh: "never",
-    //         pvalue: encodeURI(JSON.stringify(pvariables))
-    //     };
-
-    //     // use this object to keep track of which things are done
-    //     var done = {"Int" : false, "State" : false, "Int_defs" : false, "State_defs" : false, 
-    //                 "Nodes": false, "Progs": false, "Vars": false };
-
-    //     if ( DEBUGisy ) {
-    //         console.log("endpoint = ", hubEndpt, " stheader = ", stheader, " hubAccess: ", hubAccess);
-    //     }
-
-    //     // get all the variables to put into a single tile
-    //     curl_call(hubEndpt + "/vars/definitions/1", stheader, false, false, "GET", getIntVarsDef);
-    //     curl_call(hubEndpt + "/vars/definitions/2", stheader, false, false, "GET", getStateVarsDef);
-    //     curl_call(hubEndpt + "/vars/get/1", stheader, false, false, "GET", getIntVars);
-    //     curl_call(hubEndpt + "/vars/get/2", stheader, false, false, "GET", getStateVars);
-
-    //     // also get programs - each going into its own unique tile
-    //     curl_call(hubEndpt + "/programs?subfolders=true", stheader, false, false, "GET", getAllProgs);
-
-    //     // now get all the nodes - each going into its own unique tile
-    //     curl_call(hubEndpt + "/nodes", stheader, false, false, "GET", getAllNodes);
-
-    //     // handle setting the variable tile
-    //     // the four calls to curl above all land here to check if everything is done
-    //     function checkDone( stage ) {
-
-    //         // mark this stage done if passed in as a parameter
-    //         if ( stage ) {
-    //             done[ stage ] = true;
-    //         }
-
-    //         // check for finishing all the vars stages
-    //         if ( !done["Vars"] && (done["Int"] && done["State"] && done["Int_defs"] && done["State_defs"]) ) {
-
-    //             // Now that we have all the isy variables and names, create a mapping of ids to names
-    //             done["Vars"] = true;
-    //             vardefs.pvalue = encodeURI2(JSON.stringify(pvariables));
-    //             if ( DEBUGisy ) {
-    //                 console.log( (ddbg()), "updating vars: ", vardefs);
-    //             }
-    //             mydb.updateRow("devices", vardefs, "userid="+userid+" AND deviceid='vars'")
-    //             .then(resvars => {
-    //                 checkDone();
-    //             });
-    //         }
-
-    //         if ( done["Vars"] && done["Progs"] && done["Nodes"] ) {
-    //             updateOptions(userid, reload, reloadpath);
-    //         }
-
-    //     }
-
-    //     function getIntVarsDef(err, res, body ) {
-    //         if ( err ) {
-    //             console.log( (ddbg()), "error retrieving ISY int definitions: ", err);
-    //             checkDone("Int_defs");
-    //         } else {
-    //             getISY_Defs(body, "Int");
-    //         }
-    //     }
-        
-    //     function getStateVarsDef(err, res, body ) {
-    //         if ( err ) {
-    //             console.log( (ddbg()), "error retrieving ISY state definitions: ", err);
-    //             checkDone("State_defs");
-    //         } else {
-    //             getISY_Defs(body, "State");
-    //         }
-    //     }
-        
-    //     async function getISY_Defs( body, vartype ) {
-
-    //         await xml2js(body, function(err, result) {
-    //             if (DEBUGisy) {
-    //                 console.log( (ddbg()), vartype, vartype + " variables defs: ", UTIL.inspect(result, false, null, false) );
-    //             }
-    //             try {
-    //                 var varobj = result.CList.e;
-    //             } catch(e) {
-    //                 return;
-    //             }
-    //             if ( !is_object(varobj) ) {
-    //                 return;
-    //             }
-
-    //             // convert single variable object into an array of variable objects
-    //             if ( !is_array(varobj) ) {
-    //                 varobj = [varobj];
-    //             }
-    //             varobj.forEach(function( obj) {
-    //                 var defname = vartype + "_";
-    //                 try {
-    //                     var varid = obj["$"]["id"];
-    //                     var varname = obj["$"]["name"];
-    //                     if ( !varname ) {
-    //                         varname = defname + varid;
-    //                     }
-                        
-    //                     // remove spaces from name
-    //                     // varname = varname.replace(/ /g,"_");
-
-    //                     // var prec = obj["val"][0]["_"];
-    //                 } catch (e) {
-    //                     varid = 0;
-    //                     varname = "";
-    //                 }
-    //                 var defaultname = defname+varid;
-    //                 if ( varid > 0 && varname !== defaultname) {
-    //                     pvariables["def_"+defaultname] = varname;
-    //                     // vardefs["prec_" + vartype + "_" + varid] = prec;
-    //                 }
-    //             });
-    //         });
-    //         checkDone(vartype + "_defs");
-    //     }
-        
-    //     function getIntVars(err, res, body) {
-    //         if ( err ) {
-    //             console.log( (ddbg()), "error retrieving ISY Int variables: ", err);
-    //             checkDone("Int");
-    //         } else {
-    //             getISY_Vars(body, "Int");
-    //         }
-    //     }
-        
-    //     function getStateVars(err, res, body) {
-    //         if ( err ) {
-    //             console.log( (ddbg()), "error retrieving ISY State variables: ", err);
-    //             checkDone("State");
-    //         } else {
-    //             getISY_Vars(body, "State");
-    //         }
-    //     }
-
-    //     async function getISY_Vars(body, vartype) {
-    //         // make a single tile with all the variables in it
-    //         var vartypes = ["", "Int", "State"];
-    //         if (DEBUGisy) {
-    //             console.log( (ddbg()), body );
-    //         }
-
-    //         await xml2js(body, function(err, result) {
-    //             if (DEBUGisy) {
-    //                 console.log( (ddbg()), vartype, "variables: ", UTIL.inspect(result, false, null, false) );
-    //             }
-
-    //             if ( !result || !result.vars ) {
-    //                 return;
-    //             }
-
-    //             var varobj = result.vars.var;
-    //             if ( !is_object(varobj) ) {
-    //                 return;
-    //             }
-
-    //             // convert single variable object into an array of variable objects
-    //             if ( !is_array(varobj) ) {
-    //                 varobj = [varobj];
-    //             }
-                    
-    //             varobj.forEach(function( obj) {
-    //                 try {
-    //                     var varid = obj["$"]["id"];
-    //                     var vartypeid = parseInt(obj["$"]["type"]);
-    //                 } catch (e) {
-    //                     varid = 0;
-    //                     vartypeid = 0;
-    //                 }
-    //                 if ( varid > 0 && vartype === vartypes[vartypeid] ) {
-    //                     var prec = parseInt(obj.prec[0]);
-    //                     var val10 = obj.val[0];
-    //                     if ( !isNaN(prec) && prec !== 0 ) {
-    //                         val10 = parseFloat(val10) / Math.pow(10, prec);
-    //                     }
-    //                     pvariables[vartype+"_"+varid] = val10.toString();
-    //                     pvariables["prec_"+vartype+"_"+varid] = prec.toString();
-    //                 }
-    //             });
-
-    //             if ( DEBUGisy ) {
-    //                 console.log( (ddbg()), "New variable value: ", pvariables);
-    //             }
-    //         });
-
-    //         // move this to outside await so it can proceed if async returns prematurely
-    //         // the await ensures everything is done before getting here
-    //         checkDone(vartype);
-    //     }
-
-    //     // get programs and setup program tiles much like how Piston tiles are done in ST and HE
-    //     function getAllProgs(err, res, body) {
-    //         if ( err ) {
-    //             console.log( (ddbg()), "error retrieving ISY programs: ", err);
-    //             checkDone("Progs");
-    //         } else {
-
-    //             // have to use the full parsing function here
-    //             xml2js(body, function(xmlerr, result) {
-    //                 var thetype = "isy";
-    //                 if ( result ) {
-    //                     try {
-    //                         var programlist = result.programs.program;
-    //                         if ( !is_object(programlist) ) {
-    //                             checkDone("Progs");
-    //                             return;
-    //                         }
-
-    //                         // // convert single variable object into an array of variable objects
-    //                         if ( !is_array(programlist) ) {
-    //                             programlist = [programlist];
-    //                         }
-
-    //                         // now lets get all the master program nodes
-    //                         // and create a tile for any program that is not a folder
-    //                         // TODO: recurse into folders and get programs there too
-    //                         var pvalue;
-    //                         var numprogs = programlist.length;
-    //                         var progcount = 0;
-    //                         if ( numprogs === 0 ) {
-    //                             checkDone("Progs");
-    //                             return;
-    //                         }
-
-    //                         programlist.forEach(function(prog) {
-    //                             var proginfo = prog["$"];
-    //                             var isfolder = proginfo.folder;
-    //                             if ( DEBUG7 ) {
-    //                                 console.log( (ddbg()), "Program details: ", UTIL.inspect(prog, false, null, false) );
-    //                             }
-
-    //                             // if we have a folder don't add it - but flag the count to keep track of load status
-    //                             if ( isfolder==="true" ) {
-    //                                 if ( DEBUG7 ) {
-    //                                     console.log( (ddbg()), "Program ", prog.name, " is a folder. id: ", proginfo.id, " Status: ", proginfo.status);
-    //                                 }
-    //                                 progcount++;
-    //                                 if ( progcount >= numprogs ) {
-    //                                     checkDone("Progs");
-    //                                 }
-
-    //                             // create tile for programs that are not folders
-    //                             } else {
-    //                                 if ( DEBUG7 ) {
-    //                                     console.log( (ddbg()), "Program ", prog.name, " id: ", proginfo.id, " Status: ", proginfo.status, " Last run: ", prog.lastRunTime );
-    //                                 }
-    //                                 var progid = "prog_" + proginfo.id;
-
-    //                                 // set the program name. Add Program if it isn't there
-    //                                 // this will help make program names unique from tiles
-    //                                 var progname;
-    //                                 if ( is_array(prog.name) ) {
-    //                                     progname = prog.name[0];
-    //                                 } else {
-    //                                     progname = prog.name;
-    //                                 }
-    //                                 if ( progname.toLowerCase().indexOf("program") === -1 ) {
-    //                                     progname = "Program " + progname;
-    //                                 }
-
-    //                                 // var progcommands = "run|runThen|runElse|stop|enable|disable";
-    //                                 // var progarr = progcommands.split("|");
-    //                                 var progarr = ["run","runThen","runElse","stop","enable","disable"];
-    //                                 pvalue = {name: progname};
-    //                                 progarr.forEach(function(command) {
-    //                                     pvalue[command] = command;
-    //                                 });
-    //                                 for ( var key in prog ) {
-    //                                     if ( key!=="$" && key!=="name" ) {
-    //                                         var val = prog[key];
-    //                                         if ( is_array(val) ) {
-    //                                             pvalue[key] = val[0];
-    //                                         } else {
-    //                                             pvalue[key] = val;
-    //                                         }
-    //                                     }
-    //                                 }
-    //                                 pvalue.status = proginfo.status;
-
-    //                                 // get the enabled and runat states
-    //                                 pvalue.enabled  = proginfo.enabled;
-    //                                 pvalue.runAtStartup = proginfo.runAtStartup;
-    //                                 var device = {
-    //                                     userid: userid,
-    //                                     name: progname, 
-    //                                     hubid: hubindex,
-    //                                     deviceid: progid,
-    //                                     devicetype: thetype,
-    //                                     hint: "ISY_program",
-    //                                     refresh: "never",
-    //                                     pvalue: encodeURI2(JSON.stringify(pvalue))
-    //                                 };
-    //                                 mydb.updateRow("devices", device, "userid="+userid+" AND deviceid='"+progid+"'")
-    //                                 .then(resprogs => {
-    //                                     progcount++;
-    //                                     if ( progcount >= numprogs ) {
-    //                                         checkDone("Progs");
-    //                                     }
-    //                                 });
-    //                             }
-    //                         });
-    //                     } catch (e) {
-    //                         console.log( (ddbg()), "error - failed loading ISY programs. ", e);
-    //                         checkDone("Progs");
-    //                     }
-    //                 }
-    //             });
-    //         }
-
-    //     }
-
-    //     function getAllNodes(err, res, body) {
-    //         var thetype = "isy";
-    //         if ( err ) {
-    //             console.log( (ddbg()), "error retrieving ISY nodes: ", err);
-    //             checkDone("Nodes");
-    //         } else {
-
-    //             // note - changed to use xml2js
-    //             xml2js(body, function(xmlerr, result) {
-    //                 if ( DEBUG7 && DEBUGisy ) {
-    //                     console.log( (ddbg()), "xml2js nodes: ", body, UTIL.inspect(result, false, null, false) );
-    //                 }
-    //                 if ( !result ) {
-    //                     checkDone("Nodes");
-    //                     return;
-    //                 }
-
-    //                 // set our flags for handling asyncronous update status
-    //                 var newdevices = {nodecount: 0, groupcount: 0, statuscount: 0, ranstatus: false};
-    //                 var thenodes = result.nodes["node"];
-    //                 var groups = result.nodes["group"];
-    //                 var numnodes = utils.count(thenodes);
-    //                 var numgroups = utils.count(groups);
-
-    //                 // we run this after every node is updated to see if all are done
-    //                 // and if all are updated then we get status details of each
-    //                 // removing any that failed to update for whatever reason
-    //                 function checkNodesDone() {
-    //                     if ( newdevices.nodecount === numnodes && !newdevices.ranstatus ) {
-    //                         getNodesStatus();
-    //                     }
-
-    //                     // if we have read in all nodes and all groups, refresh the screen
-    //                     if ( newdevices.nodecount >= numnodes && 
-    //                          newdevices.groupcount >= numgroups &&
-    //                          newdevices.statuscount >= numnodes ) {
-    //                         if ( DEBUGisy ) {
-    //                             console.log( (ddbg()), "finished loading all nodes.");
-    //                         }
-    //                         checkDone("Nodes");
-    //                     }
-    //                 }
-
-    //                 for ( var obj in thenodes ) {
-    //                     var node = thenodes[obj];
-    //                     var id = fixISYid(node["address"][0].toString());
-    
-    //                     // var idx = thetype + "|" + id;
-    //                     var hint = node["type"][0].toString();
-    
-    //                     // set hint to nothing if default of zeros is provided
-    //                     // TODO - provide a more useful mapping of hints to type names
-    //                     // until then user can still style hints using CSS
-    //                     if ( hint ) {
-    //                         hint.replace( /\./g, "_" );
-    //                         hint = "ISY " + hint;
-    //                     }
-    
-    //                     var name = node["name"][0];
-    //                     var pvalue = {"name": name};
-    //                     if ( !name ) {
-    //                         name = pvalue["name"];
-    //                     }
-                        
-    //                     // set bare minimum info
-    //                     // this is updated below in the callback after getting node details
-    //                     var device = {
-    //                             userid: userid,
-    //                             name: name, 
-    //                             hubid: hubindex,
-    //                             deviceid: id,
-    //                             devicetype: thetype,
-    //                             hint: hint,
-    //                             refresh: "never",
-    //                             pvalue: encodeURI2(JSON.stringify(pvalue))
-    //                     };
-    //                     if ( DEBUGisy ) {
-    //                         console.log((ddbg()),"updating node after reading device: ", device);
-    //                     }
-    //                     newdevices[id] = device;
-
-    //                     mydb.updateRow("devices", device, "userid = "+userid + " AND devicetype = '" + thetype +"' AND deviceid = '"+id+"'")
-    //                     .then(result => {
-    //                         if ( !result ) {
-    //                             console.log( (ddbg()), "error - device update failed for id: ", id);
-    //                             newdevices[id] = null;
-    //                         } else {
-    //                             newdevices[id] = device;
-    //                         }
-    //                         newdevices.nodecount++;
-    //                         checkNodesDone();
-    //                     });
-
-    //                     if (DEBUGisy) {
-    //                         console.log( (ddbg()), "id= ", id," hint= ", hint, " node: ", node, " pvalue: ", pvalue);
-    //                     }
-    //                 }
-
-    //                 // now that we have all the nodes identified, get the details
-    //                 // this makes a second write to the database for each node
-    //                 function getNodesStatus() {
-                        
-    //                     newdevices.ranstatus = true;
-
-    //                     curl_call(hubEndpt + "/status", stheader, false, false, "GET", callbackStatusInfo);
-    //                     function callbackStatusInfo(err, res, body) {
-    //                         xml2js(body, function(xmlerr, result) {
-    //                             try {
-    //                                 if ( result ) {
-
-    //                                     var nodes = result.nodes.node;
-    //                                     if ( nodes ) {
-    //                                         nodes.forEach(function(node) {
-    //                                             // var nodename = node["name"][0];
-    //                                             var nodeid = fixISYid(node["$"]["id"]);
-    //                                             var props = node["property"];
-
-    //                                             var device = newdevices[nodeid];
-
-    //                                             // if there are props set values
-    //                                             // otherwise just flag that we tried by incrementing the count
-    //                                             if ( props && device ) {
-    //                                                 setIsyFields(userid, nodeid, device, props, false)
-    //                                                 .then(res2 => {
-    //                                                     newdevices.statuscount++;
-    //                                                     checkNodesDone();
-    //                                                 });
-    //                                             } else {
-    //                                                 newdevices.statuscount++;
-    //                                                 checkNodesDone();
-    //                                             }
-
-    //                                         });
-    //                                     } else {
-    //                                         throw "Something went wrong reading status from ISY";
-    //                                     }
-    //                                 }
-    //                             } catch(e) { 
-    //                                 console.log( (ddbg()), "error - ", e);
-    //                             }
-    //                         });
-    //                     }
-    //                 }
-
-    //                 // now get groups
-    //                 if ( groups ) {
-    //                     for ( var obj in groups ) {
-    //                         var node = groups[obj];
-    //                         var id = fixISYid(node["address"][0].toString());
-    //                         var hint = "ISY_scene";
-    //                         var name = node["name"][0];
-            
-    //                         // set the base tile to include name and items to turn scene on and off
-    //                         var pvalue = {"name": name, "DON": "DON", "DOF":"DOF"};
-    //                         var members = node.members[0];
-            
-    //                         // load up pvalue with links
-    //                         if ( members && array_key_exists("link", members) && is_array(members.link) ) {
-    //                             for ( var sceneitem in members.link ) {
-    //                                 pvalue["scene_"+sceneitem] = members.link[sceneitem]["_"];
-    //                             }
-    //                         }
-            
-    //                         if ( !name ) {
-    //                             name = pvalue["name"];
-    //                         }
-            
-    //                         // set tile up
-    //                         var device = {
-    //                             userid: userid,
-    //                             name: name, 
-    //                             hubid: hubindex,
-    //                             deviceid: id,
-    //                             devicetype: thetype,
-    //                             hint: hint,
-    //                             refresh: "never",
-    //                             pvalue: encodeURI2(JSON.stringify(pvalue))
-    //                         };
-    //                         if (DEBUGisy) {
-    //                             console.log( (ddbg()), "id= ", id," hint= ", hint, " node: ", node, " pvalue: ", pvalue);
-    //                         }
-    //                         mydb.updateRow("devices", device, "userid="+userid+" AND deviceid='"+id+"'")
-    //                         .then(res3 => {
-    //                             newdevices.groupcount++;
-    //                             checkNodesDone();
-    //                         });
-    //                     }
-    //                 }
-
-    //                 // in case nothing is done above check here for update
-    //                 checkNodesDone();
-            
-    //             });
-    //         }
-    //     }
-    //     // ------ end of getAllNodes
-    // }
 }
 // ------ end of getDevices
 
@@ -3211,7 +2743,7 @@ function getSpecials(configoptions) {
     return obj;
 }
 
-function getLoginPage(userid, usertype, emailname, mobile, hostname, skin) {
+function getLoginPage(req, userid, usertype, emailname, mobile, hostname, skin) {
     var tc = "";
     var pname = "default";
     tc+= utils.getHeader(userid, null, skin, true);
@@ -3230,29 +2762,40 @@ function getLoginPage(userid, usertype, emailname, mobile, hostname, skin) {
 
     tc+= "<div class='loginline'>";
     tc+= "<label for=\"emailid\" class=\"startupinp\">Email or Username: </label><br>";
-    tc+= "<input id=\"emailid\" name=\"emailid\" width=\"60\" type=\"text\" value=\"" + emailname + "\"/>"; 
+    tc+= "<input id=\"emailid\" name=\"emailid\" size=\"60\" type=\"text\" value=\"" + emailname + "\"/>"; 
     tc+= "</div>";
     
     tc+= "<div class='loginline'>";
     tc+= "<label for=\"mobileid\" class=\"startupinp\">Mobile: </label><br>";
-    tc+= "<input id=\"mobileid\" name=\"mobile\" width=\"60\" type=\"text\" value=\"" + mobile + "\"/>"; 
+    tc+= "<input id=\"mobileid\" name=\"mobile\" size=\"60\" type=\"text\" value=\"" + mobile + "\"/>"; 
     tc+= "</div>";
     
     tc+= "<div class='loginline'>";
     tc+= "<label for=\"pword\" class=\"startupinp\">Password: </label><br>";
-    tc+= "<input id=\"pword\" name=\"pword\" width=\"60\" type=\"password\" value=\"\"/>"; 
+    tc+= "<input id=\"pword\" name=\"pword\" size=\"60\" type=\"password\" value=\"\"/>"; 
     tc+= "</div>";
     
     tc+= "<hr>";
 
     tc+= "<div class='loginline'>";
     tc+= "<label for=\"pname\" class=\"startupinp\">Panel Name: </label><br>";
-    tc+= "<input id=\"pname\" name=\"pname\" width=\"60\" type=\"text\" value=\"" + pname + "\"/>"; 
+    tc+= "<input id=\"pname\" name=\"pname\" size=\"60\" type=\"text\" value=\"" + pname + "\"/>"; 
+    tc+= "</div>";
+
+    var currentport = getCookie(req.cookies, "pname") || "1:default";
+    if ( currentport.substr(1,1)!==":" ) {
+        currentport = "1";
+    } else {
+        currentport = currentport.substr(0,1);
+    }
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"pnumber\" class=\"startupinp\">Panel Number (must be unique): </label><br>";
+    tc+= "<input id=\"pnumber\" name=\"pnumber\" type='number' min='1' max='9' step='1' value='" + currentport + "'>"; 
     tc+= "</div>";
     
     tc+= "<div class='loginline'>";
     tc+= "<label for=\"panelpword\" class=\"startupinp\">Panel Password: </label><br>";
-    tc+= "<input id=\"panelpword\" name=\"panelpword\" width=\"60\" type=\"password\" value=\"\"/>"; 
+    tc+= "<input id=\"panelpword\" name=\"panelpword\" size=\"60\" type=\"password\" value=\"\"/>"; 
     tc+= "</div>";
     
     tc+= "<div class='loginline'>";
@@ -3262,15 +2805,16 @@ function getLoginPage(userid, usertype, emailname, mobile, hostname, skin) {
     // the forgot pw link only uses the email and mobile fields
     tc+= "<hr>";
     tc+= "<div class='loginline'>";
-    tc+= "Forgot Password? Ente email and mobile phone number above and then";
+    tc+= "Forgot Password? Enter email and mobile phone number above and then<br>";
     tc+= '<div id="forgotpw" class="inlinebutton">Click Here to Reset</div>';
     tc+= "</div>";
 
-    tc+= "<hr>";
-    tc+= "<div class='loginline'>";
-    tc+= "Don't have an account?";
-    tc+= '<div id="newuser" class="inlinebutton">Create One Here</div>';
-    tc+= "</div>";
+    // disable creating new accounts
+    // tc+= "<hr>";
+    // tc+= "<div class='loginline'>";
+    // tc+= "Don't have an account?";
+    // tc+= '<div id="newuser" class="inlinebutton">Create One Here</div>';
+    // tc+= "</div>";
 
     tc+= "<hr>";
     tc+= "<div class='loginline'>";
@@ -3281,6 +2825,7 @@ function getLoginPage(userid, usertype, emailname, mobile, hostname, skin) {
 
             "Each user can have any number of panels defined with each one having its own password and skin. " + 
             "This allows a single account holder to display their smart devices in different ways on different devices. " +
+            "Each device must be given a unique number from 1 to 9 to ensure that it has its own network port. " +
             "To load a specific panel skin, please enter its name and password. " +
             "If this is left blank, the first panel available that is not password protected in the user's account will be loaded. " +
             "If all panels are password protected you must provide the name and password of a valid panel to sign into HousePanel." +
@@ -3302,38 +2847,44 @@ function getLoginPage(userid, usertype, emailname, mobile, hostname, skin) {
     tc+= "<h2 class='login'>" + utils.APPNAME + "</h2>";
 
     tc+= "<div class='loginline'>";
-    tc+= "<label for=\"newemailid\" class=\"startupinp\">Email (required): </label><br>";
-    tc+= "<input id=\"newemailid\" name=\"newemailid\" width=\"60\" type=\"text\" value=\"\"/>"; 
+    tc+= "Sorry, but HousePanel is no longer available for new users. You can still use the \"freeware\" ";
+    tc+= "version of HousePanel by downloading the files onto your own server or rPI. Instructions for how ";
+    tc+= "to do this and where to find the files are available at <a href=\"https://www.housepanel.net\" target=\"_blank\">https://www.housepanel.net</a>";
     tc+= "</div>";
 
-    tc+= "<div class='loginline'>";
-    tc+= "<label for=\"newmobileid\" class=\"startupinp\">Mobile phone (required): </label><br>";
-    tc+= "<input id=\"newmobileid\" name=\"newmobile\" width=\"60\" type=\"text\" value=\"\"/>"; 
-    tc+= "</div>";
+    // tc+= "<div class='loginline'>";
+    // tc+= "<label for=\"newemailid\" class=\"startupinp\">Email (required): </label><br>";
+    // tc+= "<input id=\"newemailid\" name=\"newemailid\" size=\"60\" type=\"text\" value=\"\"/>"; 
+    // tc+= "</div>";
 
-    tc+= "<div class='loginline'>";
-    tc+= "<label for=\"newunameid\" class=\"startupinp\">Username (optional): </label><br>";
-    tc+= "<input id=\"newunameid\" name=\"newuname\" width=\"60\" type=\"text\" value=\"\"/>"; 
-    tc+= "</div>";
+    // tc+= "<div class='loginline'>";
+    // tc+= "<label for=\"newmobileid\" class=\"startupinp\">Mobile phone (required): </label><br>";
+    // tc+= "<input id=\"newmobileid\" name=\"newmobile\" size=\"60\" type=\"text\" value=\"\"/>"; 
+    // tc+= "</div>";
+
+    // tc+= "<div class='loginline'>";
+    // tc+= "<label for=\"newunameid\" class=\"startupinp\">Username (optional): </label><br>";
+    // tc+= "<input id=\"newunameid\" name=\"newuname\" size=\"60\" type=\"text\" value=\"\"/>"; 
+    // tc+= "</div>";
     
-    tc+= "<div class='loginline'>";
-    tc+= "<label for=\"newpword\" class=\"startupinp\">Password: </label><br>";
-    tc+= "<input id=\"newpword\" name=\"newpword\" width=\"60\" type=\"password\" value=\"\"/>"; 
-    tc+= "</div>";
+    // tc+= "<div class='loginline'>";
+    // tc+= "<label for=\"newpword\" class=\"startupinp\">Password: </label><br>";
+    // tc+= "<input id=\"newpword\" name=\"newpword\" size=\"60\" type=\"password\" value=\"\"/>"; 
+    // tc+= "</div>";
     
-    tc+= "<div class='loginline'>";
-    tc+= "<label for=\"newpword2\" class=\"startupinp\">Confirm Password: </label><br>";
-    tc+= "<input id=\"newpword2\" name=\"newpword2\" width=\"60\" type=\"password\" value=\"\"/>"; 
-    tc+= "</div>";
+    // tc+= "<div class='loginline'>";
+    // tc+= "<label for=\"newpword2\" class=\"startupinp\">Confirm Password: </label><br>";
+    // tc+= "<input id=\"newpword2\" name=\"newpword2\" size=\"60\" type=\"password\" value=\"\"/>"; 
+    // tc+= "</div>";
     
-    tc+= "<div class='loginline'>";
-    tc+= '<div id="createuser" class="formbutton">Create Account</div>';
-    tc+= "</div>";
+    // tc+= "<div class='loginline'>";
+    // tc+= '<div id="createuser" class="formbutton">Create Account</div>';
+    // tc+= "</div>";
 
     tc+= "<br><hr>";
     tc+= "<div class='loginline'>";
     tc+= "Already have an account?";
-    tc+= '<div id="olduser" class="inlinebutton">Create Here To Login</div>';
+    tc+= '<div id="olduser" class="inlinebutton">Click Here To Login</div>';
     tc+= "</div>";
 
     tc+= "<br><hr>";
@@ -3623,7 +3174,7 @@ function validateUserPage(user, hostname) {
 
     tc+= "<div class='loginline'>";
     tc+= "<label for=\"newhpcode\" class=\"startupinp\">Security Code: </label><br>";
-    tc+= "<input id=\"newhpcode\" name=\"newhpcode\" width=\"40\" type=\"text\" value=\"\"/>"; 
+    tc+= "<input id=\"newhpcode\" name=\"newhpcode\" size=\"40\" type=\"text\" value=\"\"/>"; 
     tc+= "</div>";
 
     tc+= "<div class='loginline'>";
@@ -3678,29 +3229,29 @@ function validatePasswordPage(user, hostname) {
     
     tc+= "<div class='loginline'>";
     tc+= "<label for=\"newhpcode\" class=\"startupinp\">Security Code: </label><br>";
-    tc+= "<input id=\"newhpcode\" name=\"newhpcode\" width=\"40\" type=\"text\" value=\"\"/>"; 
+    tc+= "<input id=\"newhpcode\" name=\"newhpcode\" size=\"40\" type=\"text\" value=\"\"/>"; 
     tc+= "</div>";
 
     tc+= "<div class='loginline'>";
     tc+= "<label for=\"newpword\" class=\"startupinp\">New Password: </label><br>";
-    tc+= "<input id=\"newpword\" name=\"newpword\" width=\"60\" type=\"password\" value=\"\"/>"; 
+    tc+= "<input id=\"newpword\" name=\"newpword\" size=\"60\" type=\"password\" value=\"\"/>"; 
     tc+= "</div>";
     
     tc+= "<div class='loginline'>";
     tc+= "<label for=\"newpword2\" class=\"startupinp\">Confirm Password: </label><br>";
-    tc+= "<input id=\"newpword2\" name=\"newpword2\" width=\"60\" type=\"password\" value=\"\"/>"; 
+    tc+= "<input id=\"newpword2\" name=\"newpword2\" size=\"60\" type=\"password\" value=\"\"/>"; 
     tc+= "</div>";
     
     tc+= "<hr>";
 
     tc+= "<div class='loginline'>";
     tc+= "<label for=\"pname\" class=\"startupinp\">Panel Name: </label><br>";
-    tc+= "<input id=\"pname\" name=\"pname\" width=\"60\" type=\"text\" value=\"" + "default" + "\"/>"; 
+    tc+= "<input id=\"pname\" name=\"pname\" size=\"60\" type=\"text\" value=\"" + "default" + "\"/>"; 
     tc+= "</div>";
     
     tc+= "<div class='loginline'>";
     tc+= "<label for=\"panelpword\" class=\"startupinp\">Panel Password: </label><br>";
-    tc+= "<input id=\"panelpword\" name=\"panelpword\" width=\"60\" type=\"password\" value=\"\"/>"; 
+    tc+= "<input id=\"panelpword\" name=\"panelpword\" size=\"60\" type=\"password\" value=\"\"/>"; 
     tc+= "</div>";
     
     tc+= "<div class='loginline'>";
@@ -3856,6 +3407,9 @@ function processLogin(body, res) {
     var uname = encodeURI(body["emailid"].trim());
     var uhash = pw_hash(body["pword"]);
 
+    // get the panel number here
+    var pnumber = body["pnumber"] || "1";
+
     if ( !body["pname"] ) {
         var pname = "";
         var phash = "";
@@ -3865,7 +3419,7 @@ function processLogin(body, res) {
     }
 
     if ( DEBUG3 ) {
-        console.log( (ddbg()), "dologin: uname= ", uname, " pword= ", uhash, " pname= ", pname, " panelpword= ", phash, " body: ", body);
+        console.log( (ddbg()), "dologin: uname= ", uname, " pword= ", uhash, " pname= ", pname, " panelpword= ", phash, " pnumber= ", pnumber, " body: ", body);
     }
 
     // get all the users and check for one that matches the hashed email address
@@ -3885,9 +3439,11 @@ function processLogin(body, res) {
             uname = therow["users_email"];
             pname = therow["panels_pname"];
             setCookie(res, "uname", pw_hash(uname));
-            setCookie(res, "pname", pw_hash(pname));
+
+            // we take on the panel number to the start of the panel name in the cookie so we always have it
+            setCookie(res, "pname", pnumber + ":" + pw_hash(pname));
             if ( DEBUG3 ) {
-                console.log((ddbg()), ">>>> Successful login. Username: ", uname, " Panelname: ", pname);
+                console.log((ddbg()), ">>>> Successful login. Username: ", uname, " Panelname: ", pname, " on panel #"+pnumber);
             }
 
             // lets make sure there is a null hub for this user
@@ -4019,7 +3575,7 @@ function getAuthPage(user, configoptions, hostname, pathname, rmsg) {
         }
 
         if ( DEBUG2 ) {
-            console.log( (ddbg()), "Hub auth default hub: ", defhub, " hubs: ", UTIL.inspect(authhubs,false,null,false));
+            console.log( (ddbg()), "Hub auth default hub: ", defhub, " hubs: ", jsonshow(authhubs) );
         }
         
         // add a new blank hub at the end for adding new ones
@@ -4149,7 +3705,7 @@ function getAuthPage(user, configoptions, hostname, pathname, rmsg) {
                     $tc += "</select>";
 
                     $tc += "<br><br><label class=\"startupinp\">Host API Url: </label>";
-                    $tc += "<input class=\"startupinp\" title=\"Enter the hub OAUTH address here\" name=\"hubhost\" width=\"80\" type=\"text\" value=\"" + hub["hubhost"] + "\"/>"; 
+                    $tc += "<input class=\"startupinp\" title=\"Enter the hub OAUTH address here\" name=\"hubhost\" size=\"80\" type=\"text\" value=\"" + hub["hubhost"] + "\"/>"; 
     
                     $tc += "</div>";
                 }
@@ -4158,33 +3714,33 @@ function getAuthPage(user, configoptions, hostname, pathname, rmsg) {
                 $tc += utils.hidden("csecret", csecret, "csecret_"+hubindex);
                     
                 // $tc += "<div><label class=\"startupinp required\">Host API Url: </label>";
-                // $tc += "<input class=\"startupinp\" title=\"Enter the hub OAUTH address here\" name=\"hubhost\" width=\"80\" type=\"text\" value=\"" + hub["hubhost"] + "\"/></div>"; 
+                // $tc += "<input class=\"startupinp\" title=\"Enter the hub OAUTH address here\" name=\"hubhost\" size=\"80\" type=\"text\" value=\"" + hub["hubhost"] + "\"/></div>"; 
 
                 // wrap all of this in a group that can be hidden for New SmartThings, Sonos, and blanks
                 $tc += "<div id=\"hideid_" + hubindex + "\" class=\"" + secretclass + "\">";
 
                 $tc += "<div><label class=\"startupinp\">Client ID: </label>";
-                $tc += "<input class=\"startupinp\" name=\"clientid\" width=\"80\" type=\"text\" value=\"" + hub["clientid"] + "\"/></div>";
+                $tc += "<input class=\"startupinp\" name=\"clientid\" size=\"80\" type=\"text\" value=\"" + hub["clientid"] + "\"/></div>";
 
                 $tc += "<div class=\"fixClientSecret\"><label class=\"startupinp\">Client Secret: </label>";
-                $tc += "<input class=\"startupinp\" name=\"clientsecret\" width=\"80\" type=\"text\" value=\"\"/></div>"; 
+                $tc += "<input class=\"startupinp\" name=\"clientsecret\" size=\"80\" type=\"text\" value=\"\"/></div>"; 
 
                 $tc += "<div><label class=\"startupinp\">Fixed access_token: </label>";
-                $tc += "<input class=\"startupinp\" name=\"useraccess\" width=\"80\" type=\"text\" value=\"" + hub["useraccess"] + "\"/></div>"; 
+                $tc += "<input class=\"startupinp\" name=\"useraccess\" size=\"80\" type=\"text\" value=\"" + hub["useraccess"] + "\"/></div>"; 
 
                 $tc += "<div><label class=\"startupinp\">Fixed Endpoint: </label>";
-                $tc += "<input class=\"startupinp\" name=\"userendpt\" width=\"80\" type=\"text\" value=\"" + hub["userendpt"] + "\"/></div>"; 
+                $tc += "<input class=\"startupinp\" name=\"userendpt\" size=\"80\" type=\"text\" value=\"" + hub["userendpt"] + "\"/></div>"; 
 
                 $tc += "<div><label class=\"startupinp\">hub ID or App ID: </label>";
-                $tc += "<input class=\"startupinp\" name=\"hubid\" width=\"80\" type=\"text\" value=\"" + hub["hubid"] + "\"/></div>"; 
+                $tc += "<input class=\"startupinp\" name=\"hubid\" size=\"80\" type=\"text\" value=\"" + hub["hubid"] + "\"/></div>"; 
 
                 $tc += "</div>";
 
                 $tc += "<div><label class=\"startupinp\">Hub Name: </label>";
-                $tc += "<input class=\"startupinp\"" + disabled + " name=\"hubname\" width=\"80\" type=\"text\" value=\"" + hub["hubname"] + "\"/></div>"; 
+                $tc += "<input class=\"startupinp\"" + disabled + " name=\"hubname\" size=\"80\" type=\"text\" value=\"" + hub["hubname"] + "\"/></div>"; 
 
                 $tc += "<div><label class=\"startupinp\">Refresh Timer: </label>";
-                $tc += "<input class=\"startupinp\"" + disabled + " name=\"hubtimer\" width=\"10\" type=\"text\" value=\"" + hub["hubtimer"] + "\"/></div>"; 
+                $tc += "<input class=\"startupinp\"" + disabled + " name=\"hubtimer\" size=\"10\" type=\"text\" value=\"" + hub["hubtimer"] + "\"/></div>"; 
 
                 $tc += "<input class=\"hidden\" name=\"hubaccess\" type=\"hidden\" value=\"" + hub["hubaccess"] + "\"/>"; 
                 $tc += "<input class=\"hidden\" name=\"hubendpt\" type=\"hidden\" value=\"" + hub["hubendpt"] + "\"/>"; 
@@ -4496,6 +4052,7 @@ function returnFile(userid, pname, thingvalue, thingtype, configoptions) {
         return thingvalue;
     }
 
+    // only process this for special tiles that read files
     var specialtiles = getSpecials(configoptions);
     if ( !array_key_exists(thingtype, specialtiles) ) {
         return thingvalue;
@@ -4556,8 +4113,6 @@ function returnFile(userid, pname, thingvalue, thingtype, configoptions) {
     // the logged in user is irrelevant here so we scan all the skins until we find a match if needed
     // moved logic to the code block below
     // var skin = getSkin();
-    var skin;
-
     function getext(fname) {
         var ipos = fname.lastIndexOf(".");
         var ext = "";
@@ -4570,42 +4125,41 @@ function returnFile(userid, pname, thingvalue, thingtype, configoptions) {
     if ( grtypes ) {
 
         // first check names without extensions
-        try {
-            var pwords = GLB.options.config.pword;
-        } catch(e) {
-            pwords = {default: ["","skin-housepanel"]};
-        }
+        var folder = "user" + userid + "/";
+        var mediafolder = folder + pname + "/media/";
+        var skins = ["skin-housepanel", "skin-modern"];
 
-        var uname;
-        if (fs.existsSync(fn) || fn.startsWith("http")) {
+        if ( fn.startsWith("http")) {
             $vn = fn;
             $fext = getext(fn);
-        } else if (fs.existsSync("media/"+ fn)) {
-            $vn = "media/" + fn;
+        } else if (fs.existsSync(folder + fn) ) {
+            $vn = folder + fn;
+            $fext = getext(fn);
+        } else if (fs.existsSync(mediafolder + fn)) {
+            $vn = mediafolder + fn;
             $fext = getext(fn);
         } else {
-            for ( uname in pwords ) {
-                var skin = pwords[uname][1];
+            for ( var i in skins ) {
+                var skin = skins[i];
                 if ( $vn==="" && fs.existsSync(skin + "/media/"+ fn)) {
                     $vn = skin + "/media/" + fn;
                     $fext = getext(fn);
-                    found = true;
                 }
             }
         }
 
-        // next check names with extensions and in media folders including skin
+        // next check names with extensions
         if ( $vn==="" ) {
             grtypes.forEach(function($ext) {
-                if ( $vn==="" && fs.existsSync(fn + $ext) ) {
-                    $vn = fn + $ext;
+                if ( $vn==="" && fs.existsSync(folder + fn + $ext) ) {
+                    $vn = folder + fn + $ext;
                     $fext = $ext;
-                } else if ( $vn==="" && fs.existsSync("media/" + fn + $ext) ) {
-                    $vn = "media/" + fn + $ext;
+                } else if ( $vn==="" && fs.existsSync(mediafolder + fn + $ext) ) {
+                    $vn = mediafolder + fn + $ext;
                     $fext = $ext;
                 } else {
-                    for ( uname in pwords ) {
-                        skin = pwords[uname][1];
+                    for ( var i in skins ) {
+                        var skin = skins[i];
                         if ( $vn==="" && fs.existsSync(skin + "/media/" + fn + $ext) ) {
                             $vn = skin + "/media/" + fn + $ext;
                             $fext = $ext;
@@ -4655,10 +4209,8 @@ function returnFile(userid, pname, thingvalue, thingtype, configoptions) {
 
             // otherwise show any web file referenced or a blank just like below
             default:
-                if ( $vn.startsWith("http") ) {
+                if ( $vn.startsWith("http") || thingtype==="frame" ) {
                     $v = "<iframe width=\"" + fw + "\" height=\"" + fh + "\" src=\"" + $vn + "\" frameborder=\"0\"></iframe>";
-                } else if ( thingtype==="custom" ) {
-                    $v = "";
                 } else {
                     $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\"></div>";
                 }
@@ -4666,14 +4218,8 @@ function returnFile(userid, pname, thingvalue, thingtype, configoptions) {
         }
     
     // if file wasn't found just make an empty block of the requested size
-    // but for custom tiles don't do this since we can use blanks to make empty block sizes
-    // for custom tiles only create a block of size if there is content to be seen
     } else {
-        if ( thingtype==="custom" ) {
-            $v = "";
-        } else {
-            $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\"></div>";
-        }
+        $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\"></div>";
     }
 
     if ( DEBUG16 ) {
@@ -4691,13 +4237,12 @@ function returnFile(userid, pname, thingvalue, thingtype, configoptions) {
 // function to create frame2.html with AccuWeather for a city
 // the City Name, Country Code, and the Location Code from AccuWeather must be provided
 // writeAccuWeather("ann-arbor-mi","us","329380");
-function writeAccuWeather(city, region, code) {
-    const acid = "awcc1531959686475";
-    const unit = "F";
+function writeAccuWeather(userid, city, region, code) {
     if ( !city || !code || !region ) {
         return;
     }
-
+    const acid = "awcc1531959686475";
+    const unit = "F";
     var rcitycode = region + "/" + city + "/" + code + "/weather-forecast/" + code;
     var $tc = "<!DOCTYPE html>";
     $tc += "<html><body>";
@@ -4705,17 +4250,17 @@ function writeAccuWeather(city, region, code) {
     $tc += "</a><div id=\"" + acid + "\" class=\"aw-widget-current\"  data-locationkey=\"" + code + "\" data-unit=\"" + unit + "\" data-language=\"en-us\" data-useip=\"false\" data-uid=\"" + acid + "\"></div>";
     $tc += "<script type=\"text/javascript\" src=\"https://oap.accuweather.com/launch.js\"></script>";
     $tc += "</body></html>";
-    fs.writeFileSync("Frame2.html", $tc, {encoding: "utf8", flag:"w"});
+    var fname = "user" + userid + "/Frame2.html";
+    fs.writeFileSync(fname, $tc, {encoding: "utf8", flag:"w"});
 }
 
 // function to create Frame1.html for a city
 // the City Name and code must be provided
 // data for my home town:  ("ann-arbor","Ann Arbor","42d28n83d74");
-function writeForecastWidget(city, region, code) {
+function writeForecastWidget(userid, city, region, code) {
     if ( !city || !code || !region ) {
         return;
     }
-
     var $tc = `
     <!DOCTYPE html>
     <html>
@@ -4738,7 +4283,8 @@ function writeForecastWidget(city, region, code) {
     $tc = $tc.replace("{{city}}", city);
     $tc = $tc.replace("{{region}}", region);
     $tc = $tc.replace("{{code}}", code);
-    fs.writeFileSync("Frame1.html", $tc, {encoding: "utf8", flag:"w"});
+    var fname = "user" + userid + "/Frame1.html";
+    fs.writeFileSync(fname, $tc, {encoding: "utf8", flag:"w"});
 }
 
 function getWeatherIcon(num, accu) {
@@ -4899,6 +4445,16 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     var thingtype = thesensor["type"];
     var bid = thesensor["id"];
     if ( thingtype==="audio" || thingtype==="sonos" || thesensor.value.audioTrackData ) {
+        if ( !thesensor.value.audioTrackData || objCount(thesensor.value.audioTrackData)===0 ) {
+            thesensor.value.audioTrackData = {
+                title: "None",
+                artist: "None",
+                album: "None",
+                albumArtUrl: GLB.returnURL + "/media/Electronics/electronics13-icn@2x.png",
+                mediaSource: "None"
+            };
+        }
+        // console.log(">>>> audio tile: ", thesensor.value);
         thesensor.value = translateAudio(thesensor.value);
     } else if ( thingtype==="music" || thesensor.value.trackData ) {
         thesensor.value = translateMusic(thesensor.value);
@@ -4910,8 +4466,8 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     }
 
     // add in customizations here
-    if ( configoptions ) {
-        thesensor.value = getCustomTile(userid, configoptions, thesensor.value, thingtype, bid);
+    if ( configoptions && is_object(configoptions) ) {
+        thesensor.value = getCustomTile(userid, configoptions, thesensor.value, bid);
         thesensor.value = setValOrder(thesensor.value);
         thesensor.value = returnFile(userid, pname, thesensor.value, thingtype, configoptions);
     }
@@ -5160,7 +4716,7 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
                     // var helperval = thingvalue[helperkey];
                     // console.log(">>>> helper: ", helperkey, helperval);
                     var helperval = tval;
-                    $tc += putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, twidth, theight);
+                    $tc += putLinkElement(bid, hint, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, twidth, theight);
                 } else {
                     $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, null, null, twidth, theight);
                 }
@@ -5176,7 +4732,7 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
 
 // compare this logic with how siblings are defined
 // in the getCustomTile function
-function putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, twidth, theight) {
+function putLinkElement(bid, hint, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, twidth, theight) {
 
     var linktype = thingtype;
     var linkhub = 0;
@@ -5214,12 +4770,6 @@ function putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, s
             //     console.log(">>>> linkdev: ", linkdev);
             // }
 
-            // var lidx = linkval;
-            // linkval = GLB.options.index[lidx];
-            // var idxitems = lidx.split("|");
-            // linktype = idxitems[0];
-            // linkbid = idxitems[1];
-
             if ( linkdev ) {
                 
                 // replace the place holder value with the linked value
@@ -5228,6 +4778,7 @@ function putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, s
                     linkid = linkdev["devices_id"];
                     linkbid = linkdev["devices_deviceid"];
                     linkhub = linkdev["hubs_id"];
+                    hint = linkdev["devices_hint"];
                     var linktileval = JSON.parse(decodeURI2(linkdev["devices_pvalue"]));
 
                     // handle special audio updates
@@ -5281,7 +4832,7 @@ function putLinkElement(bid, helperval, kindex, cnt, j, thingtype, tval, tkey, s
                 helperval = "LINK::error";
             }
 
-            sibling= "<div id=\"sb-"+cnt+"-"+subid+"\""+" aid=\""+cnt+"\" linkid=\""+linkid+"\" linktype=\""+linktype+"\" linkhub=\""+linkhub+"\" linkval=\""+helperval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
+            sibling= "<div id=\"sb-"+cnt+"-"+subid+"\""+" aid=\""+cnt+"\" linkid=\""+linkid+"\" hint=\""+hint+"\" linktype=\""+linktype+"\" linkhub=\""+linkhub+"\" linkval=\""+helperval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
         }
     }
 
@@ -5476,20 +5027,6 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
 
 }
 
-function getCustomCount(stype, defcount) {
-    var customcnt = defcount;
-    if ( GLB.options.config && array_key_exists("specialtiles", GLB.options.config) ) {
-        var specialarr = GLB.options.config["specialtiles"];
-        if ( array_key_exists(stype, specialarr) ) {
-            customcnt = parseInt(specialarr[stype]);
-            if ( isNaN(customcnt) || customcnt < 1 ) { 
-                customcnt = defcount; 
-            }
-        }
-    }
-    return customcnt;
-}
-
 function getFormattedDate(fmtdate, d) {
     var weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     var months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -5643,9 +5180,6 @@ function getClock(userid, clockid, configoptions) {
     var dclock = {"name": clockname, "skin": clockskin, "weekday": weekday,
         "date": dateofmonth, "time": timeofday, "tzone": timezone,
         "fmt_date": fmtdate, "fmt_time": fmttime};
-
-    // dclock = getCustomTile(userid, configoptions, dclock, "clock", clockid);
-    // console.log("in getclock... clock = ", dclock, " ... configoptions: ", jsonshow(configoptions));
     return dclock;
 }
 
@@ -5785,7 +5319,7 @@ function getCustomName(defbase, cnum) {
 // create addon subid's for any tile
 // this enables a unique customization effect
 // we pass in the config options so this function doesn't run async
-function getCustomTile(userid, configoptions, custom_val, customtype, bid) {
+function getCustomTile(userid, configoptions, custom_val, bid) {
 
     var configkey = "user_" + bid;
     var updated_val = clone(custom_val);
@@ -5794,9 +5328,10 @@ function getCustomTile(userid, configoptions, custom_val, customtype, bid) {
 
         var key = configoptions[i].configkey;
         var val = configoptions[i].configval;
-        if ( key === configkey ) {
+        var keyuser = configoptions[i].userid;
+        if ( parseInt(userid) === parseInt(keyuser) && key === configkey ) {
             if ( DEBUG14 ) {
-                console.log((ddbg()), ">>>> key: ", key, " val: ", val);
+                console.log((ddbg()), "userid: ", userid, " key: ", key, " val: ", val);
             }
             if ( typeof val === "object" ) {
                 var lines = val;
@@ -6028,12 +5563,12 @@ function processHubMessage(userid, hubmsg, newST) {
 
             // set the event string to this time
             var d = new Date();
-            var timestr = d.toLocaleTimeString();
+            var timestr = d.toLocaleDateString() + " " +  d.toLocaleTimeString();
             if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
-            if ( typeof pvalue[subid] === "string" && pvalue[subid].length < 20 ) {
-                pvalue["event_1"] = subid + " " + pvalue[subid] + " " + timestr;
+            if ( typeof pvalue[subid] === "string" && pvalue[subid].length < 10 ) {
+                pvalue["event_1"] = timestr + " " + subid + " " + pvalue[subid];
             } else {
-                pvalue["event_1"] = subid + " " + timestr;
+                pvalue["event_1"] = timestr + " " + subid;
             }
 
             if ( DEBUG12 ) {
@@ -6046,6 +5581,15 @@ function processHubMessage(userid, hubmsg, newST) {
 
             // handle special audio updates
             if ( swtype==="audio" || swtype==="sonos" || pvalue.audioTrackData ) {
+                if ( !pvalue.audioTrackData || objCount(pvalue.audioTrackData)===0 ) {
+                    pvalue.audioTrackData = {
+                        title: "",
+                        artist: "",
+                        album: "",
+                        albumArtUrl: GLB.returnURL + "/media/Electronics/electronics13-icn@2x.png",
+                        mediaSource: ""
+                    };
+                }
                 pvalue = translateAudio(pvalue);
             } else if ( swtype==="music" || pvalue.trackData ) {
                 pvalue = translateMusic(pvalue);
@@ -6163,7 +5707,7 @@ function processIsyMessage(userid, jsondata) {
                     }
                     // set the event string to this time
                     var d = new Date();
-                    var timestr = d.toLocaleTimeString();
+                    var timestr = d.toLocaleDateString() + " " +  d.toLocaleTimeString();
                     if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
                     if ( typeof pvalue[subid] === "string" && pvalue[subid].length < 10 ) {
                         pvalue["event_1"] = timestr + " " + subid + " " + pvalue[subid];
@@ -6605,7 +6149,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
         
         // print some debug info
         if ( DEBUG11 ) {
-            console.log( (ddbg()), "RULE: id: ", bid, " type: ", thetype, " trigger: ", trigger, " tileid: ", tileid, " userid: ", userid, " rules: ", UTIL.inspect(items, false, null, false));
+            console.log( (ddbg()), "RULE: id: ", bid, " type: ", thetype, " trigger: ", trigger, " tileid: ", tileid, " userid: ", userid, " rules: ", jsonshow(items) );
         }
 
         // loop through all the custom elements of this tile looking for rules
@@ -6922,8 +6466,23 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                     // handle requests for parameters of the trigger tile ($) or destination tile (@)
                     // disable hub calls for this type of rule
                     var trigtype = rvalue.substr(0,1);
+                    
+                    // look for +n  or  -n  to modify rvalue if rvalue is a number
+                    var kpos = rvalue.indexOf("+");
+                    var kneg = rvalue.indexOf("-");
+                    var rvaldelta = 0;
+                    if ( kpos!==-1 && !isNaN(parseInt(rvalue.substr(kpos+1))) ) {
+                        rvaldelta = parseInt(rvalue.substr(kpos+1).trim());
+                        rvalue = rvalue.substr(0, kpos).trim();
+                    }
+                    else if ( kneg!==-1 && !isNaN(parseInt(rvalue.substr(kneg+1))) ) {
+                        rvaldelta = 0 - parseInt(rvalue.substr(kneg+1).trim());
+                        rvalue =  rvalue.substr(0, kneg).trim();
+                    }
+
+                    var trigsubid = "";
                     if ( trigtype==="$" || trigtype==="@" ) {
-                        var trigsubid = rvalue.substr(1);
+                        trigsubid = rvalue.substr(1);
 
                         if ( trigtype==="$" && array_key_exists(trigsubid, pvalue) ) {
                             rvalue = pvalue[trigsubid];
@@ -6931,9 +6490,16 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                             rvalue = devpvalue[trigsubid];
                         }
                     }
+
+                    // adjust the value with the math qualifier
+                    if ( !isNaN(parseInt(rvalue)) ) {
+                        rvalue = parseInt(rvalue) + rvaldelta;
+                    }
+
+                    // convert back to a string
                     rvalue = rvalue.toString();
                     if ( DEBUG11 ) {
-                        console.log(">>>> trigtype: ", trigtype, " trigsubid: ", trigsubid, " rvalue: ", rvalue, " pvalue: ", pvalue, " devpvalue: ", devpvalue)
+                        console.log(">>>> trigtype: ", trigtype, " trigsubid: ", trigsubid, " rvalue: ", rvalue, " rvaldelta = ", rvaldelta);
                     }
 
                     // fix up ISY hubs and handle toggle
@@ -6998,8 +6564,12 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                         } else if ( rsubid==="switch" || rswtype==="isy" || (swval!=="on" && swval!=="off") ) {
                             rswattr="";
                         } else if ( !rswattr && rswtype!=="isy" ) {
-                            var swval = rvalue==="on" ? "off" : "on";
-                            rswattr= rswtype + " p_" + rtileid + " " + swval;
+                            if ( rvalue==="on" || rvalue==="off" ) {
+                                var swval = rvalue==="on" ? " off" : " on";
+                            } else {
+                                swval = "";
+                            }
+                            rswattr= rswtype + " p_" + rtileid + swval;
                         }
 
                         // make the hub call now or delayed
@@ -7037,28 +6607,27 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
 function pushClient(userid, swid, swtype, subid, body) {
     // send the new results to all clients
     var entry = {};
-    if ( typeof subid === "undefined" ) { subid= ""; }
-    entry["id"] = swid;
+    entry["id"] = swid || "";
     entry["type"] = swtype;
     entry["trigger"] = subid;
     var pvalue;
 
-    if ( typeof body === "undefined" || !body ) {
-        pvalue = "";
+    if ( !body || typeof body !== "object" ) {
+        pvalue = {};
     } else {
         pvalue = body;
     }
 
     // create blank object if nothing given
-    if ( !pvalue ) {
-        pvalue = {};
-    }
+    // if ( !pvalue ) {
+    //     pvalue = {};
+    // }
         
     // save the result to push to all clients
     entry["value"] = pvalue;
 
     if ( DEBUG17 ) {
-        console.log( (ddbg()), "pushClient: ", UTIL.inspect(entry, false, null, false));
+        console.log( (ddbg()), "pushClient: ", jsonshow(entry) );
     }
 
     // do a push to each client for this user if ready
@@ -7246,6 +6815,13 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
                     else if ( astat==="unlock" ) { astat = "unlocked"; }
                     presult[subid] = astat;
                 
+                } else if ( subid==="count") {
+                    nvpreq = null;
+                    presult[subid] = swval;
+                    console.log(">>>> swval = ", swval);
+                    getHubResponse(presult);
+                    return "success";
+
                 } else if ( swtype==="location" && subid.substr(0,1)==="_" ) {
 
                     var modename = subid.substr(1);
@@ -7685,6 +7261,12 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
                     }
                     break;
 
+                case "count":
+                    var pvalue = {};
+                    pvalue[subid] = swval;
+                    getHubResponse(pvalue);
+                    break;
+
                 case "run":
                 case "runThen":
                 case "runElse":
@@ -7740,6 +7322,7 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
                             realsubid = subid.substr(0, subid.length-3);
                             swval = subid.endsWith("-up") ? floatvar + 1.0 : floatvar - 1.0;
                         } else {
+                            floatvar = 0.0;
                             swval = parseFloat(swval);
                         }
 
@@ -8387,8 +7970,6 @@ function doAction(userid, hubid, hubindex, thingid, swid, swtype, swval, swattr,
             if ( !subid.startsWith("_") ) {
                 pushClient(userid, swid, swtype, subid, body);
             }
-            console.log( (ddbg()), "URL callback returned: ", UTIL.inspect(body, false, null, false));
-            // pushClient(userid, swid, swtype, subid, webresponse);
         } else if ( typeof body === "string" && body!=="" && body!=="success" ) {
             // skip setting results if the subid starts with an underscore signaling a command
             // always skip if the body is empty or the word success
@@ -8407,10 +7988,9 @@ function doAction(userid, hubid, hubindex, thingid, swid, swtype, swval, swattr,
                 }
                 pushClient(userid, swid, swtype, subid, webresponse);
             }
-            console.log( (ddbg()), "URL callback returned: ", body);
         }
         if ( DEBUG13 ) {
-            console.log( (ddbg()), "URL callback response: ", UTIL.inspect(body, false, null, false) );
+            console.log( (ddbg()), "URL callback returned: ", jsonshow(body) );
         }
     }
 
@@ -8421,7 +8001,7 @@ function doQuery(userid, thingid, protocol) {
 
     if ( thingid==="all" || thingid==="fast" || thingid==="slow" ) {
 
-        var rtype = swid==="all" ? "normal" : swid;
+        var rtype = thingid==="all" ? "normal" : swid;
         var conditions = "userid = " + userid + " AND refresh = " + rtype;
         result = mydb.getRows("devices","*", conditions)
         .then(devices => {
@@ -9058,7 +8638,7 @@ function hubFilters(userid, hubpick, hubs, useroptions, pagename, ncols) {
 
     $tc+= "<table class=\"useroptions\"><tr>";
     var $i= 0;
-    var numtypes = utils.count(thingtypes);
+    var numtypes = objCount(thingtypes);
     for (var $iopt in thingtypes) {
         var $opt = thingtypes[$iopt];
         $i++;
@@ -9181,10 +8761,12 @@ function getOptionsPage(user, configoptions, hubs, req) {
     var userid = user["users_id"];
     var useremail = user["users_email"];
     var uname = user["users_uname"];
+    var mobile = user["users_mobile"];
     var pname = user["panels_pname"];
     var usertype = parseInt(user["users_usertype"]);
     var panelid = user["panels_id"];
     var skin = user["panels_skin"];
+    var panelid = user["panels_id"];
 
     var hostname = req.headers.host;
     var pathname = req.path;
@@ -9234,29 +8816,38 @@ function getOptionsPage(user, configoptions, hubs, req) {
             // console.log(">>>> options things: ", things);
             resarray.push(things);
             return resarray;
-        })
+        });
         return pr;
     })
-    // var newtc = mydb.getRows("things","things.*,devices.*", conditions, [joinstr1, joinstr2, joinstr3],"rooms.rorder")
+    .then(resarray => {
+        var pr = mydb.getRows("panels","*", "userid = "+userid)
+        .then(panels => {
+            resarray.push(panels);
+            return resarray;
+        });
+        return pr;
+    })
     .then(resarray => {
         var rooms = resarray[0];
         var devices = resarray[1];
         var things = resarray[2];
+        var panels = resarray[3];
         // console.log(">>>> options rooms: ", rooms);
         // return JSON.stringify(things);
         if ( rooms && devices && things ) {
-            return renderOptionsPage(rooms, devices, things);
+            return renderOptionsPage(rooms, devices, things, panels);
         } else {
             return "error - problem with reading your existing tiles";
         }
-    }).catch(reason => {console.log("dberror 27 - getOptionsPage - ", reason);});
+    })
+    .catch(reason => {console.log("dberror 27 - getOptionsPage - ", reason);});
 
     return pr;
 
-    function renderOptionsPage(rooms, devices, sensors) {
+    function renderOptionsPage(rooms, devices, sensors, panels) {
 
-        var $fast_timer = getConfigItem(configoptions, "fast_timer") || "0";
-        var $slow_timer = getConfigItem(configoptions, "slow_timer") || "0";
+        // var $fast_timer = getConfigItem(configoptions, "fast_timer") || "0";
+        // var $slow_timer = getConfigItem(configoptions, "slow_timer") || "0";
         var $kioskoptions = getConfigItem(configoptions, "kiosk") || "false";
         var $blackout = getConfigItem(configoptions, "blackout") || "false";
         var $ruleoptions = getConfigItem(configoptions, "rules") || "true";
@@ -9266,97 +8857,162 @@ function getOptionsPage(user, configoptions, hubs, req) {
         var fcastcity = getConfigItem(configoptions, "fcastcity") || "ann-arbor";
         var fcastregion = getConfigItem(configoptions, "fcastregion") || "Ann Arbor";
         var fcastcode = getConfigItem(configoptions, "fcastcode") || "42d28n83d74";   //  ann-arbor code is 42d28n83d74
-        var $accucity = getConfigItem(configoptions, "accucity") || "ann-arbor-mi";
-        var $accuregion = getConfigItem(configoptions, "accuregion") | "us";
-        var $accucode = getConfigItem(configoptions, "accucode") || "329380";      // ann-arbor-mi code is 329380
+        var accucity = getConfigItem(configoptions, "accucity") || "ann-arbor-mi";
+        var accuregion = getConfigItem(configoptions, "accuregion") || "us";
+        var accucode = getConfigItem(configoptions, "accucode") || "329380";      // ann-arbor-mi code is 329380
         var hubpick = getConfigItem(configoptions, "hubpick") || "all";
+        var webSocketUrl = getSocketUrl(hostname);
+        var useroptions = getConfigItem(configoptions, "useroptions");
+        var specialtiles = getConfigItem(configoptions, "specialtiles");
+        var skins = ["housepanel", "modern"];
     
         var $tc = "";
         $tc += utils.getHeader(userid, null, skin, true);
-        $tc += "<h3>" + utils.APPNAME + " Options</h3>";
-        $tc += "<h3>for user: " + useremail + " | " + uname + "</h3>";
-        $tc += "<h3>on panel: " + pname + "</h3>";
-        $tc += "<button class=\"infobutton fixbottom\">Cancel and Return to HousePanel</button>";
-        // $tc += "<br><div class=\"formbutton formauto\"><a href=\"" + GLB.returnURL + "\">Cancel and Return to HousePanel</a></div>";
-        
         $tc += utils.hidden("pagename", "options");
         $tc += utils.hidden("returnURL", GLB.returnURL);
         $tc += utils.hidden("pathname", pathname);
         $tc += utils.hidden("webSocketUrl", webSocketUrl);
+        $tc += utils.hidden("userid", userid,"userid");
+        // $tc += utils.hidden("skinid", skin, "skinid");
+        $tc += utils.hidden("uname", uname,"unameid");
+        $tc += utils.hidden("emailid", useremail, "emailid");
 
-        var webSocketUrl = getSocketUrl(hostname);
-        var useroptions = getConfigItem(configoptions, "useroptions");
-        var specialtiles = getConfigItem(configoptions, "specialtiles");
-        $tc += hubFilters(userid, hubpick, hubs, useroptions, "options", 7);
+        var configs = {};
+        for (var i in configoptions) {
+            var key = configoptions[i].configkey;
+            if ( !key.startsWith("user_") ) {
+                configs[key] = configoptions[i].configval;
+            }
+        }
+        $tc += utils.hidden("configsid", JSON.stringify(configs), "configsid");
 
-        $tc += "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
-        $tc += utils.hidden("userid", userid);
-        $tc += utils.hidden("panelid", panelid);
+        $tc += "<button class=\"infobutton fixbottom\">Cancel and Return to HousePanel</button>";
+        $tc += "<h3>" + utils.APPNAME + " Options</h3>";
+        $tc += "<h3>for user: " + uname + " | " + useremail + "</h3>";
+        // $tc += "<h3>on panel: " + pname + "</h3>";
+        
+        // manage panels here - select existing, remove, or add
+        $tc += "<div class='greeting'>Users can have up to 9 panels, where each panel can be displayed" +
+               " on any device to give a different look and feel. This is where you add or remove panels." +
+               " This is also where you can completely remove your account from HousePanel by deleting this user." +
+               " Note that this action is irreversible and all deleted accounts will result in removing all devices" +
+               " from the HousePanel system. All active users must have at least one panel, so if you only have one" +
+               " you will not be able to remove it." +
+               "</div>";
 
         $tc += "<div class=\"filteroption\">";
-        $tc += "Specify number of special tiles: <br/>";
+
+        $tc += "<label class=\"startupinp\">Select Panel to Display:</label><br/>";
+            $tc += "<select id='userpanel' name='userpanel'>"; 
+            panels.forEach(panel => {
+                const selected = (panel.pname === pname) ? " selected" : "";
+                $tc += "<option value='" + panel.id + "'" + selected + ">" + panel.pname  + "</option>";
+            });
+            $tc += "<option value='new' skin='skin-housepanel'>newpanel</option>";
+        $tc += "</select><br/>";
+        $tc += "<div id='addnewpanel'>";
+            $tc += "<div id=\"showpanelname\"><label class=\"startupinp\">Panel Name: </label>";
+            $tc +=     "<input id=\"panelname\" class=\"optioninp\" name=\"panelname\" size=\"20\" type=\"text\" value=\"" + pname + "\"/>";
+            $tc += "</div>"; 
+            $tc += "<br><div><label class=\"startupinp\">Select Skin to Use on This Panel:</label><br/>";
+            $tc += "<select id='userskin' name='userskin'>"; 
+            skins.forEach(askin => {
+                const selected = (askin === skin) ? " selected" : "";
+                $tc += "<option value='skin-" + askin + "'" + selected + ">" + askin  + "</option>";
+            });
+            $tc += "</select></div>";
+            $tc += "<div><label class=\"startupinp\">Panel Password: </label>";
+            $tc += "<input id=\"panelPw\" class=\"optioninp\" name=\"panelPw\" size=\"20\" type=\"password\" value=\"\"/></div>"; 
+            $tc += "<div><label class=\"startupinp\">Confirm Password: </label>";
+            $tc += "<input id=\"panelPw2\" class=\"optioninp\" name=\"panelPw2\" size=\"20\" type=\"password\" value=\"\"/></div>"; 
+        $tc += "</div>";
+        $tc += "<div class=\"buttongrp\">";
+            $tc+= "<div id=\"usePanel\" class=\"smallbutton\">Select Panel</div>";
+            $tc+= "<div id=\"delPanel\" class=\"smallbutton\">Delete Panel</div>";
+            $tc+= "<div id=\"delUser\" class=\"smallbutton\">Delete User</div>";
+        $tc += "</div>";
+
+        $tc += "</div>";
+
+        $tc += "<div class='greeting'>Select which hubs and types of things to show in the table below." +
+               " This might be useful if you have a large number of things and/or multiple hubs so you can select ." +
+               " just the things here that you care about. Note that all things remain active even if they are not shown." +
+               " Note also for ISY hubs, all things are of type \"isy\" so you will not be able to select by type for that hub." +
+               "</div>";
+        $tc += hubFilters(userid, hubpick, hubs, useroptions, "options", 8);
+         
+        $tc += "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
+        $tc += utils.hidden("userid", userid);
+        $tc += utils.hidden("panelid", panelid,"panelid");
+
+        $tc += "<div class=\"filteroption\">";
+        $tc += "Options:<br/>";
+        
+        if ( usertype > 1 ) {
+            $tc += "<div><label for=\"kioskid\" class=\"startupinp\">Kiosk Mode: </label>";    
+            var $kstr = ($kioskoptions===true || $kioskoptions==="true") ? " checked" : "";
+            $tc+= "<input id=\"kioskid\" type=\"checkbox\" name=\"kiosk\"  value=\"" + $kioskoptions + "\"" + $kstr + "/></div>";
+
+            $tc += "<div><label for=\"ruleid\" class=\"startupinp\">Enable Rules? </label>";
+            $kstr = ($ruleoptions===true || $ruleoptions==="true") ? " checked" : "";
+            $tc += "<input id=\"ruleid\" type=\"checkbox\" name=\"rules\"  value=\"" + $ruleoptions + "\"" + $kstr + "/></div>";
+        
+            $tc += "<div><label for=\"clrblackid\" class=\"startupinp\">Blackout on Night Mode: </label>";    
+            $kstr = ($blackout===true || $blackout==="true") ? " checked" : "";
+            $tc+= "<input id=\"clrblackid\" type=\"checkbox\" name=\"blackout\"  value=\"" + $blackout + "\"" + $kstr + "/></div>";
+
+            $tc+= "<div><label for=\"photoid\" class=\"startupinp\">Photo timer (sec): </label>";
+            $tc+= "<input class=\"optioninp\" id=\"photoid\" name=\"phototimer\" type=\"number\"  min='0' max='300' step='5' value=\"" + phototimer + "\" /></div>";
+        }
+        $tc += "<div><label class=\"startupinp\">Timezone: </label>";
+        $tc += "<input id=\"newtimezone\" class=\"optioninp\" name=\"timezone\" size=\"20\" type=\"text\" value=\"" + timezone + "\"/></div>"; 
+
+        // $tc += "<div><label class=\"startupinp\">Fast Timer: </label>";
+        // $tc += "<input id=\"newfast_timer\" class=\"optioninp\" name=\"fast_timer\" size=\"20\" type=\"text\" value=\"" + $fast_timer + "\"/></div>"; 
+
+        // $tc += "<div><label class=\"startupinp\">Slow Timer: </label>";
+        // $tc += "<input id=\"newslow_timer\" class=\"optioninp\" name=\"slow_timer\" size=\"20\" type=\"text\" value=\"" + $slow_timer + "\"/></div>"; 
+        $tc += "</div>";
+
+        $tc += "<div class=\"filteroption\">";
+        $tc += "Weather City Selection:<br/>";
+        $tc += "<table>";
+        $tc += "<tr>";
+        $tc += "<td style=\"width:15%; text-align:right\"><label for=\"fcastcityid\" class=\"kioskoption\">Forecast City: </label>";
+        $tc += "<br><span class='typeopt'>(for Frame1 tiles)</span></td>";
+        $tc += "<td style=\"width:20%\"><input id=\"fcastcityid\" size=\"30\" type=\"text\" name=\"fcastcity\"  value=\"" + fcastcity + "\" /></td>";
+        $tc += "<td style=\"width:20%; text-align:right\"><label for=\"fcastregionid\" class=\"kioskoption\">Forcast Region: </label></td>";
+        $tc += "<td style=\"width:15%\"><input id=\"fcastregionid\" size=\"20\" type=\"text\" name=\"fcastregion\"  value=\"" + fcastregion + "\"/></td>";
+        $tc += "<td style=\"width:15%; text-align:right\"><label for=\"fcastcodeid\" class=\"kioskoption\">Forecast Code: </label></td>";
+        $tc += "<td style=\"width:15%\"><input id=\"fcastcodeid\" size=\"20\" type=\"text\" name=\"fcastcode\"  value=\"" + fcastcode + "\"/></td>";
+        // $tc += "<br><span class='typeopt'>(for Frame1 tiles)</span></td>";
+        $tc += "</tr>";
+
+        $tc += "<tr>";
+        $tc += "<td style=\"width:15%; text-align:right\"><label for=\"accucityid\" class=\"kioskoption\">Accuweather City: </label>";
+        $tc += "<br><span class='typeopt'>(for Frame2 tiles)</span></td>";
+        $tc += "<td style=\"width:20%\"><input id=\"accucityid\" size=\"30\" type=\"text\" name=\"accucity\"  value=\"" + accucity + "\" /></td>";
+        $tc += "<td style=\"width:20%; text-align:right\"><label for=\"accuregionid\" class=\"kioskoption\">Accuweather Region: </label></td>";
+        $tc += "<td style=\"width:15%\"><input id=\"accuregionid\" size=\"20\" type=\"text\" name=\"accuregion\"  value=\"" + accuregion + "\"/></td>";
+        $tc += "<td style=\"width:15%; text-align:right\"><label for=\"accucodeid\" class=\"kioskoption\">AccuWeather Code: </label></td>";
+        $tc += "<td style=\"width:15%\"><input id=\"accucodeid\" size=\"20\" type=\"text\" name=\"accucode\"  value=\"" + accucode + "\"/></td>";
+        // $tc += "<br><span class='typeopt'>(for Frame2 tiles)</span></td>";
+        $tc += "</tr></table></div>";
+
+        $tc += "<div class='greeting'>You can select how many special tiles of each type to include here." +
+               " These tiles are used to show special content on your dashboard." +
+               "</div>";
+        $tc += "<div class=\"filteroption\">";
+        $tc += "Specify number of special tiles:<br/>";
         for (var $stype in specialtiles) {
             var $customcnt = parseInt(specialtiles[$stype]);
             if ( isNaN($customcnt) ) { $customcnt = 0; }
             var $stypeid = "cnt_" + $stype;
             $tc+= "<div><label for=\"$stypeid\" class=\"startupinp\"> " + $stype +  " tiles: </label>";
-            $tc+= "<input class=\"optionnuminp\" id=\"" + $stypeid + "\" name=\"" + $stypeid + "\" width=\"10\" type=\"number\"  min='0' max='99' step='1' value=\"" + $customcnt + "\" /></div>";
+            $tc+= "<input class=\"optionnuminp\" id=\"" + $stypeid + "\" name=\"" + $stypeid + "\" size=\"10\" type=\"number\"  min='0' max='99' step='1' value=\"" + $customcnt + "\" /></div>";
         }
-        $tc+= "</div>";
+        $tc+= "</div><br/><br/>";
 
-        $tc += "<div class=\"filteroption\">";
-        $tc += "Other Options: <br/><hr><br/>";
-        
-        $tc += "<div><label for=\"kioskid\" class=\"startupinp\">Kiosk Mode: </label>";    
-        var $kstr = ($kioskoptions===true || $kioskoptions==="true") ? " checked" : "";
-        $tc+= "<input id=\"kioskid\" width=\"24\" type=\"checkbox\" name=\"kiosk\"  value=\"" + $kioskoptions + "\"" + $kstr + "/></div>";
-
-        if ( usertype > 1 ) {
-            $tc += "<div><label for=\"ruleid\" class=\"startupinp\">Enable Rules? </label>";
-            $kstr = ($ruleoptions===true || $ruleoptions==="true") ? " checked" : "";
-            $tc += "<input id=\"ruleid\" width=\"24\" type=\"checkbox\" name=\"rules\"  value=\"" + $ruleoptions + "\"" + $kstr + "/></div>";
-        }
-        
-        $tc += "<div><label for=\"clrblackid\" class=\"startupinp\">Blackout on Night Mode: </label>";    
-        $kstr = ($blackout===true || $blackout==="true") ? " checked" : "";
-        $tc+= "<input id=\"clrblackid\" width=\"24\" type=\"checkbox\" name=\"blackout\"  value=\"" + $blackout + "\"" + $kstr + "/></div>";
-
-        $tc+= "<div><label for=\"photoid\" class=\"startupinp\">Photo timer (sec): </label>";
-        $tc+= "<input class=\"optioninp\" id=\"photoid\" name=\"phototimer\" width=\"20\" type=\"number\"  min='0' max='300' step='1' value=\"" + phototimer + "\" /></div>";
-
-        $tc += "<div><label class=\"startupinp\">Timezone Offset: </label>";
-        $tc += "<input id=\"newtimezone\" class=\"optioninp\" name=\"timezone\" width=\"20\" type=\"text\" value=\"" + timezone + "\"/></div>"; 
-
-        $tc += "<div><label class=\"startupinp\">Fast Timer: </label>";
-        $tc += "<input id=\"newfast_timer\" class=\"optioninp\" name=\"fast_timer\" width=\"20\" type=\"text\" value=\"" + $fast_timer + "\"/></div>"; 
-
-        $tc += "<div><label class=\"startupinp\">Slow Timer: </label>";
-        $tc += "<input id=\"newslow_timer\" class=\"optioninp\" name=\"slow_timer\" width=\"20\" type=\"text\" value=\"" + $slow_timer + "\"/></div>"; 
-
-        $tc += "</div>";
-
-        $tc += "<div class=\"filteroption\">";
-        $tc += "<table>";
-        $tc += "<tr>";
-        $tc += "<td><label for=\"fcastcityid\" class=\"kioskoption\">Forecast City: </label></td>";
-        $tc += "<td><input id=\"fcastcityid\" width=\"180\" type=\"text\" name=\"fcastcity\"  value=\"" + fcastcity + "\" /></td>";
-        $tc += "<td><label for=\"fcastregionid\" class=\"kioskoption\">Forcast Region: </label></td>";
-        $tc += "<td><input id=\"fcastregionid\" width=\"40\" type=\"text\" name=\"fcastregion\"  value=\"" + fcastregion + "\"/></td>";
-        $tc += "<td><label for=\"fcastcodeid\" class=\"kioskoption\">Forecast Code: </label></td>";
-        $tc += "<td><input id=\"fcastcodeid\" width=\"20\" type=\"text\" name=\"fcastcode\"  value=\"" + fcastcode + "\"/>";
-        $tc += "<span class='typeopt'>(for Frame1 tiles)</span></td>";
-        $tc += "</tr>";
-
-        $tc += "<tr>";
-        $tc += "<td><label for=\"accucityid\" class=\"kioskoption\">Accuweather City: </label></td>";
-        $tc += "<td><input id=\"accucityid\" width=\"180\" type=\"text\" name=\"accucity\"  value=\"" + $accucity + "\" /></td>";
-        $tc += "<td><label for=\"accuregionid\" class=\"kioskoption\">Accuweather Region: </label></td>";
-        $tc += "<td><input id=\"accuregionid\" width=\"6\" type=\"text\" name=\"accuregion\"  value=\"" + $accuregion + "\"/></td>";
-        $tc += "<td><label for=\"accucodeid\" class=\"kioskoption\">AccuWeather Code: </label></td>";
-        $tc += "<td><input id=\"accucodeid\" width=\"40\" type=\"text\" name=\"accucode\"  value=\"" + $accucode + "\"/>";
-        $tc += "<span class='typeopt'>(for Frame2 tiles)</span></td>";
-        $tc += "</tr></table></div>";
-        
         // now display the table of all the rooms and thing options
         $tc += "<table class=\"headoptions\"><thead>";
         $tc += "<tr><th class=\"thingname\">Thing Name (type)</th>";
@@ -9781,9 +9437,9 @@ function processOptions(userid, panelid, optarray) {
     function doProcessOptions(configoptions, things, rooms) {
         if (DEBUG4) {
             console.log( (ddbg()), "Process Options - Before Processing");
-            console.log( (ddbg()), UTIL.inspect(configoptions, false, null, false));
-            console.log( (ddbg()), UTIL.inspect(things, false, null, false));
-            console.log( (ddbg()), UTIL.inspect(roomnames, false, null, false));
+            console.log( (ddbg()), jsonshow(configoptions) );
+            console.log( (ddbg()), jsonshow(things) );
+            console.log( (ddbg()), jsonshow(roomnames) );
         }
         
         var roomnames = {};
@@ -9804,12 +9460,12 @@ function processOptions(userid, panelid, optarray) {
         configoptions["blackout"] = "false";
 
         // force all three to be given for change to happen
-        // var city = "";
-        // var region = "";
-        // var code = "";
-        // var fcastcity = "";
-        // var fcastregion = "";
-        // var fcastcode = "";
+        var accucity = "";
+        var accuregion = "";
+        var accucode = "";
+        var fcastcity = "";
+        var fcastregion = "";
+        var fcastcode = "";
 
         // // get all the rooms checkboxes and reconstruct list of active things
         // // note that the list of checkboxes can come in any random order
@@ -9834,16 +9490,22 @@ function processOptions(userid, panelid, optarray) {
             } else if ( key==="slow_timer") {
                 configoptions["slow_timer"] = val.trim();
             } else if ( key==="fcastcity" ) {
+                fcastcity = val.trim();
                 configoptions["fcastcity"] = val.trim();
             } else if ( key==="fcastregion" ) {
+                fcastregion = val.trim();
                 configoptions["fcastregion"] = val.trim();
             } else if ( key==="fcastcode" ) {
+                fcastcode = val.trim();
                 configoptions["fcastcode"] = val.trim();
             } else if ( key==="accucity" ) {
+                accucity = val.trim();
                 configoptions["accucity"] = val.trim();
             } else if ( key==="accuregion" ) {
+                accuregion = val.trim();
                 configoptions["accuregion"] = val.trim();
             } else if ( key==="accucode" ) {
+                accucode = val.trim();
                 configoptions["accucode"] = val.trim();
             
             // handle user selected special tile count
@@ -9862,10 +9524,6 @@ function processOptions(userid, panelid, optarray) {
                 
                 // first delete any tile that isn't checked
                 var roomid = parseInt(roomnames[key]);
-                // if ( DEBUG4 ) {
-                //     console.log("processing key: ", key, " val: ", val);
-                // }
-
                 var maxtorder = 0;
                 things.forEach(function(item) {
                     var tnum = item["things_tileid"];
@@ -9897,25 +9555,10 @@ function processOptions(userid, panelid, optarray) {
             }
         }
         
-        // everything from this point on is after processing the options table
-        // start by handling the weather
-        // if ( city && region && code ) {
-        //     writeAccuWeather(city, region, code);
-        // }
+        // handle the weather codes - write into this users folder
+        writeForecastWidget(userid, fcastcity, fcastregion, fcastcode);
+        writeAccuWeather(userid, accucity, accuregion, accucode);
         
-        // // guess the region based on the city if left blank
-        // if ( !fcastregion && fcastcity ) {
-        //     var words = fcastcity.replace("-"," ").split(" ");
-        //     fcastregion = "";
-        //     for ( var i in words ) {
-        //         fcastregion += words[i].substr(0,1).toUpperCase() + words[i].substr(1).toLowerCase() + " ";
-        //     }
-        //     fcastregion = fcastregion.trim();
-        //     configoptions["fcastregion"] = fcastregion;
-        // }
-        // if ( fcastcity && fcastregion && fcastcode ) {
-        //     writeForecastWidget(fcastcity, fcastregion, fcastcode);
-        // }
         var d = new Date();
         var timesig = utils.HPVERSION + " @ " + d.getTime();
         configoptions["time"] = timesig;
@@ -9929,13 +9572,11 @@ function processOptions(userid, panelid, optarray) {
             }
             var config = {userid: userid, configkey: key, configval: configstr};
             mydb.updateRow("configs", config,"userid = "+userid+" AND configkey = '"+key+"'");
-            // console.log(">>>> simulated config update: ", config);
         }
-        // options["config"] = configoptions;
         
         if (DEBUG4) {
             console.log( (ddbg()), "Process Options - After Processing");
-            console.log( (ddbg()), UTIL.inspect(configoptions, false, null, false));
+            console.log( (ddbg()), jsonshow(configoptions) );
         }
         return "success";
     }
@@ -10117,7 +9758,7 @@ function updCustom(userid, swid, rules) {
 function apiCall(user, body, protocol, req, res) { 
 
     if ( DEBUG8 ) {
-        console.log( (ddbg()), protocol + " api call, body: ", UTIL.inspect(body, false, null, true) );
+        console.log( (ddbg()), protocol + " api call, body: ", jsonshow(body) );
     }
     var api = body['useajax'] || body['api'] || "";
     var swid = body["id"] || "none";
@@ -10168,7 +9809,7 @@ function apiCall(user, body, protocol, req, res) {
         userid = null;
     }
 
-    console.log((ddbg()),"apiCall - userid: ", userid, " api: ", api);
+    // console.log((ddbg()),"apiCall - userid: ", userid, " api: ", api);
     if ( !userid && api!=="forgotpw" && api!=="createuser") {
         console.log( (ddbg()), "*** error *** user not authorized for API call. api: ", api, " body: ", body);
         return "error - HousePanel is not authorized for this user to make an API call";
@@ -10480,7 +10121,6 @@ function apiCall(user, body, protocol, req, res) {
                 }
                 break;
             
-            // rewritten to use cookies
             case "dologin":
                 if ( protocol==="POST" ) {
                     result = processLogin(body, res);
@@ -10554,17 +10194,20 @@ function apiCall(user, body, protocol, req, res) {
                 break;
 
             case "getwsport":
-                var wsmax = 0;
+                var wsmax = 8181;
+                var usedports = [];
                 if ( clients[userid] ) {
+                    clients[userid].forEach(function(client) {
+                        var wsport = client.socket.server["_connectionKey"];
+                        var ipos = wsport.lastIndexOf(":");
+                        wsport = parseInt(wsport.substr(ipos+1));
+                        usedports.push(wsport);
+                    });
+                }
+
+                if ( usedports.length ) {
                     for (var iport=8181; iport < 8190; iport++) {
-                        var taken = false;
-                        clients[userid].forEach(function(client) {
-                            var wsport = client.socket.server["_connectionKey"];
-                            var ipos = wsport.lastIndexOf(":");
-                            wsport = parseInt(wsport.substr(ipos+1));
-                            taken = taken || ( !isNaN(wsport) && wsport===iport );
-                        });
-                        if ( !taken ) {
+                        if ( !usedports.includes(iport) ) {
                             wsmax = iport;
                             break;
                         }
@@ -10572,8 +10215,8 @@ function apiCall(user, body, protocol, req, res) {
                 } else {
                     wsmax = 8181;
                 }
-                result = wsmax;
-                // console.log(">>>> next available port: ", wsmax);
+                result = {port: wsmax, used: usedports};
+                console.log(">>>> next available port: ", wsmax, " usedports: ", usedports);
                 break;
 
             // this api call starts the oauth flow process
@@ -10830,7 +10473,10 @@ function apiCall(user, body, protocol, req, res) {
             case "getclock":
                 // if ( !swid || swid==="none" ) { swid = "clockdigital"; }
                 result = getClock(userid, swid, swattr);
-                result = getCustomTile(userid, swattr, result, "clock", swid);
+                result = getCustomTile(userid, swattr, result, swid);
+
+                // handle rules based on time
+                processRules(userid, thingid, swid, "clock", "time", result, "callHub" );
                 // remove any LINKS
                 // for (var key in result) {
                 //     if ( result[key] && typeof result[key]==="string" && 
@@ -10946,62 +10592,67 @@ function setupBrowserSocket() {
         // });
 
         wsServer.on('connect', function(connection) {
-            var userid = 0;
-
             console.log( (ddbg()), 'Connecting websocket. Address: ', connection.socket.remoteAddress );   // connection.remoteAddresses,
             // console.log( (ddbg()), 'Connection details: ', connection );   // connection.remoteAddresses,
 
             // shut down any existing connections to same remote host
             var browserurl = connection.socket.remoteAddress;
             var wsport = connection.socket.server["_connectionKey"];
+            var userport = 0;
 
             // wait for message from browser telling us what user id this is
             connection.on("message", function(msg) {
                 if ( msg.type==="utf8" ) {
                     var userandport = msg.utf8Data.split("|");
-                    userid = parseInt(userandport[0]);
-                    console.log(">>>> browserurl: ", browserurl, " userid: ", userid, " wsport: ", wsport);
-                }
+                    var userid = parseInt(userandport[0]);
+                    userport = parseInt(userandport[1]);
+                    console.log(">>>> browserurl: ", browserurl, " userid: ", userid, " wsport: ", wsport, " userport: ", userport, " userandport: ", userandport);
 
-                // create this user's list of pages if not there
-                if ( !clients[userid] ) {
-                    clients[userid] = [];
-                }
-                // now that we know the userid and the URL of the browser, register this client
-                var i = 0;
-                while ( i < clients[userid].length ) {
-                    var oldhost = clients[userid][i].socket.remoteAddress;
-                    var oldport = clients[userid][i].socket.server["_connectionKey"];
-                    if ( oldhost===browserurl && oldport===wsport ) {
-                        clients[userid].splice(i, 1);
-                    } else {
-                        i++;
+                    // create this user's list of pages if not there
+                    if ( !clients[userid] ) {
+                        clients[userid] = [];
                     }
-                }
-                var index = clients[userid].push(connection) - 1;
 
-                clients[userid].forEach(function(client, i) {
-                    var clientUrl = client.socket.remoteAddress;
-                    var clientPort = client.socket.server["_connectionKey"];
-                    var str = "User #"+userid;
-                    if ( i===index ) {
-                        str += " New Connection #"+i;
-                    } else {
-                        str += " Old Connection #"+i;
+                    // save the userid in the connection object
+                    connection.userid = userid;
+
+                    // now that we know the userid and the URL of the browser, remove old ones and register this client
+                    var i = 0;
+                    while ( i < clients[userid].length ) {
+                        var oldhost = clients[userid][i].socket.remoteAddress;
+                        var oldport = clients[userid][i].socket.server["_connectionKey"];
+                        if ( oldhost===browserurl && oldport===wsport ) {
+                            clients[userid].splice(i, 1);
+                        } else {
+                            i++;
+                        }
                     }
-                    console.log( (ddbg()), str, "from host:", clientUrl, "port:", clientPort);
-                });
-                // console.log( (ddbg()), "Connection #" + index + " accepted from host: ", browserurl, " port: ", wsport, " userid: ", userid);
+
+                    // add the new client
+                    var index = clients[userid].push(connection) - 1;
+                    clients[userid].forEach(function(client, i) {
+                        var clientUrl = client.socket.remoteAddress;
+                        var clientPort = client.socket.server["_connectionKey"];
+                        var str = "User #"+userid;
+                        if ( i===index ) {
+                            str += " New Connection #"+i;
+                        } else {
+                            str += " Old Connection #"+i;
+                        }
+                        console.log( (ddbg()), str, "from host:", clientUrl, "port:", clientPort);
+                    });
+                }
             });
         
-            // user disconnected - remove all clients that match this socket
+            // user disconnected - remove just one client that match this socket
             connection.on('close', function(reason, description) {
                 var host = connection.socket.remoteAddress;
                 var port = connection.socket.server["_connectionKey"];
-                console.log( (ddbg()), "Peer: ", host, " disconnected. for: ", reason, " desc: ", description, " user: ", userid, " connection: ", connection.socket.server["_connectionKey"]);
+                var userid = connection.userid;
+
+                console.log( (ddbg()), "Peer: ", host, " disconnected. for: ", reason, description, " user: ", userid, " connection: ", connection.socket.server["_connectionKey"]);
 
                 // remove clients that match this host
-                // clients.splice(indexsave, 1);
                 var i = 0;
                 if ( clients && userid && clients[userid] ) {
                     while ( i < clients[userid].length ) {
@@ -11147,60 +10798,18 @@ if ( app && applistening ) {
                             result = validatePasswordPage(row, hostname);
                         }
                     } else {
-                        result = getLoginPage(0, 0, "", "", hostname, "skin-housepanel");
+                        result = getLoginPage(req, 0, 0, "", "", hostname, "skin-housepanel");
                     }
                     res.send(result);
                     res.end();
                 });
             } else {
-                result = getLoginPage(0, 0, "", "", hostname, "skin-housepanel");
+                result = getLoginPage(req, 0, 0, "", "", hostname, "skin-housepanel");
                 res.send(result);
                 res.end();
             }
             return;
         }
-
-        // first check to see if user is requesting a password reset or new account confirmation
-        // in both cases a cookie will not be set but we can check for valid user from hpcode query parameter
-        // if ( req.path === "/activateuser" || req.path === "/forgotpw" ) {
-        //     var queryobj = req.query || {};
-        //     var result;
-        //     if ( queryobj.userid && queryobj.hpcode ) {
-        //         var userid = queryobj.userid;
-        //         mydb.getRow("users","*", "id = "+userid)
-        //         .then(row => {
-        //             if ( row && row.hpcode === queryobj.hpcode ) {
-        //                 // set the cookies to log the user in
-        //                 if ( req.path === "/activateuser" ) {
-        //                     setCookie(res, "uname", pw_hash(row.email));
-        //                     setCookie(res, "pname", pw_hash("default"));
-
-        //                     // update the user type to valided type
-        //                     mydb.updateRow("users",{usertype: 1},"id="+userid)
-        //                     .then( () => {
-        //                         result = validateUserPage(row, hostname);
-        //                         res.send(result);
-        //                         res.end();
-        //                         return;
-        //                     });
-        //                 } else {
-        //                     result = validatePasswordPage(row, hostname);
-        //                 }
-        //             } else {
-        //                 result = getLoginPage(0, 0, "", "", hostname, "skin-housepanel");
-        //             }
-        //             res.send(result);
-        //             res.end();
-        //         })
-        //     } else {
-        //         result = getLoginPage(0, 0, "", "", hostname, "skin-housepanel");
-        //         res.send(result);
-        //         res.end();
-        //     }
-        //     return;
-
-        // }
-
 
         // everything starts with finding the username which drives which rows we read from the DB
         getUserName(req.cookies)
@@ -11212,7 +10821,7 @@ if ( app && applistening ) {
                     console.log( (ddbg()), "login rejected.");
                 }
 
-                var result = getLoginPage(0, 0, "", "", hostname, "skin-housepanel");
+                var result = getLoginPage(req, 0, 0, "", "", hostname, "skin-housepanel");
                 res.send(result);
                 res.end();
         
@@ -11255,7 +10864,7 @@ if ( app && applistening ) {
 
                         // find any query params - if provided then user is doing an API call with HP
                         var queryobj = req.query || {};
-                        var isquery = (utils.count(queryobj) > 0);
+                        var isquery = (objCount(queryobj) > 0);
 
                         // display the main page if user is in our database
                         // don't check password here because it is checked at login
@@ -11301,7 +10910,7 @@ if ( app && applistening ) {
                         // clear the cookie to force repeat of login page
                         res.clearCookie("uname");
                         res.clearCookie("pname");
-                        var result = getLoginPage(userid, usertype, "", "", hostname, "skin-housepanel");
+                        var result = getLoginPage(req, userid, usertype, "", "", hostname, "skin-housepanel");
                         res.send(result);
                         res.end();
 
@@ -11631,12 +11240,8 @@ if ( app && applistening ) {
                             }
                         });
                     }
-
-                // } else {
-                //     console.log( (ddbg()), "unprocessed event type: ", event.eventType, " event: ", event);
                 }
             
-                // console.log( (ddbg()), "Event from new SmartThings: ", UTIL.inspect(req.body.eventData, false, null, false) );
                 res.json("200 OK");
             });
             res.end();
