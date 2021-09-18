@@ -168,7 +168,7 @@ div.showversion:hover {
     background-color: white;
 }
 
-label.startupinp, input.indent {
+label.startupinp, input.indent, div.filteroption select {
     font-weight: bold;
     font-size: 12pt;
     margin-left: 5px;
@@ -352,7 +352,7 @@ div.skinoption input {
     width: 600px;
 }
 div.filteroption {
-    margin-top: 12px;
+    margin-top: 18px;
 }
 div#thingfilters {
     margin-top: 20px;
@@ -677,7 +677,7 @@ input.resetbutton, input.submitbutton {
 div.restoretabs.hidden, div.thing.hidden.catalog-thing {
     display: none;
 }
-div.filteroption div.smallbutton {
+div.filteroption .smallbutton {
     padding: 4px;
     height: auto;
     width: 60px;
@@ -709,7 +709,7 @@ div.radiobutton label {
     margin-top: 4px; margin-bottom: 4px;
     margin-left: 10px;
 }
-div.filteroption div.smallbutton:hover {
+div.filteroption .smallbutton:hover {
     background-color: black;
     color: white;
 }
@@ -2020,5 +2020,8 @@ div.overlay.Evening div.location.Evening {
     display: none;
 }
 div.rule {
+    display: none;
+}
+div.hidden, div.filteroption div.hidden {
     display: none;
 }

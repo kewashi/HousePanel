@@ -2,6 +2,10 @@
 const fs = require('fs');
 
 const devhistory =  ` 
+3.030   Require user to specify client number to make ports work correctly
+3.029   Enable clock rules based on time by calling server once a minute
+3.028   Fix slider links to properly control their master and pass hint
+3.027   Enable frames for specific users and clean up options screen
 3.026   HPConnect and callHub now work with ISY resfresh and ISY programs
 3.025   Fixed links to work when linked to tile is not on a panel
 3.024   Stability updates and include in HPConnect ISY devices load
@@ -673,13 +677,13 @@ exports.getFooter = function getFooter() {
     return "</div></body></html>";
 }
 
-exports.count = function count(obj) {
-    if ( typeof obj === "object" )  {
-        return Object.keys(obj).length;
-    } else {
-        return 0;
-    }
-}
+// exports.count = function count(obj) {
+//     if ( typeof obj === "object" )  {
+//         return Object.keys(obj).length;
+//     } else {
+//         return 0;
+//     }
+// }
 
 exports.hsv2rgb = function hsv2rgb(h, s, v) {
     var r, g, b;
