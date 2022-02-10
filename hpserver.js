@@ -5007,7 +5007,7 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
             $tc += "<div class=\"overlay "+tkey+" v_"+kindex+"\">";
         }
         if (sibling) { $tc += sibling; }
-        if ( tkey === "level" || tkey==="onlevel" || tkey==="colorTemperature" || tkey==="volume" ) {
+        if ( tkey === "level" || tkey==="onlevel" || tkey==="colorTemperature" || tkey==="volume" || tkey==="position" ) {
             $tc += aidi + ttype + " subid=\"" + tkey+"\" value=\""+tval+"\" title=\""+tkey+"\" class=\"" + thingtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\"></div>";
         // } else if ( thingtype==="location" && tkey.substr(0,1)==="_" && tval.substr(0,6)!=="RULE::" ) {
         //     $tc += aidi + ttype + " subid=\"" + tkey+"\" modeid=\""+tval+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + extra + "\" id=\"" + aitkey + "\">" + tkey.substr(1) + "</div>";
@@ -5456,7 +5456,7 @@ function setValOrder(val) {
                    "_previousTrack": 21, "_pause": 22, "_play": 23, "_stop": 24, "_nextTrack": 25,
                    "_number_0":60, "_number_1":61, "_number_2":62, "_number_3":63, "_number_4":64, 
                    "_number_5":65, "_number_6":66, "_number_7":67, "_number_8":68, "_number_9":69, 
-                   "onlevel": 150, "level": 151, "volume": 152, "colorTemperature": 153, "hue": 141, "saturation": 142,
+                   "onlevel": 150, "level": 151, "volume": 152, "colorTemperature": 153, "hue": 141, "saturation": 142, "position": 152,
                    "allon": 41, "alloff": 42, "count": 149,
                    "temperature": 7, "feelsLike":8, "weatherIcon":20, "forecastIcon":21 };
 
@@ -6561,6 +6561,8 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                             rswattr= "onlevel";
                         } else if ( rsubid==="volume" ) {
                             rswattr= "volume";
+                        } else if ( rsubid==="position" ) {
+                            rswattr= "position";
                         } else if ( rsubid==="switch" || rswtype==="isy" || (swval!=="on" && swval!=="off") ) {
                             rswattr="";
                         } else if ( !rswattr && rswtype!=="isy" ) {

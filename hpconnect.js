@@ -197,7 +197,7 @@ function setupISYSocket() {
     hub.hubaccess = username + ":" + isyPassword;
     hub.hubendpt = isyhost + "/rest";
 
-    if ( hub && hub.hubtype==="ISY" && hub.hubendpt && hub.hubaccess ) { 
+    if ( hub && isyhost && hub.hubtype==="ISY" && hub.hubendpt && hub.hubaccess ) { 
         var hubhost = hub.hubendpt;
         if ( hubhost.startsWith("https://") ) {
             wshost = "wss://" + hubhost.substr(8);
@@ -938,7 +938,7 @@ function translateIsy(objid, uom, subid, value, val, formatted) {
 
 var isgood = true;
 try {
-    var userinfo = JSON.parse(fs.readFileSync("hpconnect.cfg","utf8"));
+    var userinfo = JSON.parse(fs.readFileSync("/home/pi/hpserver/hpconnect.cfg","utf8"));
     var isyhost = userinfo.isyhost;
     var username = userinfo.username;
     var isyPassword = userinfo.isyPassword;

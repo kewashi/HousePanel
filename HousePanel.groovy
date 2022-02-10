@@ -15,6 +15,7 @@
  * This is a SmartThings and Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history:
+ * 12/27/2021 - add position for shades
  * 10/24/2020 - clean up logger for tracking hub push changes
               - remove routines since they are depracated and classic app is gone
  * 09/12/2020 - check for valid IP and port value entries for HP hub pushes
@@ -1463,6 +1464,10 @@ def setOther(swid, cmd, swattr, subid, item=null ) {
             item.setLevel(newsw)
             resp = [:]
             resp.put("level", newsw)
+            if ( item.hasAttribute("position") ) {
+                item.setPosition(newsw)
+                resp.put("position", newsw)
+            }
 
             if ( item.hasAttribute("hue") && item.hasAttribute("saturation") ) {
                 def h = item.currentValue("hue").toInteger()
@@ -1471,6 +1476,17 @@ def setOther(swid, cmd, swattr, subid, item=null ) {
                 resp.put("color", newcolor)
             }
 
+        }
+        else if ( subid=="position" && cmd.isNumber() && item.hasAttribute("position") ) {
+                newsw = cmd.toInteger()
+                newsw = (newsw >100) ? 100 : newsw
+                item.setPosition(newsw)
+                resp = [:]
+                resp.put("position", newsw)
+                if ( item.hasAttribute("level") ) {
+                    item.setLevel(newsw)
+                    resp.put("level", newsw)
+                }
         }
         else if ( item.hasCommand(cmd) ) {
             item."$cmd"()
@@ -1758,6 +1774,8 @@ def setGenericLight(mythings, swid, cmd, swattr, subid) {
     def saturation = false
     def temperature = false
     def newcolor = false
+    def newlevel = false
+    def newposition = false
     
     if (item ) {
         
@@ -1833,6 +1851,10 @@ def setGenericLight(mythings, swid, cmd, swattr, subid) {
                 newsw = cmd.toInteger()
                 newsw = (newsw >100) ? 100 : newsw
                 item.setLevel(newsw)
+                if ( item.hasAttribute("position") ) {
+                    item.setPosition(newsw)
+                }
+                newlevel = newsw
                 if ( item.hasAttribute("hue") ) {
                     def h = item.currentValue("hue").toInteger()
                     def s = item.currentValue("saturation").toInteger()
@@ -1841,6 +1863,18 @@ def setGenericLight(mythings, swid, cmd, swattr, subid) {
                 newonoff = (newsw == 0) ? "off" : "on"
             }
             break
+
+        case "position" : // 
+            if ( cmd.isNumber() && item.hasAttribute("position") ) {
+                newsw = cmd.toInteger()
+                newsw = (newsw >100) ? 100 : newsw
+                item.setPosition(newsw)
+                if ( item.hasAttribute("level") ) {
+                    item.setLevel(newsw)
+                }
+                newposition = newsw
+                newonoff = (newsw == 0) ? "off" : "on"
+            }
          
         case "hue-up":
                 hue = item.currentValue("hue").toInteger()
@@ -1985,6 +2019,8 @@ def setGenericLight(mythings, swid, cmd, swattr, subid) {
         if ( hue ) { resp.put("hue", hue) }
         if ( saturation ) { resp.put("saturation", saturation) }
         if ( temperature ) { resp.put("colorTemperature", temperature) }
+        if ( newlevel ) { resp.put("level", newlevel) }
+        if ( newposition ) { resp.put("position", newposition) }
     }
     return resp
 }
@@ -2121,8 +2157,8 @@ def setThermostat(swid, cmd, swattr, subid) {
               newsw = cmd.toInteger() + 1
               if (newsw > 85) newsw = 85
               // item.heat()
-              item.setHeatingSetpoint(newsw.toString())
-              resp['heatingSetpoint'] = newsw
+              item.setHeatingSetpoint(newsw)
+              resp['heatingSetpoint'] = newsw.toString()
               // break
           }
           
@@ -2131,8 +2167,8 @@ def setThermostat(swid, cmd, swattr, subid) {
               newsw = cmd.toInteger() + 1
               if (newsw > 85) newsw = 85
               // item.cool()
-              item.setCoolingSetpoint(newsw.toString())
-              resp['coolingSetpoint'] = newsw
+              item.setCoolingSetpoint(newsw)
+              resp['coolingSetpoint'] = newsw.toString()
               // break
           }
 
@@ -2141,8 +2177,8 @@ def setThermostat(swid, cmd, swattr, subid) {
               newsw = cmd.toInteger() - 1
               if (newsw < 50) newsw = 50
               // item.heat()
-              item.setHeatingSetpoint(newsw.toString())
-              resp['heatingSetpoint'] = newsw
+              item.setHeatingSetpoint(newsw)
+              resp['heatingSetpoint'] = newsw.toString()
               // break
           }
           
@@ -2151,8 +2187,8 @@ def setThermostat(swid, cmd, swattr, subid) {
               newsw = cmd.toInteger() - 1
               if (newsw < 60) newsw = 60
               // item.cool()
-              item.setCoolingSetpoint(newsw.toString())
-              resp['coolingSetpoint'] = newsw
+              item.setCoolingSetpoint(newsw)
+              resp['coolingSetpoint'] = newsw.toString()
               // break
           }
           

@@ -1072,7 +1072,7 @@ function setupSliders() {
     }
 
     
-    $("div.overlay.level >div.level, div.overlay.onlevel >div.onlevel, div.overlay.volume >div.volume, div.overlay.groupVolume >div.groupVolume").slider({
+    $("div.overlay.level >div.level, div.overlay.onlevel >div.onlevel, div.overlay.volume >div.volume, div.overlay.groupVolume >div.groupVolume, div.overlay.position >div.position").slider({
         orientation: "horizontal",
         min: 0,
         max: 100,
@@ -1083,7 +1083,7 @@ function setupSliders() {
     });
 
     // set the initial slider values
-    $("div.overlay.level >div.level, div.overlay.onlevel >div.onlevel, div.overlay.volume >div.volume, div.overlay.groupVolume >div.groupVolume").each( function(){
+    $("div.overlay.level >div.level, div.overlay.onlevel >div.onlevel, div.overlay.volume >div.volume, div.overlay.groupVolume >div.groupVolume, div.overlay.position >div.position").each( function(){
         var initval = $(this).attr("value");
         $(this).slider("value", initval);
     });
@@ -3054,7 +3054,7 @@ function processKeyVal(targetid, aid, key, value) {
             iconimg = "media/Weather/" + iconstr + ".png";
         }
         value = "<img src=\"" + iconimg + "\" alt=\"" + iconstr + "\" width=\"80\" height=\"80\">";
-    } else if ( (key === "level" || key=== "onlevel" || key === "colorTemperature" || key==="volume" || key==="groupVolume") && $(targetid).slider ) {
+    } else if ( (key === "level" || key=== "onlevel" || key === "colorTemperature" || key==="volume" || key==="groupVolume" || key==="position") && $(targetid).slider ) {
         $(targetid).slider("value", value);
         $(targetid).attr("value",value);
         value = false;
@@ -3330,6 +3330,7 @@ function setupPage() {
              ( subid==="volume" ) || 
              ( subid==="groupVolume" ) || 
              ( subid==="colorTemperature" ) ||
+             ( subid==="position" ) || 
              ( id && id.startsWith("s-") ) ) {
             return;
         }
@@ -3727,7 +3728,7 @@ function processClick(that, thingname, ro) {
             if ( inspectsubid!=="battery" && strval ) {
                 if ( strval.indexOf("img src") !== -1 ) {
                     msg += inspectsubid + " =  (image)<br>";
-                } else if ( inspectsubid==="level" || inspectsubid==="onlevel" || inspectsubid==="colorTemperature" || inspectsubid==="volume" || inspectsubid==="groupVolume" ) {
+                } else if ( inspectsubid==="level" || inspectsubid==="onlevel" || inspectsubid==="colorTemperature" || inspectsubid==="volume" || inspectsubid==="groupVolume" || inspectsubid==="position" ) {
                     msg += inspectsubid + " = " + $(this).children().attr("style").substr(6) + "<br>";
                 } else if ( strval.length > 40 ) {
                     msg += inspectsubid + " ... <br>";

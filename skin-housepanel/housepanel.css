@@ -148,7 +148,7 @@ div.isy.DON, div.isy.DOF {
 /* items that have a pointer */
 div.switch, div.bulb, div.light, div.switchlevel, div.momentary, 
 div.lock, div.mode.themode, div.piston, div.valve, div.routine.label,
-div.level, div.door.garage,
+div.level, div.door.garage, div.position,
 div.custom-thing div.custom.post,
 div.piston-thing, div.music.musicmute, div.overlay.music-controls div.music,
 div.door.garage.closed, div.door.garage.closing, div.door.garage.open, div.door.garage.opening,
@@ -357,7 +357,7 @@ div.switchlevel.switch, div.bulb.switch, div.isy.switch {
 div.switchlevel.colorTemperature, div.switchlevel.hue, div.switchlevel.saturation {
     height: 16px;
 }
-div.switchlevel.level, div.bulb.level, div.music.level, div.audio.volume, div.audio.groupVolume {
+div.switchlevel.level, div.bulb.level, div.music.level, div.audio.volume, div.audio.groupVolume, div.position {
     height: 4px;
     margin-top: 4px;
     width: 99%;
@@ -901,7 +901,7 @@ div.overlay {
 }
 
 /* remove slider from regular switches */
-div.switch-thing div.overlay.level {
+div.switch-thing div.overlay.level, div.switch-thing div.overlay.position {
     display: none;
     height: 0px;
 }
