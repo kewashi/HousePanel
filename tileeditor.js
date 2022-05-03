@@ -765,6 +765,38 @@ function initDialogBinds(str_type, thingindex) {
     });
 
     // set padding for selected item
+    $("#topMargin").off('change');
+    $("#topMargin").on('change', function(event) {
+        var subid = $("#subidTarget").html();
+        var str_type = $("#tileDialog").attr("str_type");
+        var thingindex = $("#tileDialog").attr("thingindex");
+        var newsize = parseInt( $("#topMargin").val() );
+        if ( !newsize || isNaN(newsize) ) { 
+            newsize = "0px;";
+        } else {
+            newsize = newsize.toString() + "px;";
+        }
+        var rule;
+        if ( subid === "panel" ) {
+            rule = "background-position-y: " + newsize;
+            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+        } else if ( str_type==="page" ) {
+            rule = "margin-top: " + newsize;
+            addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
+            addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
+        } else {
+            var ischecked = $("#absPlace").prop("checked");
+            if ( ischecked && subid!=="wholetile" ) {
+                rule = "top: " + newsize;
+            } else {
+                rule = "margin-top: " + newsize;
+            }
+            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+        }
+        event.stopPropagation;
+    });
+
+    // set padding for selected item
     $("#topPadding").off('change');
     $("#topPadding").on('change', function(event) {
         var subid = $("#subidTarget").html();
@@ -777,29 +809,48 @@ function initDialogBinds(str_type, thingindex) {
             newsize = newsize.toString() + "px;";
         }
         var rule;
-        if ( subid === "wholetile" || subid === "panel" ) {
+        if ( subid === "panel" ) {
             rule = "background-position-y: " + newsize;
-            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+            // addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         } else if ( str_type==="page" ) {
             rule = "padding-top: " + newsize;
             addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
             addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
-        } else if ( subid==="temperature" || subid==="feelsLike" ||
-                    subid==="weatherIcon" || subid==="forecastIcon" ) {
-            rule = "margin-top: " + newsize;
+        } else {
+            rule = "padding-top: " + newsize;
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+        }
+        event.stopPropagation;
+    });
+
+    // set margin for selected item
+    $("#leftMargin").off('change');
+    $("#leftMargin").on('change', function(event) {
+        var subid = $("#subidTarget").html();
+        var str_type = $("#tileDialog").attr("str_type");
+        var thingindex = $("#tileDialog").attr("thingindex");
+        var newsize = parseInt( $("#leftMargin").val() );
+        if ( !newsize || isNaN(newsize) ) { 
+            newsize = "0px;";
+        } else {
+            newsize = newsize.toString() + "px;";
+        }
+        var rule;
+        if ( subid === "panel" ) {
+            rule = "background-position-x: " + newsize;
+            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+        } else if ( str_type==="page" ) {
+            rule = "margin-left: " + newsize;
+            addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
+            addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
         } else {
             var ischecked = $("#absPlace").prop("checked");
-            var rule2;
-            if ( ischecked ) {
-                rule = "top: " + newsize;
-                rule2 = "padding-top: 0px;";
+            if ( ischecked && subid!=="wholetile" ) {
+                rule = "left: " + newsize;
             } else {
-                rule = "padding-top: " + newsize;
-                rule2 = "top: 0px;";
+                rule = "margin-left: " + newsize;
             }
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
-            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule2);
         }
         event.stopPropagation;
     });
@@ -819,27 +870,14 @@ function initDialogBinds(str_type, thingindex) {
         var rule;
         if ( subid === "wholetile" || subid === "panel" ) {
             rule = "background-position-x: " + newsize;
-            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+            // addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         } else if ( str_type==="page" ) {
             rule = "padding-left: " + newsize;
             addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
             addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
-        } else if ( subid==="temperature" || subid==="feelsLike" ||
-                    subid==="weatherIcon" || subid==="forecastIcon" ) {
-            rule = "margin-left: " + newsize;
-            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         } else {
-            var ischecked = $("#absPlace").prop("checked");
-            var rule2;
-            if ( ischecked ) {
-                rule = "left: " + newsize;
-                rule2 = "padding-left: 0px;";
-            } else {
-                rule = "padding-left: " + newsize;
-                rule2 = "left: 0px;";
-            }
+            rule = "padding-left: " + newsize;
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
-            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule2);
         }
         event.stopPropagation;
     });
@@ -1046,6 +1084,14 @@ function sizepicker(str_type, thingindex) {
     
     if ( !ptop || isNaN(ptop) ) { ptop = 0; }
     if ( !pleft || isNaN(pleft) ) { pleft = 0; }
+    dh += "<div class='editSection_input'>";
+    dh += "<label id=\"tpmname\" for='topMargin'>Top Margin:</label>";
+    dh += "<input size='4' type=\"number\" min='0' max='1600' step='5' id=\"topMargin\" value=\"" + ptop + "\"/>";
+    dh += "</div>";
+    dh += "<div class='editSection_input'>";
+    dh += "<label id=\"lpmname\" for='leftMargin'>Left Margin:</label>";
+    dh += "<input size='4' type=\"number\" min='0' max='1600' step='5' id=\"leftMargin\" value=\"" + pleft + "\"/>";
+    dh += "</div>";
     dh += "<div class='editSection_input'>";
     dh += "<label id=\"tpname\" for='topPadding'>Top Padding:</label>";
     dh += "<input size='4' type=\"number\" min='0' max='1600' step='5' id=\"topPadding\" value=\"" + ptop + "\"/>";
@@ -1596,24 +1642,6 @@ function initColor(str_type, subid, thingindex) {
         }
     }
 
-    // set the padding
-    // if ( $(target).css("position") && $(target).css("position").includes("absolute") ) {
-    //     var ptop = parseInt($(target).css("top"));
-    //     var pleft = parseInt($(target).css("left"));
-    // } else {
-    //     ptop = parseInt($(target).css("padding-top"));
-    //     pleft = parseInt($(target).css("padding-left"));
-    // }
-
-    // if ( str_type==="panel" || subid==="wholetile" ) {
-    //     ptop = parseInt($(target).css("background-position-y"));
-    //     pleft = parseInt($(target).css("background-position-x"));
-    // }
-    // if ( !ptop || isNaN(ptop) ) { ptop = 0; }
-    // if ( !pleft || isNaN(pleft) ) { pleft = 0; }
-    // $("#topPadding").val(ptop);
-    // $("#leftPadding").val(pleft);
-
     // var txtBefore = $(target+"::before").css("content");
     try {
         var txtBefore = window.getComputedStyle(document.querySelector(target), "::"+"before").getPropertyValue('content');
@@ -2021,17 +2049,27 @@ function initColor(str_type, subid, thingindex) {
     }
 
 
-    // set the padding or absolute positioning
-    if ( str_type==="panel" || subid==="wholetile" ) {
-        var ptop = parseInt($(target).css("background-position-y"));
-        var pleft = parseInt($(target).css("background-position-x"));
-    } else if ( $(target).css("position") && $(target).css("position").includes("absolute") ) {
+    // set the margins or absolute positioning
+    var ptop;
+    var pleft;
+    if ( str_type==="panel" ) {
+        ptop = parseInt($(target).css("background-position-y"));
+        pleft = parseInt($(target).css("background-position-x"));
+    } else if ( $(target).css("position") && $(target).css("position").includes("absolute") && subid!=="wholetile" ) {
         ptop = parseInt($(target).css("top"));
         pleft = parseInt($(target).css("left"));
     } else {
-        ptop = parseInt($(target).css("padding-top"));
-        pleft = parseInt($(target).css("padding-left"));
+        ptop = parseInt($(target).css("margin-top"));
+        pleft = parseInt($(target).css("margin-left"));
     }
+    if ( !ptop || isNaN(ptop) ) { ptop = 0; }
+    if ( !pleft || isNaN(pleft) ) { pleft = 0; }
+    $("#topMargin").val(ptop);
+    $("#leftMargin").val(pleft);
+
+    // set the padding
+    ptop = parseInt($(target).css("padding-top"));
+    pleft = parseInt($(target).css("padding-left"));
     if ( !ptop || isNaN(ptop) ) { ptop = 0; }
     if ( !pleft || isNaN(pleft) ) { pleft = 0; }
     $("#topPadding").val(ptop);
