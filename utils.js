@@ -2,6 +2,7 @@
 const fs = require('fs');
 
 const devhistory =  ` 
+3.031   Update tile editor to do margins and padding and work on whole tiles
 3.030   Require user to specify client number to make ports work correctly
 3.029   Enable clock rules based on time by calling server once a minute
 3.028   Fix slider links to properly control their master and pass hint

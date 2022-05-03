@@ -15,6 +15,7 @@
  * This is a SmartThings and Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history:
+ * 04/24/2022 - handle color changes from the new HP web service
  * 12/27/2021 - add position for shades
  * 10/24/2020 - clean up logger for tracking hub push changes
               - remove routines since they are depracated and classic app is gone
@@ -820,7 +821,7 @@ def getAllThings() {
 
 // modified to only return one mode tile
 def getModes(resp) {
-    logger("Getting mode tile", "info")
+    // logger("Getting mode tile", "info")
     // def vals = ["m1x1","m1x2","m2x1","m2x2"]
     def vals = ["mode"]
     try {
@@ -1627,7 +1628,7 @@ def setMode(swid, cmd, swattr, subid) {
         newsw = allmodes[0].getName()
     }
 
-    logger("Mode changed to $newsw", "info");
+    logger("Mode changed to $newsw", "debug");
     location.setMode(newsw);
     resp =  [ themode: newsw ];
     
@@ -1796,6 +1797,8 @@ def setGenericLight(mythings, swid, cmd, swattr, subid) {
             }
         } else if ( subid=="name" ) {
             swattr = "name"
+        } else if ( subid=="color" ) {
+            swattr = subid
         }
         
         switch(swattr) {
@@ -1966,6 +1969,7 @@ def setGenericLight(mythings, swid, cmd, swattr, subid) {
         // this supports api calls and clicking on color circle
         // the level is not returned to prevent slider from moving around
         case "color":
+            logger("color command request:  ${cmd}", "info")
             if (cmd.startsWith("hsl(") && cmd.length()==16) {
                 hue = cmd.substring(4,7).toInteger()
                 saturation = cmd.substring(8,11).toInteger()
@@ -1974,7 +1978,12 @@ def setGenericLight(mythings, swid, cmd, swattr, subid) {
                 item.setSaturation(saturation)
                 item.setLevel(v)
                 newcolor = hsv2rgb(hue, saturation, v)
+                postHub(state.directIP, state.directPort, "update", item.displayName, swid, "color", "bulb", newcolor)
+                if (state.directIP2) {
+                    postHub(state.directIP2, state.directPort2, "update", item.displayName, swid, "color", "bulb", newcolor)
+                }
                 newonoff = "on"
+                logger("color command result: h= ${hue}, s= ${saturation}, l= ${v}, newcolor= ${newcolor}","info")                
             }
             break
               
@@ -2570,10 +2579,11 @@ def changeHandler(evt) {
             }
 
             // set it to change color based on attribute change
-            logger("color of device ${deviceName} changed to ${color} by the ${attr} attribute changing to ${value}", "debug")
+            logger("color of device ${deviceName} changed to ${color} by the ${attr} attribute changing to ${value}", "info")
             attr = "color"
             value = color
         }
+
         postHub(state.directIP, state.directPort, "update", deviceName, deviceid, attr, devtype, value)
         if (state.directIP2) {
             postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, attr, devtype, value)

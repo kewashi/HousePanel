@@ -50,7 +50,7 @@ div.panel-Basement, div.panel-Downstairs {
 /* the heights are set to auto for larger items like weather and thermostats */
 div.thing {
     display: inline-block;
-    margin: 3px;
+    margin: 2px 1px 0 1px;
     text-align: center;
     vertical-align: top;
     border-top: 2px solid #cccccc; 
@@ -93,8 +93,6 @@ div.switch, div.bulb, div.light, div.switchlevel, div.momentary, div.motion, div
 div.contact, div.music, div.presence, div.piston, div.valve, div.overlay div.door, 
 div.temperature, div.overlay div.themode, div.shm, div.hsm {
     background-repeat: no-repeat;
-    padding: 0px 0;
-    margin: 0;
     cursor: default;
 }
 
