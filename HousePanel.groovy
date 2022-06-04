@@ -15,6 +15,7 @@
  * This is a SmartThings and Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history:
+ * 05/30/2022 - add direct support for window shades beyond other hack on 12/27/21
  * 04/24/2022 - handle color changes from the new HP web service
  * 12/27/2021 - add position for shades
  * 10/24/2020 - clean up logger for tracking hub push changes
@@ -146,10 +147,11 @@ preferences {
             input "mypresences", "capability.presenceSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Presence"
             input "mymotions", "capability.motionSensor", multiple: true, required: false, title: "Motion"
     }
-    section ("Doors, Contacts, and Locks") {
+    section ("Doors, Contacts, Locks, and Shades") {
             input "mycontacts", "capability.contactSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Contact Sensors"
             input "mydoors", "capability.doorControl", hideWhenEmpty: true, multiple: true, required: false, title: "Garage Doors"
             input "mylocks", "capability.lock", hideWhenEmpty: true, multiple: true, required: false, title: "Locks"
+            input "myshades", "capability.windowShade", hideWhenEmpty: true, multiple: true, required: false, title: "Window Shades"
     }
     section ("Thermostats and Weather") {
             input "mythermostats", "capability.thermostat", hideWhenEmpty: true, multiple: true, required: false, title: "Thermostats"
@@ -424,6 +426,10 @@ def getContact(swid, item=null) {
 
 def getLock(swid, item=null) {
     getThing(mylocks, swid, item)
+}
+
+def getShade(swid, item=null) {
+    getThing(myshades, swid, item)
 }
 
 // this was updated to use the real key names so that push updates work
@@ -772,6 +778,8 @@ def getAllThings() {
     run = logStepAndIncrement(run)
     resp = getDimmers(resp)
     run = logStepAndIncrement(run)
+    resp = getShades(resp)
+    run = logStepAndIncrement(run)
     resp = getMomentaries(resp)
     run = logStepAndIncrement(run)
     resp = getButtons(resp)
@@ -922,6 +930,10 @@ def getButtons(resp) {
 
 def getActuators(resp) {
     getThings(resp, myactuators, "actuator")
+}
+
+def getShades(resp) {
+    getThings(resp, myshades, "shade")
 }
 
 def getMomentaries(resp) {
@@ -1092,6 +1104,7 @@ def autoType(swid) {
     else if ( mysmokes?.find {it.id == swid } ) { swtype= "smoke" }
     else if ( mytemperatures?.find {it.id == swid } ) { swtype= "temperature" }
     else if ( mypowers?.find {it.id == swid } ) { swtype= "power" }
+    else if ( myshades?.find {it.id == swid } ) { swtype= "shade" }
     else if ( myothers?.find {it.id == swid } ) { swtype= "other" }
     else if ( myactuators?.find {it.id == swid } ) { swtype= "actuator" }
     else if ( swid=="${state.prefix}shm" ) { swtype= "shm" }
@@ -1149,6 +1162,10 @@ def doAction() {
       case "lock" :
         cmdresult = setLock(swid, cmd, swattr, subid)
         break
+
+      case "shade" :
+        def ashade = myshades.find {it.id == swid }
+        cmdresult = setOther(swid, cmd, swattr, subid, ashade)
 
       case "thermostat" :
         cmdresult = setThermostat(swid, cmd, swattr, subid)
@@ -1277,6 +1294,9 @@ def doQuery() {
     case "switchlevel" :
         cmdresult = getDimmer(swid)
         break
+
+    case "shade" :
+        cmdresult = getShade(swid)
          
     case "momentary" :
         cmdresult = getMomentary(swid)
@@ -1445,7 +1465,7 @@ def setButton(swid, cmd, swattr, subid) {
 }
 
 // other types have actions starting with _ 
-// and we accommodate switches and api calls with valid cmd values
+// and we accommodate switches, shades, and api calls with valid cmd values
 def setOther(swid, cmd, swattr, subid, item=null ) {
     def resp = false
     def newsw
@@ -1475,6 +1495,9 @@ def setOther(swid, cmd, swattr, subid, item=null ) {
             if ( item.hasAttribute("position") ) {
                 item.setPosition(newsw)
                 resp.put("position", newsw)
+                if ( newsw > 0 && newsw < 100 && item.hasAttribute("windowShade")) {
+                    resp.put("windowShade","partially open")
+                }
             }
 
             if ( item.hasAttribute("hue") && item.hasAttribute("saturation") ) {
@@ -1491,6 +1514,9 @@ def setOther(swid, cmd, swattr, subid, item=null ) {
                 item.setPosition(newsw)
                 resp = [:]
                 resp.put("position", newsw)
+                if ( newsw > 0 && newsw < 100 && item.hasAttribute("windowShade")) {
+                    resp.put("windowShade","partially open")
+                }
                 if ( item.hasAttribute("level") ) {
                     item.setLevel(newsw)
                     resp.put("level", newsw)
@@ -1852,6 +1878,9 @@ def setGenericLight(mythings, swid, cmd, swattr, subid) {
                 item.setLevel(newsw)
                 if ( item.hasAttribute("position") ) {
                     item.setPosition(newsw)
+                    if ( newsw > 0 && newsw < 100 && item.hasAttribute("windowShade")) {
+                        item.setWindowShade("partially open")
+                    }
                 }
                 newlevel = newsw
                 if ( item.hasAttribute("hue") ) {
@@ -1868,6 +1897,9 @@ def setGenericLight(mythings, swid, cmd, swattr, subid) {
                 newsw = cmd.toInteger()
                 newsw = (newsw >100) ? 100 : newsw
                 item.setPosition(newsw)
+                if ( newsw > 0 && newsw < 100 && item.hasAttribute("windowShade")) {
+                    item.setWindowShade("partially open")
+                }
                 if ( item.hasAttribute("level") ) {
                     item.setLevel(newsw)
                 }
@@ -2404,7 +2436,7 @@ def setMusic(swid, cmd, swattr, subid) {
 
 def registerAll() {
     List mydevices = ["myswitches", "mydimmers", "mybulbs", "mypresences", "mybuttons",
-                      "mymotions", "mycontacts", "mydoors", "mylocks", "mythermostats",
+                      "mymotions", "mycontacts", "mydoors", "mylocks", "mythermostats", "myshades",
                       "mytemperatures", "myilluminances", "myweathers", "myaccuweathers",
                       "mywaters", "mysmokes", "mymusics", "myaudios", "mypowers", "myothers", "myactuators"]
 
@@ -2495,6 +2527,9 @@ def register_myaccuweathers() {
 }
 def register_mybuttons() {
     registerChangeHandler(settings?.mybuttons)
+}
+def register_myshades() {
+    registerChangeHandler(settings?.myshades)
 }
 
 def registerCapabilities(devices, capability) {
