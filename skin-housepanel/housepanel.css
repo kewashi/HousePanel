@@ -733,28 +733,13 @@ div.weather.illuminance::after,
 div.custom.illuminance::after {
     content: " Lux";
 }
-/*div.weather.humidity, div.weather.localSunrise, div.weather.localSunset,
-div.windVector, div.weather.percentPrecip, div.weather.alert, div.weather.illuminance {
-    background-color: rgba(100, 100, 100, 1);
-    margin-bottom: 0px;
-    display: block;
-}*/
-div.weather.sunriseset, div.weather.timeZoneOffset, div.weather.alertKeys,
+div.uom_humidity, div.uom_percentPrecip, div.uom_illuminance, div.uom_wind,
+div.uom_feelsLike, div.uom_temperature, div.uom_windspeed,
+div.weather.timeZoneOffset, div.weather.alert, 
+div.weather.forecastToday, div.weather.forecastTonight, div.weather.forecastTomorrow,
 div.weather.sunriseDate, div.weather.sunsetDate,
 div.weather.ultravioletIndex, div.weather.lastUpdate {
     display: none;
-}
-div.weather.weatherIcon, div.weather.forecastIcon {
-    display: inline-block;
-}
-div.weather-thing div.overlay.temperature, div.weather-thing div.overlay.feelsLike {
-    display: inline;
-    padding-right: 4px;
-}
-div.thing.weather-thing div.overlay.name, div.thing.weather-thing div.overlay.city {
-    display: block;
-    position: relative;
-    width: 100%;
 }
 
 /* clock styling */
