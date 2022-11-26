@@ -149,17 +149,15 @@ function clone(obj) {
 // could probably read Options file instead
 // but doing it this way ensure we get what main app sees
 function getOptions() {
-    var doreload = "";
     priorOpmode = getCookie("opmode") || "operate";
     try {
         var userid = $("#userid").val();
         var email = $("#emailid").val();
         var skin = $("#skinid").val();
         var config = $("#configsid").val();
-        console.log("config = ", config,"\n userid = ", userid);
         var pname = $("#showversion span#infoname").html();
         config = JSON.parse(config);
-        cm_Globals.options = {userid: userid, email: email, skin: skin, config: config, rules: null};
+        cm_Globals.options = {userid: userid, email: email, skin: skin, config: config, rules: {}};
 
         // disabled timer based refreshes since we no longer need this
         // setFastSlow(config);
@@ -169,8 +167,7 @@ function getOptions() {
             {useajax: "getoptions", userid: userid, pname: pname, id:"none", type:"none"},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
-                    cm_Globals.options.rules = presult;
-                    var indexkeys = Object.keys(presult);
+                    cm_Globals.options["rules"] = presult;
 
                     if ( cm_Globals.options.config.blackout ) {
                         var blackout = cm_Globals.options.config.blackout;
@@ -187,8 +184,7 @@ function getOptions() {
                         setCookie("opmode", priorOpmode);
                     }
 
-
-                    console.log("getOptions returned: " + indexkeys.length," opmode: ", priorOpmode, " config rules/links: ", presult);
+                    // console.log(">>>> getOptions returned: ", presult, " opmode: ", priorOpmode);
                 } else {
                     console.log("error - failure reading config options from database for user = " + userid);
                 }
@@ -273,7 +269,7 @@ $(document).ready(function() {
                 try {
                     $("#"+defaultTab).click();
                 } catch (f) {
-                    console.log(f);
+                    console.log(">>>> error retrieving default Tab cookie:", f);
                 }
             }
         }
@@ -472,25 +468,8 @@ function initWebsocket() {
             webSocketUrl += ":" + port;
             $("#infoport").html("#"+portnum);
             // alert("webSocketUrl: " + webSocketUrl);
-            console.log(">>>> port:", port, " webSocketUrl:", webSocketUrl);
+            // console.log(">>>> port:", port, " webSocketUrl:", webSocketUrl);
             setupWebsocket(userid, port, webSocketUrl);
-
-            // $.post(cm_Globals.returnURL, 
-            //     {useajax: "getwsport", userid: userid},
-            //     function (presult, pstatus) {
-            //         if (pstatus==="success" && presult ) {
-            //             var port = presult.port;
-            //             var usedports = presult.used;
-            //             webSocketUrl += ":" + port;
-            //             $("#infoport").html("#"+port.toString().substr(3));
-            //             // alert("webSocketUrl: " + webSocketUrl);
-            //             // console.log(">>>> port: ", port, " used: ", usedports);
-            //             setupWebsocket(userid, port, webSocketUrl);
-            //         } else {
-            //             console.log( "error - could not initialize websocket. pstatus: ", pstatus, " presult: ", presult );
-            //         }
-            //     }
-            // );
         }
     } catch(err) {
         console.log( "error - could not initialize websocket. err: ", err);
@@ -732,19 +711,24 @@ function rgb2hsv(r, g, b) {
     s = max === 0 ? 0 : d / max;
 
     if (max === min) {
-    h = 0; // achromatic
+        h = 0; // achromatic
     } else {
         switch (max) {
-            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            // case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case r: h = (g - b) / d; break;
             case g: h = (b - r) / d + 2; break;
             case b: h = (r - g) / d + 4; break;
         }
 
-        h /= 6;
+        // h /= 6;
+        h = Math.round(h * 60);
+        if ( h < 0 ) {
+            h += 360;
+        }
     }
-    h = Math.floor(h * 100);
-    s = Math.floor(s * 100);
-    v = Math.floor(v * 100);
+    // h = Math.floor(h * 100);
+    s = Math.round(s * 100);
+    v = Math.round(v * 100);
 
     return {"hue": h, "saturation": s, "level": v};
 }
@@ -948,9 +932,8 @@ function setupColors() {
                 var newcolor = $(this).minicolors("rgbObject");
                 var hexval = $(this).minicolors("value");
                 var hsl = rgb2hsv( newcolor.r, newcolor.g, newcolor.b );
-                // var nativelevel = parseInt($("#a-"+aid+"-level").attr("value"));
-                // alert("level = " + nativelevel+" v = "+hsl.level);
                 var hslstr = "hsl("+hsl.hue.pad(3)+","+hsl.saturation.pad(3)+","+hsl.level.pad(3)+")";
+                // console.log("color = " + hexval+" hsl = "+hslstr);
                 var tile = '#t-'+aid;
                 var bid = $(tile).attr("bid");
                 var hubid = $(tile).attr("hub");
@@ -984,8 +967,10 @@ function setupColors() {
                       linkval.startsWith("RULE::") || linkval.startsWith("URL::")) )
                 {
                     var jcolon = linkval.indexOf("::");
-                    command = linkval.substr(0, jcolon);
-                    linkval = linkval.substr(jcolon+2);
+                    // command = linkval.substr(0, jcolon);
+                    command = linkval.substring(0, jcolon);
+                    // linkval = linkval.substr(jcolon+2);
+                    linkval = linkval.substring(jcolon+2);
                 } else {
                     command = "";
                     linkval = "";
@@ -1059,12 +1044,8 @@ function setupSliders() {
             subid: realsubid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval},
             function(presult, pstatus) {
                 if (pstatus==="success") {
-                    if ( presult && typeof presult === "object" ) {
-                        console.log("Slider success: ", presult);
-                    } else if ( presult && typeof presult === "string" && !presult.startsWith("error") ) {
-                        console.log(presult);
-                    } else {
-                        console.error("Unrecognized return from slider POST: ", presult);
+                    if ( presult && presult.startsWith("error") ) {
+                        console.error(">>>> error adjusting a slider: ", presult);
                     }
                 }
             }, "json"
@@ -1256,7 +1237,7 @@ function setupSortable() {
                 $.post(cm_Globals.returnURL, 
                     {useajax: "setorder", userid: userid, pname: pname, id: "none", type: "things", value: tilenums, hubid: hubid, roomid: roomid},
                     function (presult, pstatus) {
-                        if (pstatus==="success" && typeof presult==="object" ) {
+                        if (pstatus==="success" ) {
                             console.log("setorder POST returned: ", presult );
                         }
                     }, "json"
@@ -1783,9 +1764,6 @@ function execButton(buttonid) {
 
         try {
             dynoPost("filteroptions", fobj, function(presult, pstatus) {
-                if ( pstatus === "success" ) {
-                    console.log("processed filteroptions:", presult);
-                }
                 dynoPost("saveoptions", oobj, function(presult, pstatus) {
                     if ( pstatus!=="success" ) {
                         console.log(pstatus, " result: ", presult, " optionsobj: ", oobj);
@@ -2533,11 +2511,11 @@ function addEditLink() {
         var userid = cm_Globals.options.userid;
         if ( pwsib && pwsib.length > 0 ) {
             pw = pwsib.children("div.password").html();
-            checkPassword(thing, "Tile editing", pw, runCustom);
+            checkPassword(thing, "Tile editing", pw, false, runCustom);
         } else {
-            runCustom(thing," ");
+            runCustom(thing," ", false);
         }
-        function runCustom(thing, name) {
+        function runCustom(thing, name, ro) {
             var str_type = $(thing).attr("type");
             var tile = $(thing).attr("tile");
             var bid = $(thing).attr("bid");
@@ -2574,7 +2552,7 @@ function addEditLink() {
                     function (presult, pstatus) {
                         // check for an object returned which should be a promise object
                         if (pstatus==="success" && ( typeof presult==="object" || (typeof presult === "string" && !presult.startsWith("error"))) ) {
-                            console.log( "delthing presult: ", presult );
+                            // console.log( "delthing presult: ", presult );
                             $(thing).remove();
                         }
                     }
@@ -2623,7 +2601,7 @@ function addEditLink() {
         var roomnum = $(evt.target).attr("roomnum");
         var roomname = $(evt.target).attr("roomname");
         var roomid = $("#panel-"+roomname).attr("roomid");
-        console.log("editing room: ", roomid, roomnum, roomname);
+        // console.log("editing room: ", roomid, roomnum, roomname);
         editTile(cm_Globals.options.userid, roomid, roomname, "page", roomname, 0, 0, "", 0, "None", roomname);
     });
    
@@ -2911,6 +2889,9 @@ function fixTrack(tval) {
 // third parameter will skip links - but this is not used for now
 function updateTile(aid, presult) {
 
+    // if ( !presult.time ) {
+    //     console.log(">>>> presult: ", presult);
+    // }
     // do something for each tile item returned by ajax call
     var isclock = false;
     
@@ -2975,7 +2956,7 @@ function updateTile(aid, presult) {
         if ( dothis ) {
 
             // push to this tile
-            processKeyVal(targetid, aid, key, value);
+            isclock = processKeyVal(targetid, aid, key, value);
 
             // push to all tiles that link to this item
             // we use bid to find linked tiles so the tile doesn't have to be on the screen for link to update
@@ -3034,7 +3015,7 @@ function processKeyVal(targetid, aid, key, value) {
     // this avoids putting names of songs into classes
     // also only do this if the old class was there in the first place
     // also handle special case of battery and music elements
-    if ( key==="battery") {
+    if ( key.startsWith("battery") ) {
         var powmod = parseInt(value);
         powmod = powmod - (powmod % 10);
         value = "<div style=\"width: " + powmod.toString() + "%\" class=\"ovbLevel L" + powmod.toString() + "\"></div>";
@@ -3060,16 +3041,23 @@ function processKeyVal(targetid, aid, key, value) {
         value = false;
         oldvalue = false;
 
+    // handle button fields that are input values
+    } else if ( key==="pushed" || key==="held" || key==="released" || key==="doubleTapped") {
+        value = "<input type=\"number\" size=\"3\" min=\"1\" max=\"20\" class=\"buttonval\" value=\"" + value + "\">";
+        // console.log(">>>> key: ", key, " button value: ", value, " targetid: ", targetid);
+
     // we now make color values work by setting the mini colors circle
     } else if ( key==="color") {
         $(targetid).html(value);
         $(targetid).attr("value", value);
         $(targetid).minicolors('value', {color: value});
-        oldvalue = "";
+        value = false;
+        oldvalue = false;
 
     // special case for numbers for KuKu Harmony things
     } else if ( key.startsWith("_number_") && value.startsWith("number_") ) {
         value = value.substring(7);
+
     } else if ( key === "skin" && value.startsWith("CoolClock") ) {
         value = '<canvas id="clock_' + aid + '" class="' + value + '"></canvas>';
         isclock = ( oldvalue !== value );
@@ -3212,34 +3200,39 @@ function clockUpdater(whichclock, forceget) {
         return;
     }
 
-    if ( !cm_Globals.options || !cm_Globals.options.rules ) {
-        return;
-    }
-    var tile = $("div.panel div.thing[bid='"+whichclock+"']");
-    if ( tile ) {
-        var thingid = $(tile).attr("thingid");
-        var tileid = $(tile).attr("tile");
-    } else {
-        return;
-    }
-
-    var userid = cm_Globals.options.userid;
-    var pname = $("#showversion span#infoname").html();
-
-    // make a mini configoptions object for just clocks
-    var clockoptions = [];
-    var opt1 = {userid: userid, configkey: "user_clockdigital", configval: cm_Globals.options.rules["user_clockdigital"]};
-    var opt2 = {userid: userid, configkey: "user_clockanalog", configval: cm_Globals.options.rules["user_clockanalog"]};
-    clockoptions.push(opt1);
-    clockoptions.push(opt2);
+    // console.log(">>>> clockUpdater, options: ", cm_Globals.options);
 
     // get the global clock devices if not previously set
     if ( cm_Globals[whichclock] && !forceget ) {
         updateClock(whichclock, cm_Globals[whichclock]);
-    } else {
+
+    } else if ( forceget && cm_Globals.options && cm_Globals.options.rules ) {
+
+        var tile = $("div.panel div.thing[bid='"+whichclock+"']");
+        if ( tile ) {
+            var thingid = $(tile).attr("thingid");
+            var tileid = $(tile).attr("tile");
+        } else {
+            return;
+        }
+    
+        var userid = cm_Globals.options.userid;
+        if ( !userid ) { userid = 1; }
+        var pname = $("#showversion span#infoname").html();
+        if ( !pname ) { pname = "default"; }
+
+        // make a mini configoptions object for just clocks
+        var clockoptions = [];
+        var opt1 = {userid: userid, configkey: "user_clockdigital", configval: cm_Globals.options.rules["user_clockdigital"]};
+        var opt2 = {userid: userid, configkey: "user_clockanalog", configval: cm_Globals.options.rules["user_clockanalog"]};
+        clockoptions.push(opt1);
+        clockoptions.push(opt2);
+
+        // console.log(">>>> force getting clock: ", cm_Globals.returnURL, whichclock, userid, pname, thingid, tileid);
         $.post(cm_Globals.returnURL, 
             {useajax: "getclock", userid: userid, pname: pname, id: whichclock, thingid: thingid, tileid: tileid, type: "clock", attr: clockoptions},
             function (presult, pstatus) {
+                // console.log(">>>> forceget results: ", pstatus, presult);
                 if ( pstatus==="success" && presult && typeof presult==="object" ) {
                     cm_Globals[whichclock] = presult;
                     updateClock(whichclock, cm_Globals[whichclock]);
@@ -3392,7 +3385,7 @@ function setupPage() {
         // or if an empty password is given this becomes a confirm box
         // the dynamically created dialog box includes an input string if pw given
         // uses a simple md5 hash to store user password - this is not strong security
-        if ( typeof pw === "string" && pw!==false ) {
+        if ( pw && typeof pw === "string" && pw!=="false" ) {
             checkPassword(that, thingname, pw, ro, processClick);
         } else {
             processClick(that, thingname, ro);
@@ -3534,6 +3527,18 @@ function processClick(that, thingname, ro) {
         targetid = '#a-'+aid+'-'+subid;
     }
 
+    var thevalue = $(targetid).html();
+
+    // if this is an edit field then do nothing
+    if ( thevalue && typeof thevalue==="string" && (thevalue.startsWith("<input type=\"text\"") || thevalue.startsWith("<input type=\"number\"") ) ) {
+        return;
+    }
+
+    // if any button edit field is clicked on do nothing since user is editing
+    // if ( subid === "pushed" || subid==="released" || subid==="held" || subid==="doubleTapped" ) {
+    //     return;
+    // }
+
     // set attr to name for ISY hubs
     if ( thetype === "isy" ) {
         theattr = $("#a-"+aid+"-name").html();
@@ -3541,8 +3546,7 @@ function processClick(that, thingname, ro) {
     var hint = $(tile).attr("hint");
 
     // all hubs now use the same doaction call name
-    var ajaxcall = "doaction";
-    var thevalue = $(targetid).html();
+    const ajaxcall = "doaction";
 
     // special case of thermostat clicking on things without values
     // send the temperature as the value
@@ -3620,7 +3624,7 @@ function processClick(that, thingname, ro) {
     var ispassive = (ro || subid==="custom" || subid==="temperature" || subid==="feelsLike" || subid==="battery" || //  (command==="TEXT" && subid!=="allon" && subid!=="alloff") ||
         subid==="presence" || subid==="motion" || subid==="contact" || subid==="status" || subid==="deviceType" || subid==="localExec" ||
         subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" || subid==="name" || subid==="skin" ||
-        subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") ||
+        subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") || subid==="illuminance" ||
         (command==="TEXT" && subid.startsWith("label")) || (command==="TEXT" && subid.startsWith("text")) ||
         (thetype==="weather" && !subid.startsWith("_")) ||
         (thetype==="ford" && !subid.startsWith("_"))
@@ -3643,17 +3647,17 @@ function processClick(that, thingname, ro) {
             this[0].html(this[2]);
         };
 
-        if ( thevalue==="on" || thevalue==="off" ) {
+        if ( thevalue && (thevalue==="on" || thevalue==="off") ) {
             thevalue = thevalue==="on" ? "off" : "on";
         }
-        console.log(ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" linkbid+ "+linkbid+" linkhub= " + linkhub + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
+        // console.log(ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" linkbid+ "+linkbid+" linkhub= " + linkhub + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
 
         $.post(cm_Globals.returnURL, 
             {useajax: ajaxcall, userid: userid, pname: pname, thingid: thingid, tileid: tileid, id: linkbid, type: linktype, value: thevalue, hint: hint,
                 attr: subid, subid: realsubid, hubid: hubid, hubindex: linkhub, command: command, linkval: linkval},
             function(presult, pstatus) {
                 if (pstatus==="success") {
-                    console.log( ajaxcall + ": POST returned:", presult );
+                    // console.log( ajaxcall + ": POST returned:", presult );
                     if (thetype==="piston") {
                         $(targetid).addClass("firing");
                         $(targetid).html("firing");
@@ -3725,8 +3729,11 @@ function processClick(that, thingname, ro) {
         $('div.overlay > div[aid="'+aid+'"]').each(function() {
             var inspectsubid = $(this).attr("subid");
             var strval = $(this).html();
-            if ( inspectsubid!=="battery" && strval ) {
-                if ( strval.indexOf("img src") !== -1 ) {
+            if ( strval ) {
+                if ( inspectsubid==="battery" ) {
+                    var batdiv = $(this).children().attr("style").substr(7);
+                    msg += inspectsubid + " = " + batdiv + "<br>";
+                } else if ( strval.indexOf("img src") !== -1 ) {
                     msg += inspectsubid + " =  (image)<br>";
                 } else if ( inspectsubid==="level" || inspectsubid==="onlevel" || inspectsubid==="colorTemperature" || inspectsubid==="volume" || inspectsubid==="groupVolume" || inspectsubid==="position" ) {
                     msg += inspectsubid + " = " + $(this).children().attr("style").substr(6) + "<br>";
@@ -3751,11 +3758,20 @@ function processClick(that, thingname, ro) {
         // however, I still inverted the ST and HE values to support future update
         // where I might just look at thevalue for these hubs types as it should be
         // the attr action was a terrible workaround put in a much earlier version
-        // we also convert any click on button tiles into a pushed call if it was held before
         if ( (subid==="switch") && (thevalue==="on" || thevalue==="off")  ) {
             thevalue = thevalue==="on" ? "off" : "on";
-        } else if ( subid==="button" && thevalue==="held" ) {
-            thevalue = "pushed";
+            // } else if ( subid==="button" && thevalue==="held" ) {
+            //     thevalue = "pushed";
+        }
+
+        // we grab the value in the input field to pass to the click routines
+        else if ( thetype==="button" && (subid==="_push" || subid==="_hold" || subid=="_doubleTap" || subid==="_release") ) {
+            var butmap = {"_push": "pushed", "_hold":"held", "_doubleTap": "doubleTapped", "_release": "released"};
+            var findval = butmap[subid];
+            thevalue = $(that).parent().parent().find("div[subid='" + findval + "'] > input").val();
+            if ( !thevalue ) { thevalue = "1"; }
+            // console.log(">>>> button pressed. value = ", thevalue, " findval = ", findval);
+            // return;
         }
 
         // remove isy type check since it could be a link
@@ -3800,9 +3816,9 @@ function processClick(that, thingname, ro) {
             function (presult, pstatus) {
                 if (pstatus==="success") {
                     if ( presult && typeof presult === "object" ) {
-                        console.log("Success: ", presult);
+                        // console.log("Success: ", presult);
                     } else if ( presult && typeof presult === "string" && !presult.startsWith("error") ) {
-                        console.log(presult);
+                        // console.log(presult);
                     } else {
                         console.log("Unrecognized return from POST call. result: ", presult);
                     }

@@ -190,18 +190,18 @@ function getOnOff(str_type, subid, val) {
     } else if ( (str_type==="momentary") && subid.startsWith("momentary" ) ) {
         onoff = ["on","off"];
     } else if ( str_type==="button" && subid.startsWith("button") ) {
-        onoff = ["pushed","held"];
+        onoff = ["pushed","held","released","doubleTapped"];
         // alert("subid = " + subid);
     } else if ( subid.startsWith("contact" ) || subid.startsWith("valve" ) ) {
         onoff = ["open","closed"];
     } else if ( subid.startsWith("door" ) ) {
-        onoff = ["open","closed", "opening", "closing"];
+        onoff = ["open","closed", "opening", "closing","unknown"];
     } else if ( subid.startsWith("lock" ) ) {
         onoff = ["locked","unlocked","unknown"];
     } else if ( subid.startsWith("motion") ) {
         onoff = ["active","inactive"];
     } else if ( subid.startsWith("windowShade") ) {
-        onoff = ["open","closed","partially_open"];
+        onoff = ["open","closed","opening","closing","partially_open","unknown"];
     } else if ( subid.startsWith("pistonName" ) ) {
         onoff = ["firing","idle"];
     } else if ( subid.startsWith("thermostatFanMode" ) ) {
@@ -228,8 +228,10 @@ function getOnOff(str_type, subid, val) {
         onoff = ["muted","unmuted"];
     } else if ( subid.startsWith("presence" ) ) {
         onoff = ["present","absent"];
-    } else if ( subid.startsWith("state" ) ) {
+    } else if ( str_type==="shm" && subid.startsWith("state" ) ) {
         onoff = ["Away","Home","Night","Disarmed"];
+    } else if ( str_type==="hsm" && subid.startsWith("state") ) {
+        onoff = ["armedAway", "armingAway", "armedHome", "armingHome", "armedNight", "armingNight", "disarmed", "allDisarmed"];
     } else if ( str_type==="mode" && subid.startsWith("themode" ) ) {
         onoff = [];
         // get all the modes supported by this location
@@ -242,9 +244,9 @@ function getOnOff(str_type, subid, val) {
         });
         // onoff = ["Away","Home","Night", ""];
     } else {
-        if ( val==="on" ) {
+        if ( val==="on" && subid!=="_on" && subid!=="_off" ) {
             onoff = ["on","off"];
-        } else if ( val==="off" ) {
+        } else if ( val==="off" && subid!=="_on" && subid!=="_off" ) {
             onoff = ["off","on"];
         } else if ( val==="DON" ) {
             onoff = ["DON","DOF"];
@@ -1470,7 +1472,6 @@ function resetInverted(selector) {
 function checkboxHandler(idselect, onaction, offaction, overlay) {
     $(idselect).off('change');
     $(idselect).on("change",function() {
-        var strAbs;;
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
         var subid = $("#subidTarget").html();
@@ -1480,7 +1481,6 @@ function checkboxHandler(idselect, onaction, offaction, overlay) {
         }
         // var overlayTarget = "div.overlay." + subid + ".v_" + thingindex;
         if($(idselect).is(':checked')){
-            // alert("overlay= "+overlay+" overlayTarget= "+overlayTarget+" action= "+onaction);
             if (overlay) {
                 addCSSRule(overlayTarget, onaction[0], true);
             }
@@ -1488,7 +1488,6 @@ function checkboxHandler(idselect, onaction, offaction, overlay) {
                 addCSSRule(cssRuleTarget, act, false);
             });
         } else {
-            // alert("overlay= "+overlay+" overlayTarget= "+overlayTarget+" action= "+offaction);
             if (overlay) {
                 addCSSRule(overlayTarget, offaction[0], true);
             }
@@ -1894,8 +1893,8 @@ function initColor(str_type, subid, thingindex) {
     }
 
     checkboxHandler("#invertIcon",["filter: invert(1);"],["filter: invert(0);"], false);
-    checkboxHandler("#absPlace",["position: absolute;","padding-top: 0px;","padding-left: 0px;"],
-                                ["position: relative;","top: 0px;","left: 0px;"], true);
+    checkboxHandler("#absPlace",["position: absolute;","margin-left: 0px;","margin-top: 0px;"],
+                                ["position: relative;","top: 0px;","left: 0px;"], false);
     checkboxHandler("#inlineOpt",["display: inline-block;"],["display: block;"], false);
     
     $("#editEffect").off('change');

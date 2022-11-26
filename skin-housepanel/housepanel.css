@@ -64,6 +64,7 @@ div.thing {
     width: auto; 
     height: auto;
     z-index: 1;
+    background-repeat: no-repeat;
 
     transform: scale(1.0);
     -moz-transform: scale(1.0);
@@ -74,9 +75,9 @@ div.thing {
 }
 div.thing:hover{
     position: relative;
-    box-shadow: 0px 0px 41px rgba(0, 0, 0, 0.70);
-    -moz-box-shadow: 0px 0px 41px rgba(0, 0, 0, 0.70);
-    -webkit-box-shadow: 0px 0px 41px rgba(0, 0, 0, 0.70); 
+    box-shadow: inset 0px 0px 20px 1px rgba(240, 240, 240, 0.5);
+    -moz-box-shadow: inset 0px 0px 20px 1px rgba(240, 240, 240, 0.5);
+    -webkit-box-shadow: inset 0px 0px 20px 1px rgba(240, 240, 240, 0.5); 
 }
 
 div.thing.switch-thing, div.thing.switchlevel-thing, div.thing.bulb-thing, 
@@ -89,12 +90,11 @@ div.thing.light-thing, div.thing.lock-thing, div.thing.door-thing, div.thing.isy
 }
 
 /* styling defaults without state or specific thing subtypes */
-div.switch, div.bulb, div.light, div.switchlevel, div.momentary, div.motion, div.lock, 
+/* div.switch, div.bulb, div.light, div.switchlevel, div.momentary, div.motion, div.lock, 
 div.contact, div.music, div.presence, div.piston, div.valve, div.overlay div.door, 
-div.temperature, div.overlay div.themode, div.shm, div.hsm {
-    background-repeat: no-repeat;
+div.temperature, div.shm, div.hsm {
     cursor: default;
-}
+} */
 
 /* div.switch, div.bulb, div.light, div.switchlevel, div.momentary, div.motion, div.lock, 
 div.contact, div.presence, div.piston, div.valve, div.overlay div.door,
@@ -133,7 +133,7 @@ div.shm-thing div.overlay.state div.shm, div.hsm-thing div.overlay.state div.hsm
     filter: invert(0);
 }
 /* heights for things with icons */
-div.switch.on, div.switch.off, div.light.on, div.light.off,
+div.switch.on, div.switch.off, div.light.on, div.light.off, div.button,
 div.switch.flash, div.light.flash,
 div.presence.present, div.presence.absent,
 div.valve.open, div.valve.closed, div.momentary.on, div.momentary.off,
@@ -143,16 +143,22 @@ div.isy.DON, div.isy.DOF {
     height: 140px;
 }
 
+div.custom-thing div.switch.switch {
+    height: 140px;
+}
+
 /* items that have a pointer */
-div.switch, div.bulb, div.light, div.switchlevel, div.momentary, 
-div.lock, div.mode.themode, div.piston, div.valve, div.routine.label,
-div.level, div.door.garage, div.position,
+div.switch, div.bulb, div.light, div.switchlevel, div.momentary, div.button,
+div.lock, div.mode, div.piston, div.valve, div.routine.label,
+div.level, div.garage.door, div.position,
 div.custom-thing div.custom.post,
 div.piston-thing, div.music.musicmute, div.overlay.music-controls div.music,
 div.door.garage.closed, div.door.garage.closing, div.door.garage.open, div.door.garage.opening,
-div.thermofan, div.thermomode,
+div.thermostatFanMode, div.thermostatMode,
 div.valve.startZone, div.valve.pause, div.piston-thing div.pistonName,
-div.shm.state, div.hsm.state, div.water.wet, div.water.dry
+div.shm.state, div.hsm.state, div.water.wet, div.water.dry,
+div._refresh, div._on, div._off, div._open, div._close, div._stop,
+div.overlay .ui-slider span.ui-slider-handle
 {
     cursor: pointer;
 }
@@ -379,11 +385,6 @@ div.overlay.momentary div.momentary.on {
     height: 112px;
     background-size: 90px;
 }
-
-/* hover over on and off states */
-/*div.on:hover, div.off:hover, div.unlocked:hover, div.locked:hover {
-  background-color: rgba(51, 51, 51, 0.3);
-}*/
 
 /* up and down arrows */
 div.heat-dn, div.cool-dn, div.level-dn, div.switchlevel-dn,
@@ -636,8 +637,6 @@ div.hue-up:hover, div.hue-dn:hover,
 div.saturation-up:hover, div.saturation-dn:hover,
 div.level-up:hover, div.level-dn:hover {
     border: 2px solid #cccccc;
-    width: 28px;
-    height: 28px;
 }
 
 div.thing.temperature-thing {
@@ -917,73 +916,9 @@ div.switchlevel.screen.power, div.switchlevel.screen.energy {
     display:none;
 }
 
-
-/* these settings are for my Stereo and TV both controled via KuKuHarmony  */
-/* They are installed in HP using an Other tile */
-div.other-thing.pioneer div.thingname, div.other-thing.lg div.thingname {
-    display: block;
-    height: 32px;
-    background-color: rgba(50, 50, 50, 1);
-}
-div.other-thing.pioneer div.switch, div.other-thing.lg div.switch {
-    height: 20px;
-    background-color: rgba(50, 50, 50, 1);
-}
-div.other-thing.pioneer, div.other-thing.pioneer div.name, div.other-thing.lg, div.other-thing.lg div.name {
-    width: 420px;
-    padding-left: 0;
-    padding-right: 0;
-}
-div.other-thing.pioneer, div.other-thing.lg {
-    background-color: rgba(110, 222, 222, 0.3);
-}
-div.other-thing.pioneer div.overlay, div.other-thing.lg div.overlay {
-    display: inline-block;
-    width: 80px; height: 30px;
-    padding-top: 10px;
-    border: 2px solid cyan;
-    background-color: rgba(0, 50, 50, 1);
-    cursor: pointer;
-}
-div.other-thing div.overlay.healthStatus,
-div.other-thing.pioneer div.overlay.name, 
-div.other-thing.pioneer div.overlay.status, 
-div.other-thing.lg div.overlay.name,
-div.other-thing.lg div.overlay.status,
-div.other-thing.pioneer div.overlay._custom5, div.other-thing.lg div.overlay._custom5,
-div.other-thing.pioneer div.overlay._virtualOn, div.other-thing.lg div.overlay._virtualOn,
-div.other-thing.pioneer div.overlay._virtualOff, div.other-thing.lg div.overlay._virtualOff
+div.overlay.healthStatus
 {
     display: none;
-}
-div.other.pioneer.switch, div.other.lg.switch {
-    background-image: none;
-    height: auto;
-    width: auto;
-    font-size: 11pt;
-    color: rgba(255, 255, 255, 1);
-}
-/* disable events for kuku */
-div.other-thing.pioneer div.overlay.event_1,
-div.other-thing.pioneer div.overlay.event_2,
-div.other-thing.pioneer div.overlay.event_3,
-div.other-thing.pioneer div.overlay.event_4,
-div.other-thing.lg div.overlay.event_1, 
-div.other-thing.lg div.overlay.event_2, 
-div.other-thing.lg div.overlay.event_3, 
-div.other-thing.lg div.overlay.event_4
-{
-    display: none;
-}
-
-/* these make KuKu harmony things show up correctly */
-div.other-thing.pioneer div.overlay._on,
-div.other-thing.pioneer div.overlay._off,
-div.other-thing.lg div.overlay._on,
-div.other-thing.lg div.overlay._off {
-    display: inline-block;
-    color: rgba(255,255,255,1);
-    font-size: 12pt;
 }
 
 /* enable event reporting for some things */
@@ -1000,16 +935,6 @@ div.switchlevel.event_1, div.bulb.event_1 {
 /* changed to use name instead of thingname */
 div.thing div.thingname {
     display: none;
-/*
-    background-color: rgba(0, 50, 100,1);
-    font-size: 11pt;
-    text-align: center;
-    color: #ffffff;
-    border-bottom: 2px solid rgba(0,0,0,1);
-    height: 30px;
-    cursor: default;
-    display: block;
-*/
 }
 
 /* div.thingname:hover {
@@ -1026,10 +951,6 @@ div.thing div.overlay.name div.name {
     /* width: 100%; */
     height: 30px;
     cursor: default;
-}
-div.thing div.overlay.name:hover {
-    background-color: #5050a0; 
-    color: #cccccc;
 }
 
 div.thermostat-thing div.name {

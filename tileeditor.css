@@ -1524,7 +1524,7 @@ div.thing div.overlay.level .ui-slider.slider-horizontal {
 }
 
 /* battery display */
-div.overlay.battery div.battery {
+div.overlay.battery div.battery, div.overlay.battery2 div.battery2, div.overlay.battery3 div.battery3, div.overlay.battery4 div.battery4 {
     background: none;
     display: block;
     position: absolute;
@@ -1539,7 +1539,7 @@ div.overlay.battery div.battery {
     /*transform: scale(0.8);*/
 }
 
-div.overlay div.battery:before {
+div.overlay div.battery:before, div.overlay div.battery2:before, div.overlay div.battery3:before, div.overlay div.battery4:before {
     content: '';
     display: block;
     position: absolute;
