@@ -7,7 +7,7 @@ const DEBUG2 = false;               // authorization flow and ISY programs
 const DEBUG3 = false;               // passwords
 const DEBUG4 = false;               // filters and options
 const DEBUG5 = false;               // hub node detail
-const DEBUG6 = false;               // tile position moves
+const DEBUG6 = false;               // tile adds and position moves
 const DEBUG7 = false;               // hub responses
 const DEBUG8 = false;               // API calls
 const DEBUG9 =  false;              // ISY webSocket success
@@ -24,12 +24,12 @@ const DEBUG19 = false;              // ST and HE callback from Groovy or new ST 
 const DEBUG20 = false;              // New SmartThings detail
 const DEBUG21 = false;              // New ST sink message debug
 const DEBUGcurl = false;            // detailed inspection
-const DEBUGsonos = false;           // Sonos hub debugging
+const DEBUGsonos = true;           // Sonos hub debugging
 const DEBUGisy = false;             // ISY HP connect pushes
 const DEBUGtmp =  true;             // used to debug anything temporarily using ||
 
 // various control options
-const DONATE = false;                  // set this to true to enable donation section
+const DONATE = false;                 // set this to true to enable donation section
 const ENABLERULES = true;             // set this to false to neuter all rules
 const FORDAPIVERSION = "2020-06-01";  // api version number to use for Ford api calls
 
@@ -193,13 +193,26 @@ function jsonshow(obj) {
     return UTIL.inspect(obj, false, null, false);
 }
 
-function encodeURI2(str) {
+function encodeURI2(obj) {
+    var str = JSON.stringify(obj)
     str = str.replace(/'/g,"");
     return encodeURI(str);
 }
 
 function decodeURI2(str) {
-    return decodeURI(str);
+    if ( !str || typeof str !== "string" || str==="undefined" ) {
+        return null;
+    }
+    
+    var obj;
+    var decodestr = decodeURI(str);
+    try {
+        obj = JSON.parse(decodestr);
+    } catch(e) {
+        console.log( (ddbg()),"error parsing existing string into an object, string: ", decodestr);
+        obj = null;
+    }
+    return obj;
 }
 
 function objCount(obj) {
@@ -266,8 +279,10 @@ async function getUserName(cookies) {
 
     // get all the users and check for one that matches the hashed email address
     // emails for all users must be unique
-    var joinstr = mydb.getJoinStr("panels", "userid", "users", "id");
-    var result = await mydb.getRows("panels", "*", "", joinstr)
+    // *** note *** changed to map userid to the usertype to support multiple logins mapped to same user
+    // var joinstr = mydb.getJoinStr("panels", "userid", "users", "id");
+    var joinstr = mydb.getJoinStr("panels", "userid", "users", "usertype");
+    var result = mydb.getRows("panels", "*", "", joinstr)
     .then(rows => {
         var therow = null;
         if ( uhash && rows ) {
@@ -512,7 +527,7 @@ function _curl(host, headers, nvpstr, calltype, callback) {
             res.on("data", (body) => {
                 totalbody+= body;
                 if ( DEBUGcurl ) {
-                    console.log(">>>> _curl debug: body: ", body, " totalbody: ", totalbody);
+                    console.log((ddbg()), "_curl debug: body: ", body, " totalbody: ", totalbody);
                 }
             });
             res.on("end", ()=> {
@@ -980,6 +995,10 @@ function getAccessToken(userid, code, hub) {
             var jsonbody = JSON.parse(body);
         } catch(e) {
             jsonbody = null;
+        }
+
+        if ( DEBUG2 ) {
+            console.log( (ddbg()),"newTokenCallback: New SmartThings jsonbody: ", jsonbody);
         }
         
         if ( !jsonbody ) {
@@ -1502,7 +1521,7 @@ function getDevices(hub, reload, reloadpath) {
                     };
                     var group = findGroup(player, sonosGroups);
                     if ( DEBUG2 ) {
-                        console.log((ddbg()), " >>>> player: ", player," in group: ", group);
+                        console.log((ddbg()), "player: ", player," in group: ", group);
                     }
                     if ( group ) {
 
@@ -1515,19 +1534,19 @@ function getDevices(hub, reload, reloadpath) {
                         if ( group.coordinatorId === player.id && group.playerIds.length===1 ) {
                             pvalue.grouped = "Not grouped";
                         } else if ( group.coordinatorId === player.id ) {
-                            pvalue.grouped = "Primary over group with:";
-                            group.playerIds.forEach( item => {
-                                if ( item !== player.id ) {
-                                    pvalue.grouped += "<br>" + item; 
-                                }
-                            });
+                            pvalue.grouped = "Primary in group " + group.name; // + " with " + group.playerIds.length + " other";
+                            // group.playerIds.forEach( item => {
+                            //     if ( item !== player.id ) {
+                            //         pvalue.grouped += "<br>" + item; 
+                            //     }
+                            // });
                         } else {
-                            pvalue.grouped = "Secondary in group with:<br>" + group.coordinatorId +" *";
-                            group.playerIds.forEach( item => {
-                                if ( item !== player.id && item !== group.coordinatorId ) {
-                                    pvalue.grouped += "<br>" + item; 
-                                }
-                            });
+                            pvalue.grouped = "Secondary in group " + group.name; // group.coordinatorId;
+                            // group.playerIds.forEach( item => {
+                            //     if ( item !== player.id && item !== group.coordinatorId ) {
+                            //         pvalue.grouped += "<br>" + item; 
+                            //     }
+                            // });
                         }
 
                         // obtain the meta data of the device
@@ -1597,7 +1616,7 @@ function getDevices(hub, reload, reloadpath) {
                                     pvalue.volume = 50;
                                 }
                                 var deviceid = player.id;
-                                pvalue = encodeURI2(JSON.stringify(pvalue));
+                                pvalue = encodeURI2(pvalue);
 
                                 // note that we store the group id in the hint so we can use it later easily to control the player
                                 var rowdevice = {
@@ -1629,7 +1648,7 @@ function getDevices(hub, reload, reloadpath) {
                         });
                     } else {
 
-                        pvalue = encodeURI2(JSON.stringify(pvalue));
+                        pvalue = encodeURI2(pvalue);
                         var deviceid = player.id;
                         var rowdevice = {
                             userid: userid,
@@ -1658,6 +1677,11 @@ function getDevices(hub, reload, reloadpath) {
                     }
                 });
 
+                // subscribe to group changes
+                var namehost = hubEndpt + "/v1/households/" + hubid + "/groups/subscription";
+                _curl(namehost, header, "", "POST");
+
+                
                 // subscribe to Group playback and metadata
                 sonosGroups.forEach( group => {
                     var namehost = hubEndpt + "/v1/groups/" + group.id + "/playback/subscription";
@@ -1871,13 +1895,11 @@ function getDevices(hub, reload, reloadpath) {
                     checkNewSTDone("location");
                     return;
                 }
-                // console.log(">>>> location: ", results);
                 var locations = jsonbody.items;
                 if ( locations && is_array(locations) && locations.length ) {
                     var numlocations = locations.length;
                     var devicecnt = 0;
                     locations.forEach(location => {
-                        // console.log(">>>> location: ", location);
                         var locationId = location.locationId;
                         var locationName = location.name;
                         var locvalue = null;
@@ -1919,10 +1941,8 @@ function getDevices(hub, reload, reloadpath) {
                             // now get the modes
                             _curl(hubEndpt + "/locations/" + locationId + "/modes", stheader, null, "GET")
                             .then(body => {
-                                // console.log(">>>> modes body: ", body);
                                 if ( body ) {
                                     var modevalue = JSON.parse(body);
-                                    // console.log(">>>> modes json: ", modevalue);
 
                                     // we add two modes for each. One is the actual mode name with the ID attached
                                     // the other one is a command to set the mode to this value. The mode names with ID's should be hidden
@@ -1945,9 +1965,9 @@ function getDevices(hub, reload, reloadpath) {
                                         locvalue.themode = themode.label;
                                     }
                                     // add a counter
-                                    locvalue.count = "0";
+                                    // locvalue.count = "0";
 
-                                    var pvalue = encodeURI2(JSON.stringify(locvalue));
+                                    var pvalue = encodeURI2(locvalue);
                                     var rowdevice = {
                                         userid: userid,
                                         hubid: hubindex,
@@ -1966,7 +1986,6 @@ function getDevices(hub, reload, reloadpath) {
                                             checkNewSTDone("location");
                                         }
                                     });
-                                    // console.log(">>>> location device: ", jsonshow(rowdevice), " locvalue: ", locvalue);
                                 });
                             });
                         });
@@ -1979,9 +1998,6 @@ function getDevices(hub, reload, reloadpath) {
                 checkNewSTDone("location");
             });
         }
-
-        // now get all the scenes
-        // curl_call(hubEndpt + "/scenes", stheader, false, false, "GET", newSTCallback);
 
         function checkNewSTDone(thetype) {
 
@@ -2013,8 +2029,7 @@ function getDevices(hub, reload, reloadpath) {
             try {
                 var jsonbody = JSON.parse(body);
             } catch (e) {
-                console.log( (ddbg()), "error translating devices", e);
-                console.log( (ddbg()), "body: ", body);
+                console.log( (ddbg()), "error translating devices of type: ", swtype, " error: ", e, " body: ", body);
                 checkNewSTDone(swtype);
                 return;
             }
@@ -2122,18 +2137,7 @@ function getDevices(hub, reload, reloadpath) {
                                                 for ( var othersub in attributes[attr] ) {
                                                     if ( othersub==="value" ) {
                                                         pvalue[subid] = attributes[attr]["value"];
-                                                        
-                                                        if ( swtype==="bulb" && (subid==="hue" || subid==="saturation" || subid==="level" ) ) {
-                                                            var h = pvalue.hue || 1;
-                                                            var s = pvalue.saturation || 1;
-                                                            var l = pvalue.level || 50;
-                                                            pvalue.color = utils.hsv2rgb(h, s, l);
-                                                        }
-                                                    // } else if ( othersub === "timestamp" ) {
-                                                        // if ( pvalue["event_3"] ) { pvalue["event_4"] = pvalue["event_3"]; }
-                                                        // if ( pvalue["event_2"] ) { pvalue["event_3"] = pvalue["event_2"]; }
-                                                        // if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
-                                                        // pvalue["event_1"] = attributes[attr]["value"] + " " + attributes[attr][othersub];
+
                                                     } else if ( othersub === "unit" ) {
                                                         pvalue["uom_"+subid] = attributes[attr]["unit"];
                                                     } else if ( othersub === "data" ) {
@@ -2148,8 +2152,6 @@ function getDevices(hub, reload, reloadpath) {
                                                             }
                                                         } catch (e) {
                                                         }
-                                                    // } else {
-                                                    //     console.log(">>>> ignoring othersub=", othersub," for type=",swtype," val=", attributes[attr][othersub]);
                                                     }
                                                 }
                                             }
@@ -2160,8 +2162,34 @@ function getDevices(hub, reload, reloadpath) {
                             }
                         }
 
-                        // add a counter
-                        pvalue.count = "0";
+                        // add color attribute if hsl is there
+                        if ( array_key_exists("hue", pvalue) && array_key_exists("saturation",pvalue) && array_key_exists("level",pvalue) ) {
+                            var h = Math.round((parseInt(pvalue["hue"]) * 360) / 100);
+                            var s = Math.round(parseInt(pvalue["saturation"]));
+                            var v = Math.round(parseInt(pvalue["level"]));
+                            pvalue["color"] = utils.hsv2rgb(h, s, v);
+                        }
+
+                        // add counter and duration for things with switch, contact, presence, motion, or lock
+                        if ( array_key_exists("switch",pvalue)  ||
+                        array_key_exists("contact",pvalue) ||
+                        array_key_exists("presence",pvalue) ||
+                        array_key_exists("motion",pvalue) ||
+                        array_key_exists("lock",pvalue) ) 
+                        {
+                            pvalue.count = "0";
+                            pvalue.duration = "0.0";
+                            pvalue.deltaT = 0;
+                            if ( (array_key_exists("switch",pvalue) && pvalue.switch==="on") ||
+                                (array_key_exists("contact",pvalue) && pvalue.contact==="open") ||
+                                (array_key_exists("presence",pvalue) && pvalue.presence==="present") ||
+                                (array_key_exists("motion",pvalue) && pvalue.motion==="active") ||
+                                (array_key_exists("lock",pvalue) && pvalue.lock==="unlocked") 
+                            ) {
+                                var d = new Date();
+                                pvalue.deltaT = d.getTime();                            
+                            }
+                        }
 
                         // add commands
                         if ( commands ) {
@@ -2195,7 +2223,7 @@ function getDevices(hub, reload, reloadpath) {
                         }
 
                         var pname = pvalue.name;
-                        pvalue = encodeURI2(JSON.stringify(pvalue));
+                        pvalue = encodeURI2(pvalue);
                         var rowdevice = {
                             userid: userid,
                             hubid: hubindex,
@@ -2283,7 +2311,7 @@ function getDevices(hub, reload, reloadpath) {
                     origname = origname.replace(/'/g, "");
                     
                     // deal with presence tiles
-                    if ( thetype==="presence" && pvalue["presence"]==="not present" ) {
+                    if ( pvalue["presence"]==="not present" ) {
                         pvalue["presence"] = "absent";
                     }
 
@@ -2294,8 +2322,26 @@ function getDevices(hub, reload, reloadpath) {
                         }
                     }
 
-                    // add a counter
-                    pvalue.count = "0";
+                    // add counter and duration for things with switch, contact, presence, motion, or lock
+                    if ( array_key_exists("switch",pvalue)  ||
+                        array_key_exists("contact",pvalue) ||
+                        array_key_exists("presence",pvalue) ||
+                        array_key_exists("motion",pvalue) ||
+                        array_key_exists("lock",pvalue) ) 
+                    {
+                        pvalue.count = "0";
+                        pvalue.duration = "0.0";
+                        pvalue.deltaT = 0;
+                        if ( (array_key_exists("switch",pvalue) && pvalue.switch==="on") ||
+                            (array_key_exists("contact",pvalue) && pvalue.contact==="open") ||
+                            (array_key_exists("presence",pvalue) && pvalue.presence==="present") ||
+                            (array_key_exists("motion",pvalue) && pvalue.motion==="active") ||
+                            (array_key_exists("lock",pvalue) && pvalue.lock==="unlocked") 
+                        ) {
+                            var d = new Date();
+                            pvalue.deltaT = d.getTime();                            
+                        }
+                    }
 
                     // handle audio and weather tiles
                     if ( thetype==="audio" || thetype==="sonos" || pvalue.audioTrackData ) {
@@ -2308,7 +2354,7 @@ function getDevices(hub, reload, reloadpath) {
                     } else {
                         pvalue = translateObjects(pvalue);
                     }
-                    var pvalstr = encodeURI2(JSON.stringify(pvalue));
+                    var pvalstr = encodeURI2(pvalue);
 
                     var device = {userid: userid, hubid: hubindex, deviceid: deviceid, name: origname, 
                         devicetype: thetype, hint: hint, refresh: refresh, pvalue: pvalstr};
@@ -2328,7 +2374,9 @@ function getDevices(hub, reload, reloadpath) {
 
             } else {
                 // an error occurred with this hub so remove all devices tied to it
-                mydb.deleteRow("devices", "userid = "+userid+" AND hubid = "+hubindex);
+                // removed this because it causes bogus errors to wipe out user settings
+                // the dead node removal below will instead clean things up if needed later
+                // mydb.deleteRow("devices", "userid = "+userid+" AND hubid = "+hubindex);
                 updateOptions(userid, reload, reloadpath);
             }
         }
@@ -2344,6 +2392,22 @@ function getDevices(hub, reload, reloadpath) {
                 }
             })
         }).catch(reason => {console.log("dberror 6b - removeDeadNodes - userid = ", userid, " reason = ", reason)});
+        // removeDeadTiles(userid, currentDevices);
+    }
+
+    // remove dead tiles from all hubs
+    function removeDeadTiles(userid, currentDevices) {
+        mydb.getRows("things", "*", "userid = "+userid)
+        .then(things => {
+            things.forEach(thing => {
+                getRow("devices","*", "userid = "+userid+" AND id = "+thing.tileid)
+                .then(row => {
+                    if ( !row ) {
+                        mydb.deleteRow("things","userid = "+userid+" AND id = " + thing.id)
+                    }
+                });
+            })
+        }).catch(reason => {console.log("dberror 6c - removeDeadTiles - userid = ", userid, " reason = ", reason)});
     }
 
     function getFordVehicles() {
@@ -2455,7 +2519,7 @@ function getDevices(hub, reload, reloadpath) {
                 // pvalue["_status"] = "_status";
                 // pvalue["_location"] = "_location";
 
-                var pvalstr = encodeURI2(JSON.stringify(pvalue));
+                var pvalstr = encodeURI2(pvalue);
                 var device = {userid: userid, hubid: hubindex, deviceid: vehicleid, name: vehiclename, 
                     devicetype: thetype, hint: hubType, refresh: "normal", pvalue: pvalstr};
                 mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+
@@ -2655,14 +2719,8 @@ function objMerge(obj, newobj) {
 // it returns a promise which if is not null can be used to signal a refresh
 function setIsyFields(userid, nodeid, device, props, screenupd) {
 
-    try {
-        var value = JSON.parse(decodeURI2(device.pvalue));
-    } catch(e) {
-        console.log( (ddbg()),"error parsing existing pvalue for isy node: ", nodeid," value: ", device.pvalue);
-        return null;
-    }
-
-    if ( is_array(props) ) {
+    var value = decodeURI2(device.pvalue);
+    if ( value && is_array(props) ) {
         props.forEach(function(aprop) {
             var obj = aprop['$'];
             // map ISY logic to the HousePanel logic based on SmartThings and Hubitat
@@ -2676,8 +2734,8 @@ function setIsyFields(userid, nodeid, device, props, screenupd) {
         if ( DEBUGisy ) {
             console.log( (ddbg()), "in setIsyFields - userid: ", userid, " nodeid: ", nodeid, " device: ", device, " value: ", value, " props: ", props);
         }
-        device.pvalue = encodeURI2(JSON.stringify(value));
-        var pr = mydb.updateRow("devices", device, "userid=" + userid + " AND deviceid = '"+nodeid+"'")
+        device.pvalue = encodeURI2(value);
+        var pr = mydb.updateRow("devices", device, "userid =" + userid + " AND deviceid = '"+nodeid+"'")
         .then(results => {
             if ( results && screenupd ) {
                 pushClient(userid, nodeid, "isy", "none", value);
@@ -2719,30 +2777,18 @@ function updateOptions(userid, reload, reloadpath) {
 
 function getSpecials(configoptions) {
 
-    var spobj = getConfigItem(configoptions, "specials");
-    if ( typeof spobj === "object" ) {
-        var obj = spobj;
-    } else {
-        try {
-            obj = JSON.parse(decodeURI2(spobj));
-        } catch (e) {
-            obj = null;
-        }
-    }
-    
+    var spobj = getConfigItem(configoptions, "specialtiles");
+    var obj = decodeURI2(spobj);
+
+    // fix the old logic that used to store this info for getFile
     if ( !obj ) {
-        obj = {
-            "video": ["vid",480,240, 4, "normal"], 
-            "frame": ["frame",480,212, 4, "slow"],
-            "image": ["img",480,240, 4, "normal"],
-            "blank": ["blank",120,150, 4, "never"],
-            "custom": ["custom_",120,150, 8, "normal"]
-        };
+        obj = {"video": 4, "frame": 4, "image": 4, "blank": 4, "custom": 8};
     }
 
     return obj;
 }
 
+// this sends control over to processLogin upon return
 function getLoginPage(req, userid, usertype, emailname, mobile, hostname, skin) {
     var tc = "";
     var pname = "default";
@@ -2810,22 +2856,23 @@ function getLoginPage(req, userid, usertype, emailname, mobile, hostname, skin) 
     tc+= "</div>";
 
     // disable creating new accounts
-    // tc+= "<hr>";
-    // tc+= "<div class='loginline'>";
-    // tc+= "Don't have an account?";
-    // tc+= '<div id="newuser" class="inlinebutton">Create One Here</div>';
-    // tc+= "</div>";
+    tc+= "<hr>";
+    tc+= "<div class='loginline'>";
+    tc+= "Don't have an account?";
+    tc+= '<div id="newuser" class="inlinebutton">Create One Here</div>';
+    tc+= "</div>";
 
     tc+= "<hr>";
     tc+= "<div class='loginline'>";
     tc+= "<div>By signing in, you are agreeing to our <div id=\"privacypolicy\" class=\"inlinebutton\">Privacy Policy</div></div>";
     tc+= "<br><div>For login instructions<div id=\"moreinfo\" class=\"inlinebutton\">Click Here...</div></div>";
     tc+="<div id=\"loginmore\" class=\" loginmore hidden\">Enter your username or email and password to access HousePanel " +
-            "and gain access to your smart home devices. All accounts must be password protected.<br><br>" +
+            "and gain access to your smart home devices. " +
+            "To access an existing user's devices, enter their mobile number in the field below. All accounts must be password protected.<br><br>" +
 
             "Each user can have any number of panels defined with each one having its own password and skin. " + 
             "This allows a single account holder to display their smart devices in different ways on different devices. " +
-            "Each device must be given a unique number from 1 to 9 to ensure that it has its own network port. " +
+            "Each device at the same physical location must be given a unique number from 1 to 9 to ensure that it has its own network port. " +
             "To load a specific panel skin, please enter its name and password. " +
             "If this is left blank, the first panel available that is not password protected in the user's account will be loaded. " +
             "If all panels are password protected you must provide the name and password of a valid panel to sign into HousePanel." +
@@ -2847,39 +2894,41 @@ function getLoginPage(req, userid, usertype, emailname, mobile, hostname, skin) 
     tc+= "<h2 class='login'>" + utils.APPNAME + "</h2>";
 
     tc+= "<div class='loginline'>";
-    tc+= "Sorry, but HousePanel is no longer available for new users. You can still use the \"freeware\" ";
+    tc+= "Sorry, but HousePanel is no longer available for new public users. You can still use the \"freeware\" ";
     tc+= "version of HousePanel by downloading the files onto your own server or rPI. Instructions for how ";
     tc+= "to do this and where to find the files are available at <a href=\"https://www.housepanel.net\" target=\"_blank\">https://www.housepanel.net</a>";
+    tc+= "<hr><br>New accounts pointing to the author's account are still allowed, but will require the owner to authorize you via a txt message.  ";
+    tc+= "To do this, enter my mobile phone number (assuming you know it) in the field below.";
     tc+= "</div>";
 
-    // tc+= "<div class='loginline'>";
-    // tc+= "<label for=\"newemailid\" class=\"startupinp\">Email (required): </label><br>";
-    // tc+= "<input id=\"newemailid\" name=\"newemailid\" size=\"60\" type=\"text\" value=\"\"/>"; 
-    // tc+= "</div>";
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"newemailid\" class=\"startupinp\">Email (required): </label><br>";
+    tc+= "<input id=\"newemailid\" name=\"newemailid\" size=\"60\" type=\"text\" value=\"\"/>"; 
+    tc+= "</div>";
 
-    // tc+= "<div class='loginline'>";
-    // tc+= "<label for=\"newmobileid\" class=\"startupinp\">Mobile phone (required): </label><br>";
-    // tc+= "<input id=\"newmobileid\" name=\"newmobile\" size=\"60\" type=\"text\" value=\"\"/>"; 
-    // tc+= "</div>";
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"newmobileid\" class=\"startupinp\">Mobile phone (required): </label><br>";
+    tc+= "<input id=\"newmobileid\" name=\"newmobile\" size=\"60\" type=\"text\" value=\"\"/>"; 
+    tc+= "</div>";
 
-    // tc+= "<div class='loginline'>";
-    // tc+= "<label for=\"newunameid\" class=\"startupinp\">Username (optional): </label><br>";
-    // tc+= "<input id=\"newunameid\" name=\"newuname\" size=\"60\" type=\"text\" value=\"\"/>"; 
-    // tc+= "</div>";
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"newunameid\" class=\"startupinp\">Username (optional): </label><br>";
+    tc+= "<input id=\"newunameid\" name=\"newuname\" size=\"60\" type=\"text\" value=\"\"/>"; 
+    tc+= "</div>";
     
-    // tc+= "<div class='loginline'>";
-    // tc+= "<label for=\"newpword\" class=\"startupinp\">Password: </label><br>";
-    // tc+= "<input id=\"newpword\" name=\"newpword\" size=\"60\" type=\"password\" value=\"\"/>"; 
-    // tc+= "</div>";
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"newpword\" class=\"startupinp\">Password: </label><br>";
+    tc+= "<input id=\"newpword\" name=\"newpword\" size=\"60\" type=\"password\" value=\"\"/>"; 
+    tc+= "</div>";
     
-    // tc+= "<div class='loginline'>";
-    // tc+= "<label for=\"newpword2\" class=\"startupinp\">Confirm Password: </label><br>";
-    // tc+= "<input id=\"newpword2\" name=\"newpword2\" size=\"60\" type=\"password\" value=\"\"/>"; 
-    // tc+= "</div>";
+    tc+= "<div class='loginline'>";
+    tc+= "<label for=\"newpword2\" class=\"startupinp\">Confirm Password: </label><br>";
+    tc+= "<input id=\"newpword2\" name=\"newpword2\" size=\"60\" type=\"password\" value=\"\"/>"; 
+    tc+= "</div>";
     
-    // tc+= "<div class='loginline'>";
-    // tc+= '<div id="createuser" class="formbutton">Create Account</div>';
-    // tc+= "</div>";
+    tc+= "<div class='loginline'>";
+    tc+= '<div id="createuser" class="formbutton">Create Account</div>';
+    tc+= "</div>";
 
     tc+= "<br><hr>";
     tc+= "<div class='loginline'>";
@@ -2943,6 +2992,8 @@ function createNewUser(body) {
     var nullhub;
     var defaultpanel;
     var rooms;
+    var usertype = 0;
+    var defhub = "";
 
     if ( !emailname || !mobile ) {
         return "error - A valid email address and mobile number must be provided to create a new account.";
@@ -2956,7 +3007,14 @@ function createNewUser(body) {
     // first check to see if this user exists
     return mydb.getRow("users","*","email = '"+emailname+"' OR mobile = '"+mobile+"'")
     .then(row => {
-        if ( row ) { return "error - user with email [" + emailname + "] or mobile [" + mobile + "] already exists"; }
+
+        // if the row exists, then map this user to an existing one
+        // that user must approve by showing the code sent to their phone to this new user
+        // if ( row ) { return "error - user with email [" + emailname + "] or mobile [" + mobile + "] already exists"; }
+        if ( row ) { 
+            usertype = row.id;
+            defhub = row.defhub;
+        }
 
         // create confirmation code
         var d = new Date();
@@ -2965,22 +3023,27 @@ function createNewUser(body) {
         var len = logincode.length;
         var mid = len / 2;
         var thecode = logincode.substr(0,1) + logincode.substr(mid,1) + logincode.substr(len-4);
-        console.log( (ddbg()), ">>>> thecode: ", thecode);
+        console.log( (ddbg()), "thecode: ", thecode);
         var msg = "HousePanel confirmation code: " + thecode;
         sendText(mobile, msg);
 
         // create new user but set type to 0 until we get validation
-        newuser = {email: emailname, uname: username, mobile: mobile, password: pw_hash(pword), usertype: 0, defhub: "", hpcode: thecode };
+        // note that validation is skipped if usertype was set to an existing user's id
+        // if it is set to zero here then we will later set it to its own id mapping to a real new user
+        newuser = {email: emailname, uname: username, mobile: mobile, password: pw_hash(pword), usertype: usertype, defhub: defhub, hpcode: thecode };
         return mydb.addRow("users", newuser)
         .then(result => {
 
             if ( !result ) { 
                 newuser = null;
-                return "error - encountered a problem adding a new user to the HousePanel user community."; 
+                return "error - encountered a problem adding a new user to HousePanel."; 
             }
 
             userid = result.getAutoIncrementValue();
             newuser.id = userid;
+
+            // this returns the new user record as the result for this function
+            // if this is mapped to an existing user the other stuff below is skipped
             return newuser;
         })
         .then(result => {
@@ -2989,6 +3052,9 @@ function createNewUser(body) {
                 nullhub = null;
                 return result; 
             }
+
+            // if this user is mapping to an existing one, skip the creation stuff
+            if ( usertype > 0 )  { return result; }
 
             // make a directory for this user with a default panel folder
             makeDefaultFolder(userid, pname);
@@ -3009,6 +3075,9 @@ function createNewUser(body) {
         })
         .then(result => {
             if ( !result || typeof result !== "object" ) { return result; }
+
+            // if this user is mapping to an existing one, skip the creation stuff
+            if ( usertype > 0 )  { return result; }
 
             addConfigItem(userid, "skin", "skin-housepanel");
             addConfigItem(userid, "kiosk", "false");
@@ -3038,6 +3107,9 @@ function createNewUser(body) {
                 rooms = null;
                 return result; 
             }
+
+            // if this user is mapping to an existing one, skip the creation stuff
+            if ( usertype > 0 )  { return result; }
 
             // now create a default panel and add a default set of rooms with a clock
             defaultpanel = {userid: userid, pname: pname, password: "", skin: "skin-housepanel"};
@@ -3145,7 +3217,8 @@ function createNewUser(body) {
 }
 
 function validateUserPage(user, hostname) {
-    var userid = user.id;
+    // var userid = user.id;
+    var userid = user.usertype;
     var tc = "";
     tc+= utils.getHeader(userid, null, null, true);
     tc+= "<h2>Activate HousePanel Account</h2>";
@@ -3190,6 +3263,7 @@ function validateUserPage(user, hostname) {
 
 function validatePasswordPage(user, hostname) {
     var userid = user.id;
+    var usertype = user.usertype;
     var tc = "";
     tc+= utils.getHeader(userid, null, null, true);
     tc+= "<h2>Enter New Credentials Below</h2>";
@@ -3293,8 +3367,8 @@ function forgotPassword(userfield, mobilefield) {
         var logincode = pw_hash(mobile + time).toUpperCase();
         var len = logincode.length;
         var mid = len / 2;
-        var thecode = logincode.substr(0,1) + logincode.substr(mid,1) + logincode.substr(len-4);
-        console.log( (ddbg()), ">>>> thecode: ", thecode);
+        var thecode = logincode.substring(0,1) + logincode.substring(mid,mid+1) + logincode.substring(len-4);
+        console.log( (ddbg()), "thecode: ", thecode);
 
         // save code to the DB for confirming later, also update mobile number
         var userid = row.id;
@@ -3329,8 +3403,9 @@ function validateUser(body) {
         return "error - invalid user or the user account was not found - password cannot be updated.";
     }
 
-    // user has been validated so lets update their usertype from 0 to 1 and clear out the code
-    var upduser = {email: emailname, mobile: mobile, hpcode: "", usertype: 1};
+    // user has been validated so lets update their usertype from 0 to equal their userid and clear out the code
+    // the userid is used so it can be mapped to an existing user if desired later
+    var upduser = {email: emailname, mobile: mobile, hpcode: "", usertype: userid};
 
     // check hpcode to see if it matches
     // and then update the designated user
@@ -3405,6 +3480,7 @@ function processLogin(body, res) {
 
     // check the user name and password based on login form data
     var uname = encodeURI(body["emailid"].trim());
+    var umobile = encodeURI(body["mobile"].trim());
     var uhash = pw_hash(body["pword"]);
 
     // get the panel number here
@@ -3425,17 +3501,23 @@ function processLogin(body, res) {
     // get all the users and check for one that matches the hashed email address
     // emails for all users must be unique
     if ( pname ) {
-        var conditions = "panels.pname = '" + pname + "' AND panels.password = '"+phash+"' AND ( users.email = '"+uname+"' OR users.uname ='"+uname+"' OR users.mobile = '"+uname+"' ) AND users.password = '"+uhash+"'";
+        var conditions = "panels.pname = '" + pname + "' AND panels.password = '"+phash+"' AND ( users.email = '"+uname+"' OR users.uname ='"+uname+"' OR users.mobile = '"+umobile+"' ) AND users.password = '"+uhash+"'";
     } else {
-        conditions = "panels.password = '"+phash+"' AND ( users.email = '"+uname+"' OR users.uname ='"+uname+"' OR users.mobile = '"+uname+"' ) AND users.password = '"+uhash+"'";
+        conditions = "panels.password = '"+phash+"' AND ( users.email = '"+uname+"' OR users.uname ='"+uname+"' OR users.mobile = '"+umobile+"' ) AND users.password = '"+uhash+"'";
     }
-    var joinstr = mydb.getJoinStr("panels", "userid", "users", "id");
+
+    // ** change id to usertype to map user to existing one
+    // var joinstr = mydb.getJoinStr("panels", "userid", "users", "id");
+    var joinstr = mydb.getJoinStr("panels", "userid", "users", "usertype");
     var results = mydb.getRow("panels", "*", conditions, joinstr)
     .then(therow => {
         if ( therow ) {
             // make sure we get the actual email and panel names to store in our cookies
             // since this is what we check for a valid login
-            var userid = therow["users_id"];
+            // var userid = therow["users_id"];
+            var myid = therow["users_id"];
+            var userid = therow["users_usertype"];
+
             uname = therow["users_email"];
             pname = therow["panels_pname"];
             setCookie(res, "uname", pw_hash(uname));
@@ -3443,23 +3525,27 @@ function processLogin(body, res) {
             // we take on the panel number to the start of the panel name in the cookie so we always have it
             setCookie(res, "pname", pnumber + ":" + pw_hash(pname));
             if ( DEBUG3 ) {
-                console.log((ddbg()), ">>>> Successful login. Username: ", uname, " Panelname: ", pname, " on panel #"+pnumber);
+                console.log((ddbg()), "Successful login. Username: ", uname, " Panelname: ", pname, " on panel #"+pnumber);
             }
 
             // lets make sure there is a null hub for this user
-            var nullhub = {userid: therow["users_id"], hubid: "-1", hubhost: "None", hubtype: "None", hubname: "None", 
-                clientid: "", clientsecret: "", hubaccess: "", hubendpt: "", hubrefresh: "", 
-                useraccess: "", userendpt: "", hubtimer: "0" };
-            mydb.updateRow("hubs",nullhub,"userid = " + userid + " AND hubid = '-1'");
+            // actually - point this to the user we are reading which could be myself or someone else
+            // if we are a new user not mapped to an existing then make the default hub stuff
+            if ( myid === userid ) {
+                var nullhub = {userid: userid, hubid: "-1", hubhost: "None", hubtype: "None", hubname: "None", 
+                    clientid: "", clientsecret: "", hubaccess: "", hubendpt: "", hubrefresh: "", 
+                    useraccess: "", userendpt: "", hubtimer: "0" };
+                mydb.updateRow("hubs",nullhub,"userid = " + userid + " AND hubid = '-1'");
 
-            // create the user directory and default custom css
-            makeDefaultFolder(userid, pname);
+                // create the user directory and default custom css
+                makeDefaultFolder(userid, pname);
+            }
         
             // pushClient(userid, "reload", "login", "/");
         } else {
             res.clearCookie("uname");
             res.clearCookie("pname");
-            console.log( (ddbg()), ">>>> Failed login attempt. Username: ", uname, " Panelname: ", pname);
+            console.log( (ddbg()), "Failed login attempt. Username: ", uname, " Panelname: ", pname);
             therow = "error - invalid username or password";
             // pushClient(userid, "reload", "login", "/logout");
         }
@@ -3471,7 +3557,8 @@ function processLogin(body, res) {
 function getAuthPage(user, configoptions, hostname, pathname, rmsg) {
 
     // get the current settings from options file
-    var userid = user["users_id"];
+    // var userid = user["users_id"];
+    var userid = user["users_usertype"];
     var useremail = user["users_email"];
     var uname = user["users_uname"];
     var defhub = user["users_defhub"] || "new";
@@ -3480,7 +3567,7 @@ function getAuthPage(user, configoptions, hostname, pathname, rmsg) {
     var pname = user["panels_pname"];
     var skin = user["panels_skin"];
     if ( !rmsg ) { rmsg = ""; }
-    var conditions = "userid = " + user["users_id"];
+    var conditions = "userid = " + userid;
     var display = mydb.getRows("hubs","*",conditions)
     .then(hubs => {
         var vals = {};
@@ -3509,7 +3596,7 @@ function getAuthPage(user, configoptions, hostname, pathname, rmsg) {
         return getinfocontents(configoptions, hubs, devices);
     })
     .catch(reason => {
-        console.log(">>>> error - ", reason);
+        console.log(">>>> getAuthPage error: ", reason);
     });
 
     return display;
@@ -3616,7 +3703,8 @@ function getAuthPage(user, configoptions, hostname, pathname, rmsg) {
         // TODO - finish fixing Ford and Sonos hubs so we can enable it
         // var allhubtypes = { SmartThings:"SmartThings", NewSmartThings:"New SmartThings", Hubitat: "Hubitat", ISY: "ISY", Ford: "Ford", Lincoln: "Lincoln" };
         // var allhubtypes = { SmartThings:"Legacy SmartThings", NewSmartThings:"SmartThings", Hubitat: "Hubitat", Sonos: "Sonos", Ford: "Ford" };
-        var allhubtypes = { SmartThings:"Legacy SmartThings", NewSmartThings:"SmartThings", Hubitat: "Hubitat" };
+        // var allhubtypes = { SmartThings:"Legacy SmartThings", NewSmartThings:"SmartThings", Hubitat: "Hubitat" };
+        var allhubtypes = { Hubitat: "Hubitat" , NewSmartThings:"SmartThings", Sonos: "Sonos" };
         var $tc = "";
         $tc += "<div class='hubopt'><label for=\"pickhub\" class=\"startupinp\">Authorize Hub: </label>";
         $tc += "<select name=\"pickhub\" id=\"pickhub\" class=\"startupinp pickhub\">";
@@ -3648,7 +3736,7 @@ function getAuthPage(user, configoptions, hostname, pathname, rmsg) {
         authhubs.forEach(function(hub) {
             
             // putStats(hub);
-            var hubType = hub["hubtype"];
+            var hubType = hub["hubtype"];secretclass
             var hubId = hub["hubid"].toString();
             var hubindex = hub.id;
             var id = i+1;
@@ -3659,7 +3747,7 @@ function getAuthPage(user, configoptions, hostname, pathname, rmsg) {
                 hubclass = "authhub hidden";
             }
 
-            // set fixed parameters for New SmartThings
+            // set fixed parameters for New SmartThings and Sonos
             var disabled = "";
             var secretclass = "startupinp";
             if ( hubType === "None" ) {
@@ -3963,14 +4051,14 @@ function getNewPage(userid, pname, configoptions, cnt, roomid, roomname, kroom, 
         var hubindex = thing["hubs_id"];
         var hint = thing["devices_hint"];
         var refresh = thing["devices_refresh"];
-        var pvalue = JSON.parse(decodeURI2(thing["devices_pvalue"]));
+        var pvalue = decodeURI2(thing["devices_pvalue"]);
         var hubtype = thing["hubs_hubtype"];
 
         // new id to make it easy to get to this specific thing later
         var thingid = thing["things_id"];
 
         // for now and testing purposes hack up a sensor
-        if ( typeof pvalue !== "object" ) {
+        if ( !pvalue || typeof pvalue !== "object" ) {
             pvalue = {name: ""};
         }
 
@@ -4058,30 +4146,28 @@ function returnFile(userid, pname, thingvalue, thingtype, configoptions) {
         return thingvalue;
     }
 
+    var fw = "auto";
+    var fh = "auto";
+
     // get the name, width, height to create
     if ( array_key_exists("name", thingvalue) ) {
         var fn = thingvalue["name"];
     } else {
-        fn = specialtiles[thingtype][0];
+        // fn = specialtiles[thingtype][0];
+        fn = thingtype.substring(0,1).toUpperCase() + thingtype.substring(1);
         thingvalue["name"] = fn;
     }
     if ( array_key_exists("width", thingvalue) ) {
-        var fw = thingvalue["width"];
+        fw = thingvalue["width"];
     } else {
-        fw = specialtiles[thingtype][1];
         thingvalue["width"] = fw;
     }
-    var fwnum = parseInt(fw);
-    if ( isNaN(fwnum) ) { fwnum = 900; }
 
     if ( array_key_exists("height", thingvalue) ) {
-        var fh = thingvalue["height"];
+        fh = thingvalue["height"];
     } else {
-        fh = specialtiles[thingtype][2];
         thingvalue["height"] = fh;
     }
-    var fhnum = parseInt(fh);
-    if ( isNaN(fhnum) ) { fhnum = 600; }
 
     var grtypes;
     switch (thingtype) {
@@ -4454,7 +4540,6 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
                 mediaSource: "None"
             };
         }
-        // console.log(">>>> audio tile: ", thesensor.value);
         thesensor.value = translateAudio(thesensor.value);
     } else if ( thingtype==="music" || thesensor.value.trackData ) {
         thesensor.value = translateMusic(thesensor.value);
@@ -4712,9 +4797,7 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
                 // $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, null, null, twidth, theight);
 
                 if ( typeof tval === "string" && (tval.startsWith("LINK::") || tval.startsWith("TEXT::")) && alldevices ) {
-                // if (  array_key_exists(helperkey, thingvalue) ) { // } && thingvalue[helperkey] && thingvalue[helperkey].substr(0,2)==="::" ) {
-                    // var helperval = thingvalue[helperkey];
-                    // console.log(">>>> helper: ", helperkey, helperval);
+                    // if (  array_key_exists(helperkey, thingvalue) ) { // } && thingvalue[helperkey] && thingvalue[helperkey].substr(0,2)==="::" ) {
                     var helperval = tval;
                     $tc += putLinkElement(bid, hint, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, twidth, theight);
                 } else {
@@ -4765,11 +4848,6 @@ function putLinkElement(bid, hint, helperval, kindex, cnt, j, thingtype, tval, t
             
             // get the device for this linked tile
             var linkdev = alldevices[linkid];
-            // if ( DEBUG10 ) {
-            //     console.log(">>>> helperval: ", helperval, " ipos, jpos, realsubid, linkid: ", ipos, jpos, realsubid, linkid);
-            //     console.log(">>>> linkdev: ", linkdev);
-            // }
-
             if ( linkdev ) {
                 
                 // replace the place holder value with the linked value
@@ -4779,10 +4857,12 @@ function putLinkElement(bid, hint, helperval, kindex, cnt, j, thingtype, tval, t
                     linkbid = linkdev["devices_deviceid"];
                     linkhub = linkdev["hubs_id"];
                     hint = linkdev["devices_hint"];
-                    var linktileval = JSON.parse(decodeURI2(linkdev["devices_pvalue"]));
+                    var linktileval = decodeURI2(linkdev["devices_pvalue"]);
 
                     // handle special audio updates
-                    if ( linktype==="audio" || linktype==="sonos" || linktileval.audioTrackData ) {
+                    if ( !linktileval ) {
+                        linktileval = {};
+                    } else if ( linktype==="audio" || linktype==="sonos" || linktileval.audioTrackData ) {
                         linktileval = translateAudio(linktileval);
                     } else if ( linktype==="music" || linktileval.trackData ) {
                         linktileval = translateMusic(linktileval);
@@ -4817,7 +4897,6 @@ function putLinkElement(bid, hint, helperval, kindex, cnt, j, thingtype, tval, t
                 if ( !goodlink ) {
                     helperval = "LINK::"+realsubid+"::"+linkid+"::error";
                     tval = "LINK::error";
-                    // console.log(">>>> linkid, linkbid, linktype, linkpvalue: ", linkid, linktype, linkbid, linktileval);
                 }
 
                 // look for width and height and replace if there
@@ -4840,7 +4919,7 @@ function putLinkElement(bid, hint, helperval, kindex, cnt, j, thingtype, tval, t
     // but in the actual target we use the linktype
     // var sibling= "<div aid=\""+cnt+"\" linktype=\""+linktype+"\" value=\""+tval+"\" linkval=\""+linkval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
     if ( DEBUG10 ) {
-        console.log( (ddbg()), "bid: ", bid, " helperval: ", helperval, " sibling: ", sibling,"\n >>>> new tval: ", tval);
+        console.log( (ddbg()), "bid: ", bid, " helperval: ", helperval, " sibling: ", sibling,"\n new tval: ", tval);
     }
     var $tc = putElement(kindex, cnt, j, linktype, tval, tkey, subtype, bgcolor, sibling, realsubid, twidth, theight);
     return $tc;
@@ -4929,7 +5008,7 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
                    tkey==="currentAlbum" || tkey==="trackImage" || tkey==="mediaSource" ||
                    tkey==="weatherIcon" || tkey==="forecastIcon" ||
                    !isNaN(+tval) || thingtype===tval ||
-                   (tval.substr(0,7)==="number_") || 
+                   (tval.substring(0,7)==="number_") || 
                    (tval.indexOf("://")!==-1) ||
                    (tval.indexOf("::")!==-1) || tval.length > 30 ) {
             extra = "";
@@ -5158,7 +5237,7 @@ function getFormattedTime(fmttime, old, tzone) {
     return timestr;
 }
 
-function getClock(userid, clockid, configoptions) {
+function getClock(clockid) {
     // set up all defaults here - can change with customizer
     var clockname = "Digital Clock";
     var clockskin = "";
@@ -5183,132 +5262,11 @@ function getClock(userid, clockid, configoptions) {
     return dclock;
 }
 
-function findDevice(bid, swtype, devices) {
-    for (var id in devices) {
-        var device = devices[id];
-        if ( device["devices_deviceid"] === bid && device["devices_devicetype"] === swtype ) {
-            return device["devices_id"];
-        }
-    }
-    return null;
-}
-
-// the index of the Null hub is passed in to define these items
-function updSpecials(userid, configoptions, hubindex, devices, clockonly) {
-    // never refresh since clocks have their own refresh timer built into the javascript code
-    // you will need to over-ride this with the tile customizer if you add custom fields
-
-    function makeClock(clockid) {
-        var clock = getClock(userid, clockid, configoptions);
-        var clockname = clock.name;
-        clock = encodeURI2(JSON.stringify(clock));
-        var device = {userid: userid, hubid: hubindex, deviceid: clockid, name: clockname,
-            devicetype: "clock", hint: "clock", refresh: "never", pvalue:  clock};
-        return device;
-    }
-
-    
-    // create promise result to return
-    var digitalClock = makeClock("clockdigital");
-    var id = findDevice("clockdigital", "clock", devices);
-    if ( id ) {
-        mydb.updateRow("devices", digitalClock, "userid = " + userid + " AND id = "+id);
-    } else {
-        mydb.addRow("devices", digitalClock);        
-    }
-
-    var analogClock = makeClock("clockanalog");
-    id = findDevice("clockanalog", "clock", devices);
-    if ( id ) {
-        mydb.updateRow("devices", analogClock, "userid = " + userid + " AND id = "+id);
-    } else {
-        mydb.addRow("devices", analogClock);        
-    }
-
-    // create the controller tile if not already there for this user
-    // keys starting with c__ will get the confirm class added to it
-    // TODO - this should move to a new module that creates a new user
-    id = findDevice("control_1", "control", devices);
-    if ( !id ) {
-        var controlval = {"name": "Controller", "showoptions": "Options","refreshpage": "Refresh","c__refactor": "Reset",
-            "c__userauth": "Re-Auth","showid": "Show Info","toggletabs": "Toggle Tabs", "showdoc": "Documentation",
-            "blackout": "Blackout","operate": "Operate","reorder": "Reorder","edit": "Edit"};
-        controlval = encodeURI2(JSON.stringify(controlval));
-        var device = {userid: userid, hubid: hubindex, deviceid: "control_1", "name": "Controller",
-                      devicetype: "control", hint: "special", refresh: "never", pvalue: controlval};
-        mydb.addRow("devices", device);
-    }
-
-    // if asked to only do clocks then return
-    // we do this upon first page load because the specials will be there already
-    // we call with false when specials need updating upon options page processing
-    if ( clockonly ) { return; }
-
-    // add special tiles based on type and user provided count
-    // this replaces the old code that handled only video and frame tiles
-    // this also creates image and blank tiles here that used to be made in groovy
-    // putting this here allows them to be handled just like other modifiable tiles
-    // these tiles all refresh fast except first 4 frames that are reserved for weather
-    // renamed accuweather to forecast2 for simplicity sake and to make sorting work
-    var specialtiles = getConfigItem(configoptions, "specialtiles");
-
-    // make sure we have special tiles in our master list updated
-    for (var stype in specialtiles) {
-        var sid = specialtiles[stype];
-        var fcnt = parseInt(sid);
-        if ( isNaN(fcnt) ) {
-            fcnt = 0;
-        }
-        
-        for (var i=0; i<fcnt; i++) {
-            var k = (i + 1).toString();
-            var devname = getCustomName(stype, k);;
-            if ( stype === "custom") {
-                var devid = stype + "_" + k;
-            } else {
-                devid = stype + k;
-            }
-            
-            var cid = findDevice(devid, stype, devices);
-            if ( !cid ) {
-                var ftile = encodeURI2(JSON.stringify({"name": devname}));
-                device = {userid: userid, hubid: hubindex, deviceid: devid, name: devname,
-                            devicetype: stype, hint: "special", refresh: "never", pvalue: ftile};
-                // console.log(">>>> simulated add: ", device);
-                mydb.addRow("devices", device);
-            }
-        }
-
-        // TODO - test and debug
-        var doneextra = false;
-        for (var iextra= fcnt; iextra < 25; iextra++) {
-            if ( stype === "custom") {
-                var devid = stype + "_" + k;
-            } else {
-                devid = stype + k;
-            }
-            mydb.deleteRow("devices", "userid = "+userid+" AND deviceid = '"+devid+"' AND devicetype = '"+stype+"'")
-            .then(res3 => {
-                if ( !res3 || res3.getAffectedItemsCount() === 0 ) {
-                    doneextra = true;
-                }
-            }).catch(reason => {
-                console.log("dberror - updSpecials - ", reason);
-                doneextra = true;
-            });
-            if ( doneextra ) {
-                break;
-            }
-        }
-
-    }
-}
-
 // make the default name start with a capital letter if we give a number
 function getCustomName(defbase, cnum) {
     var defname;
     if ( cnum ) {
-        defname = defbase.substr(0,1).toUpperCase() + defbase.substr(1);
+        defname = defbase.substring(0,1).toUpperCase() + defbase.substring(1);
         defname = defname + cnum;
     } else {
         defname = defbase;
@@ -5323,7 +5281,6 @@ function getCustomTile(userid, configoptions, custom_val, bid) {
 
     var configkey = "user_" + bid;
     var updated_val = clone(custom_val);
-    var dodebug = false;
     for ( var i in configoptions ) {
 
         var key = configoptions[i].configkey;
@@ -5334,22 +5291,18 @@ function getCustomTile(userid, configoptions, custom_val, bid) {
                 console.log((ddbg()), "userid: ", userid, " key: ", key, " val: ", val);
             }
             if ( typeof val === "object" ) {
-                var lines = val;
-                updated_val = processCustom(lines, updated_val);
+                updated_val = processCustom(val, updated_val);
             } else if ( typeof val === "string" ) {
-                try {
-                    lines = JSON.parse(decodeURI2(val));
+                var lines = decodeURI2(val);
+                if ( lines ) {
                     updated_val = processCustom(lines, updated_val);
-                } catch(e) {
-                    console.log( (ddbg()), "error - parsing custom config tile value: ", val, " for key: ", key);
                 }
             }
-            dodebug = true;
             break;
         }
     }
    
-    if ( DEBUG14 && dodebug ) {
+    if ( DEBUG14 ) {
         console.log( (ddbg()),"updated tile value: ", updated_val);
     }
 
@@ -5434,7 +5387,7 @@ function getCustomTile(userid, configoptions, custom_val, bid) {
         }
         
         if ( DEBUG14 ) {
-            console.log((ddbg()), ">>>>  companion: ", companion, " customized tile: ", custom_val);
+            console.log((ddbg()), "companion: ", companion, " customized tile: ", custom_val);
         }
         return custom_val;
     }
@@ -5443,7 +5396,7 @@ function getCustomTile(userid, configoptions, custom_val, bid) {
 // this little gem makes sure items are in the proper order
 function setValOrder(val) {
     const order = {"name": 1, "battery": 2, "color": 3, "switch": 7, "momentary": 7, "presence": 7,
-                   "contact": 8, "door": 8, "motion": 9, "themode": 10,  
+                   "contact": 9, "door": 8, "garage":8, "motion": 9, "themode": 10,  
                    "make": 11, "modelName":12, "modelYear": 13, "vehiclecolor": 14, "nickName": 15,
                    "coolingSetpoint": 11, "heatingSetpoint": 12,
                    "thermostatMode": 21, "thermostatFanMode": 22, 
@@ -5457,7 +5410,7 @@ function setValOrder(val) {
                    "_number_0":60, "_number_1":61, "_number_2":62, "_number_3":63, "_number_4":64, 
                    "_number_5":65, "_number_6":66, "_number_7":67, "_number_8":68, "_number_9":69, 
                    "onlevel": 150, "level": 151, "volume": 152, "colorTemperature": 153, "hue": 141, "saturation": 142, "position": 152,
-                   "allon": 41, "alloff": 42, "count": 149,
+                   "allon": 41, "alloff": 42, "count": 148, "duration": 149, "deltaT": 149,
                    "temperature": 7, "feelsLike":8, "weatherIcon":20, "forecastIcon":21 };
 
     function getComp(vala) {
@@ -5520,7 +5473,7 @@ function processHubMessage(userid, hubmsg, newST) {
     // pvalue[subid] = hubmsg['change_value'];
 
     // deal with presence tiles
-    if ( subid==="presence" && hubmsg['change_value']==="not present" ) {
+    if ( hubmsg['change_value']==="not present" ) {
         hubmsg['change_value'] = "absent";
     }
 
@@ -5542,28 +5495,61 @@ function processHubMessage(userid, hubmsg, newST) {
         devices.forEach(function(device) {
 
             if ( device.pvalue && device.pvalue!=="undefined" ) {
-                pvalue = JSON.parse(decodeURI2(device.pvalue));
+                pvalue = decodeURI2(device.pvalue);
+                if ( !pvalue ) { pvalue = {}; }
             } else {
                 pvalue = {};
             }
             pvalue[subid] = hubmsg['change_value'];
 
-            // increment the count if this is not the inverse of a turn on action
-            if ( pvalue[subid]!=="off" && pvalue[subid]!=="inactive" && pvalue[subid]!=="closed" && pvalue[subid]!=="locked" && pvalue[subid]!=="absent" ) {
-                if ( pvalue.count ) {
-                    var n = parseInt(pvalue.count) + 1;
-                    pvalue.count = n.toString();
-                } else {
-                    pvalue.count = "1";
-                }
+            // handle colors
+            if ( array_key_exists("color",pvalue) && (subid=="hue" || subid=="saturation" || subid=="level") ) {
+                var h = Math.round((parseInt(pvalue["hue"]) * 360) / 100);
+                var s = Math.round(parseInt(pvalue["saturation"]));
+                var v = Math.round(parseInt(pvalue["level"]));
+                var color = utils.hsv2rgb(h, s, v);
+                pvalue["color"] = color;
             }
 
+            // increment the count if this is not the inverse of a turn on action
+            var d = new Date();
+            if ( array_key_exists("duration",pvalue) && array_key_exists("deltaT",pvalue) ) {
+                if ( subid==="level" || subid==="position" || pvalue[subid]==="on" || pvalue[subid]==="active" || pvalue[subid]==="present" || pvalue[subid]==="open" || pvalue[subid]==="unlocked" ) {
+                    if ( pvalue.deltaT > 0 ) {
+                        pvalue.duration = parseFloat(pvalue.duration);
+                        if ( isNaN(pvalue.duration) ) { pvalue.duration = 0.0; }
+                        pvalue.duration += (d.getTime() - pvalue.deltaT) / 60000.0;
+                        pvalue.duration = (Math.round(pvalue.duration*10.0)/10.0).toString();
+                    }
+                    pvalue.deltaT = d.getTime();
+                    if ( pvalue.count ) {
+                        var n = parseInt(pvalue.count);
+                        if ( isNaN(n) ) { 
+                            n = 1; 
+                        } else {
+                            n++;
+                        }
+                        pvalue.count = n.toString();
+                    } else {
+                        pvalue.count = "1";
+                    }
+                } else {
+                    pvalue.duration = parseFloat(pvalue.duration);
+                    if ( isNaN(pvalue.duration) ) { pvalue.duration = 0.0; }
+                    if ( pvalue.deltaT > 0 ) {
+                        pvalue.duration += (d.getTime() - pvalue.deltaT) / 60000.0;
+                    }
+                    pvalue.duration = (Math.round(pvalue.duration*10.0)/10.0).toString();
+                    pvalue.deltaT = 0;
+                }
+            }
             var swtype = device.devicetype;
             var newval = pvalue;
 
             // set the event string to this time
-            var d = new Date();
             var timestr = d.toLocaleDateString() + " " +  d.toLocaleTimeString();
+            if ( pvalue["event_3"] ) { pvalue["event_4"] = pvalue["event_3"]; }
+            if ( pvalue["event_2"] ) { pvalue["event_3"] = pvalue["event_2"]; }
             if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
             if ( typeof pvalue[subid] === "string" && pvalue[subid].length < 10 ) {
                 pvalue["event_1"] = timestr + " " + subid + " " + pvalue[subid];
@@ -5576,7 +5562,7 @@ function processHubMessage(userid, hubmsg, newST) {
             }
 
             // update the DB
-            device.pvalue = encodeURI2(JSON.stringify(pvalue));
+            device.pvalue = encodeURI2(pvalue);
             mydb.updateRow("devices", device, "userid = " + userid + " AND id = "+device.id);
 
             // handle special audio updates
@@ -5631,6 +5617,7 @@ function processHubMessage(userid, hubmsg, newST) {
 function processIsyMessage(userid, jsondata) {
     var newval;
     var pvalue;
+    var d = new Date();
 
     // xml2js(isymsg, function(err, result) {
     //     if ( !err && result.Event ) {
@@ -5668,9 +5655,8 @@ function processIsyMessage(userid, jsondata) {
                     try {
 
                         if ( device.pvalue && device.pvalue!=="undefined" ) {
-                            try {
-                                pvalue = JSON.parse(decodeURI2(device.pvalue));
-                            } catch(e) {
+                            pvalue = decodeURI2(device.pvalue);
+                            if ( !pvalue ) {
                                 pvalue = {};
                             }
                         } else {
@@ -5697,17 +5683,41 @@ function processIsyMessage(userid, jsondata) {
                     var subid = mapIsy(control[0], uom);
                     pvalue = translateIsy(bid, control[0], uom, subid, pvalue, newval, "");
 
-                    if ( pvalue[subid]!=="off" && pvalue[subid]!=="DOF" ) {
-                        if ( pvalue.count ) {
-                            var n = parseInt(pvalue.count) + 1;
-                            pvalue.count = n.toString();
+                    if ( array_key_exists("duration",pvalue) && array_key_exists("deltaT",pvalue) ) {
+                        if ( subid==="level" || subid==="position" || pvalue[subid]==="on" || pvalue[subid]==="DON" ) {
+                            if ( pvalue.deltaT > 0 ) {
+                                pvalue.duration = parseFloat(pvalue.duration);
+                                if ( isNaN(pvalue.duration) ) { pvalue.duration = 0.0; }
+                                pvalue.duration += (d.getTime() - pvalue.deltaT) / 60000.0;
+                                pvalue.duration = (Math.round(pvalue.duration*10.0)/10.0).toString();
+                            }
+                            pvalue.deltaT = d.getTime();
+                            if ( pvalue.count ) {
+                                var n = parseInt(pvalue.count);
+                                if ( isNaN(n) ) { 
+                                    n = 1; 
+                                } else {
+                                    n++;
+                                }
+                                pvalue.count = n.toString();
+                            } else {
+                                pvalue.count = "1";
+                            }
                         } else {
-                            pvalue.count = "1";
+                            pvalue.duration = parseFloat(pvalue.duration);
+                            if ( isNaN(pvalue.duration) ) { pvalue.duration = 0.0; }
+                            if ( pvalue.deltaT > 0 ) {
+                                pvalue.duration += (d.getTime() - pvalue.deltaT) / 60000.0;
+                            }
+                            pvalue.duration = (Math.round(pvalue.duration*10.0)/10.0).toString();
+                            pvalue.deltaT = 0;
                         }
                     }
+
                     // set the event string to this time
-                    var d = new Date();
                     var timestr = d.toLocaleDateString() + " " +  d.toLocaleTimeString();
+                    if ( pvalue["event_3"] ) { pvalue["event_4"] = pvalue["event_3"]; }
+                    if ( pvalue["event_2"] ) { pvalue["event_3"] = pvalue["event_2"]; }
                     if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
                     if ( typeof pvalue[subid] === "string" && pvalue[subid].length < 10 ) {
                         pvalue["event_1"] = timestr + " " + subid + " " + pvalue[subid];
@@ -5725,7 +5735,7 @@ function processIsyMessage(userid, jsondata) {
                     if ( DEBUG9 ) {
                         console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " uom: ", uom, " newval: ", newval, " pvalue: ", pvalue);
                     }
-                    device.pvalue = encodeURI2(JSON.stringify(pvalue));
+                    device.pvalue = encodeURI2(pvalue);
                     mydb.updateRow("devices", device, "userid = "+userid+" AND devicetype = 'isy' AND id = "+device.id);
                     
                 }).catch(reason => {
@@ -5746,7 +5756,10 @@ function processIsyMessage(userid, jsondata) {
                     
                     try {
                         if ( device.pvalue && device.pvalue!=="undefined" ) {
-                            pvalue = JSON.parse(decodeURI2(device.pvalue));
+                            pvalue = decodeURI2(device.pvalue);
+                            if ( !pvalue ) {
+                                pvalue = {};
+                            }
                         } else {
                             pvalue = {};
                         }
@@ -5783,7 +5796,7 @@ function processIsyMessage(userid, jsondata) {
                             if ( DEBUG9 ) {
                                 console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " newval: ", newval, " pvalue: ", pvalue);
                             }
-                            device.pvalue = encodeURI2(JSON.stringify(pvalue));
+                            device.pvalue = encodeURI2(pvalue);
                             mydb.updateRow("devices", device, "userid = "+userid+" AND devicetype = 'isy' AND id = "+device.id);
 
                         }
@@ -5810,11 +5823,8 @@ function processIsyMessage(userid, jsondata) {
 
                     var device = results;
                     try {
-                        if ( device.pvalue && device.pvalue!=="undefined" ) {
-                            pvalue = JSON.parse(decodeURI2(device.pvalue));
-                        } else {
-                            pvalue = {};
-                        }
+                        pvalue = decodeURI2(device.pvalue);
+                        if ( !pvalue ) { pvalue = {}; }
                         pvalue["lastRunTime"] = eventInfo[0]["r"][0];
                         pvalue["lastFinishTime"] = eventInfo[0]["f"][0];
 
@@ -5852,7 +5862,7 @@ function processIsyMessage(userid, jsondata) {
                         if ( DEBUG9 ) {
                             console.log( (ddbg()), "ISY webSocket updated program: ", bid, " pvalue: ", device);
                         }
-                        device.pvalue = encodeURI2(JSON.stringify(pvalue));
+                        device.pvalue = encodeURI2(pvalue);
                         mydb.updateRow("devices", device, "userid = "+userid+" AND devicetype = 'isy' AND id = "+device.id);
                         
                     } catch(e) {
@@ -5875,6 +5885,9 @@ function processSonosMessage(userid, hub, req) {
     var body = req.body;
     var trigger = "";
     var pvalue = {};
+    if ( DEBUGsonos ) {
+        console.log( (ddbg()), "Sonos message headers: ", req.headers, "\n body: ", req.body);
+    }
     switch (namespace) {
 
         case "playerVolume":
@@ -5958,21 +5971,19 @@ function processSonosMessage(userid, hub, req) {
     }
 
     if ( DEBUGsonos ) {
-        console.log( (ddbg()),"Sonos event processed. headers: ", req.headers, "\n body: ", req.body,"\n pvalue: ", pvalue, 
-        "\n namespace: ", namespace, " deviceid: ", deviceid, " deviceytpe: ", devicetype, " trigger: ", trigger,"\n hub: ", hub);
+        console.log( (ddbg()),"Sonos event processed. pvalue: ", pvalue, 
+        "\n namespace: ", namespace, " deviceid: ", deviceid, " deviceytpe: ", devicetype, " trigger: ", trigger);
     }
 
     function updatePlayer(device, trigger, pvalue) {
 
-        if ( device.pvalue && typeof device.pvalue === "string" && device.pvalue!=="undefined" ) {
-            var newpvalue = JSON.parse(decodeURI2(device.pvalue));
-        } else {
-            newpvalue = {};
-        }
+        var newpvalue = decodeURI2(device.pvalue);
+        if ( !newpvalue ) { newpvalue = {}; }
+
         for (var skey in pvalue) {
             newpvalue[skey] = pvalue[skey];
         }
-        var pvalstr = encodeURI2(JSON.stringify(newpvalue));
+        var pvalstr = encodeURI2(newpvalue);
         mydb.updateRow("devices", {pvalue: pvalstr}, "userid = " + userid + " AND id = "+device.id);
         pushClient(device.userid, device.deviceid, device.devicetype, trigger, pvalue);
 
@@ -6078,7 +6089,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
     mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
     .then(results => {
         if ( results ) {
-            lines = JSON.parse(decodeURI2(results.configval));
+            lines = decodeURI2(results.configval);
             if ( DEBUG11 ) {
                 console.log( (ddbg()), "Rule processing for bid: ", bid," lines: ", lines);
             }
@@ -6164,7 +6175,6 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
 
                 // split the test line between commas and semi-colons
                 var testcommands = linkval.split(regsplit);
-                // console.log(">>>> rule: ", testcommands);
 
                 // only proceed if there are at least two parts and the first part starts with "if "
                 if ( testcommands.length > 1 && testcommands[0].trim().startsWith("if") ) {
@@ -6252,11 +6262,11 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                                 }
 
                                 if ( DEBUG11 ) {
-                                    console.log( (ddbg()), "    >>>> rulevalue: ", rulevalue, " ruleparts: ", ruleparts, " pvalue: ", pvalue);
+                                    console.log( (ddbg()), "rule: rulevalue: ", rulevalue, " ruleparts: ", ruleparts, " pvalue: ", pvalue);
                                 }
 
                                 // use this tile's existing value for check if $ symbol given
-                                var jv = rulevalue.substr(0,1);
+                                var jv = rulevalue.substring(0,1);
                                 var kv = rulevalue.indexOf("$");
                                 var rvindex;
                                 if ( jv === "$" ) {
@@ -6265,17 +6275,21 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                                         rulevalue = pvalue[rvindex];
                                     }
                                     if ( DEBUG11 ) {
-                                        console.log( (ddbg()), "    >>>> rvindex = ", rvindex, " rulevalue= ", rulevalue, " pvalue: ", pvalue);
+                                        console.log( (ddbg()), "rule: rvindex = ", rvindex, " rulevalue= ", rulevalue, " pvalue: ", pvalue);
                                     }
 
                                 // use another tile's existing value for check using @tilenum$fieldname syntax
                                 } else if ( jv === "@" && kv !== -1 ) {
                                     var rvtile = rulevalue.substring(1, kv);
                                     rvindex = rulevalue.substr(kv+1);
-                                    var rulepvalue = JSON.parse(decodeURI2(devices[rvtile].pvalue));
-                                    rulevalue = rulepvalue[rvindex];
+                                    var rulepvalue = decodeURI2(devices[rvtile].pvalue);
+                                    if ( rulepvalue ) {
+                                        rulevalue = rulepvalue[rvindex];
+                                    } else {
+                                        rulevalue = false;
+                                    }
                                     if ( DEBUG11 ) {
-                                        console.log( (ddbg()), "    >>>> rvtile = ", rvtile, " rulevalue= ", rulevalue);
+                                        console.log( (ddbg()), "rule: rvtile = ", rvtile, " rulevalue= ", rulevalue);
                                     }
                                 }
 
@@ -6296,8 +6310,12 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                                         try {
                                             rtype = devices[ruletileid].devicetype; 
                                             rbid = devices[ruletileid].deviceid;
-                                            var ifpvalue = JSON.parse(decodeURI2(devices[ruletileid].pvalue));
-                                            ifvalue = ifpvalue[rulesubid];
+                                            var ifpvalue = decodeURI2(devices[ruletileid].pvalue);
+                                            if ( ifpvalue ) {
+                                                ifvalue = ifpvalue[rulesubid];
+                                            } else {
+                                                ifvalue = false;
+                                            }
                                         } catch(e) {
                                             rtype = "";
                                             rbid = 0;
@@ -6395,7 +6413,6 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                         });
 
                         if ( isrule ) {
-                            // console.log(">>>> executing rule: ", testcommands);
                             execRules(userid, rulecaller, deviceid, thetype, 1, testcommands, pvalue, hubs, devices);
                         }
                     }
@@ -6461,7 +6478,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                     var hubindex = devices[rtileid].hubid;
                     var rhint = devices[rtileid].hint;
                     var hub = hubs[hubindex];
-                    var devpvalue = JSON.parse(decodeURI2(devices[rtileid].pvalue));
+                    var devpvalue = decodeURI2(devices[rtileid].pvalue);
 
                     // handle requests for parameters of the trigger tile ($) or destination tile (@)
                     // disable hub calls for this type of rule
@@ -6499,7 +6516,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                     // convert back to a string
                     rvalue = rvalue.toString();
                     if ( DEBUG11 ) {
-                        console.log(">>>> trigtype: ", trigtype, " trigsubid: ", trigsubid, " rvalue: ", rvalue, " rvaldelta = ", rvaldelta);
+                        console.log((ddbg()), "trigtype: ", trigtype, " trigsubid: ", trigsubid, " rvalue: ", rvalue, " rvaldelta = ", rvaldelta);
                     }
 
                     // fix up ISY hubs and handle toggle
@@ -6518,36 +6535,38 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                     // set the destination to the value which would typically be overwritten by hub call
                     // if the destination is a link force the link to a TEXT type to neuter other types
                     // var companion = "user_"+rsubid;
-                    var webstr = devpvalue[rsubid];
-                    var n = typeof webstr === "string" ? webstr.indexOf("::",2) : -1;
-                    if ( n !== -1 ) {
+                    if ( devpvalue ) {
+                        var webstr = devpvalue[rsubid];
+                        var n = typeof webstr === "string" ? webstr.indexOf("::",2) : -1;
+                        if ( n !== -1 ) {
 
-                        var command = webstr.substring(0, n);
-                        var linkv = webstr.substring(n+2);
-                        // var actionstr = webstr.substring(n+2);
-                        if ( DEBUG11 ) {
-                            console.log( ">>>> trigger other custom from rule. sib val: ", webstr, " command: ", command);
+                            var command = webstr.substring(0, n);
+                            var linkv = webstr.substring(n+2);
+                            // var actionstr = webstr.substring(n+2);
+                            if ( DEBUG11 ) {
+                                console.log( (ddbg()), "trigger other custom from rule. sib val: ", webstr, " command: ", command);
+                            }
+
+                            // take action if it is in a rule
+                            if ( command==="GET" || command==="POST" ) {
+
+                                doAction(userid, hub.hubid, hubindex, thingid, rswid, rswtype, rvalue, rswattr, rsubid, rhint, command, linkv);
+                                
+                                // neuter the hub call so we don't do both and invoke action function
+                                hub = null;
+                                
+                            }
+
+                        // if destination subid isn't found make a user TEXT field (disabled)
+                        // } else if ( !array_key_exists(rsubid, devpvalue) ) {
+                        //     // addCustom(userid, deviceid, rswid, rswtype, "TEXT", rvalue, rsubid);
+                        //     if ( DEBUG11 ) {
+                        //         console.log( (ddbg()), "custom field: ", rsubid, " not found in tile: ", devpvalue);
+                        //     }
+                            // restart all clients to show the newly created field
+                            // this only happens the first time the rule is triggered
+                            // pushClient(userid, "reload", "main", "/");
                         }
-
-                        // take action if it is in a rule
-                        if ( command==="GET" || command==="POST" ) {
-
-                            doAction(userid, hub.hubid, hubindex, thingid, rswid, rswtype, rvalue, rswattr, rsubid, rhint, command, linkv);
-                            
-                            // neuter the hub call so we don't do both and invoke action function
-                            hub = null;
-                            
-                        }
-
-                    // if destination subid isn't found make a user TEXT field (disabled)
-                    // } else if ( !array_key_exists(rsubid, devpvalue) ) {
-                    //     // addCustom(userid, deviceid, rswid, rswtype, "TEXT", rvalue, rsubid);
-                    //     if ( DEBUG11 ) {
-                    //         console.log( (ddbg()), "custom field: ", rsubid, " not found in tile: ", devpvalue);
-                    //     }
-                        // restart all clients to show the newly created field
-                        // this only happens the first time the rule is triggered
-                        // pushClient(userid, "reload", "main", "/");
                     }
 
                     if ( hub ) {
@@ -6686,13 +6705,6 @@ function queryNewST(hub, deviceid, swtype) {
                                 for ( var othersub in attributes[attr] ) {
                                     if ( othersub==="value" ) {
                                         pvalue[subid] = attributes[attr]["value"];
-                                        
-                                        if ( swtype==="bulb" && (subid==="hue" || subid==="saturation" || subid==="level" ) ) {
-                                            var h = pvalue.hue || 1;
-                                            var s = pvalue.saturation || 1;
-                                            var l = pvalue.level || 50;
-                                            pvalue.color = utils.hsv2rgb(h, s, l);
-                                        }
                                     } else if ( othersub === "unit" ) {
                                         pvalue["uom_"+subid] = attributes[attr]["unit"];
                                     } else if ( othersub === "data" ) {
@@ -6713,6 +6725,14 @@ function queryNewST(hub, deviceid, swtype) {
                         }
                     }
                 }
+
+                // add color attribute if hsl is there
+                if ( array_key_exists("hue", pvalue) && array_key_exists("saturation",pvalue) && array_key_exists("level",pvalue) ) {
+                    var h = Math.round( (pvalue.hue * 360) / 100 );
+                    pvalue.hue = Math.round(pvalue.hue);
+                    pvalue.saturation = Math.round(pvalue.saturation);
+                    pvalue["color"] = utils.hsv2rgb(h, pvalue.saturation, pvalue.level);
+                }
             }
         }
 
@@ -6727,7 +6747,7 @@ function queryNewST(hub, deviceid, swtype) {
 function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, hint, inrule) {
 
     // first get the hub from the DB
-    var result = mydb.getRow("hubs","*","userid="+userid+" AND id = " + hubindex)
+    var result = mydb.getRow("hubs","*","userid = "+userid+" AND id = " + hubindex)
     .then(hub => {
 
         if ( !hub ) { return null; }
@@ -6802,8 +6822,12 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
                 
                 // retrieve the current pvalue of the item clicked on
                 var devicepval = row["pvalue"];
-                presult = JSON.parse(decodeURI2(devicepval));
-                var curval = presult[subid];
+                presult = decodeURI2(devicepval);
+                if ( presult ) {
+                    var curval = presult[subid];
+                } else {
+                    curval = "off";
+                }
         
                 // handle commands for switches and doors
                 // the majority of all calls will be of this type
@@ -6820,7 +6844,6 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
                 } else if ( subid==="count") {
                     nvpreq = null;
                     presult[subid] = swval;
-                    console.log(">>>> swval = ", swval);
                     getHubResponse(presult);
                     return "success";
 
@@ -6867,6 +6890,7 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
                     nvpreq = {"commands": [ { component:"main", capability: "windowShade", command: "presetPosition", arguments: [] } ] };
             
                 // process color swaps
+                // the color UI send hue in the proper 0 - 360 range unlike the hub which stores in 0 - 100 range
                 } else if ( subid==="color" && swval.startsWith("hsl(") && swval.length==16 ) {
                     var hue = swval.substring(4,7);
                     hue= parseInt(hue);
@@ -6878,8 +6902,8 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
                     var cargs = {hue: hue, saturation: saturation, level: v, switch: "on"};
                     nvpreq = {"commands": [ { component:"main", capability: "colorControl", command: "setColor", arguments: [cargs] } ] };
                     var hex = utils.hsv2rgb(hue, saturation, v);
-                    presult.color = swattr;
-                    presult.hue = hue;
+                    presult.color = hex; // swattr;
+                    presult.hue = Math.round((hue * 100) / 360);
                     presult.saturation = saturation;
                     presult.level = v;
 
@@ -7062,7 +7086,6 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
                     var cmd = subid.substr(1);
                     cmd = cmd === "stop" ? "pause" : cmd;
                     var host = endpt + "/v1/groups/" + hint + "/playback/" + cmd;
-                    // console.log(">>>> Sonos command host: ", host);
                     _curl(host, header, "", "POST")
                     .then( () => {
                         var stat = cmd==="play" ? "playing" : "paused";
@@ -7073,7 +7096,6 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
 
                 case "_previousTrack":
                     var host = endpt + "/v1/groups/" + hint + "/playback/skipToPreviousTrack";
-                    // console.log(">>>> Sonos command host: ", host);
                     _curl(host, header, "", "POST")
                     .then( () => {
                         updateSonosMeta(endpt, header, hint);
@@ -7082,7 +7104,6 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
 
                 case "_nextTrack":
                     var host = endpt + "/v1/groups/" + hint + "/playback/skipToNextTrack";
-                    // console.log(">>>> Sonos command host: ", host);
                     _curl(host, header, "", "POST")
                     .then( () => {
                         updateSonosMeta(endpt, header, hint);
@@ -7298,20 +7319,22 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
                         mydb.getRow("devices","*","userid = "+userid+" AND deviceid = 'vars'")
                         .then(row => {
 
-                            var pvalue = JSON.parse(decodeURI2(row.pvalue));
-                            pvalue[realsubid] = intvar.toString();
-                            var newpvalstr = encodeURI2(JSON.stringify(pvalue));
-                            row.pvalue = newpvalstr;
+                            var pvalue = decodeURI2(row.pvalue);
+                            if ( pvalue ) {
+                                pvalue[realsubid] = intvar.toString();
+                                var newpvalstr = encodeURI2(pvalue);
+                                row.pvalue = newpvalstr;
 
-                            // update the row;
-                            mydb.updateRow("devices", row, "userid = " + userid + " AND id = "+row.id);
+                                // update the row;
+                                mydb.updateRow("devices", row, "userid = " + userid + " AND id = "+row.id);
 
-                            // show result on screen and handle rules for Ints
-                            pushClient(userid, swid, swtype, realsubid, pvalue);
-                            if ( !inrule && thingid ) {
-                                pvalue.subid = realsubid;
-                                processRules(userid, thingid, swid, swtype, realsubid, pvalue, "callHub");
-                                delete pvalue.subid;
+                                // show result on screen and handle rules for Ints
+                                pushClient(userid, swid, swtype, realsubid, pvalue);
+                                if ( !inrule && thingid ) {
+                                    pvalue.subid = realsubid;
+                                    processRules(userid, thingid, swid, swtype, realsubid, pvalue, "callHub");
+                                    delete pvalue.subid;
+                                }
                             }
         
                         });
@@ -7555,7 +7578,8 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
 
         // for save to DB - we must read all the devices and merge the pvalue with existing
         // we only do this for Sonos and Ford since they don't generate subscription events
-        if ( swtype==="ford" || swtype==="sonos" || swtype==="isy" || subid==="count") {
+        // if ( swtype==="ford" || swtype==="sonos" || swtype==="isy" || subid==="count") {
+        if ( swtype==="ford" || swtype==="sonos" || swtype==="isy" ) {
             mydb.getRows("devices","*", "userid = " + userid + " AND deviceid = '" + swid +"'")
             .then(devices => {
         
@@ -7564,10 +7588,13 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
                 devices.forEach(function(device) {
         
                     if ( device.pvalue && typeof device.pvalue === "string" && device.pvalue!=="undefined" ) {
-                        var newpvalue = JSON.parse(decodeURI2(device.pvalue));
-                        newpvalue.count = (parseInt(newpvalue.count) + 1).toString();
-                    } else {
-                        newpvalue = {};
+                        var newpvalue = decodeURI2(device.pvalue);
+                        if ( !newpvalue ) {
+                            newpvalue = {};
+                        }
+                        // if ( typeof newpvalue.count === "undefined" ) {
+                        //     newpvalue.count = "0";
+                        // }
                     }
                     for (var skey in pvalue) {
                         newpvalue[skey] = pvalue[skey];
@@ -7581,14 +7608,13 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
                     }
                     ndev++;
     
-                    var pvalstr = encodeURI2(JSON.stringify(newpvalue));
+                    var pvalstr = encodeURI2(newpvalue);
                     mydb.updateRow("devices", {pvalue: pvalstr}, "userid = "+userid+" AND id = "+device.id);
                 });
             });
         } else {
 
             // push new values to all clients and execute rules
-            // console.log(">>>> pushing to client: ", jsonshow(pvalue));
             pushClient(userid, swid, swtype, subid, pvalue);
             // if ( !inrule ) {
             //     pvalue.subid = subid;
@@ -7640,12 +7666,12 @@ function queryHub(userid, thingid, hubindex, swid, swtype, thingname ) {
             }
             if ( pvalue ) {
                 // deal with presence tiles
-                if ( swtype==="presence" && pvalue["presence"]==="not present" ) {
+                if ( pvalue["presence"]==="not present" ) {
                     pvalue["presence"] = "absent";
                 }
 
                 // store results back in DB
-                var pvaluestr = encodeURI2(JSON.stringify(pvalue));
+                var pvaluestr = encodeURI2(pvalue);
                 mydb.updateRow("devices", {pvalue: pvaluestr}, "userid = " + userid + " AND id = " + thingid);
 
                 // deal with audio tiles
@@ -7825,21 +7851,21 @@ function findHub(hubid) {
     return hub;
 }
 
-function testclick(clktype, clkid) {
-    const infoclicks = [
-        "temperature", "name", "contact", "presence", "motion", "battery",
-        "date","time", "weekday", "tzone", "heatingSetpoint", "coolingSetpoint",
-        "camera", "statusMessage", "numberOfButtons", 
-        "time", "weekday", "date"
-    ];
-    var test = false;
-    if ( clkid.startsWith("_") || clkid.endsWith("-up") || clkid.endsWith("-dn") ) {
-        test = false;
-    } else if ( clktype==="weather" || clkid.startsWith("Int_") || clkid.startsWith("State_") || clkid.startsWith("event_") || in_array(clkid, infoclicks) ) {
-        test = true;
-    }
-    return test;
-}
+// function testclick(clktype, clkid) {
+//     const infoclicks = [
+//         "temperature", "name", "contact", "presence", "motion", "battery",
+//         "date","time", "weekday", "tzone", "heatingSetpoint", "coolingSetpoint",
+//         "camera", "statusMessage", "numberOfButtons", 
+//         "time", "weekday", "date"
+//     ];
+//     var test = false;
+//     if ( clkid.startsWith("_") || clkid.endsWith("-up") || clkid.endsWith("-dn") ) {
+//         test = false;
+//     } else if ( clktype==="weather" || clkid.startsWith("Int_") || clkid.startsWith("State_") || clkid.startsWith("event_") || in_array(clkid, infoclicks) ) {
+//         test = true;
+//     }
+//     return test;
+// }
 
 function doAction(userid, hubid, hubindex, thingid, swid, swtype, swval, swattr, subid, hint, command, linkval) {
 
@@ -7872,14 +7898,18 @@ function doAction(userid, hubid, hubindex, thingid, swid, swtype, swval, swattr,
             msg = mydb.getRow("devices", "*", "userid = "+userid + " AND deviceid = '"+swid+"' AND hubid = "+hubindex)
             .then(device => {
                 if ( device ) {
-                    var pvalue = JSON.parse(decodeURI2(device.pvalue));
-                    pushClient(userid, swid, swtype, subid, pvalue);
-                    pvalue.subid = subid;
-                    processRules(userid, device.id, swid, swtype, subid, pvalue, "callHub");
-                    delete pvalue.subid;
-                    msg = pvalue;
+                    var pvalue =decodeURI2(device.pvalue);
+                    if ( pvalue ) {
+                        pushClient(userid, swid, swtype, subid, pvalue);
+                        pvalue.subid = subid;
+                        processRules(userid, device.id, swid, swtype, subid, pvalue, "callHub");
+                        delete pvalue.subid;
+                        msg = pvalue;
+                    } else {
+                        msg = "error - null object returned when decoding TEXT command";
+                    }
                 } else {
-                    msg = "error - invalid object value";
+                    msg = "error - invalid object value in TEXT command";
                 }
                 return msg;
             });
@@ -7904,7 +7934,8 @@ function doAction(userid, hubid, hubindex, thingid, swid, swtype, swval, swattr,
                         var id = dbdevices[adev].id;
                         devices[id] = dbdevices[adev]
                         if ( dbdevices[adev].deviceid === swid ) {
-                            pvalue = JSON.parse(decodeURI2(dbdevices[adev].pvalue));
+                            pvalue = decodeURI2(dbdevices[adev].pvalue);
+                            if ( !pvalue ) { pvalue = {}; }
                         }
                     }
                     return devices;
@@ -7924,7 +7955,6 @@ function doAction(userid, hubid, hubindex, thingid, swid, swtype, swval, swattr,
                     .then(row => {
 
                         if ( row && pvalue ) {
-                            // console.log(">>>> config row: ", row, "\n>>>> pvalue: ", pvalue); // , "\n>>>> hubs: ", hubs, "\n>>>> devices: ", devices);
                             var lines = JSON.parse(row.configval);
                             if ( is_array(lines) ) {
                                 lines.forEach(function(rule) {
@@ -7951,7 +7981,7 @@ function doAction(userid, hubid, hubindex, thingid, swid, swtype, swval, swattr,
         }
 
     } else {
-        console.log( (ddbg()), "callHub: ", hubindex, swid, thingid, swtype, swval, swattr, subid);
+        console.log( (ddbg()), "callHub: ", userid, hubindex, swid, thingid, swtype, swval, swattr, subid, hint);
         callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, hint, null, false);
         msg = "success - hub action executed on device id: " + swid + " device type: " + swtype;
     }
@@ -8012,24 +8042,26 @@ function doQuery(userid, thingid, protocol) {
             for ( var i=0; i < devices.length; i++ ) {
                 var swid = devices[i]["deviceid"];
                 var swtype = devices[i]["devicetype"];
-                var pvalue = JSON.parse(decodeURI2(devices[i]["pvalue"]));
                 var devicename = devices[i]["name"];
+                var pvalue = decodeURI2(devices[i]["pvalue"]);
     
                 // deal with audio tiles
-                if ( swtype==="audio" || swtype==="sonos" || pvalue.audioTrackData ) {
-                    pvalue = translateAudio(pvalue);
-                } else if ( swtype==="music" || pvalue.trackData ) {
-                    pvalue = translateMusic(pvalue);
-                } else if ( swtype==="weather" ) {
-                    var thisorigname = devicename || "Weather";
-                    pvalue = translateWeather(thisorigname, pvalue);
-                } else {
-                    pvalue = translateObjects(pvalue);
-                }
-                var firstsubid = Object.keys(pvalue)[0];
+                if ( pvalue ) {
+                    if ( swtype==="audio" || swtype==="sonos" || pvalue.audioTrackData ) {
+                        pvalue = translateAudio(pvalue);
+                    } else if ( swtype==="music" || pvalue.trackData ) {
+                        pvalue = translateMusic(pvalue);
+                    } else if ( swtype==="weather" ) {
+                        var thisorigname = devicename || "Weather";
+                        pvalue = translateWeather(thisorigname, pvalue);
+                    } else {
+                        pvalue = translateObjects(pvalue);
+                    }
+                    var firstsubid = Object.keys(pvalue)[0];
 
-                // push result to the clients
-                pushClient(userid, swid, swtype, firstsubid, pvalue);
+                    // push result to the clients
+                    pushClient(userid, swid, swtype, firstsubid, pvalue);
+                }
             }
             return devices;
         }).catch(reason => {console.log("dberror 18 - doQuery - ", reason);});
@@ -8183,8 +8215,6 @@ function addThing(userid, pname, bid, thingtype, panel, hubid, hubindex, roomid,
             if ( row.torder > maxtorder ) { maxtorder = row.torder; }
         });
         maxtorder++;
-
-        // console.log(">>>> max torder = ", maxtorder );
         return maxtorder
     })
     .then(maxtorder => {
@@ -8195,36 +8225,41 @@ function addThing(userid, pname, bid, thingtype, panel, hubid, hubindex, roomid,
         var promiseResult = mydb.getRow("devices", "*", "userid = "+userid+" AND hubid='"+hubindex+"' AND deviceid='"+bid+"' AND devicetype='"+thingtype+"'")
         .then(row => {
 
-            // console.log(">>>> addThing row: ", row, bid, thingtype, hubid);
             if ( row && is_object(row) ) {
 
                 var device = row;
                 var tileid = device["id"];
-                var pvalue = JSON.parse(decodeURI2(device["pvalue"]));
                 var hint = device["hint"];
                 var refresh = device["refresh"];
-                
-                // construct the thing to add to the things list
-                var athing = {userid: userid, roomid: roomid, tileid: tileid, posx: 0, posy: 0, zindex: 1, torder: maxtorder, customname: ""};
-                var result = mydb.addRow("things", athing)
-                .then(result => {
-                    if ( result ) {
+                var pvalue = decodeURI2(device["pvalue"]);
+                var result;
+                if ( pvalue ) {                
+                    // construct the thing to add to the things list
+                    var athing = {userid: userid, roomid: roomid, tileid: tileid, posx: 0, posy: 0, zindex: 1, torder: maxtorder, customname: ""};
+                    result = mydb.addRow("things", athing)
+                    .then(row => {
+                        if ( row ) {
 
-                        // obtain the new id of the added thing
-                        var thingid = result.getAutoIncrementValue();
+                            // obtain the new id of the added thing
+                            var thingid = row.getAutoIncrementValue();
 
-                        // now make the visual tile and return it as a promised value
-                        // construct the old things element equivalent but add the unique thingid and roomid fields
-                        var thesensor = {id: bid, thingid: thingid, roomid: roomid, type: thingtype, hubnum: hubid, hubindex: hubindex,
-                                        hint: hint, refresh: refresh, value: pvalue};
-                        var thing = makeThing(userid, pname, null, thingid, tileid, thesensor, panel, 0, 0, 1, "", false, null);
-                        console.log( (ddbg()), "added tile #",tileid," (thingid = ",thingid,") of type: ",thingtype," to page: ",panel,
-                                            " deviceid: ", bid, " hubid: ", hubid, " hubindex: ", hubindex);
-                        return thing;
-                    } else {
-                        return "error - could not create a new device of type " + thingtype + " on page " + panel;
-                    }
-                });
+                            // now make the visual tile and return it as a promised value
+                            // construct the old things element equivalent but add the unique thingid and roomid fields
+                            var thesensor = {id: bid, thingid: thingid, roomid: roomid, type: thingtype, hubnum: hubid, hubindex: hubindex,
+                                            hint: hint, refresh: refresh, value: pvalue};
+                            var thing = makeThing(userid, pname, null, thingid, tileid, thesensor, panel, 0, 0, 1, "", false, null);
+                            if ( DEBUG6 ) {
+                                console.log( (ddbg()), "added tile #",tileid," (thingid = ",thingid,") of type: ",thingtype," to page: ",panel,
+                                                    " deviceid: ", bid, " hubid: ", hubid, " hubindex: ", hubindex);
+                            }
+                            return thing;
+                        } else {
+                            return "error - could not create a new device of type " + thingtype + " on page " + panel;
+                        }
+                    });
+                } else {
+                    result = "error - nothing returned for device in parse for type + " + thingtype + " on page " + panel;
+                }
                 return result;
             } else {
                 // return null;
@@ -8241,7 +8276,7 @@ function addThing(userid, pname, bid, thingtype, panel, hubid, hubindex, roomid,
 // this only needs thingid to remove but other parameters are logged
 function delThing(userid, bid, thingtype, panel, tileid, thingid) {
     
-    var promiseResult = mydb.deleteRow("things","userid="+userid+" AND id="+thingid)
+    var promiseResult = mydb.deleteRow("things","userid = "+userid+" AND id="+thingid)
     .then(result => {
         var msg;
         if ( result ) {
@@ -8257,7 +8292,7 @@ function delThing(userid, bid, thingtype, panel, tileid, thingid) {
 
 function delPage(userid, roomid, panel) {
 
-    var promiseResult = mydb.deleteRow("rooms","userid="+userid+" AND id="+roomid)
+    var promiseResult = mydb.deleteRow("rooms","userid = "+userid+" AND id="+roomid)
     .then(result => {
         var msg;
         if ( result ) {
@@ -8282,7 +8317,7 @@ function addPage(userid, panelid ) {
     };
     var donestat = {room: false, clock: false};
 
-    var promiseResult = mydb.getRows("rooms","*", "userid="+userid+" AND panelid="+panelid)
+    var promiseResult = mydb.getRows("rooms","*", "userid = "+userid+" AND panelid="+panelid)
     .then(results => {
         if ( results ) {
             var bigorder = 0;
@@ -8357,6 +8392,14 @@ function addPage(userid, panelid ) {
 }
 
 function getInfoPage(user, configoptions, hubs, req) {
+ 
+    // get the port number
+    var currentport = getCookie(req.cookies, "pname") || "1:default";
+    if ( currentport.substring(1,2)!==":" ) {
+        currentport = "8181";
+    } else {
+        currentport = "818" + currentport.substring(0,1);
+    }
 
     var pathname = req.path;
     var userid = user["users_id"];
@@ -8371,18 +8414,18 @@ function getInfoPage(user, configoptions, hubs, req) {
         // var configoptions = result.configs;
         // var hubs = result.hubs;
         var devices = result;
-        return getinfocontents(userid, configoptions, hubs, devices);
+        return getinfocontents(userid, pname, currentport, configoptions, hubs, devices);
     }).catch(reason => {console.log("dberror 26 - getInfoPage - ", reason);});
 
     return visual;
 
-    function getinfocontents(userid, configoptions, hubs, sensors) {
+    function getinfocontents(userid, pname, currentport, configoptions, hubs, sensors) {
         
         var $tc = "";
         $tc += utils.getHeader(userid, null, skin, true);
         $tc += "<h3>" + utils.APPNAME + " Information Display</h3>";
 
-        if ( usertype < 2 ) {
+        if ( usertype > 1 ) {
             $tc += '<br /><h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
                 <br /><div><form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank"> \
                 <input type="hidden" name="cmd" value="_s-xclick"> \
@@ -8416,8 +8459,9 @@ function getInfoPage(user, configoptions, hubs, req) {
         $tc += "<div class='bold'>Site url = " + GLB.returnURL + "</div>";
         $tc += "<div class='bold'>Current user = " + uname + "</div>";
         $tc += "<div class='bold'>Displaying panel = " + pname + "</div>";
+        $tc += "<div class='bold'>Client on port = " + currentport + "</div>";
         $tc += "<div class='bold'>User email = " + useremail + "</div>";
-        $tc += "<div class='bold'>Skin folder = " + skin + "</div>";
+        // $tc += "<div class='bold'>Skin folder = " + skin + "</div>";
         $tc += "<div class='bold'>" + numhubs + " Hubs defined</div>";
         $tc += "<hr />";
         
@@ -8450,7 +8494,13 @@ function getInfoPage(user, configoptions, hubs, req) {
             str = str + "<br><hr><br>";
             for (var i=0; i < clients[userid].length; i++) {
                 var port = clients[userid][i].socket.server["_connectionKey"];
-                str = str + "Client #" + i + " host= " + clients[userid][i].socket.remoteAddress + ":" + port + " <br>";
+                var lenport = port.length;
+                port = port.substring(lenport-4);
+                if ( port === currentport ) {
+                    str = str + "<strong>Client #" + i + " host= " + clients[userid][i].socket.remoteAddress + ":" + port + "</strong><br>";
+                } else {
+                    str = str + "Client #" + i + " host= " + clients[userid][i].socket.remoteAddress + ":" + port + "<br>";
+                }
             }
             str = str + "<br><hr><br>";
             $tc +=  str;
@@ -8476,14 +8526,15 @@ function getInfoPage(user, configoptions, hubs, req) {
         // var sensors = sortedSensors("hubnum", "name", "type");
         for (var i in sensors) {
             var thing = sensors[i];
-            var pvalue = JSON.parse(decodeURI2(thing["devices_pvalue"]));
+            var pvalue = decodeURI2(thing["devices_pvalue"]);
             var value = "";
+            var thingname = "";
             if ( is_object(pvalue) ) {
                 for (var key in pvalue ) {
                     var val = pvalue[key];
                     value += " ";
                     if ( key==="name" ) {
-                        continue;  // value = value;
+                        thingname = val;
                     } else if ( typeof val==="object" ) {
                         value += key + "=" + JSON.stringify(val);
                     } else if ( typeof val==="string" ) {
@@ -8496,6 +8547,7 @@ function getInfoPage(user, configoptions, hubs, req) {
                 }
             } else {
                 value = pvalue;
+                if ( value === null ) { value = ""; }
             }
             var hubid = thing["hubs_hubid"];
             if ( hubid === -1 || hubid === "-1" ) {
@@ -8507,7 +8559,7 @@ function getInfoPage(user, configoptions, hubs, req) {
             }
             
             $tc += "<tr><td class=\"thingname\">" + thing["devices_name"] +
-                "</td><td class=\"thingname\">" + pvalue.name +
+                "</td><td class=\"thingname\">" + thingname +
                 "</td><td class=\"thingarr\">" + value +
                 "</td><td class=\"infoid\">" + thing["devices_deviceid"] +
                 "</td><td class=\"infotype\">" + thing["devices_devicetype"] +
@@ -8529,11 +8581,7 @@ function getInfoPage(user, configoptions, hubs, req) {
                 if ( typeof val === "object" ) {
                     var lines = val;
                 } else {
-                    try {
-                        lines = JSON.parse(decodeURI2(val));
-                    } catch(e) {
-                        lines = null;
-                    }
+                    lines = decodeURI2(val);
                 }
 
                 if ( lines && is_array(lines) ) {
@@ -8708,7 +8756,7 @@ function getCatalog(userid, hubpick, hubs, useroptions, sensors) {
         var thing = sensors[i];
         var bid = thing["devices_deviceid"];
         var thingtype = thing["devices_devicetype"];
-        var thingname = thing["devices_name"];
+        var thingname = thing["devices_name"] || "";
         var hubId = thing["hubs_hubid"];
         var hubindex = thing["hubs_id"];
         var cat = "cat-" + i.toString();
@@ -8777,7 +8825,6 @@ function getOptionsPage(user, configoptions, hubs, req) {
     function checkDone(element) {
         if ( element ) {
             maindone[element] = true;
-            console.log(">>>> finished with element: ", element);
         }
         
         var alldone = true;
@@ -8786,8 +8833,7 @@ function getOptionsPage(user, configoptions, hubs, req) {
         }
 
         if ( alldone ) {
-            // console.log(">>>> finished with all elements and rendering page");
-            var tc = ""; // renderMain(configoptions, hubs, rooms, alldevices, things);
+            var tc = "";
             res.send(tc);
             res.end();
         }
@@ -8804,7 +8850,6 @@ function getOptionsPage(user, configoptions, hubs, req) {
         var joinstr = mydb.getJoinStr("devices","hubid","hubs","id");
         var pr = mydb.getRows("devices","*","devices.userid = "+userid, joinstr,"hubs.id")
         .then(devices => {
-            // console.log(">>>> options devices: ", devices);
             return [rooms, devices];
         });
         return pr;
@@ -8815,7 +8860,6 @@ function getOptionsPage(user, configoptions, hubs, req) {
         var pr = mydb.getRows("things","*", 
             "things.userid = "+userid+" AND rooms.panelid = " + panelid, [joinstr1, joinstr2], "devices.name")
         .then(things => {
-            // console.log(">>>> options things: ", things);
             resarray.push(things);
             return resarray;
         });
@@ -8834,8 +8878,6 @@ function getOptionsPage(user, configoptions, hubs, req) {
         var devices = resarray[1];
         var things = resarray[2];
         var panels = resarray[3];
-        // console.log(">>>> options rooms: ", rooms);
-        // return JSON.stringify(things);
         if ( rooms && devices && things ) {
             return renderOptionsPage(rooms, devices, things, panels);
         } else {
@@ -8867,7 +8909,6 @@ function getOptionsPage(user, configoptions, hubs, req) {
         var useroptions = getConfigItem(configoptions, "useroptions");
         var specialtiles = getConfigItem(configoptions, "specialtiles");
         var skins = ["housepanel", "modern"];
-    
         var $tc = "";
         $tc += utils.getHeader(userid, null, skin, true);
         $tc += utils.hidden("pagename", "options");
@@ -8950,7 +8991,7 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc += "<div class=\"filteroption\">";
         $tc += "Options:<br/>";
         
-        if ( usertype > 1 ) {
+        if ( usertype > 0 ) {
             $tc += "<div><label for=\"kioskid\" class=\"startupinp\">Kiosk Mode: </label>";    
             var $kstr = ($kioskoptions===true || $kioskoptions==="true") ? " checked" : "";
             $tc+= "<input id=\"kioskid\" type=\"checkbox\" name=\"kiosk\"  value=\"" + $kioskoptions + "\"" + $kstr + "/></div>";
@@ -9124,7 +9165,9 @@ function getMainPage(user, configoptions, hubs, req, res) {
     var $tc = "";
     var hostname = req.headers.host;
     var pathname = req.path;
-    var kioskmode = false;
+    var kioskstr = getConfigItem(configoptions, "kiosk");
+    var kioskmode = (kioskstr=="true" || kioskstr==true) ? true : false;
+    // console.log(">>>> kioskstr: ", kioskstr, " mode: ", kioskmode);
 
     var userid = user["users_id"];
     var useremail = user["users_email"];
@@ -9138,12 +9181,13 @@ function getMainPage(user, configoptions, hubs, req, res) {
     var alldevices = {};
     var rooms;
     var things;
-    var maindone = {specials: true, devices: false, rooms: false, things: false};
+    var maindone = {specials: false, devices: false, rooms: false, things: false};
 
+    // this cute little function checks to see if we're done with all the promises
+    // if they are all done then it renders the main page
     function checkDone(element) {
         if ( element ) {
             maindone[element] = true;
-            console.log(">>>> finished with element: ", element);
         }
         
         var alldone = true;
@@ -9152,13 +9196,11 @@ function getMainPage(user, configoptions, hubs, req, res) {
         }
 
         if ( alldone ) {
-            // console.log(">>>> finished with all elements and rendering page");
             var tc = renderMain(configoptions, hubs, rooms, alldevices, things);
             res.send(tc);
             res.end();
         }
-        
-        return alldone;
+        // return alldone;
     }
 
     console.log(  "\n****************************************************************",
@@ -9180,7 +9222,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
         if ( DEBUG1 ) {
             console.log((ddbg()), "rooms: ", rooms);
         }
-        return checkDone("rooms");
+        checkDone("rooms");
     })
     .then( () => {
 
@@ -9196,14 +9238,10 @@ function getMainPage(user, configoptions, hubs, req, res) {
             if ( DEBUG1 ) {
                 console.log((ddbg()), "alldevices: ", alldevices);
             }
-
-            // update clocks to start off correctly
             var hubzero = hubs[0].id;
-            updSpecials(userid, configoptions, hubzero, alldevices, true);
-
-            return checkDone("devices");
+            updSpecials(userid, configoptions, hubzero);
+            checkDone("devices");
         });
-        // return results;
     })
     .then( () => {
 
@@ -9218,13 +9256,184 @@ function getMainPage(user, configoptions, hubs, req, res) {
             if ( DEBUG1 ) {
                 console.log((ddbg()), "things: ", things);
             }
-            return checkDone("things");
+            checkDone("things");
         });
     })
     .catch(reason => {
         console.log("error: ", reason);
-    })
+    });
         
+    function findDevice(bid, swtype) {
+        for (var id in alldevices) {
+            var device = alldevices[id];
+            if ( device["devices_deviceid"] === bid && device["devices_devicetype"] === swtype ) {
+                return device["devices_id"];
+            }
+        }
+        return null;
+    }
+
+    // this routine updates the null hub with the special tiles requested
+    function updSpecials(userid, configoptions, hubindex) {
+
+        // set flags to 1 for single calls; other items will be overwritten by first call to checkSpecials
+        var specialdone = {"clockdigital": 1, "clockanalog": 1, "control": 1, 
+                        "video": 1, "frame": 1, "image": 1, "blank": 1, "custom": 1, "removal": 1};
+        const defwidth = {"video": 400, "frame": 400, "image": 400, "blank": 120, "custom": 240};
+
+        // this counts down from the number of devices of the type selected
+        // first time it is called the count starting point is set by passing the second parameter
+        // subsequent calls with just the element will decrement until you get to zero
+        function checkSpecials(element = null, cnt = 0) {
+            if ( element ) {
+                if ( cnt || cnt===false ) {
+                    specialdone[element] = cnt;
+                } else {
+                    if ( specialdone[element] === false || specialdone[element] <= 1 || cnt === 0) {
+                        specialdone[element] = 0;
+                    } else {
+                        specialdone[element]--;
+                    }
+                }
+            }
+            
+            var alldone = true;
+            for (var el in specialdone) {
+                alldone = alldone && (specialdone[el] === 0);
+            }
+
+            // if done then flag that all specials are done
+            if ( alldone ) {
+                checkDone("specials");
+            }
+            
+            return alldone;
+        }
+
+        // you will need to over-ride this with the tile customizer if you add custom fields
+        // never refresh since clocks have their own refresh timer built into the javascript code
+        function makeClock(clockid) {
+            var clock = getClock(clockid);
+            var clockname = clock.name;
+            clock = encodeURI2(clock);
+            var device = {userid: userid, hubid: hubindex, deviceid: clockid, name: clockname,
+                devicetype: "clock", hint: "clock", refresh: "never", pvalue:  clock};
+            return device;
+        }
+
+        // create promise result to return
+        var digitalClock = makeClock("clockdigital");
+        var id = findDevice("clockdigital", "clock");
+        if ( id ) {
+            mydb.updateRow("devices", digitalClock, "userid = " + userid + " AND id = "+id)
+            .then(res => {
+                checkSpecials("clockdigital");
+            });
+        } else {
+            mydb.addRow("devices", digitalClock)
+            .then(res => {
+                checkSpecials("clockdigital");
+            });
+        }
+
+        var analogClock = makeClock("clockanalog");
+        id = findDevice("clockanalog", "clock");
+        if ( id ) {
+            mydb.updateRow("devices", analogClock, "userid = " + userid + " AND id = "+id)
+            .then(res => {
+                checkSpecials("clockanalog");
+            });
+        } else {
+            mydb.addRow("devices", analogClock)
+            .then(res => {
+                checkSpecials("clockanalog");
+            });
+        }
+
+        // create the controller tile if not already there for this user
+        // keys starting with c__ will get the confirm class added to it
+        // TODO - this should move to a new module that creates a new user
+        id = findDevice("control_1", "control");
+        if ( id ) {
+            checkSpecials("control");
+        } else {
+            var controlval = {"name": "Controller", "showoptions": "Options","refreshpage": "Refresh","c__refactor": "Reset",
+                "c__userauth": "Re-Auth","showid": "Show Info","toggletabs": "Toggle Tabs", "showdoc": "Documentation",
+                "blackout": "Blackout","operate": "Operate","reorder": "Reorder","edit": "Edit"};
+            controlval = encodeURI2(controlval);
+            var device = {userid: userid, hubid: hubindex, deviceid: "control_1", "name": "Controller",
+                        devicetype: "control", hint: "special", refresh: "never", pvalue: controlval};
+            mydb.addRow("devices", device)
+            .then(results => {
+                if ( results ) {
+                    alldevices["control_1"] = results.getAutoIncrementValue();
+                }
+                checkSpecials("control");
+            });
+        }
+
+        // add special tiles based on type and user provided count
+        // this replaces the old code that handled only video and frame tiles
+        // this also creates image and blank tiles here that used to be made in groovy
+        // putting this here allows them to be handled just like other modifiable tiles
+        // note that frame1 and frame2 are reserved for weather and accuweather tiles
+        var specialtiles = getConfigItem(configoptions, "specialtiles");
+
+        // make sure we have special tiles in our master list updated
+        for (var stype in specialtiles) {
+            var sid = specialtiles[stype];
+            var fcnt = parseInt(sid);
+            if ( isNaN(fcnt) ) {
+                fcnt = 0;
+            }
+
+            // initialize the checkdone routine with the number of tiles requested
+            checkSpecials(stype, fcnt);
+            var dtype = stype==="custom" ? stype+"_" : stype;
+            for (var i=0; i<fcnt; i++) {
+                var k = (i + 1).toString();
+                var devname = getCustomName(stype, k);
+                var devid = dtype + k;
+
+                // if the special tile is already there, just send check routine flag that we are done
+                // otherwise we create the tile and add it to our DB and let promise flag done status
+                var cid = findDevice(devid, stype);
+                if ( cid ) {
+                    checkSpecials(stype);
+                } else  {
+                    var pvalue = {"name": devname, "width": defwidth[stype], "height": "auto"};
+                    // pvalue[stype] = "";
+                    var ftile = encodeURI2(pvalue);
+                    device = {userid: userid, hubid: hubindex, deviceid: devid, name: devname,
+                              devicetype: stype, hint: "special", refresh: "never", pvalue: ftile};
+                    mydb.addRow("devices", device)
+                    .then(results => {
+                        if ( results ) {
+                            alldevices[devid] = results.getAutoIncrementValue();
+                        }
+                        checkSpecials(stype);
+                    });
+                }
+            }
+
+            // remove any special tiles numbered higher than the max requested
+            // this is done with a single delete query for efficiency
+            var lastid = fcnt.toString();
+            var lentype = (dtype.length + 1).toString();
+            var str = "SUBSTRING(deviceid FROM " + lentype + ") > "+lastid+" AND devicetype = '"+stype+"'";
+            mydb.deleteRow("devices", str)
+            .then(results => {
+                if ( !results ) {
+                    console.log( (ddbg()), "error - could not remove special tiles");
+                }
+                checkSpecials("removal");
+            }).catch(reason => {
+                console.log("dberror - delSpecials - ", reason);
+                checkSpecials("removal");
+            });
+        }
+    }
+
     function renderMain(configoptions, hubs, rooms, alldevices, things) {
 
         var tc = "";
@@ -9326,14 +9535,14 @@ function getMainPage(user, configoptions, hubs, req, res) {
         // show user buttons if we are not in kiosk mode
         if ( !kioskmode ) {
             tc += "<div id=\"controlpanel\">";
-            tc +='<div id="showoptions" class="formbutton">Options</div>';
             if ( usertype > 0 ) {
+                tc +='<div id="showoptions" class="formbutton">Options</div>';
                 tc +='<div id="refreshpage" class="formbutton">Refresh</div>';
                 tc +='<div id="userauth" class="formbutton confirm">Hub Auth</div>';
                 tc +='<div id="showid" class="formbutton">Show Info</div>';
+                tc +='<div id="toggletabs" class="formbutton">Hide Tabs</div>';
+                tc +='<div id="blackout" class="formbutton">Blackout</div>';
             }
-            tc +='<div id="toggletabs" class="formbutton">Hide Tabs</div>';
-            tc +='<div id="blackout" class="formbutton">Blackout</div>';
 
             tc += "<div class=\"modeoptions\" id=\"modeoptions\"> \
             <input id=\"mode_Operate\" class=\"radioopts\" type=\"radio\" name=\"usemode\" value=\"operate\" checked><label for=\"mode_Operate\" class=\"radioopts\">Operate</label> \
@@ -9374,7 +9583,6 @@ function saveFilters(userid, body) {
     } else {
         filterobj = [];
     }
-    // console.log(">>>> body: ", jsonshow(body) );
 
     var updval = {userid: userid, configkey: 'useroptions', configval: JSON.stringify(filterobj)};
     return mydb.updateRow("configs", updval, "userid = " + userid + " AND configkey = 'useroptions'")
@@ -9389,21 +9597,20 @@ function saveFilters(userid, body) {
 }
 
 // process user options page
-// TODO - update to process into DB
 function processOptions(userid, panelid, optarray) {
 
     // first get the configurations and things and then call routine to update them
     userid = parseInt(userid);
     panelid = parseInt(panelid);
 
-    return mydb.getRows("rooms","*","userid="+userid+" AND panelid="+panelid)
+    return mydb.getRows("rooms","*","userid = "+userid+" AND panelid="+panelid)
     .then(rooms => {
         // console.log(rooms);
         if ( !rooms ) { rooms = []; }
         return rooms;
     })
     .then(rooms => {
-        return mydb.getRows("configs","*","userid="+userid+" AND configkey NOT LIKE 'user_%'")
+        return mydb.getRows("configs","*","userid = "+userid+" AND configkey NOT LIKE 'user_%'")
         .then(configs => {
             // console.log(configs);
             var configoptions = {};
@@ -9424,7 +9631,7 @@ function processOptions(userid, panelid, optarray) {
         .then(configoptions => {
             var joinstr1 = mydb.getJoinStr("things","tileid","devices","id");
             var joinstr2 = mydb.getJoinStr("things","roomid","rooms","id");
-            return mydb.getRows("things","*","things.userid="+userid+" AND rooms.panelid="+panelid, [joinstr1, joinstr2])
+            return mydb.getRows("things","*","things.userid = "+userid+" AND rooms.panelid = "+panelid, [joinstr1, joinstr2])
             .then(things => {
                 // console.log(things, configoptions);
                 if ( things ) {
@@ -9511,8 +9718,8 @@ function processOptions(userid, panelid, optarray) {
                 configoptions["accucode"] = val.trim();
             
             // handle user selected special tile count
-            } else if ( key.substr(0,4)==="cnt_" ) {
-                var stype = key.substr(4);
+            } else if ( key.substring(0,4)==="cnt_" ) {
+                var stype = key.substring(4);
                 if ( array_key_exists(stype, specialtiles) ) {
                     var oldcount = specialtiles[stype];
                     var customcnt = parseInt(val);
@@ -9534,7 +9741,6 @@ function processOptions(userid, panelid, optarray) {
                         if ( !isNaN(torder) && torder > maxtorder ) { maxtorder = torder; } 
                         if ( ! in_array(tnum, val) ) {
                             mydb.deleteRow("things","id = "+ item["things_id"]);
-                            // console.log(">>>> simulated delete item: ", item["things_id"]," room= ", key);
                         }
                     }
                 });
@@ -9550,7 +9756,6 @@ function processOptions(userid, panelid, optarray) {
                     if ( !exist ) {
                         var updrow = {userid: userid, roomid: roomid, tileid: tilenum, posy: 0, posx: 0, zindex: 1, torder: maxtorder, customname: ""};
                         mydb.addRow("things",updrow);
-                        // console.log(">>>> simulated add item: ", updrow, " maxtorder: ", maxtorder);
                     }
                 });
 
@@ -9641,7 +9846,6 @@ function getIcons(userid, pname, skin, icondir, category) {
     } else {
         activedir = path.join("media", icondir);
     }
-    // console.log(">>>> activedir: ", activedir);
 
     try {
         var dirlist = fs.readdirSync(activedir);
@@ -9781,7 +9985,7 @@ function apiCall(user, body, protocol, req, res) {
     // if user is making an API call these must be provided
     if ( protocol==="POST" ) {
         var userid = body.userid;
-        var usertype = body.usertype || 1;
+        var usertype = body.usertype || userid;
         var panelid = body.panelid || 0;
         var pname = body.pname;
         var useremail = body.email;
@@ -9898,7 +10102,6 @@ function apiCall(user, body, protocol, req, res) {
 
             case "setorder":
                 if ( protocol==="POST" ) {
-                    // console.log(">>>> debug in setorder: ", swtype, swval);
                     result = setOrder(userid, swtype, swval);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
@@ -10012,7 +10215,7 @@ function apiCall(user, body, protocol, req, res) {
                 });
                 break;
 
-            // read and return devoces tied to this user
+            // read and return devices tied to this user
             case "getdevices":
                 if ( protocol==="POST" ) {
                     var conditions = "userid = "+userid;
@@ -10024,10 +10227,12 @@ function apiCall(user, body, protocol, req, res) {
                         var devices = {};
                         if ( rows ) {
                             rows.forEach(row => {
-                                var pvalue = JSON.parse(decodeURI2(row.pvalue));
+                                var pvalue = decodeURI2(row.pvalue);
 
                                 // handle special audio updates
-                                if ( swtype==="audio" || swtype==="sonos" || pvalue.audioTrackData ) {
+                                if ( !pvalue ) {
+                                    pvalue = {};
+                                } else if ( swtype==="audio" || swtype==="sonos" || pvalue.audioTrackData ) {
                                     pvalue = translateAudio(pvalue);
                                 } else if ( swtype==="music" || pvalue.trackData ) {
                                     pvalue = translateMusic(pvalue);
@@ -10218,7 +10423,6 @@ function apiCall(user, body, protocol, req, res) {
                     wsmax = 8181;
                 }
                 result = {port: wsmax, used: usedports};
-                console.log(">>>> next available port: ", wsmax, " usedports: ", usedports);
                 break;
 
             // this api call starts the oauth flow process
@@ -10255,7 +10459,7 @@ function apiCall(user, body, protocol, req, res) {
                     // hub["sinkFilterId"] = "";
 
                     if ( DEBUG2 ) {
-                        console.log((ddbg()), ">>>> hub in hubauth: ", hub);
+                        console.log((ddbg()), "hub in hubauth: ", hub);
                     }
 
                     // for now set the hubid to value user gave
@@ -10334,7 +10538,6 @@ function apiCall(user, body, protocol, req, res) {
 
                             // this branch is for new hubs
                             // the hubid provided by user is likely just a placeholder until hub is read later in oauth flow
-                            console.log(">>>> adding a new hub with hubid= ", hubid);
                             return mydb.addRow("hubs", hub)
                             .then(row => {
                                 if ( row ) {
@@ -10408,7 +10611,6 @@ function apiCall(user, body, protocol, req, res) {
                                               clientId: clientId, clientSecret: clientSecret, hubType: hubType,
                                               scope: "r:devices:* x:devices:* r:scenes:* x:scenes:* r:locations:* x:locations:*", 
                                               client_type: "USER_LEVEL", url: returnloc};
-                                    // console.log(">>>> result: ", result);
             
                                 // handle new OAUTH flow for SmartThings
                                 } else if ( hubType==="Sonos" ) {
@@ -10453,7 +10655,6 @@ function apiCall(user, body, protocol, req, res) {
                         if ( results && results.getAffectedItemsCount() > 0 ) {
                             mydb.updateRow("users",{defhub: ""}, "id = " + userid);
                             var msg = "removed a hub with ID = " + hubid;
-                            // console.log( (ddbg()),">>>> reset default hub for user ID = " + userid);
                         } else {
                             msg = "error - could not remove hub with ID = " + hubid;
                         }
@@ -10474,18 +10675,31 @@ function apiCall(user, body, protocol, req, res) {
 
             case "getclock":
                 // if ( !swid || swid==="none" ) { swid = "clockdigital"; }
-                result = getClock(userid, swid, swattr);
+                // fix this to read the clock from the DB and update with current time
+                // mydb.getRow("devices","*","userid = " + userid + " AND devicetype = 'clock' AND deviceid = '"+swid+"'")
+                // .then(row => {
+                //     if ( row ) {
+                //         result = getClock(swid);
+                //         result = getCustomTile(userid, swattr, result, swid);
+                //         processRules(userid, thingid, swid, "clock", "time", result, "callHub" );
+                //         row.pvalue = encodeURI2(result);
+                //         mydb.updateRow("devices", row,"userid = " + userid + " AND devicetype = 'clock' AND id = "+row.id);
+                                
+                //     }
+                // });
+                result = getClock(swid);
                 result = getCustomTile(userid, swattr, result, swid);
 
                 // handle rules based on time
                 processRules(userid, thingid, swid, "clock", "time", result, "callHub" );
+
                 // remove any LINKS
-                // for (var key in result) {
-                //     if ( result[key] && typeof result[key]==="string" && 
-                //          (result[key].startsWith("LINK::") || result[key].startsWith("RULE::")) ) {
-                //         delete result[key];
-                //     }
-                // }
+                for (var key in result) {
+                    if ( result[key] && typeof result[key]==="string" && 
+                         (result[key].startsWith("LINK::") || result[key].startsWith("RULE::")) ) {
+                        delete result[key];
+                    }
+                }
 
                 break;
 
@@ -10608,7 +10822,6 @@ function setupBrowserSocket() {
                     var userandport = msg.utf8Data.split("|");
                     var userid = parseInt(userandport[0]);
                     userport = parseInt(userandport[1]);
-                    console.log(">>>> browserurl: ", browserurl, " userid: ", userid, " wsport: ", wsport, " userport: ", userport, " userandport: ", userandport);
 
                     // create this user's list of pages if not there
                     if ( !clients[userid] ) {
@@ -10840,12 +11053,12 @@ if ( app && applistening ) {
                 var skin = user["panels_skin"];
 
                 // retrieve the configs and hubs
-                mydb.getRows("configs", "*", "userid="+userid)
+                mydb.getRows("configs", "*", "userid = "+userid)
                 .then(configoptions => {
                     return configoptions;
                 })
                 .then(configoptions => {
-                    return mydb.getRows("hubs", "*", "userid="+userid)
+                    return mydb.getRows("hubs", "*", "userid = "+userid)
                     .then(hubs => {
                         return [configoptions, hubs];
                     });
@@ -11137,7 +11350,6 @@ if ( app && applistening ) {
                     var attr = event.deviceEvent.attribute;
                     var valueType = event.deviceEvent.valueType;
                     var value = event.deviceEvent.value;
-                    // console.log(">>>> event: ", event.deviceEvent);
 
                     var joinstr = mydb.getJoinStr("devices","hubid","hubs","id");
                     mydb.getRow("devices","*","hubs.hubid = '" + hubid + "' AND devices.deviceid = '" + swid + "'", joinstr)
@@ -11159,11 +11371,17 @@ if ( app && applistening ) {
                         }
 
                         // set color if any of the color attributes change
-                        var pvalue = JSON.parse(decodeURI2(row["devices_pvalue"]));
-                        if ( (attr==="hue" || attr==="saturation" || attr==="level") && array_key_exists("color", pvalue) ) {
+                        var pvalue = decodeURI2(row["devices_pvalue"]);
+                        if ( DEBUG21 ) {
+                            console.log( (ddbg()), "Event sink msg pvalue: ", pvalue );
+                        }
+                        if ( pvalue && (attr==="hue" || attr==="saturation" || attr==="level") && array_key_exists("color", pvalue) ) {
                             var h = attr==="hue" ? value : pvalue.hue;
                             var s = attr==="saturation" ? value : pvalue.saturation;
                             var v = attr==="level" ? value : pvalue.level;
+                            h = Math.round((parseInt(h * 360) / 100));
+                            s = Math.round(parseInt(s));
+                            v = Math.round(parseInt(v));
                             var colorvalue = utils.hsv2rgb(h, s, v);
                             var msg = {
                                 msgtype: "update", 
@@ -11200,13 +11418,16 @@ if ( app && applistening ) {
                                 var userid = row["devices_userid"];
                                 var locvalue = row["devices_pvalue"];
                                 var hubid = row["hubs_hubid"];
-                                var pvalue = JSON.parse(decodeURI2(locvalue));
+                                var themode = null;
+                                var pvalue = decodeURI2(locvalue);
                                 // find the mode that matches the modeId
-                                var themode;
-                                for (var key in pvalue) {
-                                    if ( pvalue[key] === modeId ) {
-                                        themode = key;
-                                        break;
+
+                                if ( pvalue ) {
+                                    for (var key in pvalue) {
+                                        if ( pvalue[key] === modeId ) {
+                                            themode = key;
+                                            break;
+                                        }
                                     }
                                 }
 
@@ -11232,8 +11453,6 @@ if ( app && applistening ) {
                                             processHubMessage(userid, modemsg, true);
                                         }
                                     });
-                                } else {
-                                    modemsg = "mode not found for modeId = " + modeId;
                                 }
 
                                 if ( DEBUG21 ) {
@@ -11316,13 +11535,13 @@ if ( app && applistening ) {
                 devicetype: "isy",
                 hint: req.body.hint,
                 refresh: "never",
-                pvalue: encodeURI2(JSON.stringify(pvalue))
+                pvalue: encodeURI2(pvalue)
             };
             if ( DEBUGisy ) {
                 console.log( (ddbg()), "HP Connect update of ISY node: ", device);
             }
 
-            mydb.updateRow("devices", device, "userid="+userid+" AND deviceid='"+deviceid+"'")
+            mydb.updateRow("devices", device, "userid = "+userid+" AND deviceid='"+deviceid+"'")
             .then( () => {
                 res.json("success");
                 res.end();

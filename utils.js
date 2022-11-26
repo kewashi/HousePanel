@@ -1,7 +1,11 @@
 'use strict';
 const fs = require('fs');
 
-const devhistory =  ` 
+const devhistory =  `
+3.036   Update customizer to show links in the preview window
+3.035   Integrate HSM into events and enable sync with Ring, other cleanup 
+3.034   Important fixes to shades and doors and clean up dead devices
+3.033   Fix color control setting bug
 3.032   Direct support for shades added to Groovy file 
 3.031   Update tile editor to do margins and padding and work on whole tiles
 3.030   Require user to specify client number to make ports work correctly
@@ -698,12 +702,16 @@ exports.hsv2rgb = function hsv2rgb(h, s, v) {
         return hex;
     }
 
-    h /= 100.0;
+    h = Math.round(h);
     s /= 100.0;
     v /= 100.0;
-    
-    var i = Math.floor(h * 6);
-    var f = h * 6 - i;
+    if ( h == 360 ) {
+        h = 0;
+    } else {
+        h = h / 60;
+    }
+    var i = parseInt(Math.floor(h));
+    var f = h - i;
     var p = v * (1 - s);
     var q = v * (1 - f * s);
     var t = v * (1 - (1 - f) * s);
@@ -717,12 +725,57 @@ exports.hsv2rgb = function hsv2rgb(h, s, v) {
         case 5: r = v; g = p; b = q; break;
     }
     
-    r = parseInt(Math.floor(r*255));
-    g = parseInt(Math.floor(g*255));
-    b = parseInt(Math.floor(b*255));
+    r = parseInt(Math.round(r*255));
+    g = parseInt(Math.round(g*255));
+    b = parseInt(Math.round(b*255));
     
     var rhex = toHex(r);
     var ghex = toHex(g);
     var bhex = toHex(b);
     return "#"+rhex+ghex+bhex;
+}
+
+exports.hsv2hex = function hsv2hex(h, s, v) {
+
+    function toHex(thenumber) {
+        var hex = thenumber.toString(16);
+        if (hex.length === 1) {
+          hex = "0" + hex;
+        }
+        return hex;
+    }
+
+    var r, g, b;
+    h = Math.round(h);
+    s = s/100.0;
+    v = v/100.0;
+    if ( h == 360 ) {
+        h = 0;
+    } else {
+        h = h / 60;
+    }
+    var i = parseInt(Math.floor(h));
+    var f = h - i;
+    var p = v * (1.0 - s);
+    var q = v * (1.0 - (s * f));
+    var t = v * (1.0 - (s * (1.0 - f)));
+
+    switch (i) {
+        case 0: r = v; g = t; b = p; break;
+        case 1: r = q; g = v; b = p; break;
+        case 2: r = p; g = v; b = t; break;
+        case 3: r = p; g = q; b = v; break;
+        case 4: r = t; g = p; b = v; break;
+        case 5: r = v; g = p; b = q; break;
+    }
+    
+    r = parseInt(Math.round(r*255));
+    g = parseInt(Math.round(g*255));
+    b = parseInt(Math.round(b*255));
+    
+    var rhex = toHex(r);
+    var ghex = toHex(g);
+    var bhex = toHex(b);
+    return "#"+rhex+ghex+bhex;
+
 }

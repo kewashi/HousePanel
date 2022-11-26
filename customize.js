@@ -80,7 +80,7 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
         function (presult, pstatus) {
             if (pstatus==="success" ) {
                 cm_Globals.rules = presult;
-                console.log("getrules: ", presult);
+                // console.log("getrules: ", presult);
                 checkDone("getrules");
             } else {
                 console.log("error - failure reading rules from database for user = " + userid);
@@ -172,7 +172,7 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
             function(hook, content) {
                 // grab the global list of all things and options
                 if ( !cm_Globals.devices ) {
-                    console.log ("error - you have no devices to use in the Tile Customoizer ...");
+                    console.log("error - you have no devices to use in the Tile Customoizer ...");
                     return;
                 } else {
                     try {
@@ -186,7 +186,7 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
                         initCustomActions();
                         handleBuiltin(cm_Globals.defaultclick);
                     } catch (e) {
-                        console.log ("error attempting to load the Tile Customoizer ...", e);
+                        console.log("error attempting to load the Tile Customoizer ...", e);
                         closeModal("modalcustom");
                     }
                 }
@@ -539,7 +539,7 @@ function loadLinkItem(linkid, allowuser, sortval, sortup) {
         firstitem = null;
     }
     
-    console.log("loadLinkItem - linkid: ", linkid, " thevlaue: ", thevalue, " allowuser: ", allowuser," subids: ", subids, " fields: ", results);
+    // console.log("loadLinkItem - linkid: ", linkid, " thevlaue: ", thevalue, " allowuser: ", allowuser," subids: ", subids, " fields: ", results);
     return {fields: results, subids: subids, firstitem: firstitem};
 }
  
@@ -971,7 +971,7 @@ function handleBuiltin(subid) {
     //     }
     //     linkval = cmtext;
     // }
-    console.log("subids: ", subids, " natives: ", natives, " value: ", value[subid], " linkval: ", linkval, " cmtext: ", cmtext);
+    // console.log("subids: ", subids, " natives: ", natives, " value: ", value[subid], " linkval: ", linkval, " cmtext: ", cmtext);
 
     // update dyno panel
     if ( cmtype==="LINK" ) {
@@ -1182,7 +1182,7 @@ function showPreview() {
             var command = rule[0];
             var ruleval = command + "::";
             if ( command === "LINK" ) {
-                ruleval = ruleval + rule[1];
+                ruleval = ruleval + rulesubid + "::" + rule[1];
             } else if ( command === "TEXT" ) {
                 ruleval = rule[1];
             } else {
