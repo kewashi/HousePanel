@@ -107,21 +107,20 @@ definition(
 preferences {
     section("HousePanel Configuration") {
         paragraph "Welcome to HousePanel. Below you will authorize your things for HousePanel."
-        paragraph "prefix to uniquely identify certain tiles for this hub. " +
-                  "If left blank, hub type will determine prefix; e.g., st_ for SmartThings or h_ for Hubitat"
-        input (name: "hubprefix", type: "text", multiple: false, title: "Hub Prefix:", required: false, defaultValue: "st_")
+        paragraph "Enter hub number you are authorizing. If you only have one hub, use the default value = 0 "
+        input (name: "hubnum", type: "number", multiple: false, title: "Hub Number:", required: true, defaultValue: 0)
         paragraph "Enable Pistons? You must have WebCore installed for this to work. Beta feature for Hubitat hubs."
         input (name: "usepistons", type: "bool", multiple: false, title: "Use Pistons?", required: false, defaultValue: false)
         paragraph "Timezone and Format for event time fields; e.g., America/Detroit, Europe/London, or America/Los_Angeles"
-        input (name: "timezone", type: "text", multiple: false, title: "Timezone Name:", required: false, defaultValue: "America/Detroit")
+        input (name: "timezone", type: "text", multiple: false, title: "Timezone Name:", required: false, defaultValue: "America/Los_Angeles")
         input (name: "dateformat", type: "text", multiple: false, title: "Date Format:", required: false, defaultValue: "M/dd h:mm")
         paragraph "Specify these parameters to enable your panel to stay in sync with things when they change in your home."
-        input "webSocketHost", "text", title: "Host IP", defaultValue: "192.168.11.32", required: false
-        input "webSocketPort", "text", title: "Port", defaultValue: "3080", required: false
+        input "webSocketHost", "text", title: "Host IP", defaultValue: "192.168.4.29", required: false
+        input "webSocketPort", "text", title: "Port", defaultValue: "3280", required: false
         paragraph "The Alt Host IP and Port values are used to send hub pushes to two distinct installations of HousePanel. " +
-                  "If left blank a secondary hub push will not occur. Only use this if you are hosting two versions of HP " +
+                  "If set to 0 or left blank a secondary hub push will not occur. Only use this if you are hosting two versions of HP " +
                   "that both need to stay in sync with your smart home hubs."
-        input "webSocketHost2", "text", title: "Alt Host IP", defaultValue: "192.168.11.20", required: false
+        input "webSocketHost2", "text", title: "Alt Host IP", defaultValue: "0", required: false
         input "webSocketPort2", "text", title: "Alt Port", defaultValue: "3180", required: false
         input (
             name: "configLogLevel",
@@ -208,14 +207,14 @@ def initialize() {
     state.usepistons = settings?.usepistons ?: false
     state.directIP = settings?.webSocketHost ?: ""
     state.directIP = state.directIP.trim()
-    state.directPort = settings?.webSocketPort ?: "3080"
+    state.directPort = settings?.webSocketPort ?: "3280"
     state.directPort = state.directPort.trim()
     state.directIP2 = settings?.webSocketHost2 ?: ""
     state.directIP2 = state.directIP2.trim()
-    state.directPort2 = settings?.webSocketPort2 ?: "3180"
+    state.directPort2 = settings?.webSocketPort2 ?: ""
     state.directPort2 = state.directPort2.trim()
-    state.tz = settings?.timezone ?: "America/Detroit"
-    state.prefix = settings?.hubprefix ?: getPrefix()
+    state.tz = settings?.timezone ?: "America/Los_Angeles"
+    state.prefix = getPrefix()
     state.dateFormat = settings?.dateformat ?: "M/dd h:mm"
     state.powervals = [test: "test"]
 
@@ -236,10 +235,16 @@ def initialize() {
             postHub(state.directIP2, state.directPort2, "initialize", "", "", "", "", "")
             logger("state changes will also be posted to HP at IP: ${state.directIP2}:${state.directPort2} ", "info")
         } else {
+            state.directIP2 = ""
+            state.directPort2 = ""
             logger("state changes will not be posted to a secondary HP server", "info")
         }
         registerAll()
     } else {
+        state.directIP = ""
+        state.directPort = ""
+        state.directIP2 = ""
+        state.directPort2 = ""
         logger("state changes will not be posted to an HP server", "info")
     }
 }
@@ -258,12 +263,18 @@ private String getPlatform() {
     return hubtype
 }
 private String getPrefix() {
-    def hubpre = isHubitat() ? 'h_' : 'st_'
+    def hubpre
+    if ( isHubitat() ) {
+        hubpre = settings.hubnum == 0 ? 'he_' : 'he' + settings.hubnum.toString() + '_'
+    } else {
+        hubpre = settings.hubnum == 0 ? 'st_' : 'st' + settings.hubnum.toString() + '_'
+    }
     return hubpre
 }
 
 def configureHub() {
-    def hub = location.hubs[0]
+    def num = settings.hubnum?: 0
+    def hub = location.hubs[num]
     def hubid
     def hubip
     def endpt
@@ -277,29 +288,36 @@ def configureHub() {
         hubip = hub.localIP
         logger("You must go through the OAUTH flow to obtain a proper SmartThings AccessToken", "info")
         logger("You must go through the OAUTH flow to obtain a proper SmartThings EndPoint", "info")
+        return
     } else {
+        if ( !state.accessToken ) {
+            createAccessToken()
+        }
         state.hubid = hubUID
+        endpt = "${hubip}/apps/api/${app.id}/"
         cloudhubip = "https://oauth.cloud.hubitat.com";
         cloudendpt = "${cloudhubip}/${hubUID}/apps/${app.id}/"
         hubip = hub.localIP
-        endpt = "${hubip}/apps/api/${app.id}/"
-        logger("Hubitat AccessToken = ${state.accessToken}", "info")
-        logger("Hubitat EndPoint = ${endpt}", "info")
-        logger("Hubitat Cloud Hub = ${cloudhubip}", "info")
-        logger("Hubitat Cloud EndPoint = ${cloudendpt}", "info")
     }
     
     logger("Use this information on the Auth page of HousePanel.", "info")
     logger("Hub Platform = ${getPlatform()}", "info")
     logger("Hub IP = ${hubip}", "info")
     logger("Hub ID = ${state.hubid}", "info")
-    logger("Hub Firmware = ${firmware}", "info")
-    logger("rPI IP Address = ${state.directIP}", "info")
-    logger("rPI webSocket Port = ${state.directPort}", "info")
-    logger("Alt IP Address = ${state.directIP2}", "info")
-    logger("Alt webSocket Port = ${state.directPort2}", "info")
-    logger("date Timezone for events = ${state.tz}", "info")
-    logger("date Format for events = ${state.dateFormat}", "info")
+    logger("Hub EndPoint = ${endpt}", "info")
+    logger("Cloud Hub = ${cloudhubip}", "info")
+    logger("Cloud EndPoint = ${cloudendpt}", "info")
+    logger("AccessToken = ${state.accessToken}", "info")
+
+    logger("Server IP Address = ${state.directIP}", "info")
+    logger("Server webSocket Port = ${state.directPort}", "info")
+    if (state.directIP2 && state.directPort2) {
+        logger("Alt Server IP Address = ${state.directIP2}", "info")
+        logger("Alt Server webSocket Port = ${state.directPort2}", "info")
+    }
+
+    // logger("date Timezone for events = ${state.tz}", "info")
+    // logger("date Format for events = ${state.dateFormat}", "info")
 }
 
 def addHistory(resp, item) {
@@ -1076,7 +1094,7 @@ def autoType(swid) {
     else if ( myactuators?.find {it.id == swid } ) { swtype= "actuator" }
     else if ( swid=="${state.prefix}shm" ) { swtype= "shm" }
     else if ( swid=="${state.prefix}hsm" ) { swtype= "hsm" }
-    else if ( swid=="${state.prefix}m1x1" || swid=="${state.prefix}m1x2" || swid=="${state.prefix}m2x1" || swid=="${state.prefix}m2x2" || swid=="${state.prefix}mode" ) { swtype= "mode" }
+    else if ( swid=="${state.prefix}mode" ) { swtype= "mode" }
     else if ( state.usepistons && webCoRE_list().find {it.id == swid} ) { swtype= "piston" }
     else { swtype = "" }
     return swtype
@@ -1418,19 +1436,8 @@ def setButton(swid, cmd, swattr, subid) {
 
             // emulate event callback
             postHub(state.directIP, state.directPort, "update", item.displayName, swid, "button", "button", cmd)
-            if (state.directIP2) {
-                postHub(state.directIP2, state.directPort2, "update", item.displayName, swid, "button", "button", cmd)
-            }
+            postHub(state.directIP2, state.directPort2, "update", item.displayName, swid, "button", "button", cmd)
         }
-
-        // if trigger was not button invoke it too
-        // if ( subid!="button") {
-        //     resp[subid] = cmd;            
-        //     postHub(state.directIP, state.directPort, "update", item.displayName, swid, subid, "button", cmd)
-        //     if (state.directIP2) {
-        //         postHub(state.directIP2, state.directPort2, "update", item.displayName, swid, subid, "button", cmd)
-        //     }
-        // }
     }
     return resp
 }
@@ -1480,18 +1487,7 @@ def setOther(swid, cmd, swattr, subid, item=null ) {
             resp = [button: cmd]
             // emulate event callback
             postHub(state.directIP, state.directPort, "update", item.displayName, item.id, "button", "button", cmd)
-            if (state.directIP2) {
-                postHub(state.directIP2, state.directPort2, "update", item.displayName, item.id, "button", "button", cmd)
-            }
-            // if trigger was not button invoke it too
-            // if ( subid!="button") {
-            //     resp[subid] = cmd;            
-            //     postHub(state.directIP, state.directPort, "update", item.displayName, swid, subid, "button", cmd)
-            //     if (state.directIP2) {
-            //         postHub(state.directIP2, state.directPort2, "update", item.displayName, swid, subid, "button", cmd)
-            //     }
-            // }
-
+            postHub(state.directIP2, state.directPort2, "update", item.displayName, item.id, "button", "button", cmd)
         } else {
             resp = getOther(swid, item)
         }
@@ -2529,9 +2525,7 @@ def changeHandler(evt) {
 
             // make the original attribute change
             postHub(state.directIP, state.directPort, "update", deviceName, deviceid, attr, "bulb", value)
-            if (state.directIP2) {
-                postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, attr, "bulb", value)
-            }
+            postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, attr, "bulb", value)
 
             // set it to change color based on attribute change
             logger("color of device ${deviceName} changed to ${color} by the ${attr} attribute changing to ${value}", "debug")
@@ -2539,9 +2533,7 @@ def changeHandler(evt) {
             value = color
         }
         postHub(state.directIP, state.directPort, "update", deviceName, deviceid, attr, devtype, value)
-        if (state.directIP2) {
-            postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, attr, devtype, value)
-        }
+        postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, attr, devtype, value)
     }
 }
 
@@ -2556,17 +2548,15 @@ def modeChangeHandler(evt) {
         def modeid = "${state.prefix}mode"
         logger("Sending new mode= ${themode} with id= ${modeid} to HousePanel clients", "info")
         postHub(state.directIP, state.directPort, "update", deviceName, modeid, "themode", "mode", themode)
-        if (state.directIP2) {
-            postHub(state.directIP2, state.directPort2, "update", deviceName, modeid, "themode", "mode", themode)
-        }
+        postHub(state.directIP2, state.directPort2, "update", deviceName, modeid, "themode", "mode", themode)
     }
 }
 
 def postHub(ip, port, msgtype, name, id, attr, type, value) {
 
     
-    if ( msgtype && ip!="0" & ip!=0 && port!="0" & port!=0 ) {
-        logger("HousePanel postHub ${msgtype} to IP= ${ip}:${port} name= ${name} id= ${id} attr= ${attr} type= ${type} value= ${value}", "info")
+    if ( msgtype && ip && port && ip!="0" & ip!=0 && port!="0" & port!=0 ) {
+        logger("postHub ${msgtype} to IP= ${ip}:${port} name= ${name} id= ${id} attr= ${attr} type= ${type} value= ${value}", "info")
 
         // set a hub action - include the access token so we know which hub this is
         def params = [

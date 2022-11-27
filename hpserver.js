@@ -809,7 +809,7 @@ function getAccessToken(code, hub) {
         var nvpreq = {"grant_type": "authorization_code", "code": code, "client_id": clientId, 
                       "client_secret": clientSecret, "redirect_uri": encodeURI(redirect)};
         if ( DEBUG2 ) {
-            console.log( (ddbg()), "calling with nvpreq: ", nvpreq);
+            console.log( (ddbg()), "obtaining accesstoken by calling host: ", tokenhost, " with nvpreq: ", nvpreq);
         }
         curl_call(tokenhost, header, nvpreq, false, "POST", tokenCallback);
     }
@@ -8668,16 +8668,16 @@ if ( app && applistening ) {
             if ( req.query && req.query["code"] ) {
                 var hubId = GLB.defhub;
                 var hub = findHub(hubId);
+                if ( DEBUG2 ) {
+                    console.log( (ddbg()), "Getting hub before access_token. query: ", req.query, " hubId: ", hubId, " hub: ", hub);
+                }
                 if ( hub ) {
                     var rmsg = "Retrieving devices from Hub: " + hub.hubName;
-                    if ( DEBUG2 ) {
-                        console.log( (ddbg()), "Getting access_token for hub: ", hub);
-                    }
-
                     // get access_token, endpt, and retrieve devices
                     // this goes through a series of callbacks
                     // and ends with a pushClient to update the auth page
                     getAccessToken(req.query["code"], hub);
+
                 } else {
                     console.log( (ddbg()), "error - hub not found during authorization flow. hubId: ", hubId);
                     GLB.defhub = "-1";
