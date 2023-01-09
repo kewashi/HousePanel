@@ -12,9 +12,11 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- * This is a SmartThings and Hubitat app that works with the HousePanel smart dashboard platform
+ * This is a Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history:
+ * 01/08/2023 - added variable support
+ * 01/02/2023 - changed UI inspired by Homebridge and removed ST groovy stuff
  * 09/10/2022 - misc cleanup and report skipped functions due to parameters
  * 08/27/2022 - added action for presence to handle arrive and depart calls
  * 08/27/2022 - fix getThing to read all known attributes and updated ignore fields
@@ -102,108 +104,312 @@
  * 
  */
 
+import groovy.json.JsonOutput
+import groovy.transform.Field
+import java.text.SimpleDateFormat
+import java.util.concurrent.Semaphore
+
 public static String handle() { return "HousePanel" }
+
+/**********************************************
+    STATICALLY DEFINED VARIABLES
+    inpired by Tonesto7 homebridge2 app
+***********************************************/
+@Field static final String appVersionFLD  = '3.4.8'
+@Field static final String branchFLD      = 'master'
+@Field static final String platformFLD    = 'Hubitat'
+@Field static final String pluginNameFLD  = 'Hubitat-v2'
+@Field static final Boolean devModeFLD    = false
+@Field static final String sNULL          = (String) null
+@Field static final String sBLANK         = ''
+@Field static final String sSPACE         = ' '
+@Field static final String sBULLET        = '\u2022'
+@Field static final String sLINEBR        = '<br>'
+@Field static final String sFALSE         = 'false'
+@Field static final String sTRUE          = 'true'
+@Field static final String sBOOL          = 'bool'
+@Field static final String sENUM          = 'enum'
+@Field static final String sSVR           = 'svraddr'
+@Field static final String sCLN           = ':'
+@Field static final String sNLCLN         = 'null:null'
+@Field static final String sEVT           = 'evt'
+@Field static final String sEVTLOGEN      = 'evtLogEn'
+@Field static final String sDBGLOGEN      = 'dbgLogEn'
+@Field static final String sDBG           = 'debug'
+@Field static final String sUPD           = 'update'
+@Field static final String sEVTUPD        = 'EventUpdate'
+@Field static final String sAPPJSON       = 'application/json'
+@Field static final String sSUCC          = 'Success'
+@Field static final String sATK           = 'accessToken'
+@Field static final String sMEDIUM        = 'medium'
+@Field static final String sSMALL         = 'small'
+@Field static final String sCLR4D9        = '#2784D9'
+@Field static final String sCLR9B1        = '#0299B1'
+@Field static final String sCLRRED        = 'red'
+@Field static final String sCLRRED2       = '#cc2d3b'
+@Field static final String sCLRGRY        = 'gray'
+@Field static final String sCLRGRN        = 'green'
+@Field static final String sCLRORG        = 'orange'
+@Field static final String sTTM           = 'Tap to modify...'
+@Field static final String sTTC           = 'Tap to configure...'
+@Field static final String sTTP           = 'Tap to proceed...'
+@Field static final String sTTV           = 'Tap to view...'
+@Field static final String sTTS           = 'Tap to select...'
+@Field static final String sASYNCCR       = 'asyncHttpCmdResp'
+@Field static final String sLASTWU        = 'lastwebCoREUpdDt'
+@Field static final String sINFO          = 'info'
+@Field static final String sCMD           = 'command'
+@Field static final String sCAP_SW        = 'capability.switch'
+@Field static final String sSW            = 'switch'
+
+/**********************************************
+    APP HELPER FUNCTIONS
+    inpired by Tonesto7 homebridge2 app
+***********************************************/
+static String getAppImg(String imgName) { return "https://kenw.com/wp-content/uploads/${imgName}" }
+static String sectH3TS(String t, String st, String i = sNULL, String c=sCLR4D9) { return "<h3 style='color:${c};font-weight: bold'>${i ? "<img src='${i}' width='48'> " : sBLANK} ${t?.replaceAll("\\n", '<br>')}</h3>${st ?: sBLANK}" }
+static String sectHead(String str, String img = sNULL) { return str ? "<h3 style='margin-top:0;margin-bottom:0;'>" + spanImgStr(img) + span(str, sCLR4D9, sNULL, true) + '</h3>' + "<hr style='background-color:${sCLRGRY};font-style:italic;height:1px;border:0;margin-top:0;margin-bottom:0;'>" : sBLANK }
+
+// Root HTML Objects
+static String span(String str, String clr=sNULL, String sz=sNULL, Boolean bld=false, Boolean br=false) { return str ? "<span ${(clr || sz || bld) ? "style='${clr ? "color: ${clr};" : sBLANK}${sz ? "font-size: ${sz};" : sBLANK}${bld ? 'font-weight: bold;' : sBLANK}'" : sBLANK}>${str}</span>${br ? sLINEBR : sBLANK}" : sBLANK }
+static String div(String str, String clr=sNULL, String sz=sNULL, Boolean bld=false, Boolean br=false) { return str ? "<div ${(clr || sz || bld) ? "style='${clr ? "color: ${clr};" : sBLANK}${sz ? "font-size: ${sz};" : sBLANK}${bld ? 'font-weight: bold;' : sBLANK}'" : sBLANK}>${str}</div>${br ? sLINEBR : sBLANK}" : sBLANK }
+static String spanImgStr(String img=sNULL) { return img ? span("<img src='${(!img.startsWith('http')) ? getAppImg(img) : img}' width='42'> ") : sBLANK }
+static String strUnder(String str, Boolean showUnd=true) { return str ? (showUnd ? "<u>${str}</u>" : str) : sBLANK }
+static String htmlLine(String color=sCLR4D9, Integer width = null) { return "<hr style='background-color:${color};height:1px;border:0;margin-top:0;margin-bottom:0;${width ? "width: ${width}px;" : sBLANK}'>" }
+static String lineBr(Boolean show=true) { return show ? sLINEBR : sBLANK }
+static String inputFooter(String str, String clr=sCLR4D9, Boolean noBr=false) { return str ? lineBr(!noBr) + divSmBld(str, clr) : sBLANK }
+
+// Custom versions of the root objects above
+static String spanBldBr(String str, String clr=sNULL, String img=sNULL)    { return str ? spanImgStr(img) + span(str, clr, sNULL, true, true)      : sBLANK }
+static String spanBr(String str, String clr=sNULL, String img=sNULL)       { return str ? spanImgStr(img) + span(str, clr, sNULL, false, true)     : sBLANK }
+static String spanSm(String str, String clr=sNULL, String img=sNULL)       { return str ? spanImgStr(img) + span(str, clr, sSMALL)                 : sBLANK }
+static String spanSmBr(String str, String clr=sNULL, String img=sNULL)     { return str ? spanImgStr(img) + span(str, clr, sSMALL, false, true)    : sBLANK }
+static String spanSmBld(String str, String clr=sNULL, String img=sNULL)    { return str ? spanImgStr(img) + span(str, clr, sSMALL, true)           : sBLANK }
+static String spanSmBldUnd(String str, String clr=sNULL, String img=sNULL) { return str ? spanImgStr(img) + span(strUnder(str), clr, sSMALL, true) : sBLANK }
+static String spanSmBldBr(String str, String clr=sNULL, String img=sNULL)  { return str ? spanImgStr(img) + span(str, clr, sSMALL, true, true)     : sBLANK }
+static String divSmBld(String str, String clr=sNULL, String img=sNULL)      { return str ? div(spanImgStr(img) + span(str), clr, sSMALL, true)        : sBLANK }
+
+
+
 definition(
     name: "${handle()}",
     namespace: "kewashi",
     author: "Kenneth Washington",
     description: "Tap here to install ${handle()} - a highly customizable smarthome dashboard. ",
     category: "Convenience",
-    iconUrl: "https://s3.amazonaws.com/kewpublicicon/smartthings/hpicon1x.png",
-    iconX2Url: "https://s3.amazonaws.com/kewpublicicon/smartthings/hpicon2x.png",
-    iconX3Url: "https://s3.amazonaws.com/kewpublicicon/smartthings/hpicon3x.png",
+    iconUrl: "",
+    iconX2Url: "",
     oauth: [displayName: "HousePanel", displayLink: ""])
 
 preferences {
-    section("HousePanel Configuration") {
-        paragraph "Welcome to HousePanel. Below you will authorize your things for HousePanel."
-        paragraph "prefix to uniquely identify certain tiles for this hub. " +
-                  "If left blank, hub type will determine prefix; e.g., st_ for SmartThings or h_ for Hubitat"
-        input (name: "hubprefix", type: "text", multiple: false, title: "Hub Prefix:", required: false, defaultValue: "st_")
-        paragraph "Enable Pistons? You must have WebCore installed for this to work. Beta feature for Hubitat hubs."
-        input (name: "usepistons", type: "bool", multiple: false, title: "Use Pistons?", required: false, defaultValue: false)
-        paragraph "Timezone and Format for event time fields; e.g., America/Detroit, Europe/London, or America/Los_Angeles"
-        input (name: "timezone", type: "text", multiple: false, title: "Timezone Name:", required: false, defaultValue: "America/Los_Angeles")
-        input (name: "dateformat", type: "text", multiple: false, title: "Date Format:", required: false, defaultValue: "M/dd h:mm")
-        paragraph "Specify these parameters to enable your panel to stay in sync with things when they change in your home."
-        input "webSocketHost", "text", title: "Host IP", defaultValue: "192.168.68.32", required: false
-        input "webSocketPort", "text", title: "Port", defaultValue: "3980", required: false
-        paragraph "The Alt Host IP and Port values are used to send hub pushes to two distinct installations of HousePanel. " +
-                  "If left as 0 a secondary hub push will not occur. Only use this if you are hosting two versions of HP " +
-                  "that both need to stay in sync with your smart home hubs."
-        input "webSocketHost2", "text", title: "Alt Host IP", defaultValue: "0", required: false
-        input "webSocketPort2", "text", title: "Alt Port", defaultValue: "0", required: false
-        input (
-            name: "configLogLevel",
-            title: "IDE Live Logging Level:\nMessages with this level and higher will be logged to the IDE.",
-            type: "enum",
-            options: ["0" : "None", "1" : "Error", "2" : "Warning", "3" : "Info", "4" : "Debug", "5" : "Trace"],
-            defaultValue: "3",
-            displayDuringSetup: true,
-            required: false
-        )
-    }
-    section("Switches, Dimmers and Buttons") {
-            input "myswitches", "capability.switch", multiple: true, required: false, title: "Switches"
-            input "mydimmers", "capability.switchLevel", hideWhenEmpty: true, multiple: true, required: false, title: "Switch Level Dimmers"
-            input "mymomentaries", "capability.momentary", hideWhenEmpty: true, multiple: true, required: false, title: "Momentary Switches"
-            input "mybuttons", "capability.pushableButton", hideWhenEmpty: true, multiple: true, required: false, title: "Buttons"
-            input "mybulbs", "capability.colorControl", hideWhenEmpty: true, multiple: true, required: false, title: "Color Control Bulbs"
-            input "mypowers", "capability.powerMeter", hideWhenEmpty: true, multiple: true, required: false, title: "Power Meters"
-    }
-    section ("Motion and Presence") {
-            input "mypresences", "capability.presenceSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Presence"
-            input "mymotions", "capability.motionSensor", multiple: true, required: false, title: "Motion"
-    }
-    section ("Doors, Contacts, Locks, and Shades") {
-            input "mycontacts", "capability.contactSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Contact Sensors"
-            input "mydoors", "capability.doorControl", hideWhenEmpty: true, multiple: true, required: false, title: "Doors"
-            input "mygarages", "capability.garageDoorControl", hideWhenEmpty: true, multiple: true, required: false, title: "Garage Doors"
-            input "mylocks", "capability.lock", hideWhenEmpty: true, multiple: true, required: false, title: "Locks"
-            input "myshades", "capability.windowShade", hideWhenEmpty: true, multiple: true, required: false, title: "Window Shades"
-    }
-    section ("Thermostats and Weather") {
-            input "mythermostats", "capability.thermostat", hideWhenEmpty: true, multiple: true, required: false, title: "Thermostats"
-            input "mytemperatures", "capability.temperatureMeasurement", hideWhenEmpty: true, multiple: true, required: false, title: "Temperature Measures"
-            input "myilluminances", "capability.illuminanceMeasurement", hideWhenEmpty: true, multiple: true, required: false, title: "Illuminance Measurements"
-            input "myweathers", "device.smartweatherStationTile", hideWhenEmpty: true, multiple: true, required: false, title: "Weather tile"
-            input "myaccuweathers", "device.accuweatherDevice", hideWhenEmpty: true, multiple: true, required: false, title: "AccuWeather tile"
-    }
-    section ("Water, Sprinklers and Smoke") {
-            input "mywaters", "capability.waterSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Water Sensors"
-            input "myvalves", "capability.valve", hideWhenEmpty: true, multiple: true, required: false, title: "Sprinklers"
-            input "mysmokes", "capability.smokeDetector", hideWhenEmpty: true, multiple: true, required: false, title: "Smoke Detectors"
-    }
-    section ("Music and Audio") {
-            paragraph "Music things use the legacy Sonos device handler. Audio things use the new Audio handler that works with multiple audio device types including Sonos."
-            input "mymusics", "capability.musicPlayer", hideWhenEmpty: true, multiple: true, required: false, title: "Music Players"
-            input "myaudios", "capability.audioNotification", hideWhenEmpty: true, multiple: true, required: false, title: "Audio Devices"
-    }
-    section ("Other Sensors and Actuators") {
-            paragraph "Any thing can be added as an Other sensor or actuator. Other sensors and actuators bring in ALL fields and commands supported by the device."
-            input "myothers", "capability.sensor", multiple: true, required: false, title: "Which Other Sensors"
-            input "myactuators", "capability.actuator", multiple: true, required: false, title: "Which Other Actuators"
-    }
+    page(name: 'startPage')
+    page(name: 'mainPage')
+    page(name: 'deviceSelectPage')
+    page(name: 'settingsPage')
+    page(name: 'variablesPage')
 }
 
 mappings {
-  
-  path("/getallthings") {
-     action: [       POST: "getAllThings"     ]
-  }
-  
-  path("/doaction") {
-     action: [       POST: "doAction"     ]
-  }
-  
-  path("/doquery") {
-     action: [       POST: "doQuery"     ]
-  }
-  
-  path("/gethubinfo") {
-     action: [       POST: "getHubInfo"     ]
-  }
+  path("/getallthings") {  action: [       POST: "getAllThings"     ] }
+  path("/doaction") {      action: [       POST: "doAction"         ]  }
+  path("/doquery") {       action: [       POST: "doQuery"          ]  }
+  path("/gethubinfo") {    action: [       POST: "getHubInfo"       ]  }
 
+}
+
+def appInfoSect() {
+    Boolean isNote = false
+    String tStr = spanSmBld('HousePanel Version:', sCLRGRY) + spanSmBr(" ${appVersionFLD}", sCLRGRY)
+    section (sectH3TS((String)app.name, tStr, getAppImg('hpicon3x.png'), 'blue')) {
+        paragraph htmlLine(sCLRGRY)
+    }
+}
+
+def startPage() {
+    if (!getAccessToken()) { return dynamicPage(name: 'mainPage', install: false, uninstall: true) {
+            section() { paragraph spanSmBldBr('OAuth Error', sCLRRED) + spanSmBld("OAuth is not Enabled for ${app?.getName()}!.<br><br>Please click remove and Enable Oauth under the Hubitat App Settings in the App Code page.") } }
+    } else {
+        return mainPage()
+    }
+}
+
+def mainPage() {
+
+    Boolean isInst = (state.isInstalled == true)
+    // if ((Boolean)settings.enableWebCoRE && !webCoREFLD) { webCoRE_init() }
+
+    if ( !state.globalVars ) {
+        state.globalVars = getAllGlobalVars()
+    }
+
+    return dynamicPage(name: 'mainPage', nextPage: sBLANK, install: !isInst, uninstall: true) {
+
+        appInfoSect()
+
+        section(sectHead('Device Configuration:')) {
+            String desc = sBLANK
+            desc += myswitches ? spanSmBld("Switch${myswitches.size() > 1 ? 'es' : sBLANK}") + spanSmBr(" (${myswitches.size()})") : sBLANK
+            desc += mydimmers ? spanSmBld("Dimmers${mydimmers.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mydimmers.size()})") : sBLANK
+            desc += mymomentaries ? spanSmBld("Momentary Button${mymomentaries.size() > 1 ? "s" : sBLANK}") + spanSmBr(" (${mymomentaries.size()})") : sBLANK
+            desc += mybuttons ? spanSmBld("Pushable Button${mybuttons.size() > 1 ? "s" : sBLANK}") + spanSmBr(" (${mybuttons.size()})") : sBLANK
+            desc += mybulbs ? spanSmBld("Bulb${mybulbs.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mybulbs.size()})") : sBLANK
+            desc += mypowers ? spanSmBld("Power${mypowers.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mypowers.size()})") : sBLANK
+            desc += mypresences ? spanSmBld("Presence${mypresences.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mypresences.size()})") : sBLANK
+            desc += mymotions ? spanSmBld("Motion Sensor${mymotions.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mymotions.size()})") : sBLANK
+            desc += mycontacts ? spanSmBld("Contact Sensor${mycontacts.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mycontacts.size()})") : sBLANK
+            desc += mydoors ? spanSmBld("Door${mydoors.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mydoors.size()})") : sBLANK
+            desc += mygarages ? spanSmBld("Garage Door${mygarages.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mygarages.size()})") : sBLANK
+            desc += mylocks ? spanSmBld("Lock${mylocks.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mylocks.size()})") : sBLANK
+            desc += myshades ? spanSmBld("Shade${myshades.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${myshades.size()})") : sBLANK
+            desc += mythermostats ? spanSmBld("Thermostat${mythermostats.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mythermostats.size()})") : sBLANK
+            desc += mytemperatures ? spanSmBld("Temperature${mytemperatures.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mytemperatures.size()})") : sBLANK
+            desc += myilluminances ? spanSmBld("Illuminance${myilluminances.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${myilluminances.size()})") : sBLANK
+            desc += myweathers ? spanSmBld("Weather${myweathers.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${myweathers.size()})") : sBLANK
+            desc += mywaters ? spanSmBld("Water${mywaters.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mywaters.size()})") : sBLANK
+            desc += myvalves ? spanSmBld("Valve${myvalves.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${myvalves.size()})") : sBLANK
+            desc += mysmokes ? spanSmBld("Smoke${mysmokes.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mysmokes.size()})") : sBLANK
+            desc += mymusics ? spanSmBld("Music${mymusics.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mymusics.size()})") : sBLANK
+            desc += myaudios ? spanSmBld("Audio${myaudios.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${myaudios.size()})") : sBLANK
+            desc += myothers ? spanSmBld("Sensor${myothers.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${myothers.size()})") : sBLANK
+            desc += myactuators ? spanSmBld("Actuator${myactuators.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${myactuators.size()})") : sBLANK
+
+            desc += htmlLine(sCLR4D9, 150)
+            desc += inputFooter(sTTM)
+
+            href 'deviceSelectPage', title: spanSmBld('Device Selection'), required: false, description: (desc ? spanSm(desc, sCLR4D9) : inputFooter('Tap to select devices...', sCLRGRY, true))
+        }
+
+        section(sectHead('Variable Configuration:')) {
+            String vdesc = sBLANK
+        
+            def numvar = 0
+            state.globalVars.each { String varname, Map infomap ->
+                numvar += settings["var_${varname}"] ? 1 : 0
+            }
+            vdesc += numvar > 0 ? spanSmBld("Variable${ (numvar > 1) ? 's' : sBLANK}") + spanSmBr(" (${numvar})") : sBLANK
+            href 'variablesPage', title: spanSmBld('Variable Selection'), description: (vdesc ? spanSm(vdesc, sCLR4D9) : inputFooter('Tap to select variables...', sCLRGRY, true))
+        }
+
+        section(sectHead('App Preferences:')) {
+            // String sDesc = getSetDesc()
+            href 'settingsPage', title: spanSmBld('App Settings'), description: " Options "
+            label title: spanSmBld('Label this Instance (optional)'), description: 'Rename this App', defaultValue: app?.name, required: false
+        }
+    }
+}
+
+def settingsPage() {
+    return dynamicPage(name: 'settingsPage', nextPage: sBLANK, title: sBLANK, install: false, uninstall: false) {
+
+        appInfoSect()
+
+        section("HousePanel Configuration") {
+            paragraph "Welcome to HousePanel. Below you will authorize your things for HousePanel."
+            paragraph "prefix to uniquely identify certain tiles for this hub. " +
+                    "If left blank, hub type will determine prefix; e.g., st_ for SmartThings or h_ for Hubitat"
+            input (name: "hubprefix", type: "text", multiple: false, title: "Hub Prefix:", required: false, defaultValue: "st_")
+            paragraph "Enable Pistons? You must have WebCore installed for this to work. Beta feature for Hubitat hubs."
+            input (name: "usepistons", type: "bool", multiple: false, title: "Use Pistons?", required: false, defaultValue: false)
+            paragraph "Timezone and Format for event time fields; e.g., America/Detroit, Europe/London, or America/Los_Angeles"
+            input (name: "timezone", type: "text", multiple: false, title: "Timezone Name:", required: false, defaultValue: "America/Los_Angeles")
+            input (name: "dateformat", type: "text", multiple: false, title: "Date Format:", required: false, defaultValue: "M/dd h:mm")
+            paragraph "Specify these parameters to enable your panel to stay in sync with things when they change in your home."
+            input "webSocketHost", "text", title: "Host IP", defaultValue: "192.168.68.32", required: false
+            input "webSocketPort", "text", title: "Port", defaultValue: "3980", required: false
+            paragraph "The Alt Host IP and Port values are used to send hub pushes to two distinct installations of HousePanel. " +
+                    "If left as 0 a secondary hub push will not occur. Only use this if you are hosting two versions of HP " +
+                    "that both need to stay in sync with your smart home hubs."
+            input "webSocketHost2", "text", title: "Alt Host IP", defaultValue: "0", required: false
+            input "webSocketPort2", "text", title: "Alt Port", defaultValue: "0", required: false
+            input (
+                name: "configLogLevel",
+                title: "IDE Live Logging Level:\nMessages with this level and higher will be logged to the IDE.",
+                type: "enum",
+                options: ["0" : "None", "1" : "Error", "2" : "Warning", "3" : "Info", "4" : "Debug", "5" : "Trace"],
+                defaultValue: "3",
+                displayDuringSetup: true,
+                required: false
+            )
+        }
+
+    }
+}
+
+def deviceSelectPage() {
+    return dynamicPage(name: 'deviceSelectPage', title: sBLANK, install: false, uninstall: false) {
+
+        appInfoSect()
+
+        section(sectHead('Define Specific Categories:')) {
+            paragraph spanSmBldBr('Description:', sCLR4D9) + spanSm('Select devices to show in each category below', sCLR4D9)
+            paragraph spanSmBldBr('NOTE: ') + spanSmBldBr('Duplicates are allowed, but not requried')
+        }
+
+        section(sectHead("Switches, Dimmers and Buttons", "bulbon.png")) {
+                input "myswitches", "capability.switch", multiple: true, required: false, title: "Switches"
+                input "mydimmers", "capability.switchLevel", hideWhenEmpty: true, multiple: true, required: false, title: "Switch Level Dimmers"
+                input "mymomentaries", "capability.momentary", hideWhenEmpty: true, multiple: true, required: false, title: "Momentary Switches"
+                input "mybuttons", "capability.pushableButton", hideWhenEmpty: true, multiple: true, required: false, title: "Buttons"
+                input "mybulbs", "capability.colorControl", hideWhenEmpty: true, multiple: true, required: false, title: "Color Control Bulbs"
+                input "mypowers", "capability.powerMeter", hideWhenEmpty: true, multiple: true, required: false, title: "Power Meters"
+        }
+        section (sectHead("Motion and Presence","boypresent.png")) {
+                input "mypresences", "capability.presenceSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Presence"
+                input "mymotions", "capability.motionSensor", multiple: true, required: false, title: "Motion"
+        }
+        section (sectHead("Doors, Contacts, Locks, and Shades","closedoor.png")) {
+                input "mycontacts", "capability.contactSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Contact Sensors"
+                input "mydoors", "capability.doorControl", hideWhenEmpty: true, multiple: true, required: false, title: "Doors"
+                input "mygarages", "capability.garageDoorControl", hideWhenEmpty: true, multiple: true, required: false, title: "Garage Doors"
+                input "mylocks", "capability.lock", hideWhenEmpty: true, multiple: true, required: false, title: "Locks"
+                input "myshades", "capability.windowShade", hideWhenEmpty: true, multiple: true, required: false, title: "Window Shades"
+        }
+        section (sectHead("Thermostats and Weather")) {
+                input "mythermostats", "capability.thermostat", hideWhenEmpty: true, multiple: true, required: false, title: "Thermostats"
+                input "mytemperatures", "capability.temperatureMeasurement", hideWhenEmpty: true, multiple: true, required: false, title: "Temperature Measures"
+                input "myilluminances", "capability.illuminanceMeasurement", hideWhenEmpty: true, multiple: true, required: false, title: "Illuminance Measurements"
+                input "myweathers", "device.smartweatherStationTile", hideWhenEmpty: true, multiple: true, required: false, title: "Weather tile"
+                // input "myaccuweathers", "device.accuweatherDevice", hideWhenEmpty: true, multiple: true, required: false, title: "AccuWeather tile"
+        }
+        section (sectHead("Water, Sprinklers and Smoke")) {
+                input "mywaters", "capability.waterSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Water Sensors"
+                input "myvalves", "capability.valve", hideWhenEmpty: true, multiple: true, required: false, title: "Sprinklers"
+                input "mysmokes", "capability.smokeDetector", hideWhenEmpty: true, multiple: true, required: false, title: "Smoke Detectors"
+        }
+        section (sectHead("Music and Audio","unmute.png")) {
+                paragraph "Music things use the legacy Sonos device handler. Audio things use the new Audio handler that works with multiple audio device types including Sonos."
+                input "mymusics", "capability.musicPlayer", hideWhenEmpty: true, multiple: true, required: false, title: "Music Players"
+                input "myaudios", "capability.audioNotification", hideWhenEmpty: true, multiple: true, required: false, title: "Audio Devices"
+        }
+        section (sectHead("Other Sensors and Actuators")) {
+                paragraph "Any thing can be added as an Other sensor or actuator. Other sensors and actuators bring in ALL fields and commands supported by the device."
+                input "myothers", "capability.sensor", multiple: true, required: false, title: "Which Other Sensors"
+                input "myactuators", "capability.actuator", multiple: true, required: false, title: "Which Other Actuators"
+        }
+
+    }
+}
+
+def variablesPage() {
+
+    if ( !state.globalVars ) {
+        state.globalVars = getAllGlobalVars()
+    }
+    // logger("rendering variables page; var count = ${state.globalVars.size()}", "info")
+
+    return dynamicPage(name: 'variablesPage', title: sBLANK, install: false, uninstall: false) {
+
+        appInfoSect()
+
+        section(sectHead('Select variables to include:')) {
+            state.globalVars.each { String varname, Map infomap ->
+                def vartype = infomap["type"]
+                def curval = infomap["value"]
+                paragraph "Variable ${varname} (${vartype}) = ${curval}"
+                input (name: "var_${varname}", type: "bool", multiple: false, title: "${varname}?", required: false, defaultValue: false)
+            }
+        }
+    }
 }
 
 def installed() {
@@ -218,6 +424,9 @@ def updated() {
 def initialize() {
     def hubtype = getPlatform()
     state.usepistons = settings?.usepistons ?: false
+
+    // reset variable usage
+    removeAllInUseGlobalVar()
 
     state.directIP = settings?.webSocketHost ?: "0"
     state.directIP = state.directIP.trim()
@@ -239,7 +448,7 @@ def initialize() {
         webCoRE_init()
     }
     state.loggingLevelIDE = settings.configLogLevel?.toInteger() ?: 3
-    logger("Installed ${hubtype} hub with settings: ${settings} ", "info")
+    logger("Installed ${hubtype} hub with settings: ${settings} ", "debug")
     
     def pattern = ~/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/
     def portpatt = ~/\d+/
@@ -267,21 +476,18 @@ def initialize() {
     }
 }
 
-// detection routines - the commented line is more efficient but less foolproof
+// legacy ST groovy is gone so we just return true here
 private Boolean isHubitat() {
-    def istrue = physicalgraph?.device?.HubAction ? false : true
+    // def istrue = physicalgraph?.device?.HubAction ? false : true
     // def istrue = hubUID ? true : false
-    return istrue
-}
-private Boolean isST() {
-    return ( ! isHubitat() )
+    return true
 }
 private String getPlatform() {
-    def hubtype = isHubitat() ? 'Hubitat' : 'SmartThings'
+    def hubtype = isHubitat() ? 'Hubitat' : 'Unknown'
     return hubtype
 }
 private String getPrefix() {
-    def hubpre = isHubitat() ? 'h_' : 'st_'
+    def hubpre = 'h_'
     return hubpre
 }
 
@@ -293,32 +499,30 @@ def configureHub() {
     def cloudhubip
     def cloudendpt
     
-    def firmware = hub?.firmwareVersionString ?: "unknown"
+    state.hubid = app.getHubUID() 
+    // hubUID
+    cloudhubip = app.getApiServerUrl()
+    // "https://oauth.cloud.hubitat.com";
+    cloudendpt = app.getFullApiServerUrl()
+    // "${cloudhubip}/${hubUID}/apps/${app.id}/"
+    hubip = app.getLocalApiServerUrl() 
+    // hub.localIP
+    endpt = app.getFullLocalApiServerUrl()
+    // "${hubip}/apps/api/${app.id}/"
+    // logger("Hubitat AccessToken = ${state.accessToken}", "debug")
 
-    if ( !isHubitat() ) {
-        state.hubid = hub.id
-        hubip = hub.localIP
-        logger("You must go through the OAUTH flow to obtain a proper SmartThings AccessToken", "info")
-        logger("You must go through the OAUTH flow to obtain a proper SmartThings EndPoint", "info")
-    } else {
-        state.hubid = hubUID
-        cloudhubip = "https://oauth.cloud.hubitat.com";
-        cloudendpt = "${cloudhubip}/${hubUID}/apps/${app.id}/"
-        hubip = hub.localIP
-        endpt = "${hubip}/apps/api/${app.id}/"
-        logger("Hubitat AccessToken = ${state.accessToken}", "debug")
-        logger("Hubitat EndPoint = ${endpt}", "debug")
-        logger("Hubitat Cloud Hub = ${cloudhubip}", "debug")
-        logger("Hubitat Cloud EndPoint = ${cloudendpt}", "debug")
-    }
-    
-    logger("Use this information on the Auth page of HousePanel.", "debug")
-    logger("Hub Platform = ${getPlatform()}", "debug")
-    logger("Hub IP = ${hubip}", "debug")
-    logger("Hub ID = ${state.hubid}", "debug")
-    logger("Hub Firmware = ${firmware}", "debug")
-    logger("rPI IP Address = ${state.directIP}", "debug")
-    logger("rPI webSocket Port = ${state.directPort}", "debug")
+    logger("Use this information on the Auth page of HousePanel.", "info")
+    logger("Hub Platform = ${getPlatform()}", "info")
+    logger("Hubitat Hub IP = ${hubip}", "info")
+    logger("Hubitat EndPoint = ${endpt}", "info")
+    logger("Hubitat Cloud Hub = ${cloudhubip}", "info")
+    logger("Hubitat Cloud EndPoint = ${cloudendpt}", "info")
+    logger("Hub ID = ${state.hubid}", "info")
+    logger("The Access Token is obtained only through OAUTH flow as a Bearer Token", "info")
+
+    logger("Other useful information to know", "debug")
+    logger("IP Address = ${state.directIP}", "debug")
+    logger("webSocket Port = ${state.directPort}", "debug")
     logger("Alt IP Address = ${state.directIP2}", "debug")
     logger("Alt webSocket Port = ${state.directPort2}", "debug")
     logger("date Timezone for events = ${state.tz}", "debug")
@@ -509,9 +713,9 @@ def getTemperature(swid, item=null) {
 
 def getWeather(swid, item=null) {
     def resp = getDevice(myweathers, swid, item)
-    if ( !resp ) {
-        resp = getDevice(myaccuweathers, swid, item)
-    }
+    // if ( !resp ) {
+    //     resp = getDevice(myaccuweathers, swid, item)
+    // }
     return resp
 }
 
@@ -614,36 +818,18 @@ def getDevice(mydevices, swid, item=null) {
     	}
 
         def reserved = ignoredCommands()
-        if ( isHubitat() ) {
-            item.getSupportedCommands().each { comm ->
-                try {
-                    def comname = comm?.toString()
-                    def nparms = comm?.parameters?.size
-                    if ( nparms == null ) { nparms = 0 }
-                    if ( nparms==0 && !reserved.contains(comname)) {
-                        resp.put("_"+comname, comname)
-                    } else {
-                        log.info "Hubitat skipped command: ${comname} with ${nparms} parameters"
-                    }
-                } catch (ex) {
-                    logger("Attempt to read device command for ${swid} failed ${ex}", "error")
+        item.getSupportedCommands().each { comm ->
+            try {
+                def comname = comm?.toString()
+                def nparms = comm?.parameters?.size
+                if ( nparms == null ) { nparms = 0 }
+                if ( nparms==0 && !reserved.contains(comname)) {
+                    resp.put("_"+comname, comname)
+                } else {
+                    logger("Hubitat skipped command: ${comname} with ${nparms} parameters","debug")
                 }
-            }
-        } else {
-            item.supportedCommands.each { comm ->
-                try {
-                    def comname = comm?.getName()
-                    def args = comm?.getArguments()
-                    def arglen = args?.size()
-                    logger("Command for ${swid} = $comname with $arglen args = $args ", "trace")
-                    if ( arglen==0 && !reserved.contains(comname) ) {
-                        resp.put( "_"+comname, comname )
-                    } else {
-                        log.info "SmartThings skipped command: ${comname} with ${arglen} parameters"
-                    }
-                } catch (ex) {
-                    logger("Attempt to read device command for ${swid} failed ${ex}", "error")
-                }
+            } catch (ex) {
+                logger("Attempt to read device command for ${swid} failed ${ex}", "error")
             }
         }
         resp = addHistory(resp, item)
@@ -696,51 +882,33 @@ def getThing(things, swid, item=null) {
         }
 
         def reserved = ignoredCommands()
-        // for HE use standard commands
-        if ( isHubitat() ) {
-            // the commented code works but it gives commands that requires parameters
-            // fixed to weed out commands with parameters
-            item.getSupportedCommands().each { comm ->
-                try {
-                    def comname = comm.toString()
-                    def nparms = comm.parameters?.size
-                    if ( nparms == null ) { nparms = 0 }
-                    if ( !nparms && !reserved.contains(comname)) {
-                        resp.put("_"+comname, comname)
-                    } else {
-                        log.info "skipped command: ${comname} with ${nparms} parameters"
-                    }
-                } catch (ex) {
-                    logger("Attempt to read command for ${swid} failed ${ex}", "error")
+        // the commented code works but it gives commands that requires parameters
+        // fixed to weed out commands with parameters
+        item.getSupportedCommands().each { comm ->
+            try {
+                def comname = comm.toString()
+                def nparms = comm.parameters?.size
+                if ( nparms == null ) { nparms = 0 }
+                if ( !nparms && !reserved.contains(comname)) {
+                    resp.put("_"+comname, comname)
+                } else {
+                    logger("skipped command: ${comname} with ${nparms} parameters","debug")
                 }
-            }
-
-            // this code below was used before I figured out how to get parameters above
-            // def commoncommands = ["on","off","flash","open","close","start","stop","stopPositionChange",
-            //                       "refresh","both","siren","strobe","push","hold","doubleTap","poll","getDings",
-            //                       "setPreviousEffect","setNextEffect","lock","unlock","beep","setMotion"]
-            // commoncommands.each { comm ->
-            //     if ( item.hasCommand(comm) ) {
-            //         resp.put("_"+comm, comm)
-            //     }
-            // }
-
-        // for ST add commands other than the ones that require parameters
-        } else {
-            item.supportedCommands.each { comm ->
-                try {
-                    def comname = comm?.getName()
-                    def args = comm?.getArguments()
-                    def arglen = args?.size()
-                    logger("Command for ${swid} = $comname with $arglen args = $args ", "trace")
-                    if ( arglen==0 && !reserved.contains(comname) ) {
-                        resp.put( "_"+comname, comname )
-                    }
-                } catch (ex) {
-                    logger("Attempt to read command for ${swid} failed ${ex}", "error")
-                }
+            } catch (ex) {
+                logger("Attempt to read command for ${swid} failed ${ex}", "error")
             }
         }
+
+        // this code below was used before I figured out how to get parameters above
+        // def commoncommands = ["on","off","flash","open","close","start","stop","stopPositionChange",
+        //                       "refresh","both","siren","strobe","push","hold","doubleTap","poll","getDings",
+        //                       "setPreviousEffect","setNextEffect","lock","unlock","beep","setMotion"]
+        // commoncommands.each { comm ->
+        //     if ( item.hasCommand(comm) ) {
+        //         resp.put("_"+comm, comm)
+        //     }
+        // }
+
         resp = addHistory(resp, item)
     }
     
@@ -795,8 +963,6 @@ def getAllThings() {
     resp = getMomentaries(resp)
     run = logStepAndIncrement(run)
     resp = getButtons(resp)
-    // run = logStepAndIncrement(run)
-    // resp = getLights(resp)
     run = logStepAndIncrement(run)
     resp = getBulbs(resp)
     run = logStepAndIncrement(run)
@@ -817,10 +983,6 @@ def getAllThings() {
     resp = getTemperatures(resp)
     run = logStepAndIncrement(run)
     resp = getIlluminances(resp)
-    if ( isST() ) {
-        run = logStepAndIncrement(run)
-        resp = getWeathers(resp)
-    }
     run = logStepAndIncrement(run)
     resp = getValves(resp)
     run = logStepAndIncrement(run)
@@ -833,16 +995,8 @@ def getAllThings() {
     resp = getSmokes(resp)
     run = logStepAndIncrement(run)
     resp = getModes(resp)
-    if ( isST() ) {
-        run = logStepAndIncrement(run)
-        resp = getSHMStates(resp)
-        // run = logStepAndIncrement(run)
-        // resp = getRoutines(resp)
-    }
-    if ( isHubitat() ) {
-        run = logStepAndIncrement(run)
-        resp = getHSMStates(resp)
-    }
+    run = logStepAndIncrement(run)
+    resp = getHSMStates(resp)
     run = logStepAndIncrement(run)
     resp = getOthers(resp)
     run = logStepAndIncrement(run)
@@ -856,7 +1010,60 @@ def getAllThings() {
         resp = getPistons(resp)
     }
 
+    run = logStepAndIncrement(run)
+    resp = getVariables(resp)
+
     return resp
+}
+
+def getVariables(resp) {
+    if ( !state.globalVars ) {
+        state.globalVars = getAllGlobalVars()
+    }
+    def vals = [:]
+    def varlist = []
+    def vid = "${state.prefix}variables"
+    state.globalVars.each { String varname, Map infomap ->
+
+        if ( settings["var_${varname}"] ) {
+            def theval = infomap["value"]
+            def vartype = infomap["type"]
+        
+            // fix up times and dates if they are only time or only date
+            if ( vartype == "datetime" ) {
+                if ( theval.startsWith("9999") ) {
+                    // time only:  9999-99-99T14:25:09.009-0700
+                    theval = theval.substring(11)
+                } else if ( theval.endsWith("9999") ) {
+                    // date only: 2022-10-13T99:99:99:999-9999
+                    theval = theval.substring(0,10)
+                }
+            }
+
+            // add only the selected variables and their types as fields to the single variable tile
+            // the types will be hidden from display by default since it starts with "uom_"
+            varlist << varname
+            vals.put( varname, "${theval}" )
+            vals.put( "uom_${varname}", "${vartype}")
+            logger ("including variable ${varname} value: ${theval}","info")
+        }
+    }
+
+    if ( varlist.size() ) {
+        addInUseGlobalVar( varlist )
+        resp << [name: "Variables", id: vid, value: vals, type: "variables"]
+    }
+    return resp
+}
+
+def renameVariable(String oldName, String newName) {
+    def vid = "${state.prefix}variables"
+    def resp = []
+    resp = getVariables(resp)
+    def pvalue = resp[0]
+
+    postHub(state.directIP, state.directPort, "update", "Variables", vid, oldName, "variables", pvalue)
+    postHub(state.directIP2, state.directPort2, "update", "Variables", vid, oldName, "variables", pvalue)
 }
 
 // modified to only return one mode tile
@@ -871,15 +1078,6 @@ def getModes(resp) {
     } catch (e) {
         log.debug e
     }
-    return resp
-}
-
-def getSHMStates(resp) {
-    logger("Getting Smart Home Monitor state for SmartThings Hub","debug");
-    try {
-        def val = getSHMState("${state.prefix}shm")
-        resp << [name: "Smart Home Monitor", id: "${state.prefix}shm", value: val, type: "shm"]
-    } catch (e) {}
     return resp
 }
 
@@ -1035,22 +1233,6 @@ def getTemperatures(resp) {
     return resp
 }
 
-def getWeathers(resp) {
-    try {
-        myweathers?.each {
-            def multivalue = getDevice(myweathers, it.id, it)
-            resp << [name: it.displayName, id: it.id, value: multivalue, type: "weather"]
-        }
-        myaccuweathers?.each {
-            def accuresp = getDevice(myaccuweathers, it.id, it)
-            // log.info "AccuWeather tile loaded..."
-            // log.info accuresp
-            resp << [name: it.displayName, id: it.id, value: accuresp, type: "weather"]
-        }
-    } catch (e) {}
-    return resp
-}
-
 def getOthers(resp) {
     getThings(resp, myothers, "other")
 }
@@ -1089,7 +1271,7 @@ def autoType(swid) {
     else if ( mythermostats?.find {it.id == swid} ) { swtype = "thermostat" }
     else if ( mypresences?.find {it.id == swid } ) { swtype= "presence" }
     else if ( myweathers?.find {it.id == swid } ) { swtype= "weather" }
-    else if ( myaccuweathers?.find {it.id == swid } ) { swtype= "weather" }
+    // else if ( myaccuweathers?.find {it.id == swid } ) { swtype= "weather" }
     else if ( mymotions?.find {it.id == swid } ) { swtype= "motion" }
     else if ( mydoors?.find {it.id == swid } ) { swtype= "door" }
     else if ( mygarages?.find {it.id == swid } ) { swtype= "garage" }
@@ -1611,7 +1793,6 @@ def setButton(swid, cmd, swattr, subid, item=null ) {
             item."$cmd"(buttonnum)
             resp.put(findval, cmd)
 
-            // def postHub(ip, port, msgtype, name, id, attr, type, value) {
             // postHub(state.directIP, state.directPort, "update", item.displayName, swid, findval, "button", buttonnum)
             // postHub(state.directIP2, state.directPort2, "update", item.displayName, swid, findval, "button", buttonnum)
         } else {
@@ -2553,7 +2734,7 @@ def setMusic(swid, cmd, swattr, subid) {
 def registerAll() {
     List mydevices = ["myswitches", "mydimmers", "mybulbs", "mypresences", "mybuttons",
                       "mymotions", "mycontacts", "mydoors", "mygarages", "mylocks", "mythermostats", "myshades",
-                      "mytemperatures", "myilluminances", "myweathers", "myaccuweathers",
+                      "mytemperatures", "myilluminances", "myweathers",
                       "mywaters", "mysmokes", "mymusics", "myaudios", "mypowers", "myothers", "myactuators"]
 
     // register mode changes
@@ -2574,9 +2755,14 @@ def registerLocations() {
     // lets subscribe to mode changes
     subscribe(location, "mode", modeChangeHandler)
 
-    if ( isHubitat() ) {
-        subscribe(location, "hsmStatus", hsmStatusHandler)
-        // subscribe(location, "hsmAlerts", hsmAlertHandler)
+    subscribe(location, "hsmStatus", hsmStatusHandler)
+    // subscribe(location, "hsmAlerts", hsmAlertHandler)
+
+    // register the variables
+    state.globalVars.each { String varname, Map infomap ->
+        if ( settings["var_${varname}"] ) {
+            subscribe(location, "variable:${varname}", "variableHandler")
+        }
     }
 }
 
@@ -2640,9 +2826,9 @@ def register_myothers() {
 def register_myactuators() {
     registerChangeHandler(settings?.myactuators)
 }
-def register_myaccuweathers() {
-    registerChangeHandler(settings?.myaccuweathers)
-}
+// def register_myaccuweathers() {
+//     registerChangeHandler(settings?.myaccuweathers)
+// }
 def register_mybuttons() {
     registerChangeHandler(settings?.mybuttons)
 }
@@ -2759,11 +2945,28 @@ def hsmStatusHandler(evt) {
     def themode = evt?.value
     def deviceName = evt?.displayName
     def attr = evt?.name
-    logger("New HSM= ${themode} with attr= ${attr} and name= ${deviceName} to HousePanel clients", "info")
+    logger("New HSM= ${themode} with attr= ${attr} and name= ${deviceName} to HousePanel clients", "debug")
     if (themode && state?.directIP && state?.directPort) {
         def modeid = "${state.prefix}hsm"
         postHub(state.directIP, state.directPort, "update", deviceName, modeid, "state", "hsm", themode)
         postHub(state.directIP2, state.directPort2, "update", deviceName, modeid, "state", "hsm", themode)
+    }
+}
+
+def variableHandler(evt) {
+    // modified to simplify modes to only deal with one tile
+    // send group of hub actions for mode changes
+    def vid = "${state.prefix}variables"
+    def theval = evt?.value
+    def varname = evt?.name
+
+    if ( varname.startsWith("variable:") ) {
+        // name returned as "variable:name" so we get everything after the :
+        varname = varname.substring(9)
+        logger("Variable changed, name = ${varname}, val = ${theval}", "debug")
+
+        postHub(state.directIP, state.directPort, "update", "Variables", vid, varname, "variable", theval)
+        postHub(state.directIP2, state.directPort2, "update", "Variables", vid, varname, "variable", theval)
     }
 }
 
@@ -2792,12 +2995,7 @@ def postHub(ip, port, msgtype, name, id, attr, type, value) {
                 ],
                 body: abody
             ]
-            def result
-            if ( isST() ) {
-                result = physicalgraph.device.HubAction.newInstance(params)
-            } else {
-                result = hubitat.device.HubAction.newInstance(params)
-            }
+            def result = hubitat.device.HubAction.newInstance(params)
             sendHubCommand(result)
         }
     }
@@ -2852,6 +3050,41 @@ private logger(msg, level = "debug") {
         default:
             log.debug msg
             break
+    }
+}
+
+private getWebData(Map params, Boolean text=true) {
+    try {
+        httpGet(params) { resp ->
+            if (resp?.status != 200) { logWarn("${resp?.status} $params") }
+            if (resp?.data) {
+                if (text) { return resp.data.text?.toString() }
+                return resp.data
+            } else {
+                return null
+            }
+        }
+    } catch (ex) {
+        logger("Problem obtaining uri = ${params.uri} from web", "error") 
+        log.error ex
+        return null
+    }
+}
+
+// we only get this token to confirm OAUTH is configured
+// for making API calls we use the Bearer Token obtained via OAUTH flow
+Boolean getAccessToken() {
+    try {
+        if (!state.accessToken) {
+            state.accessToken = createAccessToken()
+            logger('App Access Token Missing... Generating New Token!!!', "warn")
+            return true
+        }
+        return true
+    } catch (ex) {
+            String msg = "Error: OAuth is not Enabled for ${app.getName()}!. Please click remove and Enable Oauth under in the HE console 'Apps Code'"
+            logger("getAccessToken Exception: ${msg}", "error")
+            return false
     }
 }
 

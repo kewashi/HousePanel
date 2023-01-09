@@ -42,8 +42,14 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
     }
 
     // save the sheet upon entry for cancel handling
-    savedSheet = document.getElementById('customtiles').sheet;
-    
+    var customCSSfile = document.getElementById('customtiles');
+    if ( customCSSfile ) {
+        savedSheet = customCSSfile.sheet;
+    } else {
+        saveCSSFile(str_type, thingindex, "", false);
+    }
+
+
     // * DIALOG START *	
     var dialog_html = "<div id='tileDialog' class='tileDialog' str_type='" + 
                       str_type + "' thingindex='" + thingindex +"' >";
@@ -271,15 +277,21 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
         scope = $("#scopeEffect").val();
     }
 
+    // dh += "<option value=\"thistile\"" + seltile + ">This tile, All pages</option>";       // old mode 0
+    // dh += "<option value=\"thispage\"" + selpage + ">This tile, This page</option>";       // old mode 0 w/ floorplan
+    // dh += "<option value=\"typetile\">All " + str_type + " tiles, All pages</option>";     // old mode 1
+    // dh += "<option value=\"typepage\">All " + str_type + " tiles, This page</option>";     // new mode
+    // dh += "<option value=\"alltile\">All tiles, All pages</option>";                       // old mode 2
+    // dh += "<option value=\"allpage\">All tiles This page</option>";                        // new mode
     function getScope() {
         // start with alltile and allpage assumptions
         var tg = "div.thing";
         // add on assumption for the next four options
-        if ( scope==="typetile" || scope==="typepage" || scope==="thistile" || scope==="thispage" || scope==="overlay" ) { 
+        if ( scope==="typetile" || scope==="typepage" || scope==="thistile" || scope==="thispage" || scope==="overlay" || scope==="wholetile") { 
             tg+= "." + str_type + "-thing"; 
         }
         // finally if we are asking for a specific tile add that specifier
-        if ( scope==="thistile" || scope==="thispage" ) { 
+        if ( scope==="thistile" || scope==="thispage" || scope==="wholetile" ) { 
             tg+= '.p_'+thingindex; 
         }
         return tg;
@@ -537,19 +549,24 @@ function initDialogBinds(str_type, thingindex) {
             addCSSRule(getCssRuleTarget(str_type, 'panel', thingindex), rule);
         } else {
             addCSSRule(getCssRuleTarget(str_type, 'wholetile', thingindex), rule);
-            addCSSRule(getCssRuleTarget(str_type, 'head', thingindex), rule);
             // if ( str_type==="switchlevel" || str_type==="bulb" ) {
             //     addCSSRule("div.overlay.level.v_"+thingindex+" .ui-slider", rule);
             // }
         }
-        
-        // handle special case of thermostats that need to have widths fixed
-        // if ( str_type === "thermostat" ) {
-        //     var midsize = newsize - 64;
-        //     rule = "width: " + midsize.toString() + "px;";
-        //     addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.heatingSetpoint", rule);
-        //     addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.coolingSetpoint", rule);
-        // }
+        event.stopPropagation;
+    });
+
+    // set float options
+    $("#floatOpts").off('change');
+    $("#floatOpts").on('change', function(event) {
+        var str_type = $("#tileDialog").attr("str_type");
+        var thingindex = $("#tileDialog").attr("thingindex");
+        var newfloat = $("#floatOpts").val();
+        var rule = "float: " + newfloat + ";";
+        console.log(">>>> Float: ", newfloat, rule, str_type);
+        if ( str_type!=="page" ) {
+            addCSSRule(getCssRuleTarget(str_type, 'wholetile', thingindex), rule);
+        }
         event.stopPropagation;
     });
 
@@ -1020,12 +1037,13 @@ function sizepicker(str_type, thingindex) {
     dh += "<div class='editSection_input'><input type='checkbox' id='autoBgSize'><label class=\"iconChecks\" for=\"autoBgSize\">Auto?</label></div>";
 
     // overall tile size effect -- i dont' know why I had this set different?
+    // now I rmember - it is for whole tiles, so I renamed it
     // var target2 = "div.thing."+str_type+"-thing";
-    var target2 = target;
+    var targetwhole = getCssRuleTarget(str_type, subid, thingindex, "wholetile"); //  "div.thing."+str_type+"-thing";
     
-    var th = $(target2).css("height");
-    var tw = $(target2).css("width");
-    if ( !th || th.indexOf("px") === -1 ) { 
+    var th = $(target).css("height");
+    var tw = $(target).css("width");
+    if ( th==="auto" || !th || th.indexOf("px") === -1 ) { 
         th= 0; 
     } else {
         th = parseInt(th);
@@ -1038,12 +1056,12 @@ function sizepicker(str_type, thingindex) {
     
     var h = $(target).css("height");
     var w = $(target).css("width");
-    if ( !h || !h.hasOwnProperty("indexOf") || h.indexOf("px") === -1 ) { 
+    if ( h==="auto" || !h || !h.hasOwnProperty("indexOf") || h.indexOf("px") === -1 ) { 
         h= 0; 
     } else {
         h = parseInt(h);
     }
-    if ( !w || !w.hasOwnProperty("indexOf") ||  w.indexOf("px") === -1 ) { 
+    if ( w==="auto" || !w || !w.hasOwnProperty("indexOf") ||  w.indexOf("px") === -1 ) { 
         w= 0; 
     } else {
         w = parseInt(w);
@@ -1054,9 +1072,27 @@ function sizepicker(str_type, thingindex) {
     dh += "<label for='tileHeight'>Tile H: </label>";
     dh += "<input size='8' type=\"number\" min='10' max='1600' step='10' id=\"tileHeight\" value=\"" + th + "\"/>";
     dh += "</div>";
-    dh += "<div class='editSection_input autochk'>";
+    dh += "<div class='editSection_input'>";
     dh += "<label for='tileWidth'>Tile W: </label>";
     dh += "<input size='8' type=\"number\" min='10' max='1600' step='10' id=\"tileWidth\" value=\"" + tw + "\"/>";
+    dh += "</div>";
+    dh += "<div class='editSection_input'>";
+
+    var curFloat = $(targetwhole).css("float");
+    console.log(">>>> curFloat = ", curFloat, target, targetwhole);
+    var floats = ["none", "left", "right"];
+    var fe = "<label for='tileFloat'>Float: </label>";
+    fe += "<select name=\"floatOpts\" id=\"floatOpts\" class=\"ddlDialog\">";
+    floats.forEach (function(key) {
+        if ( curFloat && curFloat===key ) {
+            fe += "<option value=\"" + key + "\" selected>" + key + "</option>";
+        } else {
+            fe += "<option value=\"" + key + "\">" + key + "</option>";
+        }
+    });
+    fe += "</select>";
+    dh += fe;
+
     dh += "</div>";
     dh += "<div class='editSection_input autochk'><input type='checkbox' id='autoTileHeight'><label class=\"iconChecks\" for=\"autoTileHeight\">Auto H?</label></div>";
     dh += "<div class='editSection_input autochk'><input type='checkbox' id='autoTileWidth'><label class=\"iconChecks\" for=\"autoTileWidth\">Auto W?</label></div>";
@@ -1164,7 +1200,7 @@ function setupClicks(str_type, thingindex) {
         $("#tileDialog").attr("thingindex",thingindex);
         if ( !subid ) {
             subid = (str_type==="page") ? "panel" : "wholetile";
-        }
+        }scopeEffect
         
         // update everything to reflect current tile
         toggleTile(event.target, str_type, subid, thingindex);
@@ -1374,21 +1410,34 @@ function updateNames(str_type, thingindex) {
 }
 
 function saveTileEdit(str_type, thingindex) {
-    var returnURL = cm_Globals.returnURL;
 
     // get all custom CSS text
-    var newname = $("#editName").val();
     var sheet = document.getElementById('customtiles').sheet;
     var sheetContents = "";
-    c=sheet.cssRules;
+    var c=sheet.cssRules;
     for(j=0;j<c.length;j++){
         sheetContents += c[j].cssText;
     };
 
+    saveCSSFile(str_type, thingindex, sheetContents, true);
+}
+
+function saveCSSFile(str_type, thingindex, sheetContents, reload) {
+
+    var returnURL = cm_Globals.returnURL;
+    var newname = "";
+    if ( $("#editName") ) {
+        newname = $("#editName").val();
+    }
+    var skin = $("#skinid").val();
+    var pname = $("#showversion span#infoname").html();
+
     // use this regexp to add returns after open and closed brackets and semi-colons
     var regex = /[{;}]/g;
     var subst = "$&\n";
-    sheetContents = sheetContents.replace(regex, subst);
+    if ( sheetContents.length > 1 ) {
+        sheetContents = sheetContents.replace(regex, subst);
+    }
     
     // post changes to save them in a custom css file
     // the new name of this tile is passed in the attr variable
@@ -1398,7 +1447,7 @@ function saveTileEdit(str_type, thingindex) {
 
     function postRecurse(n1, n2, nlen) {
         // ensure we end on a proper bounday for sections
-        if ( n1 >= nlen ) {
+        if ( n1 >= nlen && nlen>0 ) {
             return true;
         } else if ( n2 >= nlen ) { 
             n2 = nlen; 
@@ -1419,8 +1468,6 @@ function saveTileEdit(str_type, thingindex) {
         // console.log("\n----------------------------------------------------------\n", subcontent);
         // console.log("\n----------------------------------------------------------\n");
         subcontent= encodeURI(subcontent);
-        var skin = $("#skinid").val();
-        var pname = $("#showversion span#infoname").html();
 
         $.post(returnURL, 
             {useajax: "savetileedit", userid: et_Globals.userid, thingid: et_Globals.thingid, skin: skin, id: n1, n1: n1, n2: n2, nlen: sheetContents.length, 
@@ -1433,12 +1480,21 @@ function saveTileEdit(str_type, thingindex) {
 
                     n1 = n2;
                     n2 = n1 + 59000;
-                    var done = postRecurse(n1, n2, nlen);
-
+                    
+                    var done = ( n1 >= nlen );
+                    if ( !done ) {
+                        done = postRecurse(n1, n2, nlen);
+                    }
 
                     // reload if tile updated and if we are saving the last file part
-                    if ( cm_Globals.reload && done ) {
-                        window.location.href = cm_Globals.returnURL;
+                    if ( done ) {
+                        if ( cm_Globals.reload && reload ) {
+                            window.location.href = cm_Globals.returnURL;
+                        } else if ( !reload ) {
+                            // savedSheet = document.getElementById('customtiles').sheet;
+                            window.location.href = cm_Globals.returnURL;
+                            alert("A new custome CSS file was generated. This will be automatically updated as you make edits. You must relaunch editor again.");
+                        }
                     }
                 }
             }
@@ -1809,7 +1865,7 @@ function initColor(str_type, subid, thingindex) {
 
         fe += "<div class='colorgroup font'><label>Font Size (px):</label>";
         fe += "<select name=\"fontEffect\" id=\"editFont\" class=\"ddlDialog\">";
-        var sizes = [8,9,10,11,12,14,16,18,20,24,28,32,40,48,60,80,100,120];
+        var sizes = [6,7,8,9,10,11,12,14,16,18,20,22,24,28,32,36,40,44,48,52,60,80,100,120,200];
         sizes.forEach( function(sz, index, arr) {
             sz = parseInt(sz);
             var checked = "";
