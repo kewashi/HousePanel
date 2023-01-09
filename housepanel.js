@@ -1647,11 +1647,11 @@ function execCreateUser() {
         $.post(cm_Globals.returnURL, 
             {useajax: "createuser", email: emailname, uname: username, mobile: mobile, pword: newpw}, 
             function(presult, pstatus) {
-                if ( pstatus==="success" && presult && typeof presult === "object" && presult.userid ) {
+                if ( pstatus==="success" && presult && typeof presult === "object" && presult.id ) {
                     var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
                     var pos = {style: pstyle};
-                    // console.log("new user created: ", presult);
-                    var userid = presult.userid;
+                    console.log("new user created: ", presult);
+                    var userid = presult.id;
                     createModal("loginfo","New user created. Next, please validate using code <br>sent to mobile: " + mobile+ " to activate this account.<br><br>", "body", "Done", pos, function(ui) {
                         window.location.href = cm_Globals.returnURL + "/activateuser?userid="+userid;
                     });
@@ -1679,7 +1679,7 @@ function execValidatePassword() {
     var panelpw = genobj.panelpword;
     var emailname = genobj.email;
     var uname = genobj.uname;
-    var hpcode = genobj.hpcode;
+    // var hpcode = genobj.hpcode;
     var newhpcode = genobj.newhpcode;
     var mobile = genobj.mobile;
     // console.log("genobj: ", genobj);
@@ -1688,8 +1688,8 @@ function execValidatePassword() {
         alert("Password provided is too short. Must be 6 or more characters in length");
     } else if ( newpw !== newpw2 ) {
         alert("Passwords do not match. Try again.");
-    } else if ( hpcode !== newhpcode ) {
-        alert("Security code is incorrect.");
+    // } else if ( hpcode !== newhpcode ) {
+    //     alert("Security code is incorrect.");
     } else {
         $.post(cm_Globals.returnURL, 
             {useajax: "updatepassword", userid: userid, email:emailname, mobile:mobile, uname: uname, pword: newpw, pname: pname, panelpw: panelpw, hpcode: newhpcode}, 
@@ -1723,15 +1723,15 @@ function execValidateUser() {
     var userid = genobj.userid;
     var emailname = genobj.email;
     var mobile = genobj.mobile;
-    var hpcode = genobj.hpcode;
+    // var hpcode = genobj.hpcode;
     var newhpcode = genobj.newhpcode;
     // console.log("validateUser genobj: ", genobj);
 
-    if ( hpcode !== newhpcode ) {
-        alert("Security code is incorrect.");
-    } else {
+    // if ( hpcode !== newhpcode ) {
+    //     alert("Security code is incorrect.");
+    // } else {
         $.post(cm_Globals.returnURL, 
-            {useajax: "validateuser", userid: userid, email:emailname, mobile:mobile}, 
+            {useajax: "validateuser", userid: userid, email:emailname, mobile:mobile, hpcode: newhpcode}, 
             function(presult, pstatus) {
                 if ( pstatus==="success" && presult && typeof presult === "object" ) {
                     var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
@@ -1750,7 +1750,7 @@ function execValidateUser() {
                 }
             }
         );
-    }
+    // }
 }
 
 function execButton(buttonid) {
@@ -2227,20 +2227,15 @@ function setupButtons() {
             var hideid = $("#hideid_"+hubindex);
             var hubTarget = $(this).parent().find("input[name='hubhost']");
             var hubNameTarget = $(this).parent().parent().find("input[name='hubname']");
-            if ( hubType=== "SmartThings" ) {
-                hideid.removeClass("hidden");
-                // hubTarget.prop("disabled", false);
-                hubTarget.val("https://graph.api.smartthings.com");
-                hubNameTarget.val("");
-                $("#newthingcount").html("Fill out the fields below to authorize your "+hubType+" hub. The hub ID and name will be obtained automatically.");
-            } else if ( hubType=== "NewSmartThings" ) {
+            if ( hubType==="SmartThings" || hubType==="NewSmartThings" ) {
                 hideid.addClass("hidden");
                 hubTarget.val("https://api.smartthings.com");
                 // hubTarget.prop("disabled", true);
                 hubNameTarget.val("SmartThings Home");
                 $("#newthingcount").html("Ready to authorize your SmartThings hub via the new API platform.");
-            } else if ( hubType=== "Sonos" ) {
-                hideid.addClass("hidden");
+            } else if ( hubType==="Sonos" ) {
+                // hideid.addClass("hidden");
+                hideid.removeClass("hidden");
                 hubTarget.val("https://api.sonos.com");
                 // hubTarget.prop("disabled", true);
                 $(hubNameTarget).val("Sonos");
@@ -2393,7 +2388,7 @@ function setupButtons() {
                         if ( obj.appId ) {
                             nvpreq = nvpreq + "&application_id=" + obj.appId;
                         }
-                        nvpreq= nvpreq + "&client_id=" + encodeURI(obj.clientId) + "&redirect_uri=" + encodeURI(obj.url);
+                        nvpreq= nvpreq + "&client_id=" + obj.clientId + "&redirect_uri=" + encodeURI(obj.url);
                         // alert("preparing to launch with nvpreq = "+ nvpreq);
 
                         // navigate over to the server to authorize
@@ -2410,7 +2405,7 @@ function setupButtons() {
             evt.stopPropagation();
         });
         
-        // TODO - test and activate this feature
+        // this feature works but not on the last hub
         $("input.hubdel").click(function(evt) {
             var hubnum = $(this).attr("hubnum");
             var hubId = $(this).attr("hubid");
@@ -2504,9 +2499,9 @@ function addEditLink() {
     });
     
     $("div.cmzlink").on("click",function(evt) {
-        var aid = $(evt.target).attr("aid");
-        var thing = "#" + aid;
-        var thingname = $(thing).attr("name");
+        var taid = $(evt.target).attr("aid");
+        var thing = "#" + taid;
+        var aid = taid.substr(2);
         var pwsib = $(evt.target).siblings("div.overlay.password");
         var userid = cm_Globals.options.userid;
         if ( pwsib && pwsib.length > 0 ) {

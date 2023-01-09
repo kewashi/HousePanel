@@ -1202,8 +1202,8 @@ function showPreview() {
                 $("#cm_preview").html(presult);
 
                 // activate click on items
-                $("#tc_wysiwyg").off('click');
-                $("#tc_wysiwyg").on('click', function(event) {
+                $("#te_wysiwyg").off('click');
+                $("#te_wysiwyg").on('click', function(event) {
                     var subid = $(event.target).attr("subid");
                     // console.log("subid= ", subid);
                     if ( typeof subid!=="undefined" ) {
