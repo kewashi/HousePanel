@@ -1079,7 +1079,7 @@ function sizepicker(str_type, thingindex) {
     dh += "<div class='editSection_input'>";
 
     var curFloat = $(targetwhole).css("float");
-    console.log(">>>> curFloat = ", curFloat, target, targetwhole);
+    // console.log(">>>> curFloat = ", curFloat, target, targetwhole);
     var floats = ["none", "left", "right"];
     var fe = "<label for='tileFloat'>Float: </label>";
     fe += "<select name=\"floatOpts\" id=\"floatOpts\" class=\"ddlDialog\">";
@@ -2320,6 +2320,7 @@ function getIcons() {
                 $('#iconList').html(presult);
                 setupIcons(iCategory);
             } else {
+                // console.log("iconlist reading returned: ", presult, " inputs: ", et_Globals.userid, et_Globals.thingid, "none", localPath, iCategory, skindir, pname);
                 $('#iconList').html("<div class='error'>No icons available for: " + iCategory + "</div>");
             }
         }
