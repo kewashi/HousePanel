@@ -10030,14 +10030,14 @@ function getIcons(userid, pname, skin, icondir, category) {
     // change over to where our icons are located
     var activedir;
     if ( category.startsWith("Main_") ) {
-        // activedir = path.join(__dirname, "skin-housepanel", icondir);
-        activedir = path.join("skin-housepanel", icondir);
+        activedir = path.join(skin, icondir);
     } else if ( category.startsWith("Modern_") ) {
         activedir = path.join("skin-modern", icondir);
     } else if ( category.startsWith("User_") ) {
         activedir = path.join(userdir, pname, icondir);
     } else {
         activedir = path.join("media", icondir);
+        console.log(">>>> activedir: ", activedir);
     }
 
     try {
