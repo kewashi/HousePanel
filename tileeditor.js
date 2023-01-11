@@ -457,7 +457,7 @@ function setupIcons(category) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
         
-        var img = $(this).attr("show");
+        var img = $(this).attr("show") || $(this).attr("src");
         var subid = $("#subidTarget").html();
         var strIconTarget = getCssRuleTarget(str_type, subid, thingindex);
         // console.log("Clicked on img= "+img+" Category= "+category+" strIconTarget= "+strIconTarget+" type= "+str_type+" subid= "+subid+" index= "+thingindex);
@@ -2298,7 +2298,7 @@ function getIcons() {
     // change to use php to gather icons in an ajax post call
     // this replaces the old method that fails on GoDaddy
     if ( !iCategory ) { iCategory = 'Main_Icons'; }
-    var localPath;
+    var localPath = "";
     if ( iCategory.startsWith("Main_") ) {
         localPath = iCategory.substr(5).toLowerCase();
     } else if ( iCategory.startsWith("User_") ) {
@@ -2306,25 +2306,50 @@ function getIcons() {
         // localPath = "../../" + skindir + "/" + iCategory.substr(5).toLowerCase();
     } else if ( iCategory.startsWith("Modern_") ) {
         localPath = iCategory.substr(7).toLowerCase();
-    } else {
-        localPath = iCategory;
-        // localPath = "../../media/" + iCategory;
+    // } else {
+    //     localPath = iCategory;
+    //     // localPath = "../../media/" + iCategory;
     }
     // alert("path = "+localPath);
 
-    $.post(returnURL, 
-        {useajax: "geticons", id: 0, userid: et_Globals.userid, thingid: et_Globals.thingid, type: "none", value: localPath, attr: iCategory, skin: skindir, pname: pname},
-        function (presult, pstatus) {
-            if (pstatus==="success" && presult ) {
-                // console.log("reading icons from skin= " + skindir + " and path= "+localPath);
-                $('#iconList').html(presult);
-                setupIcons(iCategory);
-            } else {
-                // console.log("iconlist reading returned: ", presult, " inputs: ", et_Globals.userid, et_Globals.thingid, "none", localPath, iCategory, skindir, pname);
-                $('#iconList').html("<div class='error'>No icons available for: " + iCategory + "</div>");
+    if ( localPath ) {
+        $.post(returnURL, 
+            {useajax: "geticons", id: 0, userid: et_Globals.userid, thingid: et_Globals.thingid, type: "none", value: localPath, attr: iCategory, skin: skindir, pname: pname},
+            function (presult, pstatus) {
+                if (pstatus==="success" && presult ) {
+                    // console.log("reading icons from skin= " + skindir + " and path= "+localPath);
+                    $('#iconList').html(presult);
+                    setupIcons(iCategory);
+                } else {
+                    // console.log("iconlist reading returned: ", presult, " inputs: ", et_Globals.userid, et_Globals.thingid, "none", localPath, iCategory, skindir, pname);
+                    $('#iconList').html("<div class='error'>No icons available for: " + iCategory + "</div>");
+                }
             }
-        }
-    );
+        );
+    } else {
+        var icons = '';
+        $.ajax({
+            url: 'iconlist.txt',
+            type:'GET',
+            success: function (data) {
+                var arrIcons = data.toString().replace(/[\t\n]+/g,'').split(',');
+                $.each(arrIcons, function(index, val) {
+                    var iconCategory = val.substr(0, val.indexOf('|'));
+                    iconCategory = $.trim(iconCategory).replace(/\s/g, '_');	
+                    if (iconCategory === iCategory) {
+                        var iconPath = val.substr(1 + val.indexOf('|'));
+                        var k1 = iconPath.lastIndexOf("/");
+                        var k2 = iconPath.lastIndexOf(".png");
+                        var froot = iconPath.substring(k1+1, k2);
+                        icons+='<div class="iconcat"><img class="icon" src="' + iconPath + '" title="' + froot + '"></div>';
+                    }
+                });			
+                $('#iconList').html(icons);
+                setupIcons(iCategory);
+            }
+        });
+        
+    }
 }
 
 function getBgEffect(effect) {
@@ -2370,7 +2395,7 @@ function iconSelected(category, cssRuleTarget, imagePath, str_type, thingindex) 
     //     imagePath = imagePath.substr(n);
     // }
 
-    if ( !category.startsWith("User_") ) {
+    if ( !category.startsWith("User_") && !imagePath.startsWith("http:") ) {
         imagePath = "../../" + imagePath;
     }
 
