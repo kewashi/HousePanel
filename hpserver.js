@@ -29,7 +29,7 @@ const DEBUGisy = false;             // ISY HP connect pushes
 const DEBUGtmp =  true;             // used to debug anything temporarily using ||
 
 // various control options
-const DONATE = false;                 // set this to true to enable donation section
+const DONATE = true;                  // set this to true to enable donation section
 const ENABLERULES = true;             // set this to false to neuter all rules
 const FORDAPIVERSION = "2020-06-01";  // api version number to use for Ford api calls
 
@@ -52,7 +52,6 @@ const request = require('request');
 const url = require('url');
 const nodemailer = require('nodemailer');
 // const countrytime = require('countries-and-timezones');
-const voiceRSSKey = "31dbc4873bc144f2b6346ec0b9e6ae9c";
 
 // load supporting modules
 // var utils = require("./utils");
@@ -78,16 +77,6 @@ GLB.defaultrooms = {
     "Outside": "clock|garage|yard|outside|porch|patio|driveway|weather",
     "Music": "clock|sonos|music|tv|television|alexa|echo|stereo|bose|samsung|pioneer"
 };
-
-// // set fixed name for event sinks and hub authorizations for New SmartThings
-// GLB.sinkalias = "house.panel.alpha.alias";
-// GLB.clientid = "140b41bb-a5d6-4940-8731-7382e9311b96";
-// GLB.clientsecret = "ed65ed1e-85a4-41ff-be49-3ed5cd2134e0";
-
-// // set Sonos key and secret info
-// GLB.sonos_clientid = "fe5304d2-eea0-4278-bfe8-6d8de93444ea";
-// GLB.sonos_clientsecret = "e169f765-90aa-439b-b8d6-948caeae83f4";
-// GLB.sonos_keyname = "housepanel";
 
 // any attribute here will be ignored for events and display
 // this now includes ignoring washer and robot crazy fields
@@ -519,28 +508,29 @@ function getTypes() {
     return thingtypes;
 }
 
-function speakText(userid, phrase) {
-    var params = {
-        key: voiceRSSKey,
-        hl: "en-us",
-        v: "Amy",
-        f: "16khz_16bit_mono",
-        c: "MP3",
-        src: phrase
-    };
-    var headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' };
-    var opts = {};
-    opts.form = params;
-    opts.url = "https://api.voicerss.org";
-    opts.headers = headers;
+// we no longer use this function - but it could be a good replacement for echo Speaks
+// function speakText(userid, phrase) {
+//     var params = {
+//         key: GLB.voicekey,
+//         hl: "en-us",
+//         v: "Amy",
+//         f: "16khz_16bit_mono",
+//         c: "MP3",
+//         src: phrase
+//     };
+//     var headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' };
+//     var opts = {};
+//     opts.form = params;
+//     opts.url = "https://api.voicerss.org";
+//     opts.headers = headers;
 
-    var filename = "user" + userid.toString() +"_speak.mp3";
-    request(opts)
-    .pipe(fs.createWriteStream(filename))
-    .on('error',function(err) {
-        console.log((ddbg()), "error - failed to speak for userid: ", userid," speak error:", err);
-    });
-}
+//     var filename = "user" + userid.toString() +"_speak.mp3";
+//     request(opts)
+//     .pipe(fs.createWriteStream(filename))
+//     .on('error',function(err) {
+//         console.log((ddbg()), "error - failed to speak for userid: ", userid," speak error:", err);
+//     });
+// }
 
 function readCustomCss(userid, pname) {
     // var fname = skin + "/customtiles.css";
@@ -619,7 +609,6 @@ function sendText(phone, msg) {
             console.log( (ddbg()), "Sent txt: ", msg," to: ", phone, " SID: ", message.sid);
         });
     }
-    // console.log( (ddbg()), msg);
 }
 
 function sendEmail(emailname, msg) {
@@ -1042,7 +1031,7 @@ function getAccessToken(userid, code, hub) {
         }
 
         // we now always assume clientId and clientSecret are already encoded
-        var tokenhost = "https://dah2vb2cprod.b2clogin.com/914d88b1-3523-4bf6-9be4-1b96b4f6f919/oauth2/v2.0/token";
+        var tokenhost = "https://dah2vb2cprod.b2clogin.com/" + GLB.fordapicode + "/oauth2/v2.0/token";
         var nvpreq = "p=" + policy;
         var formData = {"grant_type": "authorization_code", "code": code, "client_id": clientId, 
                         "client_secret": clientSecret, "redirect_uri": encodeURI(redirect)};
@@ -1556,7 +1545,7 @@ function fordRefreshToken(userid, hub, refresh) {
     if ( hub.hubtype==="Lincoln" ) {
         policy = policy + "_Lincoln";
     }
-    var tokenhost = "https://dah2vb2cprod.b2clogin.com/914d88b1-3523-4bf6-9be4-1b96b4f6f919/oauth2/v2.0/token";
+    var tokenhost = "https://dah2vb2cprod.b2clogin.com/" + GLB.fordapicode + "/oauth2/v2.0/token";
     var nvpreq = "p=" + policy;
     var formData = {"grant_type": "refresh_token", "refresh_token": refresh_token, "client_id": clientId, "client_secret": clientSecret};
 
@@ -11127,9 +11116,12 @@ GLB.clientid = GLB.dbinfo["st_clientid"];
 GLB.clientsecret = GLB.dbinfo["st_clientsecret"];
 
 // set Sonos key and secret info
-GLB.sonos_clientid = GLB.dbinfo["sonos_clientid"];
-GLB.sonos_clientsecret = GLB.dbinfo["sonos_clientsecret"];
-GLB.sonos_keyname = GLB.dbinfo["sonos_keyname"];
+GLB.sonos_clientid = GLB.dbinfo["sonos_clientid"] || null;
+GLB.sonos_clientsecret = GLB.dbinfo["sonos_clientsecret"] || null;
+GLB.sonos_keyname = GLB.dbinfo["sonos_keyname"] || null;
+
+GLB.voicekey = GLB.dbinfo.voicekey || null;
+GLB.fordapicode = GLB.dbinfo.fordapikey || null;
 
 var port = GLB.port;
 GLB.defhub = "new";
@@ -11193,13 +11185,6 @@ try {
 // retrieve all nodes/things
 // client pages are refreshed when each hub is done reading
 if ( app && applistening ) {
-
-    // hardwire the DB if it is on my server
-    if ( httpsServer ) {
-        GLB.dbinfo.dbhost = "localhost";
-        GLB.dbinfo.dbuid = "housepanel";
-        GLB.dbinfo.dbname = "housepan_housepanel";
-    }
     var mydb = new sqlclass.sqlDatabase(GLB.dbinfo.dbhost, GLB.dbinfo.dbname, GLB.dbinfo.dbuid, GLB.dbinfo.dbpassword);
 
     // handler functions for HousePanel
@@ -11446,8 +11431,6 @@ if ( app && applistening ) {
     // --------------
     // for new SmartThings accounts this is done via a callback to the /sinks endpoint below
     // *********************************************************************************************
-    
-    // TODO - add protection to ensure post came from an authenticated user
     app.post("*", function (req, res) {
 
         // get user name
@@ -11472,27 +11455,6 @@ if ( app && applistening ) {
                     // which means we haven't done the first getDevices calle
                     } else {
                         returnmsg = "initialize ignored for hub with id = " + hubid;
-                        // getUserName(req.cookies)
-                        // .then(results => {
-                
-                        //     if ( !results || !results["users_id"] || !results["users_defhub"] ) {
-                        //         returnmsg = "no user is logged in so this is a bogus hub initialize request.";
-                        //         console.log( (ddbg()), "error - " + returnmsg);
-                        //     } else {
-                        //         var user = results;
-                        //         var userid = user["users_id"];
-                        //         var defhub = user["users_defhub"];
-
-                        //         mydb.getRow("hubs", "*", "userid = " + userid + " AND hubid = '" + defhub + "'")
-                        //         .then(row => {
-                        //             var newhub = row;
-                        //             newhub.hubid = hubid;
-                        //             returnmsg = "devices retrieved from new hub with id = " + hubid + " (updated from " + defhub + ")";
-                        //             mydb.updateRow("hubs", newhub, "id = " + newhub.id);
-                        //             getDevices(hub, true, "/");
-                        //         });
-                        //     }
-                        // });        
                     }
                     res.send(returnmsg);
                 }).catch(reason => {console.log("dberror 32 - app.post - msg initialize - ", reason);});
@@ -11502,7 +11464,7 @@ if ( app && applistening ) {
             res.end();
 
         // handle msg events from Groovy legacy SmartThings and Hubitat here
-        // these message can now only come from the connector
+        // these message can now only come from Hubitat since ST groovy is gone
         } else if ( req.path==="/" && req.body['msgtype'] === "update" ) {
             if ( DEBUG19 ) {
                 console.log( (ddbg()), "Received update msg from hub: ", req.body["hubid"], " msg: ", req.body);
@@ -11548,7 +11510,8 @@ if ( app && applistening ) {
             });
             
 
-        // // handle events from Sonos service
+        // handle events from Sonos service
+        // if you are running HP locally this will not work unless you are using https protocol
         } else if ( req.path === "/sonos" ) {
             var sigvals = [
                 req.headers['x-sonos-event-seq-id'],
