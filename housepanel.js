@@ -2234,7 +2234,6 @@ function setupButtons() {
                 hubNameTarget.val("SmartThings Home");
                 $("#newthingcount").html("Ready to authorize your SmartThings hub via the new API platform.");
             } else if ( hubType==="Sonos" ) {
-                // hideid.addClass("hidden");
                 hideid.removeClass("hidden");
                 hubTarget.val("https://api.sonos.com");
                 // hubTarget.prop("disabled", true);
@@ -2255,7 +2254,7 @@ function setupButtons() {
             } else if ( hubType==="ISY" ) {
                 hideid.removeClass("hidden");
                 // hubTarget.prop("disabled", false);
-                hubTarget.val("http://192.168.11.31");
+                // hubTarget.val("http://192.168.x.x");
                 hubNameTarget.val("ISY Home");
             } else {
                 hideid.removeClass("hidden");
@@ -2291,7 +2290,7 @@ function setupButtons() {
                 // hubTarget.prop("disabled", true);
             } else if ( hubType==="ISY" ) {
                 hideid.removeClass("hidden");
-                hubTarget.val("http://192.168.11.31");
+                // hubTarget.val("http://192.168.x.x");
                 // hubTarget.prop("disabled", false);
             } else {
                 hideid.removeClass("hidden");
@@ -3694,7 +3693,7 @@ function processClick(that, thingname, ro) {
             // for ISY only process if uom_switch is 100 which means a light
             // and fix use of on/off to DON/DOF
             var uomid = "#a-" + aid + "-uom_switch";
-            if ( thetype==="ISY" ) {
+            if ( thetype==="isy" ) {
                 if ( $(uomid) && $(uomid).html() !== "100" ) {
                     val = false;
                 } else if ( val==="on" ) {

@@ -3558,14 +3558,14 @@ function validateUser(body) {
 
     // user has been validated so lets update their usertype from 0 to equal their userid and clear out the code
     // the userid is used so it can be mapped to an existing user if desired later
-    var upduser = {email: emailname, mobile: mobile, hpcode: "", usertype: userid};
-
+    
     // check hpcode to see if it matches
     // and then update the designated user
-    return mydb.updateRow("users", upduser, "id = " + userid + " AND hpcode ='" + newhpcode + "'")
+    return mydb.getRow("users", "*", "id = " + userid + " AND hpcode ='" + newhpcode + "'")
     .then( row => {
         if ( row ) {
-            return upduser;
+            var upduser = {email: emailname, mobile: mobile, hpcode: "", usertype: userid};
+            return mydb.updateRow("users", upduser, "id = " + userid);
         } else {
             return "error - problem validating user, the code you provided probably did not match";
         }
@@ -3857,7 +3857,7 @@ function getAuthPage(user, configoptions, hostname, pathname, rmsg) {
         // var allhubtypes = { SmartThings:"SmartThings", NewSmartThings:"New SmartThings", Hubitat: "Hubitat", ISY: "ISY", Ford: "Ford", Lincoln: "Lincoln" };
         // var allhubtypes = { SmartThings:"Legacy SmartThings", NewSmartThings:"SmartThings", Hubitat: "Hubitat", Sonos: "Sonos", Ford: "Ford" };
         // var allhubtypes = { SmartThings:"Legacy SmartThings", NewSmartThings:"SmartThings", Hubitat: "Hubitat" };
-        var allhubtypes = { Hubitat: "Hubitat" , NewSmartThings:"SmartThings", Sonos: "Sonos" };
+        var allhubtypes = { Hubitat: "Hubitat", ISY: "ISY", NewSmartThings:"SmartThings", Sonos: "Sonos" };
         var $tc = "";
         $tc += "<div class='hubopt'><label for=\"pickhub\" class=\"startupinp\">Authorize Hub: </label>";
         $tc += "<select name=\"pickhub\" id=\"pickhub\" class=\"startupinp pickhub\">";
@@ -3920,7 +3920,7 @@ function getAuthPage(user, configoptions, hostname, pathname, rmsg) {
                 hub.hubhost = "https://api.sonos.com";
                 // secretclass += " hidden";
             } else {
-                hub.hubhost = "https://oauth.cloud.hubitat.com";
+                hub.hubhost = "";
             }
 
             // for each hub make a section with its own form that comes back here as a post
