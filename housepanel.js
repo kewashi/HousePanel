@@ -2317,6 +2317,9 @@ function setupButtons() {
                 return;
             }
             
+            // tell user we are authorizing hub...
+            $("#newthingcount").html("Authorizing hub: " + formData.hubName).fadeTo(400, 0.1 ).fadeTo(400, 1.0).fadeTo(400, 0.1 ).fadeTo(400, 1).fadeTo(400, 0.1 ).fadeTo(400, 1).fadeTo(400, 0.1 ).fadeTo(400, 1).fadeTo(400, 0.1 ).fadeTo(400, 1);
+
             // make an api call and process results
             // some hubs return devices on server and pushes results later
             // others return a request to start an OATH redirection flow
@@ -2327,45 +2330,22 @@ function setupButtons() {
                 // console.log("hubauth: ", presult);
                 // alert("wait... presult.action = " + presult.action);
 
-                if ( pstatus==="success" && typeof presult==="object") {
+                if ( pstatus==="success" && typeof presult==="object" && presult.action ) {
                     var obj = presult;
 
                     // for hubs that have auth info in the config file we do nothing but notify user of retrieval
                     if ( obj.action === "things" ) {
-                        // tell user we are authorizing hub...
-                        $("#newthingcount").html("Authorizing " + obj.hubType + " hub: " + obj.hubName).fadeTo(400, 0.1 ).fadeTo(400, 1.0);
-                        setInterval(function() {
-                            $("#newthingcount").fadeTo(400, 0.1 ).fadeTo(400, 1);
-                        }, 1000);
+                        $("#newthingcount").html("Hub " + obj.hubName + " of type (" + obj.hubType+") authorized " + obj.numdevices + " devices");
 
                         // reload the page after 15 seconds of trying to get the devices in the background
                         // while we are waiting the server is reading the devices from the hub asyncronously
                         // if this reload happens that means the device read likely failed
-                        setTimeout(function() {
-                            var location = cm_Globals.returnURL + "/reauth";
-                            window.location.href = location;
-                        }, 15000);
+                        // setTimeout(function() {
+                        //     var location = cm_Globals.returnURL + "/reauth";
+                        //     window.location.href = location;
+                        // }, 15000);
 
                     }
-
-                    // navigate to the location to authorize Ford Pass - see the following postman schema for background info
-                    // "_postman_id": "a4dffc56-609b-4b97-9880-15e5b249b9ea",
-                    // "name": "CA Ford-Connect Production",
-                    // "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-                    // else if ( obj.action === "fordoauth" ) {
-                    //     var nvpreq = "response_type=code";
-                    //     nvpreq = nvpreq + "&make=" + obj.model + "&application_id=" + obj.appId;
-                    //     if ( obj.scope ) {
-                    //         nvpreq = nvpreq + "&scope=" + encodeURI(obj.scope);
-                    //     }
-                    //     if ( obj.state ) {
-                    //         nvpreq = nvpreq + "&state=" + encodeURI(obj.state);
-                    //     }
-                    //     nvpreq= nvpreq + "&client_id=" + encodeURI(obj.clientId) + "&redirect_uri=" + encodeURI(obj.url);
-                    //     var location = obj.host + "?" + nvpreq;
-                    //     // alert("Ready to authorize a " + obj.model + " vehicle redirect to location: " + location);
-                    //     window.location.href = location;
-                    // }
 
                     // if oauth flow then start the process with a redirection to site
                     // was updated to handle specific client_type values for user level auth and user scope values
@@ -2393,11 +2373,16 @@ function setupButtons() {
                         // navigate over to the server to authorize
                         var location = obj.host + "?" + nvpreq;
                         window.location.href = location;
+                    }
 
+                    else if ( obj.action === "error" ) {
+                        $("#newthingcount").html(obj.reason);
                     }
                 } else {
                     if (typeof presult==="string" ) {
                         $("#newthingcount").html(presult);
+                    } else {
+                        $("#newthingcount").html("Something went wrong with hub auth request");
                     }
                 }
             });

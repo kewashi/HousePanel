@@ -42,7 +42,7 @@ const https = require('https');
 const fs = require('fs');
 const express = require('express');
 // const bodyParser = require('body-parser');
-// const xml2js = require('xml2js').parseString;
+const xml2js = require('xml2js').parseString;
 const crypto = require('crypto');
 const UTIL = require('util');
 // const mqtt = require('mqtt');
@@ -782,620 +782,647 @@ function curl_call(host, headertype, nvpstr, formdata, calltype, callback) {
     request(opts, callback);
 }
 
-function getHubInfo(hub, reload) {
-
-    var access_token = hub.hubaccess;
-    var clientId = hub.clientid;
-    var clientSecret = hub.clientsecret;
-    var endpt = hub.hubendpt;
-    var hubindex = hub.id;
-    var userid = hub.userid;
-    var sonoscount = 0;
-    var nsonos = 0;
+// rewrote this function to use promises and return actual results when it is done
+// this way hub authorizations work and return number of devices properly
+function getHubInfo(hub) {
     if ( DEBUG2 ) {
         console.log( (ddbg()), "in getHubInfo - hub: ", hub);
     }
 
-    function checkDone(extrahubid) {
-        nsonos ++;
-        if ( nsonos >= sonoscount ) {
-            mydb.updateRow("users",{defhub: extrahubid},"id = "+userid)
-            .then( () => {
-                updateOptions(userid, true, "/reauth", 1000);
-            });
-        }
-    }
-    
-    // for legacy ST and Hubitat hubs we make a call to get hub name and other info
-    if ( hub.hubtype==="SmartThings" || hub.hubtype==="Hubitat" ) {
-        var namehost = endpt + "/gethubinfo";
-        var header = {"Authorization": "Bearer " + access_token};
-        var nvpreq = {"scope": "app", "client_id": clientId, "client_secret": clientSecret};
-        curl_call(namehost, header, nvpreq, false, "POST", nameidCallback);
-
-    // handle Sonos hubs
-    // start by making a call to retrieve all households
-    // if there are multiple households we create a hub for each one
-    // the first hub is the original requested one
-    } else if ( hub.hubtype==="Sonos" ) {
-        var namehost = endpt + "/v1/households";
-        var header = {"Content-Type": "application/json",
-                      "Authorization": "Bearer " + access_token,
-                      "Content-Length": 0};
-
-        _curl(namehost, header, "", "GET", function(err, body) {
-        // curl_call(namehost, header, null, null, "GET", function(err, res, body) {
-            // console.log("sonos households returned err: ", err, " body: ", body);
-            var jsonbody = body ? JSON.parse(body) : null;
-            if ( (!err || err === 200) && jsonbody ) {
-                var households = jsonbody.households;
-                sonoscount = households.length;
-                hub.hubid = households[0].id;
-                var extrahubid = hub.hubid;
-                console.log((ddbg()),"Sonos hubid: ", hub.hubid);
-                mydb.updateRow("hubs", hub, "userid = " + userid + " AND id = " + hubindex)
-                .then( result => {
-                    if ( result ) {
-                        if ( DEBUG2 ) {
-                            console.log( (ddbg()), "updated Sonos hubs result: ", result, " hub: ", hub);
-                        }
-                        getDevices(hub, false);
-                    } else {
-                        console.log( (ddbg()),"error - updating hub in Sonos authorization");
-                    }
-                    checkDone(hub.hubid);
-                })
-                .then( () => {
-
-                    for (var i=1; i< households.length; i++) {
-                        extrahubid = households[i].id;
-                        var newhub = clone(hub);
-                        delete newhub.id;
-                        if ( DEBUG2 ) {
-                            console.log((ddbg()),"Processing additional Sonos hub with hubid: ", extrahubid);
-                        }
-
-                        mydb.getRow("hubs", "*", "userid = " + userid + " AND hubid = '"+extrahubid+"'")
-                        .then( row => {
-                            if ( row ) {
-                                newhub.id = row.id;
-                                newhub.hubid = row.hubid;
-                                mydb.updateRow("hubs", newhub, "userid = " + userid + " AND id = "+ row.id)
-                                .then( function(result) {
-                                    if ( result ) {
-                                        if ( DEBUG2 ) {
-                                            console.log( (ddbg()), "updated Sonos hub: ", newhub);
-                                        }
-                                        getDevices(newhub, false);
-                                    } else {
-                                        console.log( (ddbg()),"error - updating a secondary hub in Sonos authorization");
-                                    }
-                                    checkDone(extrahubid);
-                                });
-
-                            } else {
-                                newhub.hubid = extrahubid;
-                                mydb.addRow("hubs", newhub)
-                                .then( row => {
-                                    if ( row ) {
-                                        newhub.id = row.getAutoIncrementValue();
-                                        if ( DEBUG2 ) {
-                                            console.log( (ddbg()), "added new Sono hub: ", newhub);
-                                        }
-                                        getDevices(newhub, false);
-                                    } else {
-                                        console.log( (ddbg()),"error - adding a secondary hub in Sonos authorization");
-                                    }
-                                    checkDone(extrahubid);
-                                });
-            
-                            }
-                        });
-
-                    }
-                    updateOptions(userid, true, "/reauth", 3000);
-
-                })
-                .catch(reason => {
-                    console.log( (ddbg()),"error - dberror Sonos update: ", reason);
-                    mydb.updateRow("users",{defhub: ""},"id = "+userid)
-                    .then( () => {
-                        updateOptions(userid, true, "/reauth", 0);
-                    });
-                });
-
-            }
-
-        });
-
-    // this branch is for New SmartThings and other hubs that don't need to get their name via a hub call
-    } else {
-
-        // set name and id if not given by user or returned by api
-        if ( !hub["hubname"] ) {
-            hub["hubname"]  = hub["hubtype"];
-        }
-        if ( hub.hubid==="new" || !hub.hubid ) {
-            var rstr = getRandomInt(1001, 9999);
-            hub["hubid"] = hub["hubyype"] + rstr.toString();
-        }
-
-        if ( DEBUG2 ) {
-            console.log( (ddbg()), "getHubInfo - hub: ", jsonshow(hub) );
-        }
-
-        // save the hubid in our user default for use later
-        mydb.updateRow("users",{defhub: hub.hubid},"id = "+userid)
-        .then(result => {
-            if ( DEBUG2 ) {
-                console.log( (ddbg()), "update user to default hubid = ", hub.hubid, " result: ", result);
-            }
-
-            mydb.updateRow("hubs", hub, "userid = " + userid + " AND id = " + hubindex)
-            .then( function(result) {
-
-                if ( DEBUG2 ) {
-                    console.log( (ddbg()), "update hubs result: ", result);
-                }
-
-                // now get all the devices
-                getDevices(hub, reload, "/reauth");
-            });
-
-        });
-
-    }
-
-    function nameidCallback(err, res, body) {
-        var jsonbody;
-        var hubName = hub.hubname;;
+    // use promises so we can return actual number of devices returned
+    var promise = new Promise( function(resolve, reject) {
+        const errMsg = "error processing getHubInfo";
         var access_token = hub.hubaccess;
-        var endpt = hub.hubendpt;
-        var hubId = hub.hubid;
+        var clientId = hub.clientid;
+        var clientSecret = hub.clientsecret;
         var endpt = hub.hubendpt;
         var hubindex = hub.id;
         var userid = hub.userid;
-        if ( err ) {
-            console.log( (ddbg()), "error - attempting to make hub name request.");
-            return;
-        }
+        var sonoscount = 0;
+        var nsonos = 0;
+        var mydevices = {};
+    
+        // for legacy ST and Hubitat hubs we make a call to get hub name and other info
+        if ( hub.hubtype==="Hubitat" ) {
+            var namehost = endpt + "/gethubinfo";
+            var header = {"Authorization": "Bearer " + access_token};
+            var nvpreq = {"scope": "app", "client_id": clientId, "client_secret": clientSecret};
+            _curl(namehost, header, nvpreq, "POST")
+            .then( body => {
+                hubitatCallback(body);
+            })
+            .catch(reason => {
+                console.log( (ddbg()), reason);
+                reject(reason);
+            })
 
-        var iserror = false;
-        try {
-            jsonbody = JSON.parse(body);
-            hubName = jsonbody["sitename"];
-            hubId = jsonbody["hubId"];
+        // handle Sonos hubs
+        // start by making a call to retrieve all households
+        // if there are multiple households we create a hub for each one
+        // the first hub is the original requested one
+        } else if ( hub.hubtype==="Sonos" ) {
+            var namehost = endpt + "/v1/households";
+            var header = {"Content-Type": "application/json",
+                        "Authorization": "Bearer " + access_token,
+                        "Content-Length": 0};
+
+            _curl(namehost, header, "", "GET", function(err, body) {
+            // curl_call(namehost, header, null, null, "GET", function(err, res, body) {
+                // console.log("sonos households returned err: ", err, " body: ", body);
+                var jsonbody = body ? JSON.parse(body) : null;
+                if ( (!err || err === 200) && jsonbody ) {
+                    var households = jsonbody.households;
+                    sonoscount = households.length;
+                    hub.hubid = households[0].id;
+
+                    console.log((ddbg()),"Sonos hubid: ", hub.hubid);
+                    readSonosHub(hub);
+
+                    for (var i=1; i< households.length; i++) {
+                        var newhub = clone(hub);
+                        newhub.hubid = households[i].id;
+                        delete newhub.id;
+                        if ( DEBUG2 ) {
+                            console.log((ddbg()),"Processing additional Sonos hub with hubid: ", newhub.hubid);
+                        }
+                        readSonosHub(hub);
+                    }
+                } else {
+                    reject(errMsg);
+                }
+            });
+
+        // this branch is for ISY, New SmartThings and other hubs that don't need to get their name via a hub call
+        } else {
             if ( DEBUG2 ) {
-                console.log( (ddbg()), "hubName request return: ", jsonbody);
+                console.log( (ddbg()), "getHubInfo - hub: ", jsonshow(hub) );
             }
 
             // save the hubid in our user default for use later
-            mydb.updateRow("users",{defhub: hub.hubid},"id = " + userid);
+            mydb.updateRow("users",{defhub: hub.hubid},"id = "+userid)
+            .then( result => {
+                mydb.updateRow("hubs", hub, "userid = " + userid + " AND id = " + hubindex)
+                .then( () => {
+                    getDevices(hub)
+                    .then(mydevices => {
+                        resolve(mydevices);
+                    })
+                    .catch(reason => {
+                        reject(reason);
+                    });
+                });
+            })
+            .catch( reason => {
+                console.log( (ddbg()), "error - in getHubInfo: ", reason);
+                reject(reason);
+            });
 
-        } catch(e) {
-            console.log( (ddbg()), "error retrieving hub ID and name. ", e, "\n body: ", body);
-            iserror = true;
-            hubName = hub.hubname
-            hubId = hub.hubid;
+        }
+        return promise;
+
+        function readSonosHub(newhub) {
+
+            function checkSonosDone(hubid) {
+                nsonos ++;
+                if ( nsonos >= sonoscount ) {
+                    mydb.updateRow("users",{defhub: hubid},"id = "+userid);
+                    resolve(mydevices);
+                }
+            }
+            
+            const errMsg = "error - updating hub in Sonos authorization";
+            mydb.getRow("hubs", "*", "userid = " + userid + " AND hubid = '"+newhub.hubid+"'")
+            .then( row => {
+                if ( row ) {
+                    newhub.id = row.id;
+                    mydb.updateRow("hubs", newhub, "userid = " + userid + " AND id = "+ row.id)
+                    .then( result => {
+                        if ( result ) {
+                            if ( DEBUG2 ) {
+                                console.log( (ddbg()), "updated Sonos hub: ", newhub);
+                            }
+                            // read all the devices from this hub and merge into existing devices
+                            getDevices(newhub)
+                            .then(newdevices => {
+                                mydevices = { ...mydevices, ...newdevices};
+                                checkSonosDone(newhub.hubid);
+                            });
+                        } else {
+                            console.log( (ddbg()), errMsg);
+                            nsonos = sonoscount;
+                            reject(errMsg);
+                        }
+                    });
+
+                } else {
+                    mydb.addRow("hubs", newhub)
+                    .then( row => {
+                        if ( row ) {
+                            newhub.id = row.getAutoIncrementValue();
+                            if ( DEBUG2 ) {
+                                console.log( (ddbg()), "added new Sono hub: ", newhub);
+                            }
+                            getDevices(newhub)
+                            .then(newdevices => {
+                                mydevices = { ...mydevices, ...newdevices};
+                                checkSonosDone(newhub.hubid);
+                            });
+                        } else {
+                            console.log( (ddbg()), errMsg);
+                            nsonos = sonoscount;
+                            reject(errMsg);
+                        }
+                    });
+
+                }
+            });
         }
 
-        if ( DEBUG2 ) {
-            console.log( (ddbg()), "hub info: access_token= ", access_token, " endpt= ", endpt, " hubName= ", hubName, " hubId= ", hubId);
-        }
+        function hubitatCallback(body) {
+            var jsonbody;
+            var hubName = hub.hubname;;
+            var access_token = hub.hubaccess;
+            var endpt = hub.hubendpt;
+            var hubId = hub.hubid;
+            var hubindex = hub.id;
+            var userid = hub.userid;
 
-        // now save our info
-        hub["hubname"]  = hubName;
-        hub["hubid"] = hubId;
+            try {
+                jsonbody = JSON.parse(body);
+                hubName = jsonbody["sitename"];
+                hubId = jsonbody["hubId"];
 
-        // save the hubid in our user default for use later
-        // mydb.updateRow("users",{defhub: hub.hubid},"id = "+hub.userid);
-
-        if ( DEBUG2 ) {
-            console.log( (ddbg()), "Finished updating users. Ready to update hub: ", hubindex, hub);
-        }
-
-        if ( iserror || !hubindex ) {
-            pushClient(userid, "reload", "auth", "/reauth");
-        } else {
-            // we know the actual index of the hub at this point
-            mydb.updateRow("hubs", hub, "userid = " + userid+" AND id = "+hubindex)
-            .then(result => {
-                // retrieve all devices and go back to reauth page
-                getDevices(hub, reload, "/reauth");
-            }).catch(reason => {console.log("dberror 2 - nameidCallback - ", reason);});
-        }
-    }
-}
-
-function getAccessToken(userid, code, hub) {
-
-    // these are the parameters determined here using a series of curl calls and callbacks
-    var access_token = "";
-    var endpt = "";
-    var refresh_token = "";
-    var hubType = hub["hubtype"];
-    var hubName = hub["hubname"];
-    var hubHost = hub["hubhost"];
-    var clientId = hub["clientid"];
-    var clientSecret = hub["clientsecret"];
-
-    var redirect = GLB.returnURL + "/oauth";
-    var header = {'Content-Type' : "application/x-www-form-urlencoded"};
-
-    // Ford and Lincoln tokens
-    if ( hubType === "Ford" || hubType === "Lincoln" ) {
-        endpt = "https://api.mps.ford.com/api/fordconnect/vehicles/v1";
-        var policy = "B2C_1A_signup_signin_common";
-        if ( hub.hubtype==="Lincoln" ) {
-            policy = policy + "_Lincoln";
-        }
-
-        // we now always assume clientId and clientSecret are already encoded
-        var tokenhost = "https://dah2vb2cprod.b2clogin.com/" + GLB.fordapicode + "/oauth2/v2.0/token";
-        var nvpreq = "p=" + policy;
-        var formData = {"grant_type": "authorization_code", "code": code, "client_id": clientId, 
-                        "client_secret": clientSecret, "redirect_uri": encodeURI(redirect)};
-
-        if ( DEBUG2 ) {
-            console.log( (ddbg()), "clientId: ", clientId," clientSecret: ", clientSecret);
-            console.log( (ddbg()), "tokenhost: ", tokenhost, " nvpreq: ", nvpreq, " formData: ", formData);
-        }
-        curl_call(tokenhost, header, nvpreq, formData, "POST", fordCallback);
-
-    // new SmartThings function to get accesstoken and refreshtoken
-    } else if ( hubType === "NewSmartThings" ) {
-        endpt = hubHost;
-        // var nohttp = hubHost.substr(8);
-        var nohttp = "api.smartthings.com";
-        tokenhost = "https://" + clientId + ":" + clientSecret + "@" + nohttp + "/oauth/token";
-        // var nvpreq = {"grant_type": "authorization_code", "code": code, "client_id": clientId, 
-        //               "client_secret": clientSecret, "redirect_uri": encodeURI(redirect)};
-        var nvpreq = "grant_type=authorization_code&code=" + code + "&client_id=" + clientId + 
-                     "&client_secret=" + clientSecret + "&redirect_uri=" + encodeURI(redirect);
-        if ( DEBUG2 ) {
-            console.log( (ddbg()), "clientId: ", clientId," clientSecret: ", clientSecret);
-            console.log( (ddbg()), "tokenhost: ", tokenhost, " nvpreq: ", nvpreq);
-        }
-        _curl(tokenhost, header, nvpreq, "POST")
-        .then( body => {
-            newTokenCallback(body);
-        })
-        .catch( reason => {
-            console.log( (ddbg()), reason);
-            pushClient(userid, "reload", "auth", "/reauth");
-            return;
-        });
-
-    // get token for Sonos cloud account using basic auth method
-    } else if ( hubType === "Sonos" ) {
-        tokenhost = hubHost + "/login/v3/oauth/access";
-        var idsecret = clientId + ":" + clientSecret;
-        var buff = Buffer.from(idsecret);
-        var base64 = buff.toString('base64');
-        header = {"Content-Type" : "application/x-www-form-urlencoded;charset=utf-8",
-                  "Authorization": "Basic " + base64};
-        var formData = {"grant_type": "authorization_code", "code": code, "redirect_uri": encodeURI(redirect)};
-        // var nvpreq = "grant_type=authorization_code&code=" + code + "&redirect_uri=" + encodeURI(redirect);
-        if ( DEBUG2 ) {
-            console.log( (ddbg()), "clientId: ", clientId," clientSecret: ", clientSecret," base64: ", base64);
-            console.log( (ddbg()), "tokenhost: ", tokenhost, " nvpreq: ", nvpreq, " formData: ", formData);
-        }
-        curl_call(tokenhost, header, false, formData, "POST", tokenCallback);
-
-    // ST and HE functions to get accesstoken and endpoint
-    } else {
-        tokenhost = hubHost + "/oauth/token";
-        var nvpreq = {"grant_type": "authorization_code", "code": code, "client_id": clientId, 
-                      "client_secret": clientSecret, "redirect_uri": encodeURI(redirect)};
-        if ( DEBUG2 ) {
-            console.log( (ddbg()), "obtaining accesstoken by calling host: ", tokenhost, " with nvpreq: ", nvpreq);
-        }
-        curl_call(tokenhost, header, nvpreq, false, "POST", tokenCallback);
-    }
-
-    function fordCallback(err, res, body) {
-        var jsonbody = JSON.parse(body);
-        access_token = jsonbody["access_token"] || "";
-        refresh_token = jsonbody["refresh_token"] || "";
-        var newexpire = jsonbody["expires_in"] || "";
-
-        var expiresin;        
-        if ( hub.hubtimer && hub.hubtimer!=="0" && !isNaN(parseInt(hub.hubtimer)) ) {
-            expiresin = parseInt(hub.hubtimer);
-        } else {
-            expiresin = "";
-        }
-    
-        // if an expire in is returned from api then set hubTimer to it minus two minutes
-        if ( newexpire  && !isNaN(parseInt(newexpire)) && parseInt(newexpire)>120 ) {
-            expiresin = (parseInt(newexpire) - 120) * 1000;
-            hub.hubtimer = expiresin.toString();
-        }
-        endpt = "https://api.mps.ford.com/api/fordconnect/vehicles/v1";
-        if ( access_token && refresh_token ) {
-            hub.hubaccess = access_token;
-            hub.hubrefresh = refresh_token;
-            hub.hubendpt = endpt;
+            } catch(e) {
+                console.log( (ddbg()), "error retrieving hub ID and name. ", e, "\n body: ", body);
+                hubName = hub.hubname
+                hubId = hub.hubid;
+                reject(e);
+                return;
+            }
 
             if ( DEBUG2 ) {
-                console.log( (ddbg()),"Ford access_token: ", access_token, " refresh_token: ", refresh_token, " endpoint: ", endpt);
+                console.log( (ddbg()), "hub info: access_token= ", access_token, " endpt= ", endpt, " hubName= ", hubName, " hubId= ", hubId);
+            }
+
+            // now save our info
+            hub["hubname"]  = hubName;
+            hub["hubid"] = hubId;
+            mydb.updateRow("users",{defhub: hub.hubid},"id = " + userid);
+            if ( DEBUG2 ) {
+                console.log( (ddbg()), "Ready to update hub: ", hub);
+            }
+
+            // we know the actual index of the hub at this point
+            mydb.updateRow("hubs", hub, "userid = " + userid+" AND id = "+hubindex)
+            .then( () => {
+                // retrieve all devices and go back to reauth page
+                getDevices(hub)
+                .then(mydevices => {
+                    resolve(mydevices);
+                })
+                .catch(reason => {
+                    reject(reason);
+                });
+
+            }).catch(reason => {
+                console.log( (ddbg()), reason);
+                reject(reason);
+            });
+        }
+    
+    });
+
+    return promise;
+}
+
+// this makes Insteon ID's look good but it messes up the hub calls
+// which oddly enough expect the id in the mangled form that does not match
+// the way the id is written on the Insteon device
+function fixISYid(id) {
+    // if ( id.indexOf(" ") !== -1 ) {
+    //     var idparts = id.split(" ");
+    //     if ( idparts.length===4 ) {
+    //         idparts.forEach(function(idp, i) {
+    //             if ( idp.length===1 ) {
+    //                 idparts[i] = "0" + idp;
+    //             }
+    //         });
+    //         id = idparts.join(".");
+    //     }
+    // }
+    return id;
+}
+
+// rewrote to return a promise so we can send directly to the auth page
+function getAccessToken(userid, code, hub) {
+    
+    var promise = new Promise( function(resolve, reject) {
+        
+        function tokenCallback(err, res, body) {
+            var hubType = hub.hubType;
+            // save the access_token
+            try {
+                var jsonbody = JSON.parse(body);
+            } catch(e) {
+                jsonbody = null;
+            }
+            if ( DEBUG2 ) {
+                console.log( (ddbg()), " access_token return body: ", body," jsonbody:", jsonbody);
+            }
+
+            if ( (err && err!==200) || !jsonbody ) {
+                console.log( (ddbg()), "error authorizing ", hubType, " error: ", err);
+                pushClient(userid, "reload", "auth", "/reauth");
+
+            } else if ( jsonbody && jsonbody["access_token"] ) {
+                access_token = jsonbody["access_token"];
+                refresh_token = "";
+                if ( jsonbody["refresh_token"] ) {
+                    refresh_token = jsonbody["refresh_token"];
+                }
+                if (access_token) {
+                    var ephost;
+                    hub.hubaccess = access_token;
+                    hub.hubrefresh = refresh_token;
+                    hub.hubtype = hubType;
+                    if ( !hub.hubname ) {
+                        hub.hubname = hubType;
+                    }
+                    if ( hubType=== "SmartThings" ) {
+                        header = {"Authorization": "Bearer " + access_token};
+                        ephost = hubHost + "/api/smartapps/endpoints";
+                        curl_call(ephost, header, false, false, "GET", endptCallback);
+                    } else if ( hubType === "Hubitat" ) {
+                        header = {"Authorization": "Bearer " + access_token};
+                        ephost = hubHost + "/apps/api/endpoints";
+                        curl_call(ephost, header, false, false, "GET", endptCallback);
+                    } else if ( hubType === "Sonos" ) {
+                        hub.hubendpt = "https://api.ws.sonos.com/control/api";
+
+                        var expiresin = jsonbody["expires_in"];
+                        expiresin = (parseInt(expiresin) - 3600) * 1000;
+                        hub.hubtimer = expiresin.toString();
+
+                        // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
+                        if ( expiresin ) {
+                            setTimeout( function() {
+                                refreshSonosToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, true);
+                            }, expiresin);
+                        }
+                        // assign random hub id and save our info
+                        return getHubInfo(hub)
+                        .then(mydevices => {
+                            resolve(mydevices);
+                        }). catch(reason => { 
+                            reject(reason);
+                        });
+
+                    } else {
+                        console.log( (ddbg()), "Invalid hub type: ", hubType, " in access_token request call");
+                        reject("Invalid hub type: " + hubType + " in access_token request call");
+                    }
+
+                }
+            } else {
+                console.log( (ddbg()), "Unknown error authorizing hub: ", hubName, " error: ", err, " body: ", body);
+                reject("Unknown error authorizing hub: " + hubName);
+            }
+
+            return promise;
+        }
+
+        function newTokenCallback(body) {
+            try {
+                var jsonbody = JSON.parse(body);
+            } catch(e) {
+                jsonbody = null;
+            }
+
+            if ( DEBUG2 ) {
+                console.log( (ddbg()),"newTokenCallback: New SmartThings jsonbody: ", jsonbody);
+            }
+            
+            if ( !jsonbody ) {
+                console.log( (ddbg()), "error authorizing ", hubType, " error: ", err);
+                reject("invalide body in tokenCallback");
+                return;
+            }
+
+            access_token = jsonbody["access_token"];
+            refresh_token = jsonbody["refresh_token"];
+            hub.hubendpt = hubHost;
+            hub.hubaccess = access_token;
+            hub.hubrefresh = refresh_token;
+            hub.hubtype = hubType;
+            if ( !hub.hubname ) {
+                hub.hubname = hubType;
+            }
+
+            // we can safely ignore the legacy device_id field
+            hub.hubid = jsonbody["installed_app_id"];
+            var expiresin = jsonbody["expires_in"];
+
+            // convert refresh token from seconds to msec and two minutes before expiration
+            expiresin = (parseInt(expiresin) - 3600) * 1000;
+            hub.hubtimer = expiresin.toString();
+
+            if ( DEBUG2 ) {
+                console.log( (ddbg()),"newTokenCallback: New SmartThings access_token: ", access_token, " refresh_token: ", refresh_token, 
+                                    " endpoint: ", endpt, " expiresin: ", expiresin);
             }
 
             // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
             if ( expiresin ) {
                 setTimeout( function() {
-                    console.log( (ddbg()), "Ford access_token will be refreshed in ", expiresin," msec");
-                    fordRefreshToken(userid, hub, true);
+                    refreshSTToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, true, null);
                 }, expiresin);
             }
-            // note - for Ford API the hubId must be provided by the user and match the Ford App ID assigned to them
+
+            // register the sinks to cause events to come back to me
+            newSTRegisterEvents(hub);
+
+            // save our info - could skip this and save options and reload screen
             getHubInfo(hub, true);
-
-        } else {
-            console.log( (ddbg()), "fordCallback error authorizing " + hub.hubtype + " hub. bad access_token: ", access_token, " or endpt: ", endpt, " or refresh: ", refresh_token, " err: ", err, "\n body: ", body);
-            pushClient(userid, "reload", "auth", "/reauth");
         }
-    }
 
-    function tokenCallback(err, res, body) {
-        // save the access_token
-        try {
+        function fordCallback(err, res, body) {
             var jsonbody = JSON.parse(body);
-        } catch(e) {
-            jsonbody = null;
-        }
-        if ( DEBUG2 ) {
-            console.log( (ddbg()), hubType + " access_token return body: ", body," jsonbody:", jsonbody);
-        }
+            access_token = jsonbody["access_token"] || "";
+            refresh_token = jsonbody["refresh_token"] || "";
+            var newexpire = jsonbody["expires_in"] || "";
 
-        if ( (err && err!==200) || !jsonbody ) {
-            console.log( (ddbg()), "error authorizing ", hubType, " error: ", err);
-            pushClient(userid, "reload", "auth", "/reauth");
-
-        } else if ( jsonbody && jsonbody["access_token"] ) {
-            access_token = jsonbody["access_token"];
-            refresh_token = "";
-            if ( jsonbody["refresh_token"] ) {
-                refresh_token = jsonbody["refresh_token"];
+            var expiresin;        
+            if ( hub.hubtimer && hub.hubtimer!=="0" && !isNaN(parseInt(hub.hubtimer)) ) {
+                expiresin = parseInt(hub.hubtimer);
+            } else {
+                expiresin = "";
             }
-            if (access_token) {
-                var ephost;
+        
+            // if an expire in is returned from api then set hubTimer to it minus two minutes
+            if ( newexpire  && !isNaN(parseInt(newexpire)) && parseInt(newexpire)>120 ) {
+                expiresin = (parseInt(newexpire) - 120) * 1000;
+                hub.hubtimer = expiresin.toString();
+            }
+            endpt = "https://api.mps.ford.com/api/fordconnect/vehicles/v1";
+            if ( access_token && refresh_token ) {
                 hub.hubaccess = access_token;
                 hub.hubrefresh = refresh_token;
-                hub.hubtype = hubType;
-                if ( !hub.hubname ) {
-                    hub.hubname = hubType;
-                }
-                if ( hubType=== "SmartThings" ) {
-                    header = {"Authorization": "Bearer " + access_token};
-                    ephost = hubHost + "/api/smartapps/endpoints";
-                    curl_call(ephost, header, false, false, "GET", endptCallback);
-                } else if ( hubType === "Hubitat" ) {
-                    header = {"Authorization": "Bearer " + access_token};
-                    ephost = hubHost + "/apps/api/endpoints";
-                    curl_call(ephost, header, false, false, "GET", endptCallback);
-                } else if ( hubType === "Sonos" ) {
-                    hub.hubendpt = "https://api.ws.sonos.com/control/api";
+                hub.hubendpt = endpt;
 
-                    var expiresin = jsonbody["expires_in"];
-                    expiresin = (parseInt(expiresin) - 3600) * 1000;
-                    hub.hubtimer = expiresin.toString();
-
-                    // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
-                    if ( expiresin ) {
-                        setTimeout( function() {
-                            refreshSonosToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, true, null);
-                        }, expiresin);
-                    }
-                    // assign random hub id and save our info
-                    getHubInfo(hub, true);
-
-                } else {
-                    console.log( (ddbg()), "Invalid hub type: ", hubType, " in access_token request call");
-                    pushClient(userid, "reload", "auth", "/reauth");
+                if ( DEBUG2 ) {
+                    console.log( (ddbg()),"Ford access_token: ", access_token, " refresh_token: ", refresh_token, " endpoint: ", endpt);
                 }
 
-            }
-        } else {
-            console.log( (ddbg()), "Unknown error authorizing hub: ", hubName, " error: ", err, " body: ", body);
-            pushClient(userid, "reload", "auth", "/reauth");
-        }
-    }
+                // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
+                if ( expiresin ) {
+                    setTimeout( function() {
+                        console.log( (ddbg()), "Ford access_token will be refreshed in ", expiresin," msec");
+                        refreshFordToken(userid, hub, true);
+                    }, expiresin);
+                }
 
-    function newTokenCallback(body) {
-        try {
-            var jsonbody = JSON.parse(body);
-        } catch(e) {
-            jsonbody = null;
-        }
+                // note - for Ford API the hubId must be provided by the user and match the Ford App ID assigned to them
+                getHubInfo(hub)
+                .then(mydevices => {
+                    resolve(mydevices);
+                }) .catch(reason => { reject(reason); });
 
-        if ( DEBUG2 ) {
-            console.log( (ddbg()),"newTokenCallback: New SmartThings jsonbody: ", jsonbody);
-        }
-        
-        if ( !jsonbody ) {
-            console.log( (ddbg()), "error authorizing ", hubType, " error: ", err);
-            pushClient(userid, "reload", "auth", "/reauth");
-            return;
-        }
-
-        access_token = jsonbody["access_token"];
-        refresh_token = jsonbody["refresh_token"];
-        hub.hubendpt = hubHost;
-        hub.hubaccess = access_token;
-        hub.hubrefresh = refresh_token;
-        hub.hubtype = hubType;
-        if ( !hub.hubname ) {
-            hub.hubname = hubType;
-        }
-
-        // we can safely ignore the legacy device_id field
-        hub.hubid = jsonbody["installed_app_id"];
-        var expiresin = jsonbody["expires_in"];
-
-        // convert refresh token from seconds to msec and two minutes before expiration
-        expiresin = (parseInt(expiresin) - 3600) * 1000;
-        hub.hubtimer = expiresin.toString();
-
-        if ( DEBUG2 ) {
-            console.log( (ddbg()),"newTokenCallback: New SmartThings access_token: ", access_token, " refresh_token: ", refresh_token, 
-                                  " endpoint: ", endpt, " expiresin: ", expiresin);
-        }
-
-        // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
-        if ( expiresin ) {
-            setTimeout( function() {
-                refreshSTToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, true, null);
-            }, expiresin);
-        }
-
-        // register the sinks to cause events to come back to me
-        newSTRegisterEvents(hub);
-
-        // save our info - could skip this and save options and reload screen
-        getHubInfo(hub, true);
-    }
-    
-    function newSTRegisterEvents(hub) {
-
-        var host = hub.hubendpt + "/sink-filters";
-        const filterName = "HousePanel.Sink.Filter";
-        var header = {
-            "Authorization": "Bearer " + hub.hubaccess,
-            "Content-Type": "application/json",
-            "Accept": "application/vnd.smartthings+json;v=20200812"
-        };
-
-        // get all existing sinks and delete them and re-register new sink for this hub
-        // check for a prior registration tied to our sink and this hub
-        _curl(host, header, null, "GET", function(err, body) {
-            if (err && err !== 200) { 
-                console.log((ddbg()), "error - attempting to check for previously registered sink events: ", err);
-                regNewFilter();                    
             } else {
-                var jsonsink = JSON.parse(body);
-                // console.log((ddbg()), "Sink listing returned: ", jsonshow(jsonsink));
-
-                if ( jsonsink.items && is_array(jsonsink.items) && jsonsink.items.length ) {
-                    var numsinks = jsonsink.items.length;
-                    var num = 0;
-                    for (var i in jsonsink.items) {
-                        var sink = jsonsink.items[i];
-                        if ( sink.filterName === filterName ) {
-                            var delhost = host + "/" + sink.sinkFilterId;
-                            _curl(delhost, header, null, "DELETE")
-                            .then( () => {
-                                num++;
-                                if ( num >= numsinks ) {
-                                    regNewFilter();
-                                }
-                            });
-                        } else {
-                            num++;
-                            if ( num >= numsinks ) {
-                                regNewFilter();
-                            }
-                        }
-                    }
-                } else {
-                    regNewFilter();                    
-                }
+                var errMsg = "fordCallback error authorizing hub, access_token: " + access_token +", endpt: " + endpt + ", refresh: " + refresh_token;
+                console.log( (ddbg()), errMsg, "\n body: ", body);
+                reject(errMsg);
             }
-        });
+        }
 
-        function regNewFilter() {
+        function newSTRegisterEvents(hub) {
 
-            // gather all the capability events as groups
-            // for now just get a few categories to limit things
-            var qitem1 = [
-                {"field": "eventType", "value": "DEVICE_EVENT", "operator": "EQ"},
-                {"field": "deviceEvent.capability", "value": GLB.trigger1, "operator": "IN"},
-                {"field": "deviceEvent.stateChange", "value": true, "operator": "EQ"}
-            ];
-            var qitem2 = [
-                {"field": "eventType", "value": "DEVICE_EVENT", "operator": "EQ"},
-                {"field": "deviceEvent.capability", "value": GLB.trigger2, "operator": "IN"},
-                {"field": "deviceEvent.stateChange", "value": true, "operator": "EQ"}
-            ];
-            // don't require mode change for buttons
-            var qitembutton = [
-                {"field": "eventType", "value": "DEVICE_EVENT", "operator": "EQ"},
-                {"field": "deviceEvent.capability", "value": "button", "operator": "EQ"}
-            ];
-            // register for mode changes
-            var qitemmode = [
-                {"field": "eventType", "value": "MODE_EVENT", "operator": "EQ"}
-            ];
-            var qgroups = [
-                {queryItems: qitem1}, 
-                {queryItems: qitem2},
-                {queryItems: qitembutton},
-                {queryItems: qitemmode}
-            ];
-
-            // set up event sinks for the new ST app
-            // this uses the sink provided by ST staff
-            var sinkdata = {
-                filterName: filterName,
-                forEntity: { entityType: "INSTALLEDAPP", entityId: hub.hubid},
-                sink: GLB.sinkalias,
-                query: {queryGroups: qgroups}
-            };
-
-            header = {
+            var host = hub.hubendpt + "/sink-filters";
+            const filterName = "HousePanel.Sink.Filter";
+            var header = {
                 "Authorization": "Bearer " + hub.hubaccess,
                 "Content-Type": "application/json",
                 "Accept": "application/vnd.smartthings+json;v=20200812"
             };
 
-            _curl(host, header, sinkdata, "POST", function(err, body) {
-                if ( err && err !== 200 ) {
-                    // hub["sinkFilterId"] = "";
-                    console.log((ddbg()), "error in registerEvents: ", err);
+            // get all existing sinks and delete them and re-register new sink for this hub
+            // check for a prior registration tied to our sink and this hub
+            _curl(host, header, null, "GET", function(err, body) {
+                if (err && err !== 200) { 
+                    console.log((ddbg()), "error - attempting to check for previously registered sink events: ", err);
+                    regNewFilter();                    
                 } else {
-                    // save the filter ID for use in confirming events for this user
-                    if ( DEBUG2 ) {
-                        var jsonbody = JSON.parse(body);
-                        console.log( (ddbg()), "registerEvents result: ", jsonshow(jsonbody) );
+                    var jsonsink = JSON.parse(body);
+                    // console.log((ddbg()), "Sink listing returned: ", jsonshow(jsonsink));
+
+                    if ( jsonsink.items && is_array(jsonsink.items) && jsonsink.items.length ) {
+                        var numsinks = jsonsink.items.length;
+                        var num = 0;
+                        for (var i in jsonsink.items) {
+                            var sink = jsonsink.items[i];
+                            if ( sink.filterName === filterName ) {
+                                var delhost = host + "/" + sink.sinkFilterId;
+                                _curl(delhost, header, null, "DELETE")
+                                .then( () => {
+                                    num++;
+                                    if ( num >= numsinks ) {
+                                        regNewFilter();
+                                    }
+                                });
+                            } else {
+                                num++;
+                                if ( num >= numsinks ) {
+                                    regNewFilter();
+                                }
+                            }
+                        }
+                    } else {
+                        regNewFilter();                    
                     }
                 }
             });
-        }
 
-    }
-        
-    function endptCallback(err, res, body) {
-        var jsonbody;
-        try {
-            jsonbody = JSON.parse(body);
-            if ( DEBUG2 ) {
-                console.log( (ddbg()), "endpoint return: ", jsonbody);
+            function regNewFilter() {
+
+                // gather all the capability events as groups
+                // for now just get a few categories to limit things
+                var qitem1 = [
+                    {"field": "eventType", "value": "DEVICE_EVENT", "operator": "EQ"},
+                    {"field": "deviceEvent.capability", "value": GLB.trigger1, "operator": "IN"},
+                    {"field": "deviceEvent.stateChange", "value": true, "operator": "EQ"}
+                ];
+                var qitem2 = [
+                    {"field": "eventType", "value": "DEVICE_EVENT", "operator": "EQ"},
+                    {"field": "deviceEvent.capability", "value": GLB.trigger2, "operator": "IN"},
+                    {"field": "deviceEvent.stateChange", "value": true, "operator": "EQ"}
+                ];
+                // don't require mode change for buttons
+                var qitembutton = [
+                    {"field": "eventType", "value": "DEVICE_EVENT", "operator": "EQ"},
+                    {"field": "deviceEvent.capability", "value": "button", "operator": "EQ"}
+                ];
+                // register for mode changes
+                var qitemmode = [
+                    {"field": "eventType", "value": "MODE_EVENT", "operator": "EQ"}
+                ];
+                var qgroups = [
+                    {queryItems: qitem1}, 
+                    {queryItems: qitem2},
+                    {queryItems: qitembutton},
+                    {queryItems: qitemmode}
+                ];
+
+                // set up event sinks for the new ST app
+                // this uses the sink provided by ST staff
+                var sinkdata = {
+                    filterName: filterName,
+                    forEntity: { entityType: "INSTALLEDAPP", entityId: hub.hubid},
+                    sink: GLB.sinkalias,
+                    query: {queryGroups: qgroups}
+                };
+
+                header = {
+                    "Authorization": "Bearer " + hub.hubaccess,
+                    "Content-Type": "application/json",
+                    "Accept": "application/vnd.smartthings+json;v=20200812"
+                };
+
+                _curl(host, header, sinkdata, "POST", function(err, body) {
+                    if ( err && err !== 200 ) {
+                        // hub["sinkFilterId"] = "";
+                        console.log((ddbg()), "error in registerEvents: ", err);
+                    } else {
+                        // save the filter ID for use in confirming events for this user
+                        if ( DEBUG2 ) {
+                            var jsonbody = JSON.parse(body);
+                            console.log( (ddbg()), "registerEvents result: ", jsonshow(jsonbody) );
+                        }
+                    }
+                });
             }
-        } catch(e) {
-            err = e;
-        }
 
-        if ( err ) {
-            console.log( (ddbg()), "getEndpoint error authorizing " + hub.hubtype + " hub.\n error: ", err, "\n JSON body: ", body);
-            pushClient(userid, "reload", "auth", "/reauth");
-        } else {
-            var endptzero = jsonbody[0];
-            endpt = endptzero.uri;
         }
-
-        if ( access_token && endpt ) {
-            if ( DEBUG2 ) {
-                console.log( (ddbg()),"endptCallback - access_token: ", access_token," endpoint: ", endpt);
+            
+        function endptCallback(err, res, body) {
+            var jsonbody;
+            try {
+                jsonbody = JSON.parse(body);
+                if ( DEBUG2 ) {
+                    console.log( (ddbg()), "endpoint return: ", jsonbody);
+                }
+            } catch(e) {
+                err = e;
             }
-            hub.hubaccess = access_token;
-            hub.hubendpt = endpt;
-            getHubInfo(hub, true);
 
-        } else {
-            console.log( (ddbg()), "getEndpoint error authorizing " + hub.hubtype + " hub. bad access_token: ", access_token, " or endpt: ", endpt);
-            pushClient(userid, "reload", "auth", "/reauth");
+            if ( err ) {
+                console.log( (ddbg()), "getEndpoint error authorizing " + hub.hubtype + " hub.\n error: ", err, "\n JSON body: ", body);
+                pushClient(userid, "reload", "auth", "/reauth");
+            } else {
+                var endptzero = jsonbody[0];
+                endpt = endptzero.uri;
+            }
+
+            if ( access_token && endpt ) {
+                if ( DEBUG2 ) {
+                    console.log( (ddbg()),"endptCallback - access_token: ", access_token," endpoint: ", endpt);
+                }
+                hub.hubaccess = access_token;
+                hub.hubendpt = endpt;
+                getHubInfo(hub)
+                .then(mydevices => {
+                    resolve(mydevices);
+                }) .catch(reason => { reject(reason); });
+
+            } else {
+                console.log( (ddbg()), "getEndpoint error authorizing " + hub.hubtype + " hub. bad access_token: ", access_token, " or endpt: ", endpt);
+                pushClient(userid, "reload", "auth", "/reauth");
+            }
         }
-    }
+
+        // these are the parameters determined here using a series of curl calls and callbacks
+        var access_token = "";
+        var endpt = "";
+        var refresh_token = "";
+        var hubType = hub["hubtype"];
+        var hubName = hub["hubname"];
+        var hubHost = hub["hubhost"];
+        var clientId = hub["clientid"];
+        var clientSecret = hub["clientsecret"];
+
+        var redirect = GLB.returnURL + "/oauth";
+        var header = {'Content-Type' : "application/x-www-form-urlencoded"};
+
+        // Ford and Lincoln tokens
+        if ( hubType === "Ford" || hubType === "Lincoln" ) {
+            endpt = "https://api.mps.ford.com/api/fordconnect/vehicles/v1";
+            var policy = "B2C_1A_signup_signin_common";
+            if ( hub.hubtype==="Lincoln" ) {
+                policy = policy + "_Lincoln";
+            }
+
+            // we now always assume clientId and clientSecret are already encoded
+            var tokenhost = "https://dah2vb2cprod.b2clogin.com/" + GLB.fordapicode + "/oauth2/v2.0/token";
+            var nvpreq = "p=" + policy;
+            var formData = {"grant_type": "authorization_code", "code": code, "client_id": clientId, 
+                            "client_secret": clientSecret, "redirect_uri": encodeURI(redirect)};
+
+            if ( DEBUG2 ) {
+                console.log( (ddbg()), "clientId: ", clientId," clientSecret: ", clientSecret);
+                console.log( (ddbg()), "tokenhost: ", tokenhost, " nvpreq: ", nvpreq, " formData: ", formData);
+            }
+            curl_call(tokenhost, header, nvpreq, formData, "POST", fordCallback);
+
+        // new SmartThings function to get accesstoken and refreshtoken
+        } else if ( hubType === "NewSmartThings" ) {
+            endpt = hubHost;
+            // var nohttp = hubHost.substr(8);
+            var nohttp = "api.smartthings.com";
+            tokenhost = "https://" + clientId + ":" + clientSecret + "@" + nohttp + "/oauth/token";
+            // var nvpreq = {"grant_type": "authorization_code", "code": code, "client_id": clientId, 
+            //               "client_secret": clientSecret, "redirect_uri": encodeURI(redirect)};
+            var nvpreq = "grant_type=authorization_code&code=" + code + "&client_id=" + clientId + 
+                        "&client_secret=" + clientSecret + "&redirect_uri=" + encodeURI(redirect);
+            if ( DEBUG2 ) {
+                console.log( (ddbg()), "clientId: ", clientId," clientSecret: ", clientSecret);
+                console.log( (ddbg()), "tokenhost: ", tokenhost, " nvpreq: ", nvpreq);
+            }
+            _curl(tokenhost, header, nvpreq, "POST")
+            .then( body => {
+                newTokenCallback(body);
+            })
+            .catch( reason => {
+                console.log( (ddbg()), reason);
+                pushClient(userid, "reload", "auth", "/reauth");
+                return;
+            });
+
+        // get token for Sonos cloud account using basic auth method
+        } else if ( hubType === "Sonos" ) {
+            tokenhost = hubHost + "/login/v3/oauth/access";
+            var idsecret = clientId + ":" + clientSecret;
+            var buff = Buffer.from(idsecret);
+            var base64 = buff.toString('base64');
+            header = {"Content-Type" : "application/x-www-form-urlencoded;charset=utf-8",
+                    "Authorization": "Basic " + base64};
+            var formData = {"grant_type": "authorization_code", "code": code, "redirect_uri": encodeURI(redirect)};
+            // var nvpreq = "grant_type=authorization_code&code=" + code + "&redirect_uri=" + encodeURI(redirect);
+            if ( DEBUG2 ) {
+                console.log( (ddbg()), "clientId: ", clientId," clientSecret: ", clientSecret," base64: ", base64);
+                console.log( (ddbg()), "tokenhost: ", tokenhost, " nvpreq: ", nvpreq, " formData: ", formData);
+            }
+            curl_call(tokenhost, header, false, formData, "POST", tokenCallback);
+
+        // Hubitat functions to get accesstoken and endpoint
+        } else {
+            tokenhost = hubHost + "/oauth/token";
+            var nvpreq = {"grant_type": "authorization_code", "code": code, "client_id": clientId, 
+                        "client_secret": clientSecret, "redirect_uri": encodeURI(redirect)};
+            if ( DEBUG2 ) {
+                console.log( (ddbg()), "calling with nvpreq: ", nvpreq);
+            }
+            curl_call(tokenhost, header, nvpreq, false, "POST", tokenCallback);
+        }
+    });
+
 }
 
 function refreshSTToken(userid, hub, refresh_token, clientId, clientSecret, refresh, postCallback) {
@@ -1404,8 +1431,8 @@ function refreshSTToken(userid, hub, refresh_token, clientId, clientSecret, refr
     var header = {'Content-Type' : "application/x-www-form-urlencoded"};
     var tokenhost = "https://" + clientId + ":" + clientSecret + "@" + nohttp + "/oauth/token";
     var nvpreq = "grant_type=refresh_token" + "&client_id=" + clientId + 
-                 "&refresh_token=" + refresh_token;
-     if ( DEBUG2 ) {
+                "&refresh_token=" + refresh_token;
+    if ( DEBUG2 ) {
         console.log( (ddbg()), "Refreshing ST token via call with nvpreq: ", nvpreq);
     }
 
@@ -1466,16 +1493,16 @@ function refreshSTToken(userid, hub, refresh_token, clientId, clientSecret, refr
 
 }
 
-function refreshSonosToken(userid, hub, refresh_token, clientId, clientSecret, refresh, postCallback) {
+function refreshSonosToken(userid, hub, refresh_token, clientId, clientSecret, refresh) {
     var tokenhost = hub.hubhost + "/login/v3/oauth/access";
     var idsecret = clientId + ":" + clientSecret;
     var buff = Buffer.from(idsecret);
     var base64 = buff.toString('base64');
     var header = {"Content-Type" : "application/x-www-form-urlencoded",
-                  "Authorization": "Basic " + base64};
+                "Authorization": "Basic " + base64};
     var formData = {"grant_type": "refresh_token", "refresh_token": refresh_token};
     curl_call(tokenhost, header, "", formData, "POST", function(err, res, body) {
-         
+        
         if ( err && err !== 200 ) {
             console.log((ddbg()), "error - call to refresh token: ", err);
             return;
@@ -1513,26 +1540,19 @@ function refreshSonosToken(userid, hub, refresh_token, clientId, clientSecret, r
                 console.log( (ddbg()), "error - hub update to DB failed while trying to refresh new Sonos token");
                 return;
             }
-
-            // if we provided a callback to do something after hub updates, do it
-            if ( postCallback && typeof postCallback === "function" ) {
-                postCallback();
-            }
         })
 
         // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
         if ( refresh && expiresin ) {
             setTimeout( function() {
-                refreshSonosToken(userid, hub, hub.hubrefresh, clientId, clientSecret, true, null);
+                refreshSonosToken(userid, hub, hub.hubrefresh, clientId, clientSecret, true);
             }, expiresin);
         }
 
     });
-
 }
 
-// handle refresh tokens which happens over and over again
-function fordRefreshToken(userid, hub, refresh) {
+function refreshFordToken(userid, hub, refresh) {
 
     var access_token = hub["hubaccess"];
     var endpt = hub["hubendpt"];
@@ -1582,7 +1602,12 @@ function fordRefreshToken(userid, hub, refresh) {
                 mydb.updateRow("hubs",hub,"userid = "+userid+" AND id = "+hub.id)
                 .then( result => {
                     if ( result ) {
-                        getDevices(hub, reload, "/");
+                        getDevices(hub)
+                        .then(mydevices => {
+                            var devices = Object.values(mydevices);
+                            console.log( (ddbg()), "Ford token refreshed, devices: ", devices);
+                            pushClient(userid,"reload","all","/");
+                        });
                     }
                 });
             }
@@ -1594,7 +1619,7 @@ function fordRefreshToken(userid, hub, refresh) {
 
             if ( refresh && expiresin ) {
                 setTimeout( function() {
-                    fordRefreshToken(userid, hub, true);
+                    refreshFordToken(userid, hub, true);
                 }, expiresin);
             }
         
@@ -1606,25 +1631,6 @@ function fordRefreshToken(userid, hub, refresh) {
         }
 
     });
-
-}
-
-// this makes Insteon ID's look good but it messes up the hub calls
-// which oddly enough expect the id in the mangled form that does not match
-// the way the id is written on the Insteon device
-function fixISYid(id) {
-    // if ( id.indexOf(" ") !== -1 ) {
-    //     var idparts = id.split(" ");
-    //     if ( idparts.length===4 ) {
-    //         idparts.forEach(function(idp, i) {
-    //             if ( idp.length===1 ) {
-    //                 idparts[i] = "0" + idp;
-    //             }
-    //         });
-    //         id = idparts.join(".");
-    //     }
-    // }
-    return id;
 }
 
 function findGroup(player, allGroups) {
@@ -1639,755 +1645,137 @@ function findGroup(player, allGroups) {
     return group;
 }
 
-function getDevices(hub, reload, reloadpath) {
+// rewrote this to use a promise to return the actual array of devices
+// or a reject with a message
+function getDevices(hub) {
 
     if ( DEBUG1 ) {
         console.log( (ddbg()), "getDevices debug - hub: ", hub);
     }
-    var hubindex = hub.id;
-    var userid = hub.userid;
-    var hubid = hub.hubid;
-    var hubType = hub.hubtype;
-    var hubAccess  = hub.hubaccess;
-    var hubEndpt = hub.hubendpt;
-    var clientId = hub.clientid;
-    var clientSecret = hub.clientsecret;
-    var hubName = hub.hubname;
-    var updated = false;
-    var result = null;
-
-    if ( !hubindex ) {
-        console.log( (ddbg()), "error - hub index not found in DB. hub: ", hub);
-        pushClient(userid, "reload", "all", reloadpath);
-    } else if ( !hubAccess ) {
-        console.log( (ddbg()), "error - hub has not been authorized. hub: ", hub);
-        pushClient(userid, "reload", "all", reloadpath);
-    }
-
-    // retrieve all things from ST or HE
-    if ( hubType==="SmartThings" || hubType==="Hubitat" ) {
-        var result = getGroovyDevices();
-
-    } else if ( hubType==="NewSmartThings") {
-        result = getNewSmartDevices();
-
-    // retrieve all things from ISY
-    } else if ( hubType==="ISY" ) {
-        result = getIsyDevices();
     
-    // retrieve all things from Ford of Lincoln
-    } else if ( hubType==="Ford" || hubType==="Lincoln" ) {
-        result = getFordVehicles();
+    var promise = new Promise( function(resolve, reject) {
+        var hubindex = hub.id;
+        var userid = hub.userid;
+        var hubid = hub.hubid;
+        var hubType = hub.hubtype;
+        var hubAccess  = hub.hubaccess;
+        var hubEndpt = hub.hubendpt;
+        var clientId = hub.clientid;
+        var clientSecret = hub.clientsecret;
+        var mydevices = {};
 
-    } else if ( hubType==="Sonos" ) {
-        result = getSonosDevices();
+        if ( !hubindex ) {
+            console.log( (ddbg()), "error - hub index not found in DB. hub: ", hub);
+            reject("error - hub index not proviced");
+            // pushClient(userid, "reload", "all", reloadpath);
+        } else if ( !hubAccess ) {
+            console.log( (ddbg()), "error - hub has not been authorized. hub: ", hub);
+            reject("error - hub has not been authorized");
+            // pushClient(userid, "reload", "all", reloadpath);
 
-    } else {
-        console.log( (ddbg()), "error - attempt to read an unknown hub type= ", hubType);
-        pushClient(userid, "reload", "all", reloadpath);
-    }
+        // retrieve all things from Hubitat
+        } else if ( hubType==="Hubitat" ) {
+            getGroovyDevices();
 
-    return result;
+        // retrieve all things from new ST
+        } else if ( hubType==="NewSmartThings") {
+            getNewSmartDevices();
 
-    // legacy ST and Hubitat call to Groovy API
-    function getGroovyDevices() {
-        var stheader = {"Authorization": "Bearer " + hubAccess};
-        var params = {client_secret: clientId,
-                      scope: "app",
-                      client_id: clientSecret};
-        curl_call(hubEndpt + "/getallthings", stheader, params, false, "POST", hubInfoCallback);
-    }
+        // retrieve all things from ISY
+        } else if ( hubType==="ISY" ) {
+            getIsyDevices();
 
-    function getSonosDevices() {
+        // retrieve all things from Ford of Lincoln
+        } else if ( hubType==="Ford" || hubType==="Lincoln" ) {
+            getFordVehicles();
 
-        var header = {"Content-Type": "application/json",
-                      "Authorization": "Bearer " + hubAccess,
-                      "Content-Length": 0};
+        } else if ( hubType==="Sonos" ) {
+            getSonosDevices();
 
-        var sonosPlayers;
-        var sonosGroups;
-        var namehost = hubEndpt + "/v1/households/" + hubid + "/groups";
-        _curl(namehost, header, "", "GET", function(err, body) {
-            if ( (!err || err === 200) && body ) {
-                var jsonbody = JSON.parse(body);
-                if ( DEBUG2 ) {
-                    console.log((ddbg()), "Sonos devices for house: ", hubid, " devices: ", jsonshow(jsonbody));
-                }
-                
-                sonosGroups = jsonbody.groups;
-                sonosPlayers = jsonbody.players;
-
-                if ( !sonosPlayers ) {
-                    console.log( (ddbg()), "no Sonos devices found for Household: ", hubid);
-                    return;
-                }
-
-                var devicecnt = 0;
-                var numdevices = sonosPlayers.length;
-                sonosPlayers.forEach(function(player) {
-                    var pvalue = {
-                        name: player.name,
-                        "_previousTrack": "previousTrack", "_pause": "pause", "_play": "play", "_stop":"stop", "_nextTrack":"nextTrack",
-                        "_unmute":"unmute", "_mute":"mute", "_volumeDown":"volumeDown","_volumeUp":"volumeUp","playbackStatus":"", "mute":"false", "volume":50,
-                        wss: player.websocketUrl
-                    };
-                    var group = findGroup(player, sonosGroups);
-                    if ( DEBUG2 ) {
-                        console.log((ddbg()), "player: ", player," in group: ", group);
-                    }
-                    if ( group ) {
-
-                        var jlast = group.playbackState.lastIndexOf("_");
-                        if ( jlast !== -1 ) {
-                            pvalue.playbackStatus = group.playbackState.substr(jlast+1).toLowerCase();
-                        } else {
-                            pvalue.playbackStatus = group.playbackState.toLowerCase();
-                        }
-                        if ( group.coordinatorId === player.id && group.playerIds.length===1 ) {
-                            pvalue.grouped = "Not grouped";
-                        } else if ( group.coordinatorId === player.id ) {
-                            pvalue.grouped = "Primary in group " + group.name; // + " with " + group.playerIds.length + " other";
-                            // group.playerIds.forEach( item => {
-                            //     if ( item !== player.id ) {
-                            //         pvalue.grouped += "<br>" + item; 
-                            //     }
-                            // });
-                        } else {
-                            pvalue.grouped = "Secondary in group " + group.name; // group.coordinatorId;
-                            // group.playerIds.forEach( item => {
-                            //     if ( item !== player.id && item !== group.coordinatorId ) {
-                            //         pvalue.grouped += "<br>" + item; 
-                            //     }
-                            // });
-                        }
-
-                        // obtain the meta data of the device
-                        namehost = hubEndpt + "/v1/groups/" + group.id + "/playbackMetadata";
-                        _curl(namehost, header, "", "GET", function(err, metabody) {
-                            if ( DEBUG2 ) {
-                                console.log((ddbg()), "Sonos metadata for: ", group, " metadata: ", jsonshow(metabody));
-                            }
-                            if ( (err && err!==200) || !metabody ) { return false; }
-                            try {
-                                var metadata = JSON.parse(metabody);
-                            } catch (e) {
-                                metadata = null;
-                            }
-                            var serviceUrl = "";
-                            var albumUrl = "";
-                            if ( metadata ) {
-                                if ( metadata.container && metadata.container.service ) {
-                                    serviceUrl = metadata.container.imageUrl;
-                                }
-
-                                if ( metadata.currentItem && metadata.currentItem.track ) {
-                                    pvalue.audioTrackData = {
-                                        title: "", artist: "", album: "", mediaSource: ""
-                                    };
-                                    pvalue.audioTrackData.title = metadata.currentItem.track.name || "";
-                                    if ( metadata.currentItem.track.artist ) {
-                                        pvalue.audioTrackData.artist = metadata.currentItem.track.artist.name || "";
-                                    }
-                                    if ( metadata.currentItem.track.album ) {
-                                        pvalue.audioTrackData.album = metadata.currentItem.track.album.name || "";
-                                    }
-                                    if ( metadata.currentItem.track.service ) {
-                                        pvalue.audioTrackData.mediaSource = metadata.currentItem.track.service.name || "";
-                                    }
-                                    albumUrl = metadata.currentItem.track.imageUrl || "";
-
-                                    // use the service URL if it is secure and the album art is not
-                                    if ( albumUrl.startsWith("https://") ) {
-                                        pvalue.audioTrackData.albumArtUrl = albumUrl;
-                                    } else if ( serviceUrl.startsWith("https://") ) {
-                                        pvalue.audioTrackData.albumArtUrl = serviceUrl;
-                                    } else {
-                                        pvalue.audioTrackData.albumArtUrl = GLB.returnURL + "/media/Electronics/electronics13-icn@2x.png";
-                                    }
-                                }
-                            } else {
-                                pvalue.audioTrackData = {
-                                    title: "",
-                                    artist: "",
-                                    album: "",
-                                    mediaSource: "",
-                                    albumArtUrl: GLB.returnURL + "/media/Electronics/electronics13-icn@2x.png"
-                                };
-                            }
-
-                            // get the volume
-                            namehost = hubEndpt + "/v1/groups/" + group.id + "/groupVolume";
-                            _curl(namehost, header, "", "GET")
-                            .then( body => {
-                                try {
-                                    var groupVolume = JSON.parse(body);
-                                    pvalue.mute = groupVolume.muted.toString();
-                                    pvalue.volume = groupVolume.volume;
-                                } catch(e) {
-                                    pvalue.mute = "false";
-                                    pvalue.volume = 50;
-                                }
-                                var deviceid = player.id;
-                                pvalue = encodeURI2(pvalue);
-
-                                // note that we store the group id in the hint so we can use it later easily to control the player
-                                var rowdevice = {
-                                    userid: userid, hubid: hubindex, deviceid: deviceid, name: player.name, 
-                                    devicetype: "sonos", hint: group.id, refresh: "normal", pvalue: pvalue
-                                };
-            
-                                mydb.updateRow("devices", rowdevice, "userid = "+userid+" AND hubid = "+hubindex+
-                                                " AND devicetype = 'sonos' AND deviceid = '"+deviceid+"'")
-                                .then(result => {
-                                    devicecnt++;
-            
-                                    // check if this is our last one
-                                    if ( devicecnt >= numdevices ) {
-                                        if ( DEBUG2 ) {
-                                            console.log( (ddbg()), "new Sonos devices for Household: ", hubid," numdevices = ", numdevices);
-                                        }
-                                    }
-                                }).catch(reason => {console.log("dberror 5 (with group) - SonosCallback - ", reason);});
-                            });
-
-                            // subscribe to volume for this player
-                            var namehost = hubEndpt + "/v1/players/" + player.id + "/playerVolume/subscription";
-                            _curl(namehost, header, "", "DELETE")
-                            .then( () => {
-                                _curl(namehost, header, "", "POST");
-                            });
-        
-                        });
-                    } else {
-
-                        pvalue = encodeURI2(pvalue);
-                        var deviceid = player.id;
-                        var rowdevice = {
-                            userid: userid,
-                            hubid: hubindex,
-                            deviceid: deviceid,
-                            name: player.name, 
-                            devicetype: "sonos",
-                            hint: "Sonos", 
-                            refresh: "normal",
-                            pvalue: pvalue
-                        };
-    
-                        mydb.updateRow("devices", rowdevice, "userid = "+userid+" AND hubid = "+hubindex+
-                                        " AND devicetype = 'sonos' AND deviceid = '"+deviceid+"'")
-                        .then(result => {
-                            devicecnt++;
-    
-                            // check if this is our last one
-                            if ( devicecnt >= numdevices ) {
-                                if ( DEBUG2 ) {
-                                    console.log( (ddbg()), "new Sonos devices for Household: ", hubid," numdevices = ", numdevices);
-                                }
-                            }
-                        }).catch(reason => {console.log("dberror 5 (no group) - SonosCallback - ", reason);});
-
-                    }
-                });
-
-                // subscribe to group changes
-                var namehost = hubEndpt + "/v1/households/" + hubid + "/groups/subscription";
-                _curl(namehost, header, "", "POST");
-
-                
-                // subscribe to Group playback and metadata
-                sonosGroups.forEach( group => {
-                    var namehost = hubEndpt + "/v1/groups/" + group.id + "/playback/subscription";
-                    // _curl(namehost, header, "", "DELETE")
-                    // .then( () => {
-                    _curl(namehost, header, "", "POST");
-                    // });
-
-                    var namehost = hubEndpt + "/v1/groups/" + group.id + "/playbackMetadata/subscription";
-                    // _curl(namehost, header, "", "DELETE")
-                    // .then( () => {
-                    _curl(namehost, header, "", "POST");
-                    // });
-                });
-
-            } else {
-                console.log( (ddbg()), "error - ", err, " body: ", body);
-            }
-        });
-    }
-
-    // implement logic using new ST api
-    function getNewSmartDevices() {
-        var stheader = {"Authorization": "Bearer " + hubAccess};
-
-        // first get all the devices
-        var doneNewST = {};
-        var currentDevices = [];
-        for ( var swtype in GLB.capabilities ) {
-            doneNewST[swtype] = false;
+        } else {
+            console.log( (ddbg()), "error - attempt to read an unknown hub type= ", hubType);
+            reject("error - attempt to read an unknown hub type= " + hubType);
+            // pushClient(userid, "reload", "all", reloadpath);
         }
 
-        for ( var swtype in GLB.capabilities ) {
-            var caparray = GLB.capabilities[swtype];
-
-            // get the list of capabilities this device must have to show up
-            // note this approach will 
-            var thecapabilityList = caparray[0];
-            var params = "";
-
-            // create the "and" filter for the devices to get
-            thecapabilityList.forEach(function(thecapability) {
-                if ( params ) { params+= "&"; }
-                params+= "capability="+thecapability;
+        // Hubitat call to Groovy API
+        function getGroovyDevices() {
+            const errMsg = "error retrieving devices from this Hubitat hub";
+            var stheader = {"Authorization": "Bearer " + hubAccess};
+            var params = {client_secret: clientId,
+                        scope: "app",
+                        client_id: clientSecret};
+            // curl_call(hubEndpt + "/getallthings", stheader, params, false, "POST", hubInfoCallback);
+            _curl(hubEndpt + "/getallthings", stheader, params, "POST")
+            .then(resp => {
+                hubInfoCallback(resp);
+            })
+            .catch(err => {
+                console.log( (ddbg()), errMsg, err);
+                reject(errMsg);
             });
 
-            if ( DEBUG2 ) {
-                console.log( (ddbg()), "inside getNewSmartDevices and type: ", swtype," params: ", params);
-            }
-
-            switch (swtype) {
-                case "switch" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("switch", userid, hubindex, err, res, body);
-                    });
-                    break;
-
-                case "switchlevel" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("switchlevel", userid, hubindex, err, res, body);
-                    });
-                    break;
-
-                case "bulb" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("bulb", userid, hubindex, err, res, body);
-                    });
-                    break;
-
-                case "power" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("power", userid, hubindex, err, res, body);
-                    });
-                    break;
-
-                case "button" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("button", userid, hubindex, err, res, body);
-                    });
-                    break;
-
-                case "presence" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("presence", userid, hubindex, err, res, body);
-                    });
-                    break;
-
-                case "motion" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("motion", userid, hubindex, err, res, body);
-                    });
-                    break;
-
-                case "contact" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("contact", userid, hubindex, err, res, body);
-                    });
-                    break;
-
-                case "door" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("door", userid, hubindex, err, res, body);
-                    });
-                    break;
-
-                case "lock" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("lock", userid, hubindex, err, res, body);
-                    });
-                    break;
-
-                case "thermostat" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("thermostat", userid, hubindex, err, res, body);
-                    });
-                    break;
-
-                case "temperature" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("temperature", userid, hubindex, err, res, body);
-                    });
-                    break;
-
-                case "illuminance" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("illuminance", userid, hubindex, err, res, body);
-                    });
-                    break;
-
-                case "water" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("water", userid, hubindex, err, res, body);
-                    });
-                    break;
-
-                case "valve" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("valve", userid, hubindex, err, res, body);
-                    });
-                    break;
-
-                case "smoke" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("smoke", userid, hubindex, err, res, body);
-                    });
-                    break;
-    
-                case "audio" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("audio", userid, hubindex, err, res, body);
-                    });
-                    break;
-
-                case "shade" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("shade", userid, hubindex, err, res, body);
-                    });
-                    break;
-    
-                case "weather" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("weather", userid, hubindex, err, res, body);
-                    });
-                    break;
-
-                case "washer" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("washer", userid, hubindex, err, res, body);
-                    });
-                    break;
-
-                case "vacuum" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("vacuum", userid, hubindex, err, res, body);
-                    });
-                    break;
-    
-                case "other" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("other", userid, hubindex, err, res, body);
-                    });
-                    break;
-    
-                case "actuator" :
-                    curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
-                        await newSTCallback("actuator", userid, hubindex, err, res, body);
-                    });
-                    break;
-
-                case "location":
-                    getLocation();
-                    break;
-
-                default:
-                    checkNewSTDone(swtype);
-                    break;
-            }
-
-        }
-
-        
-        function getLocation() {
-
-            // now read the locations and make a device for each one
-            _curl(hubEndpt + "/locations", stheader, null, "GET")
-            .then(body => {
+            // callback for loading Hubitat devices
+            function hubInfoCallback(body) {
                 try {
                     var jsonbody = JSON.parse(body);
                 } catch (e) {
-                    console.log( (ddbg()), "error translating locations: ", body, " error: ", e);
-                    checkNewSTDone("location");
-                    return;
+                    jsonbody = null;
+                    console.log( (ddbg()), "error translating devices. body: ", body, " error: ", e);
+                    reject(errMsg);
                 }
-                var locations = jsonbody.items;
-                if ( locations && is_array(locations) && locations.length ) {
-                    var numlocations = locations.length;
-                    var devicecnt = 0;
-                    locations.forEach(location => {
-                        var locationId = location.locationId;
-                        var locationName = location.name;
-                        var locvalue = null;
-                        if ( !currentDevices.includes(locationId) ) {
-                            currentDevices.push(locationId);
-                        }
 
-                        _curl(hubEndpt + "/locations/" + locationId, stheader, null, "GET")
-                        .then(body => {
-                            if ( body ) {
-                                locvalue = JSON.parse(body);
-                                if ( locvalue.additionalProperties ) {
-                                    delete locvalue.additionalProperties;
-                                }
-                                if ( locvalue.parent ) {
-                                    locvalue.parentid = locvalue.parent.id;
-                                    delete locvalue.parent;
-                                }
-                                if ( locvalue.locationId ) {
-                                    delete locvalue.locationId;
-                                }
-                                if ( locvalue.backgroundImage ) {
-                                    delete locvalue.backgroundImage;
-                                }
-                                locvalue["deviceType"] = "location";
-                            } else {
-                                devicecnt++;
-                                if ( devicecnt >= numlocations ) {
-                                    checkNewSTDone("location");
-                                }
-                            }
-                        })
-                        .then( () => {
-
-                            if ( !locvalue ) { 
-                                return; 
-                            }
-
-                            // now get the modes
-                            _curl(hubEndpt + "/locations/" + locationId + "/modes", stheader, null, "GET")
-                            .then(body => {
-                                if ( body ) {
-                                    var modevalue = JSON.parse(body);
-
-                                    // we add two modes for each. One is the actual mode name with the ID attached
-                                    // the other one is a command to set the mode to this value. The mode names with ID's should be hidden
-                                    if ( modevalue.items && is_array(modevalue.items) ) {
-                                        modevalue.items.forEach( modeobj => {
-                                            var subid = modeobj.label;
-                                            var cmdid = "_" + subid;
-                                            locvalue[subid] = modeobj.id;
-                                            locvalue[cmdid] = subid;
-                                        })
-                                    }
-                                }
-                            })
-                            .then( () => {
-
-                                _curl(hubEndpt + "/locations/" + locationId + "/modes/current", stheader, null, "GET")
-                                .then(body => {
-                                    var themode = JSON.parse(body);
-                                    if ( is_object(themode) ) {
-                                        locvalue.themode = themode.label;
-                                    }
-                                    // add a counter
-                                    // locvalue.count = "0";
-
-                                    var pvalue = encodeURI2(locvalue);
-                                    var rowdevice = {
-                                        userid: userid,
-                                        hubid: hubindex,
-                                        deviceid: locationId,
-                                        name: locationName, 
-                                        devicetype: "location",
-                                        hint: hubType, 
-                                        refresh: "never",
-                                        pvalue: pvalue
-                                    };
-                                    mydb.updateRow("devices", rowdevice, "userid = "+userid+" AND hubid = "+hubindex+
-                                                " AND devicetype = 'location' AND deviceid = '"+locationId+"'")
-                                    .then(result => {
-                                        devicecnt++;
-                                        if ( devicecnt >= numlocations ) {
-                                            checkNewSTDone("location");
-                                        }
-                                    });
-                                });
-                            });
-                        });
-                    });
-                } else {
-                    checkNewSTDone("location");
-                }
-            })
-            .catch(reason => {
-                checkNewSTDone("location");
-            });
-        }
-
-        function checkNewSTDone(thetype) {
-
-            if ( thetype ) {
-                doneNewST[thetype] = true;
-                if ( DEBUG20 ) {
-                    console.log( (ddbg()), "finished reading newST type: ", thetype);
-                }
-            }
-
-            var alldone = true;
-            for ( var cap in GLB.capabilities ) {
-                if ( !doneNewST[cap] ) {
-                    alldone = false;
-                }
-            }
-
-            // if we are all done then we can reload our auth page
-            if ( alldone ) {
-                if ( DEBUG20 ) {
-                    console.log( (ddbg()), "finished reading all newST types");
-                }
-                removeDeadNodes(userid, hubindex, currentDevices);
-                updateOptions(userid, reload, reloadpath, 2000);
-            }
-        }
-
-        function newSTCallback(swtype, userid, hubindex, err, res, body) {
-            try {
-                var jsonbody = JSON.parse(body);
-            } catch (e) {
-                console.log( (ddbg()), "error translating devices of type: ", swtype, " error: ", e, " body: ", body);
-                checkNewSTDone(swtype);
-                return;
-            }
-            var items = jsonbody.items;
-            if ( ! is_array(items) || items.length===0 ) {
-                checkNewSTDone(swtype);
-                return;
-            }
-
-            // var requestedcap = GLB.capabilities[swtype];
-            var caparray = GLB.capabilities[swtype];
-            var capabilitiesList = caparray[0];
-            var commands = caparray[1];
-
-            // keep track of how many devices complete
-            var devicecnt = 0;
-            var numdevices = items.length;
-
-            // read each device of this type
-            items.forEach(function(device) {
-
-                var pname = device.label;
-                pname = pname.replace(/'/g,"");
-                var pvalue = {name: pname};
-                var st_type = device.type;
-                var deviceid = device.deviceId;
-                
-                // handle Groovy device types
-                if ( st_type==="DTH" ) {
-                    var dth = device.dth;
-                    pvalue["deviceType"] = dth.deviceTypeName;
-                    pvalue["localExec"] = dth.executingLocally;
-                    if ( dth.installedGroovyAppId ) {
-                        pvalue["appId"] = dth.installedGroovyAppId;
-                    }
+                // configure returned array with the "id"
+                if (jsonbody && is_array(jsonbody) ) {
                     
-                } else if ( st_type==="ENDPOINT_APP" ) {
-                    var stapp = device.app;
-                    pvalue["appId"] = stapp.installedAppId;
-                    pvalue["externalId"] = stapp.externalId;
-                    pvalue["profileId"] = stapp.profile.id;
-                }
+                    if (DEBUG1) {
+                        console.log( (ddbg()), "Retrieved ", jsonbody.length, " things from hub: ", hub);
+                    }    
+                    var devicecnt = 0;
+                    var numdevices = jsonbody.length;
+                    var currentDevices = [];
 
-                // get the health status
-                _curl(hubEndpt + "/devices/" + deviceid+"/health", stheader, null, "GET")
-                .then(body => {
-                    if ( body ) {
-                        try {
-                            var healthStatus = JSON.parse(body);
-                            pvalue["status"] = healthStatus.state;
-                        } catch(e) {
-                            pvalue["status"] = "OFFLINE";
+                    // now add them one at a time until we have them all
+                    jsonbody.forEach(function(content) {
+                        var thetype = content["type"];
+                        var deviceid = content["id"];
+                        if ( !currentDevices.includes(deviceid) ) {
+                            currentDevices.push(deviceid);
                         }
-                    }
-
-                    // now get the device details
-                    // curl_call(hubEndpt + "/devices/" + device.deviceId+"/status", stheader, params, false, "GET", function(err, res, bodyStatus) {
-                    _curl(hubEndpt + "/devices/" + deviceid+"/status", stheader, null, "GET", function(err, bodyStatus) {
-
-                        if ( err && err !== 200 ) {
-                            jsonStatus = null;
-                            return;
+                        var origname = content["name"] || "";
+                        var pvalue = content["value"];
+                        var hint = hubType;
+                        var refresh = "normal";
+                        
+                        // if a name isn't there use master name
+                        if ( !pvalue.name && !origname ) {
+                            origname = "unknown";
+                            pvalue.name = origname;
+                        } else if ( !pvalue.name ) {
+                            pvalue.name = origname;
+                        } else if (!origname ) {
+                            origname = pvalue.name;
+                        }
+                        origname = origname.replace(/'/g, "");
+                        
+                        // deal with presence tiles
+                        if ( pvalue["presence"]==="not present" ) {
+                            pvalue["presence"] = "absent";
                         }
 
-                        try {
-                            var jsonStatus = JSON.parse(bodyStatus);
-                        } catch (e) {
-                            console.log( (ddbg()), "error translating device status", e, " body: ", bodyStatus);
-                            jsonStatus = null;
-                            return;
-                        }
-
-                        // get all the components - this will typically only have "main"
-                        var subid;
-                        if ( jsonStatus && jsonStatus.components && is_object(jsonStatus.components) ) {
-
-                            for ( var complabel in jsonStatus.components ) {
-                                // go through the capabilities
-                                var capabilities = jsonStatus.components[complabel];
-
-                                for ( var cap in capabilities ) {
-                                    
-                                    // only pull the fields for this specific capability for switches, illuminance, and temperature
-                                    // or all fields for sensor and actuator - also always get the battery and switch
-                                    // if we are not reading a switch or illuminance or temperature then get all fields
-                                    // if ( swtype==="other" || swtype==="actuator" || cap==="battery" || capabilitiesList.includes(cap) ) {
-                                    // if ( swtype==="other" || swtype==="actuator" || cap==="battery" || capabilitiesList.includes(cap) || true ) {
-
-                                    // go through the attributes
-                                    var attributes = capabilities[cap];
-                                    for ( var attr in attributes ) {
-
-                                        if ( ! GLB.ignoredAttributes.includes(attr ) ) {
-
-                                            // set subid which is usually just the attribute
-                                            // but if we are not in the main capability adjust to include component as a prefix
-                                            // also use the main attribute if it wasn't defined already
-                                            if ( complabel==="main" || typeof pvalue[attr]==="undefined" ) {
-                                                subid = attr;
-                                            } else {
-                                                subid = complabel+"_"+attr;
-                                            }
-        
-                                            if ( typeof attributes[attr]["value"]!=="undefined" && attributes[attr]["value"]!==null ) {
-                                                for ( var othersub in attributes[attr] ) {
-                                                    if ( othersub==="value" ) {
-                                                        pvalue[subid] = attributes[attr]["value"];
-
-                                                    } else if ( othersub === "unit" ) {
-                                                        pvalue["uom_"+subid] = attributes[attr]["unit"];
-                                                    } else if ( othersub === "data" ) {
-                                                        try {
-                                                            var otherobj = JSON.parse(attributes[attr][othersub]);
-                                                            for ( var datasubid in otherobj ) {
-                                                                if ( typeof pvalue[datasubid]==="undefined" ) {
-                                                                    pvalue[datasubid] = otherobj[datasubid];
-                                                                } else {
-                                                                    pvalue["data_"+datasubid] = otherobj[datasubid];
-                                                                }
-                                                            }
-                                                        } catch (e) {
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    
-                                }
+                        // remove ignored items from pvalue
+                        for (var field in pvalue) {
+                            if ( GLB.ignoredAttributes.includes(field) || field.startsWith("supportedWasher") ) {
+                                delete pvalue[field];
                             }
-                        }
-
-                        // add color attribute if hsl is there
-                        if ( array_key_exists("hue", pvalue) && array_key_exists("saturation",pvalue) && array_key_exists("level",pvalue) ) {
-                            var h = Math.round((parseInt(pvalue["hue"]) * 360) / 100);
-                            var s = Math.round(parseInt(pvalue["saturation"]));
-                            var v = Math.round(parseInt(pvalue["level"]));
-                            pvalue["color"] = hsv2rgb(h, s, v);
                         }
 
                         // add counter and duration for things with switch, contact, presence, motion, or lock
                         if ( array_key_exists("switch",pvalue)  ||
-                        array_key_exists("contact",pvalue) ||
-                        array_key_exists("presence",pvalue) ||
-                        array_key_exists("motion",pvalue) ||
-                        array_key_exists("lock",pvalue) ) 
+                            array_key_exists("contact",pvalue) ||
+                            array_key_exists("presence",pvalue) ||
+                            array_key_exists("motion",pvalue) ||
+                            array_key_exists("lock",pvalue) ) 
                         {
                             pvalue.count = "0";
                             pvalue.duration = "0.0";
@@ -2403,369 +1791,1380 @@ function getDevices(hub, reload, reloadpath) {
                             }
                         }
 
-                        // add commands
-                        if ( commands ) {
-                            for ( var i in commands ) {
-                                var csubid = commands[i];
-                                if ( csubid.substr(0,1)==="_" ) {
-                                    pvalue[csubid] = csubid.substr(1);
-                                } else {
-                                    pvalue[csubid] = "";
+                        // handle audio and weather tiles
+                        if ( thetype==="audio" || thetype==="sonos" || pvalue.audioTrackData ) {
+                            pvalue = translateAudio(pvalue);
+                        } else if ( thetype==="music" || pvalue.trackData ) {
+                            pvalue = translateMusic(pvalue);
+                        } else if ( thetype==="weather" ) {
+                            var thisorigname = pvalue.name || "Weather";
+                            pvalue = translateWeather(thisorigname, pvalue);
+                        } else {
+                            pvalue = translateObjects(pvalue);
+                        }
+                        var pvalstr = encodeURI2(pvalue);
+
+                        var device = {userid: userid, hubid: hubindex, deviceid: deviceid, name: origname, 
+                            devicetype: thetype, hint: hint, refresh: refresh, pvalue: pvalstr};
+
+                        mydevices[deviceid] = device;
+                        devicecnt++;
+
+                        // update the device in our db
+                        mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND devicetype = '"+thetype+"' AND deviceid = '"+deviceid+"'")
+                        .then(resp => {
+                            // check if this is our last one and return array of devices
+                            if ( devicecnt >= numdevices ) {
+                                removeDeadNodes(userid, hubindex, currentDevices);
+                                resolve(mydevices);
+                                // updateOptions(userid, reload, reloadpath, 2000);
+                            }                    
+
+                        });
+                    });
+
+                } else {
+                    // an error occurred with this hub
+                    reject(errMsg);
+                    // updateOptions(userid, reload, reloadpath, 0);
+                }
+            }
+        }
+
+        function getSonosDevices() {
+
+            var header = {"Content-Type": "application/json",
+                        "Authorization": "Bearer " + hubAccess,
+                        "Content-Length": 0};
+
+            var sonosPlayers;
+            var sonosGroups;
+            var namehost = hubEndpt + "/v1/households/" + hubid + "/groups";
+            _curl(namehost, header, "", "GET", function(err, body) {
+                if ( (!err || err === 200) && body ) {
+                    var jsonbody = JSON.parse(body);
+                    if ( DEBUG2 ) {
+                        console.log((ddbg()), "Sonos devices for house: ", hubid, " devices: ", jsonshow(jsonbody));
+                    }
+                    
+                    sonosGroups = jsonbody.groups;
+                    sonosPlayers = jsonbody.players;
+
+                    var mydevices = {};
+                    if ( !sonosPlayers ) {
+                        console.log( (ddbg()), "no Sonos devices found for Household: ", hubid);
+                        resolve(mydevices);
+                    }
+
+                    var devicecnt = 0;
+                    var numdevices = sonosPlayers.length;
+                    sonosPlayers.forEach(function(player) {
+                        var pvalue = {
+                            name: player.name,
+                            "_previousTrack": "previousTrack", "_pause": "pause", "_play": "play", "_stop":"stop", "_nextTrack":"nextTrack",
+                            "_unmute":"unmute", "_mute":"mute", "_volumeDown":"volumeDown","_volumeUp":"volumeUp","playbackStatus":"", "mute":"false", "volume":50,
+                            wss: player.websocketUrl
+                        };
+                        var group = findGroup(player, sonosGroups);
+                        if ( DEBUG2 ) {
+                            console.log((ddbg()), "player: ", player," in group: ", group);
+                        }
+
+                        if ( group ) {
+
+                            var jlast = group.playbackState.lastIndexOf("_");
+                            if ( jlast !== -1 ) {
+                                pvalue.playbackStatus = group.playbackState.substr(jlast+1).toLowerCase();
+                            } else {
+                                pvalue.playbackStatus = group.playbackState.toLowerCase();
+                            }
+                            if ( group.coordinatorId === player.id && group.playerIds.length===1 ) {
+                                pvalue.grouped = "Not grouped";
+                            } else if ( group.coordinatorId === player.id ) {
+                                pvalue.grouped = "Primary in group " + group.name; // + " with " + group.playerIds.length + " other";
+                                // group.playerIds.forEach( item => {
+                                //     if ( item !== player.id ) {
+                                //         pvalue.grouped += "<br>" + item; 
+                            //         pvalue.grouped += "<br>" + item; 
+                                //         pvalue.grouped += "<br>" + item; 
+                                //     }
+                                // });
+                            } else {
+                                pvalue.grouped = "Secondary in group " + group.name; // group.coordinatorId;
+                                // group.playerIds.forEach( item => {
+                                //     if ( item !== player.id && item !== group.coordinatorId ) {
+                                //         pvalue.grouped += "<br>" + item; 
+                            //         pvalue.grouped += "<br>" + item; 
+                                //         pvalue.grouped += "<br>" + item; 
+                                //     }
+                                // });
+                            }
+
+                            // obtain the meta data of the device
+                            namehost = hubEndpt + "/v1/groups/" + group.id + "/playbackMetadata";
+                            _curl(namehost, header, "", "GET", function(err, metabody) {
+                                if ( DEBUG2 ) {
+                                    console.log((ddbg()), "Sonos metadata for: ", group, " metadata: ", jsonshow(metabody));
                                 }
+                                if ( (err && err!==200) || !metabody ) { return false; }
+                                try {
+                                    var metadata = JSON.parse(metabody);
+                                } catch (e) {
+                                    metadata = null;
+                                }
+                                var serviceUrl = "";
+                                var albumUrl = "";
+                                if ( metadata ) {
+                                    if ( metadata.container && metadata.container.service ) {
+                                        serviceUrl = metadata.container.imageUrl;
+                                    }
+
+                                    if ( metadata.currentItem && metadata.currentItem.track ) {
+                                        pvalue.audioTrackData = {
+                                            title: "", artist: "", album: "", mediaSource: ""
+                                        };
+                                        pvalue.audioTrackData.title = metadata.currentItem.track.name || "";
+                                        if ( metadata.currentItem.track.artist ) {
+                                            pvalue.audioTrackData.artist = metadata.currentItem.track.artist.name || "";
+                                        }
+                                        if ( metadata.currentItem.track.album ) {
+                                            pvalue.audioTrackData.album = metadata.currentItem.track.album.name || "";
+                                        }
+                                        if ( metadata.currentItem.track.service ) {
+                                            pvalue.audioTrackData.mediaSource = metadata.currentItem.track.service.name || "";
+                                        }
+                                        albumUrl = metadata.currentItem.track.imageUrl || "";
+
+                                        // use the service URL if it is secure and the album art is not
+                                        if ( albumUrl.startsWith("https://") ) {
+                                            pvalue.audioTrackData.albumArtUrl = albumUrl;
+                                        } else if ( serviceUrl.startsWith("https://") ) {
+                                            pvalue.audioTrackData.albumArtUrl = serviceUrl;
+                                        } else {
+                                            pvalue.audioTrackData.albumArtUrl = GLB.returnURL + "/media/Electronics/electronics13-icn@2x.png";
+                                        }
+                                    }
+                                } else {
+                                    pvalue.audioTrackData = {
+                                        title: "",
+                                        artist: "",
+                                        album: "",
+                                        mediaSource: "",
+                                        albumArtUrl: GLB.returnURL + "/media/Electronics/electronics13-icn@2x.png"
+                                    };
+                                }
+
+                                // get the volume
+                                namehost = hubEndpt + "/v1/groups/" + group.id + "/groupVolume";
+                                _curl(namehost, header, "", "GET")
+                                .then( body => {
+                                    try {
+                                        var groupVolume = JSON.parse(body);
+                                        pvalue.mute = groupVolume.muted.toString();
+                                        pvalue.volume = groupVolume.volume;
+                                    } catch(e) {
+                                        pvalue.mute = "false";
+                                        pvalue.volume = 50;
+                                    }
+                                    var deviceid = player.id;
+                                    pvalue = encodeURI2(pvalue);
+
+                                    // note that we store the group id in the hint so we can use it later easily to control the player
+                                    var rowdevice = {
+                                        userid: userid, hubid: hubindex, deviceid: deviceid, name: player.name, 
+                                    userid: userid, hubid: hubindex, deviceid: deviceid, name: player.name, 
+                                        userid: userid, hubid: hubindex, deviceid: deviceid, name: player.name, 
+                                        devicetype: "sonos", hint: group.id, refresh: "normal", pvalue: pvalue
+                                    };
+                                    devicecnt++;
+                                    mydevices[deviceid] = rowdevice;
+                                    // check if this is our last one
+                                    if ( devicecnt >= numdevices ) {
+                                        resolve(mydevices);
+                                        if ( DEBUG2 ) {
+                                            console.log( (ddbg()), "new Sonos devices for Household: ", hubid," devices: ", mydevices);
+                                        }
+                                    }
+                                    mydb.updateRow("devices", rowdevice, "userid = "+userid+" AND hubid = "+hubindex+
+                                                    " AND devicetype = 'sonos' AND deviceid = '"+deviceid+"'");
+                                });
+
+                                // subscribe to volume for this player
+                                var namehost = hubEndpt + "/v1/players/" + player.id + "/playerVolume/subscription";
+                                _curl(namehost, header, "", "DELETE")
+                                .then( () => {
+                                    _curl(namehost, header, "", "POST");
+                                });
+            
+                            });
+                        } else {
+
+                            pvalue = encodeURI2(pvalue);
+                            var deviceid = player.id;
+                            var rowdevice = {
+                                userid: userid,
+                                hubid: hubindex,
+                                deviceid: deviceid,
+                                name: player.name, 
+                            name: player.name, 
+                                name: player.name, 
+                                devicetype: "sonos",
+                                hint: "Sonos", 
+                            hint: "Sonos", 
+                                hint: "Sonos", 
+                                refresh: "normal",
+                                pvalue: pvalue
+                            };
+
+                            devicecnt++;
+                            mydevices[deviceid] = rowdevice;
+                            if ( devicecnt >= numdevices ) {
+                                resolve(mydevices);
+                                if ( DEBUG2 ) {
+                                    console.log( (ddbg()), "new Sonos devices for Household: ", hubid," devices: ", mydevices);
+                                }
+                            }
+                            mydb.updateRow("devices", rowdevice, "userid = "+userid+" AND hubid = "+hubindex+
+                                            " AND devicetype = 'sonos' AND deviceid = '"+deviceid+"'");
+                        }
+                    });
+
+                    // only do subscriptions if we are a secure site
+                    if ( hubEndpt.startsWith("https") ) {
+                        // subscribe to group changes
+                        var namehost = hubEndpt + "/v1/households/" + hubid + "/groups/subscription";
+                        _curl(namehost, header, "", "POST");
+
+                        sonosGroups.forEach( group => {
+                            var namehost = hubEndpt + "/v1/groups/" + group.id + "/playback/subscription";
+                            _curl(namehost, header, "", "POST");
+                            // });
+
+                            var namehost = hubEndpt + "/v1/groups/" + group.id + "/playbackMetadata/subscription";
+                            _curl(namehost, header, "", "POST");
+                            // });
+                        });
+                    }
+
+                } else {
+                    console.log( (ddbg()), "error - ", err, " body: ", body);
+                    reject("error reading Sonos devices from hub");
+                }
+            });
+        }
+
+        // implement logic using new ST api
+        function getNewSmartDevices() {
+            var stheader = {"Authorization": "Bearer " + hubAccess};
+
+            // first get all the devices
+            var doneNewST = {};
+            var currentDevices = [];
+            var mydevices = {};
+            for ( var swtype in GLB.capabilities ) {
+                doneNewST[swtype] = false;
+            }
+
+            for ( var swtype in GLB.capabilities ) {
+                var caparray = GLB.capabilities[swtype];
+
+                // get the list of capabilities this device must have to show up
+                // note this approach will 
+            // note this approach will 
+                // note this approach will 
+                var thecapabilityList = caparray[0];
+                var params = "";
+
+                // create the "and" filter for the devices to get
+                thecapabilityList.forEach(function(thecapability) {
+                    if ( params ) { params+= "&"; }
+                    params+= "capability="+thecapability;
+                });
+
+                if ( DEBUG2 ) {
+                    console.log( (ddbg()), "inside getNewSmartDevices and type: ", swtype," params: ", params);
+                }
+
+                switch (swtype) {
+                    case "switch" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("switch", userid, hubindex, err, res, body);
+                        });
+                        break;
+
+                    case "switchlevel" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("switchlevel", userid, hubindex, err, res, body);
+                        });
+                        break;
+
+                    case "bulb" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("bulb", userid, hubindex, err, res, body);
+                        });
+                        break;
+
+                    case "power" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("power", userid, hubindex, err, res, body);
+                        });
+                        break;
+
+                    case "button" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("button", userid, hubindex, err, res, body);
+                        });
+                        break;
+
+                    case "presence" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("presence", userid, hubindex, err, res, body);
+                        });
+                        break;
+
+                    case "motion" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("motion", userid, hubindex, err, res, body);
+                        });
+                        break;
+
+                    case "contact" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("contact", userid, hubindex, err, res, body);
+                        });
+                        break;
+
+                    case "door" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("door", userid, hubindex, err, res, body);
+                        });
+                        break;
+
+                    case "lock" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("lock", userid, hubindex, err, res, body);
+                        });
+                        break;
+
+                    case "thermostat" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("thermostat", userid, hubindex, err, res, body);
+                        });
+                        break;
+
+                    case "temperature" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("temperature", userid, hubindex, err, res, body);
+                        });
+                        break;
+
+                    case "illuminance" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("illuminance", userid, hubindex, err, res, body);
+                        });
+                        break;
+
+                    case "water" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("water", userid, hubindex, err, res, body);
+                        });
+                        break;
+
+                    case "valve" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("valve", userid, hubindex, err, res, body);
+                        });
+                        break;
+
+                    case "smoke" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("smoke", userid, hubindex, err, res, body);
+                        });
+                        break;
+        
+                    case "audio" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("audio", userid, hubindex, err, res, body);
+                        });
+                        break;
+
+                    case "shade" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("shade", userid, hubindex, err, res, body);
+                        });
+                        break;
+        
+                    case "weather" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("weather", userid, hubindex, err, res, body);
+                        });
+                        break;
+
+                    case "washer" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("washer", userid, hubindex, err, res, body);
+                        });
+                        break;
+
+                    case "vacuum" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("vacuum", userid, hubindex, err, res, body);
+                        });
+                        break;
+        
+                    case "other" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("other", userid, hubindex, err, res, body);
+                        });
+                        break;
+        
+                    case "actuator" :
+                        curl_call(hubEndpt + "/devices", stheader, params, false, "GET", async function(err, res, body) {
+                            await newSTCallback("actuator", userid, hubindex, err, res, body);
+                        });
+                        break;
+
+                    case "location":
+                        getLocation();
+                        break;
+
+                    default:
+                        checkNewSTDone(swtype);
+                        break;
+                }
+
+            }
+
+            function checkNewSTDone(thetype) {
+
+                if ( thetype ) {
+                    doneNewST[thetype] = true;
+                    if ( DEBUG20 ) {
+                        console.log( (ddbg()), "finished reading newST type: ", thetype);
+                    }
+                }
+
+                var alldone = true;
+                for ( var cap in GLB.capabilities ) {
+                    if ( !doneNewST[cap] ) {
+                        alldone = false;
+                    }
+                }
+
+                // if we are all done then we can reload our auth page
+                if ( alldone ) {
+                    if ( DEBUG20 ) {
+                        console.log( (ddbg()), "finished reading all newST types. devices: ", mydevices);
+                    }
+                    removeDeadNodes(userid, hubindex, currentDevices);
+                    resolve(mydevices);
+                    // updateOptions(userid, reload, reloadpath, 2000);
+                }
+            }
+
+            function getLocation() {
+
+                // now read the locations and make a device for each one
+                _curl(hubEndpt + "/locations", stheader, null, "GET")
+                .then(body => {
+                    try {
+                        var jsonbody = JSON.parse(body);
+                        var locations = jsonbody.items;
+                    } catch (e) {
+                        console.log( (ddbg()), "error translating ST locations: ", body, " error: ", e);
+                        reject("error translating ST locations");
+                        locations = null;
+                    }
+                    if ( locations && is_array(locations) && locations.length ) {
+                        var numlocations = locations.length;
+                        var devicecnt = 0;
+                        locations.forEach(location => {
+                            var locationId = location.locationId;
+                            var locationName = location.name;
+                            var locvalue = null;
+                            if ( !currentDevices.includes(locationId) ) {
+                                currentDevices.push(locationId);
+                            }
+
+                            _curl(hubEndpt + "/locations/" + locationId, stheader, null, "GET")
+                            .then(body => {
+                                if ( body ) {
+                                    locvalue = JSON.parse(body);
+                                    if ( locvalue.additionalProperties ) {
+                                        delete locvalue.additionalProperties;
+                                    }
+                                    if ( locvalue.parent ) {
+                                        locvalue.parentid = locvalue.parent.id;
+                                        delete locvalue.parent;
+                                    }
+                                    if ( locvalue.locationId ) {
+                                        delete locvalue.locationId;
+                                    }
+                                    if ( locvalue.backgroundImage ) {
+                                        delete locvalue.backgroundImage;
+                                    }
+                                    locvalue["deviceType"] = "location";
+                                } else {
+                                    devicecnt++;
+                                    if ( devicecnt >= numlocations ) {
+                                        checkNewSTDone("location");
+                                    }
+                                }
+                            })
+                            .then( () => {
+
+                                if ( !locvalue ) { 
+                                    reject("error translating ISY locations");
+                                    return; 
+                                }
+
+                                // now get the modes
+                                _curl(hubEndpt + "/locations/" + locationId + "/modes", stheader, null, "GET")
+                                .then(body => {
+                                    if ( body ) {
+                                        var modevalue = JSON.parse(body);
+
+                                        // we add two modes for each. One is the actual mode name with the ID attached
+                                        // the other one is a command to set the mode to this value. The mode names with ID's should be hidden
+                                        if ( modevalue.items && is_array(modevalue.items) ) {
+                                            modevalue.items.forEach( modeobj => {
+                                                var subid = modeobj.label;
+                                                var cmdid = "_" + subid;
+                                                locvalue[subid] = modeobj.id;
+                                                locvalue[cmdid] = subid;
+                                            })
+                                        }
+                                    }
+                                })
+                                .then( () => {
+
+                                    _curl(hubEndpt + "/locations/" + locationId + "/modes/current", stheader, null, "GET")
+                                    .then(body => {
+                                        var themode = JSON.parse(body);
+                                        if ( is_object(themode) ) {
+                                            locvalue.themode = themode.label;
+                                        }
+                                        // add a counter
+                                        // locvalue.count = "0";
+
+                                        var pvalue = encodeURI2(locvalue);
+                                        var rowdevice = {
+                                            userid: userid,
+                                            hubid: hubindex,
+                                            deviceid: locationId,
+                                            name: locationName, 
+                                        name: locationName, 
+                                            name: locationName, 
+                                            devicetype: "location",
+                                            hint: hubType, 
+                                        hint: hubType, 
+                                            hint: hubType, 
+                                            refresh: "never",
+                                            pvalue: pvalue
+                                        };
+                                        mydevices[locationId] = rowdevice;
+                                        devicecnt++;
+                                        if ( devicecnt >= numlocations ) {
+                                            checkNewSTDone("location");
+                                        }
+                                        mydb.updateRow("devices", rowdevice, "userid = "+userid+" AND hubid = "+hubindex+
+                                        " AND devicetype = 'location' AND deviceid = '"+locationId+"'");
+                                    });
+                                });
+                            });
+                        });
+                    }
+                })
+                .catch(reason => {
+                    console.log( (ddbg()), "error translating ST locations: ", reason);
+                    reject("error translating ST locations");
+                });
+            }
+
+            function newSTCallback(swtype, userid, hubindex, err, res, body) {
+                try {
+                    var jsonbody = JSON.parse(body);
+                } catch (e) {
+                    console.log( (ddbg()), "error translating devices of type: ", swtype, " error: ", e, " body: ", body);
+                    checkNewSTDone(swtype);
+                    return;
+                }
+                var items = jsonbody.items;
+                if ( ! is_array(items) || items.length===0 ) {
+                    checkNewSTDone(swtype);
+                    return;
+                }
+
+                // var requestedcap = GLB.capabilities[swtype];
+                var caparray = GLB.capabilities[swtype];
+                var capabilitiesList = caparray[0];
+                var commands = caparray[1];
+
+                // keep track of how many devices complete
+                var devicecnt = 0;
+                var numdevices = items.length;
+
+                // read each device of this type
+                items.forEach(function(device) {
+
+                    var pname = device.label;
+                    pname = pname.replace(/'/g,"");
+                    var pvalue = {name: pname};
+                    var st_type = device.type;
+                    var deviceid = device.deviceId;
+                    
+                    // handle Groovy device types
+                    if ( st_type==="DTH" ) {
+                        var dth = device.dth;
+                        pvalue["deviceType"] = dth.deviceTypeName;
+                        pvalue["localExec"] = dth.executingLocally;
+                        if ( dth.installedGroovyAppId ) {
+                            pvalue["appId"] = dth.installedGroovyAppId;
+                        }
+                        
+                    } else if ( st_type==="ENDPOINT_APP" ) {
+                        var stapp = device.app;
+                        pvalue["appId"] = stapp.installedAppId;
+                        pvalue["externalId"] = stapp.externalId;
+                        pvalue["profileId"] = stapp.profile.id;
+                    }
+
+                    // get the health status
+                    _curl(hubEndpt + "/devices/" + deviceid+"/health", stheader, null, "GET")
+                    .then(body => {
+                        if ( body ) {
+                            try {
+                                var healthStatus = JSON.parse(body);
+                                pvalue["status"] = healthStatus.state;
+                            } catch(e) {
+                                pvalue["status"] = "OFFLINE";
                             }
                         }
 
-                        // for audio add placeholders for album info and art if not there
-                        if ( swtype === "audio" && pvalue.deviceType && pvalue.deviceType.startsWith("LAN Sonos") && !pvalue.audioTrackData ) {
-                            pvalue.audioTrackData = {
-                                title: "",
-                                artist: "",
-                                album: "",
-                                albumArtUrl: GLB.returnURL + "/media/Electronics/electronics13-icn@2x.png",
-                                mediaSource: "Sonos"
+                        // now get the device details
+                        // curl_call(hubEndpt + "/devices/" + device.deviceId+"/status", stheader, params, false, "GET", function(err, res, bodyStatus) {
+                        _curl(hubEndpt + "/devices/" + deviceid+"/status", stheader, null, "GET", function(err, bodyStatus) {
+
+                            if ( err && err !== 200 ) {
+                                jsonStatus = null;
+                                return;
+                            }
+
+                            try {
+                                var jsonStatus = JSON.parse(bodyStatus);
+                            } catch (e) {
+                                console.log( (ddbg()), "error translating device status", e, " body: ", bodyStatus);
+                                jsonStatus = null;
+                                return;
+                            }
+
+                            // get all the components - this will typically only have "main"
+                            var subid;
+                            if ( jsonStatus && jsonStatus.components && is_object(jsonStatus.components) ) {
+
+                                for ( var complabel in jsonStatus.components ) {
+                                    // go through the capabilities
+                                    var capabilities = jsonStatus.components[complabel];
+
+                                    for ( var cap in capabilities ) {
+                                        
+                                        // only pull the fields for this specific capability for switches, illuminance, and temperature
+                                        // or all fields for sensor and actuator - also always get the battery and switch
+                                        // if we are not reading a switch or illuminance or temperature then get all fields
+                                        // if ( swtype==="other" || swtype==="actuator" || cap==="battery" || capabilitiesList.includes(cap) ) {
+                                        // if ( swtype==="other" || swtype==="actuator" || cap==="battery" || capabilitiesList.includes(cap) || true ) {
+
+                                        // go through the attributes
+                                        var attributes = capabilities[cap];
+                                        for ( var attr in attributes ) {
+
+                                            if ( ! GLB.ignoredAttributes.includes(attr ) ) {
+
+                                                // set subid which is usually just the attribute
+                                                // but if we are not in the main capability adjust to include component as a prefix
+                                                // also use the main attribute if it wasn't defined already
+                                                if ( complabel==="main" || typeof pvalue[attr]==="undefined" ) {
+                                                    subid = attr;
+                                                } else {
+                                                    subid = complabel+"_"+attr;
+                                                }
+            
+                                                if ( typeof attributes[attr]["value"]!=="undefined" && attributes[attr]["value"]!==null ) {
+                                                    for ( var othersub in attributes[attr] ) {
+                                                        if ( othersub==="value" ) {
+                                                            pvalue[subid] = attributes[attr]["value"];
+
+                                                        } else if ( othersub === "unit" ) {
+                                                            pvalue["uom_"+subid] = attributes[attr]["unit"];
+                                                        } else if ( othersub === "data" ) {
+                                                            try {
+                                                                var otherobj = JSON.parse(attributes[attr][othersub]);
+                                                                for ( var datasubid in otherobj ) {
+                                                                    if ( typeof pvalue[datasubid]==="undefined" ) {
+                                                                        pvalue[datasubid] = otherobj[datasubid];
+                                                                    } else {
+                                                                        pvalue["data_"+datasubid] = otherobj[datasubid];
+                                                                    }
+                                                                }
+                                                            } catch (e) {
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        
+                                    }
+                                }
+                            }
+
+                            // add color attribute if hsl is there
+                            if ( array_key_exists("hue", pvalue) && array_key_exists("saturation",pvalue) && array_key_exists("level",pvalue) ) {
+                                var h = Math.round((parseInt(pvalue["hue"]) * 360) / 100);
+                                var s = Math.round(parseInt(pvalue["saturation"]));
+                                var v = Math.round(parseInt(pvalue["level"]));
+                                pvalue["color"] = hsv2rgb(h, s, v);
+                            }
+
+                            // add counter and duration for things with switch, contact, presence, motion, or lock
+                            if ( array_key_exists("switch",pvalue)  ||
+                            array_key_exists("contact",pvalue) ||
+                            array_key_exists("presence",pvalue) ||
+                            array_key_exists("motion",pvalue) ||
+                            array_key_exists("lock",pvalue) ) 
+                            {
+                                pvalue.count = "0";
+                                pvalue.duration = "0.0";
+                                pvalue.deltaT = 0;
+                                if ( (array_key_exists("switch",pvalue) && pvalue.switch==="on") ||
+                                    (array_key_exists("contact",pvalue) && pvalue.contact==="open") ||
+                                    (array_key_exists("presence",pvalue) && pvalue.presence==="present") ||
+                                    (array_key_exists("motion",pvalue) && pvalue.motion==="active") ||
+                                    (array_key_exists("lock",pvalue) && pvalue.lock==="unlocked") 
+                                ) {
+                                    var d = new Date();
+                                    pvalue.deltaT = d.getTime();                            
+                                }
+                            }
+
+                            // add commands
+                            if ( commands ) {
+                                for ( var i in commands ) {
+                                    var csubid = commands[i];
+                                    if ( csubid.substr(0,1)==="_" ) {
+                                        pvalue[csubid] = csubid.substr(1);
+                                    } else {
+                                        pvalue[csubid] = "";
+                                    }
+                                }
+                            }
+
+                            // for audio add placeholders for album info and art if not there
+                            if ( swtype === "audio" && pvalue.deviceType && pvalue.deviceType.startsWith("LAN Sonos") && !pvalue.audioTrackData ) {
+                                pvalue.audioTrackData = {
+                                    title: "",
+                                    artist: "",
+                                    album: "",
+                                    albumArtUrl: GLB.returnURL + "/media/Electronics/electronics13-icn@2x.png",
+                                    mediaSource: "Sonos"
+                                };
+                            }
+
+                            // // get the health state info
+                            // for ( var subid in jsonStatus.healthState ) {
+                            //     pvalue[subid] = jsonStatus.healthState[subid];
+                            // }
+                            if ( DEBUG20 ) {
+                                console.log( (ddbg()), "New SmartThings device type: ", swtype, " pvalue: ", pvalue);
+                            }
+
+                            var pname = pvalue.name;
+                            pvalue = encodeURI2(pvalue);
+                            var rowdevice = {
+                                userid: userid,
+                                hubid: hubindex,
+                                deviceid: deviceid,
+                                name: pname, 
+                                devicetype: swtype,
+                                hint: hubType, 
+                                refresh: "normal",
+                                pvalue: pvalue
                             };
-                        }
 
-                        // // get the health state info
-                        // for ( var subid in jsonStatus.healthState ) {
-                        //     pvalue[subid] = jsonStatus.healthState[subid];
-                        // }
-                        if ( DEBUG20 ) {
-                            console.log( (ddbg()), "New SmartThings device type: ", swtype, " pvalue: ", pvalue);
-                        }
+                            if ( !currentDevices.includes(deviceid) ) {
+                                currentDevices.push(deviceid);
+                            }
 
-                        var pname = pvalue.name;
-                        pvalue = encodeURI2(pvalue);
-                        var rowdevice = {
-                            userid: userid,
-                            hubid: hubindex,
-                            deviceid: deviceid,
-                            name: pname, 
-                            devicetype: swtype,
-                            hint: hubType, 
-                            refresh: "normal",
-                            pvalue: pvalue
-                        };
-
-                        if ( !currentDevices.includes(deviceid) ) {
-                            currentDevices.push(deviceid);
-                        }
-                                
-                        mydb.updateRow("devices", rowdevice, "userid = "+userid+" AND hubid = "+hubindex+
-                            " AND devicetype = '"+swtype+"' AND deviceid = '"+deviceid+"'")
-                        .then(result => {
+                            mydevices[deviceid] = rowdevice;
                             devicecnt++;
 
                             // check if this is our last one
                             if ( devicecnt >= numdevices ) {
                                 if ( DEBUG20 ) {
-                                    console.log( (ddbg()), "new ST numdevices = ", numdevices);
+                                    console.log( (ddbg()), "new ST numdevices = ", numdevices," devices: ", mydevices);
                                 }
                                 checkNewSTDone(swtype);
                             }
-                        }).catch(reason => {console.log("dberror 5 - newSTCallback - ", reason);});
-                        
-                    });  // end of this device node detail curl callback
+                            mydb.updateRow("devices", rowdevice, "userid = "+userid+" AND hubid = "+hubindex+
+                                " AND devicetype = '"+swtype+"' AND deviceid = '"+deviceid+"'");
+                            
+                        });  // end of this device node detail curl callback
 
-                }); // end of health check
+                    }); // end of health check
 
-            }); // end of all devices of this type
+                }); // end of all devices of this type
 
-        }  // end of getNewSmartDevices callback
+            }  // end of newSTCallback
 
-    } // end of new ST 
+        } // end of new ST 
+        
+        // remove tiles and devices that are no longer on the hub
+        function removeDeadNodes(userid, hubindex, currentDevices) {
 
-    // callback for loading ST and HE hub devices
-    function hubInfoCallback(err, res, body) {
-        if ( err ) {
-            console.log( (ddbg()), "error retrieving devices: ", err);
-            updateOptions(userid, reload, reloadpath, 0);
-        } else {
-            try {
-                var jsonbody = JSON.parse(body);
-            } catch (e) {
-                console.log( (ddbg()), "error translating devices. body: ", body, " error: ", e);
-                return;
-            }
+            // removeDeadTiles(userid, hubindex, currentDevices);
+            var indev = "(" + currentDevices.join(",") + ")";
+            mydb.deleteRow("devices","userid = "+userid+" AND hubid = "+hubindex+" AND deviceid NOT IN " + indev);
 
-            if (DEBUG1) {
-                console.log( (ddbg()), "Retrieved ", jsonbody.length, " things from hub: ", hub);
-            }    
+            // mydb.getRows("devices", "*", "userid = "+userid+" AND hubid = "+hubindex)
+            // .then(devices => {
+            //     devices.forEach(device => {
+            //         if ( !currentDevices.includes(device.deviceid) ) {
+            //             mydb.deleteRow("devices", "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '"+device.deviceid+"'");
+            //         }
+            //     })
+            // }).catch(reason => {console.log("dberror 6b - removeDeadNodes - userid = ", userid, " reason = ", reason)});
+            // removeDeadTiles(userid, currentDevices);
+        }
 
-            // configure returned array with the "id"
-            var devicecnt = 0;
-            if (jsonbody && is_array(jsonbody) ) {
-                
-                var numdevices = jsonbody.length;
-                var currentDevices = [];
+        // remove dead tiles
+        function removeDeadTiles(userid, hubindex, currentDevices) {
+            var indev = "(" + currentDevices.join(",") + ")";
+            var joinstr = mydb.getJoinStr("things","tileid","devices","id");
+            mydb.deleteRow("things","things.userid = "+userid+" AND devices.hubid = "+hubindex+" AND devices.deviceid NOT IN " + indev, joinstr);
+        }
 
-                // now add them one at a time until we have them all
-                jsonbody.forEach(function(content) {
-                    var thetype = content["type"];
-                    var deviceid = content["id"];
-                    if ( !currentDevices.includes(deviceid) ) {
-                        currentDevices.push(deviceid);
-                    }
-                    var origname = content["name"] || "";
-                    var pvalue = content["value"];
-                    var hint = hubType;
-                    var refresh = "normal";
-                    
-                    // if a name isn't there use master name
-                    if ( !pvalue.name && !origname ) {
-                        origname = "unknown";
-                        pvalue.name = origname;
-                    } else if ( !pvalue.name ) {
-                        pvalue.name = origname;
-                    } else if (!origname ) {
-                        origname = pvalue.name;
-                    }
-                    origname = origname.replace(/'/g, "");
-                    
-                    // deal with presence tiles
-                    if ( pvalue["presence"]==="not present" ) {
-                        pvalue["presence"] = "absent";
-                    }
+        function getFordVehicles() {
 
-                    // remove ignored items from pvalue
-                    for (var field in pvalue) {
-                        if ( GLB.ignoredAttributes.includes(field) || field.startsWith("supportedWasher") ) {
-                            delete pvalue[field];
+            // now we call vehicle information query to get vehicle ID
+            // API version is a defined constant at front of code
+            var header = {
+                "Authorization": "Bearer " + hubAccess,
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "api-version": FORDAPIVERSION,
+                "Application-Id": hub.hubid,
+            };
+            var endpt = hub.hubendpt;
+            curl_call(endpt, header, false, false, "GET", vehicleInfoCallback);
+
+            function vehicleInfoCallback(err, res, body) {
+
+                try {
+                    var jsonbody = JSON.parse(body);
+                } catch(e) {
+                    console.log( (ddbg()), e, " body: ", body);
+
+                    reject("Problem loading vehicle info for Ford or Lincoln");
+                    // pushClient(userid, "reload", "all", reloadpath);
+                    return;
+                }
+                var thetype = "ford";
+                var devicecnt = 0;
+                var mydevices = {};
+
+                if ( jsonbody && jsonbody.status === "SUCCESS" && array_key_exists("vehicles", jsonbody) && is_array(jsonbody.vehicles) ) {
+                    var numdevices = jsonbody.vehicles.length;
+                    jsonbody.vehicles.forEach(function(obj) {
+                        var vehicleid = obj.vehicleId;
+                        var idx = thetype + "|" + vehicleid;
+                        if ( obj.nickName ) {
+                            var vehiclename = obj.nickName;
+                        } else {
+                            vehiclename = obj.modelName;
+                            obj.nickName = obj.modelName;
                         }
-                    }
+                        var pvalue = {name: vehiclename, status: "SUCCESS"};
+                        for (var subid in obj) {
+                            if ( subid!=="vehicleId" ) {
 
-                    // add counter and duration for things with switch, contact, presence, motion, or lock
-                    if ( array_key_exists("switch",pvalue)  ||
-                        array_key_exists("contact",pvalue) ||
-                        array_key_exists("presence",pvalue) ||
-                        array_key_exists("motion",pvalue) ||
-                        array_key_exists("lock",pvalue) ) 
-                    {
-                        pvalue.count = "0";
-                        pvalue.duration = "0.0";
-                        pvalue.deltaT = 0;
-                        if ( (array_key_exists("switch",pvalue) && pvalue.switch==="on") ||
-                            (array_key_exists("contact",pvalue) && pvalue.contact==="open") ||
-                            (array_key_exists("presence",pvalue) && pvalue.presence==="present") ||
-                            (array_key_exists("motion",pvalue) && pvalue.motion==="active") ||
-                            (array_key_exists("lock",pvalue) && pvalue.lock==="unlocked") 
-                        ) {
-                            var d = new Date();
-                            pvalue.deltaT = d.getTime();                            
+                                // change color to vehicle color since color is special
+                                if ( subid==="color" ) {
+                                    pvalue["vehiclecolor"] = obj[subid];
+                                } else if ( subid==="make" ) {
+                                    if ( obj[subid]==="F" ) {
+                                        pvalue[subid] = "Ford";
+                                    } else if ( obj[subid]==="L" ) {
+                                        pvalue[subid] = "Lincoln";
+                                    } else {
+                                        pvalue[subid] = obj[subid];
+                                    }
+                                } else {
+                                    pvalue[subid] = obj[subid];
+                                }
+                            }
                         }
-                    }
 
-                    // handle audio and weather tiles
-                    if ( thetype==="audio" || thetype==="sonos" || pvalue.audioTrackData ) {
-                        pvalue = translateAudio(pvalue);
-                    } else if ( thetype==="music" || pvalue.trackData ) {
-                        pvalue = translateMusic(pvalue);
-                    } else if ( thetype==="weather" ) {
-                        var thisorigname = pvalue.name || "Weather";
-                        pvalue = translateWeather(thisorigname, pvalue);
-                    } else {
-                        pvalue = translateObjects(pvalue);
-                    }
-                    var pvalstr = encodeURI2(pvalue);
+                        // place holders for info detail return values
+                        // *** note *** inconsistent cases for timestamp and timeStamp
+                        pvalue.engineTYpe = "";
+                        pvalue.mileage = "";
+                        pvalue.info = "";
+                        pvalue.lastUpdated = "";
+                        pvalue.fuelLevel_value = "";
+                        pvalue.fuelLevel_distanceToEmpty = "";
+                        pvalue.fuelLevel_timestamp = "";
+                        pvalue.batteryChargeLevel_value = "";
+                        pvalue.batteryChargeLevel_distanceToEmpty = "";
+                        pvalue.batteryChargeLevel_timestamp = "";
+                        pvalue.tirePressureWarning = "";
+                        pvalue.deepSleepInProgress = "";
+                        pvalue.firmwareUpgradeInProgress = "";
+                        pvalue.longitude = "";
+                        pvalue.latitude = "";
+                        pvalue.speed = "";
+                        pvalue.direction = "";
+                        pvalue.timeStamp = "";
+                        pvalue.remoteStartStatus_status = "";
+                        pvalue.remoteStartStatus_remoteStartDuration = "";
+                        pvalue.remoteStartStatus_remoteStartTime = "";
+                        pvalue.chargingStatus_value = "";
+                        pvalue.chargingStatus_timestamp = "";
+                        pvalue.chargingStatus_chargeStartTime = "";
+                        pvalue.chargingStatus_chargeEndTime = "";
+                        pvalue.pingStatus_value = "";
+                        pvalue.pingStatus_timeStamp = "";
 
-                    var device = {userid: userid, hubid: hubindex, deviceid: deviceid, name: origname, 
-                        devicetype: thetype, hint: hint, refresh: refresh, pvalue: pvalstr};
-                    
-                    mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+
-                                                      " AND devicetype = '"+thetype+"' AND deviceid = '"+deviceid+"'")
-                    .then(result => {
+                        // place holders for error messages
+                        pvalue.error = "";
+                        pvalue.error_description = "";
+
+                        // place holders for return status for commands
+                        pvalue["commandStatus"] = "";
+                        pvalue["commandId"] = "";
+
+                        // add all the api call functions 
+                        // removed _status and _location since they don't appear to work
+                        // the location and status are returned in the info call
+                        pvalue["_info"] = "info";
+                        pvalue["_unlock"] = "unlock";
+                        pvalue["_lock"] = "lock";
+                        pvalue["_startEngine"] = "startEngine";
+                        pvalue["_stopEngine"] = "stopEngine";
+                        pvalue["_wake"] = "wake";
+                        // pvalue["_status"] = "_status";
+                        // pvalue["_location"] = "_location";
+
+                        var pvalstr = encodeURI2(pvalue);
+                        var device = {userid: userid, hubid: hubindex, deviceid: vehicleid, name: vehiclename, 
+                            devicetype: thetype, hint: hubType, refresh: "normal", pvalue: pvalstr};
+
+                        mydevices[vehicleid] = device;
                         devicecnt++;
-
                         // check if this is our last one
                         if ( devicecnt >= numdevices ) {
-                            removeDeadNodes(userid, hubindex, currentDevices);
-                            updateOptions(userid, reload, reloadpath, 2000);
+                            resolve(mydevices);
+                            // updateOptions(userid, reload, reloadpath, 2000);
                         }
-                    }).catch(reason => {console.log("dberror 6 - hubInfoCallback - userid = ", userid, " reason = ", reason);});
-                });
+                        mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+
+                                                        " AND devicetype = '"+thetype+"' AND deviceid = '"+vehicleid+"'");
 
-            } else {
-                // an error occurred with this hub so remove all devices tied to it
-                // removed this because it causes bogus errors to wipe out user settings
-                // the dead node removal below will instead clean things up if needed later
-                // mydb.deleteRow("devices", "userid = "+userid+" AND hubid = "+hubindex);
-                updateOptions(userid, reload, reloadpath, 0);
+                    });
+                } else {
+                    console.log( (ddbg()), "No devices found for Ford or Lincoln vehicles");
+                    resolve(mydevices);
+                    // updateOptions(userid, false, reloadpath, 0);
+                }
+
             }
         }
-    }
+
+        // function for loading ISY hub devices
+        function getIsyDevices() {
+            const errMsg = "error retrieving devices from ISY hub with accessTOken = " + hubAccess;
+            var buff = Buffer.from(hubAccess);
+            var base64 = buff.toString('base64');
+            var stheader = {"Authorization": "Basic " + base64};
+            // var vardefs = {};
     
-    // remove any devices that are no longer on the hub
-    function removeDeadNodes(userid, hubindex, currentDevices) {
-        mydb.getRows("devices", "*", "userid = "+userid+" AND hubid = "+hubindex)
-        .then(devices => {
-            devices.forEach(device => {
-                if ( !currentDevices.includes(device.deviceid) ) {
-                    mydb.deleteRow("devices", "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '"+device.deviceid+"'");
-                }
+            // use this object to keep track of which things are done
+            var done = {"Int" : false, "State" : false, "Int_defs" : false, "State_defs" : false, "variables" : false, "programs" : false, "nodes" : false };
+    
+            // now read in any int and state variables and their definitions
+            var mydevices = {};
+            var variables = {name: "ISY Variables"};
+    
+            // make all the calls strung together
+            _curl(hubEndpt + "/vars/definitions/1", stheader, null, "GET")
+            .then(body => {
+                getISY_Defs(body,"Int");
+                return _curl(hubEndpt + "/vars/get/1", stheader, null, "GET")
             })
-        }).catch(reason => {console.log("dberror 6b - removeDeadNodes - userid = ", userid, " reason = ", reason)});
-        // removeDeadTiles(userid, currentDevices);
-    }
-
-    // remove dead tiles from all hubs
-    function removeDeadTiles(userid, currentDevices) {
-        mydb.getRows("things", "*", "userid = "+userid)
-        .then(things => {
-            things.forEach(thing => {
-                getRow("devices","id", "userid = "+userid+" AND id = "+thing.tileid)
-                .then(row => {
-                    if ( !row ) {
-                        mydb.deleteRow("things","userid = "+userid+" AND id = " + thing.id)
-                    }
-                });
+            .then(body => {
+                getISY_Vars(body,"Int");
+                return _curl(hubEndpt + "/vars/definitions/2", stheader, null, "GET")
             })
-        }).catch(reason => {console.log("dberror 6c - removeDeadTiles - userid = ", userid, " reason = ", reason)});
-    }
-
-    function getFordVehicles() {
-
-        // now we call vehicle information query to get vehicle ID
-        // API version is a defined constant at front of code
-        var header = {
-            "Authorization": "Bearer " + hubAccess,
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "api-version": FORDAPIVERSION,
-            "Application-Id": hub.hubid,
-        };
-        var endpt = hub.hubendpt;
-        curl_call(endpt, header, false, false, "GET", vehicleInfoCallback);
-
-    }
-
-    function vehicleInfoCallback(err, res, body) {
-
-        try {
-            var jsonbody = JSON.parse(body);
-        } catch(e) {
-            console.log(e, " body: ", body);
-            pushClient(userid, "reload", "all", reloadpath);
-            return;
-        }
-        var thetype = "ford";
-
-        if ( jsonbody.status === "SUCCESS" && array_key_exists("vehicles", jsonbody) && is_array(jsonbody.vehicles) ) {
-            var numdevices = jsonbody.vehicles.length;
-            jsonbody.vehicles.forEach(function(obj) {
-                var vehicleid = obj.vehicleId;
-                var idx = thetype + "|" + vehicleid;
-                if ( obj.nickName ) {
-                    var vehiclename = obj.nickName;
+            .then(body => {
+                getISY_Defs(body,"State");
+                return _curl(hubEndpt + "/vars/get/2", stheader, null, "GET")
+            })
+            .then(body => {
+                getISY_Vars(body,"State");
+                return _curl(hubEndpt + "/programs?subfolders=true", stheader, null, "GET")
+            })
+            .then(body => {
+                getAllProgs(body);
+                return _curl(hubEndpt + "/nodes", stheader, null, "GET")
+            })
+            .then(body => {
+                getAllNodes(body);
+                resolve(mydevices);
+            })
+            .catch(reason => {
+                console.log( (ddbg()), "error retrieving ISY nodes", reason);
+                var ndev = Object.keys(mydevices).length;
+                if ( ndev ) {
+                    resolve(mydevices);
                 } else {
-                    vehiclename = obj.modelName;
-                    obj.nickName = obj.modelName;
+                    reject(errMsg);
                 }
-                var pvalue = {name: vehiclename, status: "SUCCESS"};
-                for (var subid in obj) {
-                    if ( subid!=="vehicleId" ) {
+            });
+                
+            function checkDone( stage ) {
+                if ( stage ) {
+                    done[ stage ] = true;
+                }
 
-                        // change color to vehicle color since color is special
-                        if ( subid==="color" ) {
-                            pvalue["vehiclecolor"] = obj[subid];
-                        } else if ( subid==="make" ) {
-                            if ( obj[subid]==="F" ) {
-                                pvalue[subid] = "Ford";
-                            } else if ( obj[subid]==="L" ) {
-                                pvalue[subid] = "Lincoln";
-                            } else {
-                                pvalue[subid] = obj[subid];
-                            }
+                if ( !done[variables] && done["Int"] && done["State"] && done["Int_defs"] && done["State_defs"]) {
+                    // Now that we have all the isy variables and names, create a mapping of ids to names
+                    // set all the alias values here so that updates can use alias names
+                    // variables["alias"] = vardefs;
+                    var pvalstr = encodeURI2(variables);
+                    var device = {userid: userid, hubid: hubindex, deviceid: "isyvars", name: variables.name, 
+                    devicetype: thetype, hint: "ISY_variable", refresh: "never", pvalue: pvalstr};
+                    
+                    // customize here after all isy vars are read
+                    // and update our options
+                    mydevices["isyvars"] = device;
+                    done["variables"] = true;
+                }
+
+                if ( done["variables"] && done["programs"] && done["nodes"] ) {
+                    mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND devicetype = '"+thetype+"' AND deviceid = '"+vehicleid+"'")
+                    .then( () => {
+                        resolve(mydevices);
+                    })
+                    .catch( reason => {
+                        console.log( (ddbg()), reason);
+                        var ndev = Object.keys(mydevices).length;
+                        if ( ndev ) {
+                            resolve(mydevices);
                         } else {
-                            pvalue[subid] = obj[subid];
+                            reject(errMsg);
+                        }
+                    })
+                    return true;
+                } else {
+                    return false;
+                }
+            }
+    
+            function getISY_Defs( body, vartype ) {
+                xml2js(body, function(err, result) {
+                    if (DEBUGvar) {
+                        console.log( (ddbg()), vartype, vartype + " variables defs: ", UTIL.inspect(result, false, null, false) );
+                    }
+                    try {
+                        var varobj = result.CList.e;
+                    } catch(e) {
+                        checkDone(vartype + "_defs");
+                        return;
+                    }
+                    if ( !is_object(varobj) ) {
+                        checkDone(vartype + "_defs");
+                        return;
+                    }
+    
+                    // convert single variable object into an array of variable objects
+                    if ( !is_array(varobj) ) {
+                        varobj = [varobj];
+                    }
+                    varobj.forEach(function( obj) {
+                        var defname = vartype + "_";
+                        try {
+                            var varid = obj["$"]["id"];
+                            var varname = obj["$"]["name"];
+                            if ( !varname ) {
+                                varname = defname + varid;
+                            }
+                            // varname = varname.replace(/ /g,"_");
+                        } catch (e) {
+                            varid = 0;
+                            varname = "";
+                        }
+                        if ( varid > 0 ) {
+                            variables["def_"+defname+varid] = varname;
+                            // vardefs[defname+varid] = varname;
+                        }
+                    });
+                    checkDone(vartype + "_defs");
+                });
+            }
+               
+            function getISY_Vars(body, vartype) {
+                const vartypes = ["", "Int", "State"];    
+                xml2js(body, function(err, result) {
+                    if (DEBUGvar) {
+                        console.log( (ddbg()), vartype, body, "variables: ", UTIL.inspect(result, false, null, false) );
+                    }
+    
+                    if ( !result ) {
+                        checkDone(vartype);
+                        return;
+                    }
+
+                    var varobj = result.vars.var;
+                    if ( !is_object(varobj) ) {
+                        checkDone(vartype);
+                        return;
+                    }
+    
+                    // convert single variable object into an array of variable objects
+                    if ( !is_array(varobj) ) {
+                        varobj = [varobj];
+                    }
+                        
+                    varobj.forEach(function( obj) {
+                        try {
+                            var varid = obj["$"]["id"];
+                            var vartypeid = parseInt(obj["$"]["type"]);
+                            if ( vartypeid > 2 ) { vartypeid = 0; }
+                        } catch (e) {
+                            varid = 0;
+                            vartypeid = 0;
+                        }
+                        if ( varid > 0 && vartype === vartypes[vartypeid] ) {
+                            var prec = parseInt(obj.prec[0]);
+                            var val10 = obj.val[0];
+                            if ( !isNaN(prec) && prec !== 0 ) {
+                                val10 = parseFloat(val10) / Math.pow(10, prec);
+                            }
+                            variables[vartype+"_"+varid] = val10.toString();
+                            variables["prec_"+vartype+"_"+varid] = prec.toString();
+                        }
+                    });
+                    
+                    if ( DEBUGvar ) {
+                        console.log( (ddbg()), "New variable value: ", variables);
+                    }
+                    checkDone(vartype);
+                });
+    
+            }
+    
+            // get programs and setup program tiles much like how Piston tiles are done in ST and HE
+            function getAllProgs(body) {
+                // have to use the full parsing function here
+                xml2js(body, function(xmlerr, result) {
+                    if ( DEBUGisy ) {
+                        console.log( (ddbg()), "xmlerr: ", xmlerr, " xml2js programs: ", UTIL.inspect(result, false, null, false) );
+                    }
+                    var thetype = "isy";
+                    if ( !result ) {
+                        checkDone("programs");
+                        return;
+                    }
+                
+                    var programlist = result.programs.program;
+                    if ( !is_object(programlist) ) {
+                        checkDone("programs");
+                        return;
+                    }
+
+                    // // convert single variable object into an array of variable objects
+                    if ( !is_array(programlist) ) {
+                        programlist = [programlist];
+                    }
+
+                    // now lets get all the master program nodes
+                    // and create a tile for any program that is not a folder
+                    // TODO: recurse into folders and get programs there too
+                    var pvalue;
+                    programlist.forEach(function(prog) {
+                        var proginfo = prog["$"];
+                        var isfolder = proginfo.folder;
+                        // if we have a folder don't add it
+                        if ( isfolder==="true" ) {
+                            if ( DEBUGisy ) {
+                                console.log( (ddbg()), "Program ", prog.name, " is a folder. id: ", proginfo.id, " Status: ", proginfo.status);
+                            }
+                        // create tile for programs that are not folders
+                        } else {
+                            if ( DEBUG7 ) {
+                                console.log( (ddbg()), "Program ", prog.name, " id: ", proginfo.id, " Status: ", proginfo.status, " Last run: ", prog.lastRunTime );
+                            }
+                            var progid = "prog_" + proginfo.id;
+
+                            // set the program name. Add Program if it isn't there
+                            // this will help make program names unique from tiles
+                            var progname;
+                            if ( is_array(prog.name) ) {
+                                progname = prog.name[0];
+                            } else {
+                                progname = prog.name;
+                            }
+                            if ( progname.toLowerCase().indexOf("program") === -1 ) {
+                                progname = "Program " + progname;
+                            }
+
+                            // var progcommands = "run|runThen|runElse|stop|enable|disable";
+                            // var progarr = progcommands.split("|");
+                            var progarr = ["run","runThen","runElse","stop","enable","disable"];
+                            pvalue = {name: progname};
+                            progarr.forEach(function(command) {
+                                pvalue[command] = command;
+                            });
+                            for ( var key in prog ) {
+                                if ( key!=="$" && key!=="name" ) {
+                                    var val = prog[key];
+                                    if ( is_array(val) ) {
+                                        pvalue[key] = val[0];
+                                    } else {
+                                        pvalue[key] = val;
+                                    }
+                                }
+                            }
+                            pvalue.status = proginfo.status;
+
+                            // get the enabled and runat states
+                            pvalue.enabled  = proginfo.enabled;
+                            pvalue.runAtStartup = proginfo.runAtStartup;
+                            var pvalstr = encodeURI2(pvalue);
+
+                            var device = {userid: userid, hubid: hubindex, deviceid: progid, name: progname, 
+                                            devicetype: thetype, hint: "ISY_program", refresh: "normal", pvalue: pvalstr};
+                            mydevices[progid] = device;
+                        }
+                    });
+                    checkDone("programs");
+                });
+    
+            }
+    
+            function getAllNodes(body) {
+                const thetype = "isy";
+    
+                xml2js(body, function(xmlerr, result) {
+                    if ( DEBUGisy ) {
+                        console.log( (ddbg()), "xmlerr: ", xmlerr, " xml2js nodes: ", UTIL.inspect(result, false, null, false) );
+                    }
+
+                    if ( !result ) {
+                        checkDone("nodes");
+                        return;
+                    }
+                
+                    var thenodes = result.nodes["node"];
+                    if ( !is_object(thenodes) ) {
+                        checkDone("nodes");
+                        return;
+                    }
+
+                    for ( var obj in thenodes ) {
+                        var node = thenodes[obj];
+                        var id = fixISYid(node["address"][0].toString());
+                        var hint = node["type"][0].toString();
+    
+                        // set hint to nothing if default of zeros is provided
+                        // TODO - provide a more useful mapping of hints to type names
+                        // until then user can still style hints using CSS
+                        if ( hint ) {
+                            hint.replace( /\./g, "_" );
+                            hint = "ISY " + hint;
+                        }
+    
+                        var name = node["name"][0] || "Node";
+                        var pvalue = {"name": name};
+                        var pvalstr = encodeURI2(pvalue);
+    
+                        // set bare minimum info
+                        // this is updated below in the callback after getting node details
+                        var device = {userid: userid, hubid: hubindex, deviceid: id, name: name, 
+                            devicetype: thetype, hint: hint, refresh: "never", pvalue: pvalstr};
+                        mydevices[id] = device;
+                        if (DEBUG5) {
+                            console.log( (ddbg()), "ISY node device: ", device);
                         }
                     }
-                }
 
-                // place holders for info detail return values
-                // *** note *** inconsistent cases for timestamp and timeStamp
-                pvalue.engineTYpe = "";
-                pvalue.mileage = "";
-                pvalue.info = "";
-                pvalue.lastUpdated = "";
-                pvalue.fuelLevel_value = "";
-                pvalue.fuelLevel_distanceToEmpty = "";
-                pvalue.fuelLevel_timestamp = "";
-                pvalue.batteryChargeLevel_value = "";
-                pvalue.batteryChargeLevel_distanceToEmpty = "";
-                pvalue.batteryChargeLevel_timestamp = "";
-                pvalue.tirePressureWarning = "";
-                pvalue.deepSleepInProgress = "";
-                pvalue.firmwareUpgradeInProgress = "";
-                pvalue.longitude = "";
-                pvalue.latitude = "";
-                pvalue.speed = "";
-                pvalue.direction = "";
-                pvalue.timeStamp = "";
-                pvalue.remoteStartStatus_status = "";
-                pvalue.remoteStartStatus_remoteStartDuration = "";
-                pvalue.remoteStartStatus_remoteStartTime = "";
-                pvalue.chargingStatus_value = "";
-                pvalue.chargingStatus_timestamp = "";
-                pvalue.chargingStatus_chargeStartTime = "";
-                pvalue.chargingStatus_chargeEndTime = "";
-                pvalue.pingStatus_value = "";
-                pvalue.pingStatus_timeStamp = "";
+                    var groups = result.nodes["group"];
+                    for ( var obj in groups ) {
+                        var node = groups[obj];
+                        var id = fixISYid(node["address"][0].toString());
+                        var hint = "ISY_scene";
+                        var name = node["name"][0];
+        
+                        // set the base tile to include name and items to turn scene on and off
+                        var pvalue = {"name": name, "DON": "DON", "DOF":"DOF"};
+                        var members = node.members[0];
+        
+                        // load up pvalue with links
+                        if ( members && array_key_exists("link", members) && is_array(members.link) ) {
+                            for ( var sceneitem in members.link ) {
+                                pvalue["scene_"+sceneitem] = members.link[sceneitem]["_"];
+                            }
+                        }
 
-                // place holders for error messages
-                pvalue.error = "";
-                pvalue.error_description = "";
-
-                // place holders for return status for commands
-                pvalue["commandStatus"] = "";
-                pvalue["commandId"] = "";
-
-                // add all the api call functions 
-                // removed _status and _location since they don't appear to work
-                // the location and status are returned in the info call
-                pvalue["_info"] = "info";
-                pvalue["_unlock"] = "unlock";
-                pvalue["_lock"] = "lock";
-                pvalue["_startEngine"] = "startEngine";
-                pvalue["_stopEngine"] = "stopEngine";
-                pvalue["_wake"] = "wake";
-                // pvalue["_status"] = "_status";
-                // pvalue["_location"] = "_location";
-
-                var pvalstr = encodeURI2(pvalue);
-                var device = {userid: userid, hubid: hubindex, deviceid: vehicleid, name: vehiclename, 
-                    devicetype: thetype, hint: hubType, refresh: "normal", pvalue: pvalstr};
-                mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+
-                                                  " AND devicetype = '"+thetype+"' AND deviceid = '"+vehicleid+"'")
-                .then(result => {
-                    devicecnt++;
-
-                    // check if this is our last one
-                    if ( devicecnt >= numdevices ) {
-                        updateOptions(userid, reload, reloadpath, 2000);
+                        var pvalstr = encodeURI2(pvalue);
+                        var device = {userid: userid, hubid: hubindex, deviceid: id, name: name, 
+                            devicetype: thetype, hint: hint, refresh: "never", pvalue: pvalstr};
+                        mydevices[id] = device;
+                        if (DEBUG5) {
+                            console.log( (ddbg()), "ISY scene device: ", device);
+                        }
                     }
-                }).catch(reason => {console.log("dberror 6 - vehicleInfoCallback - ", reason);});
-
-            });
-        } else {
-            updateOptions(userid, false, reloadpath, 0);
+            
+                    // now that we have all the nodes identified, get the details
+                    _curl(hubEndpt + "/status", stheader, null, "GET")
+                    .then(body => {
+                        if ( !body ) {
+                            checkDone("nodes");
+                            return;
+                        }
+                        xml2js(body, function(xmlerr, result) {
+                            try {
+                                if ( result ) {
+                                    var nodes = result.nodes.node;
+                                    if ( DEBUGisy ) {
+                                        console.log( (ddbg()), "node details: ", UTIL.inspect(result, false, null, false) );
+                                    }
+                                    if ( nodes ) {
+                                        nodes.forEach(function(node) {
+                                            var nodeid = fixISYid(node["$"]["id"]);
+                                            if ( mydevices[nodeid] ) {
+                                                var props = node["property"];
+                                                if ( props ) {
+                                                    mydevices[nodeid][value] = setIsyFields(nodeid, mydevices[nodeid], props);
+                                                }
+                                            }
+                                        });
+                                    } else {
+                                        throw "Something went wrong reading status from ISY";
+                                    }
+                                }
+                            } catch(e) { 
+                                console.log( (ddbg()), "error - ", e);
+                            }
+                            checkDone("nodes");
+                        });
+                    });
+                });
+            
+            }
         }
 
-    }
-
-    // function for loading ISY hub devices
-    // this functionality was moved to the HPconnect helper app which must run locally
-    // when this request is made on the server we call the Refresh IFTTT webhook 
-    // which must be installed in a Users my.isy.io portal account to query all to work
-    function getIsyDevices() {
-        var hookname = "Refresh";
-        var hookurl = "https://my.isy.io/api/ifttt/" + hookname + "/key/" + hub.hubrefresh;
-        var header = {"Content-Type": "text/plain"};
-        _curl(hookurl, header, "", "POST");
-        if ( DEBUGisy ) {
-            console.log( (ddbg()), "Called webhook to refresh ISY for userid: ", userid, " hookurl: ", hookurl);
-        }
-        return "success";
-    }
+    // end of the promise function to return to caller
+    });
+    return promise;
 
 }
 // ------ end of getDevices
@@ -2927,12 +3326,12 @@ function objMerge(obj, newobj) {
     return clone(obj);
 }
 
-// this takes an array of props and updates the database with new values
-// it returns a promise which if is not null can be used to signal a refresh
-function setIsyFields(userid, nodeid, device, props, screenupd) {
+// this takes an array of props and updates values
+function setIsyFields(nodeid, device, props) {
 
-    var value = decodeURI2(device.pvalue);
-    if ( value && is_array(props) ) {
+    var value = device.pvalue;
+    if ( props && value && is_array(props) ) {
+        value = decodeURI2(value);
         props.forEach(function(aprop) {
             var obj = aprop['$'];
             // map ISY logic to the HousePanel logic based on SmartThings and Hubitat
@@ -2940,25 +3339,13 @@ function setIsyFields(userid, nodeid, device, props, screenupd) {
             value["uom_" + subid] = obj.uom;
             var val = obj.value;
             value = translateIsy(nodeid, obj.id, obj.uom, subid, value, val, obj.formatted);
-        });
-        
-        // update DB
+        });        
         if ( DEBUGisy ) {
-            console.log( (ddbg()), "in setIsyFields - userid: ", userid, " nodeid: ", nodeid, " device: ", device, " value: ", value, " props: ", props);
+            console.log( (ddbg()), "in setIsyFields - node: ", nodeid, " device: ", device, " value: ", value, " props: ", props);
         }
-        device.pvalue = encodeURI2(value);
-        var pr = mydb.updateRow("devices", device, "userid =" + userid + " AND deviceid = '"+nodeid+"'")
-        .then(results => {
-            if ( results && screenupd ) {
-                pushClient(userid, nodeid, "isy", "none", value);
-            }
-            return results;
-        }).catch(reason => {console.log("dberror 7 - setIsyFields - ", reason);});
-        return pr;
-    } else {
-        return null;
+        value = encodeURI2(value);
     }
-    // return device.pvalue;
+    return value;
 }
 
 // returns the maximum index from the options
@@ -2989,12 +3376,6 @@ function updateOptions(userid, reload, reloadpath, delay) {
             pushClient(userid, "reload", "all", reloadpath);
         }
     }
-    // signal clients to reload
-    // if ( reload && reloadpath && reloadpath==="/reauth") {
-    //     pushClient(userid, "reload", "auth", reloadpath);
-    // } else if ( reload ) {
-    //     pushClient(userid, "reload", "all", reloadpath);
-    // }
 }
 
 function getSpecials(configoptions) {
@@ -3766,8 +4147,9 @@ function getAuthPage(user, configoptions, hostname, pathname, rmsg) {
         // or if a reauth is requested or when converting old passwords
         $tc += "<div class=\"greeting\">";
 
-        $tc +="<p>This is where you link a SmartThings or Hubitat hub to " +
+        $tc +="<p>This is where you link a Hubitat or ISY hub to " +
                 "HousePanel to gain access to your smart home devices. " +
+                "Sonos hubs are also supported but updates will not be received. " +
                 "Ford and Lincoln vehicles are also supported if you have a Ford-Connect API developer account. " +
                 "You can link any number and combination of hubs. " + 
                 "To authorize Legacy SmartThings and Hubitat hubs you must have the following info: " +
@@ -5731,7 +6113,7 @@ function processHubMessage(userid, hubmsg, newST) {
 
             if ( DEBUG12 ) {
                 console.log( (ddbg()), "processHubMessage - hubmsgid: ", hubmsgid, " swtype: ", swtype, " subid: ", subid, " pvalue: ", newval);
-            }
+            }pushClient
 
             // update the DB
             device.pvalue = encodeURI2(pvalue);
@@ -7607,9 +7989,7 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
             // the curl failed so try refreshing token and repeating
             if ( err && inrule!=="refresh" ) {
                 console.log((ddbg()), "Obtaining Sonos refresh token for user: ", userid, " err: ", err);
-                refreshSonosToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, false, function () {
-                    callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, hint, "refresh");
-                });
+                refreshSonosToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, false);
                 return;
             }
 
@@ -7732,8 +8112,7 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
                 pvalue.status = "ERROR";
                 pvalue.error = "invalid_grant";
                 pvalue.error_description = "Access token expired and is being refreshed. Try again soon.";
-                fordRefreshToken(userid, hub, false);
-                // getDevices(hub, true, "/");
+                refreshFordToken(userid, hub, false);
             }
         }
 
@@ -10154,8 +10533,8 @@ function findHub(hubid, hubs) {
 }
 
 function getHubObj(userid, hub) {
+    var result;
     if ( hub && typeof hub==="object" ) {
-
         var returnloc = GLB.returnURL + "/oauth";
         var hubid = hub.id;
         var hubName = hub["hubname"];
@@ -10163,9 +10542,8 @@ function getHubObj(userid, hub) {
         var clientId = hub.clientid;
         var clientSecret = hub.clientsecret;
         var host = hub["hubhost"];
-        var result;
 
-        // first handle user provided auth which only works for ISY and legacy ST and HE
+        // first handle user provided auth which only works for ISY and Hubitat
         if ( hub.useraccess && hub.userendpt ) {
             // get all new devices and update the options index array
             // this forces page reload with all the new stuff
@@ -10175,11 +10553,18 @@ function getHubObj(userid, hub) {
             // for ISY and legacy ST/HE we can go right to getting hub details and devices
             // this meets up with the js later by pushing hub info back to reauth page
             // determine what to retun to browser to hold callback info for hub auth flow
-            if ( hubType==="ISY" || hubType==="SmartThings" || hubType==="Hubitat" ) {
-                getHubInfo(hub, true);
-                result = {action: "things", hubType: hubType, hubName: hubName};
+            if ( hubType==="ISY" || hubType==="Hubitat" ) {
+                result = getHubInfo(hub, true)
+                .then(mydevices => {
+                    var ndev = Object.keys(mydevices).length;
+                    // var devices = Object.values(mydevices);
+                    return {action: "things", hubType: hubType, hubName: hubName, numdevices: ndev};
+                })
+                .catch(reason => {
+                    return {action: "error", reason: reason};
+                });
             } else {
-                result = "error - user access and user endpoint can only be used with ISY, legacy SmartThings, and Hubitat hubs.";
+                result = {action: "error", reason: "user access and user endpoint can only be used with ISY and Hubitat hubs."};
             }
         } else {
             var thestate = hub.id.toString();
@@ -10195,7 +10580,7 @@ function getHubObj(userid, hub) {
                             scope: "access", url: returnloc};
 
 
-            // oauth flow for ST legacy and HE hubs
+            // oauth flow for Hubitat hubs
             // we complete the flow later when redirection happens back to /oauth GET call
             } else if ( hubType==="Hubitat" ) {
                 var hosturl = host + "/oauth/authorize";
@@ -10225,10 +10610,10 @@ function getHubObj(userid, hub) {
                 result = "error - invalid hub type requesting an OAUTH flow. hubType: " + hubType;
             }
         }
-        return result;
     } else {
-        return "error - something went wrong with authorizing a hub";
+        result = {action: "error", reason: "something went wrong with authorizing a hub"};
     }
+    return result;
 }
 
 function apiCall(user, body, protocol, req, res) { 
@@ -10442,7 +10827,7 @@ function apiCall(user, body, protocol, req, res) {
                         if ( hubs ) {
                             hubs.forEach(hub => {
                                 if ( hub.hubid !== "-1" && hub.hubid!=="new" ) {
-                                    getDevices(hub, true, "/");
+                                    getDevices(hub);
                                 }
                             });
                         }
@@ -10699,7 +11084,7 @@ function apiCall(user, body, protocol, req, res) {
                 result = {port: wsmax, used: usedports};
                 break;
 
-            // this api call starts the oauth flow process
+            // this api call starts the hub authorization process
             // the actual redirection to the first auth site is done in js file
             case "hubauth":
 
@@ -10714,16 +11099,19 @@ function apiCall(user, body, protocol, req, res) {
                     hub["hubname"] = body.hubname;
 
                     // handle New SmartThings which has known clientId and clientSecret values
-                    if ( body.hubtype === "NewSmartThings" ) {
-                        hub["clientid"] = GLB.clientid;
-                        hub["clientsecret"] = GLB.clientsecret;
-                    } else if ( body.hubtype === "Sonos" ) {
-                        hub["clientid"] = GLB.sonos_clientid;
-                        hub["clientsecret"] = GLB.sonos_clientsecret;
-                    } else {
-                        hub["clientid"] = body.clientid;
-                        hub["clientsecret"] = body.clientsecret;
-                    }
+                    // for local servers we don't do this
+                    // if ( body.hubtype === "NewSmartThings" ) {
+                    //     hub["clientid"] = GLB.clientid;
+                    //     hub["clientsecret"] = GLB.clientsecret;
+                    // } else if ( body.hubtype === "Sonos" ) {
+                    //     hub["clientid"] = GLB.sonos_clientid;
+                    //     hub["clientsecret"] = GLB.sonos_clientsecret;
+                    // } else {
+                    //     hub["clientid"] = body.clientid;
+                    //     hub["clientsecret"] = body.clientsecret;
+                    // }
+                    hub["clientid"] = body.clientid;
+                    hub["clientsecret"] = body.clientsecret;
                     hub["hubaccess"] = body.hubaccess;
                     hub["hubendpt"] = body.hubendpt;
                     hub["hubrefresh"] = "";
@@ -10739,7 +11127,7 @@ function apiCall(user, body, protocol, req, res) {
                     // for now set the hubid to value user gave
                     // if this hub exists it will be overwritten
                     // if not it will be generated later or default given
-                    var hubid = hub.hubid;
+                    var hubid = hub.hubid.toString();
 
                     // if hubid not given assign it a random number tied to hub type
                     // for ST and HE hubs this is a placeholder that will be over written
@@ -10761,7 +11149,7 @@ function apiCall(user, body, protocol, req, res) {
                         hub.userendpt = hub.userendpt.substr(0, hub.userendpt.length -1);
                     }
 
-                    // if no name given, give it one
+                    // if no name given, give it one but know that it will be overwritten if OAUTH flow occurs
                     if ( !hub.hubname ||  hub.hubname.trim()==="" ) {
                         hub.hubname = hub.hubtype;
                     }
@@ -10786,10 +11174,9 @@ function apiCall(user, body, protocol, req, res) {
                     // while this runs we return to the browser instructions for what to show as place holder
                     // save the hub to DB - this could be an update or it could be a new addition
                     // so we have to first check to see if we have this hubid
-                    var whereclause = "userid = "+userid+" AND hubid = '" + hubid.toString() + "'";
-                    console.log( (ddbg()), whereclause );
+                    var whereclause = "userid = "+userid+" AND hubid = '" + hubid + "'";
                     result = mydb.getRow("hubs", "*", whereclause)
-                    .then(row => {
+                    .then( row => {
                         if ( row ) {
                             // this hub is there so lets update it and save id in user table for later
                             // this all happens asyncronously while the auth flow begins later
@@ -10799,15 +11186,13 @@ function apiCall(user, body, protocol, req, res) {
                                 console.log((ddbg()),"Authorizing existing hub at row: ", id," hubid= ", hub.hubid);
                             }
                             return mydb.updateRow("hubs", hub, "userid = " + userid + " AND id = "+id)
-                            .then(res3 => {
-                                if ( res3 ) {
-                                    mydb.updateRow("users",{defhub: hubid},"id = "+userid);
-                                }
+                            .then( () => {
+                                mydb.updateRow("users",{defhub: hubid},"id = "+userid);
                                 return getHubObj(userid, hub);
                             })
                             .catch(reason => {
                                 console.log( (ddbg()), "DB update error - upon existing hubauth", reason);
-                                return false;
+                                return {action: "error", reason: reason};
                             });
 
                         } else {
