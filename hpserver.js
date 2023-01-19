@@ -653,6 +653,11 @@ function sendEmail(emailname, msg) {
     }
 }
 
+function json2query(params) {
+    var queryString = Object.keys(params).map(key => key + '=' + params[key]).join('&');
+    return queryString;   
+}
+
 // this curl function uses promises so it can be chained with .then() like any other promise
 function _curl(host, headers, nvpstr, calltype, callback) {
     var promise = new Promise(function(resolve, reject) {
@@ -807,14 +812,15 @@ function getHubInfo(hub) {
             var namehost = endpt + "/gethubinfo";
             var header = {"Authorization": "Bearer " + access_token};
             var nvpreq = {"scope": "app", "client_id": clientId, "client_secret": clientSecret};
-            _curl(namehost, header, nvpreq, "POST")
-            .then( body => {
-                hubitatCallback(body);
-            })
-            .catch(reason => {
-                console.log( (ddbg()), reason);
-                reject(reason);
-            })
+            curl_call(namehost, header, nvpreq, false, "POST", hubitatCallback);
+            // _curl(namehost, header, nvpreq, "POST")
+            // .then( body => {
+            //     hubitatCallback(body);
+            // })
+            // .catch(reason => {
+            //     console.log( (ddbg()), reason);
+            //     reject(reason);
+            // })
 
         // handle Sonos hubs
         // start by making a call to retrieve all households
@@ -860,19 +866,13 @@ function getHubInfo(hub) {
 
             // save the hubid in our user default for use later
             mydb.updateRow("users",{defhub: hub.hubid},"id = "+userid)
-            .then( result => {
-                mydb.updateRow("hubs", hub, "userid = " + userid + " AND id = " + hubindex)
-                .then( () => {
-                    getDevices(hub)
-                    .then(mydevices => {
-                        resolve(mydevices);
-                    })
-                    .catch(reason => {
-                        reject(reason);
-                    });
-                });
+            .then( () => {
+                return mydb.updateRow("hubs", hub, "userid = " + userid + " AND id = " + hubindex)
             })
-            .catch( reason => {
+            .then( () => {
+                resolve(getDevices(hub));
+            })
+            .catch(reason => {
                 console.log( (ddbg()), "error - in getHubInfo: ", reason);
                 reject(reason);
             });
@@ -896,49 +896,46 @@ function getHubInfo(hub) {
                 if ( row ) {
                     newhub.id = row.id;
                     mydb.updateRow("hubs", newhub, "userid = " + userid + " AND id = "+ row.id)
-                    .then( result => {
-                        if ( result ) {
-                            if ( DEBUG2 ) {
-                                console.log( (ddbg()), "updated Sonos hub: ", newhub);
-                            }
-                            // read all the devices from this hub and merge into existing devices
-                            getDevices(newhub)
-                            .then(newdevices => {
-                                mydevices = { ...mydevices, ...newdevices};
-                                checkSonosDone(newhub.hubid);
-                            });
-                        } else {
-                            console.log( (ddbg()), errMsg);
-                            nsonos = sonoscount;
-                            reject(errMsg);
+                    .then( () => {
+                        if ( DEBUG2 ) {
+                            console.log( (ddbg()), "updated Sonos hub: ", newhub);
                         }
+                        // read all the devices from this hub and merge into existing devices
+                        return (getDevices(newhub));
+                    })
+                    .then(newdevices => {
+                        mydevices = { ...mydevices, ...newdevices};
+                        checkSonosDone(newhub.hubid);
+                    })
+                    .catch(reason => {
+                        console.log( (ddbg()), errMsg, " ", reason);
+                        reject(reason);
                     });
 
                 } else {
                     mydb.addRow("hubs", newhub)
                     .then( row => {
-                        if ( row ) {
-                            newhub.id = row.getAutoIncrementValue();
-                            if ( DEBUG2 ) {
-                                console.log( (ddbg()), "added new Sono hub: ", newhub);
-                            }
-                            getDevices(newhub)
-                            .then(newdevices => {
-                                mydevices = { ...mydevices, ...newdevices};
-                                checkSonosDone(newhub.hubid);
-                            });
-                        } else {
-                            console.log( (ddbg()), errMsg);
-                            nsonos = sonoscount;
-                            reject(errMsg);
+                        newhub.id = row.getAutoIncrementValue();
+                        if ( DEBUG2 ) {
+                            console.log( (ddbg()), "added new Sonos hub: ", newhub);
                         }
+                        return (getDevices(newhub));
+                    })
+                    .then(newdevices => {
+                        mydevices = { ...mydevices, ...newdevices};
+                        checkSonosDone(newhub.hubid);
+                    })
+                    .catch(reason => {
+                        console.log( (ddbg()), errMsg, " ", reason);
+                        nsonos = sonoscount;
+                        reject(reason);
                     });
 
                 }
             });
         }
 
-        function hubitatCallback(body) {
+        function hubitatCallback(err, res, body) {
             var jsonbody;
             var hubName = hub.hubname;;
             var access_token = hub.hubaccess;
@@ -951,7 +948,11 @@ function getHubInfo(hub) {
                 jsonbody = JSON.parse(body);
                 hubName = jsonbody["sitename"];
                 hubId = jsonbody["hubId"];
-
+                console.log( (ddbg()), "hub info: ", hubName, hubId );
+                if ( !hubId || !hubName ) {
+                    reject("hubName or hubId is not defined");
+                    return;
+                }
             } catch(e) {
                 console.log( (ddbg()), "error retrieving hub ID and name. ", e, "\n body: ", body);
                 hubName = hub.hubname
@@ -960,34 +961,31 @@ function getHubInfo(hub) {
                 return;
             }
 
-            if ( DEBUG2 ) {
+            if ( DEBUG2 || DEBUGtmp ) {
                 console.log( (ddbg()), "hub info: access_token= ", access_token, " endpt= ", endpt, " hubName= ", hubName, " hubId= ", hubId);
             }
 
             // now save our info
             hub["hubname"]  = hubName;
             hub["hubid"] = hubId;
-            mydb.updateRow("users",{defhub: hub.hubid},"id = " + userid);
-            if ( DEBUG2 ) {
-                console.log( (ddbg()), "Ready to update hub: ", hub);
-            }
-
-            // we know the actual index of the hub at this point
-            mydb.updateRow("hubs", hub, "userid = " + userid+" AND id = "+hubindex)
+            mydb.updateRow("users",{defhub: hub.hubid},"id = " + userid)
             .then( () => {
-                // retrieve all devices and go back to reauth page
-                getDevices(hub)
+                if ( DEBUG2 || DEBUGtmp ) {
+                    console.log( (ddbg()), "Ready to update hub: ", hub);
+                }
+                // we know the actual index of the hub at this point
+                mydb.updateRow("hubs", hub, "userid = " + userid+" AND id = "+hubindex)
+                .then( () => {
+                    // retrieve all devices and go back to reauth page
+                    return getDevices(hub);
+                })
                 .then(mydevices => {
                     resolve(mydevices);
-                })
-                .catch(reason => {
+                }).catch(reason => {
+                    console.log( (ddbg()), reason);
                     reject(reason);
                 });
-
-            }).catch(reason => {
-                console.log( (ddbg()), reason);
-                reject(reason);
-            });
+            })
         }
     
     });
@@ -1019,7 +1017,7 @@ function getAccessToken(userid, code, hub) {
     var promise = new Promise( function(resolve, reject) {
         
         function tokenCallback(err, res, body) {
-            var hubType = hub.hubType;
+            var hubType = hub.hubtype;
             // save the access_token
             try {
                 var jsonbody = JSON.parse(body);
@@ -1032,7 +1030,9 @@ function getAccessToken(userid, code, hub) {
 
             if ( (err && err!==200) || !jsonbody ) {
                 console.log( (ddbg()), "error authorizing ", hubType, " error: ", err);
-                pushClient(userid, "reload", "auth", "/reauth");
+                reject("errot authorizing hub " + hubType);                
+                // pushClient(userid, "reload", "auth", "/reauth");
+                return;
 
             } else if ( jsonbody && jsonbody["access_token"] ) {
                 access_token = jsonbody["access_token"];
@@ -1314,7 +1314,7 @@ function getAccessToken(userid, code, hub) {
             }
 
             if ( err ) {
-                console.log( (ddbg()), "getEndpoint error authorizing " + hub.hubtype + " hub.\n error: ", err, "\n JSON body: ", body);
+                console.log( (ddbg()), "getEndpoint error authorizing " + hub.hubtype + " hub.\n error: ", err, "\n JSON body: ", body);newTokenCallback
                 pushClient(userid, "reload", "auth", "/reauth");
             } else {
                 var endptzero = jsonbody[0];
@@ -1369,7 +1369,7 @@ function getAccessToken(userid, code, hub) {
                 console.log( (ddbg()), "clientId: ", clientId," clientSecret: ", clientSecret);
                 console.log( (ddbg()), "tokenhost: ", tokenhost, " nvpreq: ", nvpreq, " formData: ", formData);
             }
-            curl_call(tokenhost, header, nvpreq, formData, "POST", fordCallback);
+            curl_call(tokenhost+"?"+nvpreq, header, false, formData, "POST", fordCallback);
 
         // new SmartThings function to get accesstoken and refreshtoken
         } else if ( hubType === "NewSmartThings" ) {
@@ -1581,7 +1581,8 @@ function refreshFordToken(userid, hub, refresh) {
     }
 
     curl_call(tokenhost, header, nvpreq, formData, "POST", function(err, res, body) {
-        try {
+
+        if ( body ) {
             var jsonbody = JSON.parse(body);
             access_token = jsonbody["access_token"] || "";
             refresh_token = jsonbody["refresh_token"] || "";
@@ -1598,17 +1599,28 @@ function refreshFordToken(userid, hub, refresh) {
                     expiresin = (parseInt(newexpire) - 120) * 1000;
                     hub.hubtimer = expiresin.toString();
                 }
+
+                // schedule the next refresh
+                if ( refresh && expiresin ) {
+                    setTimeout( function() {
+                        refreshFordToken(userid, hub, true);
+                    }, expiresin);
+                }
+    
                 // update hub in DB
                 mydb.updateRow("hubs",hub,"userid = "+userid+" AND id = "+hub.id)
-                .then( result => {
-                    if ( result ) {
-                        getDevices(hub)
-                        .then(mydevices => {
-                            var devices = Object.values(mydevices);
-                            console.log( (ddbg()), "Ford token refreshed, devices: ", devices);
-                            pushClient(userid,"reload","all","/");
-                        });
-                    }
+                .then( () => {
+                    return getDevices(hub);
+                })
+                .then(mydevices => {
+                    var devices = Object.values(mydevices);
+                    console.log( (ddbg()), "Ford token refreshed, devices: ", devices);
+                    // pushClient(userid,"reload","all","/");
+                })
+                .catch(reason => {
+                    console.log( (ddbg()), reason );
+                    console.log( (ddbg()), "refresh token error for hub: ", hub.hubtype, " access_token: ", access_token, 
+                    "\n refresh_token: ", refresh_token, "\n expiresin: ", expiresin, "\n endpoint: ", endpt, "\n body: ", body);
                 });
             }
 
@@ -1616,20 +1628,7 @@ function refreshFordToken(userid, hub, refresh) {
                 console.log( (ddbg()),"Refresh return... access_token: ", access_token, 
                 "\n refresh_token: ", refresh_token, "\n expiresin: ", expiresin, "\n endpoint: ", endpt, "\n body: ", body);
             }
-
-            if ( refresh && expiresin ) {
-                setTimeout( function() {
-                    refreshFordToken(userid, hub, true);
-                }, expiresin);
-            }
-        
-        } catch(e) {
-            // primary token needs to be redone - the refresh token has expired
-            // TODO - find a graceful way to tell the user
-            console.log( (ddbg()), "refresh token error for hub: ", hub.hubtype, " access_token: ", access_token, 
-            "\n refresh_token: ", refresh_token, "\n expiresin: ", expiresin, "\n endpoint: ", endpt, "\n body: ", body);
         }
-
     });
 }
 
@@ -1649,11 +1648,18 @@ function findGroup(player, allGroups) {
 // or a reject with a message
 function getDevices(hub) {
 
-    if ( DEBUG1 ) {
-        console.log( (ddbg()), "getDevices debug - hub: ", hub);
+    if ( DEBUG1 && DEBUGtmp ) {
+        console.log( (ddbg()), "getDevices debug for hub: ", hub);
     }
     
+    // the support functions below for reading devices will resolve or reject the promise returned to the caller
     var promise = new Promise( function(resolve, reject) {
+
+        if ( !is_object(hub) ) {
+            reject("error - hub object not provided to getDevices call");
+            return;
+        }
+
         var hubindex = hub.id;
         var userid = hub.userid;
         var hubid = hub.hubid;
@@ -1664,11 +1670,11 @@ function getDevices(hub) {
         var clientSecret = hub.clientsecret;
         var mydevices = {};
 
-        if ( !hubindex ) {
-            console.log( (ddbg()), "error - hub index not found in DB. hub: ", hub);
-            reject("error - hub index not proviced");
+        if ( !hubindex || !hubid ) {
+            console.log( (ddbg()), "error - hubindex or hubid not found in DB. hub: ", hub);
+            reject("error - hubindex or hubid not proviced");
             // pushClient(userid, "reload", "all", reloadpath);
-        } else if ( !hubAccess ) {
+        } else if ( !hubAccess || !hubEndpt ) {
             console.log( (ddbg()), "error - hub has not been authorized. hub: ", hub);
             reject("error - hub has not been authorized");
             // pushClient(userid, "reload", "all", reloadpath);
@@ -1703,32 +1709,26 @@ function getDevices(hub) {
             const errMsg = "error retrieving devices from this Hubitat hub";
             var stheader = {"Authorization": "Bearer " + hubAccess};
             var params = {client_secret: clientId,
-                        scope: "app",
-                        client_id: clientSecret};
-            // curl_call(hubEndpt + "/getallthings", stheader, params, false, "POST", hubInfoCallback);
-            _curl(hubEndpt + "/getallthings", stheader, params, "POST")
-            .then(resp => {
-                hubInfoCallback(resp);
-            })
-            .catch(err => {
-                console.log( (ddbg()), errMsg, err);
-                reject(errMsg);
-            });
+                scope: "app",
+                client_id: clientSecret};
+            // _curl(hubEndpt + "/getallthings", stheader, params, "POST")
+            curl_call(hubEndpt + "/getallthings", stheader, params, false, "POST", hubInfoCallback);
+            return;
 
             // callback for loading Hubitat devices
-            function hubInfoCallback(body) {
+            function hubInfoCallback(err, res, body) {
                 try {
                     var jsonbody = JSON.parse(body);
                 } catch (e) {
-                    jsonbody = null;
                     console.log( (ddbg()), "error translating devices. body: ", body, " error: ", e);
                     reject(errMsg);
+                    return;
                 }
 
                 // configure returned array with the "id"
                 if (jsonbody && is_array(jsonbody) ) {
                     
-                    if (DEBUG1) {
+                    if (DEBUG1 || DEBUGtmp) {
                         console.log( (ddbg()), "Retrieved ", jsonbody.length, " things from hub: ", hub);
                     }    
                     var devicecnt = 0;
@@ -1807,6 +1807,9 @@ function getDevices(hub) {
                         var device = {userid: userid, hubid: hubindex, deviceid: deviceid, name: origname, 
                             devicetype: thetype, hint: hint, refresh: refresh, pvalue: pvalstr};
 
+                        if ( DEBUGtmp ) {
+                            console.log( (ddbg()), "device: ", device);
+                        }
                         mydevices[deviceid] = device;
                         devicecnt++;
 
@@ -1815,7 +1818,7 @@ function getDevices(hub) {
                         .then(resp => {
                             // check if this is our last one and return array of devices
                             if ( devicecnt >= numdevices ) {
-                                removeDeadNodes(userid, hubindex, currentDevices);
+                                // removeDeadNodes(userid, hubindex, currentDevices);
                                 resolve(mydevices);
                                 // updateOptions(userid, reload, reloadpath, 2000);
                             }                    
@@ -1840,8 +1843,9 @@ function getDevices(hub) {
             var sonosPlayers;
             var sonosGroups;
             var namehost = hubEndpt + "/v1/households/" + hubid + "/groups";
-            _curl(namehost, header, "", "GET", function(err, body) {
-                if ( (!err || err === 200) && body ) {
+            _curl(namehost, header, "", "GET") // function(err, body) {
+            .then(body => {
+                if ( body ) {
                     var jsonbody = JSON.parse(body);
                     if ( DEBUG2 ) {
                         console.log((ddbg()), "Sonos devices for house: ", hubid, " devices: ", jsonshow(jsonbody));
@@ -1854,6 +1858,7 @@ function getDevices(hub) {
                     if ( !sonosPlayers ) {
                         console.log( (ddbg()), "no Sonos devices found for Household: ", hubid);
                         resolve(mydevices);
+                        return;
                     }
 
                     var devicecnt = 0;
@@ -1972,8 +1977,6 @@ function getDevices(hub) {
                                     // note that we store the group id in the hint so we can use it later easily to control the player
                                     var rowdevice = {
                                         userid: userid, hubid: hubindex, deviceid: deviceid, name: player.name, 
-                                    userid: userid, hubid: hubindex, deviceid: deviceid, name: player.name, 
-                                        userid: userid, hubid: hubindex, deviceid: deviceid, name: player.name, 
                                         devicetype: "sonos", hint: group.id, refresh: "normal", pvalue: pvalue
                                     };
                                     devicecnt++;
@@ -2050,6 +2053,10 @@ function getDevices(hub) {
                     console.log( (ddbg()), "error - ", err, " body: ", body);
                     reject("error reading Sonos devices from hub");
                 }
+            })
+            .catch(reason => {
+                console.log( (ddbg()), reason);
+                reject(reason);
             });
         }
 
@@ -10822,15 +10829,31 @@ function apiCall(user, body, protocol, req, res) {
         
             case "refreshpage":
                 if ( protocol==="POST" ) {
-                    mydb.getRows("hubs","*","userid = "+userid)
+                    result = mydb.getRows("hubs","*","userid = "+userid)
                     .then(hubs => {
+                        var numdevices = 0;
                         if ( hubs ) {
                             hubs.forEach(hub => {
                                 if ( hub.hubid !== "-1" && hub.hubid!=="new" ) {
-                                    getDevices(hub);
+                                    getDevices(hub)
+                                    .then(mydevices => {
+                                        var numdevices = Object.keys(mydevices).length;
+                                        var devices = Object.values(mydevices);
+                                        // pushClient(userid, "reload", "main", "/");
+                                        if ( DEBUGtmp ) {
+                                            console.log( (ddbg()), "refreshed ", numdevices," devices: ", devices);
+                                        }
+                                    })
+                                    .catch(reason => {
+                                        console.log( (ddbg()), reason);
+                                    });
                                 }
                             });
                         }
+                    })
+                    .catch(reason => {
+                        numdevices = 0;
+                        return reason;
                     });
 
                     result = "success";
@@ -11248,7 +11271,7 @@ function apiCall(user, body, protocol, req, res) {
                     .catch(reason => {
                         console.log( (ddbg()), "error - ", reason);
                     });
-                    result = "Attempting to removed hub #" + swattr + " hubid = " + hubid;
+                    result = "Removing hub #" + swattr + " hubid = " + hubid;
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -11747,22 +11770,17 @@ if ( app && applistening ) {
                     } else if ( req.path==="/oauth") {
                         if ( req.query && req.query["code"] ) {
                             var hubid = user["users_defhub"];
-                            if ( DEBUG2 ) {
-                                console.log( (ddbg()), "in /oauth apiCall - defhub = ", hubid, " hubs: ", hubs);
-                            }
-                            var hub = findHub(hubid, hubs);
-                            if ( hub ) {
-                                if ( DEBUG2 ) {
+                            // var hub = findHub(hubid, hubs);
+                            mydb.getRow("hubs","*", "userid = "+userid+" AND hubid = '" + hubid + "'")
+                            .then(hub => {
+                                if ( DEBUG2 || DEBUGtmp ) {
                                     console.log( (ddbg()), "Getting access_token for hub: ", hub);
                                 }
-    
-                                // get access_token, endpt, and retrieve devices
-                                // this goes through a series of callbacks
-                                // and ends with a pushClient to update the auth page
                                 getAccessToken(userid, req.query["code"], hub);
-                            } else {
-                                console.log( (ddbg()), "error - hub not found during authorization flow. hubid: ", hubid);
-                            }
+                            })
+                            .catch(reason => {
+                                console.log( (ddbg()), reason);
+                            });
                              
                         }
 
@@ -11823,28 +11841,36 @@ if ( app && applistening ) {
 
         // handle initialize events from Hubitat here
         if ( req.path==="/" && req.body['msgtype'] === "initialize" ) {
-            hubid = req.body['hubid'] || null;
+            hubid = req.body['hubId'] || null;
+            console.log( (ddbg()), "init request - req.body: ", req.body);
 
             if ( hubid ) {
-
                 // if we find an existing hub then just update the devices
-                var returnmsg;
+                // var returnmsg;
                 mydb.getRow("hubs","*","hubid = '" + hubid + "'")
                 .then(hub => {
-                    if ( hub ) {
-                        getDevices(hub, true, "/");
-                        returnmsg = "initialize caused devices to be updated for hub with id = " + hubid;
+                    if ( DEBUGtmp ) {
+                        console.log( (ddbg()), "init request - hub: ", hub);
+                    }
+                    return getDevices(hub);
+                })
+                .then(mydevices => {
+                    var devices = Object.values(mydevices);
+                    console.log( (ddbg()), "initialize devices success, devices: ", devices);
+                })
+                .catch(reason => {
+                    console.log( (ddbg()), "initialize devices error: ", reason);
+                });
+
+                // returnmsg = "initialize caused devices to be updated for hub with id = " + hubid;
 
                     // otherwise, we are initializing a new hub
                     // it is safe to ignore this init call because we haven't set the hubid yet
                     // which means we haven't done the first getDevices calle
-                    } else {
-                        returnmsg = "initialize ignored for hub with id = " + hubid;
-                    }
-                    res.send(returnmsg);
-                }).catch(reason => {console.log("dberror 32 - app.post - msg initialize - ", reason);});
-            } else {
-                res.send('error - hubid not provided in initialize call');
+                    // } else {
+                    //     returnmsg = "initialize ignored for hub with id = " + hubid;
+                    // res.send(returnmsg);
+            //     res.send('error - hubid not provided in initialize call');
             }
             res.end();
 
@@ -11854,7 +11880,7 @@ if ( app && applistening ) {
             if ( DEBUG19 ) {
                 console.log( (ddbg()), "Received update msg from hub: ", req.body["hubid"], " msg: ", req.body);
             }
-            hubid = req.body['hubid'] || null;
+            hubid = req.body['hubId'] || null;
             if ( hubid ) {
                 mydb.getRow("hubs","*","hubid = '" + hubid + "'")
                 .then(hub => {
@@ -11928,7 +11954,11 @@ if ( app && applistening ) {
                     }
                     res.send("200 OK");
                     res.end();
-                });
+                })
+                .catch(reason => {
+                    console.log(reason);
+                    res.end();
+                })
 
             } else {
                 console.log( (ddbg()),"Sonos event ignored because signatures do not match: ", sonossig, mysig, req.body);
