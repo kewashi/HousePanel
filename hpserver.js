@@ -6774,7 +6774,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                         }
 
                         if ( delay && delay > 0 ) {
-                            thandle = setTimeout( function() {
+                            setTimeout( function() {
                                 try {
                                     callHub(userid, hub.id, rswid, 0, rswtype, rvalue, rswattr, rsubid, rhint, true);
                                 } catch (e) {
