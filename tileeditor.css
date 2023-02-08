@@ -33,7 +33,7 @@ body {
 .ui-tabs .ui-tabs-nav {
     padding: 0.2em 0.2em 0em 0em;
     width: 100%;
-    background-color: #666666;
+    background-color: #333333;
 }
 @media (orientation: landscape) {
     #dragregion, #dragregion div.panel {
@@ -44,7 +44,19 @@ body {
         font-size: 11pt;
     }
     .ui-tabs .ui-tabs-nav {
-        width: 70%;
+        width: 100%;
+        padding-right: 0px;
+    }
+    .showversion {
+        display: inline-block;
+        color: #cccccc;
+        position: absolute;
+        top: 10px;
+        right: 80px;
+        width: auto; height: 25px;
+        padding-left: 5px; padding-right: 5px;
+        text-align: left; 
+        cursor: pointer;
     }
 }
 @media (orientation: portrait) {
@@ -56,8 +68,21 @@ body {
         font-size: 10pt;
     }
     .ui-tabs .ui-tabs-nav {
-        width: 65%;
+        width: 100%;
+        padding-right: 0px;
     }
+    .showversion {
+        display: none;
+        /* color: #cccccc;
+        background-color:rgb(10, 10, 10);
+        position: absolute;
+        top: 37px;
+        right:1px;
+        width: auto; height: 25px;
+        padding-left: 5px; padding-right: 5px;
+        text-align: left; 
+        cursor: pointer; */
+    }    
 }
 
 div.greeting {
@@ -161,17 +186,6 @@ div.inlinebutton {
     position: absolute;
     top: 5px;
     right: 45px;
-}
-.showversion {
-    display: inline-block;
-    color: #cccccc;
-    position: absolute;
-    top: 10px;
-    right: 80px;
-    width: auto; height: 25px;
-    padding-left: 5px; padding-right: 5px;
-    text-align: left; 
-    cursor: pointer;
 }
 div.showversion:hover {
     color: black;
@@ -297,8 +311,7 @@ div#catalog {
 }
 
 .ui-widget.ui-widget-content{
-    background-color: #666666;
-    margin: 0px -5px 0px 0px;
+    background-color: #adadad;
     border: none;
 }
 .ui-widget-content a {
@@ -1645,9 +1658,6 @@ div.overlay.weatherIcon div.weather, div.overlay.forecastIcon div.weather {
     margin-left: 8px; margin-right: 8px;
     color: rgba(0, 0, 0, 1);
     background-size: 80px;
-    
-    /* hide the icons for now until we figure out new format */
-    /*display: none;*/
 }
 
 div.weather.forecastToday, div.weather.forecastTonight, div.weather.forecastTomorrow {
