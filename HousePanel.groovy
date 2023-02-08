@@ -827,7 +827,7 @@ def getDevice(mydevices, swid, item=null) {
                 if ( nparms==0 && !reserved.contains(comname)) {
                     resp.put("_"+comname, comname)
                 } else {
-                    logger("Hubitat skipped command: ${comname} with ${nparms} parameters","debug")
+                    logger("Hubitat skipped command: ${comname} with ${nparms} parameters","trace")
                 }
             } catch (ex) {
                 logger("Attempt to read device command for ${swid} failed ${ex}", "error")
@@ -1018,9 +1018,7 @@ def getAllThings() {
 }
 
 def getVariables(resp) {
-    if ( !state.globalVars ) {
-        state.globalVars = getAllGlobalVars()
-    }
+    state.globalVars = getAllGlobalVars()
     def vals = [:]
     def varlist = []
     def vid = "${state.prefix}variables"
@@ -1046,7 +1044,7 @@ def getVariables(resp) {
             varlist << varname
             vals.put( varname, "${theval}" )
             vals.put( "uom_${varname}", "${vartype}")
-            logger ("including variable ${varname} value: ${theval}","info")
+            logger ("including variable ${varname} value: ${theval}","debug")
         }
     }
 
@@ -2738,7 +2736,7 @@ def registerAll() {
                       "mytemperatures", "myilluminances", "myweathers",
                       "mywaters", "mysmokes", "mymusics", "myaudios", "mypowers", "myothers", "myactuators"]
 
-    // register mode changes
+    // register mode changesvariableHandler
     registerLocations()
 
     // register all the devices in time steps

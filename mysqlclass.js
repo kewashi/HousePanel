@@ -1,14 +1,19 @@
-var mysqlx = require('mysql');
+#!/usr/bin/env node
+
+const mysqlx = require('mysql');
+const sqlite3 = require('sqlite3');
+
 const DEBUGsql = false;
-const DEBUGrow = false;
 
 exports.sqlDatabase = class sqlDatabase {
     
-    constructor(dbhost, dbname, dbuid, dbpassword) {        
+    constructor(dbhost, dbname, dbuid, dbpassword, dbtype) {        
         this.insertId = 0;
         this.impacted = 0;
         this.recentResults;
+        this.recentRequest = "";
         this.error;
+        this.dbtype = (dbtype==="mysql" || dbtype==="sqlite") ? dbtype : "mysql";
         // var hpcrt = fs.readFileSync(__dirname + 'rootCA.crt');
 
         this.config = {
@@ -18,17 +23,22 @@ exports.sqlDatabase = class sqlDatabase {
             database: dbname
         };
         if ( DEBUGsql ) {
-            console.log(">>>> db info - startup: ", dbhost, dbname, dbuid, dbpassword);
+            console.log(">>>> db info - startup: ", dbhost, dbname, dbuid, dbpassword, dbtype);
         }
 
         try {
-            this.connection = mysqlx.createConnection(this.config);
-            this.connection.connect();
+            if ( this.dbtype==="mysql" ) {
+                this.connection = mysqlx.createConnection(this.config);
+                this.connection.connect();
+            } else {
+                if ( dbname.indexOf(".")=== -1 ) {
+                    dbname = dbname + ".db";
+                    this.config.database = dbname;
+                }
+                this.connection = new sqlite3.Database(dbname);
+            }
         } catch (e) {
             console.log(">>>> db connect error: ", e);
-        }
-        if ( DEBUGsql ) {
-            console.log(">>>> db connection config: ", this.config);
         }
     }
 
@@ -48,8 +58,15 @@ exports.sqlDatabase = class sqlDatabase {
         return this.error;
     }
 
+    getRequest() {
+        return this.recentRequest;
+    }
+
     die(msg) {
         this.error = msg;
+        this.insertId = 0;
+        this.impacted = 0;
+        this.recentResults = null;
         if ( DEBUGsql ) {
             console.log(">>>> sql error: ", msg);
         }
@@ -79,6 +96,8 @@ exports.sqlDatabase = class sqlDatabase {
             return this.die("No table specified in call to addRow");
         }
 
+        // lastid will be returned by the sql engine so set it here to 0
+        this.insertID = 0;
         var keystring = "";
         var valstring = "";
         for (var fieldkey in values) {
@@ -109,36 +128,43 @@ exports.sqlDatabase = class sqlDatabase {
             return this.die("Attempted to update row with no conditions set");
         }
 
-
         var that = this;
         var promise = new Promise( function(resolve, reject) { 
 
             that.getRow(usertable, "*", conditions)
             .then( function(result) {
-
-                // handle errors from getRow
-                if ( that.error ) {
-                    if ( typeof reject === "function" ) {
-                        reject(that.error);
-                    }
-                }
+                // // handle errors from getRow
+                // if ( that.error ) {
+                //     if ( typeof reject === "function" ) {
+                //         reject(that.error);
+                //     } else {
+                //         resolve()
+                //     }
+                //     return null;
+                // }
 
                 // if row is there then update it and return the update promise
+                // also set the lastid field to the existing row so we can get it if needed
                 if ( result ) {
-                    if ( DEBUGsql ) {
-                        console.log(">>>> updating row: ", result);
-                    }
+                    that.insertId = result.id;
                     var str = buildUpdateStr();
+                    if ( DEBUGsql ) {
+                        console.log(">>>> updating row: ", result, "\n >>>> query: ", str );
+                    }
                     resolve (that.query(str) );
-                    // resolve( doUpdate(that) );
 
                 // otherwise add a new row and return the add promise
                 } else {
+                    that.insertId = 0;
                     if ( DEBUGsql ) {
-                        console.log(">>>> adding row: ", values);
+                        console.log(">>>> adding row to table ", usertable, " with values: ", values);
                     }
+                    if ( values.id ) { delete values.id; }
                     resolve (that.addRow(usertable, values) );
                 }
+            })
+            .catch( reason => {
+                reject(reason);
             });
 
         });
@@ -174,7 +200,7 @@ exports.sqlDatabase = class sqlDatabase {
             if ( conditions ) {
                 str += " WHERE " + conditions;
             }
-            return str; // that.query(str);
+            return str;
         }
     }
     
@@ -198,143 +224,206 @@ exports.sqlDatabase = class sqlDatabase {
         if ( conditions !== "ALL" && conditions !== "all" ) {
             str += " WHERE " + conditions;
         }
+        this.insertId = 0;
 
         return this.query(str);
     }
     
+    getRow(usertable, fields, conditions, joins, orderby, callback) {
+        return this.getRows(usertable, fields, conditions, joins, orderby, true, callback);
+    }
+
     // use a promise 
     // the rows will have table names in the columns if joined is provided
     // if you want the table name without a join, use a blank string as the join
     getRows(usertable, fields, conditions, joins, orderby, firstrow, callback) {
+
         this.error = null;
-        if ( !usertable ) {
-            return this.die("No table specified in call to getRows");
-        }
-
-        // can pass a string or an array to pick which fields to read from the table
-        var keystring = "*";
-        if ( typeof fields === "string" ) {
-            if (fields=="") { fields = "*"; }
-            keystring = fields;
-        } else if ( typeof fields === "object" && Array.isArray(fields) ) {
-            keystring = fields.join(", ");
-        }
-        var str = "SELECT " + keystring + " FROM " + usertable;
-
-        // add all of the joins provided do not remove the space in between
-        var isjoined = false;
-        if ( joins && typeof joins === "string" ) {
-            str += " " + joins + " ";
-            isjoined = true;
-        } else if ( joins && typeof joins === "object" && Array.isArray(joins)  ) {
-            str += " " + joins.join(" ") + " ";
-            isjoined = true;
-        }
-        
-        // add on the optional conditions
-        if (conditions && typeof conditions === "string")  { 
-            str += " WHERE " + conditions; 
-        } else if ( conditions && typeof conditions === "object") {
-            str += " WHERE ";
-            var addon = "";
-            for ( var objkey in conditions) {
-                str += addon + "(" + objkey + " = '" + conditions[objkey] + "')";
-                addon = " AND ";
-            }
-        }
-
-        // add on ordering if provided
-        if (orderby && typeof orderby === "string") {
-            str += " ORDER BY " + orderby; 
-        }
-
-        var options = {sql: str};
-        if ( joins ) {
-            options.nestTables = "_";
-        }
-        var rowobjs;
         var that = this;
 
         // create a custom promise that mimicks how the X lib works
         var promise = new Promise(function(resolve, reject) {
-            that.connection.query(options, function(err, result, columns) {
-                
+
+            if ( !usertable ) {
+                console.log(">>>> fatal DB error: No table specified in call to getRows");
+                reject(null);
+                return;
+            }
+
+            // can pass a string or an array to pick which fields to read from the table
+            var keystring = "*";
+            if ( typeof fields === "string" ) {
+                if (fields=="") { fields = "*"; }
+                keystring = fields;
+            } else if ( typeof fields === "object" && Array.isArray(fields) ) {
+                keystring = fields.join(", ");
+            }
+            var str = "SELECT " + keystring + " FROM " + usertable;
+
+            // add all of the joins provided do not remove the space in between
+            var isjoined = false;
+            if ( joins && typeof joins === "string" ) {
+                str += " " + joins + " ";
+                isjoined = true;
+            } else if ( joins && typeof joins === "object" && Array.isArray(joins)  ) {
+                str += " " + joins.join(" ") + " ";
+                isjoined = true;
+            }
+            
+            // add on the optional conditions
+            if (conditions && typeof conditions === "string")  { 
+                str += " WHERE " + conditions; 
+            } else if ( conditions && typeof conditions === "object") {
+                str += " WHERE ";
+                var addon = "";
+                for ( var objkey in conditions) {
+                    str += addon + "(" + objkey + " = '" + conditions[objkey] + "')";
+                    addon = " AND ";
+                }
+            }
+
+            // add on ordering if provided
+            if (orderby && typeof orderby === "string") {
+                str += " ORDER BY " + orderby; 
+            }
+
+            that.recentRequest = str;
+            var options = {sql: str};
+
+            // disable this because sqlite doesn't support it
+            // so had to rewrite all the queries accordingly anyway
+            // if ( joins ) {
+            //     options.nestTables = "_";
+            // }
+
+            if ( that.dbtype === "mysql" ) {
+
+                that.connection.query(options, function(err, result, columns) {
+                    var rowobjs;
+                    if ( err ) {
+                        that.error = err;
+                        reject(err);
+                    } else {
+
+                        if ( typeof result !== "object" ) {
+                            rowobjs = null;
+                            that.insertId = 0;
+                        } else if ( firstrow===true ) {
+                            rowobjs = result.length ? result[0] : null;
+                            that.insertId = rowobjs ? rowobjs.id : 0;
+                        } else {
+                            rowobjs = result;
+                            that.insertId = 0;
+                        }
+                        that.recentResults = rowobjs;
+                        resolve(rowobjs);
+                    }
+
+                    if ( callback ) {
+                        callback(rowobjs);
+                    }
+
+                });
+
+            } else {
+                if ( firstrow===true ) {
+                    that.connection.get(options.sql, [], function(err, row) {
+                        that.insertId = row ? row.id : 0;
+                        getorall(err, row);
+                    });
+                } else {
+                    that.connection.all(options.sql, [], function(err, rows) {
+                        that.insertId = 0;
+                        getorall(err, rows);
+                    });
+                }
+            }
+            function getorall(err, rows) {
                 if ( err ) {
                     that.error = err;
-                    if ( typeof reject === "function" ) {
-                        reject(err);
+                    if ( DEBUGsql ) {
+                        console.log(">>>> sql error: ", err);
                     }
+                    reject(null);
                 } else {
-
-                    if ( typeof result !== "object" ) {
-                        rowobjs = null;
-                    } else if ( firstrow===true ) {
-                        rowobjs = result[0];
-                    } else {
-                        rowobjs = result;
+                    that.recentResults = rows;
+                    resolve(rows);
+                    if ( callback ) {
+                        callback(rows);
                     }
-                    if ( DEBUGrow ) {
-                        console.log(">>>> rowobjs: ", rowobjs);
-                    }
-                    that.recentResults = rowobjs;
-                    resolve(rowobjs);
                 }
-
-                if ( callback ) {
-                    callback(rowobjs);
-                }
-
-            });
+            }
         });
         return promise;
-    }
-
-    getRow(usertable, fields, conditions, joins, orderby, callback) {
-        if ( !usertable ) {
-            return this.die("No table specified in call to getRow");
-        }
-
-        return this.getRows(usertable, fields, conditions, joins, orderby, true, callback);
     }
 
     // generic user-defined query
     query(str, callback) {
         this.error = null;
         var that = this;
-
+        this.recentRequest = str;
+        
         var promise = new Promise(function(resolve, reject) {
 
-            that.connection.query(str, function(err, sqlresult, fields) {
-                if ( err ) {
-                    sqlresult = null;
-                    that.error = err;
-                    if ( typeof reject === "function" ) {
+            if ( that.dbtype === "mysql" ) {
+                that.connection.query(str, function(err, sqlresult, fields) {
+                    if ( err ) {
+                        sqlresult = null;
+                        that.error = err;
+                        reject(null);
+                    } else {
+                        that.insertId = sqlresult.insertId;
+                        that.impacted = sqlresult.affectedRows;
+
+                        // mimick X protocol
+                        sqlresult.getAffectedItemsCount = function() {
+                            return sqlresult.affectedRows;
+                        }
+                        sqlresult.getAutoIncrementValue = function() {
+                            return sqlresult.insertId;
+                        }
+                        resolve(sqlresult);
+                    }
+
+                    if ( callback ) {
+                        callback(sqlresult);
+                    }
+                });
+            } else {
+                that.connection.run(str, [], function(err) {
+                    if ( err ) {
+                        that.error = err;
                         reject(err);
-                    }
-                } else {
-                    that.insertId = sqlresult.insertId;
-                    that.impacted = sqlresult.affectedRows;
+                    } else {
+                        var sqlresult = {};
+                        sqlresult.insertId = this.lastID ? this.lastID : that.insertId;
+                        sqlresult.affectedRows = this.changes;
+                        that.insertId = sqlresult.insertId;
+                        that.impacted = sqlresult.affectedRows;
 
-                    // mimick X protocol
-                    sqlresult.getAffectedItemsCount = function() {
-                        return sqlresult.affectedRows;
+                        // mimick X protocol
+                        sqlresult.getAffectedItemsCount = function() {
+                            return this.affectedRows;
+                        }
+                        sqlresult.getAutoIncrementValue = function() {
+                            return this.insertId;
+                        }
+                        resolve(sqlresult);
                     }
-                    sqlresult.getAutoIncrementValue = function() {
-                        return sqlresult.insertId;
-                    }
-                    resolve(sqlresult);
-                }
 
-                if ( callback ) {
-                    callback(sqlresult);
-                }
-            });
+                    if ( callback ) {
+                        callback(sqlresult);
+                    }
+                });
+            }
         });
         return promise;
     }
 
     catch(err) {
-
+        if ( DEBUGsql ) {
+            console.log(">>>> fatal DB error: ", err);
+        }
     }
 
 }

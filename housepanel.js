@@ -14,6 +14,7 @@ cm_Globals.options = null;
 cm_Globals.returnURL = "";
 cm_Globals.hubId = "all";
 cm_Globals.wsclient = null;
+cm_Globals.hubs =  {};
 
 var modalStatus = 0;
 var modalWindows = {};
@@ -145,6 +146,20 @@ function clone(obj) {
     return JSON.parse(JSON.stringify(obj));
 }
 
+function findHub(hubid, id) {
+    var thehub = cm_Globals.hubs[0];
+    hubid = hubid.toString();
+    cm_Globals.hubs.forEach( function(hub) {
+        if ( (!id || id==="id") && hubid === hub["id"].toString() ) {
+            thehub = hub;
+        } else if ( hubid === hub[id].toString() ) {
+            thehub = hub;
+        }
+    });
+    return thehub;
+}
+
+
 // obtain options using an ajax api call
 // could probably read Options file instead
 // but doing it this way ensure we get what main app sees
@@ -158,6 +173,7 @@ function getOptions() {
         var pname = $("#showversion span#infoname").html();
         config = JSON.parse(config);
         cm_Globals.options = {userid: userid, email: email, skin: skin, config: config, rules: {}};
+        cm_Globals.pname = pname;
 
         // disabled timer based refreshes since we no longer need this
         // setFastSlow(config);
@@ -191,30 +207,56 @@ function getOptions() {
             }, "json"
         );
     } catch(e) {
-        console.log("error - failure reading your hmoptions.cfg file", e);
+        console.log("error - failure reading options from DB", e);
     }
+}
 
-    function setFastSlow(config) {
-        try {
-            var fast_timer = config.fast_timer;
-            fast_timer = parseInt(fast_timer, 10);
-        } catch(err) {
-            console.log ("Couldn't retrieve fast timer; disabling fast timer refresh feature. err: ", err);
-            fast_timer = 0;
-        }
-        try {
-            var slow_timer = config.slow_timer;
-            slow_timer = parseInt(slow_timer, 10);
-        } catch(err) {
-            console.log ("Couldn't retrieve slow timer; disabling slow timer refresh feature. err: ", err);
-            slow_timer = 0;
-        }
-        if ( fast_timer && fast_timer >= 1000 ) {
-            setupTimer("fast", fast_timer, "all");
-        }
-        if ( slow_timer && slow_timer >= 1000 ) {
-            setupTimer("slow", slow_timer, "all");
-        }
+// obtain options using an ajax api call
+// could probably read Options file instead
+// but doing it this way ensure we get what main app sees
+function getHubs() {
+    priorOpmode = getCookie("opmode") || "operate";
+    try {
+        var userid = $("#userid").val();
+        var pname = cm_Globals.pname;
+
+        // read the hubs
+        $.post(cm_Globals.returnURL, 
+            {useajax: "gethubs", userid: userid, pname: pname, id:"none", type:"none"},
+            function (presult, pstatus) {
+                if (pstatus==="success" ) {
+                    cm_Globals.hubs = presult;
+                } else {
+                    cm_Globals.hubs = {};
+                    console.log("error - failure reading hubs from database for user = " + userid);
+                }
+            }, "json"
+        );
+    } catch(e) {
+        console.log("error - failure reading hubs from DB", e);
+    }
+}
+
+function setFastSlow(config) {
+    try {
+        var fast_timer = config.fast_timer;
+        fast_timer = parseInt(fast_timer, 10);
+    } catch(err) {
+        console.log ("Couldn't retrieve fast timer; disabling fast timer refresh feature. err: ", err);
+        fast_timer = 0;
+    }
+    try {
+        var slow_timer = config.slow_timer;
+        slow_timer = parseInt(slow_timer, 10);
+    } catch(err) {
+        console.log ("Couldn't retrieve slow timer; disabling slow timer refresh feature. err: ", err);
+        slow_timer = 0;
+    }
+    if ( fast_timer && fast_timer >= 1000 ) {
+        setupTimer("fast", fast_timer, "all");
+    }
+    if ( slow_timer && slow_timer >= 1000 ) {
+        setupTimer("slow", slow_timer, "all");
     }
 }
 
@@ -381,6 +423,7 @@ $(document).ready(function() {
     if ( pagename==="main" || pagename==="auth" || pagename==="options" ) {
 
         getOptions();
+        getHubs();
         
         // disable return key
         $("body").off("keypress");
@@ -455,16 +498,18 @@ function initWebsocket() {
     try {
         var userid = $("#userid").val();
         var webSocketUrl = $("input[name='webSocketUrl']").val();
+        var webSocketPort = $("input[name='webSocketServerPort']").val();
+        webSocketPort = parseInt(webSocketPort);
 
         if ( userid && webSocketUrl ) {
 
             // get the port from the panel name cookie
             var pname = getCookie("pname");
-            if ( pname.substr(1,1)!==":" ) {
+            if ( pname.substring(1,2)!==":" ) {
                 pname = "1:" + pname;
             }
-            var portnum = pname.substr(0,1);
-            var port = 8180 + parseInt(portnum);
+            var portnum = pname.substring(0,1);
+            var port = webSocketPort + parseInt(portnum);
             webSocketUrl += ":" + port;
             $("#infoport").html("#"+portnum);
             // alert("webSocketUrl: " + webSocketUrl);
@@ -542,18 +587,17 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                 if ( !thetype || thetype==="all" || thetype===pagename ) {
 
                     // reload all screens if that is requested
-                    if ( typeof subid==="undefined" || subid==="" || subid==="/" || subid==="reload" || subid==="/reload" ) {
+                    if ( typeof subid==="undefined" || subid==="" || subid==="/" ) {
                         var reloadpage =  cm_Globals.returnURL;
                         window.location.href = reloadpage;
 
                     } else {
-                        if ( subid.substr(0,1)!=="/" ) {
+                        if ( subid.substring(0,1)!=="/" ) {
                             subid = "/" + subid;
                         }
                         reloadpage =  cm_Globals.returnURL + subid;
                         // alert("reloading to: " + reloadpage);
                         window.location.href = reloadpage;
-                        
                     }
                 }
 
@@ -967,9 +1011,7 @@ function setupColors() {
                       linkval.startsWith("RULE::") || linkval.startsWith("URL::")) )
                 {
                     var jcolon = linkval.indexOf("::");
-                    // command = linkval.substr(0, jcolon);
                     command = linkval.substring(0, jcolon);
-                    // linkval = linkval.substr(jcolon+2);
                     linkval = linkval.substring(jcolon+2);
                 } else {
                     command = "";
@@ -1031,8 +1073,8 @@ function setupSliders() {
              linkval.startsWith("RULE::") || linkval.startsWith("URL::")) )
         {
             var jcolon = linkval.indexOf("::");
-            command = linkval.substr(0, jcolon);
-            linkval = linkval.substr(jcolon+2);
+            command = linkval.substring(0, jcolon);
+            linkval = linkval.substring(jcolon+2);
         // } else {
         //     command = "";
         //     linkval = "";
@@ -1566,7 +1608,7 @@ function dynoPost(ajaxcall, body, callback) {
 
     // if body is not given or is not an object then use all other values
     // to set the object to pass to post call with last one being a reload flag
-    if ( typeof body === "object" ) { 
+    if ( body && typeof body === "object" ) { 
         body["api"] = ajaxcall;
         body.pname = pname;
         if ( body.reload ) {
@@ -1945,8 +1987,16 @@ function execButton(buttonid) {
 
     } else if ( buttonid==="refreshpage" ) {
         var pstyle = "position: absolute; background-color: blue; color: white; font-weight: bold; font-size: 32px; left: 300px; top: 300px; width: 600px; height: 100px; margin-top: 50px;";
-        createModal("info", "Screen may reload multiple times...","body", false, {style: pstyle});
-        dynoPost(buttonid);
+        createModal("info", "Screen will reload when hub refresh is done...","body", false, {style: pstyle});
+        dynoPost(buttonid, "", function(presult, pstatus) {
+            setTimeout(function() {
+                closeModal("info");
+                createModal("info", presult, "body", false, {style: pstyle});
+                setTimeout(function() {
+                    window.location.href = cm_Globals.returnURL;
+                },2000);
+            },2000);
+        });
 
     } else if ( buttonid==="refactor" ) {
         alert("This feature is not yet available.");
@@ -2183,11 +2233,15 @@ function setupButtons() {
         $("#pickhub").on('change',function(evt) {
             var hubindex = $(this).val();
             var target = "#authhub_" + hubindex;
-
+            var defhub = findHub(hubindex,"id");
+            var defhost = defhub["hubhost"];
+            
             // this is only the starting type and all we care about is New
             // if we needed the actual type we would have used commented code
             var hubType = $(target).attr("hubtype");
             var hubId = $(target).attr("hubid");
+            console.log( ">>>> allhubs: ", cm_Globals.hubs );
+            console.log( ">>>> hubindex: ", hubindex, " hubId: ", hubId, defhost) ;
             // alert("hubType = " + hubType);
             // var realhubType = $("#hubdiv_" + hubId).children("select").val();
             // alert("realhubType= " + realhubType);
@@ -2203,6 +2257,8 @@ function setupButtons() {
                 $("#newthingcount").html("");
                 $("input.hubauth").removeClass("hidden");
                 $("input.hubdel").removeClass("hidden");
+                var hubTarget = $("#authhubwrapper").find("input[name='hubhost']");
+                hubTarget.val(defhost);
             }
             $("div.authhub").each(function() {
                 if ( !$(this).hasClass("hidden") ) {
@@ -2225,8 +2281,14 @@ function setupButtons() {
             var hubType = $(this).val();
             var hubindex = $("#pickhub").val();
             var hideid = $("#hideid_"+hubindex);
-            var hubTarget = $(this).parent().find("input[name='hubhost']");
+            // var hubTarget = $(this).parent().find("input[name='hubhost']");
+            var hubTarget = $("#authhubwrapper").find("input[name='hubhost']");
             var hubNameTarget = $(this).parent().parent().find("input[name='hubname']");
+            var defhub = findHub(hubindex,"id");
+            var defhost = defhub["hubhost"];
+
+            console.log("hubs: ", cm_Globals.hubs);
+
             if ( hubType==="SmartThings" || hubType==="NewSmartThings" ) {
                 hideid.addClass("hidden");
                 hubTarget.val("https://api.smartthings.com");
@@ -2241,7 +2303,8 @@ function setupButtons() {
                 $("#newthingcount").html("Ready to authorize your "+hubType+" account. The hub name can be set to anything or the name Sonos will be assigned.");
             } else if ( hubType==="Hubitat" ) {
                 hideid.removeClass("hidden");
-                hubTarget.val("https://oauth.cloud.hubitat.com");
+                // hubTarget.val("https://oauth.cloud.hubitat.com");
+                hubTarget.val(defhost);
                 hubNameTarget.val("");
                 // hubTarget.prop("disabled", false);
                 $("#newthingcount").html("Fill out the fields below to authorize your "+hubType+" hub. The hub ID and name will be obtained automatically.");
@@ -2254,7 +2317,7 @@ function setupButtons() {
             } else if ( hubType==="ISY" ) {
                 hideid.removeClass("hidden");
                 // hubTarget.prop("disabled", false);
-                // hubTarget.val("http://192.168.x.x");
+                hubTarget.val(defhost);
                 hubNameTarget.val("ISY Home");
             } else {
                 hideid.removeClass("hidden");
@@ -2318,7 +2381,7 @@ function setupButtons() {
             }
             
             // tell user we are authorizing hub...
-            $("#newthingcount").html("Authorizing hub: " + formData.hubName).fadeTo(400, 0.1 ).fadeTo(400, 1.0).fadeTo(400, 0.1 ).fadeTo(400, 1).fadeTo(400, 0.1 ).fadeTo(400, 1).fadeTo(400, 0.1 ).fadeTo(400, 1).fadeTo(400, 0.1 ).fadeTo(400, 1);
+            $("#newthingcount").html("Authorizing hub: " + formData.hubname).fadeTo(400, 0.1 ).fadeTo(400, 1.0).fadeTo(400, 0.1 ).fadeTo(400, 1).fadeTo(400, 0.1 ).fadeTo(400, 1).fadeTo(400, 0.1 ).fadeTo(400, 1).fadeTo(400, 0.1 ).fadeTo(400, 1);
 
             // make an api call and process results
             // some hubs return devices on server and pushes results later
@@ -2332,11 +2395,11 @@ function setupButtons() {
 
                 if ( pstatus==="success" && typeof presult==="object" && presult.action ) {
                     var obj = presult;
+                    console.log(">>>> result returned form auth: ", presult);
 
                     // for hubs that have auth info in the config file we do nothing but notify user of retrieval
                     if ( obj.action === "things" ) {
                         $("#newthingcount").html("Hub " + obj.hubName + " of type (" + obj.hubType+") authorized " + obj.numdevices + " devices");
-
                         // reload the page after 15 seconds of trying to get the devices in the background
                         // while we are waiting the server is reading the devices from the hub asyncronously
                         // if this reload happens that means the device read likely failed
@@ -2460,7 +2523,7 @@ function addEditLink() {
     $("div.editlink").on("click",function(evt) {
         var taid = $(evt.target).attr("aid");
         var thing = "#" + taid;
-        var aid = taid.substr(2);
+        var aid = taid.substring(2);
         var str_type = $(thing).attr("type");
         var tile = $(thing).attr("tile");
         var strhtml = $(thing).html();
@@ -2485,7 +2548,7 @@ function addEditLink() {
     $("div.cmzlink").on("click",function(evt) {
         var taid = $(evt.target).attr("aid");
         var thing = "#" + taid;
-        var aid = taid.substr(2);
+        var aid = taid.substring(2);
         var pwsib = $(evt.target).siblings("div.overlay.password");
         var userid = cm_Globals.options.userid;
         if ( pwsib && pwsib.length > 0 ) {
@@ -3440,9 +3503,9 @@ function stripOnoff(thevalue) {
     if ( newvalue==="on" || newvalue==="off" ) {
         return " ";
     } else if ( newvalue.endsWith("on") ) {
-        thevalue = thevalue.substr(0, thevalue.length-2);
+        thevalue = thevalue.substring(0, thevalue.length-2);
     } else if ( newvalue.endsWith("off") ) {
-        thevalue = thevalue.substr(0, thevalue.length-3);
+        thevalue = thevalue.substring(0, thevalue.length-3);
     }
     if ( thevalue.substr(-1)!==" " && thevalue.substr(-1)!=="_" && thevalue.substr(-1)!=="-" && thevalue.substr(-1)!=="|" ) {
         thevalue+= " ";
@@ -3539,7 +3602,7 @@ function processClick(that, thingname, ro) {
     // new logic based on DB version
     var triggersubid = subid;
     if ( subid.endsWith("-dn") || subid.endsWith("up") ) {
-        triggersubid = subid.substr(0,subid.length - 3);
+        triggersubid = subid.substring(0,subid.length - 3);
     }
     var usertile =  $("#sb-"+aid+"-"+triggersubid);
     var linkval = thevalue;
@@ -3552,7 +3615,7 @@ function processClick(that, thingname, ro) {
         linktype = usertile.attr("linktype");
         realsubid = usertile.attr("subid");
         if ( subid.endsWith("-dn") || subid.endsWith("up") ) {
-            realsubid += subid.substr(subid.length-3);
+            realsubid += subid.substring(subid.length-3);
         }
         linkid = usertile.attr("linkid");
         hint = usertile.attr("hint");
@@ -3565,8 +3628,8 @@ function processClick(that, thingname, ro) {
           linkval.startsWith("RULE::") || linkval.startsWith("URL::")) )
     {
         var jcolon = linkval.indexOf("::");
-        command = linkval.substr(0, jcolon);
-        linkval = linkval.substr(jcolon+2);
+        command = linkval.substring(0, jcolon);
+        linkval = linkval.substring(jcolon+2);
     } else {
         // command = "";
         linkval = thevalue;
@@ -3710,12 +3773,12 @@ function processClick(that, thingname, ro) {
             var strval = $(this).html();
             if ( strval ) {
                 if ( inspectsubid==="battery" ) {
-                    var batdiv = $(this).children().attr("style").substr(7);
+                    var batdiv = $(this).children().attr("style").substring(7);
                     msg += inspectsubid + " = " + batdiv + "<br>";
                 } else if ( strval.indexOf("img src") !== -1 ) {
                     msg += inspectsubid + " =  (image)<br>";
                 } else if ( inspectsubid==="level" || inspectsubid==="onlevel" || inspectsubid==="colorTemperature" || inspectsubid==="volume" || inspectsubid==="groupVolume" || inspectsubid==="position" ) {
-                    msg += inspectsubid + " = " + $(this).children().attr("style").substr(6) + "<br>";
+                    msg += inspectsubid + " = " + $(this).children().attr("style").substring(6) + "<br>";
                 } else if ( strval.length > 40 ) {
                     msg += inspectsubid + " ... <br>";
                 } else {

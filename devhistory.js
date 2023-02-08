@@ -1,4 +1,8 @@
 const devhistory = `
+3.042   First working debugged version supporting sqlite
+3.041   Various bug fixes to new hub auth flow and sqlite support
+3.040   Major rewrite of auth flow to be more robust and add SQLITE option
+3.039   protect for errors with catch in all updateRow calls to mysql
 3.038   fixed images to show url and bugfixes to wysiwyg in customizer
 3.037   Fixed OAUTH flow for Hubitat and disabled ST legacy option
 3.036   Update customizer to show links in the preview window
