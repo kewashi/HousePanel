@@ -28,8 +28,8 @@ const DEBUG21 = false;              // New ST sink message debug
 const DEBUG22 = false;              // login info
 const DEBUGcurl = false;            // detailed inspection
 const DEBUGsonos = false;           // Sonos hub debugging
-const DEBUGisy = false;             // ISY HP connect pushes
-const DEBUGtmp =  true;             // used to debug anything temporarily using ||
+const DEBUGisy = true;              // ISY debug info
+const DEBUGtmp = true;              // used to debug anything temporarily using ||
 
 // various control options
 const DONATE = false;                 // set this to true to enable donation section
@@ -1370,7 +1370,7 @@ function getAccessToken(userid, code, hub) {
             }
 
             if ( access_token && endpt ) {
-                if ( DEBUG2 || DEBUGtmp ) {
+                if ( DEBUG2 ) {
                     console.log( (ddbg()),"endptCallback - access_token: ", access_token," endpoint: ", endpt);
                 }
                 hub.hubaccess = access_token;
@@ -1793,7 +1793,7 @@ function getDevices(hub) {
                                 resolve(mydevices);
                                 removeDeadNodes(userid, hubindex, currentDevices)
                                 .then(results => {
-                                    if ( DEBUGtmp ) {
+                                    if ( DEBUG2 ) {
                                         console.log( (ddbg()), results);
                                     }
                                 })
@@ -2834,7 +2834,7 @@ function getDevices(hub) {
             // var vardefs = {};
     
             // use this object to keep track of which things are done
-            var done = {"Int" : false, "State" : false, "Int_defs" : false, "State_defs" : false, "variables" : false, "programs" : false, "nodes" : false };
+            var done = {"Int" : false, "State" : false, "Int_defs" : false, "State_defs" : false, "variables" : false, "programs" : false, "nodes" : false, "states": false };
     
             // now read in any int and state variables and their definitions
             var mydevices = {};
@@ -2846,61 +2846,15 @@ function getDevices(hub) {
             curl_call(hubEndpt + "/vars/get/2", stheader, false, false, "GET", getStateVars);
             curl_call(hubEndpt + "/programs?subfolders=true", stheader, false, false, "GET", getAllProgs);
             curl_call(hubEndpt + "/nodes", stheader, false, false, "GET", getAllNodes);
-    
-            // _curl(hubEndpt + "/vars/definitions/1", stheader, null, "GET")
-            // .then(body => {
-            //     getISY_Defs(body,"Int");
-            // })
-            // .catch(reason => {
-            //     reject("2: " + errMsg + " r: " + reason);
-            // });
-
-            // _curl(hubEndpt + "/vars/definitions/2", stheader, null, "GET")
-            // .then(body => {
-            //     getISY_Defs(body,"State");
-            // })
-            // .catch(reason => {
-            //     reject("3: " + errMsg + " r: " + reason);
-            // });
-
-            // _curl(hubEndpt + "/vars/get/1", stheader, null, "GET")
-            // .then(body => {
-            //     getISY_Vars(body,"Int");
-            // })
-            // .catch(reason => {
-            //     reject("4: " + errMsg + " r: " + reason);
-            // });
-
-            // _curl(hubEndpt + "/vars/get/2", stheader, null, "GET")
-            // .then(body => {
-            //     getISY_Vars(body,"State");
-            // })
-            // .catch(reason => {
-            //     reject("5: " + errMsg + " r: " + reason);
-            // });
-
-            // _curl(hubEndpt + "/programs?subfolders=true", stheader, null, "GET")
-            // .then(body => {
-            //     getAllProgs(null, null, body);
-            // })
-            // .catch(reason => {
-            //     reject("6: " + errMsg + " r: " + reason);
-            // });
-
-            // _curl(hubEndpt + "/nodes", stheader, null, "GET")
-            // .then(body => {
-            //     getAllNodes(null, null, body);
-            // })
-            // .catch(reason => {
-            //     reject("7: " + errMsg + " r: " + reason);
-            // });
                 
             function checkDone( stage ) {
                 if ( stage ) {
                     done[ stage ] = true;
+                } else {
+                    return ( done["variables"] && done["programs"] && done["nodes"] && done["states"] );
                 }
 
-                if ( !done["variables"] && done["Int"] && done["State"] && done["Int_defs"] && done["State_defs"]) {
+                if ( !done["variables"] && done["Int"] && done["State"] && done["Int_defs"] && done["State_defs"] ) {
                     // Now that we have all the isy variables and names, create a mapping of ids to names
                     // set all the alias values here so that updates can use alias names
                     // variables["alias"] = vardefs;
@@ -2909,8 +2863,6 @@ function getDevices(hub) {
                                   devicetype: thetype, hint: "ISY_variable", refresh: "never", pvalue: pvalstr};
                                   
                     mydevices["vars"] = device;
-                    
-                    // and update our options
                     mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = 'vars'")
                     .then( () => {
                         done["variables"] = true;
@@ -2921,7 +2873,15 @@ function getDevices(hub) {
                     });
                 }
 
-                if ( done["variables"] && done["programs"] && done["nodes"] ) {
+                if ( !done["states"] && stage==="nodes" ) {
+                    curl_call(hubEndpt + "/status", stheader, false, false, "GET", callbackStatusInfo);
+                    return false;
+                }
+
+                if ( DEBUGisy ) {
+                    console.log( (ddbg()), "done stage: ", stage, " done: ", done);
+                }
+                if ( done["variables"] && done["programs"] && done["nodes"] && done["states"] ) {
                     resolve(mydevices);
                     return true;
                 } else {
@@ -3095,7 +3055,10 @@ function getDevices(hub) {
                     // and create a tile for any program that is not a folder
                     // TODO: recurse into folders and get programs there too
                     var pvalue;
+                    var nprogs = programlist.length;
+                    var n = 0;
                     programlist.forEach(function(prog) {
+                        n++;
                         var proginfo = prog["$"];
                         var isfolder = proginfo.folder;
                         // if we have a folder don't add it
@@ -3103,9 +3066,12 @@ function getDevices(hub) {
                             if ( DEBUGisy ) {
                                 console.log( (ddbg()), "Program ", prog.name, " is a folder. id: ", proginfo.id, " Status: ", proginfo.status);
                             }
+                            if ( n >= nprogs ) {
+                                checkDone("programs");
+                            }
                         // create tile for programs that are not folders
                         } else {
-                            if ( DEBUG7 ) {
+                            if ( DEBUGisy || DEBUGtmp ) {
                                 console.log( (ddbg()), "Program ", prog.name, " id: ", proginfo.id, " Status: ", proginfo.status, " Last run: ", prog.lastRunTime );
                             }
                             var progid = "prog_" + proginfo.id;
@@ -3147,16 +3113,27 @@ function getDevices(hub) {
                             var pvalstr = encodeURI2(pvalue);
 
                             var device = {userid: userid, hubid: hubindex, deviceid: progid, name: progname, 
-                                            devicetype: thetype, hint: "ISY_program", refresh: "normal", pvalue: pvalstr};
+                                            devicetype: thetype, hint: "ISY_program", refresh: "never", pvalue: pvalstr};
                             mydevices[progid] = device;
+                            mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + progid + "'")
+                            .then( res => {
+                                console.log("prog update: ", res);
+                                if ( n >= nprogs ) {
+                                    checkDone("programs");
+                                }
+                            })
+                            .catch(reason => {
+                                console.log( (ddbg()), reason);
+                                checkDone("programs");
+                            });
                         }
                     });
-                    checkDone("programs");
+                    if ( nprogs === 0 ) checkDone("programs");
                 });
     
             }
     
-            async function getAllNodes(err, res, body) {
+            function getAllNodes(err, res, body) {
                 if ( err ) {
                     console.log( (ddbg()), "error retrieving ISY Nodes. Error: ", err);
                     checkDone("nodes");
@@ -3165,13 +3142,16 @@ function getDevices(hub) {
                 
                 // console.log("ISY Nodes body: ", body);
                 const thetype = "isy";
-                await xml2js(body, function(xmlerr, result) {
+                xml2js(body, function(xmlerr, result) {
                     if ( !result ) {
                         checkDone("nodes");
                         return;
                     }
                 
                     var thenodes = result.nodes["node"];
+                    var groups = result.nodes["group"];
+                    var numnodes = thenodes.length + groups.length;
+                    var n = 0;
                     if ( !is_object(thenodes) ) {
                         checkDone("nodes");
                         return;
@@ -3196,6 +3176,14 @@ function getDevices(hub) {
     
                         var name = node["name"][0] || "Node";
                         var pvalue = {"name": name};
+
+                        const ignoreNodes = ["$","address","name","family","type","pnode"];
+                        for (var nodeitem in node) {
+                            if ( !ignoreNodes.includes(nodeitem) ) {
+                                pvalue[nodeitem] = node[nodeitem][0].toString();
+                            }
+                        }
+
                         var pvalstr = encodeURI2(pvalue);
     
                         // set bare minimum info
@@ -3203,12 +3191,21 @@ function getDevices(hub) {
                         var device = {userid: userid, hubid: hubindex, deviceid: id, name: name, 
                             devicetype: thetype, hint: hint, refresh: "never", pvalue: pvalstr};
                         mydevices[id] = device;
-                        if (DEBUG5) {
-                            console.log( (ddbg()), "ISY node device: ", device);
-                        }
+
+                        console.log(">>>> node: ", device );
+
+                        mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + id + "'")
+                        .then(res => {
+                            n++;
+                            if ( n >= numnodes ) {
+                                checkDone("nodes");
+                            }
+                        })
+                        .catch(reason => {
+                            console.log(">>>> dberr: ", reason);
+                        });
                     }
 
-                    var groups = result.nodes["group"];
                     for ( var obj in groups ) {
                         var node = groups[obj];
                         var id = fixISYid(node["address"][0].toString());
@@ -3225,44 +3222,64 @@ function getDevices(hub) {
                                 pvalue["scene_"+sceneitem] = members.link[sceneitem]["_"];
                             }
                         }
-
                         var pvalstr = encodeURI2(pvalue);
                         var device = {userid: userid, hubid: hubindex, deviceid: id, name: name, 
                                       devicetype: thetype, hint: hint, refresh: "never", pvalue: pvalstr};
                         mydevices[id] = device;
-                        if (DEBUGisy) {
-                            console.log( (ddbg()), "ISY scene device: ", device);
-                        }
-                    }
-
-                    curl_call(hubEndpt + "/status", stheader, false, false, "GET", callbackStatusInfo);
-                    async function callbackStatusInfo(err, res, body) {
-                        await xml2js(body, function(xmlerr, result) {
-                            try {
-                                if ( result ) {
-                                    var nodes = result.nodes.node;
-                                    if ( DEBUGisy ) {
-                                        console.log( (ddbg()), "node details: ", UTIL.inspect(result, false, null, false) );
-                                    }
-                                    if ( nodes ) {
-                                        nodes.forEach(function(node) {
-                                            var nodeid = fixISYid(node["$"]["id"]);
-                                            if ( mydevices[nodeid] ) {
-                                                var props = node["property"];
-                                                var pvalstr = setIsyFields(nodeid, mydevices[nodeid], props);
-                                                mydevices[nodeid]["pvalue"] = pvalstr;
-                                            }
-                                        });
-                                    } else {
-                                        throw "Something went wrong reading status from ISY";
-                                    }
-                                }
-                            } catch(e) { 
-                                console.log( (ddbg()), "error - ", e);
+                        mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + id + "'")
+                        .then(res => {
+                            n++;
+                            if ( n >= numnodes ) {
+                                checkDone("nodes");
                             }
-                            checkDone("nodes");
                         });
-                    };
+                    }                    
+                });
+            }
+            
+            function callbackStatusInfo(err, res, body) {
+                xml2js(body, function(xmlerr, result) {
+                    try {
+                        if ( DEBUGisy ) {
+                            console.log( (ddbg()), "node details: ", UTIL.inspect(result, false, null, false) );
+                        }
+                        if ( !result || !result.nodes ) {
+                            checkDone("states");
+                            return;
+                        }
+                        var nodes = result.nodes.node;
+                        var numnodes = nodes ? nodes.length : 0;
+                        if ( numnodes ) {
+                            var n = 0;
+                            nodes.forEach(function(node) {
+                                var nodeid = fixISYid(node["$"]["id"]);
+
+                                var props = node["property"];
+                                if ( props && mydevices[nodeid] ) {
+                                    var pvalstr = setIsyFields(nodeid, mydevices[nodeid], props);
+                                    mydevices[nodeid]["pvalue"] = pvalstr;
+                                    var device = mydevices[nodeid];
+                                    mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + nodeid + "'")
+                                    .then(res => {
+                                        n++;
+                                        if ( n >= numnodes ) {
+                                            checkDone("states");
+                                        }
+                                    });
+                                } else {
+                                    n++;
+                                    if ( n >= numnodes ) {
+                                        checkDone("states");
+                                    }
+                            }
+                            });
+                        } else {
+                            checkDone("states");
+                        }
+                    } catch(e) { 
+                        console.log( (ddbg()), "error - ", e);
+                        checkDone("states");
+                    }
                 });
             }
         }
@@ -3675,7 +3692,7 @@ function createNewUser(body) {
     })
     .then( newuser => {
 
-        if ( DEBUG15 || DEBUGtmp ) {
+        if ( DEBUG15 ) {
             console.log( (ddbg()), "newuser: ", newuser );
         }
         if ( !newuser || !newuser.id ) throw "error creating new user";
@@ -3806,7 +3823,7 @@ function addNewUser(emailname, username, mobile, pword) {
         if ( !result ) { 
             throw "error - encountered a problem adding a new user to HousePanel with email = " + emailname; 
         }
-        if ( DEBUG15 || DEBUGtmp ) {
+        if ( DEBUG15 ) {
             console.log( (ddbg()), "add user result: ", result );
         }
         var userid = result.getAutoIncrementValue();
@@ -4367,7 +4384,7 @@ function processLogin(body, res) {
         }
         return therow;
     }).catch(reason => {
-        console.log("dberror 8 - processLogin - ", reason);
+        console.log( (ddbg()), "processLogin - ", reason);
         return "error - something went wrong when logging in";
     });
     return results;
@@ -6565,7 +6582,7 @@ function processIsyMessage(userid, jsondata) {
                     console.log( (ddbg()), reason);
                 });
             }).catch(reason => {
-                console.log("dberror 10 - processIsyMessage - ", reason);
+                console.log( (ddbg()), "processIsyMessage - ", reason);
             });
 
         // set variable changes events
@@ -6634,7 +6651,10 @@ function processIsyMessage(userid, jsondata) {
                     console.log( (ddbg()), "warning - var // processIsyMessage: ", e, device);
                     return;
                 }
-            }).catch(reason => {console.log("dberror 11 - processIsyMessage - ", reason);});
+            })
+            .catch(reason => {
+                console.log( (ddbg()), "processIsyMessage - ", reason);
+            });
 
         // handle program changes events
         } else if ( is_object(eventInfo[0]) && array_key_exists("id", eventInfo[0]) && 
@@ -6705,7 +6725,7 @@ function processIsyMessage(userid, jsondata) {
                     return;
                 }
             }).catch(reason => {
-                console.log("dberror 12 - processIsyMessage - ", reason);
+                console.log( (ddbg()), "processIsyMessage - ", reason);
             });
 
         }
@@ -6972,7 +6992,10 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                 console.log( (ddbg()), reason );
             });
         }
-    }).catch(reason => {console.log("dberror 13 - processRules - ", reason);});
+    })
+    .catch(reason => {
+        console.log( (ddbg()), "processRules - ", reason);
+    });
 
     return;
 
@@ -8260,7 +8283,10 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
 
         }
 
-    }).catch(reason => {console.log("dberror 14 - callHub - ", reason);});
+    })
+    .catch(reason => {
+        console.log( (ddbg()), "callHub - ", reason);
+    });
     return result;
 
     // --------------------- end of callHub commands ------------------------------
@@ -8358,18 +8384,10 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
 
     function getHubImage(err, res, body) {
 
-        fs.writeFile("thumbraw.png", body, function() {
-            if ( DEBUGtmp ) {
-                console.log( (ddbg()), "return from image request: file written - thumbraw.png" );
-            }
-        });
+        fs.writeFileSync("thumbraw.png", body);
         var buff = Buffer.from(body);
         var base64 = buff.toString('base64');
-        fs.writeFile("thumbnail.png", base64, function() {
-            if ( DEBUGtmp ) {
-                console.log( (ddbg()), "return from image request: file written - thumbnail.png" );
-            }
-        });
+        fs.writeFileSync("thumbnail.png", base64);
     }
 
     function getHubResponse(body) {
@@ -8544,7 +8562,7 @@ function queryHub(userid, thingid, hubindex, swid, swtype, thingname ) {
 
         }
 
-    }).catch(reason => {console.log("dberror 15 - queryHub - ", reason);});
+    }).catch(reason => {console.log( (ddbg()), "queryHub - ", reason);});
     
     function getQueryResponse(err, res, pvalue) {
         if ( err ) {
@@ -8964,7 +8982,7 @@ function doQuery(userid, thingid, protocol) {
             }
             return devices;
         }).catch(reason => {
-            console.log("dberror 18 - doQuery - ", reason);
+            console.log( (ddbg()), "doQuery - ", reason);
             return null;
         });
 
@@ -9000,7 +9018,7 @@ function doQuery(userid, thingid, protocol) {
                 return qres;
             }
         }).catch(reason => {
-            console.log("dberror 19 - doQuery - ", reason);
+            console.log( (ddbg()), "doQuery - ", reason);
             return null;
         });
 
@@ -9017,14 +9035,18 @@ function setOrder(userid, swtype, swval) {
         for ( var k in swval ) {
             var roomid = swval[k].id;
             var updval = { rorder: swval[k]["rorder"], rname: swval[k]["rname"] };
-            if ( DEBUGtmp ) console.log("roomid: ", roomid, " updval: ", updval);
             mydb.updateRow("rooms", updval, "userid = " + userid + " AND id = "+roomid)
             .then(results => {
                 if ( results ) {
-                    if ( DEBUGtmp ) console.log(results.getAffectedItemsCount() );
+                    if ( DEBUG6 ) {
+                        console.log( (ddbg()),"move room results: ", results.getAffectedItemsCount() );
+                    }
                     num++;
                 }
-            }).catch(reason => {console.log("dberror 20 - setOrder - ", reason);});
+            })
+            .catch(reason => {
+                console.log( (ddbg()), "setOrder - ", reason);
+            });
         }
         result = "success - updated order of " + num + " rooms for user = " + userid;
 
@@ -9035,7 +9057,9 @@ function setOrder(userid, swtype, swval) {
             // var updval = swval[kk].updval;
             var updval = {tileid: swval[kk].tileid, torder: swval[kk].torder};
             if ( updval ) {
-                if ( DEBUGtmp ) console.log("setOrder of tiles.  thingid: ", thingid, " updval: ", updval);
+                if ( DEBUG6 ) {
+                    console.log((ddbg()),"move tile results: thingid: ", thingid, " updval: ", updval);
+                }
                 mydb.updateRow("things", updval, "userid = " + userid + " AND id = "+thingid)
                 .then(results => {
                     if ( results && swval[kk].position==="relative" ) {
@@ -9047,7 +9071,7 @@ function setOrder(userid, swtype, swval) {
                 });
             }
         }
-        result = "success - updated order of " + num + " relatively placed things for user = " + userid;
+        result = "success - updated order of things for user = " + userid;
 
     } else {
         result = "error - unrecognized request to sort order. type: " + swtype;
@@ -9108,7 +9132,7 @@ function setPosition(userid, swid, swtype, panel, swattr, tileid, thingid) {
             return "error - could not find tile: " + tileid;
         }
     }).catch(reason => {
-        console.log("dberror 21 - setPosition - ", reason);
+        console.log( (ddbg()), "setPosition - ", reason);
         return "error - something went wrong";
     });
 
@@ -9181,11 +9205,13 @@ function addThing(userid, pname, bid, thingtype, panel, hubid, hubindex, roomid,
                             }
                             return thing;
                         } else {
-                            return "error - could not create a new device of type " + thingtype + " on page " + panel;
+                            var errmsg = "error - could not create a new device of type " + thingtype + " on page " + panel;
+                            console.log( (ddbg()), "addThing - ", errmsg);
+                            return errmsg;
                         }
                     })
                     .catch(reason => {
-                        console.log("dberror 22 - addThing - ", reason);
+                        console.log( (ddbg()), "addThing - ", reason);
                         return "error - something went wrong";
                     });
         
@@ -9194,11 +9220,10 @@ function addThing(userid, pname, bid, thingtype, panel, hubid, hubindex, roomid,
                 }
                 return result;
             } else {
-                // return null;
                 return "error - could not find device of type " + thingtype + " in your list of authenticated devices";
             }
         }).catch(reason => {
-            console.log("dberror 22 - addThing - ", reason);
+            console.log( (ddbg()), "addThing - ", reason);
             return "error - something went wrong";
         });
 
@@ -9210,51 +9235,50 @@ function addThing(userid, pname, bid, thingtype, panel, hubid, hubindex, roomid,
 // this only needs thingid to remove but other parameters are logged
 function delThing(userid, bid, thingtype, panel, tileid, thingid) {
     
-    var promiseResult = mydb.deleteRow("things","userid = "+userid+" AND id="+thingid)
+    return mydb.deleteRow("things","userid = "+userid+" AND id="+thingid)
     .then(result => {
         var msg;
         if ( result ) {
             msg = "removed tile #" + tileid + " deviceid: " + bid + " of type: " + thingtype + " from page: " + panel;
+            if ( DEBUG6 ) {
+                console.log( (ddbg()), msg);
+            }
         } else {
             msg = "error - could not remove tile #" + tileid + " deviceid: " + bid + " of type: " + thingtype + " from page: " + panel;
+            console.log( (ddbg()), msg);
         }
-        console.log( (ddbg()), msg);
         return msg;
-    }).catch(reason => {console.log("dberror 23 - delThing - ", reason);});
-    return promiseResult;
+    })
+    .catch(reason => {
+        console.log( (ddbg()), "delThing - ", reason);
+        return reason;
+    });
 }
 
 function delPage(userid, roomid, panel) {
 
-    var promiseResult = mydb.deleteRow("rooms","userid = "+userid+" AND id="+roomid)
+    return mydb.deleteRow("rooms","userid = "+userid+" AND id="+roomid)
     .then(result => {
         var msg;
         if ( result ) {
             msg = "removed room #" + roomid + " of name: " + panel;
         } else {
             msg = "error - could not remove room #" + roomid + " of name: " + panel;
+            console.log( (ddbg()), "delPage - ", msg);
         }
-        console.log( (ddbg()), msg);
         return msg;
-    }).catch(reason => {console.log("dberror 24 - delPage - ", reason);});
-    return promiseResult;
+    })
+    .catch(reason => {
+        console.log( (ddbg()), "delPage - ", reason);
+        return reason;
+    });
 }
 
 function addPage(userid, panelid ) {
+    var newroom;
 
-    // var clock = {
-    //     userid: userid,
-    //     roomid: 0,
-    //     tileid: 0,
-    //     posy: 0, posx: 0, zindex: 1, torder: 1,
-    //     customname: ""
-    // };
-    var promise = mydb.getRows("rooms","*", "userid = "+userid+" AND panelid="+panelid)
-    .then(results => {
-
-        var rooms = results[0];
-        var defclock = results[1];
-        clock.tileid = defclock.id;
+    return mydb.getRows("rooms","*", "userid = "+userid+" AND panelid="+panelid)
+    .then(rooms => {
 
         var bigorder = 0;
         if ( rooms ) {
@@ -9267,11 +9291,11 @@ function addPage(userid, panelid ) {
             bigorder = 1;
         }
         var roomname = "Room" + bigorder.toString();
-        var newroom = {
+        newroom = {
             userid: userid,
             panelid: panelid,
             rname: roomname,
-            rorder: rorder
+            rorder: bigorder
         }
 
         // add room and get default clock in same promise so we have both results
@@ -9282,10 +9306,11 @@ function addPage(userid, panelid ) {
     })
     .then(results => {
 
-        var newroom = results[0];
+        var roomadd = results[0];
         var defclock = results[1];
-        roomid = newroom.getAutoIncrementValue();
-
+      
+        var roomid = roomadd.getAutoIncrementValue();
+        newroom.id = roomid;
         var clock = {
             userid: userid,
             roomid: roomid,
@@ -9294,23 +9319,22 @@ function addPage(userid, panelid ) {
             customname: ""
         };
     
-        mydb.addRow("things", clock)
+        return mydb.addRow("things", clock)
         .then( () => {
-            resolve(newroom);
-            console.log( (ddbg()), "New room created: ", newroom, " and digital clock added: ", clock);
+            if ( DEBUG6 ) {
+                console.log( (ddbg()), "New room created: ", newroom, " and digital clock added: ", clock);
+            }
+            return newroom;
         })
         .catch( () => {
             console.log( (ddbg()), "New room created: ", newroom, " but no clock was added");
-            resolve(newroom);
+            return newroom;
         });
-
-        return newroom;
     }).catch(reason => {
-        console.log( (ddbg()), reason);
-        reject(reason);
+        console.log( (ddbg()), "addPage - ", reason);
+        return "error - " + reason;
     });
 
-    return promise;
 }
 
 function getInfoPage(user, configoptions, hubs, req) {
@@ -9345,7 +9369,7 @@ function getInfoPage(user, configoptions, hubs, req) {
         var devices = result;
         return getinfocontents(userid, pname, currentport, configoptions, hubs, devices);
     }).catch(reason => {
-        console.log("dberror 26 - getInfoPage - ", reason);
+        console.log( (ddbg()), "getInfoPage - ", reason);
         return "something went wrong";
     });
 
@@ -9748,26 +9772,6 @@ function getOptionsPage(user, configoptions, hubs, req) {
 
     var hostname = req.headers.host;
     var pathname = req.path;
-    var maindone = {devices: false, rooms: false, things: false};
-
-    function checkDone(element) {
-        if ( element ) {
-            maindone[element] = true;
-        }
-        
-        var alldone = true;
-        for (var el in maindone) {
-            alldone = alldone && maindone[el];
-        }
-
-        if ( alldone ) {
-            var tc = "";
-            res.send(tc);
-            res.end();
-        }
-        
-        return alldone;
-    }
 
     // get all the things in the various rooms as we do on the main page
     var pr = mydb.getRows("rooms","*", "userid = "+userid+" AND panelid = "+panelid)
@@ -9822,7 +9826,7 @@ function getOptionsPage(user, configoptions, hubs, req) {
         }
     })
     .catch(reason => {
-        console.log("dberror 27 - getOptionsPage - ", reason);
+        console.log( (ddbg()), "getOptionsPage - ", reason);
         return "something went wrong";
     });
 
@@ -11134,24 +11138,34 @@ function apiCall(user, body, protocol, req, res) {
         
             case "refreshpage":
                 if ( protocol==="POST" ) {
+                    var numdevices = 0;
                     result = mydb.getRows("hubs","*","userid = "+userid+ " AND hubid != '-1' AND hubid != 'new'")
                     .then(hubs => {
-                        var numhubs = 0;
-                        hubs.forEach(hub => {
-                            numhubs++;
-                            getDevices(hub)
-                            .then(mydevices => {
-                                var num = Object.keys(mydevices).length;
-                                // pushClient(userid, "reload", "main", "/");
-                                if ( DEBUGtmp ) {
-                                    console.log( (ddbg()), "refreshed ", num," devices from hub: ", hub.hubname);
-                                }
-                            })
-                            .catch(reason => {
-                                console.log( (ddbg()), reason);
+                        var numhubs = hubs ? Object.keys(hubs).length : 0;
+                        if ( numhubs === 0 ) {
+                            return "nothing to refresh";
+                        } else {
+                            var promise = new Promise(function(resolve, reject) {
+                                var n = 0;
+                                hubs.forEach(hub => {
+                                    getDevices(hub)
+                                    .then(mydevices => {
+                                        n++;
+                                        var num = Object.keys(mydevices).length;
+                                        numdevices+= num;
+                                        if ( n >= numhubs ) {
+                                            resolve("refreshed " + numdevices + " devices from " + numhubs + " hubs ");
+                                        }
+                                    })
+                                    .catch(reason => {
+                                        n++;
+                                        console.log( (ddbg()), reason);
+                                        reject(reason);
+                                    });
+                                });
                             });
-                        });
-                        return "Refreshed devices for " + numhubs + " hubs";
+                            return promise;
+                        }
                     })
                     .catch(reason => {
                         console.log( (ddbg()), reason);
@@ -11181,7 +11195,7 @@ function apiCall(user, body, protocol, req, res) {
                     }
                     return rulelist;
                 }).catch(reason => {
-                    console.log("dberror - apiCall - ", reason);
+                    console.log( (ddbg()), "apiCall - getoptiopns: ", reason);
                     return null;
                 });
                 break;
@@ -11200,7 +11214,7 @@ function apiCall(user, body, protocol, req, res) {
                     }
                     return rulelist;
                 }).catch(reason => {
-                    console.log("dberror - apiCall - ", reason);
+                    console.log( (ddbg()), "apiCall - getrules: ", reason);
                     return null;
                 });
                 break;
@@ -11251,7 +11265,10 @@ function apiCall(user, body, protocol, req, res) {
                             });
                         }
                         return devices;
-                    }).catch(reason => {console.log("dberror 28a - apiCall - ", reason);});
+                    })
+                    .catch(reason => {
+                        console.log( (ddbg()), "apiCall - getdevices: ", reason);
+                    });
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -11274,7 +11291,7 @@ function apiCall(user, body, protocol, req, res) {
                         }
                         return things;
                     }).catch(reason => {
-                        console.log("dberror 28b - apiCall - ", reason);
+                        console.log( (ddbg()), "apiCall - getthings: ", reason);
                         return null;
                     });
                 } else {
@@ -11531,13 +11548,13 @@ function apiCall(user, body, protocol, req, res) {
                     .then(result => {
                         hub.id = mydb.getId();
                         var autoid = result.getAutoIncrementValue();
-                        if ( DEBUG2 || DEBUGtmp ) {
+                        if ( DEBUG2 ) {
                             console.log( (ddbg()), "oauth hub: ", hub, " id: ", hub.id, autoid );
                         }
                         return getHubObj(userid, hub);
                     })
                     .then(obj => {
-                        if ( DEBUG2 || DEBUGtmp ) {
+                        if ( DEBUG2 ) {
                             console.log( (ddbg()), "hub auth - getHubObj: ", obj);
                         }
                         res.send(obj);
@@ -12115,7 +12132,9 @@ if ( app && applistening ) {
         getUserName(req.cookies)
         .then(results => {
 
-            console.log("username results: ", results);
+            if ( DEBUG22 ) {
+                console.log( (ddbg()), "username results: ", results);
+            }
 
             if ( !results || !results["users_id"] ) {
                 if ( DEBUG3 ) {
@@ -12242,7 +12261,7 @@ if ( app && applistening ) {
                             // var hub = findHub(hubid, hubs);
                             mydb.getRow("hubs","*", "userid = "+userid+" AND hubid = '" + hubid + "'")
                             .then(hub => {
-                                if ( DEBUG2 || DEBUGtmp ) {
+                                if ( DEBUG2 ) {
                                     console.log( (ddbg()), "Getting access_token for hub: ", hub," hubid: ", hubid, " code: ", thecode);
                                 }
                                 return hub;
@@ -12252,7 +12271,7 @@ if ( app && applistening ) {
                                 .then(mydevices => {
                                     var numdevices = Object.keys(mydevices).length;
                                     var msg = hub.hubtype + " hub named " + hub.hubname + " authorized with " + numdevices + " devices";
-                                    if ( DEBUG2 || DEBUGtmp ) {
+                                    if ( DEBUG2 ) {
                                         console.log( (ddbg()), msg);
                                     }
                                     getAuthPage(user, configoptions, req.headers.host, msg)

@@ -2627,7 +2627,7 @@ function addEditLink() {
                 $.post(cm_Globals.returnURL, 
                     {useajax: "pagedelete", userid: cm_Globals.options.userid, id: roomnum, type: "none", value: roomname, roomid: roomid, attr: "none", pname: pname},
                     function (presult, pstatus) {
-                        if (pstatus==="success" && !presult.startsWith("error")) {
+                        if (pstatus==="success" && (typeof presult !== "string" || !presult.startsWith("error")) ) {
                             // remove it visually
                             $("li[roomnum="+roomnum+"]").remove();
                         }
@@ -2659,10 +2659,11 @@ function addEditLink() {
                 $.post(cm_Globals.returnURL, 
                     {useajax: "pageadd", userid: cm_Globals.options.userid, id: "none", panelid: panelid, pname: pname},
                     function (presult, pstatus) {
-                        if ( pstatus==="success" && !presult.startsWith("error") ) {
+                        if (pstatus==="success" && typeof presult === "object" ) {
+                            // console.log("Added room: ", presult);
                             window.location.href = cm_Globals.returnURL;
                         } else {
-                            console.log(presult);
+                            console.log("status: ", pstatus, " result: ", presult);
                         }
                     }
                 );
