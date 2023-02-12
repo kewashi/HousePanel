@@ -8,8 +8,6 @@
     "axios": "^0.21.1",
     "body-parser": "^1.18.3",
     "cookie-parser": "^1.4.5",
-    "express": "^4.17.3",
-    "countries-and-timezones": "^2.3.1",
     "mqtt": "^4.3.7",
     "mysql": "github:mysqljs/mysql",
     "nodemailer": "^6.4.17",

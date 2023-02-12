@@ -1,4 +1,4 @@
-#!/usr/bin/env nodeDEBUG8
+#!/usr/bin/env node
 
 "use strict";
 process.title = 'hpserver';
@@ -2792,31 +2792,26 @@ function getDevices(hub) {
                         // pvalue["_status"] = "_status";
                         // pvalue["_location"] = "_location";
 
-                        var pvalstr = encodeURI2(pvalue);
-                        var device = {userid: userid, hubid: hubindex, deviceid: vehicleid, name: vehiclename, 
-                            devicetype: thetype, hint: hubType, refresh: "normal", pvalue: pvalstr};
+                var pvalstr = encodeURI2(pvalue);
+                var device = {userid: userid, hubid: hubindex, deviceid: vehicleid, name: vehiclename, 
+                    devicetype: thetype, hint: hubType, refresh: "normal", pvalue: pvalstr};
+                mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+
+                                                  " AND devicetype = '"+thetype+"' AND deviceid = '"+vehicleid+"'")
+                .then(result => {
+                    devicecnt++;
 
-                        mydevices[vehicleid] = device;
-                        devicecnt++;
-                        // check if this is our last one
-                        if ( devicecnt >= numdevices ) {
-                            resolve(mydevices);
-                            // updateOptions(userid, reload, reloadpath, 2000);
-                        }
-                        mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+
-                                                        " AND devicetype = '"+thetype+"' AND deviceid = '"+vehicleid+"'")
-                        .catch( reason => {
-                            console.log( (ddbg()), reason );
-                        });
-                    });
-                } else {
-                    console.log( (ddbg()), "No devices found for Ford or Lincoln vehicles");
-                    resolve(mydevices);
-                    // updateOptions(userid, false, reloadpath, 0);
-                }
+                    // check if this is our last one
+                    if ( devicecnt >= numdevices ) {
+                        updateOptions(userid, reload, reloadpath, 2000);
+                    }
+                }).catch(reason => {console.log("dberror 6 - vehicleInfoCallback - ", reason);});
 
-            }
+            });
+        } else {
+            updateOptions(userid, false, reloadpath, 0);
         }
+
+    }
 
         // function for loading ISY hub devices
         function getIsyDevices(hub) {

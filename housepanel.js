@@ -2305,7 +2305,8 @@ function setupButtons() {
                 $("#newthingcount").html("Ready to authorize your Sonos account. The hub name can be set to anything or the name Sonos will be assigned.");
             } else if ( hubType==="Hubitat" ) {
                 hideid.removeClass("hidden");
-                hubTarget.val("https://oauth.cloud.hubitat.com");
+                // hubTarget.val("https://oauth.cloud.hubitat.com");
+                hubTarget.val(defhost);
                 hubNameTarget.val("");
                 hubTarget.prop("disabled", false);
                 $("#newthingcount").html("Ready to authorize your Hubitat hub. The hub ID and name will be obtained automatically.");
