@@ -2792,26 +2792,28 @@ function getDevices(hub) {
                         // pvalue["_status"] = "_status";
                         // pvalue["_location"] = "_location";
 
-                var pvalstr = encodeURI2(pvalue);
-                var device = {userid: userid, hubid: hubindex, deviceid: vehicleid, name: vehiclename, 
-                    devicetype: thetype, hint: hubType, refresh: "normal", pvalue: pvalstr};
-                mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+
-                                                  " AND devicetype = '"+thetype+"' AND deviceid = '"+vehicleid+"'")
-                .then(result => {
-                    devicecnt++;
+                        var pvalstr = encodeURI2(pvalue);
+                        var device = {userid: userid, hubid: hubindex, deviceid: vehicleid, name: vehiclename, 
+                            devicetype: thetype, hint: hubType, refresh: "normal", pvalue: pvalstr};
+                        mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+
+                                                        " AND devicetype = '"+thetype+"' AND deviceid = '"+vehicleid+"'")
+                        .then(result => {
+                            devicecnt++;
 
-                    // check if this is our last one
-                    if ( devicecnt >= numdevices ) {
-                        updateOptions(userid, reload, reloadpath, 2000);
-                    }
-                }).catch(reason => {console.log("dberror 6 - vehicleInfoCallback - ", reason);});
+                            // check if this is our last one
+                            if ( devicecnt >= numdevices ) {
+                                updateOptions(userid, reload, reloadpath, 2000);
+                            }
+                        }).catch(reason => {
+                            console.log( (ddbg()), reason);
+                        });
 
-            });
-        } else {
-            updateOptions(userid, false, reloadpath, 0);
+                    });
+                } else {
+                    updateOptions(userid, false, reloadpath, 0);
+                }
+            }
         }
-
-    }
 
         // function for loading ISY hub devices
         function getIsyDevices(hub) {

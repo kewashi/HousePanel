@@ -493,8 +493,7 @@ private String getPrefix() {
 }
 
 def configureHub() {
-    def num = settings.hubnum?: 0
-    def hub = location.hubs[num]
+    def hub = location.hubs[0]
     def hubid
     def hubip
     def endpt
