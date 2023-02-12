@@ -15,6 +15,7 @@
  * This is a Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history:
+ * 02/11/2023 - removed event here since we do it on node side and changed to status_
  * 01/08/2023 - added variable support
  * 01/02/2023 - changed UI inspired by Homebridge and removed ST groovy stuff
  * 09/10/2022 - misc cleanup and report skipped functions due to parameters
@@ -531,31 +532,35 @@ def configureHub() {
 }
 
 def addHistory(resp, item) {
-    if (resp && item ) {
+    if (resp ) {
         
-        try {
-            def start = new Date() - 7
-            def thestates = item.eventsSince(start,["max":4])
-            def i = 0;
-            def priorval = ""
-            def tz = TimeZone.getTimeZone( state.tz ?: "America/Los_Angeles" )
-            thestates.each {
-                if ( it.value!=priorval && it.value?.length()<120 ) {
-                    i++
-                    def evtvalue = it.value + " " + it.date.format(state.dateFormat ?: "M/dd h:mm", tz)
-                    resp.put("event_${i}", evtvalue )
-                    priorval = it.value
-                }
+        // try {
+        //     def start = new Date() - 7
+        //     def thestates = item.eventsSince(start,["max":4])
+        //     def i = 0;
+        //     def priorval = ""
+        //     def tz = TimeZone.getTimeZone( state.tz ?: "America/Los_Angeles" )
+        //     thestates.each {
+        //         if ( it.value!=priorval && it.value?.length()<120 ) {
+        //             i++
+        //             def evtvalue = it.value + " " + it.date.format(state.dateFormat ?: "M/dd h:mm", tz)
+        //             resp.put("event_${i}", evtvalue )
+        //             priorval = it.value
+        //         }
+        //     }
+        // } catch (e) {
+        //     logger("Cannot retrieve history for device ${item.displayName}", "debug")
+        // }
+        // also add in a status unless this device has native status field
+        if ( item && !resp["status_"] ) {
+            try {
+                resp.put("status_", item?.getStatus() ?: "UNKNOWN" )
+            } catch(e) {
+                resp.put("status_", "UNKNOWN")
+                log.error e
             }
-        } catch (e) {
-            logger("Cannot retrieve history for device ${item.displayName}", "debug")
-        }
-
-        // also add in a status
-        try {
-            resp.put("status", item.getStatus())
-        } catch(e) {
-            log.error e
+        } else {
+            resp.put("status_", "ACTIVE")
         }
     }
     return resp
@@ -650,7 +655,7 @@ def getAudio(swid, item=null) {
         volume: raw.volume,
         mute: raw.mute, groupRole: raw.groupRole]
 
-    resp = addHistory(resp, item)
+    resp = addHistory(resp, raw)
     return resp
 }
 
@@ -745,29 +750,6 @@ def getMyMode(swid, item=null) {
     return resp
 }
 
-def getSHMState(swid, item=null){
-    def cmds = ["away", "stay", "night", "off"]
-    def keynames = ["Away", "Home", "Night", "Disarmed"]
-    def key = location.currentState("alarmSystemStatus")?.value
-
-    // mimic the states provided by HSM
-    def i = cmds.findIndexOf{it == key}
-    if ( i<0 ) { i = 3 }
-    
-    // if mode is night and set to stay change mode to fake night setting
-    if ( i==1 ) {
-        def curmode = location.getCurrentMode()?.getName()
-        if ( curmode == "Night" ) { i= 2 }
-    }
-    
-    def statusname = keynames[i]
-    def resp = [name : "Smart Home Monitor", state: statusname]
-    for (defcmd in cmds) {
-        resp.put("_${defcmd}",defcmd)
-    }
-    return resp
-}
-
 def getHSMState(swid, item=null) {
     // uses Hubitat specific call for HSM per 
     // https://community.hubitat.com/t/hubitat-safety-monitor-api/934/11
@@ -779,10 +761,10 @@ def getHSMState(swid, item=null) {
     def resp
     
     if ( !key ) {
-        resp = [name : "Hubitat Safety Monitor", state: "Not Installed"]
+        resp = [name : "Hubitat Safety Monitor", state: "Not Installed", "status_":"OFFLINE"]
         logger("location hsmStatus is invalid; it is not installed","debug")
     } else {
-        resp = [name : "Hubitat Safety Monitor", state: key]
+        resp = [name : "Hubitat Safety Monitor", state: key, "status_":"ONLINE"]
         logger("location hsmStatus returned: ${key}","debug")
         for (defcmd in cmds) {
             resp.put("_${defcmd}",defcmd)
@@ -1543,10 +1525,6 @@ def doQuery() {
         
     case "mode" :
         cmdresult = getMyMode(swid)
-        break
-        
-    case "shm" :
-        cmdresult = getSHMState(swid)
         break
         
     case "hsm" :

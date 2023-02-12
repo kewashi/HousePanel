@@ -1,4 +1,5 @@
 const devhistory = `
+3.043   ISY debugged version with working webSocket support
 3.042   First working debugged version supporting sqlite
 3.041   Various bug fixes to new hub auth flow and sqlite support
 3.040   Major rewrite of auth flow to be more robust and add SQLITE option

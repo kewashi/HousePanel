@@ -1762,11 +1762,7 @@ div.thing.control-thing div.thingname {
 }
 
 div.thing.control-thing div.overlay.name {
-    background-color: rgba(0, 0, 0, .01);
-}
-div.thing.control-thing div.overlay:hover {
-    background-color: rgba(204, 204, 204, 1);
-    color: rgba(0, 102, 102, 1);
+    background-color: rgba(78, 77, 77, 0.4);
 }
 
 div.thing.frame-thing div.frame.width, 
@@ -1954,13 +1950,10 @@ div.thing.switch-thing div.overlay.switch {
     display: block;
 }
 
-div.thing div.status.ONLINE,
-div.thing div.status.OFFLINE,
-div.thing div.status.SUCCESS,
-div.thing div.status.ERROR,
-div.thing div.status.ACTIVE,
-div.thing div.status.HUB_DISCONNECTED,
-div.thing div.status.INACTIVE {
+div.thing div.status_.ONLINE, div.thing div.status_.OFFLINE, div.thing div.status_.SUCCESS, div.thing div.status_.ERROR,
+div.thing div.status_.ACTIVE, div.thing div.status_.UNKNOWN, div.thing div.status_.HUB_DISCONNECTED, div.thing div.status_.INACTIVE,
+div.thing div.status.ONLINE, div.thing div.status.OFFLINE, div.thing div.status.SUCCESS, div.thing div.status.ERROR,
+div.thing div.status.ACTIVE, div.thing div.status.UNKNOWN, div.thing div.status.HUB_DISCONNECTED, div.thing div.status.INACTIVE {
     position: absolute;
     cursor: default;
     border-radius: 50%;
@@ -1970,14 +1963,16 @@ div.thing div.status.INACTIVE {
     z-index: 51; 
     top: 5px; left: 5px;
 }
+div.thing div.status_.INACTIVE,
 div.thing div.status.INACTIVE {
     background-color: rgb(255, 155, 0);
 }
-div.thing div.status.OFFLINE,
-div.thing div.status.ERROR {
+div.thing div.status_.OFFLINE, div.thing div.status_.ERROR,
+div.thing div.status.OFFLINE, div.thing div.status.ERROR {
     background-color: rgb(192, 0, 0);
 }
-div.thing div.status.HUB_DISCONNECTED {
+div.thing div.status_.UNKNOWN, div.thing div.status_.HUB_DISCONNECTED,
+div.thing div.status.UNKNOWN, div.thing div.status.HUB_DISCONNECTED {
     background-color: rgb(202, 0, 222);
 }
 

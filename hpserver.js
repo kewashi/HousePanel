@@ -22,13 +22,13 @@ const DEBUG15 = false;              // new user and forgot password
 const DEBUG16 = false;              // writing and custom names
 const DEBUG17 = false;              // push client
 const DEBUG18 = false;              // ST, HE, and Ford messages in callHub -> getHubResponse
-const DEBUG19 = false;              // ST and HE callback from Groovy or new ST Event Sink
+const DEBUG19 = false;              // new ST Event Sink debugs
 const DEBUG20 = false;              // New SmartThings detail
 const DEBUG21 = false;              // New ST sink message debug
 const DEBUG22 = false;              // login info
 const DEBUGcurl = false;            // detailed inspection
 const DEBUGsonos = false;           // Sonos hub debugging
-const DEBUGisy = true;              // ISY debug info
+const DEBUGisy = false;              // ISY debug info
 const DEBUGtmp = true;              // used to debug anything temporarily using ||
 
 // various control options
@@ -890,7 +890,7 @@ function getHubInfo(hub) {
         function updateHub(hub, oldhubId) {
             mydb.updateRow("users",{defhub: hub.hubid},"id = " + userid)
             .then( () => {
-                if ( DEBUG2 || DEBUGtmp ) {
+                if ( DEBUG2 ) {
                     console.log( (ddbg()), "Ready to update or add hub: ", hub);
                 }
                 // update any hub with the same hubid attribute
@@ -899,7 +899,7 @@ function getHubInfo(hub) {
                 .then( row => {
                     hub.id = mydb.getId();
                     var autoid = row.getAutoIncrementValue();
-                    if ( DEBUG2 || DEBUGtmp ) {
+                    if ( DEBUG2 ) {
                         console.log( (ddbg()), "updated hub with id: ", hub.id, " auto: ", autoid, " hub: ", hub, " row: , row");
                     }
                     return getDevices(hub);
@@ -1029,8 +1029,8 @@ function getAccessToken(userid, code, hub) {
             //               "client_secret": clientSecret, "redirect_uri": encodeURI(redirect)};
             var nvpreq = "grant_type=authorization_code&code=" + code + "&client_id=" + clientId + 
                         "&client_secret=" + clientSecret + "&redirect_uri=" + encodeURI(redirect);
-            if ( DEBUG2 ) {
-                console.log( (ddbg()), "clientId: ", clientId," clientSecret: ", clientSecret, "tokenhost: ", tokenhost, " nvpreq: ", nvpreq);
+            if ( DEBUG19 ) {
+                console.log( (ddbg()), "NewSmartThings - clientId: ", clientId," clientSecret: ", clientSecret, "tokenhost: ", tokenhost, " nvpreq: ", nvpreq);
             }
             _curl(tokenhost, header, nvpreq, "POST")
             .then( body => {
@@ -1625,7 +1625,7 @@ function findGroup(player, allGroups) {
 // or a reject with a message
 function getDevices(hub) {
 
-    if ( DEBUG1 && DEBUGtmp ) {
+    if ( DEBUG1 ) {
         console.log( (ddbg()), "getDevices debug for hub: ", hub);
     }
 
@@ -2838,7 +2838,7 @@ function getDevices(hub) {
     
             // now read in any int and state variables and their definitions
             var mydevices = {};
-            var variables = {name: "ISY Variables"};
+            var variables = {name: "ISY Variables", "status_": "INACTIVE"};
 
             curl_call(hubEndpt + "/vars/definitions/1", stheader, false, false, "GET", getIntVarsDef);
             curl_call(hubEndpt + "/vars/definitions/2", stheader, false, false, "GET", getStateVarsDef);
@@ -2846,6 +2846,51 @@ function getDevices(hub) {
             curl_call(hubEndpt + "/vars/get/2", stheader, false, false, "GET", getStateVars);
             curl_call(hubEndpt + "/programs?subfolders=true", stheader, false, false, "GET", getAllProgs);
             curl_call(hubEndpt + "/nodes", stheader, false, false, "GET", getAllNodes);
+
+            // cool sort function to put variable names in front of values and precision after values
+            function sortVariables(variables) {
+                var keys = Object.keys(variables);
+                var newkeys = keys.sort( 
+                    function test(a, b) {
+                        
+                        var compa;
+                        var compb;
+                       
+                        if ( a==="name" ) {
+                            compa = "1";
+                        } else if ( a==="status_" ) {
+                            compa = "2";
+                        } else if ( a.startsWith("def_" ) ) {
+                            compa = a.substring(4)+"_A";
+                        } else if ( a.startsWith("prec_") ) {
+                            compa = a.substring(5)+"_C";
+                        } else {
+                            compa = a+"_B";
+                        }
+
+                        if ( b==="name" ) {
+                            compb = "1";
+                        } else if ( b==="status_" ) {
+                            compb = "2";
+                        } else if ( b.startsWith("def_" ) ) {
+                            compb = b.substring(4)+"_A";
+                        } else if ( b.startsWith("prec_") ) {
+                            compb = b.substring(5)+"_C";
+                        } else {
+                            compb = b+"_B";
+                        }
+
+                        if ( compa===compb ) { return 0; }
+                        else if ( compa > compb ) { return 1; }
+                        else { return -1; }
+                    }
+                );
+                var sortedVariables = {};
+                newkeys.forEach(key => {
+                    sortedVariables[key] = variables[key];
+                })
+                return sortedVariables;
+            }
                 
             function checkDone( stage ) {
                 if ( stage ) {
@@ -2858,6 +2903,9 @@ function getDevices(hub) {
                     // Now that we have all the isy variables and names, create a mapping of ids to names
                     // set all the alias values here so that updates can use alias names
                     // variables["alias"] = vardefs;
+
+                    // sort variables so names show up in front of variable values
+                    variables = sortVariables(variables);
                     var pvalstr = encodeURI2(variables);
                     var device = {userid: userid, hubid: hubindex, deviceid: "vars", name: variables.name, 
                                   devicetype: thetype, hint: "ISY_variable", refresh: "never", pvalue: pvalstr};
@@ -3007,6 +3055,7 @@ function getDevices(hub) {
                             if ( !isNaN(prec) && prec !== 0 ) {
                                 val10 = parseFloat(val10) / Math.pow(10, prec);
                             }
+                            variables["status_"] = "ACTIVE";
                             variables[vartype+"_"+varid] = val10.toString();
                             variables["prec_"+vartype+"_"+varid] = prec.toString();
                         }
@@ -3071,7 +3120,7 @@ function getDevices(hub) {
                             }
                         // create tile for programs that are not folders
                         } else {
-                            if ( DEBUGisy || DEBUGtmp ) {
+                            if ( DEBUGisy ) {
                                 console.log( (ddbg()), "Program ", prog.name, " id: ", proginfo.id, " Status: ", proginfo.status, " Last run: ", prog.lastRunTime );
                             }
                             var progid = "prog_" + proginfo.id;
@@ -3105,7 +3154,8 @@ function getDevices(hub) {
                                     }
                                 }
                             }
-                            pvalue.status = proginfo.status;
+                            // map true to green dot of active - the websocket updates this
+                            pvalue["status_"] = proginfo.status === "true" ? "ACTIVE" : "INACTIVE";
 
                             // get the enabled and runat states
                             pvalue.enabled  = proginfo.enabled;
@@ -5830,7 +5880,7 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
             } else {
                 extra = "";
             }
-        } else if ( tkey==="time" || tkey==="date" || tkey==="color" || typeof tval!=="string" || tval==="" ||
+        } else if ( tkey==="time" || tkey==="date" || tkey==="color" || typeof tval!=="string" || tval==="" || tval==="lastRunTime" || tval==="lastFinishTime" ||
                    (tkey.substr(0,6)==="event_") || tkey.startsWith("_") ||
                    tkey==="trackDescription" || tkey==="currentArtist" || tkey==="groupRole" ||
                    tkey==="currentAlbum" || tkey==="trackImage" || tkey==="mediaSource" ||
@@ -6336,7 +6386,9 @@ function processHubMessage(userid, hubmsg, newST) {
                 var s = Math.round(parseInt(pvalue["saturation"]));
                 var v = Math.round(parseInt(pvalue["level"]));
                 var color = hsv2rgb(h, s, v);
-                pvalue["color"] = color;
+                if ( color ) {
+                    pvalue["color"] = color;
+                }
             }
 
             // increment the count if this is not the inverse of a turn on action
@@ -6372,27 +6424,29 @@ function processHubMessage(userid, hubmsg, newST) {
                 }
             }
             var swtype = device.devicetype;
-            var newval = pvalue;
 
             // set the event string to this time
             var timestr = d.toLocaleDateString() + " " +  d.toLocaleTimeString();
             if ( pvalue["event_3"] ) { pvalue["event_4"] = pvalue["event_3"]; }
             if ( pvalue["event_2"] ) { pvalue["event_3"] = pvalue["event_2"]; }
             if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
-            if ( typeof pvalue[subid] === "string" && pvalue[subid].length < 10 ) {
+            if ( typeof pvalue[subid] === "string" && pvalue[subid].length < 15 ) {
                 pvalue["event_1"] = timestr + " " + subid + " " + pvalue[subid];
             } else {
                 pvalue["event_1"] = timestr + " " + subid;
             }
 
             if ( DEBUG12 ) {
-                console.log( (ddbg()), "processHubMessage - hubmsgid: ", hubmsgid, " swtype: ", swtype, " subid: ", subid, " pvalue: ", newval);
+                console.log( (ddbg()), "processHubMessage - hubmsgid: ", hubmsgid, " swtype: ", swtype, " subid: ", subid, " pvalue: ", pvalue);
             }
 
             // update the DB
             device.pvalue = encodeURI2(pvalue);
             mydb.updateRow("devices", device, "userid = " + userid + " AND id = "+device.id)
-            .then( () => {
+            .then( res => {
+                if ( DEBUG12 ) {
+                    console.log( (ddbg()), "processHubMessage - db update: ", res);
+                }
             })
             .catch( reason => {
                 console.log( (ddbg()), reason);
@@ -6463,6 +6517,7 @@ function processIsyMessage(userid, jsondata) {
     var newval;
     var pvalue;
     var d = new Date();
+    var timestr = d.toLocaleDateString() + " " +  d.toLocaleTimeString();
 
     if ( jsondata ) {
         var control = jsondata.control;
@@ -6471,7 +6526,7 @@ function processIsyMessage(userid, jsondata) {
         var eventInfo = jsondata.eventInfo;
 
         var uom;
-        if ( DEBUG9 || DEBUGisy) {
+        if ( DEBUG9 || DEBUGisy ) {
             console.log( (ddbg()), "ISY event: ", jsonshow(jsondata) );
         }
 
@@ -6553,12 +6608,10 @@ function processIsyMessage(userid, jsondata) {
                     }
                 }
 
-                // set the event string to this time
-                var timestr = d.toLocaleDateString() + " " +  d.toLocaleTimeString();
                 if ( pvalue["event_3"] ) { pvalue["event_4"] = pvalue["event_3"]; }
                 if ( pvalue["event_2"] ) { pvalue["event_3"] = pvalue["event_2"]; }
                 if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
-                if ( typeof pvalue[subid] === "string" && pvalue[subid].length < 10 ) {
+                if ( typeof pvalue[subid] === "string" && pvalue[subid].length < 15 ) {
                     pvalue["event_1"] = timestr + " " + subid + " " + pvalue[subid];
                 } else {
                     pvalue["event_1"] = timestr + " " + subid;
@@ -6571,7 +6624,7 @@ function processIsyMessage(userid, jsondata) {
                 delete pvalue.subid;
                 
                 // update the DB
-                if ( DEBUG9 || DEBUGisy ) {
+                if ( DEBUG9 ) {
                     console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " uom: ", uom, " newval: ", newval, " pvalue: ", pvalue);
                 }
                 device.pvalue = encodeURI2(pvalue);
@@ -6587,7 +6640,7 @@ function processIsyMessage(userid, jsondata) {
 
         // set variable changes events
         // include test for an init action which is skipped (kudos to @KMan)
-        } else if ( is_object(eventInfo[0]) && array_key_exists("var", eventInfo[0]) && action && action[0]==="6" ) {
+        } else if ( is_array(eventInfo) && eventInfo.length && is_object(eventInfo[0]) && array_key_exists("var", eventInfo[0]) && action && action[0]==="6" ) {
             var varobj = eventInfo[0].var[0];
             var bid = "vars";
             mydb.getRow("devices", "*", "userid = "+userid+" AND devicetype = 'isy' AND deviceid = '"+bid+"'")
@@ -6629,6 +6682,21 @@ function processIsyMessage(userid, jsondata) {
                             }
                         } 
                         pvalue[subid] = newval.toString();
+
+                        // set rolling event time info - convert from europe style time for consistent treatment
+                        // unlike programs variables use a 4 digit year, programs use a 2 digit year for some reason
+                        if ( pvalue["event_3"] ) { pvalue["event_4"] = pvalue["event_3"]; }
+                        if ( pvalue["event_2"] ) { pvalue["event_3"] = pvalue["event_2"]; }
+                        if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
+                        if ( array_key_exists("ts", varobj) && is_array(varobj.ts) ) {
+                            var lrun = varobj.ts[0];
+                            var d2 = new Date(lrun.substring(4,6)+"/"+lrun.substring(6,8)+"/"+lrun.substring(0,4)+lrun.substring(8));
+                            var goodts = d2.toLocaleDateString() + " " +  d2.toLocaleTimeString();
+                            pvalue["event_1"] = goodts  + " " + subid + " " + pvalue[subid];
+                        } else {
+                            pvalue["event_1"] = timestr + " " + subid + " " + pvalue[subid];
+                        }
+
                         pushClient(userid, bid, "isy", subid, pvalue);
                         
                         pvalue.subid = subid;
@@ -6636,8 +6704,8 @@ function processIsyMessage(userid, jsondata) {
                         delete pvalue.subid;
 
                         // update the DB
-                        if ( DEBUG9 || DEBUGisy) {
-                            console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " newval: ", newval, " pvalue: ", pvalue);
+                        if ( DEBUG9 ) {
+                            console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " varobj: ", varobj, " subid: ", subid, " pvalue: ", pvalue);
                         }
                         device.pvalue = encodeURI2(pvalue);
                         mydb.updateRow("devices", device, "userid = "+userid+" AND devicetype = 'isy' AND id = "+device.id)
@@ -6657,13 +6725,13 @@ function processIsyMessage(userid, jsondata) {
             });
 
         // handle program changes events
-        } else if ( is_object(eventInfo[0]) && array_key_exists("id", eventInfo[0]) && 
+        } else if ( is_array(eventInfo) && eventInfo.length && is_object(eventInfo[0]) && array_key_exists("id", eventInfo[0]) && 
                     array_key_exists("r",  eventInfo[0]) && array_key_exists("f",  eventInfo[0]) ) {
             // var idsymbol = parseInt(eventInfo[0]["id"]);
             // idsymbol = idsymbol.toString();
             var idsymbol = eventInfo[0]["id"][0].toString().trim();
             var len = 4 - idsymbol.length;
-            var bid = "prog_" + "0000".substr(0,len) + idsymbol;
+            var bid = "prog_" + "0000".substring(0,len) + idsymbol;
             var subid = "status";
 
             mydb.getRow("devices","*", "userid = "+userid+" AND devicetype = 'isy' AND deviceid = '"+bid+"'")
@@ -6675,22 +6743,37 @@ function processIsyMessage(userid, jsondata) {
                 try {
                     pvalue = decodeURI2(device.pvalue);
                     if ( !pvalue ) { pvalue = {}; }
-                    pvalue["lastRunTime"] = eventInfo[0]["r"][0];
-                    pvalue["lastFinishTime"] = eventInfo[0]["f"][0];
+
+                    // convert the date from the goofy 2 digit european year format used for programs
+                    var lrun = eventInfo[0]["r"][0];
+                    var d = new Date(lrun.substring(2,4)+"/"+lrun.substring(4,6)+"/"+lrun.substring(0,2)+lrun.substring(6));
+                    var timestr = d.toLocaleDateString() + " " +  d.toLocaleTimeString();
+                    pvalue["lastRunTime"] = timestr;
+
+                    lrun = eventInfo[0]["f"][0];   // 
+                    d = new Date(lrun.substring(2,4)+"/"+lrun.substring(4,6)+"/"+lrun.substring(0,2)+lrun.substring(6));
+                    timestr = d.toLocaleDateString() + " " +  d.toLocaleTimeString();
+                    pvalue["lastFinishTime"] = timestr;
+
+                    // set our rolling event log
+                    if ( pvalue["event_3"] ) { pvalue["event_4"] = pvalue["event_3"]; }
+                    if ( pvalue["event_2"] ) { pvalue["event_3"] = pvalue["event_2"]; }
+                    if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
+                    pvalue["event_1"] = pvalue["lastRunTime"];
 
                     // use decoder ring documented for ISY_program events
                     if ( array_key_exists("s", eventInfo[0]) ) {
                         var st = eventInfo[0]["s"][0].toString();
-                        pvalue["status"] = st;
-                        // if ( st.startsWith("2") ) {
-                        //     pvalue["status"] = "true";
-                        // } else if ( st.startsWith("3") ) {
-                        //     pvalue["status"] = "false";
-                        // } else if ( st.startsWith("1") ) {
-                        //     pvalue["status"] = "unknown";
-                        // } else {
-                        //     pvalue["status"] = "not_loaded"
-                        // }
+                        pvalue["status_"] = st;
+                        if ( st.startsWith("2") ) {
+                            pvalue["status_"] = "ACTIVE";
+                        } else if ( st.startsWith("3") ) {
+                            pvalue["status_"] = "INACTIVE";
+                        } else if ( st.startsWith("1") ) {
+                            pvalue["status_"] = "OFFLINE";
+                        } else {
+                            pvalue["status_"] = "OFFLINE"
+                        }
                     }
                     if ( array_key_exists("on", eventInfo[0]) ) {
                         pvalue["enabled"] = "true";
@@ -6709,7 +6792,7 @@ function processIsyMessage(userid, jsondata) {
                     delete pvalue.subid;
 
                     // update the DB
-                    if ( DEBUG9 || DEBUGisy ) {
+                    if ( DEBUG9 ) {
                         console.log( (ddbg()), "ISY webSocket updated program: ", bid, " pvalue: ", device);
                     }
                     device.pvalue = encodeURI2(pvalue);
@@ -7519,7 +7602,7 @@ function pushClient(userid, swid, swtype, subid, body) {
     entry["value"] = pvalue;
 
     if ( DEBUG17 ) {
-        console.log( (ddbg()), "pushClient: ", jsonshow(entry) );
+        console.log( (ddbg()), "pushClient: ", jsonshow(entry), "\n userid: ", userid," clients: <<", clients[userid], ">>" );
     }
 
     // do a push to each client for this user if ready
@@ -7617,8 +7700,11 @@ function queryNewST(hub, deviceid, swtype) {
 
 function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, hint, inrule) {
 
+    // used to grab responses for ISY hubs
+    var isyresp = {};
+
     // first get the hub from the DB
-    var result = mydb.getRow("hubs","*","userid = "+userid+" AND id = " + hubindex)
+    return mydb.getRow("hubs","*","userid = "+userid+" AND id = " + hubindex)
     .then(hub => {
 
         if ( !hub ) { return null; }
@@ -7636,15 +7722,16 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
             console.log( (ddbg()), "callHub: access: ", access_token, " endpt: ", endpt, " swval: ", swval, " subid: ", subid, " swtype: ", swtype, " attr: ", swattr, " hub: ", hub);
         }
 
-        // reset count if clicked on
-        if ( subid==="count" || subid==="duration" ) {
-            // var body = {};
-            // body[subid] = "0";
-            // getHubResponse(body);
+        // reset count if clicked on regardless of hub type
+        if ( subid==="count" || subid==="duration" || subid==="deltaT" ) {
             var newval = "0";
+            if ( subid==="deltaT" ) {
+                var d = new Date();
+                newval = d.getTime();                            
+            }
 
             // get counter from DB and update if it is there
-            mydb.getRow("devices", "*", "userid = " + userid + " AND deviceid = "+swid)
+            mydb.getRow("devices", "*", "userid = " + userid + " AND hubid = "+hubindex+" AND deviceid = '"+swid+"'")
             .then(subdevice => {
                 var pvalue = decodeURI2(subdevice.pvalue);
                 pvalue[subid] = newval;
@@ -7662,7 +7749,7 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
             .catch(reason => {
                 console.log( (ddbg()), "***warning***", reason );
             });
-            return "success - counter reset to 0";
+            return "success - " + subid + " reset to " + newval;
         }
 
         // this function calls the Groovy hub api
@@ -7702,7 +7789,7 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
             } catch(e) {
                 cap = subid;
             }
-            if ( DEBUG18 ) {
+            if ( DEBUG19 ) {
                 console.log( (ddbg()), " Calling  new ST API doaction in callHub. subid: ", subid, " swid: ", swid, " swval: ", swval, " swtype: ", swtype, " cap: ", cap );
             }
 
@@ -7736,13 +7823,7 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
                     else if ( astat==="lock" ) { astat = "locked"; }
                     else if ( astat==="unlock" ) { astat = "unlocked"; }
                     presult[subid] = astat;
-                
-                } else if ( subid==="count") {
-                    nvpreq = null;
-                    presult[subid] = swval;
-                    getHubResponse(presult);
-                    return "success";
-
+                               
                 } else if ( swtype==="location" && subid.substr(0,1)==="_" ) {
 
                     var modename = subid.substr(1);
@@ -8118,176 +8199,193 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
         // for ISY where the logic for handling actions is provided
         // compare this to the doAction function in HousePanel.groovy
         } else if ( hub.hubtype==="ISY" ) {
-            // var buff = Buffer.from(access_token);
-            // var base64 = buff.toString('base64');
-            // var isyheader = {"Authorization": "Basic " + base64};
-            // var cmd;
-            // var hint = "";
 
+            var buff = Buffer.from(access_token);
+            var base64 = buff.toString('base64');
+            var isyheader = {"Authorization": "Basic " + base64};
+            var cmd;
+    
             // fix up isy devices
             if ( swval==="on" ) { swval = "DON"; }
             else if ( swval==="off" ) { swval = "DOF"; }
-
+    
             // set default subid so api calls will work
             if ( !subid ) {
                 subid = "switch";
             }
 
-            // only handle switches and dimmers in the cloud DB version of HP
-            // this uses the webhooks feature of the ISY portal
-            // they must be set up a special way and the hubrefresh set to the key
-            switch(subid) {
-
-                case "level":
-                case "onlevel":
-
-                    // convert percentage to 0 - 256 range for Insteon
-                    var irange = Math.floor(parseInt(swval) * 255 / 100);
-                    irange = irange.toString();
-
-                    var hookname = swid;
-                    hookname = hookname.replace(/ /g,"");
-                    var hookon = hookname + "_DON";
-                    hookname+= "_level";
-                    var header = {"Content-Type": "text/plain"};
-
-                    // turn light on
-                    var hookurlon = "https://my.isy.io/api/ifttt/" + hookon + "/key/" + hub.hubrefresh;
-                    _curl(hookurlon, header, "", "POST");
-
-                    // set the level
-                    var hookurl = "https://my.isy.io/api/ifttt/" + hookname + "/key/" + hub.hubrefresh;
-                    _curl(hookurl, header, irange, "POST");
-                    if ( DEBUG20 ) {
-                        console.log( (ddbg()), "hookurl: ", hookurl, "subid: ", subid, " irange: ", irange, " swid: ", swid);
-                    }
-                    break;
+            // get counter from DB and update if it is there
+            mydb.getRow("devices", "*", "userid = " + userid + " AND hubid = "+hubindex+" AND deviceid = '"+swid+"'")
+            .then(subdevice => {
+                var pvalue = decodeURI2(subdevice.pvalue);
+                // pvalue[subid] = newval;
+                // subdevice.pvalue = encodeURI2(pvalue);
+    
+                switch(subid) {
+    
+                    case "level":
+                        // for now semd both level commands since either could be expected
+                        // one is for Insteon other is for Polyglot nodes
+                        // later we will flag this in the item
+                        var cmd1 = "/nodes/" + swid + "/cmd/SETLVL/" + swval;
+                        isyresp["level"] = swval;
+                        curl_call(endpt + cmd1, isyheader, false, false, "GET", getNodeResponse);
         
-                case "switch":
-                case "DOF":
-                case "DON":
-
-                    var hookname = swid;
-                    hookname = hookname.replace(/ /g,"");
-                    if ( swval==="DON" || swval==="DOF" ) {
-                        hookname+= "_" + swval;
-                    } else {
-                        hookname+= "_DON";
-                    }
-                    var hookurl = "https://my.isy.io/api/ifttt/" + hookname + "/key/" + hub.hubrefresh;
-                    var header = {"Content-Type": "text/plain"};
-                    _curl(hookurl, header, "", "POST");
-                    if ( DEBUG20 ) {
-                        console.log( (ddbg()), "hookurl: ", hookurl, "subid: ", subid, " swid: ", swid);
-                    }
-                    break;
-
-                case "count":
-                    var pvalue = {};
-                    pvalue[subid] = swval;
-                    getHubResponse(pvalue);
-                    break;
-
-                case "run":
-                case "runThen":
-                case "runElse":
-                case "stop":
-                    var hookname = swid+"_"+subid;
-                    var hookurl = "https://my.isy.io/api/ifttt/" + hookname + "/key/" + hub.hubrefresh;
-                    var header = {"Content-Type": "text/plain"};
-                    _curl(hookurl, header, "", "POST");
-                    if ( DEBUG20 ) {
-                        console.log( (ddbg()), "hookurl: ", hookurl, "subid: ", subid, " swid: ", swid);
-                    }
-                    break;
-       
-                default:
-
-                    // for int variables there is no webhook method so we just save in DB
-                    if ( subid.startsWith("Int_") ) {
-                        // get the real subid that the arrows are pointing toward
-                        var realsubid = subid;
-                        var intvar = parseInt(swval);
-                        if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
-                            realsubid = subid.substr(0, subid.length-3);
-                            intvar = subid.endsWith("-up") ? intvar + 1 : intvar - 1;
+                        // convert percentage to 0 - 256 range for Insteon
+                        var irange = Math.floor(parseInt(swval) * 255 / 100);
+                        var cmd2 = "/nodes/" + swid + "/cmd/DON/" + irange;
+                        isyresp["switch"] = "DON";
+                        curl_call(endpt + cmd2, isyheader, false, false, "GET", getNodeResponse);
+        
+                        // comment this code to preserve the prior dimmer setting; 
+                        // otherwise the onlevel is set to current level
+                        // the default behavior for Insteon lights would be to comment this
+                        // setTimeout(function() {
+                        //     var cmd3 = "/nodes/" + swid + "/cmd/OL/" + irange;
+                        //     isyresp["onlevel"] = swval;
+                        //     curl_call(endpt + cmd3, isyheader, false, false, "GET", getNodeResponse);
+                        // }, 200 );
+                        break;
+        
+                    case "onlevel":    
+                        // convert percentage to 0 - 256 range for Insteon
+                        var irange = Math.floor(parseInt(swval) * 255 / 100);
+                        var cmd3 = "/nodes/" + swid + "/set/OL/" + irange;
+                        isyresp["onlevel"] = swval;
+                        curl_call(endpt + cmd3, isyheader, false, false, "GET", getNodeResponse);
+        
+                        // pause before we turn on the light to prevent slider from toggling
+                        setTimeout(function() {
+                            var cmd2 = "/nodes/" + swid + "/cmd/DON/" + irange;
+                            isyresp["switch"] = "DON";
+                            curl_call(endpt + cmd2, isyheader, false, false, "GET", getNodeResponse);
+                        }, 200 );
+                        break;
+            
+                    case "switch":
+                    case "DOF":
+                    case "DON":
+                        // handle toggle command - note that the GUI will never produce a toggle swval command
+                        // but the RULE logic can and so can users when using api calls
+                        if ( swval==="toggle" ) {
+                                var currentval = pvalue[subid];
+                                swval = currentval==="DON" ? "DOF" : "DON";
                         }
-
-                        // get the Variable device
-                        mydb.getRow("devices","*","userid = "+userid+" AND deviceid = 'vars'")
-                        .then(row => {
-
-                            var pvalue = decodeURI2(row.pvalue);
-                            if ( pvalue ) {
-                                pvalue[realsubid] = intvar.toString();
-                                var newpvalstr = encodeURI2(pvalue);
-                                row.pvalue = newpvalstr;
-
-                                // update the row;
-                                mydb.updateRow("devices", row, "userid = " + userid + " AND id = "+row.id)
-                                .then( () => {
-                                })
-                                .catch( reason => {
-                                    console.log( (ddbg()), reason);
-                                });
-
-                                // show result on screen and handle rules for Ints
-                                pushClient(userid, swid, swtype, realsubid, pvalue);
-                                if ( !inrule && thingid ) {
-                                    pvalue.subid = realsubid;
-                                    processRules(userid, thingid, swid, swtype, realsubid, pvalue, "callHub");
-                                    delete pvalue.subid;
+                        cmd = "/nodes/" + swid + "/cmd/" + swval;
+                        isyresp[subid] = swval;
+                        curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+                        break;
+        
+                    case "heatingSetpoint-up":
+                    case "coolingSetpoint-up":
+                    case "heatingSetpoint-dn":
+                    case "coolingSetpoint-dn":
+                        // do some fancy footwork here to get either CLISPH or CLISPC so we can use same code
+                        var hcletter = subid.substr(0,1).toUpperCase();
+                        var clicommand = "CLISP" + hcletter;
+        
+                        // determine if up or down
+                        var isup = subid.substr(-2);
+        
+                        // get existing value and then proceed with adjust if it is a number
+                        var newval = extractTemp(swval);
+                        if ( !isNaN(newval) ) { 
+                            newval = (isup === "up") ? newval + 1 : newval - 1;
+                            cmd = "/nodes/" + swid + "/cmd/" + clicommand + "/" + newval.toString();
+                            isyresp[subid] = newval;
+                            curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+                        } else {
+                            result = "error - ISY thermostat set point cannot be interpreted.  value: " + swval;
+                            console.log( (ddbg()), result);
+                        }
+                        break;
+            
+                    default:
+        
+                        // handle arrows for variable changes
+                        if ( hint==="ISY_variable" && subid.startsWith("Int_") ) {
+                            // get the real subid that the arrows are pointing toward
+                            var intvar = parseInt(swval);
+                            if ( !isNaN(intvar) ) {
+                                if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
+                                    var varnum = subid.substr(4, subid.length-7);
+                                    var realsubid = subid.substr(0, subid.length-3);
+                                    intvar = subid.endsWith("-up") ? intvar + 1 : intvar - 1;
+                                } else {
+                                    varnum = subid.substr(4);
+                                    realsubid = subid;
+                                    intvar++;
                                 }
+                                cmd = "/vars/set/1/" + varnum + "/" + intvar.toString();
+                                isyresp[realsubid] = intvar.toString();
+                                curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+                            } else {
+                                result = "error - Int variable setting invalid: " + swval;
                             }
         
-                        })
-                        .catch(reason => {
-                            console.log( (ddbg()), reason );
-                        });
-            
-                    } else if ( subid.startsWith("State_") ) {
-
-                        var realsubid = subid;
-                        if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
-                            var floatvar = parseFloat(swval);
-                            realsubid = subid.substr(0, subid.length-3);
-                            swval = subid.endsWith("-up") ? floatvar + 1.0 : floatvar - 1.0;
+                        } else if ( hint==="ISY_variable" && subid.startsWith("State_") ) {
+                            // get the real subid that the arrows are pointing toward
+                            var intvar = parseFloat(swval);
+                            var prec = 0;
+                            if ( !isNaN(intvar) ) {
+                                if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
+                                    var varnum = subid.substr(6, subid.length-9);
+                                    var realsubid = subid.substr(0, subid.length-3);
+                                    intvar = subid.endsWith("-up") ? intvar + 1 : intvar - 1;
+                                } else {
+                                    varnum = subid.substr(6);
+                                    realsubid = subid;
+                                    intvar++;
+                                    prec = parseInt(pvalue["prec_State_"+varnum]);
+                                    if ( ! isNaN(prec) && prec > 0 ) {
+                                        var pow10 = Math.pow(10,prec);
+                                        intvar = Math.round(intvar*pow10) / pow10;
+                                    }
+                                }
+                                cmd = "/vars/set/2/" + varnum + "/" + intvar.toString();
+                                isyresp[realsubid] = intvar.toString();
+                                curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+                            } else {
+                                result = "error - State variable setting invalid: " + swval;
+                            }
+        
+                        // run commands
+                        } else if ( hint==="ISY_program" ) {
+                            const progarr = ["run","runThen","runElse","stop","enable","disable"];
+                            if ( progarr.includes(subid) ) {
+                                var progid = subdevice.deviceid;
+                                progid = progid.substring(5);
+                                cmd = "/programs/" + progid + "/" + subid;
+                                curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+                            } else {
+                                result = "error - program: " + subid + " not supported for ISY programs";
+                            } 
                         } else {
-                            floatvar = 0.0;
-                            swval = parseFloat(swval);
+                            // try setting a property
+                            try {
+                                cmd = "/nodes/" + swid + "/set/" + subid + "/" + swval;
+                                // isyresp[subid] = swval;
+                                curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+                            } catch (e) {
+                                console.log( (ddbg()), result, " value: ", swval, " msg: ", e);
+                                result = "error - property: " + subid + " not supported for ISY hubs";
+                            }
                         }
-
-                        // for state variables we can use the IFTTT webhook method
-                        var hookname = realsubid;
-                        var header = {"Content-Type": "text/plain"};
-                        var hookurl = "https://my.isy.io/api/ifttt/" + hookname + "/key/" + hub.hubrefresh;
-                        
-                        // var floatstr = swval.toString();
-                        var floatstr = Math.floor(swval + 0.5).toString();
-
-                        _curl(hookurl, header, floatstr, "POST")
-                        .then( () => {
-                            var pvalue = {};
-                            pvalue[realsubid] = floatstr;
-                            pushClient(userid, swid, swtype, realsubid, pvalue);
-                        })
-                        .catch( err => {
-                            console.log( (ddbg()), "curl error: ", err);
-                        });
-                        if ( DEBUG20 ) {
-                            console.log( (ddbg()), "hookurl: ", hookurl, "subid: ", realsubid, " swval: ", floatstr, " swid: ", swid);
-                        }
-
-                    }
+                    // end of switch
                 }
-
-        }
-
+    
+            })
+            .catch(reason => {
+                console.log( (ddbg()), "callHub ISY - failed to get device: ", reason, "\n swid: ", swid, " subid: ", subid);
+                result = null;
+            });
+        };
+        return result;
     })
     .catch(reason => {
-        console.log( (ddbg()), "callHub - ", reason);
+        console.log( (ddbg()), "callHub ISY - failed to get hubs: ", reason);
+        return null;
     });
-    return result;
 
     // --------------------- end of callHub commands ------------------------------
     // supporting sub-functions are below
@@ -8393,7 +8491,7 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
     function getHubResponse(body) {
         // update all clients - this is actually not needed if your server is accessible to websocket updates
         // It is left here because my dev machine sometimes doesn't get websocket pushes
-        // you can comment this if your server gets pushes reliable
+        // you can comment this if your server gets pushes reliably
         // leaving it here causes no harm other than processing the visual update twice
         var pvalue;
         try {
@@ -8482,7 +8580,7 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
         // we only do this for Sonos and Ford since they don't generate subscription events
         // if ( swtype==="ford" || swtype==="sonos" || swtype==="isy" || subid==="count") {
         if ( swtype==="ford" || swtype==="sonos" || swtype==="isy" ) {
-            mydb.getRows("devices","*", "userid = " + userid + " AND deviceid = '" + swid +"'")
+            mydb.getRows("devices","*", "userid = " + userid + " AND hubid = "+hubindex + " AND deviceid = '" + swid +"'")
             .then(devices => {
         
                 if ( !devices ) { return; }
@@ -8512,7 +8610,10 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
     
                     var pvalstr = encodeURI2(newpvalue);
                     mydb.updateRow("devices", {pvalue: pvalstr}, "userid = "+userid+" AND id = "+device.id)
-                    .then( () => {
+                    .then( res => {
+                        if ( DEBUG18 ) {
+                            console.log( (ddbg()), res);
+                        }
                     })
                     .catch( reason => {
                         console.log( (ddbg()), reason);
@@ -8531,6 +8632,28 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
         }
      
     }
+
+    // I don't think I need to use this because the ISY pushes a webSocket that I use
+    // to do the same thing in the processIsyMessage function
+    function getNodeResponse(err, res, body) {
+        if ( err ) {
+            console.log( (ddbg()), "error calling ISY node: ", err);
+        } else {
+
+            xml2js(body, function(xmlerr, result) {
+                var rres = result.RestResponse.status[0];
+                rres = rres ? rres.toString() : "";
+                if ( DEBUGisy ) {
+                    console.log( (ddbg()), "rres: ", rres, " swid: ", swid, " swtype: ", swtype, " subid: ", subid, " isyrep: ", isyresp, " call returned: ", UTIL.inspect(result, false, null, false));
+                }
+
+                if ( rres === '200' ) {
+                    getHubResponse(isyresp);
+                }
+            });
+        }
+    }
+
 }
 
 // TODO - add newSmartThings type and Ford hubs support for query
@@ -11286,9 +11409,6 @@ function apiCall(user, body, protocol, req, res) {
                     "rooms.id as rooms_id, rooms.panelid as rooms_panelid, rooms.rname as rooms_rname, rooms.rorder as rooms_rorder";
                     result = mydb.getRows("things", fields, conditions, joinstr)
                     .then(things => {
-                        if ( DEBUGtmp ) {
-                            console.log( (ddbg()), "getallthings: ", things);
-                        }
                         return things;
                     }).catch(reason => {
                         console.log( (ddbg()), "apiCall - getthings: ", reason);
@@ -11647,7 +11767,6 @@ function setupBrowserSocket() {
 
     // create the HTTP server for handling sockets
     // support insecure and secure sockets to deal with ISY which is insecure
-    var servers = [];
     if ( fs.existsSync("housepanel_server.key") && fs.existsSync("housepanel_server.crt") && fs.existsSync("housepanel_server.ca") ) {
         var key = fs.readFileSync("housepanel_server.key");
         var crt = fs.readFileSync("housepanel_server.crt");
@@ -11655,31 +11774,21 @@ function setupBrowserSocket() {
         var credentials = {key: key, cert: crt, ca: cabundle};
         for ( var isrv=1; isrv<10; isrv++) {
             var server = https.createServer(credentials, function() {});
-            servers.push(server);
-
             var wsServer = new webSocketServer({httpServer: server});
             var wsport = GLB.webSocketServerPort + isrv;
             console.log( (ddbg()), "Secure webSocket Server is listening on port: ", wsport);
             wsServers.push( wsServer );
             server.listen(wsport, function() {} );
         }
-        // var server = https.createServer(credentials, function() {});
-        // var server2 = https.createServer(credentials, function() {});
-        // var secinfo = "Secure";
     } else {
         for ( var isrv=1; isrv<10; isrv++) {
             var server = http.createServer(function() {});
-            servers.push(server);
-
             var wsServer = new webSocketServer({httpServer: server});
             var wsport = GLB.webSocketServerPort + isrv;
             console.log( (ddbg()), "Insecure webSocket Server is listening on port: ", wsport);
             wsServers.push( wsServer );
             server.listen(wsport, function() {} );
         }
-        // server = http.createServer(function() {});
-        // server2 = http.createServer(function() {});
-        // secinfo = "Insecure";
     }
 
     // This function handles new connections, messages from connections, and closed connections
@@ -11776,25 +11885,38 @@ function setupBrowserSocket() {
 
         });
     }
+    
+}
 
+function setupISYSocket() {
+    
     // make websocket connection to any ISY hub
     // unlike ST and HE below, communication from ISY happens over a real webSocket
     var wshost;
+
+    // close any prior sockets
+    if ( isyServers.length ) {
+        isyServers.forEach(server => {
+            try {
+                server.drop(1001,"HousePanel page refreshing");
+            } catch(e) {}
+        })
+    }
+    isyServers = [];
 
     // get all the ISY hubs for every user - this assumes no two users use the same ISY hub
     mydb.getRows("hubs","*","hubtype = 'ISY'")
     .then(hubs => {
         hubs.forEach(hub => {
 
-            if ( DEBUGisy ) {
-                console.log( (ddbg()), "Setting up callback socket for hub: ", hub);
-            }
-
+            // if ( DEBUGisy ) {
+            //     console.log( (ddbg()), "Setting up callback socket for hub: ", hub);
+            // }
             var userid = hub.userid;
             wshost = false;
-            if ( hub["hubType"]==="ISY" && hub["hubEndpt"] && hub["hubAccess"] ) { 
+            if ( hub["hubtype"]==="ISY" && hub["hubendpt"] && hub["hubaccess"] ) { 
 
-                var hubhost = hub["hubEndpt"];
+                var hubhost = hub["hubendpt"];
                 if ( hubhost.startsWith("https://") ) {
                     wshost = "wss://" + hubhost.substr(8);
                 } else if ( hubhost.startsWith("http://") ) {
@@ -11802,27 +11924,37 @@ function setupBrowserSocket() {
                 }
             }
 
+            if ( DEBUGisy ) {
+                console.log( (ddbg()), "wshost: ", wshost);
+            }
+
             // set up socket for ISY hub if one is there
             if ( wshost ) {
-                var wsclient = new webSocketClient();
-                var buff = Buffer.from(hub["hubAccess"]);
+                var buff = Buffer.from(hub["hubaccess"]);
                 var base64 = buff.toString('base64');
                 var origin = "com.universal-devices.websockets.isy";
                 var header = {"Authorization": "Basic " + base64, "Sec-WebSocket-Protocol": "ISYSUB",  
-                            "Sec-WebSocket-Version": "13", "Origin": "com.universal-devices.websockets.isy"};
+                                "Sec-WebSocket-Version": "13", "Origin": origin};
                 wshost = wshost + "/subscribe";
+                var opts = {rejectUnauthorized: false};
+                var wsconfigs = {tlsOptions: opts, closeTimeout: 2000};
+                var wsclient = new webSocketClient(wsconfigs);
+                isyServers.push(wsclient);
+                wsclient["kw_signature"] = "test";
 
+                wsclient.connect(wshost, "ISYSUB", origin, header, opts);
                 wsclient.on("connectFailed", function(err) {
                     console.log( (ddbg()), "Connection failure to ISY socket: ", err.toString(), " wshost: ", wshost, " header: ", header);
                 });
-
+            
                 wsclient.on("connect", function(connection) {
+                    var that = this;
                     console.log( (ddbg()), "Success connecting to ISY socket. Listening for messages...");
-
+            
                     // handle incoming state messages from ISY
-                    // this will be ignored if the node isn't in our list
                     connection.on("message", function(msg) {
                         if ( msg.type==="utf8" ) {
+                            console.log(">>>> socketsignature: ", that["kw_signature"]);
                             processIsyXMLMessage(userid, msg.utf8Data);
                         }
                     });
@@ -11831,19 +11963,16 @@ function setupBrowserSocket() {
                         console.log( (ddbg()), "Connection error to ISY socket: ", err);
                     });
                 
-                    connection.on("close", function() {
-                        console.log( (ddbg()), "Connection closed to ISY socket");
+                    connection.on("close", function(reasonCode, description) {
+                        console.log( (ddbg()), "ISY socket closed. reason: ", reasonCode, " desc: ", description, );
                     });
                 
                 });
-
-                wsclient.connect(wshost, "ISYSUB", origin, header);
             }
         });
     }).catch(reason => {
-        console.log( (ddbg()), reason);
+        console.log( (ddbg()), "ISY socket setup failure: ", reason);
     });
-
 }
 
 function buildDatabaseTable(tableindex) {
@@ -11979,6 +12108,7 @@ GLB.newcss = {};
 
 var wsServers = [];
 var clients = [];
+var isyServers = [];
 
 // start our main server
 var httpServer;
@@ -11988,7 +12118,7 @@ try {
     // the Node.js app loop - can be invoked by client or back end
     app = express();
     app.use(express.json());
-    app.use(express.urlencoded());getInfoPage
+    app.use(express.urlencoded());
     // app.use(bodyParser.json());
     // app.use(bodyParser.urlencoded({ extended: true }));
     var dir = path.join(__dirname, '');
@@ -12214,6 +12344,7 @@ if ( app && applistening ) {
 
                         // this is what makes the main page
                         } else {
+                            setupISYSocket();
                             getMainPage(user, configoptions, hubs, req, res);
                         }
 
@@ -12638,5 +12769,5 @@ if ( app && applistening ) {
 
     // set up sockets
     setupBrowserSocket();
- 
 }
+ 
