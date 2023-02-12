@@ -1,4 +1,5 @@
 const devhistory = `
+3.044   Tidy up hub auth page and debugs and rebase to hpsql
 3.043   ISY debugged version with working webSocket support
 3.042   First working debugged version supporting sqlite
 3.041   Various bug fixes to new hub auth flow and sqlite support

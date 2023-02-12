@@ -2256,7 +2256,7 @@ function setupButtons() {
                 $("input.hubdel").addClass("hidden");
                 $("input.hubauth").addClass("hidden");
             } else {
-                $("#newthingcount").html("");
+                $("#newthingcount").html("You can re-authorize the existing " + hubType + " hub/account here.");
                 $("input.hubauth").removeClass("hidden");
                 $("input.hubdel").removeClass("hidden");
                 var hubTarget = $("#authhubwrapper").find("input[name='hubhost']");
@@ -2294,33 +2294,33 @@ function setupButtons() {
             if ( hubType==="SmartThings" || hubType==="NewSmartThings" ) {
                 hideid.addClass("hidden");
                 hubTarget.val("https://api.smartthings.com");
-                // hubTarget.prop("disabled", true);
+                hubTarget.prop("disabled", true);
                 hubNameTarget.val("SmartThings Home");
-                $("#newthingcount").html("Ready to authorize your SmartThings hub via the new API platform.");
+                $("#newthingcount").html("Ready to authorize your new SmartThings API account. You must provide info in housepanel.cfg for this");
             } else if ( hubType==="Sonos" ) {
                 hideid.removeClass("hidden");
                 hubTarget.val("https://api.sonos.com");
-                // hubTarget.prop("disabled", true);
                 $(hubNameTarget).val("Sonos");
-                $("#newthingcount").html("Ready to authorize your "+hubType+" account. The hub name can be set to anything or the name Sonos will be assigned.");
+                hubTarget.prop("disabled", true);
+                $("#newthingcount").html("Ready to authorize your Sonos account. The hub name can be set to anything or the name Sonos will be assigned.");
             } else if ( hubType==="Hubitat" ) {
                 hideid.removeClass("hidden");
-                // hubTarget.val("https://oauth.cloud.hubitat.com");
-                hubTarget.val(defhost);
+                hubTarget.val("https://oauth.cloud.hubitat.com");
                 hubNameTarget.val("");
-                // hubTarget.prop("disabled", false);
-                $("#newthingcount").html("Fill out the fields below to authorize your "+hubType+" hub. The hub ID and name will be obtained automatically.");
+                hubTarget.prop("disabled", false);
+                $("#newthingcount").html("Ready to authorize your Hubitat hub. The hub ID and name will be obtained automatically.");
             } else if ( hubType==="Ford" || hubType==="Lincoln" ) {
                 hideid.removeClass("hidden");
-                $("#newthingcount").html("Fill out the fields below to authorize your "+hubType+". Be sure to provide a valid App ID");
                 hubTarget.val("https://fordconnect.cv.ford.com");
-                // hubTarget.prop("disabled", true);
-                hubNameTarget.val(hubType);
+                hubTarget.prop("disabled", true);
+                hubNameTarget.val("");
+                $("#newthingcount").html("Ready to authorize your Ford or Lincoln vehicle. Be sure to provide a valid App ID");
             } else if ( hubType==="ISY" ) {
                 hideid.removeClass("hidden");
-                // hubTarget.prop("disabled", false);
-                hubTarget.val(defhost);
-                hubNameTarget.val("ISY Home");
+                hubTarget.val("https://192.168.4.4:8443/rest");
+                hubNameTarget.val("");
+                hubTarget.prop("disabled", false);
+                $("#newthingcount").html("Ready to authorize your Universal Devices ISY account. Client ID is your ISY username, Client Secret is your ISY password.");
             } else {
                 hideid.removeClass("hidden");
                 // hubTarget.prop("disabled", false);
@@ -2333,11 +2333,7 @@ function setupButtons() {
             var hubindex = $("#pickhub").val();
             var hideid = $("#hideid_"+hubindex);
             var hubTarget = $(this).parent().find("input[name='hubhost']");
-            if ( hubType=== "SmartThings" ) {
-                hideid.removeClass("hidden");
-                // hubTarget.prop("disabled", false);
-                hubTarget.val("https://graph.api.smartthings.com");
-            } else if ( hubType=== "NewSmartThings" ) {
+            if ( hubType=== "NewSmartThings" ) {
                 hideid.addClass("hidden");
                 hubTarget.val("https://api.smartthings.com");
                 // hubTarget.prop("disabled", true);

@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env nodeDEBUG8
 
 "use strict";
 process.title = 'hpserver';
@@ -4602,7 +4602,7 @@ function getAuthPage(user, configoptions, hostname, rmsg) {
         // var allhubtypes = { SmartThings:"SmartThings", NewSmartThings:"New SmartThings", Hubitat: "Hubitat", ISY: "ISY", Ford: "Ford", Lincoln: "Lincoln" };
         // var allhubtypes = { SmartThings:"Legacy SmartThings", NewSmartThings:"SmartThings", Hubitat: "Hubitat", Sonos: "Sonos", Ford: "Ford" };
         // var allhubtypes = { SmartThings:"Legacy SmartThings", NewSmartThings:"SmartThings", Hubitat: "Hubitat" };
-        var allhubtypes = { Hubitat: "Hubitat", ISY: "ISY", NewSmartThings:"SmartThings", Sonos: "Sonos" };
+        var allhubtypes = { Hubitat: "Hubitat", ISY: "ISY", NewSmartThings:"SmartThings", Sonos: "Sonos", Ford: "Ford" };
         var $tc = "";
         $tc += "<div class='hubopt'><label for=\"pickhub\" class=\"startupinp\">Authorize Hub: </label>";
         $tc += "<select name=\"pickhub\" id=\"pickhub\" class=\"startupinp pickhub\">";
@@ -4654,18 +4654,20 @@ function getAuthPage(user, configoptions, hostname, rmsg) {
                 hub.hubhost = "";
                 secretclass += " hidden";
                 disabled = " disabled";
-            } else if ( hubType === "NewSmartThings" ) {
-                hub.clientid = GLB.clientid;
-                hub.clientsecret = encodeURI(GLB.clientsecret);
-                hub.hubhost = "https://api.smartthings.com";
-                secretclass += " hidden";
-            } else if ( hubType === "Sonos" ) {
-                // hub.clientid = GLB.sonos_clientid;
-                // hub.clientsecret = encodeURI(GLB.sonos_clientsecret);
-                hub.hubhost = "https://api.sonos.com";
-                // secretclass += " hidden";
-            } else {
-                hub.hubhost = "";
+            // } else if ( hubType === "Hubitat" ) {
+            //     hub.hubhost = "https://oauth.cloud.hubitat.com";
+            // } else if ( hubType === "NewSmartThings" ) {
+            //     // hub.clientid = GLB.clientid;
+            //     // hub.clientsecret = encodeURI(GLB.clientsecret);
+            //     hub.hubhost = "https://api.smartthings.com";
+            //     // secretclass += " hidden";
+            // } else if ( hubType === "Sonos" ) {
+            //     hub.hubhost = "https://api.sonos.com";
+            //     // secretclass += " hidden";
+            // } else if ( hubType === "ISY" ) {
+            //     hub.hubhost = "https://192.168.4.4:8443";
+            // } else {
+            //     hub.hubhost = "";
             }
 
             // for each hub make a section with its own form that comes back here as a post
@@ -4858,8 +4860,8 @@ function array_key_exists(key, arr) {
 
 function ddbg() {
     var d = new Date();
-    var dstr = d.toLocaleDateString() + "  " + d.toLocaleTimeString() + " ";
-    return "V" + GLB.HPVERSION +" on " + dstr;
+    var dstr = "{" + d.toLocaleDateString() + " " + d.toLocaleTimeString() + "} => ";
+    return "V" + GLB.HPVERSION +" " + dstr;
 }
 
 // returns true if the index is in the room things list passed
@@ -7718,7 +7720,7 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
         if ( isNaN(valint) ) {
             valint = 50;
         }
-        if ( DEBUG7 ) {
+        if ( DEBUG8 ) {
             console.log( (ddbg()), "callHub: access: ", access_token, " endpt: ", endpt, " swval: ", swval, " subid: ", subid, " swtype: ", swtype, " attr: ", swattr, " hub: ", hub);
         }
 
@@ -9014,7 +9016,9 @@ function doAction(userid, hubid, hubindex, thingid, swid, swtype, swval, swattr,
         }
 
     } else {
-        console.log( (ddbg()), "callHub: ", userid, hubindex, swid, thingid, swtype, swval, swattr, subid, hint);
+        if ( DEBUG1 ) {
+            console.log( (ddbg()), "callHub: ", userid, hubindex, swid, thingid, swtype, swval, swattr, subid, hint);
+        }
         callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, hint, null, false);
         msg = "success - hub action executed on device id: " + swid + " device type: " + swtype;
     }
@@ -10256,16 +10260,9 @@ function getMainPage(user, configoptions, hubs, req, res) {
     var skin = user["panels_skin"];
     var alldevices = {};
 
-    console.log(  "\n****************************************************************",
+    console.log(  "\n**********************************************************************************************",
                   "\n", (ddbg()), "Serving pages from: ", GLB.returnURL,
-                  "\n****************************************************************");
-
-    // var temp = "<br>****************************************************************" +
-    //            "<br>" + (ddbg()) + "Serving pages from: " + GLB.returnURL +
-    //            "<br>****************************************************************";
-    // res.send(temp);
-    // res.end();
-    // return true;
+                  "\n**********************************************************************************************");
 
     // first get the room list and make the header
     var devices_joinstr = mydb.getJoinStr("devices","hubid","hubs","id");
@@ -11586,19 +11583,6 @@ function apiCall(user, body, protocol, req, res) {
                     hub["hubhost"] = body.hubhost;
                     hub["hubtype"] = body.hubtype;
                     hub["hubname"] = body.hubname;
-
-                    // handle New SmartThings which has known clientId and clientSecret values
-                    // for local servers we don't do this
-                    // if ( body.hubtype === "NewSmartThings" ) {
-                    //     hub["clientid"] = GLB.clientid;
-                    //     hub["clientsecret"] = GLB.clientsecret;
-                    // } else if ( body.hubtype === "Sonos" ) {
-                    //     hub["clientid"] = GLB.sonos_clientid;
-                    //     hub["clientsecret"] = GLB.sonos_clientsecret;
-                    // } else {
-                    //     hub["clientid"] = body.clientid;
-                    //     hub["clientsecret"] = body.clientsecret;
-                    // }
                     hub["clientid"] = body.clientid;
                     hub["clientsecret"] = body.clientsecret;
                     hub["hubaccess"] = body.hubaccess;
@@ -11940,7 +11924,7 @@ function setupISYSocket() {
                 var wsconfigs = {tlsOptions: opts, closeTimeout: 2000};
                 var wsclient = new webSocketClient(wsconfigs);
                 isyServers.push(wsclient);
-                wsclient["kw_signature"] = "test";
+                // wsclient["kw_signature"] = "test";
 
                 wsclient.connect(wshost, "ISYSUB", origin, header, opts);
                 wsclient.on("connectFailed", function(err) {
@@ -11954,7 +11938,7 @@ function setupISYSocket() {
                     // handle incoming state messages from ISY
                     connection.on("message", function(msg) {
                         if ( msg.type==="utf8" ) {
-                            console.log(">>>> socketsignature: ", that["kw_signature"]);
+                            // console.log(">>>> socketsignature: ", that["kw_signature"]);
                             processIsyXMLMessage(userid, msg.utf8Data);
                         }
                     });
@@ -12088,19 +12072,13 @@ if ( twilioSid && twilioToken && twilioService ) {
 GLB.port = parseInt(GLB.dbinfo["port"]);
 GLB.webSocketServerPort = parseInt(GLB.dbinfo["websocketport"]);
 
-GLB.sonos_clientid = GLB.dbinfo["sonos_clientid"];
 // // set fixed name for event sinks and hub authorizations for New SmartThings
 GLB.sinkalias = GLB.dbinfo["st_sinkalias"];
 GLB.clientid = GLB.dbinfo["st_clientid"];
 GLB.clientsecret = GLB.dbinfo["st_clientsecret"];
 
-// set Sonos key and secret info
-GLB.sonos_clientid = GLB.dbinfo["sonos_clientid"] || null;
-GLB.sonos_clientsecret = GLB.dbinfo["sonos_clientsecret"] || null;
-GLB.sonos_keyname = GLB.dbinfo["sonos_keyname"] || null;
-
-GLB.voicekey = GLB.dbinfo.voicekey || null;
-GLB.fordapicode = GLB.dbinfo.fordapikey || null;
+GLB.voicekey = GLB.dbinfo.voicekey;
+GLB.fordapicode = GLB.dbinfo.fordapicode;
 
 var port = GLB.port;
 GLB.defhub = "new";
@@ -12116,9 +12094,9 @@ var httpsServer;
 var credentials;
 try {
     // the Node.js app loop - can be invoked by client or back end
-    app = express();
+    var app = express();
     app.use(express.json());
-    app.use(express.urlencoded());
+    app.use(express.urlencoded({ extended: true }));
     // app.use(bodyParser.json());
     // app.use(bodyParser.urlencoded({ extended: true }));
     var dir = path.join(__dirname, '');
@@ -12546,47 +12524,50 @@ if ( app && applistening ) {
         // handle events from Sonos service
         // if you are running HP locally this will not work unless you are using https protocol
         } else if ( req.path === "/sonos" ) {
-            var sigvals = [
-                req.headers['x-sonos-event-seq-id'],
-                req.headers['x-sonos-namespace'],
-                req.headers['x-sonos-type'],
-                req.headers['x-sonos-target-type'],
-                req.headers['x-sonos-target-value'],
-                GLB.sonos_clientid,
-                GLB.sonos_clientsecret               
-            ];
-            var buff = sigvals.join("");  //  Buffer.from(sigvals);
-            var thehash = crypto.createHash("sha256");
-            thehash.update(buff);
-            var mysig = thehash.digest('base64');
-            var sonossig = req.headers['x-sonos-event-signature'];
 
-            // remove - + / = _ since they don't match for some reason
-            mysig = mysig.replace(/[\-\.\+\/\=\_]/g,"");
-            sonossig = sonossig.replace(/[\-\.\+\/\=\_]/g,"");
-            
-            if ( mysig === sonossig ) {
+            var hubid = req.headers['x-sonos-household-id'];
+            mydb.getRow("hubs","*","hubid = '"+hubid+"'")
+            .then(hub => {
+                if ( !hub ) throw "No Sonos hub available to update";
+                var sigvals = [
+                    req.headers['x-sonos-event-seq-id'],
+                    req.headers['x-sonos-namespace'],
+                    req.headers['x-sonos-type'],
+                    req.headers['x-sonos-target-type'],
+                    req.headers['x-sonos-target-value'],
+                    hub.clientid,
+                    hub.clientsecret               
+                ];
+    
+                var buff = sigvals.join("");  //  Buffer.from(sigvals);
+                var thehash = crypto.createHash("sha256");
+                thehash.update(buff);
+                var mysig = thehash.digest('base64');
+                var sonossig = req.headers['x-sonos-event-signature'];
 
-                // get the hub this message belongs to and process it
-                var hubid = req.headers['x-sonos-household-id'];
-                mydb.getRow("hubs","*","hubid = '"+hubid+"'")
-                .then(hub => {
-                    if ( hub ) {
-                        processSonosMessage(hub.userid, hub, req);
+                // remove - + / = _ since they don't match for some reason
+                mysig = mysig.replace(/[\-\.\+\/\=\_]/g,"");
+                sonossig = sonossig.replace(/[\-\.\+\/\=\_]/g,"");
+                
+                if ( mysig === sonossig ) {
+                    processSonosMessage(hub.userid, hub, req);
+                    res.send("200 OK");
+                    res.end();
+                } else {
+                    if ( DEBUGsonos ) {
+                        console.log( (ddbg()),"Sonos event ignored, signatures do not match. signatures:\n ", sonossig, "\n ", mysig,"\n body: ", req.body);
                     }
                     res.send("200 OK");
                     res.end();
-                })
-                .catch(reason => {
-                    console.log(reason);
-                    res.end();
-                })
-
-            } else {
-                // console.log( (ddbg()),"Sonos event ignored because signatures do not match: ", sonossig, mysig, req.body);
+                }
+            })
+            .catch(reason => {
+                if ( DEBUGsonos ) {
+                    console.log( (ddbg()), reason);
+                }
                 res.send("200 OK");
                 res.end();
-            }
+            });
         
         // handle events from new SmartThings
         } else if ( (req.path==="/" || req.path==="/sinks") && 
@@ -12760,7 +12741,7 @@ if ( app && applistening ) {
 
         // handle unknown requests
         } else {
-            console.log( (ddbg()), "HousePanel received unknown POST message - path: ", req.path, " headers: ", req.headers, " body:", req.body);
+            console.log( (ddbg()), "HousePanel unknown POST to path: ", req.path, " body:", req.body);
             res.send("unknonwn message sent to HousePanel");
             res.end();
         }
