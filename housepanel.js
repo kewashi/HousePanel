@@ -772,7 +772,6 @@ function rgb2hsv(r, g, b) {
             h += 360;
         }
     }
-    // h = Math.floor(h * 100);
     s = Math.round(s * 100);
     v = Math.round(v * 100);
 
@@ -998,6 +997,7 @@ function setupColors() {
                 var linkbid = bid;
                 var linkhub = hubindex;
                 var realsubid = subid;
+                var linkid = 0;
     
                 if ( usertile && usertile.attr("command") ) {
                     command = usertile.attr("command");    // command type
@@ -1006,6 +1006,7 @@ function setupColors() {
                     linkhub = usertile.attr("linkhub");
                     linktype = usertile.attr("linktype");
                     realsubid = usertile.attr("subid");
+                    linkid = usertile.attr("linkid");
                 }
                 if ( typeof linkval === "string" && 
                      (linkval.startsWith("GET::") || linkval.startsWith("POST::") || 
@@ -1019,7 +1020,12 @@ function setupColors() {
                     command = "";
                     linkval = "";
                 }
-                console.log("setupColors doaction: id: ", linkbid, " type: ", linktype, " value: ", hslstr, " hex: ", hexval, " hubid: ", linkhub);
+                // console.log("setupColors doaction: id: ", linkbid, " type: ", linktype, " value: ", hslstr, " hex: ", hexval, " hubid: ", linkhub);
+                console.log("setupColors: userid= ", userid, " thingid= ", thingid, " tileid= ", tileid, " hint= ", hint,
+                " command= ", command, " bid= ", bid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", hubid, " linkhub= ", linkhub,
+                " type= ", thetype, " linktype= ", linktype, " subid= ", subid, " value= ", hslstr, 
+                " linkval= ", linkval, " attr=", hexval);
+
                 $.post(cm_Globals.returnURL, 
                        {useajax: "doaction", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: hslstr, hint: hint,
                         subid: realsubid, attr: hexval, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval} );
@@ -2529,6 +2535,7 @@ function addEditLink() {
         var pagename = $(thing).attr("panel")
         var bid = $(thing).attr("bid");
         var hubid = $(thing).attr("hub");
+        var hubindex = $(thing).attr("hubindex");
         var hubType = $(thing).attr("hubtype");
         var thingid = $(thing).attr("thingid");
         var userid = cm_Globals.options.userid;
@@ -2540,7 +2547,8 @@ function addEditLink() {
 
         // replace all the id tags to avoid dynamic updates
         strhtml = strhtml.replace(/ id="/g, " id=\"x_");
-        editTile(userid, thingid, pagename, str_type, tile, aid, bid, thingclass, hubid, hubType, customname, strhtml);
+
+        editTile(userid, thingid, pagename, str_type, tile, aid, bid, thingclass, hubid, hubindex, hubType, customname, strhtml);
     });
     
     $("div.cmzlink").on("click",function(evt) {
@@ -2642,7 +2650,7 @@ function addEditLink() {
         var roomname = $(evt.target).attr("roomname");
         var roomid = $("#panel-"+roomname).attr("roomid");
         // console.log("editing room: ", roomid, roomnum, roomname);
-        editTile(cm_Globals.options.userid, roomid, roomname, "page", roomname, 0, 0, "", 0, "None", roomname);
+        editTile(cm_Globals.options.userid, roomid, roomname, "page", roomname, 0, 0, "", "-1", 0, "None", roomname);
     });
    
     $("#addpage").off("click");
@@ -3591,7 +3599,7 @@ function processClick(that, thingname, ro) {
 
     // special case of thermostat clicking on things without values
     // send the temperature as the value
-    if ( !thevalue && (thetype=="thermostat" || thetype==="isy") && ($("#a-"+aid+"-temperature")!==null) &&
+    if ( !thevalue && (thetype==="thermostat") && ($("#a-"+aid+"-temperature")!==null) &&
          ( subid.endsWith("-up") || subid.endsWith("-dn") ) ) {
         thevalue = $("#a-"+aid+"-temperature").html();
     }
@@ -3599,11 +3607,7 @@ function processClick(that, thingname, ro) {
     // determine if this is a LINK or RULE by checking for sb-aid sibling element
     // this includes setting the bid of the linked tile if needed
     // new logic based on DB version
-    var triggersubid = subid;
-    if ( subid.endsWith("-dn") || subid.endsWith("up") ) {
-        triggersubid = subid.substring(0,subid.length - 3);
-    }
-    var usertile =  $("#sb-"+aid+"-"+triggersubid);
+    var usertile =  $("#sb-"+aid+"-"+targetid);
     var linkval = thevalue;
     var linkid = 0;
     if ( usertile && usertile.attr("linkval") ) {
@@ -3619,7 +3623,6 @@ function processClick(that, thingname, ro) {
         linkid = usertile.attr("linkid");
         hint = usertile.attr("hint");
     }
-    // console.log("triggersubid = ", triggersubid, " command = ", command, " usertile= ", usertile);
 
     if ( typeof linkval === "string" && 
          (linkval.startsWith("GET::") || linkval.startsWith("POST::") || linkval.startsWith("TEXT::") ||

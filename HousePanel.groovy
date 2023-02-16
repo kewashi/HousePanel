@@ -15,6 +15,7 @@
  * This is a Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history:
+ * 02/13/2023 - rewrote logic for handling colors including a nasty bugfix in hsv2rgb
  * 02/11/2023 - removed event here since we do it on node side and changed to status_
  * 01/08/2023 - added variable support
  * 01/02/2023 - changed UI inspired by Homebridge and removed ST groovy stuff
@@ -314,14 +315,17 @@ def settingsPage() {
             paragraph "Timezone and Format for event time fields; e.g., America/Detroit, Europe/London, or America/Los_Angeles"
             input (name: "timezone", type: "text", multiple: false, title: "Timezone Name:", required: false, defaultValue: "America/Los_Angeles")
             input (name: "dateformat", type: "text", multiple: false, title: "Date Format:", required: false, defaultValue: "M/dd h:mm")
-            paragraph "Specify these parameters to enable your panel to stay in sync with things when they change in your home."
-            input "webSocketHost", "text", title: "Host IP", defaultValue: "192.168.68.32", required: false
-            input "webSocketPort", "text", title: "Port", defaultValue: "3980", required: false
-            paragraph "The Alt Host IP and Port values are used to send hub pushes to two distinct installations of HousePanel. " +
-                    "If left as 0 a secondary hub push will not occur. Only use this if you are hosting two versions of HP " +
-                    "that both need to stay in sync with your smart home hubs."
-            input "webSocketHost2", "text", title: "Alt Host IP", defaultValue: "0", required: false
-            input "webSocketPort2", "text", title: "Alt Port", defaultValue: "0", required: false
+            paragraph "Specify these parameters to enable your panel to stay in sync with things when they change in your home. " +
+                      "This is not a hard requirement but if you don't provide the IP of where you are hositng your panel will get out of sync."
+            input "webSocketHost", "text", title: "Host IP", defaultValue: "192.168.4.4", required: false
+            input "webSocketPort", "text", title: "Port", defaultValue: "8560", required: false
+            paragraph "The Alternate 2nd and 3rd Host IP and Port values are used to send hub pushes to additional installations of HousePanel. " +
+                    "If left as 0 additional hub pushes will not occur. Only use this if you are hosting two or three versions of HP " +
+                    "that need to stay in sync with this smart home hub. Note: this is mostly used for development debugging and can be safely left as 0"
+            input "webSocketHost2", "text", title: "2nd Host IP", defaultValue: "0", required: false
+            input "webSocketPort2", "text", title: "2nd Port", defaultValue: "0", required: false
+            input "webSocketHost3", "text", title: "3rd Host IP", defaultValue: "0", required: false
+            input "webSocketPort3", "text", title: "3rd Port", defaultValue: "0", required: false
             input (
                 name: "configLogLevel",
                 title: "IDE Live Logging Level:\nMessages with this level and higher will be logged to the IDE.",
@@ -439,6 +443,11 @@ def initialize() {
     state.directPort2 = settings?.webSocketPort2 ?: "0"
     state.directPort2 = state.directPort2.trim()
 
+    state.directIP3 = settings?.webSocketHost3 ?: "0"
+    state.directIP3 = state.directIP3.trim()
+    state.directPort3 = settings?.webSocketPort3 ?: "0"
+    state.directPort3 = state.directPort3.trim()
+
     state.tz = settings?.timezone ?: "America/Los_Angeles"
     state.prefix = settings?.hubprefix ?: getPrefix()
     state.dateFormat = settings?.dateformat ?: "M/dd h:mm"
@@ -460,7 +469,6 @@ def initialize() {
 
     } else {
         state.directIP = "0"
-        logger("state changes will not be posted to an HP server", "info")
     }
 
     if ( (state.directIP2.startsWith("http") || state.directIP2 ==~ pattern) && state.directPort2 ==~ portpatt ) {
@@ -468,12 +476,20 @@ def initialize() {
         logger("state changes will also be posted to HP at: ${state.directIP2}:${state.directPort2} ", "info")
     } else {
         state.directIP2 = "0"
-        logger("state changes will not be posted to a secondary HP server", "info")
+    }
+
+    if ( (state.directIP3.startsWith("http") || state.directIP3 ==~ pattern) && state.directPort3 ==~ portpatt ) {
+        postHub(state.directIP3, state.directPort3, "initialize", "", "", "", "", "")
+        logger("state changes will also be posted to HP at: ${state.directIP3}:${state.directPort3} ", "info")
+    } else {
+        state.directIP3 = "0"
     }
 
     // register callbacks if one of the two is available
-    if ( state.directIP!="0" || state.directIP2!="0" ) {
+    if ( state.directIP!="0" || state.directIP2!="0" || state.directIP3!="0" ) {
         registerAll()
+    } else {
+        logger("state changes will not be posted to HP because no server IP was provided", "info")
     }
 }
 
@@ -519,13 +535,15 @@ def configureHub() {
     logger("Hubitat Cloud Hub = ${cloudhubip}", "info")
     logger("Hubitat Cloud EndPoint = ${cloudendpt}", "info")
     logger("Hub ID = ${state.hubid}", "info")
-    logger("The Access Token is obtained only through OAUTH flow as a Bearer Token", "info")
+    logger("The Access Token is obtained only through OAUTH flow as a Bearer Token", "debug")
 
     logger("Other useful information to know", "debug")
     logger("IP Address = ${state.directIP}", "debug")
     logger("webSocket Port = ${state.directPort}", "debug")
     logger("Alt IP Address = ${state.directIP2}", "debug")
     logger("Alt webSocket Port = ${state.directPort2}", "debug")
+    logger("3rd IP Address = ${state.directIP3}", "debug")
+    logger("3rd webSocket Port = ${state.directPort3}", "debug")
     logger("date Timezone for events = ${state.tz}", "debug")
     logger("date Format for events = ${state.dateFormat}", "debug")
 }
@@ -587,7 +605,7 @@ def getBulb(swid, item=null) {
 // handle momentary devices as push buttons
 def getMomentary(swid, item=null) {
     def resp = false
-    item = item ? item : mymomentaries.find {it.id == swid }
+    item = item ? item : mymomentaries.find{it.id == swid }
     if ( item ) {
         resp = [name: item.displayName]
         resp = addBattery(resp, item)
@@ -689,7 +707,7 @@ def getGarage(swid, item=null) {
 }
 
 def getIlluminance(swid, item=null) {
-    item = item ? item : myilluminances.find {it.id == swid }
+    item = item ? item : myilluminances.find{it.id == swid }
     def resp = false
     if ( item ) {
         resp = [name: item.displayName]
@@ -705,7 +723,7 @@ def getSmoke(swid, item=null) {
 
 // return temperature for this capability and humidity if it has one
 def getTemperature(swid, item=null) {
-    item = item ? item : mytemperatures.find {it.id == swid }
+    item = item ? item : mytemperatures.find{it.id == swid }
     def resp = false
     if ( item ) {
         resp = [name: item.displayName]
@@ -775,7 +793,7 @@ def getHSMState(swid, item=null) {
 // change pistonName to name to be consistent
 // but retain original for backward compatibility reasons
 def getPiston(swid, item=null) {
-    item = item ? item : webCoRE_list().find {it.id == swid}
+    item = item ? item : webCoRE_list().find{it.id == swid}
     def resp = [name: item.name, pistonName: "idle"]
     return resp
 }
@@ -784,7 +802,7 @@ def getPiston(swid, item=null) {
 def getDevice(mydevices, swid, item=null) {
     def resp = false
     if ( mydevices ) {
-    	item = item ? item : mydevices.find {it.id == swid }
+    	item = item ? item : mydevices.find{it.id == swid }
     	if (item) {
             resp = [:]
             def attrs = item.getSupportedAttributes()
@@ -846,7 +864,7 @@ def ignoredCommands() {
 
 // make a generic thing getter to streamline the code
 def getThing(things, swid, item=null) {
-    item = item ? item : things?.find {it.id == swid }
+    item = item ? item : things?.find{it.id == swid }
     def resp = item ? [:] : false
     def reservedcap = ignoredAttributes()
     if ( item ) {
@@ -1044,6 +1062,7 @@ def renameVariable(String oldName, String newName) {
 
     postHub(state.directIP, state.directPort, "update", "Variables", vid, oldName, "variables", pvalue)
     postHub(state.directIP2, state.directPort2, "update", "Variables", vid, oldName, "variables", pvalue)
+    postHub(state.directIP3, state.directPort3, "update", "Variables", vid, oldName, "variables", pvalue)
 }
 
 // modified to only return one mode tile
@@ -1240,36 +1259,40 @@ def getHubInfo() {
 
 def autoType(swid) {
     def swtype
-    if ( mydimmers?.find {it.id == swid } ) { swtype= "switchlevel" }
-    else if ( mymomentaries?.find {it.id == swid } ) { swtype= "momentary" }
-    else if ( mybulbs?.find {it.id == swid } ) { swtype= "bulb" }
-    else if ( myswitches?.find {it.id == swid } ) { swtype= "switch" }
-    else if ( mybuttons?.find {it.id == swid } ) { swtype= "button" }
-    else if ( mylocks?.find {it.id == swid } ) { swtype= "lock" }
-    else if ( mymusics?.find {it.id == swid } ) { swtype= "music" }
-    else if ( myaudios?.find {it.id == swid } ) { swtype= "audio" }
-    else if ( mythermostats?.find {it.id == swid} ) { swtype = "thermostat" }
-    else if ( mypresences?.find {it.id == swid } ) { swtype= "presence" }
-    else if ( myweathers?.find {it.id == swid } ) { swtype= "weather" }
-    // else if ( myaccuweathers?.find {it.id == swid } ) { swtype= "weather" }
-    else if ( mymotions?.find {it.id == swid } ) { swtype= "motion" }
-    else if ( mydoors?.find {it.id == swid } ) { swtype= "door" }
-    else if ( mygarages?.find {it.id == swid } ) { swtype= "garage" }
-    else if ( mycontacts?.find {it.id == swid } ) { swtype= "contact" }
-    else if ( mywaters?.find {it.id == swid } ) { swtype= "water" }
-    else if ( myvalves?.find {it.id == swid } ) { swtype= "valve" }
-    else if ( myilluminances?.find {it.id == swid } ) { swtype= "illuminance" }
-    else if ( mysmokes?.find {it.id == swid } ) { swtype= "smoke" }
-    else if ( mytemperatures?.find {it.id == swid } ) { swtype= "temperature" }
-    else if ( mypowers?.find {it.id == swid } ) { swtype= "power" }
-    else if ( myshades?.find {it.id == swid } ) { swtype= "shade" }
-    else if ( myothers?.find {it.id == swid } ) { swtype= "other" }
-    else if ( myactuators?.find {it.id == swid } ) { swtype= "actuator" }
-    else if ( swid=="${state.prefix}shm" ) { swtype= "shm" }
+    swid = swid.toInteger()
+
+    if ( mydimmers?.find{it.id.toInteger() == swid } ) { swtype= "switchlevel" }
+    else if ( mymomentaries?.find{it.id.toInteger() == swid } ) { swtype= "momentary" }
+    else if ( mybulbs?.find{it.id.toInteger() == swid } ) { swtype= "bulb" }
+    else if ( myswitches?.find{it.id.toInteger() == swid } ) { swtype= "switch" }
+    else if ( mybuttons?.find{it.id.toInteger() == swid } ) { swtype= "button" }
+    else if ( mylocks?.find{it.id.toInteger() == swid } ) { swtype= "lock" }
+    else if ( mymusics?.find{it.id.toInteger() == swid } ) { swtype= "music" }
+    else if ( myaudios?.find{it.id.toInteger() == swid } ) { swtype= "audio" }
+    else if ( mythermostats?.find{it.id.toInteger() == swid} ) { swtype = "thermostat" }
+    else if ( mypresences?.find{it.id.toInteger() == swid } ) { swtype= "presence" }
+    else if ( myweathers?.find{it.id.toInteger() == swid } ) { swtype= "weather" }
+    // else if ( myaccuweathers?.find{it.id.toInteger() == swid } ) { swtype= "weather" }
+    else if ( mymotions?.find{it.id.toInteger() == swid } ) { swtype= "motion" }
+    else if ( mydoors?.find{it.id.toInteger() == swid } ) { swtype= "door" }
+    else if ( mygarages?.find{it.id.toInteger() == swid } ) { swtype= "garage" }
+    else if ( mycontacts?.find{it.id.toInteger() == swid } ) { swtype= "contact" }
+    else if ( mywaters?.find{it.id.toInteger() == swid } ) { swtype= "water" }
+    else if ( myvalves?.find{it.id.toInteger() == swid } ) { swtype= "valve" }
+    else if ( myilluminances?.find{it.id.toInteger() == swid } ) { swtype= "illuminance" }
+    else if ( mysmokes?.find{it.id.toInteger() == swid } ) { swtype= "smoke" }
+    else if ( mytemperatures?.find{it.id.toInteger() == swid } ) { swtype= "temperature" }
+    else if ( mypowers?.find{it.id.toInteger() == swid } ) { swtype= "power" }
+    else if ( myshades?.find{it.id.toInteger() == swid } ) { swtype= "shade" }
+    else if ( myothers?.find{it.id.toInteger() == swid } ) { swtype= "other" }
+    else if ( myactuators?.find{it.id.toInteger() == swid } ) { swtype= "actuator" }
     else if ( swid=="${state.prefix}hsm" ) { swtype= "hsm" }
     else if ( swid=="${state.prefix}mode" ) { swtype= "mode" }
-    else if ( state.usepistons && webCoRE_list().find {it.id == swid} ) { swtype= "piston" }
+    else if ( state.usepistons && webCoRE_list().find{it.id.toInteger() == swid} ) { swtype= "piston" }
     else { swtype = "" }
+    
+    logger("swid = ${swid} swtype = ${swtype}","debug")
+
     return swtype
 }
 
@@ -1378,7 +1401,7 @@ def doAction() {
         break
 
       case "actuator":
-        def item = myactuators.find {it.id == swid }
+        def item = myactuators.find{it.id == swid }
         cmdresult = setOther(swid, cmd, swattr, subid, item)
         break
 
@@ -1395,7 +1418,7 @@ def doAction() {
         break
 
       case "weather":
-        def item = myweathers.find {it.id == swid }
+        def item = myweathers.find{it.id == swid }
         if ( cmd && item?.hasCommand(cmd) ) {
             item."$cmd"()
         }
@@ -1560,7 +1583,7 @@ def setGarage(swid, cmd, swattr, subid) {
 def setGenericDoor(things, swid, cmd, swattr, subid, item=null) {
     def newonoff
     def resp = false
-    item  = item ? item : things.find {it.id == swid }
+    item  = item ? item : things.find{it.id == swid }
     if (item) {
         if ( subid=="door" && ( swattr.endsWith(" closed") || swattr.endsWith(" closing") ) ) {
             cmd = "open"
@@ -1588,7 +1611,7 @@ def setGenericDoor(things, swid, cmd, swattr, subid, item=null) {
 // shades are really different than doors and lights so had to write a special routine
 def setShade(swid, cmd, swattr, subid) {
     logcaller("setShade", swid, cmd, swattr, subid)
-    def item  = myshades.find {it.id == swid }
+    def item  = myshades.find{it.id == swid }
     def resp = false
     
     if (item ) {
@@ -1714,7 +1737,7 @@ def setShade(swid, cmd, swattr, subid) {
 def setMotion(swid, cmd, swattr, subid) {
     def resp = false
     def newsw
-    def item  = mymotions.find {it.id == swid }
+    def item  = mymotions.find{it.id == swid }
     logcaller("setMotion", swid, cmd, swattr, subid)
     // anything but active will set the motion to inactive
     if (item && item.hasCommand("startmotion") && item.hasCommand("stopmotion") ) {
@@ -1742,7 +1765,7 @@ def setBulb(swid, cmd, swattr, subid) {
 
 def setPresence(swid, cmd, swattr, subid) {
     def resp = false
-    item  = item ? item : mypresences.find {it.id == swid }
+    item  = item ? item : mypresences.find{it.id == swid }
     if ( item ) {
         if ( item.hasCommand(cmd) ) {
             item."$cmd"()
@@ -1757,7 +1780,7 @@ def setPresence(swid, cmd, swattr, subid) {
 def setButton(swid, cmd, swattr, subid, item=null ) {
     def resp = false
     def buttonnum = cmd.isNumber() ? cmd.toInteger() : 1
-    item  = item ? item : mybuttons.find {it.id == swid }
+    item  = item ? item : mybuttons.find{it.id == swid }
     
     if ( item ) {
         // resp  = [button: cmd]
@@ -1768,13 +1791,8 @@ def setButton(swid, cmd, swattr, subid, item=null ) {
             cmd = subid.substring(1)
             item."$cmd"(buttonnum)
             resp.put(findval, cmd)
-
-            // postHub(state.directIP, state.directPort, "update", item.displayName, swid, findval, "button", buttonnum)
-            // postHub(state.directIP2, state.directPort2, "update", item.displayName, swid, findval, "button", buttonnum)
         } else {
             resp.put(subid, buttonnum);
-            // postHub(state.directIP, state.directPort, "update", item.displayName, swid, subid, "button", buttonnum)
-            // postHub(state.directIP2, state.directPort2, "update", item.displayName, swid, subid, "button", buttonnum)
         }
     }
 
@@ -1788,7 +1806,7 @@ def setButton(swid, cmd, swattr, subid, item=null ) {
 def setOther(swid, cmd, swattr, subid, item=null ) {
     def resp = false
     def newsw
-    item  = item ? item : myothers.find {it.id == swid }
+    item  = item ? item : myothers.find{it.id == swid }
     def lightflags = ["switch","level","hue","saturation","colorTemperature","color"]
     def doorflags = ["door","shade"]
     
@@ -1827,7 +1845,7 @@ def setOther(swid, cmd, swattr, subid, item=null ) {
 // much like music but the buttons are real commands
 def setAudio(swid, cmd, swattr, subid) {
     def resp = false
-    def item  = myaudios.find {it.id == swid }
+    def item  = myaudios.find{it.id == swid }
     
     if ( item ) {
         logcaller(item.getDisplayName(), swid, cmd, swattr, subid)
@@ -1884,7 +1902,7 @@ def setAudio(swid, cmd, swattr, subid) {
 def setWater(swid, cmd, swattr, subid) {
     logcaller("setWater", swid, cmd, swattr, subid)
     def resp = false
-    def item  = mywaters.find {it.id == swid }
+    def item  = mywaters.find{it.id == swid }
     if (item) {
         def newsw = item.currentValue
         if ( subid=="water" && swattr.endsWith(" dry") && item.hasCommand("wet") ) {
@@ -2054,7 +2072,7 @@ def setHSMState(swid, cmd, swattr, subid){
     
     // send command to change the alarm mode
     sendLocationEvent(name: "hsmSetArm", value: cmd)
-    logger("HSM arm set with cmd= ${cmd}", "info")
+    logger("HSM arm set with cmd= ${cmd}", "debug")
 
     def k = cmds.findIndexOf{ it == cmd }
     def resp = []
@@ -2078,66 +2096,58 @@ def setDimmer(swid, cmd, swattr, subid) {
 // and it has to handle API calls that could have all sorts of options
 def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
     def resp = false
-    item  = item ? item : mythings.find {it.id == swid }
-    def newsw = false
+    item  = item ? item : mythings.find{it.id == swid }
     def hue = false
     def saturation = false
     def temperature = false
     def newcolor = false
     def newlevel = false
     def newname = false
-    def hexval
     
     if (item ) {
         
         // logcaller(item.getDisplayName(), swid, cmd, swattr, subid, "trace")
         def newonoff = item.currentValue("switch")
-        // logger("setGenericLight: swid = $swid cmd = $cmd swattr = $swattr subid = $subid", "debug");
-        // bug fix for grabbing right swattr when long classes involved
-        // note: sometime swattr has the command and other times it has the value
-        //       just depends. This is a legacy issue when classes were the command
-        // we start by handling base GUI case with attr ending in on or off or flash
-        if ( subid=="switch" ) {
-            if ( swattr.endsWith(" on" ) ) {
-                swattr = "on"
-            } else if ( swattr.endsWith(" flash" ) ) {
-                swattr = "on"
-            } else if ( swattr.endsWith(" off" ) ) {
-                swattr = "off"
-            }
-        } else if ( subid=="name" ) {
-            swattr = "name"
-        } else if ( subid=="color" ) {
-            hexval = swattr
-            swattr = subid
-        }
-        
-        switch(swattr) {
+
+        switch(subid) {
         
         // this branch is legacy - gui no longer sends toggle as attr
         // i left this in code since API could still send toggle as attr
+        case "switch":
+            if ( swattr.endsWith(" on" ) ) {
+                cmd = "off"
+            } else if ( swattr.endsWith(" flash" ) ) {
+                cmd = "flash"
+            } else if ( swattr.endsWith(" off" ) ) {
+                cmd = "on"
+            }
+            newonoff = cmd
+            break
+
         case "toggle":
             newonoff = newonoff=="off" ? "on" : "off"
+            cmd = newonoff
             break
         
         // enable name change
         case "name":
             newname = cmd
-            // newonoff = newonoff=="off" ? "on" : "off"
             break
          
         case "level-up":
             if ( item.hasAttribute("level") ) {
-                newsw = item.currentValue("level")
-                newsw = newsw.toInteger()
-                newsw = (newsw >= 95) ? 100 : newsw - (newsw % 5) + 5
-                item.setLevel(newsw)
-                newlevel = newsw
-                if ( item.hasAttribute("hue") && item.hasAttribute("saturation") ) {
+                newlevel = item.currentValue("level")
+                newlevel = newlevel.toInteger()
+                newlevel = (newlevel >= 95) ? 100 : newlevel - (newlevel % 5) + 5
+                item.setLevel(newlevel)
+                if ( item.hasAttribute("hue") && item.hasAttribute("saturation") && item.hasAttribute("color") ) {
                     def hue100 = item.currentValue("hue").toInteger()
                     def h = Math.round((hue100 * 360) / 100)
                     def s = item.currentValue("saturation").toInteger()
-                    newcolor = hsv2rgb(h, s, newsw)
+                    def v = newlevel
+                    newcolor = hsv2rgb(h, s, v)
+                    // item.setColor([hue: hue100, saturation: s, level: v])
+                    logger("level command result: hue= ${hue100}, h= ${h} s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
                 }
             }
             newonoff = "on"
@@ -2145,17 +2155,19 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
               
         case "level-dn":
             if ( item.hasAttribute("level") ) {
-                newsw = item.currentValue("level")
-                newsw = newsw.toInteger()
-                def del = (newsw % 5) == 0 ? 5 : newsw % 5
-                newsw = (newsw <= 5) ? 5 : newsw - del
-                newlevel = newsw
-                item.setLevel(newsw)
-                if ( item.hasAttribute("hue") && item.hasAttribute("saturation") ) {
+                newlevel = item.currentValue("level")
+                newlevel = newlevel.toInteger()
+                def del = (newlevel % 5) == 0 ? 5 : newlevel % 5
+                newlevel = (newlevel <= 5) ? 5 : newlevel - del
+                item.setLevel(newlevel)
+                if ( item.hasAttribute("hue") && item.hasAttribute("saturation") && item.hasAttribute("color") ) {
                     def hue100 = item.currentValue("hue").toInteger()
                     def h = Math.round((hue100 * 360) / 100)
                     def s = item.currentValue("saturation").toInteger()
-                    newcolor = hsv2rgb(h, s, newsw)
+                    def v = newlevel
+                    newcolor = hsv2rgb(h, s, v)
+                    // item.setColor([hue:hue100, saturation: s, level: v])
+                    logger("level command result: hue= ${hue100}, h= ${h} s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
                 }
                 newonoff = "on"
             } else {
@@ -2165,33 +2177,36 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
          
         case "level":
             if ( cmd.isNumber() && item.hasAttribute("level") ) {
-                newsw = cmd.toInteger()
-                newsw = (newsw >100) ? 100 : newsw
-                item.setLevel(newsw)
+                newlevel = cmd.toInteger()
+                newlevel = (newlevel >100) ? 100 : newlevel
+                item.setLevel(newlevel)
                 if ( item.hasAttribute("position") ) {
-                    item.setPosition(newsw)
+                    item.setPosition(newlevel)
                 }
-                newlevel = newsw
                 if ( item.hasAttribute("hue") && item.hasAttribute("saturation") ) {
                     def hue100 = item.currentValue("hue").toInteger()
                     def h = Math.round((hue100 * 360) / 100)
                     def s = item.currentValue("saturation").toInteger()
-                    newcolor = hsv2rgb(h, s, newsw)
+                    def v = newlevel
+                    newcolor = hsv2rgb(h, s, v)
+                    // item.setColor([hue: hue100, saturation: s, level: v])
+                    logger("level command result: hue= ${hue100}, h= ${h} s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
                 }
-                newonoff = (newsw == 0) ? "off" : "on"
+                newonoff = (newlevel == 0) ? "off" : "on"
             }
             break
          
         case "hue-up":
                 hue = item.currentValue("hue").toInteger()
                 hue = (hue >= 95) ? 100 : hue - (hue % 5) + 5
-                def hue100 = Nath.round((hue * 100) / 360)
                 item.setHue(hue)
-                hue = Math.round((hue * 360) / 100)
+                def h = Math.round((hue * 360) / 100)
                 def s = item.currentValue("saturation").toInteger()
                 def v = item.currentValue("level").toInteger()
-                newcolor = hsv2rgb(hue, s, v)
+                newcolor = hsv2rgb(h, s, v)
+                // item.setColor([hue:hue, saturation: s, level: v])
                 newonoff = "on"
+                logger("hue command result: hue= ${hue}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","info")
             break
               
         case "hue-dn":
@@ -2199,22 +2214,43 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
                 def del = (hue % 5) == 0 ? 5 : hue % 5
                 hue = (hue <= 5) ? 5 : hue - del
                 item.setHue(hue)
-                hue = Math.round((hue * 360) / 100)
+                def h = Math.round((hue * 360) / 100)
                 def s = item.currentValue("saturation").toInteger()
                 def v = item.currentValue("level").toInteger()
-                newcolor = hsv2rgb(hue, s, v)
+                newcolor = hsv2rgb(h, s, v)
+                // item.setColor([hue:hue, saturation: s, level: v])
                 newonoff = (v == 0) ? "off" : "on"
+                logger("hue command result: hue= ${hue}, h= ${h}, del= ${del} s= ${s}, v= ${v}, newcolor= ${newcolor}","info")
             break
               
+        case "hue":
+                hue = item.currentValue("hue").toInteger()
+                /* temperature drifts up so we cant use round down method */
+                if ( cmd.isNumber() ) {
+                    hue = cmd.toInteger()
+                }
+                item.setHue(hue)
+                def h = Math.round((hue * 360) / 100)
+                def s = item.currentValue("saturation").toInteger()
+                def v = item.currentValue("level").toInteger()
+                newcolor = hsv2rgb(h, s, v)
+                // item.setColor([hue:hue, saturation: s, level: v])
+                newonoff = (v == 0) ? "off" : "on"
+                logger("hue command result: hue= ${hue}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","info")
+            break
+
         case "saturation-up":
                 saturation = item.currentValue("saturation").toInteger()
                 saturation = (saturation >= 95) ? 100 : saturation - (saturation % 5) + 5
                 item.setSaturation(saturation)
-                def h = item.currentValue("hue").toInteger()
-                h = Math.round((h * 360) / 100)
+                def hue100 = item.currentValue("hue").toInteger()
+                def h = Math.round((hue100 * 360) / 100)
+                def s = saturation
                 def v = item.currentValue("level").toInteger()
-                newcolor = hsv2rgb(h, saturation, v)
+                newcolor = hsv2rgb(h, s, v)
+                // item.setColor([hue: hue100, saturation: s, level: v])
                 newonoff = "on"
+                logger("saturation command result: hue= ${hue100}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","info")
             break
               
         case "saturation-dn":
@@ -2222,13 +2258,32 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
                 def del = (saturation % 5) == 0 ? 5 : saturation % 5
                 saturation = (saturation <= 5) ? 5 : saturation - del
                 item.setSaturation(saturation)
-                def h = item.currentValue("hue").toInteger()
-                h = Math.round((h * 360) / 100)
+                def hue100 = item.currentValue("hue").toInteger()
+                def h = Math.round((hue100 * 360) / 100)
+                def s = saturation
                 def v = item.currentValue("level").toInteger()
                 newcolor = hsv2rgb(h, saturation, v)
+                // item.setColor([hue: hue100, saturation: s, level: v])
                 newonoff = (v == 0) ? "off" : "on"
+                logger("saturation command result: hue= ${hue100}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","info")
             break
               
+        case "saturation":
+                saturation = item.currentValue("saturation").toInteger()
+                if ( cmd.isNumber() ) {
+                    saturation = cmd.toInteger()
+                }
+                item.setSaturation(saturation)
+                def hue100 = item.currentValue("hue").toInteger()
+                def h = Math.round((hue100 * 360) / 100)
+                def s = saturation
+                def v = item.currentValue("level").toInteger()
+                newcolor = hsv2rgb(h, s, v)
+                // item.setColor([hue: hue100, saturation: s, level: v])
+                newonoff = (v == 0) ? "off" : "on"
+                logger("saturation command result: hue= ${hue100}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")                
+            break
+
         case "colorTemperature-up":
                 temperature = item.currentValue("colorTemperature").toInteger()
                 temperature = (temperature >= 6500) ? 6500 : temperature - (temperature % 100) + 100
@@ -2256,67 +2311,59 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
                 newonoff = "on"
             break
 
-        // if the middle value is clicked on we toggle the light
-        // this is a legacy behavior from the very old HP days
-        case "level-val":
-        case "hue-val":
-        case "saturation-val":
-        case "colorTemperature-val":
-            newonoff = newonoff=="off" ? "on" : "off"
-            break
-
-        // we also use opposite for GUI sending state in attr variable
-        case "on":
-            newonoff = "off"
-            break
-              
-        case "off":
-            newonoff = "on"
-            break
-
         // this supports api calls and clicking on color circle
         // the level is not returned to prevent slider from moving around
         case "color":
             logger("color command request:  ${cmd}", "debug")
             if (cmd.startsWith("hsl(") && cmd.length()==16) {
-                hue = cmd.substring(4,7).toInteger()
-                def hue100 = Math.round((hue * 100) / 360)
-                saturation = cmd.substring(8,11).toInteger()
+                def h = cmd.substring(4,7).toInteger()
+                def hue100 = Math.round((h * 100) / 360)
+                def s = cmd.substring(8,11).toInteger()
                 def v = cmd.substring(12,15).toInteger()
-                item.setHue(hue100)
-                item.setSaturation(saturation)
+                newcolor = hsv2rgb(h, s, v)
+                item.setColor([hue: hue100, saturation: s, level: v])
                 newlevel = v
-                def newrgb = hsv2rgb(hue, saturation, v)
-                newcolor = newrgb
-                // item.setColor([hue:hue, saturation: saturation, level: v])
-                // postHub(state.directIP, state.directPort, "update", item.displayName, swid, "color", "bulb", newcolor)
-                // postHub(state.directIP2, state.directPort2, "update", item.displayName, swid, "color", "bulb", newcolor)
                 newonoff = "on"
-                logger("color command result: h= ${hue}, s= ${saturation}, l= ${v}, newcolor= ${newcolor}, hexval= ${hexval}, newrgb= ${newrgb}","debug")                
+                logger("color click: hue= ${hue100}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","info")                
+            } else if ( cmd.startsWith("#") ) {
+                newcolor = cmd;
+                def r = cmd.substring(1,3)
+                def g = cmd.substring(3,5)
+                def b = cmd.substring(5,7)
+                r = Integer.parseInt(r,16)
+                g = Integer.parseInt(g,16)
+                b = Integer.parseInt(b,16)
+                def hsv = rgb2hsv(r, g, b)
+                def h = hsv[0]
+                def hue100 = hsv[3]
+                // Math.round((h * 100) / 360)
+                def s = hsv[1]
+                def v = hsv[2]
+                item.setColor([hue: hue100, saturation: s, level: v])
+                newlevel = v
+                newonoff = "on"
+                logger("color command: , r,g,b = ${r}, ${g}, ${b}, hue= ${hue100}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","info")                
             }
             break
               
         default:
-            if ( item.hasCommand(cmd) ) { // cmd=="on" || cmd=="off" || cmd=="flash" || cmd=="open" || cmd=="close") {
+            if (subid.startsWith("_")) {
+                newonoff = subid.substring(1)
+                cmd = newonoff
+            } else if ( item.hasCommand(cmd) ) { // cmd=="on" || cmd=="off" || cmd=="flash" || cmd=="open" || cmd=="close") {
                 newonoff = cmd
             } else if (cmd=="toggle") {
                 newonoff = newonoff=="off" ? "on" : "off"
-            } else if (subid.startsWith("_")) {
-                newonoff = subid.substring(1)
-            } else if ( subid=="switch" ) {
-                newonoff = newonoff=="off" ? "on" : "off"
-            }
-
-            // set the level if a number is given for attr
-            if ( swattr.isNumber() && item.hasAttribute("level") ) {
-                newsw = swattr.toInteger()
-                item.setLevel(newsw)
+                cmd = newonoff
+            } else if ( swattr.isNumber() && item.hasAttribute("level") ) {
+                // set the level if a number is given for attr
+                newlevel = swattr.toInteger()
+                item.setLevel(newlevel)
                 newonoff = "on"
+                cmd = "on"
             }
             break               
-              
         }
-        cmd = newonoff
 
         // execute the new command
         if ( item.hasCommand(cmd) ) {
@@ -2332,21 +2379,26 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
         if ( item.hasAttribute("switch") && (newonoff=="on" || newonoff=="off") ) {
             resp.put("switch", newonoff)
         }
-        if ( newcolor ) { 
+        if ( item.hasAttribute("color") && newcolor ) { 
             resp.put("color", newcolor) 
-            postHub(state.directIP, state.directPort, "update", item.displayName, swid, "color", "bulb", newcolor)
-            postHub(state.directIP2, state.directPort2, "update", item.displayName, swid, "color", "bulb", newcolor)
+            // postHub(state.directIP, state.directPort, "update", item.displayName, swid, "color", "bulb", newcolor)
+            // postHub(state.directIP2, state.directPort2, "update", item.displayName, swid, "color", "bulb", newcolor)
+            // postHub(state.directIP2, state.directPort3, "update", item.displayName, swid, "color", "bulb", newcolor)
         }
-        if ( hue ) { resp.put("hue", hue) }
-        if ( saturation ) { resp.put("saturation", saturation) }
-        if ( temperature ) { resp.put("colorTemperature", temperature) }
-        if ( newlevel ) { resp.put("level", newlevel) }
+        if ( item.hasAttribute("hue") && hue ) { resp.put("hue", hue) }
+        if ( item.hasAttribute("saturation") && saturation ) { resp.put("saturation", saturation) }
+        if ( item.hasAttribute("colorTemperature") && temperature ) { resp.put("colorTemperature", temperature) }
+        if ( item.hasAttribute("level") && newlevel ) { resp.put("level", newlevel) }
+        if ( item.hasAttribute("position") && newlevel ) { resp.put("position", newlevel) }
     }
     return resp
 }
 
 def hsv2rgb(h, s, v) {
     def r, g, b
+    def oh = h
+    def os = s
+    def ov = v
 
     h = Math.round(h);
     s /= 100.0
@@ -2378,17 +2430,67 @@ def hsv2rgb(h, s, v) {
     def ghex = Integer.toHexString(g)
     def bhex = Integer.toHexString(b)
 
-    rhex = rhex == "0" ? "00" : rhex
-    ghex = ghex == "0" ? "00" : ghex
-    bhex = bhex == "0" ? "00" : bhex
+    if ( rhex.length() == 1 ) rhex = "0"+rhex;
+    if ( ghex.length() == 1 ) ghex = "0"+ghex;
+    if ( bhex.length() == 1 ) bhex = "0"+bhex;
+    // rhex = rhex == "0" ? "00" : rhex
+    // ghex = ghex == "0" ? "00" : ghex
+    // bhex = bhex == "0" ? "00" : bhex
     def hexval = "#"+rhex+ghex+bhex
     return hexval
+}
+
+def mapMinMax(value,oldMin,oldMax,newMin, newMax) {
+  def r = (newMax-newMin)*(value-oldMin)/(oldMax-oldMin)+newMin
+  r = Math.round(r)
+  return r.toInteger()
+}
+
+def rgb2hsv(r, g, b) {
+    r /= 255
+    g /= 255
+    b /= 255
+
+    def max = Math.max(r, Math.max(g, b))
+    def min = Math.min(r, Math.min(g, b))
+    def h = max
+    def v = max
+    def d = max - min
+    def s = max == 0 ? 0 : d / max;
+    if (max == min) {
+        h = 0
+    } else {
+        switch (max) {
+            case r:
+                h = (g - b) / d + (g < b ? 6 : 0)
+                break
+            case g:
+                h = (b - r) / d + 2
+                break
+            case b:
+                h = (r - g) / d + 4
+                break
+        }
+        h /= 6
+    }
+
+    def h100 = h*100
+    h100 = h100.toInteger()
+    h = h*360
+    h = h.toInteger()
+    // h = mapMinMax(h,0,1,0,360);
+    s *= 100
+    s = s.toInteger()
+    v *= 100
+    v = v.toInteger()
+    // def hsvstr = "hsl(${h},${s},${v})"
+    return [h, s, v, h100]
 }
 
 def setMomentary(swid, cmd, swattr, subid) {
     logcaller("setMomentary", swid, cmd, swattr, subid)
     def resp = false
-    def item  = mymomentaries?.find {it.id == swid }
+    def item  = mymomentaries?.find{it.id == swid }
     if ( item ) {
         if ( (subid=="momentary" || subid=="_push") && item.hasCommand("push") ) {
             item.push()
@@ -2404,7 +2506,7 @@ def setLock(swid, cmd, swattr, subid) {
     logcaller("setLock", swid, cmd, swattr, subid)
     def resp = false
     def newsw
-    def item  = mylocks?.find {it.id == swid }
+    def item  = mylocks?.find{it.id == swid }
     if (item) {
         if (cmd=="toggle") {
             newsw = item.currentLock=="locked" ? "unlocked" : "locked"
@@ -2441,7 +2543,7 @@ def setLock(swid, cmd, swattr, subid) {
 def setValve(swid, cmd, swattr, subid) {
     logcaller("setValve", swid, cmd, swattr, subid)
     def resp = false
-    def item  = myvalves.find {it.id == swid }
+    def item  = myvalves.find{it.id == swid }
     if (item) {
         def newsw = item.currentValue
         if ( subid=="valve" && swattr.endsWith(" open") ) {
@@ -2470,7 +2572,7 @@ def setThermostat(swid, cmd, swattr, subid) {
     def resp = false
     def newsw = 72
     def tempint
-    def item  = mythermostats.find {it.id == swid }
+    def item  = mythermostats.find{it.id == swid }
     if (item) {
         
         resp = getThermostat(swid, item)
@@ -2639,7 +2741,7 @@ def setThermostat(swid, cmd, swattr, subid) {
 def setMusic(swid, cmd, swattr, subid) {
     logcaller("setMusic", swid, cmd, swattr, subid)
     def resp = false
-    def item  = mymusics.find {it.id == swid }
+    def item  = mymusics.find{it.id == swid }
     def newsw
     if (item) {
         resp = getMusic(swid, item)
@@ -2840,7 +2942,7 @@ def changeHandler(evt) {
     def skip = false
     
     def devtype = autoType(deviceid)
-    logger("handling id = ${deviceid} type = ${devtype}", "debug")
+    logger("handling id = ${deviceid} devtype = ${devtype} name = ${deviceName} attr = ${attr} value = ${value}", "debug")
 
     // handle power changes to skip if not changed by at least 15%
     // this value was set by trial and error for my particular plug
@@ -2869,34 +2971,74 @@ def changeHandler(evt) {
             logger("problem in change handler for power device. oldpower: ${oldpower} error msg: ${e}", "error")
         }
     }
-
     
     // log.info "Sending ${src} Event ( ${deviceName}, ${deviceid}, ${attr}, ${value} ) to HousePanel clients  log = ${state.loggingLevelIDE}"
-    if ( !skip && state?.directIP && state?.directPort && deviceName && deviceid && attr && value) {
+    // log.info "skip= ${skip} deviceName= ${deviceName} attr= ${attr} value= ${value}"
+    if ( !skip && deviceName && deviceid && attr && value) {
 
-        // fix color bulbs - force attr to color if hue, saturation, or level changes
-        def item = mybulbs?.find{it.id == deviceid}
-        if ( item && (attr=="hue" || attr=="saturation") && item.hasAttribute("color") ) {
+        def item = mybulbs?.find{it.id.toInteger() == deviceid.toInteger()}
+        if ( (attr=="hue" || attr=="saturation" || attr=="level" || attr=="color") && item && item.hasAttribute("color") ) {
 
-            def h = attr=="hue" ? value.toInteger() : item.currentValue("hue").toInteger()
-            def s = attr=="saturation" ? value.toInteger() : item.currentValue("saturation").toInteger()
-            def v = attr=="level" ? value.toInteger() : item.currentValue("level").toInteger()
-            h = Math.round((h*360)/100)
-            def color = hsv2rgb(h, s, v)
-            // item.setColor([hue: h, saturation: s, level: v])
+            // fix color bulbs - force attr to color if hue, saturation, or level changes
+            def h
+            def h100
+            def s
+            def v 
+            def c
+            def color
+            if ( attr == "color" && value.substring(0,1)=="#") {
+                def r = value.substring(1,3)
+                def g = value.substring(3,5)
+                def b = value.substring(5,7)
+                r = Integer.parseInt(r,16)
+                g = Integer.parseInt(g,16)
+                b = Integer.parseInt(b,16)
+                def hsv = rgb2hsv(r, g, b)
+                h = hsv[0]
+                hue100 = hsv[3] 
+                //  Math.round((h * 100) / 360)
+                s = hsv[1]
+                v = hsv[2]
+                // c = item.currentValue("colorTemperature").toInteger()
+                color = value
+            } else {
+                h100 = attr=="hue" ? value.toInteger() : item.currentValue("hue").toInteger()
+                s = attr=="saturation" ? value.toInteger() : item.currentValue("saturation").toInteger()
+                v = attr=="level" ? value.toInteger() : item.currentValue("level").toInteger()
+                // c = attr=="colorTemperature" ? value.toInteger() : item.currentValue("colorTemperature").toInteger()
+                h = mapMinMax(h100,0,100,0,360)     //  Math.round((h100*360)/100)
+                color = hsv2rgb(h, s, v)
+            }
 
-            // make the original attribute change
-            postHub(state.directIP, state.directPort, "update", deviceName, deviceid, attr, "bulb", value)
-            postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, attr, "bulb", value)
+            // postHub(state.directIP, state.directPort, "update", deviceName, deviceid, "hue", devtype, h100)
+            // postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, "hue", devtype, h100)
+            // postHub(state.directIP3, state.directPort3, "update", deviceName, deviceid, "hue", devtype, h100)
+
+            // postHub(state.directIP, state.directPort, "update", deviceName, deviceid, "saturation", devtype, s)
+            // postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, "saturation", devtype, s)
+            // postHub(state.directIP3, state.directPort3, "update", deviceName, deviceid, "saturation", devtype, s)
+
+            // postHub(state.directIP, state.directPort, "update", deviceName, deviceid, "level", devtype, v)
+            // postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, "level", devtype, v)
+            // postHub(state.directIP3, state.directPort3, "update", deviceName, deviceid, "level", devtype, v)
+
+            // for colors we have to set all parameters at the same time to avoid race conditions
+            def colorarray = [h100, s, v, color]
+            postHub(state.directIP, state.directPort, "update", deviceName, deviceid, "color", devtype, colorarray)
+            postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, "color", devtype, colorarray)
+            postHub(state.directIP3, state.directPort3, "update", deviceName, deviceid, "color", devtype, colorarray)
 
             // set it to change color based on attribute change
-            logger("color of device ${deviceName} changed to ${color} by the ${attr} attribute changing to ${value}", "debug")
-            attr = "color"
-            value = color
+            logger("color update in changeHandler: ${deviceName} of type ${devtype} changed to ${color} by changing ${attr} to ${value}, h100: ${h100}, h: ${h}, s: ${s}, v: ${v} ", "debug") 
+        } else {
+            // make the original attribute change
+            postHub(state.directIP, state.directPort, "update", deviceName, deviceid, attr, devtype, value)
+            postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, attr, devtype, value)
+            postHub(state.directIP3, state.directPort3, "update", deviceName, deviceid, attr, devtype, value)
+
+            logger("thing update in changeHandler, ${deviceName} of type ${devtype} changed to ${value} by changing ${attr} to ${value}", "debug")
         }
 
-        postHub(state.directIP, state.directPort, "update", deviceName, deviceid, attr, devtype, value)
-        postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, attr, devtype, value)
     }
 }
 
@@ -2912,6 +3054,7 @@ def modeChangeHandler(evt) {
         logger("Sending new mode= ${themode} with id= ${modeid} to HousePanel clients", "debug")
         postHub(state.directIP, state.directPort, "update", deviceName, modeid, "themode", "mode", themode)
         postHub(state.directIP2, state.directPort2, "update", deviceName, modeid, "themode", "mode", themode)
+        postHub(state.directIP3, state.directPort3, "update", deviceName, modeid, "themode", "mode", themode)
     }
 }
 
@@ -2926,6 +3069,7 @@ def hsmStatusHandler(evt) {
         def modeid = "${state.prefix}hsm"
         postHub(state.directIP, state.directPort, "update", deviceName, modeid, "state", "hsm", themode)
         postHub(state.directIP2, state.directPort2, "update", deviceName, modeid, "state", "hsm", themode)
+        postHub(state.directIP3, state.directPort3, "update", deviceName, modeid, "state", "hsm", themode)
     }
 }
 
@@ -2943,6 +3087,7 @@ def variableHandler(evt) {
 
         postHub(state.directIP, state.directPort, "update", "Variables", vid, varname, "variable", theval)
         postHub(state.directIP2, state.directPort2, "update", "Variables", vid, varname, "variable", theval)
+        postHub(state.directIP3, state.directPort3, "update", "Variables", vid, varname, "variable", theval)
     }
 }
 

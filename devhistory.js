@@ -1,4 +1,5 @@
 const devhistory = `
+3.045   Rewrote logic for handling colors including a nasty bugfix in hsv2rgb
 3.044   Tidy up hub auth page and debugs and rebase to hpsql
 3.043   ISY debugged version with working webSocket support
 3.042   First working debugged version supporting sqlite

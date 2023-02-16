@@ -366,51 +366,6 @@ function hsv2rgb(h, s, v) {
     return "#"+rhex+ghex+bhex;
 }
 
-function hsv2hex(h, s, v) {
-
-    function toHex(thenumber) {
-        var hex = thenumber.toString(16);
-        if (hex.length === 1) {
-          hex = "0" + hex;
-        }
-        return hex;
-    }
-
-    var r, g, b;
-    h = Math.round(h);
-    s = s/100.0;
-    v = v/100.0;
-    if ( h == 360 ) {
-        h = 0;
-    } else {
-        h = h / 60;
-    }
-    var i = parseInt(Math.floor(h));
-    var f = h - i;
-    var p = v * (1.0 - s);
-    var q = v * (1.0 - (s * f));
-    var t = v * (1.0 - (s * (1.0 - f)));
-
-    switch (i) {
-        case 0: r = v; g = t; b = p; break;
-        case 1: r = q; g = v; b = p; break;
-        case 2: r = p; g = v; b = t; break;
-        case 3: r = p; g = q; b = v; break;
-        case 4: r = t; g = p; b = v; break;
-        case 5: r = v; g = p; b = q; break;
-    }
-    
-    r = parseInt(Math.round(r*255));
-    g = parseInt(Math.round(g*255));
-    b = parseInt(Math.round(b*255));
-    
-    var rhex = toHex(r);
-    var ghex = toHex(g);
-    var bhex = toHex(b);
-    return "#"+rhex+ghex+bhex;
-
-}
-
 function objCount(obj) {
     if ( typeof obj === "object" )  {
         return Object.keys(obj).length;
@@ -5818,17 +5773,12 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
     var pkindex = " p_" + kindex;
     var aidi = "<div aid=\"" + i + "\"";
     var ttype = " type=\"" + thingtype + "\"";
-    var colorval = "";
     if ( typeof subtype === "undefined" ) {
         subtype = "";
     } else if ( typeof subtype === "string" && subtype.substr(0,1)!==" " ) {
         subtype = " " + subtype;
     }
 
-    // note - disabled this stupid color background thingy
-    // if ( bgcolor && (tkey==="hue" || tkey==="saturation") ) {
-    //     colorval = bgcolor;
-    // }
     if ( tval===0 ) { tval = "0"; }
     else if ( typeof tval === "undefined" ) { tval = ""; }
 
@@ -5841,9 +5791,9 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
     // this is supported by changes in the .js file and .css file
     
     if ( tkey==="hue" || tkey==="saturation" ||
-         tkey==="heatingSetpoint" || tkey==="coolingSetpoint" ) {
-        //  (tkey.startsWith("Int_") && thingtype==="isy") ||
-        //  (tkey.startsWith("State_") && thingtype==="isy") ) {
+         tkey==="heatingSetpoint" || tkey==="coolingSetpoint"  ||
+         (tkey.startsWith("Int_") && thingtype==="isy") ||
+         (tkey.startsWith("State_") && thingtype==="isy") ) {
 
         var modvar = tkey;
 
@@ -5853,7 +5803,7 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         $tc += "<div class=\"overlay " + tkey + " " + subtype + " v_" + kindex + "\">";
         if (sibling) { $tc += sibling; }
         $tc += aidi + " subid=\"" + modvar + "-dn\" title=\"" + modvar + " down\" class=\"" + thingtype + " arrow-dn " + modvar + "-dn " + pkindex + "\"></div>";
-        $tc += aidi + " subid=\"" + modvar + "\" title=\"" + thingtype + " " + modvar + "\" class=\"" + thingtype + " arrow " + modvar + pkindex + "\"" + colorval + " id=\"" + aitkey + "\">" + tval + "</div>";
+        $tc += aidi + " subid=\"" + modvar + "\" title=\"" + thingtype + " " + modvar + "\" class=\"" + thingtype + " arrow-it " + modvar + pkindex + "\"" + " id=\"" + aitkey + "\">" + tval + "</div>";
         $tc += aidi + " subid=\"" + modvar + "-up\" title=\"" + modvar + " up\" class=\"" + thingtype + " arrow-up " + modvar + "-up " + pkindex + "\"></div>";
         $tc += "</div>";
 
@@ -5972,7 +5922,7 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
             var numval = tkey.substring(8);
             $tc += aidi + ttype + " subid=\"" + tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\">" + numval + "</div>";
         } else {
-            if ( typeof tval==="string" && tval.substr(0,6)==="RULE::" && subtype!=="rule" ) {
+            if ( typeof tval==="string" && tval.substring(0,6)==="RULE::" && subtype!=="rule" ) {
                 tkeyshow += " rule";
             }
             // if ( thingtype === "variables" ) {
@@ -6337,12 +6287,9 @@ function processHubMessage(userid, hubmsg, newST) {
     // that was also used in the old housepanel.push app
     var subid = hubmsg['change_attribute'];
     var hubmsgid = hubmsg['change_device'].toString();
-    if ( newST && hubmsg["change_type"] ) {
-        var change_type = hubmsg["change_type"];
-    } else {
-        change_type = "string";
-    }
-    if ( DEBUG12 ) {
+    var change_type = hubmsg["change_type"];
+    var value = hubmsg['change_value'];
+    if ( DEBUG12 || DEBUGtmp ) {
         console.log( (ddbg()), "processHubMessage - userid: ", userid, " hubmsg: ", hubmsg);
     }
 
@@ -6377,23 +6324,37 @@ function processHubMessage(userid, hubmsg, newST) {
             } else {
                 pvalue = {};
             }
-            pvalue[subid] = hubmsg['change_value'];
 
-            // handle colors
-            if ( array_key_exists("color",pvalue) && (subid=="hue" || subid=="saturation" || subid=="level") ) {
-                var h = Math.round((parseInt(pvalue["hue"]) * 360) / 100);
-                var s = Math.round(parseInt(pvalue["saturation"]));
-                var v = Math.round(parseInt(pvalue["level"]));
-                var color = hsv2rgb(h, s, v);
-                if ( color ) {
-                    pvalue["color"] = color;
-                }
+            // handle colors - now we do this in the hub app
+            // if ( array_key_exists("color",pvalue) && (subid==="hue" || subid==="saturation" || subid==="level") ) {
+            //     var h = Math.round((parseInt(pvalue["hue"]) * 360) / 100);
+            //     var s = Math.round(parseInt(pvalue["saturation"]));
+            //     var v = Math.round(parseInt(pvalue["level"]));
+            //     var color = hsv2rgb(h, s, v);
+            //     if ( color ) {
+            //         pvalue["color"] = color;
+            //     }
+            //     pvalue[subid] = value;
+
+            // handle special case where groovy pushes an array for color changes
+            if ( subid==="color" && is_array(value) ) {
+                pvalue["hue"] = value[0];
+                pvalue["saturation"] = value[1];
+                pvalue["level"] = value[2];
+                pvalue["color"] = value[3];
+            // } else if ( subid==="object" && is_object(value) ) {
+            //     for (var key in value) {
+            //         pvalue[key] = value[key];
+            //     }
+            //     subid = Object.keys(value)[0];
+            } else {
+                pvalue[subid] = value;
             }
 
             // increment the count if this is not the inverse of a turn on action
             var d = new Date();
             if ( array_key_exists("duration",pvalue) && array_key_exists("deltaT",pvalue) ) {
-                if ( subid==="level" || subid==="position" || pvalue[subid]==="on" || pvalue[subid]==="active" || pvalue[subid]==="present" || pvalue[subid]==="open" || pvalue[subid]==="unlocked" ) {
+                if ( pvalue[subid]==="on" || pvalue[subid]==="active" || pvalue[subid]==="present" || pvalue[subid]==="open" || pvalue[subid]==="unlocked" ) {
                     if ( pvalue.deltaT > 0 ) {
                         pvalue.duration = parseFloat(pvalue.duration);
                         if ( isNaN(pvalue.duration) ) { pvalue.duration = 0.0; }
@@ -6475,12 +6436,6 @@ function processHubMessage(userid, hubmsg, newST) {
             pvalue.subid = subid;
             processRules(userid, device.id, hubmsgid, swtype, subid, pvalue, "processMsg");
             delete pvalue.subid;
-
-            // save the first device that matches
-            // if ( !devid ) {
-            //     devid = device.id;
-            //     devid = devid.toString();
-            // }
 
         });
         return devices;
@@ -7761,8 +7716,8 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
                         "swtype": swtype};
             if ( subid && subid!=="none" ) { nvpreq["subid"] = subid; }
             curl_call(host, header, nvpreq, false, "POST", function(err, res, body) {
-                if ( DEBUG7 ) {
-                    console.log( (ddbg()), "curl response: \n err: ", err, "\n res: ", res, "\n body: ", body, "\n host: ", host, "\n header: ", header, "\n params: ", nvpreq );
+                if ( DEBUG7 || DEBUGtmp ) {
+                    console.log( (ddbg()), "curl response: body: ", body, " params: ", nvpreq );
                 }
                 if ( !err || err===200 ) {
                     if ( !body ) {

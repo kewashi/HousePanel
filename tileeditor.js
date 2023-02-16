@@ -17,7 +17,7 @@ var DEBUGte = false;
 
 // popup dialog box now uses createModal
 //       editTile(userid, roomid,  roomname, "page",   roomname,   0,   0,   "",         0,      "None",  "None",     null);
-function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thingclass, hubnum, hubType, customname, htmlcontent) {  
+function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thingclass, hubid, hubindex, hubType, customname, htmlcontent) {  
     // var returnURL;
     // try {
     //     returnURL = $("input[name='returnURL']").val();
@@ -30,7 +30,8 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
         et_Globals.aid = aid;
         et_Globals.id = bid;
     }
-    et_Globals.hubnum = hubnum;
+    et_Globals.hubid = hubid;
+    et_Globals.hubindex = hubindex;
     et_Globals.hubType = hubType || "None";
     et_Globals.pagename = pagename;
     et_Globals.userid = userid;
@@ -56,7 +57,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
 	
     // header
     if ( str_type==="page" ) {
-        dialog_html += "<div class='editheader' id='editheader'>Editing Page#" + et_Globals.hubnum + 
+        dialog_html += "<div class='editheader' id='editheader'>Editing Page#" + et_Globals.hubid + 
                    " Name: " + thingindex + "</div>";
         
     } else {
@@ -79,7 +80,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
     var jqxhr = null;
     if ( str_type==="page" ) {
         jqxhr = $.post(returnURL, 
-            {useajax: "pagetile", userid: et_Globals.userid, thingid: et_Globals.thingid, id: hubnum, type: 'page', tile: thingindex, value: thingindex, attr: customname},
+            {useajax: "pagetile", userid: et_Globals.userid, thingid: et_Globals.thingid, id: hubid, type: 'page', tile: thingindex, value: thingindex, attr: customname},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;
@@ -95,6 +96,8 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
         htmlcontent = "<div id='error'>Edit dialog cannot be displayed</div>";
         htmlcontent = "<div class=\"" + thingclass + "\" id='te_wysiwyg'>" + htmlcontent + "</div>";
     }
+    // console.log(">>> htmlcontent: ", htmlcontent);
+
     dialog_html += "<div id='subsection'></div>";
     dialog_html += "</div>";
     
@@ -563,7 +566,7 @@ function initDialogBinds(str_type, thingindex) {
         var thingindex = $("#tileDialog").attr("thingindex");
         var newfloat = $("#floatOpts").val();
         var rule = "float: " + newfloat + ";";
-        console.log(">>>> Float: ", newfloat, rule, str_type);
+        // console.log(">>>> Float: ", newfloat, rule, str_type);
         if ( str_type!=="page" ) {
             addCSSRule(getCssRuleTarget(str_type, 'wholetile', thingindex), rule);
         }
@@ -671,7 +674,7 @@ function initDialogBinds(str_type, thingindex) {
                 target = target + " img.trackImage";
             }
             var rule = "width: " + newsize.toString() + "px;";
-            console.log("target: ", target, " rule: ", rule);
+            // console.log("target: ", target, " rule: ", rule);
             addCSSRule(target, rule);
 
         }
@@ -1210,7 +1213,7 @@ function setupClicks(str_type, thingindex) {
 
         var newtitle;
         if ( str_type==="page" ) {
-            newtitle = "Editing Page#" + et_Globals.hubnum + " Name: " + thingindex;
+            newtitle = "Editing Page#" + et_Globals.hubid + " Name: " + thingindex;
             $("#labelName").html("Page Name:");
         } else {
             newtitle = "Editing Tile #" + thingindex + " of Type: " + str_type;
@@ -1267,7 +1270,7 @@ function loadSubSelect(str_type, firstsub, thingindex) {
         var subid;
         // var firstsub = setsubid(str_type);
 
-        $("#tileDialog div."+str_type+"-thing  div.overlay").each(function(index) {
+        $("#tileDisplay div."+str_type+"-thing  div.overlay").each(function(index) {
             var classes = $(this).attr("class");
             var words = classes.split(" ", 3);
             subid = words[1];
@@ -1286,7 +1289,7 @@ function loadSubSelect(str_type, firstsub, thingindex) {
                 }
 
                 // limit selectable sub to exclude color since that is special
-                else if ( subid!=="color" ) {
+                else if ( subid!=="colorxxx" ) {
                     subcontent += "<option value='" + subid +"'";
                     if ( subid === firstsub ) {
                         subcontent += " selected";
@@ -1298,9 +1301,7 @@ function loadSubSelect(str_type, firstsub, thingindex) {
     
     }
     
-    // console.log("classes: " + idsubs);
     subcontent += "</select>";
-    // console.log("subcontent = " + subcontent);
     $("#subsection").html(subcontent);
     $("#subidselect").off('change');
     $("#subidselect").on('change', function(event) {
@@ -1381,14 +1382,9 @@ function updateNames(str_type, thingindex) {
     } else {
         oldname = $(target1).html();
     }
-
     if ( oldname === newname ) {
-        if ( DEBUGte ) {
-            console.log("Names match in updateNames, so doing nothing. name: ", newname);
-        }
         return;
     }
-    // $(target1).html(newname);
 
     var returnURL = cm_Globals.returnURL;
     $.post(returnURL, 
@@ -1569,8 +1565,10 @@ function initColor(str_type, subid, thingindex) {
         generic = getCssRuleTarget(str_type, subid, thingindex, "thistile");
     }
     var icontarget = "#tileDisplay " + target;
-    
-    // console.log ("initcolor: str_type= " + str_type + " subid= " + subid + " thingindex= " + thingindex + " target= " + target);
+
+    if ( DEBUGte ) {
+        console.log ("initcolor: str_type= " + str_type + " subid= " + subid + " thingindex= " + thingindex + " target= " + target);
+    }
     priorIcon = $(target).css("background-image");
     
     // set the active value
@@ -1740,9 +1738,10 @@ function initColor(str_type, subid, thingindex) {
         if ( !onstart || onstart==="rgba(0, 0, 0, 0)" ) { onstart = $("div.thing").css("background-color"); }
         if ( !onstart || onstart==="rgba(0, 0, 0, 0)" ) { onstart = "rgba(0, 0, 0, 1)"; }
     }
-    
-    // alert("target= " + target+" generic= "+generic+" onstart= "+onstart);
-    // console.log("target= "+ target+ " initial background-color= "+onstart);
+
+    if ( DEBUGte ) {
+        console.log("target= "+ target+ " initial background-color= "+onstart);
+    }
     var iconback = '<div class="colorgroup"> \
                   <label for="iconColor">Background Color</label> \
                   <input type="text" id="iconColor" caller="background" target="' + target + '" \
@@ -1808,7 +1807,9 @@ function initColor(str_type, subid, thingindex) {
             if ( !onstart || onstart==="rgba(0, 0, 0, 0)" ) { onstart = $("div.thing").css("color"); }
             if ( !onstart || onstart==="rgba(0, 0, 0, 0)" ) { onstart = "rgba(255, 255, 255, 1)"; }
         }
-        // console.log("target= "+ target+ ", initial color= "+onstart);
+        if ( DEBUGte ) {
+            console.log("target= "+ target+ ", initial color= "+onstart);
+        }
         var iconfore = '<div class="colorgroup"> \
                       <label for="iconFore">Text Font Color</label> \
                       <input type="text" id="iconFore" \
@@ -1821,8 +1822,6 @@ function initColor(str_type, subid, thingindex) {
         var fweight = $(target).css("font-weight");
         var fstyle = $(target).css("font-style");
         var fontdef;
-
-        // console.log("ffamily = " + ffamily + " fweight= " + fweight + " fstyle= " + fstyle);
 
         if ( ffamily===undefined || !ffamily || !ffamily.hasOwnProperty(("includes")) ) {
             fontdef = "sans";
@@ -1839,7 +1838,6 @@ function initColor(str_type, subid, thingindex) {
         if ( fstyle!=="normal") {
             fontdef+= "i";
         }
-        // console.log("strtype= " + str_type + " ffamily= " + ffamily + " fweight= " + fweight + " fstyle= " + fstyle + " fontdef = "+ fontdef);
 
         var fe = "";
         fe += "<div class='colorgroup font'><label>Font Type:</label>";
@@ -2181,11 +2179,8 @@ function initColor(str_type, subid, thingindex) {
         for ( var i = 0; i< ish.length; i++) {
             if (  $(ish[i]) && $(ish[i]).css("display")==="none" ) {
                 ishidden= true;
-                var status = $(ish[i]).css("display");
-                // console.log("hidden #", i, ": ", status);
             }
         }
-        // console.log("hidden info: ", ishidden);
         $("#isHidden").prop("checked", ishidden);
     }
     
@@ -2252,7 +2247,6 @@ function updateColor(strCaller, cssRuleTarget, str_type, subid, thingindex, strC
             addCSSRule(sliderbox2, "background-color: " + strColor + ";");		
             addCSSRule(sliderbox2, "color: " + strColor + ";");		
         }
-        // console.log("Slider color: caller= " + strCaller + " LineTarget= " + sliderline + " BoxTarget= "+ sliderbox);
 
     } else if ( strCaller==="background" ) {
         addCSSRule(cssRuleTarget, "background-color: " + strColor + ";");		
@@ -2317,11 +2311,9 @@ function getIcons() {
             {useajax: "geticons", id: 0, userid: et_Globals.userid, thingid: et_Globals.thingid, type: "none", value: localPath, attr: iCategory, skin: skindir, pname: pname},
             function (presult, pstatus) {
                 if (pstatus==="success" && presult ) {
-                    // console.log("reading icons from skin= " + skindir + " and path= "+localPath);
                     $('#iconList').html(presult);
                     setupIcons(iCategory);
                 } else {
-                    // console.log("iconlist reading returned: ", presult, " inputs: ", et_Globals.userid, et_Globals.thingid, "none", localPath, iCategory, skindir, pname);
                     $('#iconList').html("<div class='error'>No icons available for: " + iCategory + "</div>");
                 }
             }
@@ -2386,26 +2378,12 @@ function iconSelected(category, cssRuleTarget, imagePath, str_type, thingindex) 
     
     // if the separator is back slash change to forward slash required by css
     imagePath = imagePath.replace(/\\/g,"/");
-    // alert(imagePath);
-
-    // remove skin directory reference because css is now located in the skin directory
-    // var skindir = $("#skinid").val() + "/";
-    // if ( imagePath.startsWith(skindir) ) {
-    //     var n = skindir.length;
-    //     imagePath = imagePath.substr(n);
-    // }
-
     if ( !category.startsWith("User_") && !imagePath.startsWith("http:") ) {
         imagePath = "../../" + imagePath;
     }
 
     var imgurl = 'background-image: url("' + imagePath + '")';
-    // console.log("Setting icon: category= " + category + " target= " + cssRuleTarget + " icon= " + imagePath + " type= " + str_type + " index= " + thingindex + " rule= " + imgurl);
     addCSSRule(cssRuleTarget, imgurl + strEffect + ";");
-
-    // set new icons to default size
-    // $("#autoBgSize").prop("checked", false);
-    // updateSize(str_type, subid, thingindex);
 }
 
 function updateSize(str_type, subid, thingindex) {
@@ -2511,15 +2489,18 @@ function resetCSSRules(str_type, subid, thingindex){
 function removeCSSRule(strMatchSelector, thingindex, target){
     var scope = $("#scopeEffect").val();
     var sheet = document.getElementById('customtiles').sheet; // returns an Array-like StyleSheetList
-    //Searching of the selector matching cssRules
-    // console.log("Remove rule: " + strMatchSelector );
+    if ( DEBUGte ) {
+        console.log("Remove rule: " + strMatchSelector );
+    }
     for (var i=sheet.cssRules.length; i--;) {
         var current_style = sheet.cssRules[i];
         if ( scope==="alltile" || scope==="allpage" || ( thingindex && current_style.selectorText.indexOf("_"+thingindex) !== -1 ) || 
              (current_style.selectorText === strMatchSelector &&
                ( !target || current_style.style.cssText.indexOf(target) !== -1 ) ) ) {
             sheet.deleteRule (i);
-            // console.log("Removing rule: " + current_style.selectorText);
+            if ( DEBUGte ) {
+                console.log("Removing rule: " + current_style.selectorText);
+            }
         }
     }  
 }
