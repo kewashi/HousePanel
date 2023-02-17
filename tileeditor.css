@@ -994,14 +994,13 @@ input[type="button"]#wholetile {
 #iconChoices {
     margin: 3px;
     margin-bottom: 5px;
-    display: inline-block;
     float: left;
     width: 240px; 
     height: 18px;
 }
 
 #tileDisplay {
-    display: inline-block;
+    display: block;
     width: auto;  
     height: auto;
     margin-left: 2px;
@@ -1064,7 +1063,7 @@ div.colorgroup.font {
 }
 #iconList img.icon {
     position: relative;
-    display: inline-block;
+    display: block;
     float: left;
     margin: 2px;
     margin-bottom: 5px;
@@ -1106,7 +1105,7 @@ div.editSection_input.autochk {
 }
 
 #noHead-label {
-  display: inline-block;
+  display: block;
   text-align: left;
   float: left;
   margin-top: 5px;
