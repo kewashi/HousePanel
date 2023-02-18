@@ -6289,7 +6289,7 @@ function processHubMessage(userid, hubmsg, newST) {
     var hubmsgid = hubmsg['change_device'].toString();
     var change_type = hubmsg["change_type"];
     var value = hubmsg['change_value'];
-    if ( DEBUG12 || DEBUGtmp ) {
+    if ( DEBUG12 ) {
         console.log( (ddbg()), "processHubMessage - userid: ", userid, " hubmsg: ", hubmsg);
     }
 
@@ -7716,7 +7716,7 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
                         "swtype": swtype};
             if ( subid && subid!=="none" ) { nvpreq["subid"] = subid; }
             curl_call(host, header, nvpreq, false, "POST", function(err, res, body) {
-                if ( DEBUG7 || DEBUGtmp ) {
+                if ( DEBUG7 ) {
                     console.log( (ddbg()), "curl response: body: ", body, " params: ", nvpreq );
                 }
                 if ( !err || err===200 ) {
@@ -8268,7 +8268,7 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
                                 } else {
                                     varnum = subid.substr(4);
                                     realsubid = subid;
-                                    intvar++;
+                                    // intvar++;
                                 }
                                 cmd = "/vars/set/1/" + varnum + "/" + intvar.toString();
                                 isyresp[realsubid] = intvar.toString();
@@ -8289,7 +8289,7 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
                                 } else {
                                     varnum = subid.substr(6);
                                     realsubid = subid;
-                                    intvar++;
+                                    // intvar++;
                                     prec = parseInt(pvalue["prec_State_"+varnum]);
                                     if ( ! isNaN(prec) && prec > 0 ) {
                                         var pow10 = Math.pow(10,prec);

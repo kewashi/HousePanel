@@ -3091,8 +3091,8 @@ function processKeyVal(targetid, aid, key, value) {
         oldvalue = false;
 
     // handle button fields that are input values
-    } else if ( key==="pushed" || key==="held" || key==="released" || key==="doubleTapped") {
-        value = "<input type=\"number\" size=\"3\" min=\"1\" max=\"20\" class=\"buttonval\" value=\"" + value + "\">";
+    // } else if ( key==="pushed" || key==="held" || key==="released" || key==="doubleTapped") {
+    //     value = "<input type=\"number\" size=\"3\" min=\"1\" max=\"20\" class=\"buttonval\" value=\"" + value + "\">";
         // console.log(">>>> key: ", key, " button value: ", value, " targetid: ", targetid);
 
     // we now make color values work by setting the mini colors circle
@@ -3363,7 +3363,7 @@ function setupPage() {
         var aid = $(this).attr("aid");
         var subid = $(this).attr("subid");
         var id = $(this).attr("id");
-
+        
         // avoid doing click if the target was the title bar
         // also skip sliders tied to subid === level or colorTemperature
         if ( ( typeof aid==="undefined" ) || 
@@ -3380,6 +3380,12 @@ function setupPage() {
         // var tile = '#t-'+aid;
         var thetype = $(that).attr("type");
         var thingname = $("#s-"+aid).html();
+        var targetid = '#a-'+aid+'-'+subid;
+        if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
+            var slen = subid.length;
+            targetid = '#a-'+aid+'-'+subid.substring(0,slen-3);
+        }
+        var thevalue = $(targetid).html()
         
         // handle special control type tiles that perform javascript actions
         // if we are not in operate mode only do this if click is on operate
@@ -3435,9 +3441,16 @@ function setupPage() {
         // the dynamically created dialog box includes an input string if pw given
         // uses a simple md5 hash to store user password - this is not strong security
         if ( pw && typeof pw === "string" && pw!=="false" ) {
-            checkPassword(that, thingname, pw, ro, processClick);
+            checkPassword(that, thingname, pw, ro, thevalue, processClick);
+        } else if ( subid==="color" || 
+                    (subid.startsWith("Int_") && !subid.endsWith("-up") && !subid.endsWith("-dn") )|| 
+                    (subid.startsWith("State_") && !subid.endsWith("-up") && !subid.endsWith("-dn") ) ||
+                    subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" ||
+                    subid==="heatingSetpoint" || subid==="coolingSetpoint" ||
+                    (thetype==="variables" && subid!=="name") || subid==="hue" || subid==="saturation" ) {
+            getNewValue(that, thingname, ro, subid, thevalue);
         } else {
-            processClick(that, thingname, ro);
+            processClick(that, thingname, ro, thevalue);
         }
         evt.stopPropagation();
 
@@ -3445,7 +3458,7 @@ function setupPage() {
    
 }
 
-function checkPassword(tile, thingname, pw, ro, yesaction) {
+function checkPassword(tile, thingname, pw, ro, thevalue, yesaction) {
 
     var userpw = "";
     var tpos = $(tile).offset();
@@ -3468,7 +3481,7 @@ function checkPassword(tile, thingname, pw, ro, yesaction) {
         if ( clk==="okay" ) {
             if ( pw==="" ) {
                 // console.log("Tile action confirmed for tile [" + thingname + "]");
-                yesaction(tile, thingname, ro);
+                yesaction(tile, thingname, ro, thevalue);
             } else {
                 userpw = $("#userpw").val();
                 $.post(cm_Globals.returnURL, 
@@ -3476,7 +3489,7 @@ function checkPassword(tile, thingname, pw, ro, yesaction) {
                     function (presult, pstatus) {
                         if ( pstatus==="success" && presult==="success" ) {
                             // console.log("Protected tile [" + thingname + "] access granted.");
-                            yesaction(tile, thingname, ro);
+                            yesaction(tile, thingname, ro, thevalue);
                         } else {
                             console.log("Protected tile [" + thingname + "] access denied.");
                         }
@@ -3495,6 +3508,40 @@ function checkPassword(tile, thingname, pw, ro, yesaction) {
         // set up return key to process and escape to cancel
         $("#userpw").off("keydown");
         $("#userpw").on("keydown",function(e) {
+            if ( e.which===13  ){
+                $("#modalokay").click();
+            }
+            if ( e.which===27  ){
+                $("#modalcancel").click();
+            }
+        });
+    });
+}
+
+function getNewValue(tile, thingname, ro, subid, thevalue) {
+    var tpos = $(tile).offset();
+    var ttop = (tpos.top > 125) ? tpos.top - 120 : 5;
+    var pos = {top: ttop, left: tpos.left};
+    var htmlcontent;
+    htmlcontent = "<p>Enter new value for tile: " + thingname + "</p>";
+    htmlcontent += "<div class='ddlDialog'><label for='userpw'>" + subid + ":</label>";
+    htmlcontent += "<input class='ddlDialog' id='newsubidValue' type='text' size='20' value='" + thevalue + "' />";
+    htmlcontent += "</div>";
+    
+    createModal("modalexec", htmlcontent, "body", true, pos, 
+    function(ui) {
+        var clk = $(ui).attr("name");
+        if ( clk==="okay" ) {
+            thevalue = $("#newsubidValue").val();
+            // console.log(">>>> newValue: ", thevalue);
+            processClick(tile, thingname, ro, thevalue);
+        }
+    },
+    // after box loads set focus to field
+    function(hook, content) {
+        $("#newsubidValue").focus();
+        $("#newsubidValue").off("keydown");
+        $("#newsubidValue").on("keydown",function(e) {
             if ( e.which===13  ){
                 $("#modalokay").click();
             }
@@ -3549,7 +3596,7 @@ function addOnoff(targetid, subid, thevalue) {
 // the aid value is now exactly equal to thingid -- both are the index key in the DB
 // for the main things table that holds the index keys for devices shown on pages
 // tileid below is the index in the devices table to the absolute device information
-function processClick(that, thingname, ro) {
+function processClick(that, thingname, ro, thevalue) {
     var aid = $(that).attr("aid");
     var theattr = $(that).attr("class");
     var subid = $(that).attr("subid");
@@ -3576,7 +3623,7 @@ function processClick(that, thingname, ro) {
         targetid = '#a-'+aid+'-'+subid;
     }
 
-    var thevalue = $(targetid).html();
+    // var thevalue = $(targetid).html();
 
     // if this is an edit field then do nothing
     if ( thevalue && typeof thevalue==="string" && (thevalue.startsWith("<input type=\"text\"") || thevalue.startsWith("<input type=\"number\"") ) ) {
@@ -3607,7 +3654,7 @@ function processClick(that, thingname, ro) {
     // determine if this is a LINK or RULE by checking for sb-aid sibling element
     // this includes setting the bid of the linked tile if needed
     // new logic based on DB version
-    var usertile =  $("#sb-"+aid+"-"+targetid);
+    var usertile =  $("#sb-"+aid+"-"+subid);
     var linkval = thevalue;
     var linkid = 0;
     if ( usertile && usertile.attr("linkval") ) {
@@ -3809,14 +3856,14 @@ function processClick(that, thingname, ro) {
         }
 
         // we grab the value in the input field to pass to the click routines
-        else if ( thetype==="button" && (subid==="_push" || subid==="_hold" || subid=="_doubleTap" || subid==="_release") ) {
-            var butmap = {"_push": "pushed", "_hold":"held", "_doubleTap": "doubleTapped", "_release": "released"};
-            var findval = butmap[subid];
-            thevalue = $(that).parent().parent().find("div[subid='" + findval + "'] > input").val();
-            if ( !thevalue ) { thevalue = "1"; }
-            // console.log(">>>> button pressed. value = ", thevalue, " findval = ", findval);
-            // return;
-        }
+        // else if ( thetype==="button" && (subid==="_push" || subid==="_hold" || subid=="_doubleTap" || subid==="_release") ) {
+        //     var butmap = {"_push": "pushed", "_hold":"held", "_doubleTap": "doubleTapped", "_release": "released"};
+        //     var findval = butmap[subid];
+        //     thevalue = $(that).parent().parent().find("div[subid='" + findval + "'] > input").val();
+        //     if ( !thevalue ) { thevalue = "1"; }
+        //     // console.log(">>>> button pressed. value = ", thevalue, " findval = ", findval);
+        //     // return;
+        // }
 
         // remove isy type check since it could be a link
         else if ( subid==="switch" && (thevalue==="DON" || thevalue==="DOF" )  ) {

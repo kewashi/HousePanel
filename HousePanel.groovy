@@ -15,6 +15,7 @@
  * This is a Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history:
+ * 02/18/2023 - fix thermostat to support directly changing temperatures
  * 02/13/2023 - rewrote logic for handling colors including a nasty bugfix in hsv2rgb
  * 02/11/2023 - removed event here since we do it on node side and changed to status_
  * 01/08/2023 - added variable support
@@ -1423,6 +1424,11 @@ def doAction() {
             item."$cmd"()
         }
         cmdresult = getWeather(swid)
+        break
+    
+      case "variables":
+        cmdresult = setVariable(swid, cmd, swattr, subid)
+        break
 
       default:
         cmdresult = setOther(swid, cmd, swattr, subid)
@@ -1596,12 +1602,18 @@ def setGenericDoor(things, swid, cmd, swattr, subid, item=null) {
         } else if (cmd=="close") {
             newonoff = "closing"
         } else {
-            newonoff = (item.currentValue("door")=="closed" ||
-                        item.currentValue("door")=="closing" )  ? "open" : "closed"
+            newonoff = (item.currentValue(subid)=="closed" ||
+                        item.currentValue(subid)=="closing" )  ? "open" : "closed"
+            cmd = (newonoff == "open") ? "open" : "close"
         }
         // newonoff=="open" ? item.open() : item.close()
-        item."$cmd"()
-        resp = [door: newonoff]
+        // if command is valid, do it
+        if ( item.hasCommand(cmd) ) {
+            item."$cmd"()
+        }
+        // resp = [door: newonoff]
+        resp = [:]
+        resp.put(subid, newonoff)
         // resp = addAttr(resp, item, "contact")
         // resp = addBattery(resp, item)
     }
@@ -1627,6 +1639,9 @@ def setShade(swid, cmd, swattr, subid) {
                 cmd = "stopPositionChange"
                 newonoff = "partially_open"
                 newposition = curposition
+                if ( item.hasAttribute("level") ) {
+                    newlevel = curposition
+                }
             } else if ( newonoff == "unknown" ) {
                 cmd = null
                 newposition = 50
@@ -1639,10 +1654,16 @@ def setShade(swid, cmd, swattr, subid) {
                 cmd = "close"
                 newonoff = "closing"
                 newposition = 0
+                if ( item.hasAttribute("level") ) {
+                    newlevel = 0
+                }
             } else if ( swattr.endsWith(" closed") || (swattr.endsWith(" partially_open") && curposition < 50) ) {
                 cmd = "open"
                 newonoff = "opening"
                 newposition = 100
+                if ( item.hasAttribute("level") ) {
+                    newlevel = 100
+                }
             } else {
                 cmd = null
                 newonoff = "unknown"
@@ -1764,9 +1785,13 @@ def setBulb(swid, cmd, swattr, subid) {
 }
 
 def setPresence(swid, cmd, swattr, subid) {
+    logcaller("setPresence", swid, cmd, swattr, subid)
     def resp = false
     item  = item ? item : mypresences.find{it.id == swid }
     if ( item ) {
+        if (subid.startsWith("_")) {
+            cmd = subid.substring(1)
+        }
         if ( item.hasCommand(cmd) ) {
             item."$cmd"()
             resp = getPresence(swid, item)
@@ -1777,26 +1802,48 @@ def setPresence(swid, cmd, swattr, subid) {
 }
 
 // new way of processing buttons using user provided button numbers
+// a non-zero button number must be passed into cmd
+// and the command signalled from the subid value
 def setButton(swid, cmd, swattr, subid, item=null ) {
+    logcaller("setButton", swid, cmd, swattr, subid, "info")
     def resp = false
-    def buttonnum = cmd.isNumber() ? cmd.toInteger() : 1
+    def buttonnum = cmd.isNumber() ? cmd.toInteger() : 0
     item  = item ? item : mybuttons.find{it.id == swid }
     
-    if ( item ) {
+    if ( item && buttonnum ) {
         // resp  = [button: cmd]
-        resp = [:]
-        if ( subid.startsWith("_") && item.hasCommand(subid.substring(1)) ) {
-            def butmap = ["_push": "pushed", "_hold":"held", "_doubleTap": "doubleTapped", "_release": "released"]
-            def findval = butmap[subid] || "pushed";
+        if (subid.startsWith("_")) {
+            def revmap = ["push": "pushed", "hold":"held", "doubleTap": "doubleTapped", "release": "released"]
             cmd = subid.substring(1)
-            item."$cmd"(buttonnum)
-            resp.put(findval, cmd)
+            subid = revmap[cmd] ?: ""
+        } else if ( subid == "numberOfButtons" ) {
+            cmd = ""
         } else {
-            resp.put(subid, buttonnum);
+            def butmap = ["pushed": "push", "held":"hold", "doubleTapped": "doubleTap", "released": "release"]
+            cmd = butmap[subid] ?: "";
+        }
+
+        log.info "cmd = ${cmd} subid = ${subid} buttonnum = ${buttonnum}"
+        if ( item.hasCommand(cmd) ) {
+            item."$cmd"(buttonnum)
+        }
+        if ( subid ) {
+            resp = [:]
+            resp.put(subid, buttonnum)
         }
     }
 
     // log.debug "findval = ${findval} resp = ${resp}"
+    return resp
+}
+
+def setVariable(swid, cmd, swattr, subid ) {
+
+    try {
+        setGlobalVar(subid, cmd)
+    } catch(e) {}
+    def resp = [:]
+    resp.put(subid, cmd)
     return resp
 }
 
@@ -1808,7 +1855,8 @@ def setOther(swid, cmd, swattr, subid, item=null ) {
     def newsw
     item  = item ? item : myothers.find{it.id == swid }
     def lightflags = ["switch","level","hue","saturation","colorTemperature","color"]
-    def doorflags = ["door","shade"]
+    def doorflags = ["door","contact","shade"]
+    def buttonflags = ["pushed","held","doubleTapped","released"]
     
     if ( item ) {
         logcaller(item.getDisplayName(), swid, cmd, swattr, subid, "debug")
@@ -1819,19 +1867,15 @@ def setOther(swid, cmd, swattr, subid, item=null ) {
                 item."$subid"()
                 resp = getOther(swid, item)
             }
-        }
-        else if ( lightflags.contains(subid) ) {
+        } else if ( lightflags.contains(subid) ) {
             resp = setGenericLight(myothers, swid, cmd, swattr, subid, item)
-        }
-        else if ( doorflags.contains(subid) ) {
+        } else if ( doorflags.contains(subid) ) {
             resp = setGenericDoor(myothers, swid, cmd, swattr, subid, item)
         } else if ( subid=="windowShade" ) {
             resp = setShade(swid, cmd, swattr, subid)
-        }
-        else if ( subid=="button" || subid=="pushed" || subid=="held" ) {
+        } else if ( buttonflags.contains(subid) ) {
             resp = setButton(swid, cmd, swattr, subid, item)
-        }
-        else if ( item.hasCommand(cmd) ) {
+        } else if ( item.hasCommand(cmd) ) {
             item."$cmd"()
             resp = getOther(swid, item)
         } else {
@@ -2103,11 +2147,17 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
     def newcolor = false
     def newlevel = false
     def newname = false
+    def swtrigger = subid
     
     if (item ) {
         
         // logcaller(item.getDisplayName(), swid, cmd, swattr, subid, "trace")
         def newonoff = item.currentValue("switch")
+
+        // do this for link commands on switches that have secondary subid's
+        if ( subid.startsWith("switch") && swattr.startsWith("switch") ) {
+            subid = "switch"
+        }
 
         switch(subid) {
         
@@ -2122,6 +2172,14 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
                 cmd = "on"
             }
             newonoff = cmd
+            break
+
+        // handle cases where switches have buttons
+        case "pushed":
+        case "held":
+        case "doubleTapped":
+        case "released":
+            return setButton(swid, cmd, swattr, subid, item)
             break
 
         case "toggle":
@@ -2377,7 +2435,7 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
             resp = ["name": item.displayName]
         }
         if ( item.hasAttribute("switch") && (newonoff=="on" || newonoff=="off") ) {
-            resp.put("switch", newonoff)
+            resp.put(swtrigger, newonoff)
         }
         if ( item.hasAttribute("color") && newcolor ) { 
             resp.put("color", newcolor) 
@@ -2391,6 +2449,7 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
         if ( item.hasAttribute("level") && newlevel ) { resp.put("level", newlevel) }
         if ( item.hasAttribute("position") && newlevel ) { resp.put("position", newlevel) }
     }
+    logger("generic light setter returned: ${resp}", "info")
     return resp
 }
 
@@ -2570,50 +2629,65 @@ def setValve(swid, cmd, swattr, subid) {
 def setThermostat(swid, cmd, swattr, subid) {
     logcaller("setThermostat", swid, cmd, swattr, subid)
     def resp = false
-    def newsw = 72
-    def tempint
+    def newsw
     def item  = mythermostats.find{it.id == swid }
     if (item) {
         
         resp = getThermostat(swid, item)
         // case "heat-up":
-        if ( subid=="heatingSetpoint-up" || swattr.contains("heatingSetpoint-up") ) {
+        if ( subid=="heatingSetpoint-up" ) {
             newsw = cmd.toInteger() + 1
-            if (newsw > 85) newsw = 85
-            // item.heat()
+            newsw = Math.min(85, newsw)
             item.setHeatingSetpoint(newsw)
-            resp['heatingSetpoint'] = newsw.toString()
-            // break
-        }
-        
-        // case "cool-up":
-        else if ( subid=="coolingSetpoint-up" || swattr.contains("coolingSetpoint-up") ) {
-            newsw = cmd.toInteger() + 1
-            if (newsw > 95) newsw = 95
-            // item.cool()
-            item.setCoolingSetpoint(newsw)
-            resp['coolingSetpoint'] = newsw.toString()
-            // break
+            newsw = newsw.toString()
+            resp = [heatingSetpoint: newsw]
         }
 
         // case "heat-dn":
-        else if ( subid=="heatingSetpoint-dn" || swattr.contains("heatingSetpoint-dn")) {
+        else if ( subid=="heatingSetpoint-dn" ) {
             newsw = cmd.toInteger() - 1
-            if (newsw < 50) newsw = 50
-            // item.heat()
+            newsw = Math.max(50, newsw)
             item.setHeatingSetpoint(newsw)
-            resp['heatingSetpoint'] = newsw.toString()
-            // break
+            newsw = newsw.toString()
+            resp = [heatingSetpoint: newsw]
+        }
+          
+        else if ( subid=="heatingSetpoint" ) {
+            newsw = cmd.toInteger()
+            newsw = Math.max(50, newsw)
+            newsw = Math.min(85, newsw)
+            item.heat()
+            item.setHeatingSetpoint(newsw)
+            newsw = newsw.toString()
+            resp = [heatingSetpoint: newsw, thermostatMode: "heat"]
+        }
+        
+        // case "cool-up":
+        else if ( subid=="coolingSetpoint-up" ) {
+            newsw = cmd.toInteger() + 1
+            newsw = Math.min(95, newsw)
+            item.setCoolingSetpoint(newsw)
+            newsw = newsw.toString()
+            resp = [coolingSetpoint: newsw]
         }
         
         // case "cool-dn":
-        else if ( subid=="coolingSetpoint-dn" || swattr.contains("coolingSetpoint-dn")) {
+        else if ( subid=="coolingSetpoint-dn" ) {
             newsw = cmd.toInteger() - 1
-            if (newsw < 60) newsw = 60
-            // item.cool()
+            newsw = Math.max(60, newsw)
             item.setCoolingSetpoint(newsw)
-            resp['coolingSetpoint'] = newsw.toString()
-            // break
+            newsw = newsw.toString()
+            resp = [coolingSetpoint: newsw]
+        }
+          
+        else if ( subid=="coolingSetpoint" ) {
+            newsw = cmd.toInteger()
+            newsw = Math.max(60, newsw)
+            newsw = Math.min(95, newsw)
+            item.cool()
+            item.setCoolingSetpoint(newsw)
+            newsw = newsw.toString()
+            resp = [coolingSetpoint: newsw, thermostatMode: "cool"]
         }
           
         // case "thermostat thermomode heat":
@@ -2624,46 +2698,46 @@ def setThermostat(swid, cmd, swattr, subid) {
                 item.heat()
             }
             newsw = "heat"
-            resp['thermostatMode'] = newsw
+            resp = [thermostatMode: newsw]
         }
 
         // case "thermostat thermomode cool":
-        else if ( subid=="_cool" || (subid=="thermostatMode" && (cmd=="heat" || cmd=="heatingSetpoint" || swattr.endsWith("heat"))) ) {
+        else if ( subid=="_cool" || (subid=="thermostatMode" && cmd=="heatingSetpoint") ) {
             item.cool()
             newsw = "cool"
-            resp['thermostatMode'] = newsw
+            resp = [thermostatMode: newsw]
         }
           
         // case "thermostat thermomode auto":
-        else if ( subid=="_auto" || (subid=="thermostatMode" && (cmd=="cool" || cmd=="coolingSetpoint" || swattr.endsWith("cool"))) ) {
+        else if ( subid=="_auto" || (subid=="thermostatMode" && cmd=="coolingSetpoint") ) {
             item.auto()
             newsw = "auto"
-            resp['thermostatMode'] = newsw
+            resp = [thermostatMode: newsw]
         }
           
         // case "thermostat thermomode off":
-        else if ( subid=="_off" || (subid=="thermostatMode" && (cmd=="auto" || swattr.endsWith("auto"))) ) {
+        else if ( subid=="_off" || (subid=="thermostatMode" && (cmd=="auto")) ) {
             item.off()
             newsw = "off"
-            resp['thermostatMode'] = newsw
+            resp = [thermostatMode: newsw]
         }
           
         // case "thermostat thermomode heat":
-        else if ( subid=="_heat" || (subid=="thermostatMode" && (cmd=="off" || swattr.endsWith("off"))) ) {
+        else if ( subid=="_heat" || (subid=="thermostatMode" && cmd=="off") ) {
             item.heat()
             newsw = "heat"
-            resp['thermostatMode'] = newsw
+            resp = [thermostatMode: newsw]
         }
           
         // case leaving on, go to auto
-        else if ( subid=="thermostatFanMode" && (cmd=="on" || swattr.contains("on")) ) {
+        else if ( subid=="thermostatFanMode" && cmd=="on" ) {
             item.fanAuto()
             newsw = "auto"
-            resp['thermostatFanMode'] = newsw
+            resp = [thermostatFanMode: newsw]
         }
           
         // case leaving auto, go to either circulate or on
-        else if ( subid=="thermostatFanMode" && (cmd=="auto" || swattr.endsWith("auto")) ) {
+        else if ( subid=="thermostatFanMode" && cmd=="auto" ) {
             if ( item.hasCommand("fanCirculate") ) {
                 item.fanCirculate()
                 newsw = "circulate"
@@ -2671,66 +2745,62 @@ def setThermostat(swid, cmd, swattr, subid) {
                 item.fanOn()
                 newsw = "on"
             }
-            resp['thermostatFanMode'] = newsw
-            // break
+            resp = [thermostatFanMode: newsw]
         }
         
         // case leaving circulate, got to on:
-        else if ( subid=="thermostatFanMode" && (cmd=="circulate" || swattr.endsWith("circulate")) ) {
+        else if ( subid=="thermostatFanMode" && cmd=="circulate" ) {
             item.fanOn()
             newsw = "on"
-            resp['thermostatFanMode'] = newsw
-            // break
+            resp = [thermostatFanMode: newsw]
+            // resp['thermostatFanMode'] = newsw
         }
 
+        // these three just return the states but they should never be called
         else if ( subid=="temperature" ) {
-            def subidval = resp[subid]
-            resp = [temperature: subidval]
-        }
-          
-        else if ( subid=="heatingSetpoint" ) {
-            def subidval = resp[subid]
-            resp = [heatingSetpoint: subidval]
-        }
-          
-        else if ( subid=="coolingSetpoint" ) {
-            def subidval = resp[subid]
-            resp = [coolingSetpoint: subidval]
+            newsw = resp[subid]
+            resp = [temperature: newsw]
         }
           
         else if ( subid=="state" ) {
-            def subidval = resp[subid]
-            resp = [state: subidval]
+            newsw = resp[subid]
+            resp = [state: newsw]
         }
           
         else if ( subid=="humidity" ) {
-            def subidval = resp[subid]
-            resp = [humidity: subidval]
+            newsw = resp[subid]
+            resp = [humidity: newsw]
         }
            
-        // define actions for python end points  
+        // define actions for python end points
+        // if no action is taken the full state is returned
         else {
           // default:
             if ( (cmd=="heat" || cmd=="heatingSetpoint" || cmd=="emergencyHeat") && swattr.isNumber()) {
                 item.heat()
                 item.setHeatingSetpoint(swattr)
-                resp['heatingSetpoint'] = swattr
+                resp = [heatingSetpoint: swattr, thermostatMode: "heat"]
             }
             else if ( (cmd=="cool" || cmd=="coolingSetpoint") && swattr.isNumber()) {
                 item.cool()
                 item.setCoolingSetpoint(swattr)
-                resp['coolingSetpoint'] = swattr
-            } else if (cmd=="auto" && swattr.isNumber() && item.hasCapability("thermostatSetpoint")) {
+                resp = [coolingSetpoint: swattr, thermostatMode: "cool"]
+            } else if (cmd=="auto" && swattr.isNumber() ) {
                 item.auto()
-                item.thermostatSetpoint(swattr)
+                def heatpt = swattr.toInteger() - 3
+                def coolpt = heatpt +3
+                item.setHeatingSetpoint(heatpt)
+                item.setCoolingSetpoint(heatpt)
+                resp = [heatingSetpoint: heatpt, coolingSetpoint: coolpt, thermostatMode: "auto"]
             } else if (subid.startsWith("_")) {
-                subid = subid.substring(1)
-                resp = [:]
-                if ( item.hasCommand(subid) ) {
-                    item."$subid"()
+                cmd = subid.substring(1)
+                if ( item.hasCommand(cmd) ) {
+                    item."$cmd"(swattr)
+                } else {
+                    resp = false
                 }
             } else if ( item.hasCommand(cmd) ) {
-                item."$cmd"()
+                item."$cmd"(swattr)
             }
         }
       

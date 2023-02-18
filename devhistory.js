@@ -1,4 +1,6 @@
 const devhistory = `
+3.047   Control buttons on the panel and support setting Hubitat variables
+3.046   Add popup to edit strings like color, hue, and variables
 3.045   Rewrote logic for handling colors including a nasty bugfix in hsv2rgb
 3.044   Tidy up hub auth page and debugs and rebase to hpsql
 3.043   ISY debugged version with working webSocket support

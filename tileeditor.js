@@ -1289,6 +1289,8 @@ function loadSubSelect(str_type, firstsub, thingindex) {
                 }
 
                 // limit selectable sub to exclude color since that is special
+                // we now show this because it contains useful info and can be
+                // used to refresh color icon - will also add edit later
                 else if ( subid!=="colorxxx" ) {
                     subcontent += "<option value='" + subid +"'";
                     if ( subid === firstsub ) {
