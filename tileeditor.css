@@ -73,15 +73,6 @@ body {
     }
     .showversion {
         display: none;
-        /* color: #cccccc;
-        background-color:rgb(10, 10, 10);
-        position: absolute;
-        top: 37px;
-        right:1px;
-        width: auto; height: 25px;
-        padding-left: 5px; padding-right: 5px;
-        text-align: left; 
-        cursor: pointer; */
     }    
 }
 
@@ -1502,7 +1493,17 @@ div.overlay {
 div.thing div.overlay.level, div.thing div.overlay.position {
     position: absolute;
     height: 20px;
-    margin-bottom: 0px;
+    margin-top: 5px;
+    margin-bottom: 10px;
+    bottom: 0px;
+    width: 88%; left: 4%;
+}
+
+div.thing div.overlay.colorTemperature {
+    position: absolute;
+    height: 20px;
+    margin-top: 5px;
+    margin-bottom: 20px;
     bottom: 0px;
     width: 88%; left: 4%;
 }
@@ -1522,7 +1523,7 @@ div.page-thing div.overlay.name {
     height: 0.3em; 
 }
 
-div.thing div.overlay.level .ui-slider.slider-horizontal {
+.ui-slider.slider-horizontal {
     width: 100%;
 }
 
@@ -1661,12 +1662,6 @@ div.weather.forecastToday, div.weather.forecastTonight, div.weather.forecastTomo
     display: none;
 }
 
-/* default weather name and city to not show */
-/* div.thing.weather-thing div.overlay.name, div.thing.weather-thing div.overlay.city {
-    display: none;
-    position: relative;
-    color: rgba(255, 255, 255, 1);
-} */
 /* weather styling */
 div.thing.weather-thing {
     background-color: rgba(0,0,0,0.01);

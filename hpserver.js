@@ -491,7 +491,7 @@ function getTypes() {
 // we no longer use this function - but it could be a good replacement for echo Speaks
 // function speakText(userid, phrase) {
 //     var params = {
-//         key: GLB.voicekey,
+//         key: GLB.dbinfo.voicekey,
 //         hl: "en-us",
 //         v: "Amy",
 //         f: "16khz_16bit_mono",
@@ -526,10 +526,17 @@ function writeCustomCss(userid, pname, str) {
     } else if ( typeof str !== "string" ) {
         str = str.toString();
     }
-
+    
     // proceed only if there is a custom css file in this skin folder
     if ( userid && pname ) {
-        var fname = "user" + userid + "/" + pname + "/customtiles.css";
+        
+        // check for custom directory and if not there make it
+        var panelfolder = "user" + userid + "/" + pname;
+        if ( !fs.existsSync(panelfolder) ) {
+            makeDefaultFolder(userid, pname);
+        }
+                
+        var fname = panelfolder + "/customtiles.css";
         var d = new Date();
         var today = d.toLocaleString();
         var fixstr = "";
@@ -964,7 +971,7 @@ function getAccessToken(userid, code, hub) {
             }
 
             // we now always assume clientId and clientSecret are already encoded
-            var tokenhost = "https://dah2vb2cprod.b2clogin.com/" + GLB.fordapicode + "/oauth2/v2.0/token";
+            var tokenhost = "https://dah2vb2cprod.b2clogin.com/" + GLB.dbinfo.fordapicode + "/oauth2/v2.0/token";
             var nvpreq = "p=" + policy;
             var formData = {"grant_type": "authorization_code", "code": code, "client_id": clientId, 
                             "client_secret": clientSecret, "redirect_uri": encodeURI(redirect)};
@@ -1276,7 +1283,7 @@ function getAccessToken(userid, code, hub) {
                 var sinkdata = {
                     filterName: filterName,
                     forEntity: { entityType: "INSTALLEDAPP", entityId: hub.hubid},
-                    sink: GLB.sinkalias,
+                    sink: GLB.dbinfo["st_sinkalias"],
                     query: {queryGroups: qgroups}
                 };
 
@@ -1496,7 +1503,7 @@ function refreshFordToken(userid, hub, refresh) {
     if ( hub.hubtype==="Lincoln" ) {
         policy = policy + "_Lincoln";
     }
-    var tokenhost = "https://dah2vb2cprod.b2clogin.com/" + GLB.fordapicode + "/oauth2/v2.0/token";
+    var tokenhost = "https://dah2vb2cprod.b2clogin.com/" + GLB.dbinfo.fordapicode + "/oauth2/v2.0/token";
     var nvpreq = "p=" + policy;
     var formData = {"grant_type": "refresh_token", "refresh_token": refresh_token, "client_id": clientId, "client_secret": clientSecret};
 
@@ -3194,7 +3201,7 @@ function getDevices(hub) {
                             devicetype: thetype, hint: hint, refresh: "never", pvalue: pvalstr};
                         mydevices[id] = device;
 
-                        console.log(">>>> node: ", device );
+                        // console.log(">>>> node: ", device );
 
                         mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + id + "'")
                         .then(res => {
@@ -3204,7 +3211,7 @@ function getDevices(hub) {
                             }
                         })
                         .catch(reason => {
-                            console.log(">>>> dberr: ", reason);
+                            console.log( (ddbg()), reason);
                         });
                     }
 
@@ -3842,30 +3849,30 @@ function makeDefaultFolder(userid, pname) {
     var userfolder = "user"+userid.toString();
     if (!fs.existsSync(userfolder) ) {
         fs.mkdirSync(userfolder);
-        
-        var panelfolder = userfolder + "/" + pname;
-        if ( !fs.existsSync(panelfolder) ) {
-            fs.mkdirSync(panelfolder);
-        }
+    }
 
-        var fname = panelfolder + "/customtiles.css";
-        if ( !fs.existsSync(fname) ) {
-            writeCustomCss(userid, pname, "");
-        }
+    var panelfolder = userfolder + "/" + pname;
+    if ( !fs.existsSync(panelfolder) ) {
+        fs.mkdirSync(panelfolder);
+    }
 
-        // add three folders for custom icons, media, and photos
-        var imgfolder = panelfolder + "/icons";
-        if ( !fs.existsSync(imgfolder) ) {
-            fs.mkdirSync(imgfolder);
-        }
-        imgfolder = panelfolder + "/media";
-        if ( !fs.existsSync(imgfolder) ) {
-            fs.mkdirSync(imgfolder);
-        }
-        imgfolder = panelfolder + "/photos";
-        if ( !fs.existsSync(imgfolder) ) {
-            fs.mkdirSync(imgfolder);
-        }
+    var fname = panelfolder + "/customtiles.css";
+    if ( !fs.existsSync(fname) ) {
+        writeCustomCss(userid, pname, "");
+    }
+
+    // add three folders for custom icons, media, and photos
+    var imgfolder = panelfolder + "/icons";
+    if ( !fs.existsSync(imgfolder) ) {
+        fs.mkdirSync(imgfolder);
+    }
+    imgfolder = panelfolder + "/media";
+    if ( !fs.existsSync(imgfolder) ) {
+        fs.mkdirSync(imgfolder);
+    }
+    imgfolder = panelfolder + "/photos";
+    if ( !fs.existsSync(imgfolder) ) {
+        fs.mkdirSync(imgfolder);
     }
 }
 
@@ -4609,8 +4616,8 @@ function getAuthPage(user, configoptions, hostname, rmsg) {
             // } else if ( hubType === "Hubitat" ) {
             //     hub.hubhost = "https://oauth.cloud.hubitat.com";
             // } else if ( hubType === "NewSmartThings" ) {
-            //     // hub.clientid = GLB.clientid;
-            //     // hub.clientsecret = encodeURI(GLB.clientsecret);
+            //     // hub.clientid = GLB.dbinfo["st_clientid"];
+            //     // hub.clientsecret = encodeURI(GLB.dbinfo["st_clientsecret"]);
             //     hub.hubhost = "https://api.smartthings.com";
             //     // secretclass += " hidden";
             // } else if ( hubType === "Sonos" ) {
@@ -9421,7 +9428,7 @@ function getInfoPage(user, configoptions, hubs, req) {
     // get the port number
     var currentport = getCookie(req.cookies, "pname") || "1:default";
     if ( currentport.substring(1,2)!==":" ) {
-        currentport = "8181";
+        currentport = "Unknown";
     } else {
         currentport = GLB.webSocketServerPort + parseInt(currentport.substring(0,1));
         currentport = currentport.toString();
@@ -9675,7 +9682,7 @@ function getInfoPage(user, configoptions, hubs, req) {
     }
 }
 
-function hubFilters(userid, hubpick, hubs, useroptions, pagename, ncols) {
+function hubFilters(userid, hubpick, hubs, useroptions, pagename, ncols, isform) {
     // var options = GLB.options;
     // var useroptions = options["useroptions"];
     // var configoptions = options["config"];
@@ -9683,10 +9690,12 @@ function hubFilters(userid, hubpick, hubs, useroptions, pagename, ncols) {
 
     var thingtypes = getTypes();
     var $tc = "";
-    $tc+= "<form id=\"filteroptions\" class=\"options\" name=\"filteroptions\" action=\"#\">";
-    $tc+= hidden("userid", userid);
-    $tc += hidden("pagename", pagename);
-    $tc += hidden("returnURL", GLB.returnURL);
+    if ( isform ) {
+        $tc += "<form id=\"filteroptions\" class=\"options\" name=\"filteroptions\" action=\"#\">";
+        $tc += hidden("userid", userid);
+        $tc += hidden("pagename", pagename);
+        $tc += hidden("returnURL", GLB.returnURL);
+    }
 
     // // if more than one hub then let user pick which one to show
     if ( !hubpick ) {
@@ -9739,7 +9748,10 @@ function hubFilters(userid, hubpick, hubs, useroptions, pagename, ncols) {
     }
     $tc+= "</tr></table>";
     $tc+= "</div>";
-    $tc+= "</form>";
+
+    if ( isform ) {
+        $tc+= "</form>";
+    }
 
     return $tc;
 }
@@ -9777,7 +9789,7 @@ function getCatalog(userid, hubpick, hubs, useroptions, sensors) {
     var $tc = "";
 
     $tc += "<div id=\"catalog\">";
-    $tc += hubFilters(userid, hubpick, hubs, useroptions, "main", 3);
+    $tc += hubFilters(userid, hubpick, hubs, useroptions, "main", 3, true);
 
     $tc += "<div class='scrollvtable fshort'><table class=\"catalog\">";
 
@@ -9934,15 +9946,21 @@ function getOptionsPage(user, configoptions, hubs, req) {
         var skins = ["housepanel", "modern", "legacyblue"];
         var $tc = "";
         $tc += getHeader(userid, null, null, true);
+
+        // this is the start of the options page that gets sent to processOptions
+        $tc += "<button class=\"infobutton fixbottom\">Cancel and Return to HousePanel</button>";
+        $tc += "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
+
         $tc += hidden("pagename", "options");
         $tc += hidden("returnURL", GLB.returnURL);
         $tc += hidden("pathname", pathname);
         $tc += hidden("webSocketUrl", webSocketUrl);
         $tc += hidden("webSocketServerPort", GLB.webSocketServerPort);
         $tc += hidden("userid", userid,"userid");
-        // $tc += hidden("skinid", skin, "skinid");
         $tc += hidden("uname", uname,"unameid");
         $tc += hidden("emailid", useremail, "emailid");
+        $tc += hidden("panelid", panelid, "panelid");
+        $tc += hidden("pname", pname, "pname");
 
         var configs = {};
         for (var i in configoptions) {
@@ -9953,21 +9971,26 @@ function getOptionsPage(user, configoptions, hubs, req) {
         }
         $tc += hidden("configsid", JSON.stringify(configs), "configsid");
 
-        $tc += "<button class=\"infobutton fixbottom\">Cancel and Return to HousePanel</button>";
         $tc += "<h3>" + GLB.APPNAME + " Options</h3>";
         $tc += "<h3>for user: " + uname + " | " + useremail + "</h3>";
         // $tc += "<h3>on panel: " + pname + "</h3>";
         
         // manage panels here - select existing, remove, or add
-        $tc += "<div class='greeting'>Users can have up to 9 panels, where each panel can be displayed" +
-               " on any device to give a different look and feel. This is where you add or remove panels." +
-               " This is also where you can completely remove your account from HousePanel by deleting this user." +
-               " Note that this action is irreversible and all deleted accounts will result in removing all devices" +
-               " from the HousePanel system. All active users must have at least one panel, so if you only have one" +
-               " you will not be able to remove it." +
+        // $tc += "<div class='greeting'>Users can have up to 9 panels, where each panel can be displayed" +
+        //        " on any device to give a different look and feel. This is where you add or remove panels." +
+        //        " This is also where you can completely remove your account from HousePanel by deleting this user." +
+        //        " Note that this action is irreversible and all deleted accounts will result in removing all devices" +
+        //        " from the HousePanel system. All active users must have at least one panel, so if you only have one" +
+        //        " you will not be able to remove it." +
+        //        "</div>";
+        $tc += "<div class='greeting'>Select various options for your specific installation." +
                "</div>";
 
         $tc += "<div class=\"filteroption\">";
+
+        // // users can update their username here
+        $tc += "<div><label class=\"startupinp\">Username: </label>";
+        $tc += "<input id=\"newUsername\" class=\"optioninp\" name=\"newUsername\" size=\"20\" type=\"text\" value=\"" + uname + "\"/></div>"; 
 
         $tc += "<label class=\"startupinp\">Select Panel to Display:</label><br/>";
             $tc += "<select id='userpanel' name='userpanel'>"; 
@@ -9975,11 +9998,11 @@ function getOptionsPage(user, configoptions, hubs, req) {
                 const selected = (panel.pname === pname) ? " selected" : "";
                 $tc += "<option value='" + panel.id + "'" + selected + ">" + panel.pname  + "</option>";
             });
-            $tc += "<option value='new' skin='skin-housepanel'>newpanel</option>";
+            $tc += "<option id='newpanel' value='new'>newpanel</option>";
         $tc += "</select><br/>";
         $tc += "<div id='addnewpanel'>";
-            $tc += "<div id=\"showpanelname\"><label class=\"startupinp\">Panel Name: </label>";
-            $tc +=     "<input id=\"panelname\" class=\"optioninp\" name=\"panelname\" size=\"20\" type=\"text\" value=\"" + pname + "\"/>";
+            $tc += "<div><label class=\"startupinp\">Panel Name: </label>";
+            $tc +=     "<input id=\"panelname\" class=\"optioninp\" name=\"panelname\" size=\"20\" type=\"text\" value=\"\"/>";
             $tc += "</div>"; 
             $tc += "<br><div><label class=\"startupinp\">Select Skin to Use on This Panel:</label><br/>";
             $tc += "<select id='userskin' name='userskin'>"; 
@@ -9989,54 +10012,41 @@ function getOptionsPage(user, configoptions, hubs, req) {
             });
             $tc += "</select></div>";
             $tc += "<div><label class=\"startupinp\">Panel Password: </label>";
-            $tc += "<input id=\"panelPw\" class=\"optioninp\" name=\"panelPw\" size=\"20\" type=\"password\" value=\"\"/></div>"; 
+            $tc += "<input id=\"panelPw1\" class=\"optioninp\" name=\"panelPw1\" size=\"20\" type=\"password\" value=\"\"/></div>"; 
             $tc += "<div><label class=\"startupinp\">Confirm Password: </label>";
             $tc += "<input id=\"panelPw2\" class=\"optioninp\" name=\"panelPw2\" size=\"20\" type=\"password\" value=\"\"/></div>"; 
         $tc += "</div>";
-        $tc += "<div class=\"buttongrp\">";
-            $tc+= "<div id=\"usePanel\" class=\"smallbutton\">Select Panel</div>";
-            $tc+= "<div id=\"delPanel\" class=\"smallbutton\">Delete Panel</div>";
-            $tc+= "<div id=\"delUser\" class=\"smallbutton\">Delete User</div>";
-        $tc += "</div>";
+
+        // $tc += "<div class=\"buttongrp\">";
+        //     $tc+= "<div id=\"usePanel\" class=\"smallbutton\">Select Panel</div>";
+        //     $tc+= "<div id=\"delPanel\" class=\"smallbutton\">Delete Panel</div>";
+        //     $tc+= "<div id=\"delUser\" class=\"smallbutton\">Delete User</div>";
+        // $tc += "</div>";
 
         $tc += "</div>";
 
-        $tc += "<div class='greeting'>Select which hubs and types of things to show in the table below." +
-               " This might be useful if you have a large number of things and/or multiple hubs so you can select ." +
-               " just the things here that you care about. Note that all things remain active even if they are not shown." +
-               " Note also for ISY hubs, all things are of type \"isy\" so you will not be able to select by type for that hub." +
-               "</div>";
-        $tc += hubFilters(userid, hubpick, hubs, useroptions, "options", 8);
-         
-        $tc += "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
-        $tc += hidden("userid", userid);
-        $tc += hidden("panelid", panelid,"panelid");
+        // $tc += "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
+        // $tc += hidden("userid", userid);
+        // $tc += hidden("panelid", panelid,"panelid");
 
         $tc += "<div class=\"filteroption\">";
         $tc += "Options:<br/>";
-        
-        if ( usertype > 0 ) {
-            $tc += "<div><label for=\"kioskid\" class=\"startupinp\">Kiosk Mode: </label>";    
-            var $kstr = ($kioskoptions===true || $kioskoptions==="true") ? " checked" : "";
-            $tc+= "<input id=\"kioskid\" type=\"checkbox\" name=\"kiosk\"  value=\"" + $kioskoptions + "\"" + $kstr + "/></div>";
-
-            $tc += "<div><label for=\"ruleid\" class=\"startupinp\">Enable Rules? </label>";
-            $kstr = ($ruleoptions===true || $ruleoptions==="true") ? " checked" : "";
-            $tc += "<input id=\"ruleid\" type=\"checkbox\" name=\"rules\"  value=\"" + $ruleoptions + "\"" + $kstr + "/></div>";
-        
-            $tc += "<div><label for=\"clrblackid\" class=\"startupinp\">Blackout on Night Mode: </label>";    
-            $kstr = ($blackout===true || $blackout==="true") ? " checked" : "";
-            $tc+= "<input id=\"clrblackid\" type=\"checkbox\" name=\"blackout\"  value=\"" + $blackout + "\"" + $kstr + "/></div>";
-
-            $tc+= "<div><label for=\"photoid\" class=\"startupinp\">Photo timer (sec): </label>";
-            $tc+= "<input class=\"optioninp\" id=\"photoid\" name=\"phototimer\" type=\"number\"  min='0' max='300' step='5' value=\"" + phototimer + "\" /></div>";
-        }
+        $tc += "<div><label for=\"kioskid\" class=\"startupinp\">Kiosk Mode: </label>";    
+        var $kstr = ($kioskoptions===true || $kioskoptions==="true") ? " checked" : "";
+        $tc+= "<input id=\"kioskid\" type=\"checkbox\" name=\"kiosk\"  value=\"" + $kioskoptions + "\"" + $kstr + "/></div>";
+        $tc += "<div><label for=\"ruleid\" class=\"startupinp\">Enable Rules? </label>";
+        $kstr = ($ruleoptions===true || $ruleoptions==="true") ? " checked" : "";
+        $tc += "<input id=\"ruleid\" type=\"checkbox\" name=\"rules\"  value=\"" + $ruleoptions + "\"" + $kstr + "/></div>";
+        $tc += "<div><label for=\"clrblackid\" class=\"startupinp\">Blackout on Night Mode: </label>";    
+        $kstr = ($blackout===true || $blackout==="true") ? " checked" : "";
+        $tc+= "<input id=\"clrblackid\" type=\"checkbox\" name=\"blackout\"  value=\"" + $blackout + "\"" + $kstr + "/></div>";
+        $tc+= "<div><label for=\"photoid\" class=\"startupinp\">Photo timer (sec): </label>";
+        $tc+= "<input class=\"optioninp\" id=\"photoid\" name=\"phototimer\" type=\"number\"  min='0' max='300' step='5' value=\"" + phototimer + "\" /></div>";
         $tc += "<div><label class=\"startupinp\">Timezone: </label>";
         $tc += "<input id=\"newtimezone\" class=\"optioninp\" name=\"timezone\" size=\"20\" type=\"text\" value=\"" + timezone + "\"/></div>"; 
 
         // $tc += "<div><label class=\"startupinp\">Fast Timer: </label>";
         // $tc += "<input id=\"newfast_timer\" class=\"optioninp\" name=\"fast_timer\" size=\"20\" type=\"text\" value=\"" + $fast_timer + "\"/></div>"; 
-
         // $tc += "<div><label class=\"startupinp\">Slow Timer: </label>";
         // $tc += "<input id=\"newslow_timer\" class=\"optioninp\" name=\"slow_timer\" size=\"20\" type=\"text\" value=\"" + $slow_timer + "\"/></div>"; 
         $tc += "</div>";
@@ -10079,6 +10089,14 @@ function getOptionsPage(user, configoptions, hubs, req) {
             $tc+= "<input class=\"optionnuminp\" id=\"" + $stypeid + "\" name=\"" + $stypeid + "\" size=\"10\" type=\"number\"  min='0' max='99' step='1' value=\"" + $customcnt + "\" /></div>";
         }
         $tc+= "</div><br/><br/>";
+
+
+        $tc += "<div class='greeting'>Select which hubs and types of things to show in the table below." +
+               " This might be useful if you have a large number of things and/or multiple hubs so you can select ." +
+               " just the things here that you care about. Note that all things remain active even if they are not shown." +
+               " Note also for ISY hubs, all things are of type \"isy\" so you will not be able to select by type for that hub." +
+               "</div>";
+        $tc += hubFilters(userid, hubpick, hubs, useroptions, "options", 8, false);
 
         // now display the table of all the rooms and thing options
         $tc += "<table class=\"headoptions\"><thead>";
@@ -10327,7 +10345,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
         };
  
         // include doc button and panel name
-        var displayname = uname ? uname+" ("+useremail+")" : useremail;
+        var displayname = uname ? uname : useremail;
         tc += '<div id="showversion" class="showversion">';
         tc += '<span id="emailname">' + displayname + '</span> | <span id="infoname">' + pname + '</span><span> | V' + GLB.HPVERSION + '</span> | <span id="infoport"></span>';
         tc += '</div>';
@@ -10410,22 +10428,23 @@ function clone(obj) {
     return JSON.parse(JSON.stringify(obj));
 }
 
-function saveFilters(userid, body) {
+function saveFilters(userid, useroptions, huboptpick) {
+    // body = {useroptions: [], huboptpick: "string"}
     if ( DEBUG4 ) {
-        console.log( (ddbg()), "filters save request for user: ", userid, " body: ", body);
+        console.log( (ddbg()), "filters save request for user: ", userid, useroptions, huboptpick);
     }
     
-    if ( body.useroptions && typeof body.useroptions === "object" ) {
-        var filterobj = body.useroptions;
+    if ( is_array(useroptions) ) {
+        var filterobj = useroptions;
     } else {
         filterobj = [];
     }
 
-    var updval = {userid: userid, configkey: 'useroptions', configval: JSON.stringify(filterobj)};
+    var updval = {configkey: 'useroptions', configval: JSON.stringify(filterobj)};
     return mydb.updateRow("configs", updval, "userid = " + userid + " AND configkey = 'useroptions'")
     .then( () => {
-        if ( body.huboptpick && typeof body.huboptpick === "string" ) {
-            var updhub = {userid: userid, configkey: 'hubpick', configval: body.huboptpick};
+        if ( huboptpick && typeof huboptpick === "string" ) {
+            var updhub = {configkey: 'hubpick', configval: huboptpick};
             mydb.updateRow("configs", updhub, "userid = " + userid + " AND configkey = 'hubpick'")
             .then( () => {
             })
@@ -10438,15 +10457,18 @@ function saveFilters(userid, body) {
     .catch( reason => {
         console.log( (ddbg()), reason);
     });
-
 }
 
 // process user options page
-function processOptions(userid, panelid, optarray) {
+function processOptions(userid, panelid, pnumber, optarray, res) {
 
     // first get the configurations and things and then call routine to update them
     userid = parseInt(userid);
     panelid = parseInt(panelid);
+    // console.log(">>>> userid: ", userid, " panelid: ", panelid);
+
+    // get the hub filters and process them first
+    // filteroptions
     var joinstr = mydb.getJoinStr("things","roomid","rooms","id");
     var fields = "things.id as things_id, things.userid as things_userid, things.roomid as things_roomid, " +
         "things.tileid as things_tileid, things.posy as things_posy, things.posx as things_posx, " +
@@ -10479,10 +10501,6 @@ function processOptions(userid, panelid, optarray) {
                 configoptions[key] = parseval;
             });
         }
-        // if ( DEBUG3 ) {
-        //     console.log( (ddbg()), "processOptions params: ", configoptions, hubzero, specials, things, rooms, configs);
-        // }
-
         return doProcessOptions(optarray, configoptions, hubzero, things, rooms, specials);
     })
     .catch(reason => {
@@ -10492,10 +10510,12 @@ function processOptions(userid, panelid, optarray) {
 
     function doProcessOptions(optarray, configoptions, hubzero, things, rooms, specials) {
         if (DEBUG4) {
-            console.log( (ddbg()), "Process Options - Before Processing");
+            console.log( (ddbg()), "Process Options - Before Processing, panelid: ", panelid);
             console.log( (ddbg()), jsonshow(configoptions) );
+            console.log( (ddbg()), jsonshow(hubzero) );
             console.log( (ddbg()), jsonshow(things) );
-            console.log( (ddbg()), jsonshow(roomnames) );
+            console.log( (ddbg()), jsonshow(rooms) );
+            console.log( (ddbg()), jsonshow(specials) );
         }
         
         var roomnames = {};
@@ -10522,15 +10542,46 @@ function processOptions(userid, panelid, optarray) {
         var fcastcity = "";
         var fcastregion = "";
         var fcastcode = "";
+        var newPassword = "";
+        var newName = "";
+        var oldpname = optarray["pname"];
+        var newPanel = oldpname;
+        var oldName = optarray["uname"];
+        var newSkin = optarray["userskin"];
+        var useroptions = [];
+        var huboptpick = "-1";
 
-        // // get all the rooms checkboxes and reconstruct list of active things
-        // // note that the list of checkboxes can come in any random order
         for (var key in optarray) {
             var val = optarray[key];
+            if ( typeof val === "string" ) val = val.trim();
 
             //skip the returns from the submit button and the flag
-            if (key==="options" || key==="api" || key==="useajax" ) {
+            if (key==="options" || key==="api" || key==="useajax"  || key==="userid" || key==="panelid" || key==="webSocketUrl" || key==="returnURL" ||
+                key==="pagename" || key==="pathname" || key==="userpanel" || key==="pname" || key==="uname" ||
+                key==="userskin" || key==="panelPw2" || key==="newpanel") {
+                // console.log(">>>>> skipped key, val: ", key, " = ", val);
                 continue;
+
+            } else if ( key==="newUsername" ) {
+                // the \D ensures we start with a non-numerica character
+                // and the \S ensures we have at least 2 non-white space characters following
+                if ( val && val!==oldName && val.match(/^\D\S{2,}$/) ) {
+                    newName = val;
+                }
+            } else if ( key==="panelname" ) {
+                if ( val && val.match(/^\D\S{2,}$/) ) {
+                    newPanel = val;
+                }
+            } else if ( key==="panelPw1") {
+                var pw1 = val;
+                var pw2 = optarray["panelPw2"].trim();
+                if ( pw1 === pw2 && pw1.match(/^\D\S{5,}$/) ) {
+                    newPassword = pw_hash(pw1);
+                }
+            } else if ( key==="useroptions" ) {
+                useroptions = val;
+            } else if ( key==="huboptpick" ) {
+                huboptpick = val;
             } else if ( key==="kiosk") {
                 configoptions["kiosk"] = "true";
             } else if ( key==="rules") {
@@ -10538,31 +10589,31 @@ function processOptions(userid, panelid, optarray) {
             } else if ( key==="blackout") {
                 configoptions["blackout"] = "true";
             } else if ( key==="phototimer" ) {
-                configoptions["phototimer"] = val.trim();
+                configoptions["phototimer"] = val;
             } else if ( key==="timezone") {
-                configoptions["timezone"] = val.trim();
+                configoptions["timezone"] = val;
             } else if ( key==="fast_timer") {
-                configoptions["fast_timer"] = val.trim();
+                configoptions["fast_timer"] = val;
             } else if ( key==="slow_timer") {
-                configoptions["slow_timer"] = val.trim();
+                configoptions["slow_timer"] = val;
             } else if ( key==="fcastcity" ) {
-                fcastcity = val.trim();
-                configoptions["fcastcity"] = val.trim();
+                fcastcity = val;
+                configoptions["fcastcity"] = val;
             } else if ( key==="fcastregion" ) {
-                fcastregion = val.trim();
-                configoptions["fcastregion"] = val.trim();
+                fcastregion = val;
+                configoptions["fcastregion"] = val;
             } else if ( key==="fcastcode" ) {
-                fcastcode = val.trim();
-                configoptions["fcastcode"] = val.trim();
+                fcastcode = val;
+                configoptions["fcastcode"] = val;
             } else if ( key==="accucity" ) {
-                accucity = val.trim();
-                configoptions["accucity"] = val.trim();
+                accucity = val;
+                configoptions["accucity"] = val;
             } else if ( key==="accuregion" ) {
-                accuregion = val.trim();
-                configoptions["accuregion"] = val.trim();
+                accuregion = val;
+                configoptions["accuregion"] = val;
             } else if ( key==="accucode" ) {
-                accucode = val.trim();
-                configoptions["accucode"] = val.trim();
+                accucode = val;
+                configoptions["accucode"] = val;
             
             // handle user selected special tile count
             } else if ( key.substring(0,4)==="cnt_" ) {
@@ -10610,6 +10661,44 @@ function processOptions(userid, panelid, optarray) {
             }
         }
         
+        console.log( (ddbg()), "updated panelid: ", panelid, " userid: ", userid,  " newName: ", newName, " newPassword: ", newPassword, 
+                               " newPanel: ", newPanel, " skin: ", newSkin, " useroptions: ", useroptions, " huboptpick: ", huboptpick);
+        
+        if ( newName ) {
+            mydb.updateRow("users",{uname: newName},"id = " + userid);
+        }
+
+        var obj = {userid: userid, skin: newSkin};
+        if ( newPanel !== oldpname ) {
+            obj["pname"] = newPanel;
+            setCookie(res, "pname",  pnumber + ":" + pw_hash(newPanel));
+        }
+        if ( newPassword || newPanel !== oldpname ) {
+            obj["password"] = newPassword;
+        }
+
+        // if we have a new panel name then add, otherwise update
+        if ( newPanel !== oldpname ) {
+            mydb.addRow("panels", obj)
+            .then(results => {
+                // console.log( (ddbg()), "add results: ", results);
+            })
+            .catch(reason => {
+                console.log( (ddbg()), reason);
+            });
+        } else {
+            mydb.updateRow("panels", obj, "id = " + panelid)
+            .then(results => {
+                // console.log( (ddbg()), "update results: ", results);
+            })
+            .catch(reason => {
+                console.log( (ddbg()), reason);
+            });
+        }
+
+        // save the hub filter options
+        saveFilters(userid, useroptions, huboptpick);
+
         // handle the weather codes - write into this users folder
         writeForecastWidget(userid, fcastcity, fcastregion, fcastcode);
         writeAccuWeather(userid, accucity, accuregion, accucode);
@@ -11028,7 +11117,8 @@ function apiCall(user, body, protocol, req, res) {
     if ( protocol==="POST" ) {
         var userid = body.userid;
         var usertype = body.usertype || userid;
-        var panelid = body.panelid || 0;
+        var panelid = body.panelid;
+        if ( !panelid ) panelid = 1;
         var pname = body.pname;
         var useremail = body.email;
         var uname = body.uname;
@@ -11370,7 +11460,7 @@ function apiCall(user, body, protocol, req, res) {
                     
             case "filteroptions":
                 if ( protocol==="POST" ) {
-                    result = saveFilters(userid, body);
+                    result = saveFilters(userid, body["useroptions"], body["huboptpick"]);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -11378,7 +11468,8 @@ function apiCall(user, body, protocol, req, res) {
 
             case "saveoptions":
                 if ( protocol==="POST" ) {
-                    result = processOptions(userid, panelid, body);
+                    var pnameInfo = getCookie(req.cookies, "pname");
+                    result = processOptions(userid, panelid, pnameInfo, body, res);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -12007,8 +12098,29 @@ function buildDatabaseTable(tableindex) {
 try {
     GLB.dbinfo = JSON.parse(fs.readFileSync("housepanel.cfg","utf8"));
 } catch (e) {
-    console.log( (ddbg()), "Cannot launch HousePanel, housepanel.cfg file missing \n", e);
-    return;
+
+    // these parameters are not public
+    // if you want to share the source code publicly remove this and put in the json file above
+    GLB.dbinfo = {
+        "dbhost": "localhost",
+        "dbname": "housepanel",
+        "dbuid": "housepanel",
+        "dbpassword": "housepanel",
+        "dbtype": "sqlite",
+        "port": "8580",
+        "websocketport": "8380",
+        "allownewuser" : "true",
+        "service": "twilio",
+        "emailhost": "smtp.office365.com",
+        "emailport": "587",
+        "emailuser": "housepanel@housepanel.net",
+        "emailpass": "somepassword",
+        "twilio_sid" : "AC4c44636b3c8ca5ba4c2bd008e012aa26",
+        "twilio_token" : "e822a3150324815ecb1bfcd240d3bad8",
+        "twilio_service" : "MG0f149eb5b18104da453f7fccac0ff931"
+    };
+    // console.log( (ddbg()), "Cannot launch HousePanel, housepanel.cfg file missing \n", e);
+    // return;
 }
 
 // setup the txt message service
@@ -12023,14 +12135,6 @@ if ( twilioSid && twilioToken && twilioService ) {
 
 GLB.port = parseInt(GLB.dbinfo["port"]);
 GLB.webSocketServerPort = parseInt(GLB.dbinfo["websocketport"]);
-
-// // set fixed name for event sinks and hub authorizations for New SmartThings
-GLB.sinkalias = GLB.dbinfo["st_sinkalias"];
-GLB.clientid = GLB.dbinfo["st_clientid"];
-GLB.clientsecret = GLB.dbinfo["st_clientsecret"];
-
-GLB.voicekey = GLB.dbinfo.voicekey;
-GLB.fordapicode = GLB.dbinfo.fordapicode;
 
 var port = GLB.port;
 GLB.defhub = "new";

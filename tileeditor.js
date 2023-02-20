@@ -1491,7 +1491,7 @@ function saveCSSFile(str_type, thingindex, sheetContents, reload) {
                         } else if ( !reload ) {
                             // savedSheet = document.getElementById('customtiles').sheet;
                             window.location.href = cm_Globals.returnURL;
-                            alert("A new custome CSS file was generated. This will be automatically updated as you make edits. You must relaunch editor again.");
+                            alert("A new custom CSS file was generated for panel = [" + pname + "] This will be automatically updated as you make edits. You must relaunch editor again.");
                         }
                     }
                 }

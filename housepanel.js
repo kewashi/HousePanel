@@ -333,7 +333,7 @@ $(document).ready(function() {
 
         initWebsocket();
 
-        var unamere = /^\D\S{3,}$/;      // start with a letter and be four long at least
+        var unamere = /^\D\S{2,}$/;      // start with a letter and be three long at least
         // $("#uname").val("default");
         $("#emailid").focus();
         $("#loginform").on("keydown", function(e) {
@@ -1809,24 +1809,24 @@ function execButton(buttonid) {
         // first save our filters
         // if ( !checkInputs() ) { return; }
 
-        var fobj = formToObject("filteroptions");
+        // var fobj = formToObject("filteroptions");
         var oobj = formToObject("optionspage");
 
-        try {
-            dynoPost("filteroptions", fobj, function(presult, pstatus) {
-                dynoPost("saveoptions", oobj, function(presult, pstatus) {
-                    if ( pstatus!=="success" ) {
-                        console.log(pstatus, " result: ", presult, " optionsobj: ", oobj);
-                        alert("Options page failed to save properly");
-                    }
-                    window.location.href = cm_Globals.returnURL;
-                });
-            });
-        } catch (e) {
-            console.log("Options page failed to save properly", e);
-            alert("Options page failed to save properly");
+        // try {
+            // dynoPost("filteroptions", fobj, function(presult, pstatus) {
+        dynoPost("saveoptions", oobj, function(presult, pstatus) {
+            if ( pstatus!=="success" ) {
+                console.log(pstatus, " result: ", presult, " optionsobj: ", oobj);
+                alert("Options page failed to save properly");
+            }
             window.location.href = cm_Globals.returnURL;
-        }
+        });
+        //     });
+        // } catch (e) {
+        //     console.log("Options page failed to save properly", e);
+        //     alert("Options page failed to save properly");
+        //     window.location.href = cm_Globals.returnURL;
+        // }
 
     } else if ( buttonid==="optCancel" ) {
         // do nothing but reload the main page
@@ -1835,7 +1835,7 @@ function execButton(buttonid) {
     } else if ( buttonid==="optReset" ) {
         // reset the forms on the options page to their starting values
         $("#optionspage")[0].reset();
-        $("#filteroptions")[0].reset();
+        // $("#filteroptions")[0].reset();
 
     } else if ( buttonid==="createuser" ) {
         execCreateUser();
@@ -2042,7 +2042,7 @@ function checkInputs() {
     var errs = {};
     var isgood = true;
     var intre = /^\d{1,6}$/;         // only up to 6 digits allowed
-    var unamere = /^\D\S{3,}$/;      // start with a letter and be four long at least
+    var unamere = /^\D\S{2,}$/;      // start with a letter and be two long at least
     var pwordre = /^\S{6,}$/;        // start with anything but no white space and at least 6 digits 
 
     // errs.webSocketServerPort = checkInpval("webSocketServerPort", webSocketServerPort, intre);
@@ -2177,16 +2177,16 @@ function setupButtons() {
         $("#userpanel").on("change", function(evt) {
             var panelid = $(this).val();
             if ( panelid === "new" ) {
-                $("#showpanelname").show(); // removeClass("hidden");
+                $("#newpanel").show(); // removeClass("hidden");
                 $("#panelname").val("");
                 // $("#delPanel").html("Add Panel");
-                $("#delPanel").hide();
+                // $("#delPanel").hide();
             } else {
                 var panelname = $("#userpanel option[value='"+panelid+"']").html();
-                $("#showpanelname").hide(); // addClass("hidden");
+                $("#newpanel").hide(); // addClass("hidden");
                 $("#panelname").val(panelname);
                 // $("#delPanel").html("Delete Panel");
-                $("#delPanel").show();
+                // $("#delPanel").show();
             }
         });
         $("#delPanel").on("click", function(evt) {
