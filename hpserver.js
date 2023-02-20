@@ -3706,7 +3706,12 @@ function createNewUser(body) {
         }
         if ( !newuser || !newuser.id ) throw "error creating new user";
         userid = newuser.id;
-        
+
+        // if we don't require user validation set usertype to userid right away
+        if ( GLB.dbinfo.service!=="twilio" && GLB.dbinfo.service!=="email" && GLB.dbinfo.service!=="both"  ) {
+            mydb.updateRow("users",{usertype: userid, hpcode: ""}, "id = "+userid);
+        }
+            
         // first check to see if this user exists
         var promise = Promise.all( [
             mydb.getRow("users","*","id = "+userid),
@@ -3740,6 +3745,11 @@ function createNewUser(body) {
         var userid = panel.userid;
         var hubid = defhub.id;
 
+        // set new user if no validation is used
+        if ( GLB.dbinfo.service!=="twilio" && GLB.dbinfo.service!=="email" && GLB.dbinfo.service!=="both"  ) {
+            newuser.usertype = userid;
+        }         
+
         // create the default devices
         makeDefaultDevices(userid, hubid, configs)
         .then( result => {     
@@ -3772,19 +3782,21 @@ function createNewUser(body) {
             sendEmail(emailname, msg);
         }
     
-        // make the hpcode expire after 15 minutes
-        var delay = 15 * 60000;
-        setTimeout(function() {
-            mydb.updateRow("users",{hpcode: ""},"id = "+userid)
-            .then( () => {
-                if ( DEBUG2 ) {
-                    console.log( (ddbg()), "confirmation code removed from database for user: ", userid);
-                }
-            })
-            .catch( reason => {
-                console.log( (ddbg()), reason);
-            });
-        }, delay);
+        // make the hpcode expire after 15 minutes if validation is used
+        if ( GLB.dbinfo.service==="twilio" || GLB.dbinfo.service==="email" || GLB.dbinfo.service==="both"  ) {
+            var delay = 15 * 60000;
+            setTimeout(function() {
+                mydb.updateRow("users",{hpcode: ""},"id = "+userid)
+                .then( () => {
+                    if ( DEBUG2 ) {
+                        console.log( (ddbg()), "confirmation code removed from database for user: ", userid);
+                    }
+                })
+                .catch( reason => {
+                    console.log( (ddbg()), reason);
+                });
+            }, delay);
+        }
         return newuser;
     })
     .catch(reason => {
@@ -12097,10 +12109,17 @@ function buildDatabaseTable(tableindex) {
 // read config file
 try {
     GLB.dbinfo = JSON.parse(fs.readFileSync("housepanel.cfg","utf8"));
+    var twilioSid =  GLB.dbinfo["twilio_sid"];
+    var twilioToken =  GLB.dbinfo["twilio_token"];
+    var twilioService = GLB.dbinfo["twilio_service"];
+    if ( twilioSid && twilioToken && twilioService ) {
+        var twilioClient = require('twilio')(twilioSid, twilioToken); 
+    } else {
+        twilioClient = null;
+    }
 } catch (e) {
 
-    // these parameters are not public
-    // if you want to share the source code publicly remove this and put in the json file above
+    // default behavior is no new user validation
     GLB.dbinfo = {
         "dbhost": "localhost",
         "dbname": "housepanel",
@@ -12110,23 +12129,8 @@ try {
         "port": "8580",
         "websocketport": "8380",
         "allownewuser" : "true",
-        "service": "none",
-        "emailhost": "smtp.office365.com",
-        "emailport": "587",
-        "emailuser": "housepanel@housepanel.net",
-        "emailpass": "somepassword"
+        "service": "none"
     };
-    // console.log( (ddbg()), "Cannot launch HousePanel, housepanel.cfg file missing \n", e);
-    // return;
-}
-
-// setup the txt message service
-var twilioSid =  GLB.dbinfo["twilio_sid"];
-var twilioToken =  GLB.dbinfo["twilio_token"];
-var twilioService = GLB.dbinfo["twilio_service"];
-if ( twilioSid && twilioToken && twilioService ) {
-    var twilioClient = require('twilio')(twilioSid, twilioToken); 
-} else {
     twilioClient = null;
 }
 

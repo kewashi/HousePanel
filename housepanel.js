@@ -1702,9 +1702,14 @@ function execCreateUser() {
                     var pos = {style: pstyle};
                     console.log("new user created: ", presult);
                     var userid = presult.id;
-                    createModal("loginfo","New user created. Next, please validate using code <br>sent to mobile: " + mobile+ " to activate this account.<br><br>", "body", "Done", pos, function(ui) {
-                        window.location.href = cm_Globals.returnURL + "/activateuser?userid="+userid;
-                    });
+                    var usertype = presult.usertype;
+                    if ( !usertype || usertype === 0 ) {
+                        createModal("loginfo","New user created. Next, please validate using code in log file or sent to mobile: <b>" + mobile+ "</b> or <b>" + emailname + "</b> to activate this account.<br><br>", "body", "Done", pos, function(ui) {
+                            window.location.href = cm_Globals.returnURL + "/activateuser?userid="+userid;
+                        });
+                    } else {
+                        window.location.href = cm_Globals.returnURL;
+                    }
                 } else {
                     pstyle = "position: absolute; border: 6px black solid; background-color: red; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
                     pos = {style: pstyle};

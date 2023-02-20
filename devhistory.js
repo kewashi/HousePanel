@@ -1,5 +1,5 @@
 const devhistory = `
-3.048   Fix multiple panels to work properly and other bug fixes
+3.048   Fix multiple panels to work properly and enable no confirmation for new users
 3.047   Control buttons on the panel and support setting Hubitat variables
 3.046   Add popup to edit strings like color, hue, and variables
 3.045   Rewrote logic for handling colors including a nasty bugfix in hsv2rgb
