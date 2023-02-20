@@ -12110,14 +12110,11 @@ try {
         "port": "8580",
         "websocketport": "8380",
         "allownewuser" : "true",
-        "service": "twilio",
+        "service": "none",
         "emailhost": "smtp.office365.com",
         "emailport": "587",
         "emailuser": "housepanel@housepanel.net",
-        "emailpass": "somepassword",
-        "twilio_sid" : "AC4c44636b3c8ca5ba4c2bd008e012aa26",
-        "twilio_token" : "e822a3150324815ecb1bfcd240d3bad8",
-        "twilio_service" : "MG0f149eb5b18104da453f7fccac0ff931"
+        "emailpass": "somepassword"
     };
     // console.log( (ddbg()), "Cannot launch HousePanel, housepanel.cfg file missing \n", e);
     // return;
