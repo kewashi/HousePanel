@@ -3200,9 +3200,6 @@ function getDevices(hub) {
                         var device = {userid: userid, hubid: hubindex, deviceid: id, name: name, 
                             devicetype: thetype, hint: hint, refresh: "never", pvalue: pvalstr};
                         mydevices[id] = device;
-
-                        // console.log(">>>> node: ", device );
-
                         mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + id + "'")
                         .then(res => {
                             n++;
@@ -3519,9 +3516,9 @@ function getSpecials(configoptions) {
 }
 
 // this sends control over to processLogin upon return
-function getLoginPage(req, userid, usertype, emailname, mobile, hostname, skin) {
+function getLoginPage(req, userid, pname, emailname, mobile, hostname) {
     var tc = "";
-    var pname = "default";
+    if ( !pname ) pname = "default";
     tc+= getHeader(userid, null, null, true);
 
 
@@ -3552,8 +3549,6 @@ function getLoginPage(req, userid, usertype, emailname, mobile, hostname, skin) 
     tc+= "<input id=\"pword\" tabindex=\"3\" name=\"pword\" size=\"60\" type=\"password\" value=\"\"/>"; 
     tc+= "</div>";
     
-    tc+= "<hr>";
-
     tc+= "<div class='loginline'>";
     tc+= "<label for=\"pname\" class=\"startupinp\">Panel Name: </label><br>";
     tc+= "<input id=\"pname\" tabindex=\"4\" name=\"pname\" size=\"60\" type=\"text\" value=\"" + pname + "\"/>"; 
@@ -4330,7 +4325,16 @@ function processLogin(body, res) {
     var uhash = pw_hash(body["pword"]);
 
     // get the panel number here
-    var pnumber = body["pnumber"] || "1";
+    var pnumber = body["pnumber"];
+    if ( !pnumber ) {
+        pnumber = "1";
+    } else {
+        pnumber = parseInt(pnumber);
+        if ( isNaN(pnumber) || pnumber < 1 || pnumber > 9 ) {
+            pnumber = 1;
+        }
+        pnumber = pnumber.toString();
+    }
 
     if ( !body["pname"] ) {
         var pname = "";
@@ -4344,12 +4348,13 @@ function processLogin(body, res) {
         console.log( (ddbg()), "dologin: uname= ", uname, " pword= ", uhash, " pname= ", pname, " panelpword= ", phash, " pnumber= ", pnumber, " body: ", body);
     }
 
-    // get all the users and check for one that matches the hashed email address
+    // query for panel name given with password and username or email with password
+    // panel name can be skipped if the password is also skipped to retrieve the first panel without a password for the user given
     // emails for all users must be unique
     if ( pname ) {
         var conditions = "panels.pname = '" + pname + "' AND panels.password = '"+phash+"' AND ( users.email = '"+uname+"' OR users.uname ='"+uname+"' ) AND users.mobile = '"+umobile+"' AND users.password = '"+uhash+"'";
     } else {
-        conditions = "panels.password = '"+phash+"' AND ( users.email = '"+uname+"' OR users.uname ='"+uname+"' ) AND users.mobile = '"+umobile+"' AND users.password = '"+uhash+"'";
+        conditions = "panels.password = '' AND ( users.email = '"+uname+"' OR users.uname ='"+uname+"' ) AND users.mobile = '"+umobile+"' AND users.password = '"+uhash+"'";
     }
 
     // ** change id to usertype to map user to existing one
@@ -10001,32 +10006,37 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc += "<div class=\"filteroption\">";
 
         // // users can update their username here
-        $tc += "<div><label class=\"startupinp\">Username: </label>";
+        $tc += "<div><label class=\"optioninp\">Username: </label>";
         $tc += "<input id=\"newUsername\" class=\"optioninp\" name=\"newUsername\" size=\"20\" type=\"text\" value=\"" + uname + "\"/></div>"; 
 
-        $tc += "<label class=\"startupinp\">Select Panel to Display:</label><br/>";
-            $tc += "<select id='userpanel' name='userpanel'>"; 
+        // available panels to pick from
+        $tc += "<label class =\"optioninp\">Select from list or enter name below:</label>";
+            $tc += "<select class=\"optioninp\" id='userpanel' name='userpanel'>"; 
             panels.forEach(panel => {
                 const selected = (panel.pname === pname) ? " selected" : "";
                 $tc += "<option value='" + panel.id + "'" + selected + ">" + panel.pname  + "</option>";
             });
-            $tc += "<option id='newpanel' value='new'>newpanel</option>";
         $tc += "</select><br/>";
-        $tc += "<div id='addnewpanel'>";
-            $tc += "<div><label class=\"startupinp\">Panel Name: </label>";
-            $tc +=     "<input id=\"panelname\" class=\"optioninp\" name=\"panelname\" size=\"20\" type=\"text\" value=\"\"/>";
-            $tc += "</div>"; 
-            $tc += "<br><div><label class=\"startupinp\">Select Skin to Use on This Panel:</label><br/>";
-            $tc += "<select id='userskin' name='userskin'>"; 
-            skins.forEach(askin => {
-                const selected = (askin === skin) ? " selected" : "";
-                $tc += "<option value='skin-" + askin + "'" + selected + ">" + askin  + "</option>";
-            });
-            $tc += "</select></div>";
-            $tc += "<div><label class=\"startupinp\">Panel Password: </label>";
-            $tc += "<input id=\"panelPw1\" class=\"optioninp\" name=\"panelPw1\" size=\"20\" type=\"password\" value=\"\"/></div>"; 
-            $tc += "<div><label class=\"startupinp\">Confirm Password: </label>";
-            $tc += "<input id=\"panelPw2\" class=\"optioninp\" name=\"panelPw2\" size=\"20\" type=\"password\" value=\"\"/></div>"; 
+        $tc += "<div><label class=\"optioninp\">Panel Name: </label>";
+        $tc += "<input id=\"panelname\" class=\"optioninp\" name=\"panelname\" size=\"20\" type=\"text\" value=\"" + pname + "\"/></div>";
+        $tc += "</div>";
+
+        // skins to pick from
+        $tc += "<div class=\"filteroption\">";
+        $tc += "<label class =\"optioninp\">Select Skin to Use on This Panel:</label>";
+        $tc += "<select class=\"optioninp\" id='userskin' name='userskin'>"; 
+        skins.forEach(askin => {
+            const selected = (askin === skin) ? " selected" : "";
+            $tc += "<option value='skin-" + askin + "'" + selected + ">" + askin  + "</option>";
+        });
+        $tc += "</select></div>";
+
+        // panel passwords
+        $tc += "<div class=\"filteroption\">";
+        $tc += "<div><label class=\"optioninp\">Panel Password: </label>";
+        $tc += "<input id=\"panelPw1\" class=\"optioninp\" name=\"panelPw1\" size=\"20\" type=\"password\" value=\"\"/></div>"; 
+        $tc += "<div><label class=\"optioninp\">Confirm Password: </label>";
+        $tc += "<input id=\"panelPw2\" class=\"optioninp\" name=\"panelPw2\" size=\"20\" type=\"password\" value=\"\"/></div>"; 
         $tc += "</div>";
 
         // $tc += "<div class=\"buttongrp\">";
@@ -10035,31 +10045,24 @@ function getOptionsPage(user, configoptions, hubs, req) {
         //     $tc+= "<div id=\"delUser\" class=\"smallbutton\">Delete User</div>";
         // $tc += "</div>";
 
-        $tc += "</div>";
-
-        // $tc += "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
-        // $tc += hidden("userid", userid);
-        // $tc += hidden("panelid", panelid,"panelid");
-
         $tc += "<div class=\"filteroption\">";
-        $tc += "Options:<br/>";
-        $tc += "<div><label for=\"kioskid\" class=\"startupinp\">Kiosk Mode: </label>";    
+        $tc += "<label class =\"optioninp\">Options:</label>";
+        $tc += "<div><label for=\"kioskid\" class=\"optioninp\">Kiosk Mode: </label>";    
         var $kstr = ($kioskoptions===true || $kioskoptions==="true") ? " checked" : "";
-        $tc+= "<input id=\"kioskid\" type=\"checkbox\" name=\"kiosk\"  value=\"" + $kioskoptions + "\"" + $kstr + "/></div>";
-        $tc += "<div><label for=\"ruleid\" class=\"startupinp\">Enable Rules? </label>";
+        $tc+= "<input class=\"optionchk\" id=\"kioskid\" type=\"checkbox\" name=\"kiosk\"  value=\"" + $kioskoptions + "\"" + $kstr + "/></div>";
+        $tc += "<div><label for=\"ruleid\" class=\"optioninp\">Enable Rules? </label>";
         $kstr = ($ruleoptions===true || $ruleoptions==="true") ? " checked" : "";
-        $tc += "<input id=\"ruleid\" type=\"checkbox\" name=\"rules\"  value=\"" + $ruleoptions + "\"" + $kstr + "/></div>";
-        $tc += "<div><label for=\"clrblackid\" class=\"startupinp\">Blackout on Night Mode: </label>";    
+        $tc += "<input class=\"optionchk\" id=\"ruleid\" type=\"checkbox\" name=\"rules\"  value=\"" + $ruleoptions + "\"" + $kstr + "/></div>";
+        $tc += "<div><label for=\"clrblackid\" class=\"optioninp\">Blackout on Night Mode: </label>";    
         $kstr = ($blackout===true || $blackout==="true") ? " checked" : "";
-        $tc+= "<input id=\"clrblackid\" type=\"checkbox\" name=\"blackout\"  value=\"" + $blackout + "\"" + $kstr + "/></div>";
-        $tc+= "<div><label for=\"photoid\" class=\"startupinp\">Photo timer (sec): </label>";
+        $tc+= "<input class=\"optionchk\" id=\"clrblackid\" type=\"checkbox\" name=\"blackout\"  value=\"" + $blackout + "\"" + $kstr + "/></div>";
+        $tc+= "<div><label for=\"photoid\" class=\"optioninp\">Photo timer (sec): </label>";
         $tc+= "<input class=\"optioninp\" id=\"photoid\" name=\"phototimer\" type=\"number\"  min='0' max='300' step='5' value=\"" + phototimer + "\" /></div>";
-        $tc += "<div><label class=\"startupinp\">Timezone: </label>";
+        $tc += "<div><label class=\"optioninp\">Timezone: </label>";
         $tc += "<input id=\"newtimezone\" class=\"optioninp\" name=\"timezone\" size=\"20\" type=\"text\" value=\"" + timezone + "\"/></div>"; 
-
-        // $tc += "<div><label class=\"startupinp\">Fast Timer: </label>";
+        // $tc += "<div><label class=\"optioninp\">Fast Timer: </label>";
         // $tc += "<input id=\"newfast_timer\" class=\"optioninp\" name=\"fast_timer\" size=\"20\" type=\"text\" value=\"" + $fast_timer + "\"/></div>"; 
-        // $tc += "<div><label class=\"startupinp\">Slow Timer: </label>";
+        // $tc += "<div><label class=\"optioninp\">Slow Timer: </label>";
         // $tc += "<input id=\"newslow_timer\" class=\"optioninp\" name=\"slow_timer\" size=\"20\" type=\"text\" value=\"" + $slow_timer + "\"/></div>"; 
         $tc += "</div>";
 
@@ -10097,7 +10100,7 @@ function getOptionsPage(user, configoptions, hubs, req) {
             var $customcnt = parseInt(specialtiles[$stype]);
             if ( isNaN($customcnt) ) { $customcnt = 0; }
             var $stypeid = "cnt_" + $stype;
-            $tc+= "<div><label for=\"$stypeid\" class=\"startupinp\"> " + $stype +  " tiles: </label>";
+            $tc+= "<div><label for=\"$stypeid\" class=\"optioninp\"> " + $stype +  " tiles: </label>";
             $tc+= "<input class=\"optionnuminp\" id=\"" + $stypeid + "\" name=\"" + $stypeid + "\" size=\"10\" type=\"number\"  min='0' max='99' step='1' value=\"" + $customcnt + "\" /></div>";
         }
         $tc+= "</div><br/><br/>";
@@ -10200,7 +10203,7 @@ function getOptionsPage(user, configoptions, hubs, req) {
 
         $tc+= "</tbody></table>";
         $tc+= "</div>";
-        $tc+= "<div id='optionspanel' class=\"processoptions\">";
+        $tc+= "<div class=\"buttonopts\">";
         $tc +='<div id="optSave" class="formbutton">Save</div>';
         $tc +='<div id="optReset" class="formbutton">Reset</div>';
         $tc +='<div id="optCancel" class="formbutton">Cancel</div><br>';
@@ -10472,12 +10475,14 @@ function saveFilters(userid, useroptions, huboptpick) {
 }
 
 // process user options page
-function processOptions(userid, panelid, pnumber, optarray, res) {
+function processOptions(userid, panelid, optarray, res) {
 
     // first get the configurations and things and then call routine to update them
     userid = parseInt(userid);
     panelid = parseInt(panelid);
-    // console.log(">>>> userid: ", userid, " panelid: ", panelid);
+    if ( DEBUG4 ) {
+        console.log( (ddbg()), "userid: ", userid, " panelid: ", panelid);
+    }
 
     // get the hub filters and process them first
     // filteroptions
@@ -10489,6 +10494,8 @@ function processOptions(userid, panelid, pnumber, optarray, res) {
 
     return Promise.all([
         mydb.getRow("hubs","*","hubid = '-1'"),
+        mydb.getRow("users","*","id = "+userid),
+        mydb.getRow("panels","*","id = "+panelid),
         mydb.getRows("rooms","*","userid = "+userid+" AND panelid="+panelid),
         mydb.getRows("configs","*","userid = "+userid+" AND configkey NOT LIKE 'user_%'"),
         mydb.getRows("devices","*","userid = "+userid+" AND hint='special'"),
@@ -10496,10 +10503,12 @@ function processOptions(userid, panelid, pnumber, optarray, res) {
     ])
     .then(results => {
         var hubzero = results[0];
-        var rooms = results[1];
-        var configs = results[2];
-        var specials = results[3];
-        var things = results[4];
+        var user = results[1];
+        var panel = results[2];
+        var rooms = results[3];
+        var configs = results[4];
+        var specials = results[5];
+        var things = results[6];
         var configoptions = {};
         if ( configs ) {
             configs.forEach(function(item) {
@@ -10513,14 +10522,14 @@ function processOptions(userid, panelid, pnumber, optarray, res) {
                 configoptions[key] = parseval;
             });
         }
-        return doProcessOptions(optarray, configoptions, hubzero, things, rooms, specials);
+        return doProcessOptions(optarray, configoptions, hubzero, user, panel, things, rooms, specials);
     })
     .catch(reason => {
         console.log( (ddbg()), "processOptions failed. ", reason);
         return reason;
     });
 
-    function doProcessOptions(optarray, configoptions, hubzero, things, rooms, specials) {
+    function doProcessOptions(optarray, configoptions, hubzero, user, panel, things, rooms, specials) {
         if (DEBUG4) {
             console.log( (ddbg()), "Process Options - Before Processing, panelid: ", panelid);
             console.log( (ddbg()), jsonshow(configoptions) );
@@ -10547,6 +10556,10 @@ function processOptions(userid, panelid, pnumber, optarray, res) {
         configoptions["rules"] = "false";
         configoptions["blackout"] = "false";
 
+        // get old panel info to check for changes
+        var oldPanel = panel.pname;
+        var oldSkin = panel.skin;
+
         // force all three to be given for change to happen
         var accucity = "";
         var accuregion = "";
@@ -10556,10 +10569,8 @@ function processOptions(userid, panelid, pnumber, optarray, res) {
         var fcastcode = "";
         var newPassword = "";
         var newName = "";
-        var oldpname = optarray["pname"];
-        var newPanel = oldpname;
-        var oldName = optarray["uname"];
-        var newSkin = optarray["userskin"];
+        var newSkin = oldSkin;
+        var newPanel = oldPanel;
         var useroptions = [];
         var huboptpick = "-1";
 
@@ -10569,16 +10580,15 @@ function processOptions(userid, panelid, pnumber, optarray, res) {
 
             //skip the returns from the submit button and the flag
             if (key==="options" || key==="api" || key==="useajax"  || key==="userid" || key==="panelid" || key==="webSocketUrl" || key==="returnURL" ||
-                key==="pagename" || key==="pathname" || key==="userpanel" || key==="pname" || key==="uname" ||
-                key==="userskin" || key==="panelPw2" || key==="newpanel") {
-                // console.log(">>>>> skipped key, val: ", key, " = ", val);
+                key==="pagename" || key==="pathname" || key==="userpanel" || key==="pname" || key==="uname" || key==="panelPw2" ) {
                 continue;
 
             } else if ( key==="newUsername" ) {
                 // the \D ensures we start with a non-numerica character
                 // and the \S ensures we have at least 2 non-white space characters following
-                if ( val && val!==oldName && val.match(/^\D\S{2,}$/) ) {
+                if ( val && val.match(/^\D\S{2,}$/) ) {
                     newName = val;
+                    mydb.updateRow("users",{uname: newName},"id = " + userid);
                 }
             } else if ( key==="panelname" ) {
                 if ( val && val.match(/^\D\S{2,}$/) ) {
@@ -10590,6 +10600,8 @@ function processOptions(userid, panelid, pnumber, optarray, res) {
                 if ( pw1 === pw2 && pw1.match(/^\D\S{5,}$/) ) {
                     newPassword = pw_hash(pw1);
                 }
+            } else if ( key==="userskin" ) {
+                newSkin = val;
             } else if ( key==="useroptions" ) {
                 useroptions = val;
             } else if ( key==="huboptpick" ) {
@@ -10676,38 +10688,6 @@ function processOptions(userid, panelid, pnumber, optarray, res) {
         console.log( (ddbg()), "updated panelid: ", panelid, " userid: ", userid,  " newName: ", newName, " newPassword: ", newPassword, 
                                " newPanel: ", newPanel, " skin: ", newSkin, " useroptions: ", useroptions, " huboptpick: ", huboptpick);
         
-        if ( newName ) {
-            mydb.updateRow("users",{uname: newName},"id = " + userid);
-        }
-
-        var obj = {userid: userid, skin: newSkin};
-        if ( newPanel !== oldpname ) {
-            obj["pname"] = newPanel;
-            setCookie(res, "pname",  pnumber + ":" + pw_hash(newPanel));
-        }
-        if ( newPassword || newPanel !== oldpname ) {
-            obj["password"] = newPassword;
-        }
-
-        // if we have a new panel name then add, otherwise update
-        if ( newPanel !== oldpname ) {
-            mydb.addRow("panels", obj)
-            .then(results => {
-                // console.log( (ddbg()), "add results: ", results);
-            })
-            .catch(reason => {
-                console.log( (ddbg()), reason);
-            });
-        } else {
-            mydb.updateRow("panels", obj, "id = " + panelid)
-            .then(results => {
-                // console.log( (ddbg()), "update results: ", results);
-            })
-            .catch(reason => {
-                console.log( (ddbg()), reason);
-            });
-        }
-
         // save the hub filter options
         saveFilters(userid, useroptions, huboptpick);
 
@@ -10734,13 +10714,54 @@ function processOptions(userid, panelid, pnumber, optarray, res) {
                 console.log( (ddbg()), reason);
             });
         }
-        
-        if (DEBUG4) {
-            console.log( (ddbg()), "Process Options - After Processing");
-            console.log( (ddbg()), jsonshow(configoptions) );
-        }
-        return "success";
+
+        // we return the object that was updated plus a flag to logout or reload the page
+        return mydb.getRow("panels","*", "userid = " + userid + " AND pname = '" + newPanel + "'")
+        .then(row => {
+            var obj = {userid: userid, pname: newPanel, skin: newSkin};
+            if ( row ) {
+                panelid = row.id;
+                if ( newPassword || (newPanel!==oldPanel)) {
+                    obj["password"] = newPassword;
+                }
+                return mydb.updateRow("panels", obj, "id = " + panelid)
+                .then(results => {
+                    obj["result"] = (newPassword || (newPanel!==oldPanel)) ? "logout" : "reload";
+                    obj.id = panelid;
+                    obj.useremail = user.email;
+                    obj.mobile = user.mobile;
+                    if ( DEBUG4 ) {
+                        console.log( (ddbg()), "obj: ", obj, " update results: ", results);
+                    }
+                    return obj;
+                })
+                .catch(reason => {
+                    console.log( (ddbg()), reason);
+                });
+            } else {
+                obj["password"] = newPassword;
+                return mydb.addRow("panels", obj)
+                .then(results => {
+                    panelid = mydb.getId();
+                    obj["result"] = "logout";
+                    obj.id = panelid;
+                    obj.useremail = user.email;
+                    obj.mobile = user.mobile;
+                    if ( DEBUG4 ) {
+                        console.log( (ddbg()), "obj: ", obj, "add results: ", results);
+                    }
+                    return obj;
+                })
+                .catch(reason => {
+                    console.log( (ddbg()), reason);
+                });    
+            }
+        })
+        .catch(reason => {
+            console.log( (ddbg()), reason);
+        })
     }
+    
 }
 
 // this routine updates the null hub with the special tile count requested
@@ -11480,8 +11501,8 @@ function apiCall(user, body, protocol, req, res) {
 
             case "saveoptions":
                 if ( protocol==="POST" ) {
-                    var pnameInfo = getCookie(req.cookies, "pname");
-                    result = processOptions(userid, panelid, pnameInfo, body, res);
+                    // var pnameInfo = getCookie(req.cookies, "pname");
+                    result = processOptions(userid, panelid, body, res);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -11993,7 +12014,6 @@ function setupISYSocket() {
                     // handle incoming state messages from ISY
                     connection.on("message", function(msg) {
                         if ( msg.type==="utf8" ) {
-                            // console.log(">>>> socketsignature: ", that["kw_signature"]);
                             processIsyXMLMessage(userid, msg.utf8Data);
                         }
                     });
@@ -12091,8 +12111,6 @@ function buildDatabaseTable(tableindex) {
             hpcode TEXT NULL
           )`
     ];
-
-    // console.log( (ddbg()),">>>> simulating creation of table: \n>>>> ", "mydb.query(", tableData[tableindex],"\n)");
     mydb.query(tableData[tableindex])
     .then(results => {
         console.log( (ddbg()), results );
@@ -12275,18 +12293,18 @@ if ( app && applistening ) {
                             result = validatePasswordPage(row, thecode);
                         }
                     } else {
-                        result = getLoginPage(req, 0, 0, "", "", hostname, "skin-housepanel");
+                        result = getLoginPage(req, 0, "", "", "", hostname);
                     }
                     res.send(result);
                     res.end();
                 }).catch(reason => {
                     console.log( (ddbg()), reason);
-                    var result = getLoginPage(req, 0, 0, "", "", hostname, "skin-housepanel");
+                    var result = getLoginPage(req, 0, "", "", "", hostname);
                     res.send(result);
                     res.end();
                 });
             } else {
-                var result = getLoginPage(req, 0, 0, "", "", hostname, "skin-housepanel");
+                var result = getLoginPage(req, 0, "", "", "", hostname);
                 res.send(result);
                 res.end();
             }
@@ -12305,7 +12323,7 @@ if ( app && applistening ) {
                 if ( DEBUG3 ) {
                     console.log( (ddbg()), "login rejected for user: ", results);
                 }
-                var result = getLoginPage(req, 0, 0, "", "", hostname, "skin-housepanel");
+                var result = getLoginPage(req, 0, "", "", "", hostname);
                 res.send(result);
                 res.end();
         
@@ -12401,7 +12419,13 @@ if ( app && applistening ) {
                         // clear the cookie to force repeat of login page
                         res.clearCookie("uname");
                         res.clearCookie("pname");
-                        var result = getLoginPage(req, userid, usertype, "", "", hostname, "skin-housepanel");
+
+                        if ( req.query && req.query["pname"] ) {
+                            var pname = req.query["pname"];
+                        } else {
+                            pname = "default";
+                        }
+                        var result = getLoginPage(req, userid, pname, "", "", hostname);
                         res.send(result);
                         res.end();
 
@@ -12491,7 +12515,7 @@ if ( app && applistening ) {
 
         }).catch(reason => {
             console.log( (ddbg()),"Startup error: ", reason);
-            var result = getLoginPage(req, 0, 0, "", "", hostname, "skin-housepanel");
+            var result = getLoginPage(req, 0, "", "", "", hostname);
             res.send(result);
             res.end();
         });

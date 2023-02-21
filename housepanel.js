@@ -1823,8 +1823,15 @@ function execButton(buttonid) {
             if ( pstatus!=="success" ) {
                 console.log(pstatus, " result: ", presult, " optionsobj: ", oobj);
                 alert("Options page failed to save properly");
+                window.location.href = cm_Globals.returnURL;
+            } else {
+                console.log("results: ", presult, " optionsobj: ", oobj);
+                if ( typeof presult === "object" && presult.result === "logout" ) {
+                    window.location.href = cm_Globals.returnURL + "/logout?pname=" + presult.pname;
+                } else {
+                    window.location.href = cm_Globals.returnURL;
+                }
             }
-            window.location.href = cm_Globals.returnURL;
         });
         //     });
         // } catch (e) {
@@ -2178,21 +2185,12 @@ function setupButtons() {
         setupCustomCount();
         setupFilters();
         var pos = {position: "absolute", top: 100, left: 100, width: 600, height: 120, border: "4px solid"};
-        $("#showpanelname").hide();
+        // $("#showpanelname").hide();
         $("#userpanel").on("change", function(evt) {
             var panelid = $(this).val();
-            if ( panelid === "new" ) {
-                $("#newpanel").show(); // removeClass("hidden");
-                $("#panelname").val("");
-                // $("#delPanel").html("Add Panel");
-                // $("#delPanel").hide();
-            } else {
-                var panelname = $("#userpanel option[value='"+panelid+"']").html();
-                $("#newpanel").hide(); // addClass("hidden");
-                $("#panelname").val(panelname);
-                // $("#delPanel").html("Delete Panel");
-                // $("#delPanel").show();
-            }
+            var panelname = $("#userpanel option[value='"+panelid+"']").html();
+            $("#panelname").val(panelname);
+            // $("#delPanel").html("Delete Panel");
         });
         $("#delPanel").on("click", function(evt) {
             const pname = $("#panelname").val();

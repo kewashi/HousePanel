@@ -247,7 +247,7 @@ h1, h2, h3 {
     margin-bottom: 2px;    margin-top: 2px;    margin-left: 10px;
 }
 
-input.startupinp, input.optioninp, input.optionnuminp {
+input.startupinp, input.optionnuminp {
     font-style: normal;
     font-weight: normal;
     font-size: 12pt;
@@ -261,8 +261,32 @@ input.startupinp, input.optioninp, input.optionnuminp {
     display: inline-block;
 }
 
+label.optioninp, select.optioninp {
+    font-style: normal;
+    font-weight: normal;
+    font-size: 12pt;
+    margin-left: 0px;
+    margin-top: 10px;
+    width: 150px;
+    display: inline-block;
+    text-align: right;
+}
+
+input.optionchk {
+    margin-left: 5px;
+    display: inline-block;
+}
+
 input.optioninp {
-    left: 180px;
+    font-style: normal;
+    font-weight: normal;
+    font-size: 12pt;
+    border-top: #cccccc solid 3px;
+    border-left: #cccccc solid 3px;
+    border-right: black solid 3px;
+    border-bottom: black solid 3px;
+    margin-left: 5px;
+    margin-top: 10px;
     width: 300px;
 }
 
@@ -617,11 +641,9 @@ span.indent {
     position: absolute;
     left: 220px;
 }
-div.processoptions {
+div.buttonopts {
     margin-left: 0px; margin-top: 0px;    
     padding-top: 10px;
-    background-color: white;
-    width: 550px;
     display: inline-block;
 }
 
