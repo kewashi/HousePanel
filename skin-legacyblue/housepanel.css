@@ -1,7 +1,10 @@
 /* 
- * This is the legacy blue HousePanel skin file 
+ * This is the default HousePanel skin file 
  * you can edit this file directly but I recommend
- * using the TileEditor instead which updates the customtiles.css file
+ * that instead you copy this entire folder to a new folder
+ * renaming it to your new skin name and edit that copy
+ * then you can activate the skin in the HousePanel main GUI
+ * 
  */
 
 /* panel backgrounds go here in the skin */
@@ -10,11 +13,11 @@ div.panel-Family, div.panel-family, div.panel-Familyroom, div.panel-familyroom {
     background-size: cover;
 }
 div.panel-Kitchen, div.panel-kitchen, div.panel-Dinette, div.panel-dinette {
-    background-image: url('media/kitchen.jpg');
+    background-image: url('media/kitchenroom.jpg');
     background-size: cover;
 }
 div.panel-Living, div.panel-living, div.panel-Livingroom, div.panel-livingroom {
-    background-image: url('media/living.jpg');
+    background-image: url('media/formal.jpg');
     background-size: cover;
 }
 div.panel-Outside, div.panel-outside {
@@ -47,7 +50,7 @@ div.panel-Basement, div.panel-Downstairs {
 /* the heights are set to auto for larger items like weather and thermostats */
 div.thing {
     display: inline-block;
-    margin: 2px 1px 0 1px;
+    margin: 3px 0px 2px 5px;
     text-align: center;
     vertical-align: top;
     border-top: 2px solid #cccccc; 
@@ -58,8 +61,8 @@ div.thing {
     box-shadow: 2px 2px 7px black;
     color: rgba(250, 250, 250, 1);
     cursor: default;
-    width: auto; 
-    height: auto;
+    width: 120px; 
+    height: 120px;
     z-index: 1;
     background-repeat: no-repeat;
 
@@ -77,27 +80,6 @@ div.thing:hover{
     -webkit-box-shadow: inset 0px 0px 20px 1px rgba(240, 240, 240, 0.5); 
 }
 
-div.thing.switch-thing, div.thing.switchlevel-thing, div.thing.bulb-thing, 
-div.thing.momentary-thing, div.thing.motion-thing, div.thing.valve-thing,
-div.thing.contact-thing, div.thing.mode-thing, div.thing.shm-thing,
-div.thing.presence-thing, div.thing.hsm-thing, div.thing.piston-thing,
-div.thing.light-thing, div.thing.lock-thing, div.thing.door-thing, div.thing.isy-thing {
-    height: auto;
-    width: 120px;
-}
-
-div.shm-thing div.overlay div.shm.state, div.hsm-thing div.overlay div.hsm.state {
-    width: 140px;
-    background-color: inherit;
-    border-top: none;
-}
-div.shm-thing div.overlay div.shm,
-div.hsm-thing div.overlay div.hsm {
-    background-color: rgba(150, 150, 150, 1); 
-    border-top: 1px solid white;
-    font-size: 12pt;
-    cursor: pointer;
-}
 div.shm-thing div.overlay div.shm:hover,
 div.hsm-thing div.overlay div.hsm:hover {
     filter: invert(1);
@@ -110,24 +92,39 @@ div.shm-thing div.overlay.state div.shm, div.hsm-thing div.overlay.state div.hsm
     filter: invert(0);
 }
 /* heights for things with icons */
-div.switch.on, div.switch.off, div.light.on, div.light.off, div.button,
-div.switch.flash, div.light.flash,
-div.presence.present, div.presence.absent,
-div.valve.open, div.valve.closed, div.momentary.on, div.momentary.off,
-div.motion.active, div.motion.inactive,
-div.contact.open, div.contact.closed, div.water.wet, div.water.dry,
-div.isy.DON, div.isy.DOF {
-    height: 140px;
+div.overlay.switch div.switch, 
+div.overlay.switchlevel div.switch, 
+div.overlay.light div.light, 
+div.overlay.button div.button,
+div.overlay.presence div.presence,
+div.overlay.valve div.valve, 
+div.overlay.momentary div.momentary.on,
+div.overlay.motion div.motion,
+div.overlay.contact div.contact,
+div.overlay.windowShade div.windowShade,
+div.overlay.door div.door,
+div.overlay.switch div.switch, 
+div.overlay.water div.water,
+div.overlay.fan div.fan, 
+div.overlay.mode div.mode, 
+div.overlay.piston div.piston, 
+div.overlay.isy div.isy {
+    height: 100px;
+    background-size: 55px;
+    color: rgba(250, 250, 250, 0.01);
 }
 
-div.custom-thing div.switch.switch {
-    height: 140px;
+div.overlay.contact {
+    height: 60px;
+    background-size: 40px;
 }
 
 /* items that have a pointer */
-div.switch, div.bulb, div.light, div.switchlevel, div.momentary, div.button,
+div.switch, div.bulb, div.light, div.switchlevel, div.momentary, div.button, div.windowShade,
 div.lock, div.mode, div.piston, div.valve, div.routine.label,
 div.level, div.garage.door, div.position,
+div.shm-thing div.overlay div.shm,
+div.hsm-thing div.overlay div.hsm,
 div.custom-thing div.custom.post,
 div.piston-thing, div.music.musicmute, div.overlay.music-controls div.music,
 div.door.garage.closed, div.door.garage.closing, div.door.garage.open, div.door.garage.opening,
@@ -139,147 +136,99 @@ div.overlay .ui-slider span.ui-slider-handle
 {
     cursor: pointer;
 }
+
 div.contact.door {
     cursor: default;
 }
 
-/* style the on and off states of things to not show up */
-/* set size to show text to avoid funky resizing, but use transparent color */
-div.open, div.closed, div.inactive, div.active, div.locked, div.unlocked, div.unknown, 
-div.on, div.off, div.present, div.absent, div.firing, div.piston.pistonName {
-    font-size: 11pt;
-    background-position: center center;
-}
-
 /* this section is for specific thing icons and texts */
 /* the transparency is set to near zero so text doesn't show */
-div.contact.open, div.custom.open {
+div.contact.open {
     background-image: url('icons/opencontact.png');
-    color: rgba(255, 255, 255, 0.01);
 }
-div.contact.closed, div.custom.closed {
+div.contact.closed {
     background-image: url('icons/closecontact.png');
-    color: rgba(255, 255, 255, 0.01);
 }
-div.contact.mat.open, div.custom.mat.open {
+div.contact.mat.open, div.contact.pressure.open {
     background-image: url('icons/matempty.png');
-    color: rgba(255, 255, 255, 0.01);
-    background-size: 80px;
 }
-div.contact.mat.closed, div.custom.mat.closed {
+div.contact.mat.closed, div.contact.pressure.closed {
     background-image: url('icons/matfull.png');
     color: rgba(255, 255, 255, 0.01);
-    background-size: 80px;
+    background-size: 55px;
 }
 
 /* specific contact types one might find */
 div.door.open, div.contact.door.open {
     background-image: url('icons/opendoor.png');
-    color: rgba(255, 255, 255, 0.01);
-    background-size: 40px;
 }
 div.door.closed, div.contact.door.closed {
     background-image: url('icons/closedoor.png');
-    color: rgba(255, 255, 255, 0.01);
-    background-size: 40px;
 }
 div.overlay.water div.water.wet {
     background-image: url('icons/wet@2x.png');
-    background-color: rgba(204, 255, 204, 0.6);
-    color: rgba(255, 255, 255, 0.01);
 }
 div.overlay.water div.water.dry {
     background-image: url('icons/dry@2x.png');
-    background-color: rgba(245, 245, 245, 0.6);
-    color: rgba(255, 255, 255, 0.01);
 }
 /* hide the contact part of garage doors that include an embedded contact sensor */
-div.door-thing.garage div.overlay.contact {
+div.garage-thing div.overlay.contact, div.door-thing.garage div.overlay.contact {
     display: none;
 }
-div.contact.window.open, div.custom.window.open {
+div.contact.window.open {
     background-image: url('icons/openwindow.png');
-    color: rgba(255, 255, 255, 0.01);
 }
-div.contact.window.closed, div.custom.window.closed {
+div.contact.window.closed {
     background-image: url('icons/closewindow.png');
-    color: rgba(255, 255, 255, 0.01);
 }
-div.door.garage.open, div.door.garage.opening {
+div.door.garage.open {
     background-image: url('icons/garage-opened.png');
-    color: rgba(255, 255, 255, 0.01);
-    background-size: 80px;
-    height: 112px;
+    background-size: 100px;
 }
-div.door.garage.closed, div.door.garage.closing {
+div.door.garage.closed {
     background-image: url('icons/garage-closed.png');
-    color: rgba(255, 255, 255, 0.01);
-    background-size: 80px;
-    height: 112px;
+    background-size: 100px;
+}
+div.door.garage.opening, div.door.garage.closing {
+    background-image: url('icons/garage-partial.png');
+    background-size: 100px;
 }
 
 /* fill tile with valve image */
-div.overlay.valve div.valve {
-    background-size: 120px;
-}
 div.valve.open {
     background-image: url('icons/sprinkler-on.png');
-    background-color: rgba(27,177,75,0.3);
-    color: rgba(255, 255, 255, 0.01);
-    height: 112px;
 }
 div.valve.closed {
     background-image: url('icons/sprinkler-off.png');
-    background-color: rgba(0, 51, 204, 0.3);
-    color: rgba(255, 255, 255, 0.01);
-    height: 112px;
-}
-div.valve.startZone, div.valve.pause {
-    background-color: rgba(50,50,50,1);
 }
 /* special handling of garage entry which is a door */
 div.contact.garage.entry.open {
     background-image: url('icons/opendoor.png');
-    color: rgba(255, 255, 255, 0.01);
-    background-size: 40px;
-    height: 112px;
 }
 div.contact.garage.entry.closed {
     background-image: url('icons/closedoor.png');
-    color: rgba(255, 255, 255, 0.01);
-    background-size: 40px;
-    height: 112px;
 }
-
 /* motion styling */
 div.motion.inactive {
     background-image: url('icons/stand.png');
-    background-color: rgba(0, 51, 204, 0);
-    color: rgba(255, 255, 255, 0.01);
 }
 div.motion.active {
     background-image: url('icons/run.png');
-    background-color: rgba(0, 51, 204, 0);
-    color: rgba(255, 255, 255, 0.01);
 }
-
 /* lock styling */
 div.overlay.lock div.lock.locked {
     background-image: url('icons/lock.png');
     background-color: rgba(153, 0, 51, 1);
-    color: rgba(255, 255, 255, 0.01);
-    background-size: 80px;
-    background-position-y: 50px;
+    background-size: 55px;
 }
 div.overlay.lock div.lock.unlocked, div.overlay.lock div.lock.unknown {
     background-image: url('icons/unlock.png');
     background-color: rgba(0, 102, 51, 1);
-    color: rgba(255, 255, 255, 0.01);
-    background-size: 70px;
-    background-position-y: 50px;
+    background-size: 50px;
 }
-div.thing.lock-thing {
-    background-color: rgba(153, 0, 51, 1);
+div.overlay.lastCodeName, div.overlay._getCodes,
+div.overlay._lock, div.overlay._unlock {
+    display: none;
 }
 
 /* switch styling */
@@ -287,11 +236,9 @@ div.thing.lock-thing {
 div.switch.on, div.switch.light.on, div.bulb.on, div.light.on,
 div.switch.flash, div.switch.light.flash, div.bulb.flash, div.light.flash, div.isy.DON {
     background-image: url('icons/bulbon.png');
-    color: rgba(255, 255, 255, 0.01);
 }
 div.switch.off, div.switch.light.off, div.bulb.off, div.light.off, div.isy.DOF {
     background-image: url('icons/bulboff.png');
-    color: rgba(255, 255, 255, 0.01);
 }
 div.switch.plug.on {
     background-image: url('icons/plugon.png');
@@ -301,26 +248,30 @@ div.switch.plug.off {
 }
 div.overlay.alloff div.alloff, div.overlay.allon div.allon.on, div.overlay.alloff div.alloff.on {
     background-image: url('icons/switchon.png');
-    height: 80px;
 }
 div.overlay.allon div.allon, div.overlay.alloff div.alloff.off, div.overlay.allon div.allon.off {
     background-image: url('icons/switchoff.png');
-    height: 80px;
+}
+div.overlay.windowShade div.windowShade.open {
+    background-image: url('icons/shades_open.png');
+    background-size: 80px; height: 80px;
+}
+div.overlay.windowShade div.windowShade.closed {
+    background-image: url('icons/shades_closed.png');
+    background-size: 80px; height: 80px;
+}
+div.overlay.windowShade div.windowShade.partially_open,
+div.overlay.windowShade div.windowShade.opening,
+div.overlay.windowShade div.windowShade.closing
+{
+    background-image: url('icons/shades_mid.png');
+    background-size: 80px; height: 80px;
 }
 /* enable this if you want to show levels for switches and bulbs */
 /* this will duplicate the switchlevel functionality */
 /* div.switch.level {
     display: none;
 } */
-
-/* change power and energy default style */
-div.overlay.power div.power,
-div.overlay.energy div.energy {
-    text-align: left;
-    background-color: rgba(204, 0, 51, 1);
-    color: rgba(255, 255, 255, 1);
-    font-weight: bold;
-}
 div.overlay.energy div.energy::after, div.overlay.switch div.energy::after {
     content: " (kWh)";
 }
@@ -328,39 +279,31 @@ div.overlay.power div.power::after, div.overlay.switch div.power::after {
     content: " (Watts)";
 }
 
-
 /* switchlevel / dimmer styling - make room for the dimmer controls */
 /* if you have a dimmer with power and energy controls - see custom below */
 /* things that can have sliders */
-div.switchlevel.switch, div.bulb.switch, div.isy.switch {
-    height: 140px;
-}
 div.switchlevel.colorTemperature, div.switchlevel.hue, div.switchlevel.saturation {
     height: 16px;
 }
-div.switchlevel.level, div.bulb.level, div.music.level, div.audio.volume, div.audio.groupVolume, div.position {
-    height: 4px;
-    margin-top: 4px;
-    width: 99%;
+/* div.switchlevel.level, div.bulb.level, div.music.level, div.shade.level, div.music.groupVolume, div.audio.volume, div.audio.groupVolume, div.position {
+    height: 6px;
+    width: 98%;
     color:rgba(0, 0, 0, 0.01);
-}
-div.colorTemperature-val, div.hue-val, div.saturation-val {
-    background-color: #ffffff;
-    color: #000000;
+} */
+div.thing div.overlay.position, div.thing div.overlay.level {
+    color:rgba(0, 0, 0, 0.01);
+    width: 88%; margin-left: 0px; 
+    margin-top: 5px; margin-bottom: 10px;
+    height: 20px;
+    position: absolute;
 }
 
 /* momentary styling */
-div.overlay.momentary div.momentary.off {
+div.momentary.off {
     background-image: url('icons/3dbutton.png');
-    color: rgba(255, 255, 255, 0.01);
-    height: 112px;
-    background-size: 90px;
 }
-div.overlay.momentary div.momentary.on {
+div.momentary.on {
     background-image: url('icons/3dbuttonpush.png');
-    color: rgba(255, 255, 255, 0.01);
-    height: 112px;
-    background-size: 90px;
 }
 
 /* up and down arrows */
@@ -392,13 +335,6 @@ div.heatingSetpoint-up, div.coolingSetpoint-up {
     box-shadow: 0px 1px 2px rgba(0,0,0,0.8);
 }
 
-/* this width is set assuming only one of the volume groups is visible */
-div.thing.audio-thing {
-    background-color: rgba(0, 102, 102, 1);
-    width: 180px;
-    height: auto;
-}
-
 div.overlay._previousTrack,
 div.overlay._pause,
 div.overlay._play,
@@ -415,7 +351,8 @@ div.overlay._volumeDown
 div.overlay._rewind,
 div.overlay._fastForward,
 div.overlay._groupVolumeUp,
-div.overlay._groupVolumeDown {
+div.overlay._groupVolumeDown,
+div.overlay._stopPositionChange {
     display: none;
 }
 
@@ -431,18 +368,99 @@ div.sonos._previousTrack, div.sonos._pause, div.sonos._stop, div.sonos._play, di
     width: 32px;
     margin-top: 5px;
 }
+
+div.thing.music-thing div.overlay.status,
+div.thing.music-thing div.overlay.music-controls,
+div.thing.music-thing div.overlay.mute,
+div.thing.music-thing div.overlay.currentAlbum,
+div.thing.music-thing div.overlay.currentArtist,
+div.thing.music-thing div.overlay.mediaSource {
+    display: none;
+}
+
+div.thing.music-thing div.overlay._previousTrack div._previousTrack,
+div.thing.music-thing div.overlay._nextTrack div._nextTrack,
+div.thing.music-thing div.overlay._pause div._pause,
+div.thing.music-thing div.overlay._play div._play,
+div.thing.music-thing div.overlay._stop div._stop {
+    position: absolute;
+    padding-top: 0px; padding-left: 0px;
+    color: rgba(250, 250, 250, 0.01);
+    background-size: 35px; background-repeat: no-repeat;
+    width: 35px; height: 35px; top:85px;
+    cursor: pointer;
+}
+div.thing.music-thing div.overlay._previousTrack div._previousTrack {
+    background-image: url("icons/prev.png");
+    left: 10px;
+}
+div.thing.music-thing div.overlay._nextTrack div._nextTrack {
+    background-image: url("icons/next.png");
+    left: 50px;
+}
+div.thing.music-thing div.overlay._stop div._stop {
+    background-image: url("icons/stop.png");
+    left: 90px;
+}
+div.thing.music-thing div.overlay._play div._play {
+    background-image: url("icons/play.png");
+    left: 130px;
+}
+div.thing.music-thing div.overlay._pause div._pause {
+    background-image: url("icons/play.png");
+    left: 130px;
+    display: none;
+}
+
+div.thing.music-thing div.overlay._volumeUp div._volumeUp,
+div.thing.music-thing div.overlay._volumeDown div._volumeDown,
+div.thing.music-thing div.overlay._unmute div._unmute,
+div.thing.music-thing div.overlay._mute div._mute {
+    position: absolute;
+    padding-top: 0px; padding-left: 0px;
+    color: rgba(250, 250, 250, 0.01);
+    background-size: 35px; background-repeat: no-repeat;
+    width: 35px; height: 35px; top: 120px;
+    cursor: pointer;
+}
+div.thing.music-thing div.overlay._volumeUp div._volumeUp {
+    background-image: url("icons/up.png");
+    left: 10px;
+}
+div.thing.music-thing div.overlay._volumeDown div._volumeDown {
+    background-image: url("icons/down.png");
+    left: 50px;
+}
+div.thing.music-thing div.overlay._mute div._mute {
+    background-image: url("icons/mute.png");
+    left: 90px;
+}
+div.thing.music-thing div.overlay._unmute div._unmute {
+    background-image: url("icons/unmute.png");
+    left: 130px;
+}
+div.thing.music-thing div.overlay.currentArtist div.currentArtist {
+    display: none;
+    }
+   div.thing.music-thing div.overlay.currentAlbum div.currentAlbum {
+    display: none;
+    }
+   div.thing.wholetile-thing div.overlay._volumeUp div._volumeUp {
+    position: absolute;
+    }
+
 div.audio._mute, div.audio._muteGroup, div.audio._unmute, div.audio._unmuteGroup,
 div.audio._volumeUp, div.audio._groupVolumeUp, div.audio._volumeDown, div.audio._groupVolumeDown,
 div.sonos._mute, div.sonos._muteGroup, div.sonos._unmute, div.sonos._unmuteGroup,
 div.sonos._volumeUp, div.sonos._groupVolumeUp, div.sonos._volumeDown, div.sonos._groupVolumeDown
 {
     color: rgba(255, 255, 255, 0.01);
-    background-size: 40px;
+    background-size: 38px;
     display: inline-block;
     background-repeat: no-repeat;
-    margin-top: 2px;
-    height:40px; 
-    width: 40px;
+    margin-top: 5px;
+    height:38px; 
+    width: 32px;
 }
 div.music-pause, div.audio._pause, div.sonos._pause {
     background-image: url("icons/pause.png");
@@ -484,12 +502,6 @@ div.audio._groupVolumeDown, div.sonos._groupVolumeDown {
     background-image: url("icons/downgroup.png");
 }
 
-/* make thermostat height auto */
-div.thing.thermostat-thing{
-    background-color: rgba(100,100,100,0.9);
-    height: auto;
-}
-
 /* round temperature value inside a thermostat */
 div.overlay.temperature div.temperature,
 div.overlay.realFeel div.realFeel,
@@ -514,7 +526,7 @@ div.overlay.feelsLike div.feelsLike
     -moz-border-radius: 50%;
 }
 
-div.thermostatFanMode.on {
+div.overlay div.thermostatFanMode.on {
     background-color: #3333ff;
 }
 div.overlay div.thermostatMode.heat, div.overlay div.thermostatMode.Heat {
@@ -526,21 +538,15 @@ div.overlay div.thermostatMode.cool, div.overlay div.thermostatMode.Cool {
 div.overlay div.thermostatFanMode {
     background-color: #009999;
 }
-div.overlay div.thermostatFanMode::before {
+div.overlay.thermostatFanMode div.thermostatFanMode::before {
     content: "Fan: ";
 }
-div.overlay div.thermostatMode::before,
-div.overlay div.thermomode::before {
+div.overlay.thermostatMode div.thermostatMode::before,
+div.overlay.thermomode div.thermomode::before {
     content: "Mode: ";
 }
-div.overlay div.thermostatOperatingState::before {
+div.overlay.thermostatOperatingState div.thermostatOperatingState::before {
     content: "State: ";
-}
-div.overlay div.humidity::before {
-    content: "Humidity: ";
-}
-div.weather-thing div.overlay div.humidity::after {
-    content: "%";
 }
 
 /* values of the adjustable items */
@@ -604,16 +610,6 @@ div.level-up:hover, div.level-dn:hover {
     border: 2px solid #cccccc;
 }
 
-div.thing.temperature-thing {
-    height: 150px;
-}
-
-/* music styling */
-div.thing.music-thing {
-    background-color: rgba(80,0,50,0.6);
-    width: 180px;
-    height: auto;
-}
 /* use italic serif font for music titles and a custom size */
 div.overlay.trackDescription div.custom.trackDescription, 
 div.music-thing div.overlay.trackDescription div.trackDescription,
@@ -632,33 +628,26 @@ div.overlay.status div.music.status, div.overlay.mute div.music.mute {
     height: 24px;
     width: 100%;
     font-size: 11pt;
-    background-color: rgba(80, 80, 80, 0.7);
 }
 
 /* pistons */
 div.overlay.pistonName div.pistonName {
-    height: 112px;
-    color: rgba(102,102,102,0.01);
-    background-color: rgba(102, 102, 102, 1);
     background-image: url('icons/piston.png');
-    width: 100%;
 }
 div.overlay.pistonName div.pistonName.firing {
     background-image: url('icons/pistonfiring.png');
-    color: rgba(255, 255, 255, 0.01);
 }
 
 /* weather styling */
 div.thing.weather-thing {
-    background-color: rgba(0,0,0,0.01);
-    width: 240px;
     text-align: center;
     height: auto;
 }
+
 div.overlay.temperature div.weather.temperature, 
 div.overlay.feelsLike div.weather.feelsLike,
 div.overlay.realFeel div.weather.realFeel {
-        display: inline-block;
+    display: inline-block;
     width: 118px;
     background-color: #006666;
     color: #ffffee;
@@ -683,18 +672,16 @@ div.overlay.feelsLike div.feelsLike::before {
     content: "~ ";
     font-size: 8pt;
 }
-div.weather.humidity::before {
+div.overlay.humidity div.humidity::before {
     content: "Humidity: ";
 }
-div.weather.percentPrecip::before {
+div.overlay.percentPrecip div.percentPrecip::before {
     content: "Rain: ";
 }
-div.weather.humidity::after, div.weather.percentPrecip::after,
-div.custom.percentPrecip::after {
+ div.overlay.percentPrecip div.percentPrecip::after {
     content: "%";
 }
-div.weather.illuminance::after,
-div.custom.illuminance::after {
+div.overlay.weather div.weather.illuminance::after {
     content: " Lux";
 }
 div.uom_humidity, div.uom_percentPrecip, div.uom_illuminance, div.uom_wind,
@@ -706,73 +693,73 @@ div.weather.ultravioletIndex, div.weather.lastUpdate {
     display: none;
 }
 
-/* clock styling */
-div.thing.clock-thing {
-    height: 150px;
-    width: 246px;
+/* control styling */
+div.thing.control-thing {
+    background-color: rgba(255, 255, 255, 0.4);
+    color: rgba(204, 204, 204, 1);
 }
+div.thing.control-thing div.overlay div.control {
+    font-size: 11pt;
+}
+
 div.thing.clock-thing.analog {
-    background-color: white;
+    background-color: rgba(255, 255, 255, 0.7);
 }
 div.clock.weekday {
     margin-top: 0px;
     margin-bottom: 0px;
 }
 div.clock.time {
-    font-size: 32pt;
-    margin-top: 12px;
+    font-size: 22pt;
+    margin-top: 30px;
 }
 div.clock.weekday, div.clock.date {
     font-size: 14pt;
     margin-top: 5px;
+}
+div.thing.clock-thing div.overlay.name {
+    display: none;
 }
 
 div.mode.themode {
     font-size: 20pt;
     height: 24px;
 }
-div.shm.state, div.hsm.state, div.custom.state {
+div.shm.state, div.hsm.state {
     font-size: 18pt;
-    margin-top: 10px;
+    margin-top: 0px;
     color: rgba(255, 255, 255, 1);
     background-size: 70px;
     background-repeat: no-repeat;
-    height: 102px;
+    height: 100px;
     background-position-x: center;
     background-position-y: bottom;
 }
-div.shm.state.stay, div.hsm.state.armedHome, div.state.Home,
-div.custom.state.stay, div.custom.state.armedHome, div.custom.state.Home {
+div.shm.state.stay, div.hsm.state.armedHome, div.state.Home {
     background-image: url('icons/security-blue.png');
 }
-div.shm.state.away, div.hsm.state.armedAway, div.state.Away,
-div.custom.state.away, div.custom.state.armedAway, div.custom.state.Away {
+div.shm.state.away, div.hsm.state.armedAway, div.state.Away {
     background-image: url('icons/security-red.png');
 }
-div.shm.state.off, div.hsm.state.disarmed, div.state.Disarmed,
-div.custom.state.off, div.custom.state.disarmed, div.custom.state.Disarmed {
+div.shm.state.off, div.hsm.state.disarmed, div.state.Disarmed, div.state.allDisarmed {
     background-image: url('icons/security-green.png');
 }
-div.hsm.state.armedNight, div.state.Night, 
-div.custom.state.armedNight, div.custom.state.Night {
+div.hsm.state.armedNight, div.state.Night {
     background-image: url('icons/security-purple.png');
 }
-
-/* SmartThings routines */
-div.routine.label, div.custom.label {
-    font-size: 18pt;
-    margin-top: 20px;
+div.hsm-thing div.overlay._armAway, div.hsm-thing div.overlay._armHome,
+div.hsm-thing div.overlay._armNight, div.hsm-thing div.overlay._disarm,
+div.hsm-thing div.overlay._armRules, div.hsm-thing div.overlay._disarmRules,
+div.hsm-thing div.overlay._disarmAll, div.hsm-thing div.overlay._armAll,
+div.hsm-thing div.overlay._cancelAlerts {
+    display: none;
 }
 
 /* images */
-div.thing.image-thing {
+div.thing.image-thing, div.thing.blank-thing {
     border: 0px none;
     padding: 0;
     background-color: rgba(255,255,255,0.01);
-    color: #ffffff;
-    box-shadow: none;
-    width: auto;
-    height: auto;
 }
 div.thing.image-thing div.overlay.name,
 div.thing.video-thing div.overlay.name,
@@ -781,32 +768,26 @@ div.thing.blank-thing div.overlay.name {
     display: none;
 }
 
+/* frames */
+div.thing.frame-thing {
+    width: 374px;
+    background-color: rgba(0, 0, 0, 0.01);
+}
+
 /* presence styling */
 div.presence.present, div.custom.present {
     background-image: url('icons/boypresent.png');
-    background-color: rgba(255, 255, 255, 0.6);
-    color: rgba(255, 255, 255, 0.01);
 }
 div.presence.absent, div.custom.absent {
     background-image: url('icons/boyabsent.png');
-    background-color: rgba(255, 255, 255, 0.3);
-    color: rgba(255, 255, 255, 0.01);
 }
 
 div.bulb.colorMode {
     display: none;
 }
 
-div.custom-thing {
-    height: 150px;
-    width: 120px;
-}
-
 /* for weather illuminance avoid showing T and fix humidity */
-div.illuminance-thing .overlay.temperature {
-    display: none;
-}
-div.illuminance-thing .illuminance.humidity:after {
+div.overlay.humidity div.humidity:after {
     content: "%";
 }
 
@@ -814,50 +795,37 @@ div.switchlevel.colorTemperature, div.bulb.colorTemperature {
     height: 4px;
 }
 
-/* user overlay name for locks instead of title bar */
-div.thingname.lock {
-    display: none;
-}
 div.overlay.lock div.lock.locked, div.overlay.lock div.lock.unlocked, div.overlay.lock div.lock.unknown {
-    height: 146px;
-}
-/* locks */
-div.thing.lock-thing div.overlay.name div.lock.name {
-    display: block;
-    position: absolute;
-    border: none;
-    background: none;
-    left: 18px;
-    width: 24px;
-    font-size: 14px;
-    background-color: none;
-    color: rgba(255, 255, 255, 1);
+    height: 90px;
 }
 
-div.overlay {
-    width: 100%;
-    display: block;
-}
-
-/* remove slider from regular switches */
-div.switch-thing div.overlay.level, div.switch-thing div.overlay.position {
+/* remove slider and power from regular switches */
+div.switch-thing div.overlay.level, div.switch-thing div.overlay.position,
+div.switch-thing div.overlay.power {
     display: none;
-    height: 0px;
 }
 
-/* hide the power and energy for my screen switch */
-div.switchlevel.screen.power, div.switchlevel.screen.energy {
-    display:none;
+/* smart switch on my rock fountain */
+div.switch.rock.on {
+    background-image: url('icons/rockon.png');
+}
+div.switch.rock.off {
+    background-image: url('icons/rockoff.png');
 }
 
-div.overlay.healthStatus
+/* things to hide */
+div.overlay.healthStatus, div.overlay.deltaT, div.overlay.duration, div.overlay.count,
+div.overlay.numberOfButtons, div.overlay.pushed, div.overlay.held, div.overlay.doubleTapped,
+div.overlay._poll, div.overlay._componentOff, div.overlay._componentOn, div.overlay._componentRefresh,
+div.overlay._componentSetColor, div.overlay._componentSetColorTemperature, div.overlay._componentSetLevel,
+div._startLevelChange, div._stopLevelChange, div.event_1, div.event_2, div.event_3, div.event_4,
+div.hubMeshDisabled
 {
     display: none;
 }
 
 /* enable event reporting for some things */
-div.lock.event_1,
-div.door.event_1 {
+div.event_1 {
     display: block;
     font-size: 9pt;
     width: 100%;
@@ -870,22 +838,13 @@ div.thing div.thingname {
     display: none;
 }
 
-div.thing div.overlay.name div.name {
-    background-color: rgba(0, 50, 100,1);
+div.thing div.overlay.name {
     font-size: 11pt;
     text-align: center;
-    color: #ffffff;
-    border-bottom: 2px solid rgba(0,0,0,1);
-    /* width: 100%; */
+    color: rgba(250, 250, 250, 1);
+    width: 100%;
     height: 30px;
     cursor: default;
-}
-
-div.thermostat-thing div.name {
-    width: 100%;
-}
-div.thing.clock-thing div.overlay.name {
-    display: none;
 }
 
 /* set piston images for ISY run and runThen items */
@@ -894,32 +853,22 @@ div.thing.clock-thing div.overlay.name {
 div.overlay.run div.run,
 div.overlay.runThen div.runThen {
     background-image: url('icons/piston.png');
-    background-size: 70px;
+    background-size: 55px;
     background-position-y: bottom;
     color: rgb(255, 255, 255);
     font-size: 18px;
-    height: 100px;
+    height: 90px;
     filter: invert(0);
 }
 div.overlay.run div.run.clicked,
 div.overlay.runThen div.runThen.clicked {
     background-image: url('icons/pistonfiring.png');
-    background-size: 70px;
+    background-size: 55px;
     background-position-y: bottom;
     color: rgb(255, 255, 255);
     font-size: 18px;
-    height: 100px;
+    height: 90px;
     filter: invert(0);
-}
-
-div.isy.ecobee.GV4::after {
-    content: "°F";
-}
-div.thermostat.humidity::after {
-    content: "%";
-}
-div.floorplan.thing div.overlay.color {
-    display: none;
 }
 
 /* hide the functions for EcoBee thermostats */
@@ -952,30 +901,4 @@ div.thermostat._resumeProgram,
 div.thermostat._off
 {
     display: none;
-}
-
-div.thing.switchlevel-thing div.overlay.alarmstat div.alarmstat {
-        background-image: none;
-        height: 45px;
-        padding-top: 30px;
-        top: 0px;
-        font-family: "Droid Sans", Arial, Helvetica, sans-serif;
-        font-style: normal;
-        font-weight: bold;
-        background-position-x: 100%;
-        text-align: left;
-        padding-left: 5px;
-        left: 0px;
-        font-size: 24px;
-        background-size: 65px;
-        background-repeat: no-repeat;
-}
-div.thing.switchlevel-thing div.overlay.alarmstat div.alarmstat.Off {
-    background-image: url("../../skin-housepanel/icons/security-green.png");
-}
-div.thing.switchlevel-thing div.overlay.alarmstat div.alarmstat.Stay {
-    background-image: url("../../skin-housepanel/icons/security-blue.png");
-}
-div.thing.switchlevel-thing div.overlay.alarmstat div.alarmstat.Away {
-    background-image: url("../../skin-housepanel/icons/security-red.png");
 }

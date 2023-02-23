@@ -172,8 +172,9 @@ function setCookie(res, avar, theval, days) {
     res.cookie(thevar, theval, options);
 }
 
-function getCookie(cookies, avar) {
+function getCookie(req, avar) {
     // modified cookie routines to tack on port to ensure we match this instance of the app
+    var cookies = req.cookies;
     var thevar = avar + GLB.port;
     if ( is_object(cookies) && typeof cookies[thevar]==="string" ) {
         var val = cookies[thevar];
@@ -181,6 +182,12 @@ function getCookie(cookies, avar) {
         val = null;
     }
     return val;
+}
+
+function delCookie(res, avar) {
+    // modified cookie routines to tack on port to ensure we match this instance of the app
+    var thevar = avar + GLB.port;
+    res.clearCookie(thevar);
 }
 
 function hidden(pname, pvalue, id) {
@@ -413,9 +420,9 @@ function getConfigItem(configoptions, tag) {
 }
 
 // this function gets the user name and panel name that matches the hashes
-async function getUserName(cookies) {
-    var uhash = getCookie(cookies, "uname");
-    var phash = getCookie(cookies, "pname");
+async function getUserName(req) {
+    var uhash = getCookie(req, "uname");
+    var phash = getCookie(req, "pname");
     if ( phash && phash.substr(1,1) === ":" ) {
         phash = phash.substr(2);
     }
@@ -3554,7 +3561,7 @@ function getLoginPage(req, userid, pname, emailname, mobile, hostname) {
     tc+= "<input id=\"pname\" tabindex=\"4\" name=\"pname\" size=\"60\" type=\"text\" value=\"" + pname + "\"/>"; 
     tc+= "</div>";
 
-    var currentport = getCookie(req.cookies, "pname") || "1:default";
+    var currentport = getCookie(req, "pname") || "1:default";
     if ( currentport.substr(1,1)!==":" ) {
         currentport = "1";
     } else {
@@ -3692,6 +3699,7 @@ function createNewUser(body) {
 
     var promise = checkUser(emailname)
     .then( () => {
+        // disable usertype confirmation if email or txt is not activated
         return addNewUser(emailname, username, mobile, pword);
     })
     .then( newuser => {
@@ -3702,19 +3710,14 @@ function createNewUser(body) {
         if ( !newuser || !newuser.id ) throw "error creating new user";
         userid = newuser.id;
 
-        // if we don't require user validation set usertype to userid right away
-        if ( GLB.dbinfo.service!=="twilio" && GLB.dbinfo.service!=="email" && GLB.dbinfo.service!=="both"  ) {
-            mydb.updateRow("users",{usertype: userid, hpcode: ""}, "id = "+userid);
-        }
-            
-        // first check to see if this user exists
-        var promise = Promise.all( [
-            mydb.getRow("users","*","id = "+userid),
-            makeNewConfig(userid),
-            makeNewRooms(userid, pname),
-            makeDefaultHub(userid)
-        ] );
-        return promise;
+        // the first promise below is to just return newuser since we don't need to get it from the db again
+        return Promise.all( [
+                // mydb.getRow("users","*","id = "+userid),
+                new Promise( function (resolve, reject) { resolve(newuser); }),
+                makeNewConfig(userid),
+                makeNewRooms(userid, pname),
+                makeDefaultHub(userid)
+            ] );
     })
     .then(results => {
 
@@ -3747,8 +3750,10 @@ function createNewUser(body) {
 
         // create the default devices
         makeDefaultDevices(userid, hubid, configs)
-        .then( result => {     
-            console.log( (ddbg()), "default devices created for userid: ", userid, " hubid: ", hubid, " result: ", result);       
+        .then( result => {
+            if ( DEBUG15 ) {
+                console.log( (ddbg()), "default devices created for userid: ", userid, " hubid: ", hubid, " result: ", result);       
+            }
 
             // all went well so make a new folder for this user
             makeDefaultFolder(userid, pname);
@@ -3756,42 +3761,42 @@ function createNewUser(body) {
             throw reason;
         })
 
-        // create confirmation code
-        var d = new Date();
-        var time = d.toLocaleTimeString();
-        var logincode = pw_hash(mobile + time).toUpperCase();
-        var len = logincode.length;
-        var mid = len / 2;
-        var thecode = logincode.substring(0,1) + logincode.substring(mid,mid+1) + logincode.substring(len-4);
+        // get the confirmation code from the new user
+        var thecode = newuser.hpcode;
+
+        // var d = new Date();
+        // var time = d.toLocaleTimeString();
+        // var logincode = pw_hash(mobile + time).toUpperCase();
+        // var len = logincode.length;
+        // var mid = len / 2;
+        // var thecode = logincode.substring(0,1) + logincode.substring(mid,mid+1) + logincode.substring(len-4);
         var msg = "HousePanel confirmation code: " + thecode;
 
         // write confirmation to console and email and/or text it to user
-        if ( DEBUG2 ) {
-            console.log( (ddbg()), msg );
-        }
+        console.log( (ddbg()), msg );
+           
         if ( (GLB.dbinfo.service==="twilio" || GLB.dbinfo.service==="both") ) {
             sendText(mobile, msg);
         }
         if ( GLB.dbinfo.service==="email" || GLB.dbinfo.service==="both" ) {
-            msg += " To confirm and activate your HousePanel account, <a href=\"" + GLB.returnURL + "/activateuser?userid="+userid+"&hpcode="+thecode+"\">click here</a>"
+            msg += "<br>\n\nTo confirm and activate your HousePanel account, <a href=\"" + GLB.returnURL + "/activateuser?userid="+userid+"&hpcode="+thecode+"\">click here</a>, or enter the above code manually."
             sendEmail(emailname, msg);
         }
     
-        // make the hpcode expire after 15 minutes if validation is used
-        if ( GLB.dbinfo.service==="twilio" || GLB.dbinfo.service==="email" || GLB.dbinfo.service==="both"  ) {
-            var delay = 15 * 60000;
-            setTimeout(function() {
-                mydb.updateRow("users",{hpcode: ""},"id = "+userid)
-                .then( () => {
-                    if ( DEBUG2 ) {
-                        console.log( (ddbg()), "confirmation code removed from database for user: ", userid);
-                    }
-                })
-                .catch( reason => {
-                    console.log( (ddbg()), reason);
-                });
-            }, delay);
-        }
+        // make the hpcode expire after 15 minutes
+        var delay = 15 * 60000;
+        setTimeout(function() {
+            mydb.updateRow("users",{hpcode: ""},"id = "+userid)
+            .then( () => {
+                if ( DEBUG2 ) {
+                    console.log( (ddbg()), "confirmation code removed from database for user: ", userid);
+                }
+            })
+            .catch( reason => {
+                console.log( (ddbg()), reason);
+            });
+        }, delay);
+
         return newuser;
     })
     .catch(reason => {
@@ -3800,7 +3805,8 @@ function createNewUser(body) {
 
     return promise;
 }
-    // promise function to check for existing user
+
+// promise function to check for existing user
 function checkUser(emailname) {
     var promise = new Promise(function(resolve, reject) {
         if ( !emailname ) {
@@ -3840,10 +3846,17 @@ function addNewUser(emailname, username, mobile, pword) {
             throw "error - encountered a problem adding a new user to HousePanel with email = " + emailname; 
         }
         if ( DEBUG15 ) {
-            console.log( (ddbg()), "add user result: ", result );
+            console.log( (ddbg()), "add user result: ", result, " user: ", newuser );
         }
         var userid = result.getAutoIncrementValue();
+        if ( GLB.dbinfo.service!=="twilio" && GLB.dbinfo.service!=="email" && GLB.dbinfo.service!=="both"  ) {
+            var usertype = userid;
+            mydb.updateRow("users",{usertype: usertype}, "id = " + userid);
+        } else {
+            usertype = 0;
+        }
         newuser.id = userid;
+        newuser.usertype = usertype;
         return newuser;
     })
     .catch(reason => {
@@ -4167,16 +4180,19 @@ function validatePasswordPage(user, thecode) {
 
 // email and mobile must match
 // returns the user object
-function forgotPassword(userfield, mobilefield) {
+function forgotPassword(emailname, mobilefield) {
 
     // get the user from the database and send reminder if user exists
-    return mydb.getRow("users","*","email = '"+userfield+"' OR mobile = '"+mobilefield+"'")
+    return mydb.getRow("users","*","email = '"+emailname+"'")
     .then(row => {
-        if ( !row ) { return "error - user with email mobile = " + userfield + " and mobile = " + mobilefield + " does not exist"; }
+        if ( !row ) { 
+            return "error - user with email mobile = " + userfield + " and mobile = " + mobilefield + " does not exist"; 
+        }
+
+        // update the mobile number if one is given
+        var mobile = mobilefield ? mobilefield : row.mobile;
 
         // compute a special code to check later
-        var emailname = row.email;
-        var mobile = row.mobile;
         var d = new Date();
         var time = d.toLocaleTimeString();
         var logincode = pw_hash(mobile + time).toUpperCase();
@@ -4186,17 +4202,20 @@ function forgotPassword(userfield, mobilefield) {
         
         // save code to the DB for confirming later, also update mobile number
         var userid = row.id;
-        return mydb.updateRow("users",{hpcode: thecode},"id = "+userid)
+        return mydb.updateRow("users",{mobile: mobile, hpcode: thecode},"id = "+userid)
         .then(result => {
-            if ( !result ) { return "error - could not process password reset for user " + emailname + " (ID #" + userid + ")"; }
+            if ( !result ) { 
+                return "error - could not process password reset for user " + emailname + " (ID #" + userid + ")"; 
+            }
+            row.mobile = mobile;
             row.hpcode = thecode;
             var msg = "HousePanel Security Code: " + thecode;
-            console.log( (ddbg()), msg );
+            console.log( (ddbg()), msg, " row: " + row );
             if ( (GLB.dbinfo.service==="twilio" || GLB.dbinfo.service==="both") ) {
                 sendText(mobile, msg);
             }
             if ( GLB.dbinfo.service==="email" || GLB.dbinfo.service==="both" ) {
-                msg += " To confirm and activate your HousePanel account, <a href=\"" + GLB.returnURL + "/forgotpw?userid="+userid+"&hpcode="+thecode+"\">click here</a>"
+                msg += "<br>\n To confirm and activate your HousePanel account, <a href=\"" + GLB.returnURL + "/forgotpw?userid="+userid+"&hpcode="+thecode+"\">click here</a>"
                 sendEmail(emailname, msg);
             }
     
@@ -4267,6 +4286,7 @@ function updatePassword(body) {
     var pword = pw_hash(body.pword);
     var panelpw = pw_hash(body.panelpw);
 
+    // console.log(">>>> ", userid, emailname, uname, mobile, pname, hpcode, pword);
     if ( !userid || !emailname ) {
         return "error - invalid user or the user account was not found - password cannot be updated.";
     }
@@ -4279,6 +4299,7 @@ function updatePassword(body) {
     var retobj = mydb.getRow("users","*","id = " + userid + " AND hpcode = '" + hpcode + "'")
     .then(row => {
         if ( row ) {
+            // console.log(">>>> users row: ", row);
             var upduser = {email: emailname, uname: uname, mobile: mobile, password: pword, usertype: userid, defhub: "", hpcode: ""};
             return mydb.updateRow("users", upduser, "id = " + userid)
             .then( row => {
@@ -4368,8 +4389,8 @@ function processLogin(body, res) {
             // make sure we get the actual email and panel names to store in our cookies
             // since this is what we check for a valid login
             // var userid = therow["users_id"];
-            var myid = therow["users_id"];
-            var userid = therow["users_usertype"];
+            var userid = therow["users_id"];
+            var usertype = therow["users_usertype"];
 
             uname = therow["users_email"];
             pname = therow["panels_pname"];
@@ -4385,7 +4406,7 @@ function processLogin(body, res) {
             // lets make sure there is a null hub for this user
             // actually - point this to the user we are reading which could be myself or someone else
             // if we are a new user not mapped to an existing then make the default hub stuff
-            if ( myid === userid ) {
+            if ( userid === usertype ) {
                 var nullhub = {userid: userid, hubid: "-1", hubhost: "None", hubtype: "None", hubname: "None", 
                     clientid: "", clientsecret: "", hubaccess: "", hubendpt: "", hubrefresh: "", 
                     useraccess: "", userendpt: "", hubtimer: "0" };
@@ -4402,8 +4423,8 @@ function processLogin(body, res) {
         
             // pushClient(userid, "reload", "login", "/");
         } else {
-            res.clearCookie("uname");
-            res.clearCookie("pname");
+            delCookie(res, "uname");
+            delCookie(res, "pname");
             console.log( (ddbg()), "Failed login attempt. Username: ", uname, " Panelname: ", pname);
             therow = "error - invalid username or password";
             // pushClient(userid, "reload", "login", "/logout");
@@ -4419,8 +4440,7 @@ function processLogin(body, res) {
 function getAuthPage(user, configoptions, hostname, rmsg) {
 
     // get the current settings from options file
-    // var userid = user["users_id"];
-    var userid = user["users_usertype"];
+    var userid = user["users_userid"];
     var useremail = user["users_email"];
     var uname = user["users_uname"];
     var defhub = user["users_defhub"] || "new";
@@ -4859,7 +4879,7 @@ function inroom($idx, $things) {
 // each HousePanel tab is generated by this function call
 // each page is contained within its own form and tab division
 // notice the call of $cnt by reference to keep running count
-function getNewPage(userid, pname, configoptions, cnt, roomid, roomname, kroom, things, alldevices) {
+function getNewPage(userid, pname, skin, configoptions, cnt, roomid, roomname, kroom, things, alldevices) {
     var $tc = "";
     $tc += "<div id=\"" + roomname + "-tab\">";
     $tc += "<form title=\"" + roomname + "\" action=\"#\">";
@@ -5051,7 +5071,7 @@ function returnFile(userid, pname, thingvalue, thingtype, configoptions) {
         // first check names without extensions
         var folder = "user" + userid + "/";
         var mediafolder = folder + pname + "/media/";
-        var skins = ["skin-housepanel", "skin-modern"];
+        var skins = ["skin-housepanel", "skin-modern", "skin-legacyblue"];
 
         if ( thingtype === "image" && fn.startsWith("http") ) {
             $vn = fn;
@@ -9443,7 +9463,7 @@ function addPage(userid, panelid ) {
 function getInfoPage(user, configoptions, hubs, req) {
  
     // get the port number
-    var currentport = getCookie(req.cookies, "pname") || "1:default";
+    var currentport = getCookie(req, "pname") || "1:default";
     if ( currentport.substring(1,2)!==":" ) {
         currentport = "Unknown";
     } else {
@@ -10026,8 +10046,9 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc += "<label class =\"optioninp\">Select Skin to Use on This Panel:</label>";
         $tc += "<select class=\"optioninp\" id='userskin' name='userskin'>"; 
         skins.forEach(askin => {
-            const selected = (askin === skin) ? " selected" : "";
-            $tc += "<option value='skin-" + askin + "'" + selected + ">" + askin  + "</option>";
+            var skinval = "skin-"+askin;
+            const selected = (skinval === skin) ? " selected" : "";
+            $tc += "<option value='" + skinval + "'" + selected + ">" + askin  + "</option>";
         });
         $tc += "</select></div>";
 
@@ -10293,7 +10314,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
             alldevices[devid] = dev;
         });
 
-        var tc = renderMain(configoptions, hubs, rooms, alldevices, things);
+        var tc = renderMain(configoptions, user, hubs, rooms, alldevices, things);
         res.send(tc);
         res.end();
     })
@@ -10305,7 +10326,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
     });
 
     // this is the routine that actually draws the page the user sees
-    function renderMain(configoptions, hubs, rooms, alldevices, things) {
+    function renderMain(configoptions, user, hubs, rooms, alldevices, things) {
         var tc = "";
         tc += getHeader(userid, pname, skin, false);
 
@@ -10354,7 +10375,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
             // var pagecontent = "<div class='error' id=\"" + roomname + "-tab\">"
             //                   + "Test Page #" + i + " for Room: " + roomname + " order: " + rorder
             //                   + "</div>";
-            var pagecontent = getNewPage(userid, pname, configoptions, cnt, roomid, roomname, rorder, thingsarray, alldevices);
+            var pagecontent = getNewPage(userid, pname, skin, configoptions, cnt, roomid, roomname, rorder, thingsarray, alldevices);
             cnt += thingsarray.length;
             tc = tc + pagecontent;
         };
@@ -11144,11 +11165,12 @@ function apiCall(user, body, protocol, req, res) {
     var roomid = body["roomid"] || 0;
     var hubindex = body.hubindex || 0;
     var hint = body.hint || "";
+    var userid = null;
 
     // for POST we get vital info from GUI
     // if user is making an API call these must be provided
-    if ( protocol==="POST" ) {
-        var userid = body.userid;
+    if ( protocol==="POST" && typeof body === "object" ) {
+        userid = body.userid;
         var usertype = body.usertype || userid;
         var panelid = body.panelid;
         if ( !panelid ) panelid = 1;
@@ -11165,18 +11187,16 @@ function apiCall(user, body, protocol, req, res) {
         } catch(e) {
             rules = null;
         }
-
-    } else if ( user && typeof user === "object" ) {
+    }
+    
+    if ( user && typeof user === "object" ) {
         userid = user["users_id"];
         usertype = user["users_usertype"];
-        useremail = user["users_email"];
-        uname = user["users_uname"];
         panelid = user["panels_id"];
         pname = user["panels_pname"];
+        useremail = user["users_email"];
+        uname = user["users_uname"];
         skin = user["panels_skin"];
-    
-    } else {
-        userid = null;
     }
 
     // console.log((ddbg()),"apiCall - userid: ", userid, " api: ", api);
@@ -11501,7 +11521,6 @@ function apiCall(user, body, protocol, req, res) {
 
             case "saveoptions":
                 if ( protocol==="POST" ) {
-                    // var pnameInfo = getCookie(req.cookies, "pname");
                     result = processOptions(userid, panelid, body, res);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
@@ -11583,6 +11602,7 @@ function apiCall(user, body, protocol, req, res) {
 
             case "forgotpw":
                 if ( protocol==="POST" ) {
+                    // console.log(">>>> email: ", body.email, " mobile: ", body.mobile);
                     result = forgotPassword(body.email, body.mobile);
                 } else {
                     result = "error - api call [" + api + "] is not supported";
@@ -12150,6 +12170,7 @@ try {
         "service": "none"
     };
     twilioClient = null;
+    twilioService = null;
 }
 
 GLB.port = parseInt(GLB.dbinfo["port"]);
@@ -12290,6 +12311,8 @@ if ( app && applistening ) {
                         if ( req.path === "/activateuser" ) {
                             var result = validateUserPage(row, thecode);
                         } else {
+                            delCookie(res, "uname");
+                            delCookie(res, "pname");
                             result = validatePasswordPage(row, thecode);
                         }
                     } else {
@@ -12312,7 +12335,7 @@ if ( app && applistening ) {
         }
 
         // everything starts with finding the username which drives which rows we read from the DB
-        getUserName(req.cookies)
+        getUserName(req)
         .then(results => {
 
             if ( DEBUG22 ) {
@@ -12346,7 +12369,7 @@ if ( app && applistening ) {
                     // retrieve the configs
                     var specials = getConfigItem(configoptions, "specialtiles");
                     var hptime = getConfigItem(configoptions, "time");
-                    if ( !configoptions || !specials || !hptime ) {
+                    if ( !specials || !hptime ) {
                         configoptions = makeNewConfig(userid);
                     }
                     if ( !hubs ) {
@@ -12417,8 +12440,8 @@ if ( app && applistening ) {
 
                     } else if ( req.path==="/logout" ) {
                         // clear the cookie to force repeat of login page
-                        res.clearCookie("uname");
-                        res.clearCookie("pname");
+                        delCookie(res, "uname");
+                        delCookie(res, "pname");
 
                         if ( req.query && req.query["pname"] ) {
                             var pname = req.query["pname"];

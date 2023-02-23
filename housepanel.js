@@ -1653,7 +1653,7 @@ function execForgotPassword() {
     if ( emailname.length < 5 ) {
         alert("Enter a valid email or mobile phone number before requesting a reset. You will be sent a txt message.");
     } else {
-        // alert(emailname);
+        // alert("email: " + emailname + " mobile: " + mobile);
         $.post(cm_Globals.returnURL, 
             {useajax: "forgotpw", email: emailname, mobile: mobile}, 
             function(presult, pstatus) {
@@ -1662,7 +1662,7 @@ function execForgotPassword() {
                     var pos = {style: pstyle};
                     var userid = presult.id;
                     // console.log("user: ", presult);
-                    createModal("loginfo","Login reset code sent via txt message.<br>On the next screen please provide that code <br>along with the new password information.<br>", "body", "Done", pos, function(ui) {
+                    createModal("loginfo","Login reset code sent and printed to log for user# " + userid + "<br>On the next screen please provide that code <br>along with the new password information.<br>", "body", "Done", pos, function(ui) {
                         window.location.href = cm_Globals.returnURL + "/forgotpw?userid="+userid;
                     });
                     // setTimeout(function() {
@@ -1702,13 +1702,15 @@ function execCreateUser() {
                     var pos = {style: pstyle};
                     console.log("new user created: ", presult);
                     var userid = presult.id;
-                    var usertype = presult.usertype;
+                    var usertype = parseInt(presult.usertype);
                     if ( !usertype || usertype === 0 ) {
-                        createModal("loginfo","New user created. Next, please validate using code in log file or sent to mobile: <b>" + mobile+ "</b> or <b>" + emailname + "</b> to activate this account.<br><br>", "body", "Done", pos, function(ui) {
+                        createModal("loginfo","New user created. Please validate using code in log file or sent to mobile: <b>" + mobile+ "</b> or <b>" + emailname + "</b> to activate this account.<br><br>", "body", "Done", pos, function(ui) {
                             window.location.href = cm_Globals.returnURL + "/activateuser?userid="+userid;
                         });
                     } else {
-                        window.location.href = cm_Globals.returnURL;
+                        createModal("loginfo","New user created. Please login using the email ["  + emailname + "], phone [" + mobile + "], and password you created to log into this account.<br><br>", "body", "Done", pos, function(ui) {
+                            window.location.href = cm_Globals.returnURL;
+                        });
                     }
                 } else {
                     pstyle = "position: absolute; border: 6px black solid; background-color: red; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
@@ -1752,6 +1754,7 @@ function execValidatePassword() {
                 if ( pstatus==="success" && presult && typeof presult === "object" ) {
                     var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
                     var pos = {style: pstyle};
+                    // console.log("validatepassword = ", presult);
                     createModal("loginfo","User and panel passwords updated successfully.<br>Please log in with the new credentials.<br>email = " + emailname+ "<br><br>", "body", "Done", pos, function(ui) {
                         window.location.href = cm_Globals.returnURL;
                     });
@@ -1821,11 +1824,11 @@ function execButton(buttonid) {
             // dynoPost("filteroptions", fobj, function(presult, pstatus) {
         dynoPost("saveoptions", oobj, function(presult, pstatus) {
             if ( pstatus!=="success" ) {
-                console.log(pstatus, " result: ", presult, " optionsobj: ", oobj);
+                // console.log(pstatus, " result: ", presult, " optionsobj: ", oobj);
                 alert("Options page failed to save properly");
                 window.location.href = cm_Globals.returnURL;
             } else {
-                console.log("results: ", presult, " optionsobj: ", oobj);
+                // console.log("results: ", presult, " optionsobj: ", oobj);
                 if ( typeof presult === "object" && presult.result === "logout" ) {
                     window.location.href = cm_Globals.returnURL + "/logout?pname=" + presult.pname;
                 } else {
@@ -1866,7 +1869,7 @@ function execButton(buttonid) {
 
         dynoPost("dologin", genobj, function(presult, pstatus) {
             if ( pstatus === "success" && presult && typeof presult === "object" ) {
-                console.log("login successful for user: ",  presult["users_email"], " and panel: ", presult["panels_pname"]);
+                // console.log("login successful for user: ",  presult["users_email"], " and panel: ", presult["panels_pname"]);
                 var pstyle = "position: absolute; border: 6px black solid; background-color: blue; color: white; font-weight: bold; font-size: 24px; left: 560px; top: 220px; width: 600px; height: 220px; padding-top: 20px;";
                 var pos = {style: pstyle};
                 createModal("loginfo","User Email: " + presult["users_email"] + "<br>Username: " + presult["users_uname"] + "<br>Logged into panel: " + presult["panels_pname"] + "<br>With skin: " + presult["panels_skin"] + "<br><br>Proceed? ", 
@@ -1878,7 +1881,7 @@ function execButton(buttonid) {
                     });
                 // window.location.href = cm_Globals.returnURL;
             } else {
-                console.log("not logged in. ", presult);
+                // console.log("not logged in. ", presult);
                 var pstyle = "position: absolute; border: 6px black solid; background-color: red; color: white; font-weight: bold; font-size: 24px; left: 560px; top: 220px; width: 600px; height: 180px; padding-top: 50px;";
                 var pos = {style: pstyle};
                 createModal("loginfo","Either the User and Password pair are invalid, or the requested Panel and Password pair are invalid. <br><br>Please try again.", "body", false, pos);
@@ -2251,8 +2254,8 @@ function setupButtons() {
             // if we needed the actual type we would have used commented code
             var hubType = $(target).attr("hubtype");
             var hubId = $(target).attr("hubid");
-            console.log( ">>>> allhubs: ", cm_Globals.hubs );
-            console.log( ">>>> hubindex: ", hubindex, " hubId: ", hubId, defhost) ;
+            // console.log( ">>>> allhubs: ", cm_Globals.hubs );
+            // console.log( ">>>> hubindex: ", hubindex, " hubId: ", hubId, defhost) ;
             // alert("hubType = " + hubType);
             // var realhubType = $("#hubdiv_" + hubId).children("select").val();
             // alert("realhubType= " + realhubType);
@@ -2297,8 +2300,7 @@ function setupButtons() {
             var hubNameTarget = $(this).parent().parent().find("input[name='hubname']");
             var defhub = findHub(hubindex,"id");
             var defhost = defhub["hubhost"];
-
-            console.log("hubs: ", cm_Globals.hubs);
+            // console.log("hubs: ", cm_Globals.hubs);
 
             if ( hubType==="SmartThings" || hubType==="NewSmartThings" ) {
                 hideid.addClass("hidden");
@@ -2402,7 +2404,7 @@ function setupButtons() {
 
                 if ( pstatus==="success" && typeof presult==="object" && presult.action ) {
                     var obj = presult;
-                    console.log(">>>> result returned form auth: ", presult);
+                    // console.log(">>>> result returned form auth: ", presult);
 
                     // for hubs that have auth info in the config file we do nothing but notify user of retrieval
                     if ( obj.action === "things" ) {
@@ -3332,7 +3334,7 @@ function setupTimer(timertype, timerval, hubid) {
                     function (presult, pstatus) {
                         if (pstatus==="success" && typeof presult==="object" ) {
                             if ( cm_Globals.logwebsocket ) {
-                                console.log("timer poll refresh. pstatus = ", pstatus, " presult: ", presult);
+                                // console.log("timer poll refresh. pstatus = ", pstatus, " presult: ", presult);
                             }
                         }
                     }, "json"
@@ -3914,7 +3916,7 @@ function processClick(that, thingname, ro, thevalue) {
                     } else if ( presult && typeof presult === "string" && !presult.startsWith("error") ) {
                         // console.log(presult);
                     } else {
-                        console.log("Unrecognized return from POST call. result: ", presult);
+                        // console.log("Unrecognized return from POST call. result: ", presult);
                     }
                 }
             }, "json"
