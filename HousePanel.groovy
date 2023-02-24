@@ -2553,7 +2553,7 @@ def setMomentary(swid, cmd, swattr, subid) {
     if ( item ) {
         if ( (subid=="momentary" || subid=="_push") && item.hasCommand("push") ) {
             item.push()
-        } else if ( subid=="switch" && item.hasCommand(cmd) ) {
+        } else if ( cmd && item.hasCommand(cmd) ) {
             item."$cmd"()
         }
         resp = getMomentary(swid, item)

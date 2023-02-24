@@ -1051,10 +1051,43 @@ input[type="button"]#wholetile {
     font-size: 11pt;
 }
 
+.editSection_inline {
+    display: inline-block;
+    margin-left: 0px;
+    margin-top: 5px;
+    font-size: 11pt;
+}
+
+div.editSection_input label {
+    display: inline-block;
+    text-align: left;
+    margin-left: 2px;
+    margin-right: 5px;
+    font-size: 11pt;
+    color: white;
+}
+
+div.editSection_inline label {
+    display: inline-block;
+    text-align: right; width: 55px;
+    margin-left: 2px;
+    margin-right: 2px;
+    font-size: 10pt;
+    color: white;
+}
+
+div.editSection_inline input {
+    display: inline-block;
+    text-align: left; width: 40px;
+    margin-left: 2px;
+    font-size: 10pt;
+    color: black;
+}
+
 .ddlDialog {
     font-size: 11pt;
     margin-top: 8px;
-    margin-left: 8px;
+    margin-left: 2px;
 }
 
 #iconSrc option {
@@ -1091,13 +1124,6 @@ div.colorgroup.font {
 	-moz-box-shadow: 0px 0px 41px rgba(0, 0, 0, 0.70);
 	transition-duration: .1s;
 	-webkit-transition-duration: .1s;
-}
-
-div.editSection_input label {
-    margin-left: 0px;
-    margin-right: 5px;
-    font-size: 11pt;
-    color: white;
 }
 
 div.editInfo {
@@ -1170,12 +1196,10 @@ div.editSection_input.autochk {
 }
 .sizeText {
     font-size: 11pt;
-    margin-right: 5px;
     margin-left: 0px;
-    margin-top: 10px;
+    margin-top: 12px;
     color: rgba(255, 255, 255, 1);
     display: block;
-    border-top: 1px solid white;
 }
 #invertIcon, #noIcon {
     vertical-align: middle;
@@ -2041,4 +2065,10 @@ div.thing.isy-thing div.overlay div.arrow-dn {
 div.thing.isy-thing div.overlay div.arrow-it {
     display: inline-block;
     width: 30%; margin-top: 5px;
+}
+div.lock-thing div.overlay._getCodes,
+div.lock-thing div.overlay.lastCodeName,
+div.lock-thing div.overlay._lock,
+div.lock-thing div.overlay._unlock {
+    display: none;
 }

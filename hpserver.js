@@ -196,9 +196,10 @@ function hidden(pname, pvalue, id) {
     inpstr += " />";
     return inpstr;
 }
+
 // this makes Insteon ID's look good but it messes up the hub calls
 // which oddly enough expect the id in the mangled form that does not match
-// the way the id is written on the Insteon device
+// the way the id is written on the Insteon device so I disabled doing anything here
 function fixISYid(id) {
     // if ( id.indexOf(" ") !== -1 ) {
     //     var idparts = id.split(" ");
@@ -519,13 +520,6 @@ function getTypes() {
 //     });
 // }
 
-function readCustomCss(userid, pname) {
-    // var fname = skin + "/customtiles.css";
-    var fname = "user" + userid + "/" + pname + "/customtiles.css";
-    var contents = fs.readFileSync(fname, 'utf8');
-    return contents;
-}
-
 function writeCustomCss(userid, pname, str) {
 
     if ( typeof str === "undefined" ) {
@@ -619,11 +613,11 @@ function sendEmail(emailname, msg) {
         });
 
         // setup the message
-        var textmsg = "If you did not request a new HousePanel acount for user [" + emailname + "] please ignore this email.\n\n";
+        var textmsg = "If you did not request a new HousePanel account or a HousePanel password reset for user [" + emailname + "] please ignore this email.\n\n";
         textmsg+= "To confirm and activate your HousePanel account, paste this into your browser window:\n\n";
         textmsg+= msg;
         textmsg+= "This code expires in 15 minutes.";
-        var htmlmsg = "<strong>If you did not request a new HousePanel account for user [" + emailname + "] please ignore this email.</strong><br><br>";
+        var htmlmsg = "<strong>If you did not request a new HousePanel account or a HousePanel password reset for user [" + emailname + "] please ignore this email.</strong><br><br>";
         htmlmsg+= msg;
         htmlmsg+= "<br><br>This code expires in 15 minutes.";
 
@@ -4440,7 +4434,7 @@ function processLogin(body, res) {
 function getAuthPage(user, configoptions, hostname, rmsg) {
 
     // get the current settings from options file
-    var userid = user["users_userid"];
+    var userid = user["users_id"];
     var useremail = user["users_email"];
     var uname = user["users_uname"];
     var defhub = user["users_defhub"] || "new";
@@ -4485,7 +4479,7 @@ function getAuthPage(user, configoptions, hostname, rmsg) {
     })
     .catch(reason => {
         console.log( (ddbg()), reason );
-        return "error - something went wrong trying to display info page";
+        return "error - something went wrong trying to display auth page \n" + reason.toString();
     });
 
     return display;
@@ -12851,7 +12845,7 @@ if ( app && applistening ) {
         }
 
     });
-
+    
     // set up sockets
     setupBrowserSocket();
 }

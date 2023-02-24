@@ -819,6 +819,39 @@ function initDialogBinds(str_type, thingindex) {
     });
 
     // set padding for selected item
+    $("#botMargin").off('change');
+    $("#botMargin").on('change', function(event) {
+        var subid = $("#subidTarget").html();
+        var str_type = $("#tileDialog").attr("str_type");
+        var thingindex = $("#tileDialog").attr("thingindex");
+        var newsize = parseInt( $("#botMargin").val() );
+        if ( !newsize || isNaN(newsize) ) { 
+            newsize = "0px;";
+        } else {
+            newsize = newsize.toString() + "px;";
+        }
+        var rule;
+        if ( subid === "panel" ) {
+            if ( newsize !== "0px;" ) newsize = "-" + newsize;
+            rule = "background-position-y: " + newsize;
+            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+        } else if ( str_type==="page" ) {
+            rule = "margin-bottom: " + newsize;
+            addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
+            addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
+        } else {
+            var ischecked = $("#absPlace").prop("checked");
+            if ( ischecked && subid!=="wholetile" ) {
+                rule = "bottom: " + newsize;
+            } else {
+                rule = "margin-bottom: " + newsize;
+            }
+            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+        }
+        event.stopPropagation;
+    });
+
+    // set padding for selected item
     $("#topPadding").off('change');
     $("#topPadding").on('change', function(event) {
         var subid = $("#subidTarget").html();
@@ -831,15 +864,36 @@ function initDialogBinds(str_type, thingindex) {
             newsize = newsize.toString() + "px;";
         }
         var rule;
-        if ( subid === "panel" ) {
-            rule = "background-position-y: " + newsize;
-            // addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
-        } else if ( str_type==="page" ) {
+        if ( str_type==="page" ) {
             rule = "padding-top: " + newsize;
             addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
             addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
         } else {
             rule = "padding-top: " + newsize;
+            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+        }
+        event.stopPropagation;
+    });
+
+    // set padding for selected item
+    $("#botPadding").off('change');
+    $("#botPadding").on('change', function(event) {
+        var subid = $("#subidTarget").html();
+        var str_type = $("#tileDialog").attr("str_type");
+        var thingindex = $("#tileDialog").attr("thingindex");
+        var newsize = parseInt( $("#botPadding").val() );
+        if ( !newsize || isNaN(newsize) ) { 
+            newsize = "0px;";
+        } else {
+            newsize = newsize.toString() + "px;";
+        }
+        var rule;
+        if ( str_type==="page" ) {
+            rule = "padding-bottom: " + newsize;
+            addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
+            addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
+        } else {
+            rule = "padding-bottom: " + newsize;
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         }
         event.stopPropagation;
@@ -877,6 +931,39 @@ function initDialogBinds(str_type, thingindex) {
         event.stopPropagation;
     });
 
+    // set margin for selected item
+    $("#rightMargin").off('change');
+    $("#rightMargin").on('change', function(event) {
+        var subid = $("#subidTarget").html();
+        var str_type = $("#tileDialog").attr("str_type");
+        var thingindex = $("#tileDialog").attr("thingindex");
+        var newsize = parseInt( $("#rightMargin").val() );
+        if ( !newsize || isNaN(newsize) ) { 
+            newsize = "0px;";
+        } else {
+            newsize = newsize.toString() + "px;";
+        }
+        var rule;
+        if ( subid === "panel" ) {
+            if ( newsize !== "0px;" ) newsize = "-" + newsize;
+            rule = "background-position-x: " + newsize;
+            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+        } else if ( str_type==="page" ) {
+            rule = "margin-right: " + newsize;
+            addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
+            addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
+        } else {
+            var ischecked = $("#absPlace").prop("checked");
+            if ( ischecked && subid!=="wholetile" ) {
+                rule = "right: " + newsize;
+            } else {
+                rule = "margin-right: " + newsize;
+            }
+            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+        }
+        event.stopPropagation;
+    });
+
     // set padding for selected item
     $("#leftPadding").off('change');
     $("#leftPadding").on('change', function(event) {
@@ -890,15 +977,36 @@ function initDialogBinds(str_type, thingindex) {
             newsize = newsize.toString() + "px;";
         }
         var rule;
-        if ( subid === "wholetile" || subid === "panel" ) {
-            rule = "background-position-x: " + newsize;
-            // addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
-        } else if ( str_type==="page" ) {
+        if ( str_type==="page" ) {
             rule = "padding-left: " + newsize;
             addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
             addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
         } else {
             rule = "padding-left: " + newsize;
+            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
+        }
+        event.stopPropagation;
+    });
+
+    // set padding for selected item
+    $("#rightPadding").off('change');
+    $("#rightPadding").on('change', function(event) {
+        var subid = $("#subidTarget").html();
+        var str_type = $("#tileDialog").attr("str_type");
+        var thingindex = $("#tileDialog").attr("thingindex");
+        var newsize = parseInt( $("#rightPadding").val() );
+        if ( !newsize || isNaN(newsize) ) { 
+            newsize = "0px;";
+        } else {
+            newsize = newsize.toString() + "px;";
+        }
+        var rule;
+        if ( str_type==="page" ) {
+            rule = "padding-right: " + newsize;
+            addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
+            addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
+        } else {
+            rule = "padding-right: " + newsize;
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         }
         event.stopPropagation;
@@ -1071,16 +1179,14 @@ function sizepicker(str_type, thingindex) {
     }
     
     dh += "<div class='sizeText'>Overall Tile Size</div>";
-    dh += "<div class='editSection_input'>";
+    dh += "<div class='editSection_inline'>";
     dh += "<label for='tileHeight'>Tile H: </label>";
     dh += "<input size='8' type=\"number\" min='10' max='1600' step='10' id=\"tileHeight\" value=\"" + th + "\"/>";
-    dh += "</div>";
-    dh += "<div class='editSection_input'>";
     dh += "<label for='tileWidth'>Tile W: </label>";
     dh += "<input size='8' type=\"number\" min='10' max='1600' step='10' id=\"tileWidth\" value=\"" + tw + "\"/>";
     dh += "</div>";
-    dh += "<div class='editSection_input'>";
 
+    dh += "<div class='editSection_input'>";
     var curFloat = $(targetwhole).css("float");
     // console.log(">>>> curFloat = ", curFloat, target, targetwhole);
     var floats = ["none", "left", "right"];
@@ -1095,21 +1201,17 @@ function sizepicker(str_type, thingindex) {
     });
     fe += "</select>";
     dh += fe;
-
     dh += "</div>";
+
     dh += "<div class='editSection_input autochk'><input type='checkbox' id='autoTileHeight'><label class=\"iconChecks\" for=\"autoTileHeight\">Auto H?</label></div>";
     dh += "<div class='editSection_input autochk'><input type='checkbox' id='autoTileWidth'><label class=\"iconChecks\" for=\"autoTileWidth\">Auto W?</label></div>";
 
     dh += "<div class='sizeText'><p>Item Size & Position:</p></div>";
-    dh += "<div class='editSection_input autochk'>";
+    dh += "<div class='editSection_inline'>";
     dh += "<label for='editHeight'>Item H: </label>";
     dh += "<input size='4' type=\"number\" min='5' max='1600' step='5' id=\"editHeight\" value=\"" + h + "\"/>";
-    dh += "</div>";
-    dh += "<div>";
-    dh += "<div class='editSection_input autochk'>";
     dh += "<label for='editWidth'>Item W: </label>";
     dh += "<input size='4' type=\"number\" min='5' max='1600' step='5' id=\"editWidth\" value=\"" + w + "\"/>";
-    dh += "</div>";
     dh += "</div>";
     dh += "<div class='editSection_input autochk'><input type='checkbox' id='autoHeight'><label class=\"iconChecks\" for=\"autoHeight\">Auto H?</label></div>";
     dh += "<div class='editSection_input autochk'><input type='checkbox' id='autoWidth'><label class=\"iconChecks\" for=\"autoWidth\">Auto W?</label></div>";
@@ -1117,36 +1219,71 @@ function sizepicker(str_type, thingindex) {
     // font size (returns px not pt)
     var ptop = parseInt($(target).css("padding-top"));
     var pleft = parseInt($(target).css("padding-left"));
+    var pbot = parseInt($(target).css("padding-bot"));
+    var pright = parseInt($(target).css("padding-right"));
+    var mtop;
+    var mleft;
+    var mbot;
+    var mright;
     
-    if ( subid === "wholetile" || subid === "panel") {
-        ptop = parseInt($(target).css("background-position-y"));
-        pleft = parseInt($(target).css("background-position-x"));
+    if ( subid === "panel") {
+        var bgy = parseInt($(target).css("background-position-y"));
+        var bgx = parseInt($(target).css("background-position-x"));
+        if ( bgy < 0 ) {
+            mbot = -bgy;
+            mtop = 0;
+        } else {
+            mtop = bgy;
+            mbot = 0;
+        }
+        if ( bgx < 0 ) {
+            mright = -bgx;
+            mleft = 0;
+        } else {
+            mleft = bgx;
+            mright = 0;
+        }
+    } else {
+        mtop = parseInt($(target).css("margin-top"));
+        mleft = parseInt($(target).css("margin-left"));
+        mbot = parseInt($(target).css("margin-bottom"));
+        mright = parseInt($(target).css("margin-right"));    
     }
     
     if ( !ptop || isNaN(ptop) ) { ptop = 0; }
     if ( !pleft || isNaN(pleft) ) { pleft = 0; }
-    dh += "<div class='editSection_input'>";
-    dh += "<label id=\"tpmname\" for='topMargin'>Top Margin:</label>";
-    dh += "<input size='4' type=\"number\" min='0' max='1600' step='5' id=\"topMargin\" value=\"" + ptop + "\"/>";
+    if ( !mtop || isNaN(mtop) ) { mtop = 0; }
+    if ( !mleft || isNaN(mleft) ) { mleft = 0; }
+    dh += "<div class='editSection_inline'>";
+    dh += "<label for='topMargin'>Top Margin:</label>";
+    dh += "<input size='2' type=\"number\" min='0' max='1600' step='5' id=\"topMargin\" value=\"" + mtop + "\"/>";
+    dh += "<label for='botMargin'>Bot Margin:</label>";
+    dh += "<input size='2' type=\"number\" min='0' max='1600' step='5' id=\"botMargin\" value=\"" + mbot + "\"/>";
     dh += "</div>";
-    dh += "<div class='editSection_input'>";
-    dh += "<label id=\"lpmname\" for='leftMargin'>Left Margin:</label>";
-    dh += "<input size='4' type=\"number\" min='0' max='1600' step='5' id=\"leftMargin\" value=\"" + pleft + "\"/>";
+    dh += "<div class='editSection_inline'>";
+    dh += "<label for='leftMargin'>Left Margin:</label>";
+    dh += "<input size='2' type=\"number\" min='0' max='1600' step='5' id=\"leftMargin\" value=\"" + mleft + "\"/>";
+    dh += "<label for='rightMargin'>Right Margin:</label>";
+    dh += "<input size='2' type=\"number\" min='0' max='1600' step='5' id=\"rightMargin\" value=\"" + mright + "\"/>";
     dh += "</div>";
-    dh += "<div class='editSection_input'>";
-    dh += "<label id=\"tpname\" for='topPadding'>Top Padding:</label>";
-    dh += "<input size='4' type=\"number\" min='0' max='1600' step='5' id=\"topPadding\" value=\"" + ptop + "\"/>";
+    dh += "<div class='editSection_inline'>";
+    dh += "<label for='topPadding'>Top Padding:</label>";
+    dh += "<input size='2' type=\"number\" min='0' max='1600' step='5' id=\"topPadding\" value=\"" + ptop + "\"/>";
+    dh += "<label for='botPadding'>Bot Padding:</label>";
+    dh += "<input size='2' type=\"number\" min='0' max='1600' step='5' id=\"botPadding\" value=\"" + pbot + "\"/>";
     dh += "</div>";
-    dh += "<div class='editSection_input'>";
-    dh += "<label id=\"lpname\" for='leftPadding'>Left Padding:</label>";
-    dh += "<input size='4' type=\"number\" min='0' max='1600' step='5' id=\"leftPadding\" value=\"" + pleft + "\"/>";
+    dh += "<div class='editSection_inline'>";
+    dh += "<label for='leftPadding'>Left Padding:</label>";
+    dh += "<input size='2' type=\"number\" min='0' max='1600' step='5' id=\"leftPadding\" value=\"" + pleft + "\"/>";
+    dh += "<label for='rightPadding'>Right Padding:</label>";
+    dh += "<input size='2' type=\"number\" min='0' max='1600' step='5' id=\"rightPadding\" value=\"" + pright + "\"/>";
     dh += "</div>";
     dh += "<div class='editSection_input'>";
     dh += "<label for='beforeText'>Text Before:</label>";
     dh += "<input size='10' id=\"beforeText\" value=\"\"/>";
     dh += "</div>";
     dh += "<div class='editSection_input'>";
-    dh += "<label for='afterText'>Text After: &nbsp;</label>";
+    dh += "<label for='afterText'>Text After:</label>";
     dh += "<input size='10' id=\"afterText\" value=\"\"/>";
     dh += "</div>";
     
@@ -1322,15 +1459,18 @@ function setsubid(str_type) {
     var subid = str_type;
     switch(str_type) {
         case "page":
-            subid= "tab";
+            subid= "panel";
             break;
 
         case "bulb":
-        case "light":
         case "switch":
         case "valve":
         case "switchlevel":
             subid = "switch";
+            break;
+
+        case "button":
+            subid = "pushed";
             break;
 
         case "thermostat":
@@ -1340,20 +1480,14 @@ function setsubid(str_type) {
             break;
 
         case "music":
-            subid = "track";
+            subid = "trackDescription";
             break;
 
-        case "clock":
-            subid = "time";
-            break;
-            
-        case "momentary":
         case "door":
-        case "contact":
-        case "illuminance":
-            subid = str_type;
+        case "garage":
+            subid = "door";
             break;
-            
+
         case "shm":
         case "hsm":
             subid = "state";
@@ -1363,8 +1497,15 @@ function setsubid(str_type) {
             subid = "themode";
             break;
             
+        case "frame":
+        case "video":
+        case "custom":
         case "image":
-            subid = "image";
+        case "contact":
+        case "motion":
+        case "presence":
+        case "lock":
+            subid = str_type;
             break;
             
         default:
@@ -1949,8 +2090,8 @@ function initColor(str_type, subid, thingindex) {
     }
 
     checkboxHandler("#invertIcon",["filter: invert(1);"],["filter: invert(0);"], false);
-    checkboxHandler("#absPlace",["position: absolute;","margin-left: 0px;","margin-top: 0px;"],
-                                ["position: relative;","top: 0px;","left: 0px;"], false);
+    checkboxHandler("#absPlace",["position: absolute;","margin-left: 0px;","margin-top: 0px;","margin-right: 0px;","margin-bottom: 0px;","top: 0px;","left: 0px;","right: 0px;","bottom: 0px;"],
+                                ["position: relative;","margin-left: 0px;","margin-top: 0px;","margin-right: 0px;","margin-bottom: 0px;","top: 0px;","left: 0px;","right: 0px;","bottom: 0px;"], false);
     checkboxHandler("#inlineOpt",["display: inline-block;"],["display: block;"], false);
     
     $("#editEffect").off('change');
@@ -2105,30 +2246,44 @@ function initColor(str_type, subid, thingindex) {
 
 
     // set the margins or absolute positioning
-    var ptop;
-    var pleft;
-    if ( str_type==="panel" ) {
-        ptop = parseInt($(target).css("background-position-y"));
-        pleft = parseInt($(target).css("background-position-x"));
+    var mtop;
+    var mleft;
+    var mbot;
+    var mright;
+    if ( subid==="panel" ) {
+        mtop = parseInt($(target).css("background-position-y"));
+        mleft = parseInt($(target).css("background-position-x"));
+        mbot = parseInt($(target).css("margin-bottom"));
+        mright = parseInt($(target).css("margin-right"));
     } else if ( $(target).css("position") && $(target).css("position").includes("absolute") && subid!=="wholetile" ) {
-        ptop = parseInt($(target).css("top"));
-        pleft = parseInt($(target).css("left"));
-    } else {
-        ptop = parseInt($(target).css("margin-top"));
-        pleft = parseInt($(target).css("margin-left"));
+        mtop = parseInt($(target).css("top"));
+        mleft = parseInt($(target).css("left"));
+        mbot = parseInt($(target).css("bottom"));
+        mright = parseInt($(target).css("right"));
+   } else {
+        mtop = parseInt($(target).css("margin-top"));
+        mleft = parseInt($(target).css("margin-left"));
+        mbot = parseInt($(target).css("margin-bottom"));
+        mright = parseInt($(target).css("margin-right"));
     }
-    if ( !ptop || isNaN(ptop) ) { ptop = 0; }
-    if ( !pleft || isNaN(pleft) ) { pleft = 0; }
-    $("#topMargin").val(ptop);
-    $("#leftMargin").val(pleft);
+    if ( !mtop || isNaN(mtop) ) { mtop = 0; }
+    if ( !mleft || isNaN(mleft) ) { mleft = 0; }
+    $("#topMargin").val(mtop);
+    $("#leftMargin").val(mleft);
+    $("#botMargin").val(mbot);
+    $("#rightMargin").val(mright);
 
     // set the padding
-    ptop = parseInt($(target).css("padding-top"));
-    pleft = parseInt($(target).css("padding-left"));
+    var ptop = parseInt($(target).css("padding-top"));
+    var pbot = parseInt($(target).css("padding-bottom"));
+    var pleft = parseInt($(target).css("padding-left"));
+    var pright = parseInt($(target).css("padding-right"));
     if ( !ptop || isNaN(ptop) ) { ptop = 0; }
     if ( !pleft || isNaN(pleft) ) { pleft = 0; }
     $("#topPadding").val(ptop);
     $("#leftPadding").val(pleft);
+    $("#botPadding").val(pbot);
+    $("#rightPadding").val(pright);
     
 
     // set the initial inline check box
