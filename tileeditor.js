@@ -1504,6 +1504,7 @@ function setsubid(str_type) {
         case "contact":
         case "motion":
         case "presence":
+        case "momentary":
         case "lock":
             subid = str_type;
             break;

@@ -2060,8 +2060,6 @@ function checkInputs() {
     var unamere = /^\D\S{2,}$/;      // start with a letter and be two long at least
     var pwordre = /^\S{6,}$/;        // start with anything but no white space and at least 6 digits 
 
-    // errs.webSocketServerPort = checkInpval("webSocketServerPort", webSocketServerPort, intre);
-    // errs.port = checkInpval("port", port, intre);
     errs.fast_timer = checkInpval("fast_timer", fast_timer, intre);
     errs.slow_timer = checkInpval("slow_timer", slow_timer, intre);
     // errs.uname = checkInpval("username", uname, unamere);

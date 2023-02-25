@@ -67,9 +67,6 @@ GLB.devhistory = devhistory.DEV;
 GLB.HPVERSION = GLB.devhistory.substring(1,9).trim();
 GLB.APPNAME = 'HousePanel V' + GLB.HPVERSION;
 
-GLB.port = 3080;
-GLB.webSocketServerPort = 8180;
-
 GLB.defaultrooms = {
     "Kitchen": "clock|kitchen|sink|pantry|dinette" ,
     "Family": "clock|family|mud|fireplace|casual|thermostat",
@@ -11635,29 +11632,39 @@ function apiCall(user, body, protocol, req, res) {
                 result = getIcons(userid, pname, skin, swval, swattr);
                 break;
 
+            // this isn't used, but it is here to return the next port available to connect
             case "getwsport":
-                var wsmax = 8181;
-                var usedports = [];
-                if ( clients[userid] ) {
-                    clients[userid].forEach(function(client) {
-                        var wsport = client.socket.server["_connectionKey"];
-                        var ipos = wsport.lastIndexOf(":");
-                        wsport = parseInt(wsport.substr(ipos+1));
-                        usedports.push(wsport);
-                    });
-                }
 
-                if ( usedports.length ) {
-                    for (var iport=8181; iport < 8190; iport++) {
-                        if ( !usedports.includes(iport) ) {
-                            wsmax = iport;
-                            break;
-                        }
+                if ( protocol==="POST" ) {
+                    var wsmin = GLB.webSocketServerPort + 1;
+                    var wsmax = GLB.webSocketServerPort + 10;
+                    var wsport;
+                    var usedports = [];
+                    if ( clients[userid] ) {
+                        clients[userid].forEach(function(client) {
+                            wsport = client.socket.server["_connectionKey"];
+                            var ipos = wsport.lastIndexOf(":");
+                            wsport = parseInt(wsport.substr(ipos+1));
+                            usedports.push(wsport);
+                        });
                     }
+                    if ( usedports.length ) {
+                        for (var iport=wsmin; iport < wsmax; iport++) {
+                            if ( usedports.includes(iport)===false ) {
+                                wsport = iport;
+                                break;
+                            }
+                        }
+                    } else {
+                        wsport = wsmin;
+                    }
+                    if ( DEBUGtmp ) {
+                        console.log( (ddbg()), "wsport: ", wsport, " usedports: ", usedports);
+                    }
+                    result = {port: wsport, used: usedports};
                 } else {
-                    wsmax = 8181;
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
-                result = {port: wsmax, used: usedports};
                 break;
 
             // this api call starts the hub authorization process
@@ -12141,6 +12148,8 @@ function buildDatabaseTable(tableindex) {
 // read config file
 try {
     GLB.dbinfo = JSON.parse(fs.readFileSync("housepanel.cfg","utf8"));
+    if ( !GLB.dbinfo.port ) GLB.dbinfo.port = "8580";
+    if ( !GLB.dbinfo.webSocketServerPort ) GLB.dbinfo.webSocketServerPort = "8380";
     var twilioSid =  GLB.dbinfo["twilio_sid"];
     var twilioToken =  GLB.dbinfo["twilio_token"];
     var twilioService = GLB.dbinfo["twilio_service"];
@@ -12171,7 +12180,6 @@ GLB.port = parseInt(GLB.dbinfo["port"]);
 GLB.webSocketServerPort = parseInt(GLB.dbinfo["websocketport"]);
 
 var port = GLB.port;
-GLB.defhub = "new";
 GLB.newcss = {};
 
 var wsServers = [];
