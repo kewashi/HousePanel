@@ -229,7 +229,6 @@ function getHeader(userid, pname, skin, skip) {
     $tc += '<link rel="icon" type="image/png" href="media/favicon-32x32.png" sizes="32x32"> ';
     $tc += '<link rel="icon" type="image/png" href="media/favicon-96x96.png" sizes="96x96"> ';
     $tc += '<link rel="apple-touch-icon" href="media/apple-touch-icon.png">';
-    // $tc += '<link rel="shortcut icon" href="media/favicon.ico">';
     
     // load jQuery and themes
     $tc += '<link rel="stylesheet" type="text/css" href="jquery-ui.css">';
@@ -3124,7 +3123,9 @@ function getDevices(hub) {
                             mydevices[progid] = device;
                             mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + progid + "'")
                             .then( res => {
-                                console.log("prog update: ", res);
+                                if ( DEBUGisy ) {
+                                    console.log("prog update: ", res);
+                                }
                                 if ( n >= nprogs ) {
                                     checkDone("programs");
                                 }
@@ -7493,7 +7494,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                             // take action if it is in a rule
                             if ( command==="GET" || command==="POST" ) {
 
-                                doAction(userid, hub.hubid, hubindex, thingid, rswid, rswtype, rvalue, rswattr, rsubid, rhint, command, linkv);
+                                doAction(userid, hubindex, thingid, rswid, rswtype, rvalue, rswattr, rsubid, rhint, command, linkv);
                                 
                                 // neuter the hub call so we don't do both and invoke action function
                                 hub = null;
@@ -7547,14 +7548,14 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                         if ( delay && delay > 0 ) {
                             setTimeout( function() {
                                 try {
-                                    callHub(userid, hub.id, rswid, 0, rswtype, rvalue, rswattr, rsubid, rhint, true);
+                                    callHub(userid, hub.id, rswid, rswtype, rvalue, rswattr, rsubid, rhint, true);
                                 } catch (e) {
                                     console.log( (ddbg()), "error calling hub from rule for userid: ", userid, " hub.id, rswid,rswtype,rvalue,rsattr,rsubid,rhint: ", hub.id, rswid, rswtype, rvalue, rswattr, rsubid, rhint, " error: ", e);
                                 }
                             }, delay);
                         } else {
                             try {
-                                callHub(userid, hub.id, rswid, 0, rswtype, rvalue, rswattr, rsubid, rhint, true);
+                                callHub(userid, hub.id, rswid, rswtype, rvalue, rswattr, rsubid, rhint, true);
                             } catch (e) {
                                 console.log( (ddbg()), "error calling hub from rule for userid: ", userid, " hub.id, rswid,rswtype,rvalue,rsattr,rsubid,rhint: ", hub.id, rswid, rswtype, rvalue, rswattr, rsubid, rhint, " error: ", e);
                             }
@@ -7687,7 +7688,7 @@ function queryNewST(hub, deviceid, swtype) {
 
 }
 
-function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, hint, inrule) {
+function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inrule) {
 
     // used to grab responses for ISY hubs
     var isyresp = {};
@@ -8017,7 +8018,7 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
                         if ( err === 401 && inrule!=="refresh" ) {
                             console.log((ddbg()), "Obtaining refresh token for user: ", userid);
                             refreshSTToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, false, function () {
-                                callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, hint, "refresh");
+                                callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, "refresh");
                             });
                             return;
                         }
@@ -8646,109 +8647,99 @@ function callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, 
 }
 
 // TODO - add newSmartThings type and Ford hubs support for query
-// userid, thingid, swid, swtype, thingname, pvalue, hubhost, access_token, refresh_token, endpt, clientid, clientsecret
-function queryHub(userid, thingid, hubindex, swid, swtype, thingname ) {
+function queryHub(device) {
 
-    mydb.getRow("hubs","*","id = " + hubindex)
-    .then(result => {
+    var thingid = device.id;
+    var userid = device.userid;
+    var hubindex = device.hubid;
+    var swid = device.deviceid;
+    var swtype = device.devicetype;
 
-        var host = hub["hubhost"];
-        var access_token = hub["hubaccess"];
-        var refresh_token = hub["hubrefresh"];
-        var endpt = hub["hubendpt"];
-        var clientid = hub["clientid"];
-        var clientsecret = hub["clientsecret"];
+    var promise = new Promise( function(resolve, reject) {
 
-        if ( hub.hubtype==="Hubitat" ) {
-            var host = endpt + "/doquery";
-            var header = {"Authorization": "Bearer " + access_token};
-            var nvpreq = {"swid": swid, "swtype": swtype};
-            curl_call(host, header, nvpreq, false, "POST", getQueryResponse);
+        mydb.getRow("hubs","*","id = " + hubindex)
+        .then(hub => {
+            var host = hub["hubhost"];
+            var access_token = hub["hubaccess"];
+            var refresh_token = hub["hubrefresh"];
+            var endpt = hub["hubendpt"];
 
-        // } else if ( hub.hubtype==="ISY" ) {
-        //     var buff = Buffer.from(access_token);
-        //     var base64 = buff.toString('base64');
-        //     var header = {"Authorization": "Basic " + base64};
-        //     var cmd = "/nodes/" + swid;
-        //     curl_call(endpt + cmd, header, false, false, "GET", getNodeQueryResponse);
+            if ( hub.hubtype==="Hubitat" ) {
+                var host = endpt + "/doquery";
+                var header = {"Authorization": "Bearer " + access_token};
+                var nvpreq = {"swid": swid, "swtype": swtype};
+                curl_call(host, header, nvpreq, false, "POST", getQueryResponse);
 
-        }
-
-    }).catch(reason => {console.log( (ddbg()), "queryHub - ", reason);});
-    
-    function getQueryResponse(err, res, pvalue) {
-        if ( err ) {
-            console.log( (ddbg()), "error requesting hub node query: ", err);
-        } else {
-            if ( DEBUG5 ) {
-                console.log( (ddbg()), "doQuery: ", swid, " type: ", swtype, " value: ", pvalue);
+            } else if ( hub.hubtype==="ISY" ) {
+                var buff = Buffer.from(access_token);
+                var base64 = buff.toString('base64');
+                var header = {"Authorization": "Basic " + base64};
+                var cmd = "/nodes/" + swid;
+                curl_call(endpt + cmd, header, false, false, "GET", getNodeQueryResponse);
+            } else {
+                reject("query hub for type = [" + hub.hubtype + "] is not supported");
             }
-            if ( pvalue ) {
-                // deal with presence tiles
-                if ( pvalue["presence"]==="not present" ) {
-                    pvalue["presence"] = "absent";
-                }
 
-                // store results back in DB
-                var pvaluestr = encodeURI2(pvalue);
-                mydb.updateRow("devices", {pvalue: pvaluestr}, "userid = " + userid + " AND id = " + thingid)
-                .then( () => {
-                })
-                .catch( reason => {
-                    console.log( (ddbg()), reason);
-                });
-
-                // deal with audio tiles
-                if ( swtype==="audio" || swtype==="sonos" || pvalue.audioTrackData ) {
-                    pvalue = translateAudio(pvalue);
-                } else if ( swtype==="music" || pvalue.trackData ) {
-                    pvalue = translateMusic(pvalue);
-                } else if ( swtype==="weather" ) {
-                    var thisorigname = pvalue.name || "Weather";
-                    pvalue = translateWeather(thisorigname, pvalue);
+        }).catch(reason => {
+            console.log( (ddbg()), reason);
+            reject(reason);
+        });
+        
+        function getQueryResponse(err, res, body) {
+            var pvalue;
+            if ( err ) {
+                console.log( (ddbg()), "error requesting hub node query: ", err);
+                reject(err);
+            } else {
+                if ( typeof body==="object" ) {
+                    pvalue = body;
+                } else if ( typeof body==="string" ) {
+                    pvalue = JSON.parse(body);
                 } else {
-                    pvalue = translateObjects(pvalue);
+                    reject("Invalid object in getQueryResponse.");
                 }
-
-                // push results to all clients
-                pushClient(userid, swid, swtype, "none", pvalue);
+    
+                if ( DEBUG5 ) {
+                    console.log( (ddbg()), "doQuery: id: ", thingid, " swid: ", swid, " type: ", swtype, "\n value: ", pvalue);
+                }
+                if ( pvalue ) {
+                    // deal with presence tiles
+                    if ( pvalue["presence"]==="not present" ) {
+                        pvalue["presence"] = "absent";
+                    }
+                    resolve(pvalue);
+                } else {
+                    reject("nothing returned in device query");
+                }
             }
         }
-    }
 
-//     function getNodeQueryResponse(err, res, body) {
-//         if ( err ) {
-//             console.log( (ddbg()), "error requesting ISY node query: ", err);
-//         } else {
-//             xml2js(body, function(xmlerr, result) {
-//                 try {
-//                     if ( result ) {
-//                         var nodeid = result.nodeInfo.node[0]["address"];
-//                         nodeid = fixISYid(nodeid);
-//                         if ( nodeid ) {
-
-//                             var props = result.nodeInfo.properties[0].property;
-
-//                             // first read the existing field data to update the json string
-//                             // pass to our field updater which does the screen update
-//                             mydb.getRow("devices","*","userid = " + userid + " AND deviceid = '"+nodeid+"'")
-//                             .then(device => {
-//                                 if (device) {
-//                                     setIsyFields(userid, nodeid, device, props, true);
-//                                 }
-//                             }).catch(reason => {console.log("dberror 16 - getNodeQueryResponse - ", reason);});
-
-//                         } else {
-//                             throw "Something went wrong reading node from ISY in getNodeQueryResponse";
-//                         }
-//                     }
-//                 } catch(e) { 
-//                     console.log( (ddbg()), "error in getNodeQueryResponse: ", e);
-//                 }
-//             });
-//         }
-
-//     }
+        function getNodeQueryResponse(err, res, body) {
+            if ( err ) {
+                console.log( (ddbg()), "error requesting ISY node query: ", err);
+                reject(err);
+            } else {
+                xml2js(body, function(xmlerr, result) {
+                    try {
+                        if ( ! is_object(result) || !result.nodeInfo ) { throw "invalid result returned for Node query"; }
+                        var nodeid = result.nodeInfo.node[0]["address"];
+                        if ( nodeid ) {
+                            var props = result.nodeInfo.properties[0].property;
+                            var pvaluestr = setIsyFields(nodeid, device, props);
+                            var pvalue = decodeURI2(pvaluestr);
+                            resolve(pvalue);
+                        } else {
+                            throw "nodeid invalid while trying to read node from ISY in getNodeQueryResponse";
+                        }
+                    } catch(e) { 
+                        console.log( (ddbg()), e);
+                        reject(e);
+                    }
+                });
+            }
+        }
+    });
+    return promise;
 }
 
 function translateAudio(pvalue, specialkey, audiomap) {
@@ -8886,12 +8877,12 @@ function translateObjects(pvalue) {
 //     return test;
 // }
 
-function doAction(userid, hubid, hubindex, thingid, swid, swtype, swval, swattr, subid, hint, command, linkval) {
+function doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, command, linkval) {
 
     var msg = "success";
     if ( DEBUG7 ) {
-        console.log( (ddbg()), "doaction: thingid: ", thingid, " swid: ", swid, " swtype:", swtype, " swval: ", swval, " hubindex: ", hubindex,
-                                " hubid: ", hubid, " swattr: ", swattr, " subid: ", subid, " command: ", command);
+        console.log( (ddbg()), "doaction: swid: ", swid, " swtype:", swtype, " swval: ", swval, " hubindex: ", hubindex,
+                               " swattr: ", swattr, " subid: ", subid, " command: ", command);
     }
 
     // first check for a command
@@ -8939,7 +8930,7 @@ function doAction(userid, hubid, hubindex, thingid, swid, swtype, swval, swattr,
 
         } else if ( command==="LINK" ) {
             // processLink(linkval);
-            callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, hint, null, false);
+            callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, null, false);
             msg = "success - link action executed on device id: " + swid + " device type: " + swtype;
         
         } else if ( command==="RULE" ) {
@@ -8988,7 +8979,7 @@ function doAction(userid, hubid, hubindex, thingid, swid, swtype, swval, swattr,
                                     if ( testcommands[0].trim().startsWith("if") ) {
                                         istart = 1;
                                     }
-                                    execRules(userid, "callHub", thingid, swtype, istart, testcommands, pvalue, hubs, devices);
+                                    execRules(userid, "callHub", swid, swtype, istart, testcommands, pvalue, hubs, devices);
                                 }
                             });
                             resolve("success - rule manually executed: " + configrow.configval);
@@ -9004,9 +8995,9 @@ function doAction(userid, hubid, hubindex, thingid, swid, swtype, swval, swattr,
 
     } else {
         if ( DEBUG1 ) {
-            console.log( (ddbg()), "callHub: ", userid, hubindex, swid, thingid, swtype, swval, swattr, subid, hint);
+            console.log( (ddbg()), "callHub: ", userid, hubindex, swid, swtype, swval, swattr, subid, hint);
         }
-        callHub(userid, hubindex, swid, thingid, swtype, swval, swattr, subid, hint, null, false);
+        callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, null, false);
         msg = "success - hub action executed on device id: " + swid + " device type: " + swtype;
     }
     return msg;
@@ -9066,30 +9057,10 @@ function doQuery(userid, thingid, protocol) {
             for ( var i=0; i < devices.length; i++ ) {
                 var swid = devices[i]["deviceid"];
                 var swtype = devices[i]["devicetype"];
-                var devicename = devices[i]["name"];
                 var pvalue = decodeURI2(devices[i]["pvalue"]);
     
-                // deal with audio tiles
                 if ( pvalue ) {
-                    if ( swtype==="audio" || swtype==="sonos" || pvalue.audioTrackData ) {
-                        pvalue = translateAudio(pvalue);
-                    } else if ( swtype==="music" || pvalue.trackData ) {
-                        pvalue = translateMusic(pvalue);
-                    } else if ( swtype==="weather" ) {
-                        var thisorigname = devicename || "Weather";
-                        pvalue = translateWeather(thisorigname, pvalue);
-                    } else {
-                        pvalue = translateObjects(pvalue);
-                    }
                     var firstsubid = Object.keys(pvalue)[0];
-
-                    // add in customizations here
-                    // if ( configoptions && is_object(configoptions) ) {
-                    //     thesensor.value = getCustomTile(userid, configoptions, thesensor.value, bid);
-                    //     thesensor.value = returnFile(userid, pname, thesensor.value, thingtype, configoptions);
-                    // }
-                    pvalue = setValOrder(pvalue);
-
                     // push result to the clients
                     pushClient(userid, swid, swtype, firstsubid, pvalue);
                 }
@@ -9101,15 +9072,17 @@ function doQuery(userid, thingid, protocol) {
         });
 
     // a specific device is being requested
-    // lets get the device info and call its hub function
+    // lets get the device info and call its hub function if a POST request
     } else {
 
-        var conditions = "id = "+thingid + " AND userid = " + userid;
+        var conditions = "id = "+thingid;
         result = mydb.getRow("devices","*", conditions)
         .then(device => {
-
+            var swid = device.deviceid;
+            var swtype = device.devicetype;
+        
             if ( !device ) {
-                return "error - invalid device: " + thingid;
+                throw "error - invalid device: id = " + thingid;
             } else {
 
                 // query the hub which pushes update to GUI if we queried using POST
@@ -9118,18 +9091,30 @@ function doQuery(userid, thingid, protocol) {
                 // whenever you query a tile. To avoid this use the GET method to query a tile
                 // note that actions will always update clients to keep them in sync
                 // the GET function waits for the promise to put results to the browser
-                var hubindex = device.hubid;
-                var swid = device.deviceid;
-                var swtype = device.devicetype;
-                var thingname = device.name;
 
-                if ( protocol==="POST" ) {
-                    queryHub(userid, thingid, hubindex, swid, swtype, thingname );
-                    qres = "success - clients will be updated via a webSocket push";
-                } else {
-                    qres = pvalue;
-                }
-                return qres;
+                return queryHub(device)
+                .then(pvalue => {
+                    if ( DEBUG5 ) {
+                        console.log( (ddbg()), "queryHub results: ", pvalue);
+                    }
+
+                    // store results back in DB
+                    var pvaluestr = encodeURI2(pvalue);
+                    mydb.updateRow("devices", {pvalue: pvaluestr}, "id = " + thingid)
+                    .then( result => {
+                        if ( DEBUG5 ) {
+                            console.log( (ddbg()), "doQuery updated device: ", pvalue, " pvalstr: ", pvaluestr, " result: ", result);
+                        }
+                        pushClient(userid, swid, swtype, "none", pvalue);
+                    })
+                    .catch( reason => {
+                        console.log( (ddbg()), reason);
+                    });
+                    return pvalue;
+                })
+                .catch(reason => {
+                    console.log( (ddbg()), reason);
+                });
             }
         }).catch(reason => {
             console.log( (ddbg()), "doQuery - ", reason);
@@ -11199,12 +11184,12 @@ function apiCall(user, body, protocol, req, res) {
     // handle multiple api calls but only for tiles since nobody would ever give a list of long id's
     // this now has to be a list of thingid's instead of tileid's because the tiles must be reachable
     // either will be taken and used if provided
-    if ( (tileid && tileid.indexOf(",") !== -1) ) {
+    if ( (api==="action" || api==="doaction") && tileid && tileid.indexOf(",") !== -1 ) {
         var multicall = true;
         var tilearray = tileid.split(",");
-    } else if ( (thingid && thingid.indexOf(",") !== -1) ) {
-        multicall = true;
-        tilearray = thingid.split(",");
+    // } else if ( (thingid && thingid.indexOf(",") !== -1) ) {
+    //     multicall = true;
+    //     tilearray = thingid.split(",");
     } else {
         multicall = false;
     }
@@ -11215,34 +11200,46 @@ function apiCall(user, body, protocol, req, res) {
             case "doaction":
             case "action":
                 if ( multicall ) {
+                    result = "";
                     tilearray.forEach(function(athing) {
-                        if ( DEBUG8 ) {
-                            console.log( (ddbg()), "doaction multicall: hubid: ", hubid, " swval: ", swval, " swattr: ", swattr, " subid: ", subid, " thingid= ", athing);
-                        }
-                        doAction(userid, "auto", hubindex, athing, "", "", swval, swattr, subid, hint, command, linkval);
+                        mydb.getRow("devices","*","id = " + athing)
+                        .then(device => {
+                            userid = device.userid;
+                            hubindex = device.hubid;
+                            swid = device.deviceid;
+                            swtype = device.devicetype;
+                            if ( !subid ) { subid = "switch"; }
+                            if ( DEBUG8 ) {
+                                console.log( (ddbg()), "doaction multicall: hubindex: ", hubindex, " swval: ", swval, " swattr: ", swattr, " subid: ", subid, " tilrid= ", athing);
+                            }
+                            doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, command, linkval);
+                        })
                     });
                     result = "called doAction " + tilearray.length + " times in a multihub action";
                 } else {
                     if ( DEBUG8 ) {
-                        console.log( (ddbg()), "doaction: hubid: ", hubid, " swid: ", swid, " swval: ", swval, " swattr: ", swattr, " subid: ", subid, " thingid: ", thingid, " hint: ", hint);
+                        console.log( (ddbg()), "doaction: hubid: ", hubid, " swid: ", swid, " swval: ", swval, " swattr: ", swattr, " subid: ", subid, " tileid: ", tileid, " hint: ", hint);
                     }
-                    result = doAction(userid, hubid, hubindex, thingid, swid, swtype, swval, swattr, subid, hint, command, linkval);
+                    if ( tileid && (!swid || !swtype || !hubindex) ) {
+                        result = mydb.getRow("devices","*","id = " + tileid)
+                        .then(device => {
+                            userid = device.userid;
+                            hubindex = device.hubid;
+                            swid = device.deviceid;
+                            swtype = device.devicetype;
+                            if ( !subid ) { subid = "switch"; }
+                            return doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, command, linkval);
+                        });
+                    } else {
+                        result = doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, command, linkval);
+                    }
                     // result = "call doAction for tile ID: " + swid;
                 }
                 break;
                 
             case "doquery":
             case "query":
-                if ( multicall ) {
-                    result = [];
-                    tilearray.forEach(function(athing) {
-                        doQuery(userid, athing, protocol);
-                    });
-                    result = "called doQuery " + tilearray.length + " times in a multihub action";
-                } else {
-                    doQuery(userid, thingid, protocol);
-                    result = "call doQuery for tile ID: " + swid;
-                }
+                result = doQuery(userid, tileid, protocol);
                 break;
 
             case "status":
@@ -11657,9 +11654,6 @@ function apiCall(user, body, protocol, req, res) {
                         }
                     } else {
                         wsport = wsmin;
-                    }
-                    if ( DEBUGtmp ) {
-                        console.log( (ddbg()), "wsport: ", wsport, " usedports: ", usedports);
                     }
                     result = {port: wsport, used: usedports};
                 } else {
@@ -12403,11 +12397,17 @@ if ( app && applistening ) {
 
                         if ( isquery ) {
                             var result = apiCall(user, queryobj, "GET", req, res);
-                            if ( typeof result === "object" && typeof result.then === "function" ) {
-                                result.then(obj => {
-                                    res.json(obj);
+                            // if ( typeof result === "object" && result.then && typeof result.then === "function" ) {
+                            if ( typeof result === "object" ) {
+                                try {
+                                    result.then(obj => {
+                                        res.json(obj);
+                                        res.end();
+                                    });
+                                } catch(e) {
+                                    res.json(result);
                                     res.end();
-                                });
+                                }
                             } else if ( typeof result === "string" ) {
                                 res.send(result);
                                 res.end;

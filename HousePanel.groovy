@@ -2170,6 +2170,8 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
                 cmd = "flash"
             } else if ( swattr.endsWith(" off" ) ) {
                 cmd = "on"
+            } else if ( cmd=="toggle" ) {
+                cmd = newonoff=="off" ? "on" : "off"
             }
             newonoff = cmd
             break
@@ -2449,7 +2451,7 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
         if ( item.hasAttribute("level") && newlevel ) { resp.put("level", newlevel) }
         if ( item.hasAttribute("position") && newlevel ) { resp.put("position", newlevel) }
     }
-    logger("generic light setter returned: ${resp}", "info")
+    logger("generic light setter returned: ${resp}", "debug")
     return resp
 }
 
@@ -2885,7 +2887,7 @@ def registerAll() {
                       "mytemperatures", "myilluminances", "myweathers",
                       "mywaters", "mysmokes", "mymusics", "myaudios", "mypowers", "myothers", "myactuators"]
 
-    // register mode changesvariableHandler
+    // register mode changes
     registerLocations()
 
     // register all the devices in time steps
