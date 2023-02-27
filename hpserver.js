@@ -1574,6 +1574,7 @@ function findGroup(player, allGroups) {
         allGroups.forEach(agroup => {
             if ( agroup.playerIds.includes(player.id) ) {
                 group = agroup;
+                return group;
             }
         });
     }
@@ -1678,7 +1679,7 @@ function getDevices(hub) {
                         var origname = content["name"] || "";
                         var pvalue = content["value"];
                         var hint = hubType;
-                        var refresh = "normal";
+                        var refresh = "";
                         
                         // if a name isn't there use master name
                         if ( !pvalue.name && !origname ) {
@@ -3983,9 +3984,7 @@ function makeDefaultDevices(userid, hubid) {
         .then( row => {
             aclock.id = row.getAutoIncrementValue();
 
-            var controlval = {"name": "Controller", "showoptions": "Options","refreshpage": "Refresh","c__refactor": "Reset",
-                "c__userauth": "Re-Auth","showid": "Show Info","toggletabs": "Toggle Tabs", "showdoc": "Documentation",
-                "blackout": "Blackout","operate": "Operate","reorder": "Reorder","edit": "Edit"};
+            var controlval = getController();
             controlval = encodeURI2(controlval);
             acontrol = {userid: userid, hubid: hubid, deviceid: "control_1", "name": "Controller",
                         devicetype: "control", hint: "controller", refresh: "never", pvalue: controlval};
@@ -4009,6 +4008,13 @@ function makeDefaultDevices(userid, hubid) {
         });
     });
     return promise;
+}
+
+function getController() {
+    var controlval = {"name": "Controller", "showoptions": "Options","refreshpage": "Refresh","c__refactor": "Reset",
+    "c__userauth": "Re-Auth","showid": "Show Info","toggletabs": "Toggle Tabs", "showdoc": "Documentation",
+    "blackout": "Blackout","operate": "Operate","reorder": "Reorder","edit": "Edit"};
+    return controlval;
 }
 
 
@@ -4553,7 +4559,7 @@ function getAuthPage(user, configoptions, hostname, rmsg) {
         // hubId must be a unique name and can be anything
         // for ST and HE hubs this is a string obtained from the hub itself
         // for Ford and Lincoln hubs this should be provided by the user
-        var newhub = {id: 0, userid: userid, hubid: "new", hubhost: "https://graph.api.smartthings.com", hubtype: "New",
+        var newhub = {id: 0, userid: userid, hubid: "new", hubhost: "https://oauth.cloud.hubitat.com", hubtype: "New",
                       hubname: "", clientid: "", clientsecret: "",
                       hubaccess: "", hubendpt: "", hubrefresh: "", 
                       useraccess: "", userendpt: "", hubtimer: 0};
@@ -4642,20 +4648,19 @@ function getAuthPage(user, configoptions, hostname, rmsg) {
                 hub.hubhost = "";
                 secretclass += " hidden";
                 disabled = " disabled";
-            // } else if ( hubType === "Hubitat" ) {
-            //     hub.hubhost = "https://oauth.cloud.hubitat.com";
-            // } else if ( hubType === "NewSmartThings" ) {
-            //     // hub.clientid = GLB.dbinfo["st_clientid"];
-            //     // hub.clientsecret = encodeURI(GLB.dbinfo["st_clientsecret"]);
-            //     hub.hubhost = "https://api.smartthings.com";
-            //     // secretclass += " hidden";
-            // } else if ( hubType === "Sonos" ) {
-            //     hub.hubhost = "https://api.sonos.com";
-            //     // secretclass += " hidden";
-            // } else if ( hubType === "ISY" ) {
-            //     hub.hubhost = "https://192.168.4.4:8443";
-            // } else {
-            //     hub.hubhost = "";
+            } else if ( !hub.hubhost && hubType === "Hubitat" ) {
+                hub.hubhost = "https://oauth.cloud.hubitat.com";
+            } else if ( hubType === "NewSmartThings" ) {
+                hub.clientid = GLB.dbinfo["st_clientid"];
+                hub.clientsecret = encodeURI(GLB.dbinfo["st_clientsecret"]);
+                hub.hubhost = "https://api.smartthings.com";
+                secretclass += " hidden";
+            } else if ( hubType === "Sonos" ) {
+                hub.hubhost = "https://api.sonos.com";
+            } else if ( !hub.hubhost && hubType === "ISY" ) {
+                hub.hubhost = "https://192.168.4.4:8443";
+            } else {
+                hub.hubhost = "";
             }
 
             // for each hub make a section with its own form that comes back here as a post
@@ -4683,7 +4688,7 @@ function getAuthPage(user, configoptions, hostname, rmsg) {
                     $tc += "</select>";
 
                     $tc += "<br><br><label class=\"startupinp\">Host API Url: </label>";
-                    $tc += "<input class=\"startupinp\" title=\"Enter the hub OAUTH address here\" name=\"hubhost\" size=\"80\" type=\"text\" value=\"" + hub["hubhost"] + "\"/>"; 
+                    $tc += "<input class=\"startupinp" + secretclass + "\" title=\"Enter the hub OAUTH address here\" name=\"hubhost\" size=\"80\" type=\"text\" value=\"" + hub["hubhost"] + "\"/>"; 
     
                     $tc += "</div>";
                 }
@@ -5430,7 +5435,7 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     var hint = thesensor["hint"] || "";
     var hubnum = thesensor["hubnum"] || "-1";
     var hubindex = thesensor["hubindex"];
-    var refresh = "normal";
+    var refresh = "";
     var thingid = thesensor.thingid;
     var hubtype = thesensor.hubtype || "None";
 
@@ -6489,7 +6494,6 @@ function processHubMessage(userid, hubmsg, newST) {
 // this function handles processing of all websocket calls from ISY
 // used to keep clients in sync with the status of ISY operation
 // because ISY hubs are local, this function must be invoked locally
-// this magic is handled by the hpconnect.js helper app user must run
 function processIsyXMLMessage(userid, isymsg) {
     xml2js(isymsg, function(err, result) {
         if ( !err && result.Event ) {
@@ -8646,8 +8650,8 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
 
 }
 
-// TODO - add newSmartThings type and Ford hubs support for query
-function queryHub(device) {
+// TODO - test NewSmartThings type and add Ford and Sonos hub support for query
+function queryHub(device, pname) {
 
     var thingid = device.id;
     var userid = device.userid;
@@ -8661,10 +8665,22 @@ function queryHub(device) {
         .then(hub => {
             var host = hub["hubhost"];
             var access_token = hub["hubaccess"];
-            var refresh_token = hub["hubrefresh"];
             var endpt = hub["hubendpt"];
+            var hubid = hub["hubid"];
 
-            if ( hub.hubtype==="Hubitat" ) {
+            if ( hubid==="-1" || hub.hubtype==="None" ) {
+
+                // clockdigital
+                var pvalue;
+                if ( swtype==="clock") {
+                    pvalue = getClock(swid);
+                } else if ( swtype==="control" ) {
+                    pvalue = getController();
+                } else {
+                    pvalue = decodeURI2(device.pvalue);
+                }
+
+            } else if ( hub.hubtype==="Hubitat" ) {
                 var host = endpt + "/doquery";
                 var header = {"Authorization": "Bearer " + access_token};
                 var nvpreq = {"swid": swid, "swtype": swtype};
@@ -8676,6 +8692,75 @@ function queryHub(device) {
                 var header = {"Authorization": "Basic " + base64};
                 var cmd = "/nodes/" + swid;
                 curl_call(endpt + cmd, header, false, false, "GET", getNodeQueryResponse);
+
+            } else if ( hub.hubtype==="Sonos" ) {
+                var header = {"Content-Type": "application/json", "Authorization": "Bearer " + access_token, "Content-Length": 0};
+                var namehost = endpt + "/v1/households/" + hubid + "/groups";
+                _curl(namehost, header, "", "GET")
+                .then(body => {
+                    if ( body ) {
+                        var jsonbody = JSON.parse(body);
+                        var sonosGroups = jsonbody.groups;
+                        var sonosPlayers = jsonbody.players;
+                        if ( !sonosPlayers ) {
+                            reject("no Sonos devices found for Household: " + hubid);
+                            return;
+                        }
+    
+                        var resolved = false;
+                        sonosPlayers.forEach(function(player) {
+                            if ( !resolved ) {
+                                var pvalue = {
+                                    name: player.name,
+                                    "_previousTrack": "previousTrack", "_pause": "pause", "_play": "play", "_stop":"stop", "_nextTrack":"nextTrack",
+                                    "_unmute":"unmute", "_mute":"mute", "_volumeDown":"volumeDown","_volumeUp":"volumeUp","playbackStatus":"", "mute":"false", "volume":50,
+                                    wss: player.websocketUrl
+                                };
+                                var group = findGroup(player, sonosGroups);
+
+                                if ( DEBUGtmp ) {
+                                    console.log( (ddbg()), "group: ", group, " player: ", player);
+                                }
+                                if ( group && player.id === swid ) {
+                                    resolved = true;
+                                    getSonosDevice(endpt, header, player, group, pvalue)
+                                    .then(pvalue => {
+                                        if ( DEBUGtmp ) {
+                                            console.log( (ddbg()), "getSonosDevice returned pvalue: ", pvalue);
+                                        }
+                                        resolve(pvalue);
+                                    })
+                                    .catch(reason => {
+                                        reason = "****" + reason;
+                                        reject(reason)
+                                    });
+                                }
+                            }
+                        });
+                    } else {
+                        reject("Something went wrong trying to refresh Sonos");
+                    }
+                })
+                .catch(reason => {
+                    reject(reason);
+                });
+
+            } else if ( hub.hubtype==="NewSmartThings" ) {
+                queryNewST(hub, swid, swtype)
+                .then(body => {
+                    if ( typeof body==="object" ) {
+                        pvalue = body;
+                    } else if ( typeof body==="string" ) {
+                        pvalue = JSON.parse(body);
+                    } else {
+                        throw "Invalid object in getQueryResponse.";
+                    }
+                    resolve(pvalue);
+                })
+                .catch(reason => {
+                    reject(reason);
+                })
+
             } else {
                 reject("query hub for type = [" + hub.hubtype + "] is not supported");
             }
@@ -8738,6 +8823,95 @@ function queryHub(device) {
                 });
             }
         }
+
+        function getSonosDevice(hubEndpt, header, player, group, pvalue) {
+
+            var jlast = group.playbackState.lastIndexOf("_");
+            if ( jlast !== -1 ) {
+                pvalue.playbackStatus = group.playbackState.substr(jlast+1).toLowerCase();
+            } else {
+                pvalue.playbackStatus = group.playbackState.toLowerCase();
+            }
+            if ( group.coordinatorId === player.id && group.playerIds.length===1 ) {
+                pvalue.grouped = "Not grouped";
+            } else if ( group.coordinatorId === player.id ) {
+                pvalue.grouped = "Primary in group " + group.name; // + " with " + group.playerIds.length + " other";
+            } else {
+                pvalue.grouped = "Secondary in group " + group.name; // group.coordinatorId;
+            }
+
+            // obtain the meta data of the device
+            var namehost = hubEndpt + "/v1/groups/" + group.id + "/playbackMetadata";
+            return _curl(namehost, header, "", "GET")
+            .then(metabody => {
+
+                
+                var metadata = JSON.parse(metabody);
+                console.log(">>>> metabody: ", metabody, "\n metadata: ", metadata);
+
+                var serviceUrl = "";
+                var albumUrl = "";
+                if ( metadata ) {
+                    if ( metadata.container && metadata.container.service ) {
+                        serviceUrl = metadata.container.imageUrl;
+                    }
+
+                    if ( metadata.currentItem && metadata.currentItem.track ) {
+                        pvalue.audioTrackData = {
+                            title: "", artist: "", album: "", mediaSource: ""
+                        };
+                        pvalue.audioTrackData.title = metadata.currentItem.track.name || "";
+                        if ( metadata.currentItem.track.artist ) {
+                            pvalue.audioTrackData.artist = metadata.currentItem.track.artist.name || "";
+                        }
+                        if ( metadata.currentItem.track.album ) {
+                            pvalue.audioTrackData.album = metadata.currentItem.track.album.name || "";
+                        }
+                        if ( metadata.currentItem.track.service ) {
+                            pvalue.audioTrackData.mediaSource = metadata.currentItem.track.service.name || "";
+                        }
+                        albumUrl = metadata.currentItem.track.imageUrl || "";
+
+                        // use the service URL if it is secure and the album art is not
+                        if ( albumUrl.startsWith("http") ) {
+                            pvalue.audioTrackData.albumArtUrl = albumUrl;
+                        } else if ( serviceUrl.startsWith("http") ) {
+                            pvalue.audioTrackData.albumArtUrl = serviceUrl;
+                        } else {
+                            pvalue.audioTrackData.albumArtUrl = GLB.returnURL + "/media/Electronics/electronics13-icn@2x.png";
+                        }
+                    }
+                } else {
+                    pvalue.audioTrackData = {
+                        title: "",
+                        artist: "",
+                        album: "",
+                        mediaSource: "",
+                        albumArtUrl: GLB.returnURL + "/media/Electronics/electronics13-icn@2x.png"
+                    };
+                }
+                return pvalue;
+            })
+            .then(pvalue => {
+
+                // get the volume
+                var namehost = hubEndpt + "/v1/groups/" + group.id + "/groupVolume";
+                return _curl(namehost, header, "", "GET")
+                .then( body => {
+                    var groupVolume = JSON.parse(body);
+                    pvalue.mute = groupVolume.muted.toString();
+                    pvalue.volume = groupVolume.volume;
+                    return pvalue;
+                })
+                .catch( reason => {
+                    console.log( (ddbg()), reason);
+                    pvalue.mute = "false";
+                    pvalue.volume = 50;
+                    return pvalue;
+                });
+            });
+        }
+
     });
     return promise;
 }
@@ -9043,13 +9217,17 @@ function doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, co
 
 }
 
-function doQuery(userid, thingid, protocol) {
+function doQuery(userid, tileid, attr, pname, protocol) {
     var result;
 
-    if ( thingid==="all" || thingid==="fast" || thingid==="slow" ) {
+    if ( attr==="all" || attr==="fast" || attr==="slow" ) {
 
-        var rtype = thingid;
-        var conditions = "userid = " + userid + " AND refresh = " + rtype;
+        var conditions;
+        if ( attr==="all" ) {
+            conditions = "userid = " + userid + " AND refresh != never";
+        } else {
+            conditions = "id = " + tileid + " AND refresh = " + attr;
+        }
         result = mydb.getRows("devices","*", conditions)
         .then(devices => {
 
@@ -9075,14 +9253,14 @@ function doQuery(userid, thingid, protocol) {
     // lets get the device info and call its hub function if a POST request
     } else {
 
-        var conditions = "id = "+thingid;
+        var conditions = "id = "+tileid;
         result = mydb.getRow("devices","*", conditions)
         .then(device => {
             var swid = device.deviceid;
             var swtype = device.devicetype;
         
             if ( !device ) {
-                throw "error - invalid device: id = " + thingid;
+                throw "error - invalid device: id = " + tileid;
             } else {
 
                 // query the hub which pushes update to GUI if we queried using POST
@@ -9092,20 +9270,22 @@ function doQuery(userid, thingid, protocol) {
                 // note that actions will always update clients to keep them in sync
                 // the GET function waits for the promise to put results to the browser
 
-                return queryHub(device)
+                return queryHub(device, pname)
                 .then(pvalue => {
-                    if ( DEBUG5 ) {
+                    if ( DEBUG5 || DEBUGtmp ) {
                         console.log( (ddbg()), "queryHub results: ", pvalue);
                     }
 
                     // store results back in DB
                     var pvaluestr = encodeURI2(pvalue);
-                    mydb.updateRow("devices", {pvalue: pvaluestr}, "id = " + thingid)
+                    mydb.updateRow("devices", {pvalue: pvaluestr}, "id = " + tileid)
                     .then( result => {
-                        if ( DEBUG5 ) {
-                            console.log( (ddbg()), "doQuery updated device: ", pvalue, " pvalstr: ", pvaluestr, " result: ", result);
+                        var firstsubid = Object.keys(pvalue)[0];
+                        if ( DEBUG5 || DEBUGtmp ) {
+                            console.log( (ddbg()), "doQuery updated device: ", pvalue, " pvalstr: ", pvaluestr, " swid:", swid, 
+                                                   " swtype:", swtype, " firstsubid:", firstsubid, " result: ", result);
                         }
-                        pushClient(userid, swid, swtype, "none", pvalue);
+                        pushClient(userid, swid, swtype, firstsubid, pvalue);
                     })
                     .catch( reason => {
                         console.log( (ddbg()), reason);
@@ -11239,7 +11419,8 @@ function apiCall(user, body, protocol, req, res) {
                 
             case "doquery":
             case "query":
-                result = doQuery(userid, tileid, protocol);
+                if ( !pname ) { pname = "default"; }
+                result = doQuery(userid, tileid, swattr, pname, protocol);
                 break;
 
             case "status":
@@ -11337,6 +11518,10 @@ function apiCall(user, body, protocol, req, res) {
                 
             case "refactor":
                 result = "error - api call [" + api + "] is no longer supported";
+                break;
+
+            case "refreshtiles":
+                result = refreshTiles(user, body);
                 break;
         
             case "refreshpage":
@@ -11970,14 +12155,17 @@ function setupISYSocket() {
     var wshost;
 
     // close any prior sockets
-    if ( isyServers.length ) {
-        isyServers.forEach(server => {
-            try {
-                server.drop(1001,"HousePanel page refreshing");
-            } catch(e) {}
-        })
+    for (var hubid in isyServers) {
+        var server = isyServers[hubid];
+        try {
+            console.log( (ddbg()), "dropped server for hub: ", hubid);
+            server.drop(1001,"HousePanel page refreshing");
+            delete isyServers[hubid];
+        } catch(e) {
+            console.log( (ddbg()), "error trying to dropped server for hub: ", hubid, "\n", err);
+        }
     }
-    isyServers = [];
+    isyServers = {};
 
     // get all the ISY hubs for every user - this assumes no two users use the same ISY hub
     mydb.getRows("hubs","*","hubtype = 'ISY'")
@@ -11988,6 +12176,7 @@ function setupISYSocket() {
             //     console.log( (ddbg()), "Setting up callback socket for hub: ", hub);
             // }
             var userid = hub.userid;
+            var hubid = hub.hubid;
             wshost = false;
             if ( hub["hubtype"]==="ISY" && hub["hubendpt"] && hub["hubaccess"] ) { 
 
@@ -12014,22 +12203,23 @@ function setupISYSocket() {
                 var opts = {rejectUnauthorized: false};
                 var wsconfigs = {tlsOptions: opts, closeTimeout: 2000};
                 var wsclient = new webSocketClient(wsconfigs);
-                isyServers.push(wsclient);
-                // wsclient["kw_signature"] = "test";
+                isyServers[hubid] = wsclient;
+                wsclient["userid"] = userid;
+                wsclient["hubid"] = hubid;
 
                 wsclient.connect(wshost, "ISYSUB", origin, header, opts);
                 wsclient.on("connectFailed", function(err) {
-                    console.log( (ddbg()), "Connection failure to ISY socket: ", err.toString(), " wshost: ", wshost, " header: ", header);
+                    console.log( (ddbg()), "Connection failure to ISY socket: ", err.toString(), " wshost:", wshost, " header:", header);
                 });
             
                 wsclient.on("connect", function(connection) {
                     var that = this;
-                    console.log( (ddbg()), "Success connecting to ISY socket. Listening for messages...");
+                    console.log( (ddbg()), "Success connecting to ISY socket. Listening for messages from hub:", that.hubid);
             
                     // handle incoming state messages from ISY
                     connection.on("message", function(msg) {
                         if ( msg.type==="utf8" ) {
-                            processIsyXMLMessage(userid, msg.utf8Data);
+                            processIsyXMLMessage(that.userid, msg.utf8Data);
                         }
                     });
                 
@@ -12038,7 +12228,8 @@ function setupISYSocket() {
                     });
                 
                     connection.on("close", function(reasonCode, description) {
-                        console.log( (ddbg()), "ISY socket closed. reason: ", reasonCode, " desc: ", description, );
+                        console.log( (ddbg()), "ISY socket closed for hub: ", that.hubid," reason: ", reasonCode, description, );
+                        delete isyServers[that.hubid];
                     });
                 
                 });
@@ -12178,7 +12369,7 @@ GLB.newcss = {};
 
 var wsServers = [];
 var clients = [];
-var isyServers = [];
+var isyServers = {};
 
 // start our main server
 var httpServer;

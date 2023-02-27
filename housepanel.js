@@ -226,6 +226,14 @@ function getHubs() {
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     cm_Globals.hubs = presult;
+
+                    // if Sonos hub, then set up timer to refresh every 30 seconds
+                    cm_Globals.hubs.forEach(hub => {
+                        if ( hub.hubtype === "Sonos" ) {
+                            setupTimer("hub", 30000, hub);
+                        }
+                    });
+
                 } else {
                     cm_Globals.hubs = {};
                     console.log("error - failure reading hubs from database for user = " + userid);
@@ -253,10 +261,10 @@ function setFastSlow(config) {
         slow_timer = 0;
     }
     if ( fast_timer && fast_timer >= 1000 ) {
-        setupTimer("fast", fast_timer, "all");
+        setupTimer("fast", fast_timer, null);
     }
     if ( slow_timer && slow_timer >= 1000 ) {
-        setupTimer("slow", slow_timer, "all");
+        setupTimer("slow", slow_timer, null);
     }
 }
 
@@ -3163,10 +3171,15 @@ function processKeyVal(targetid, aid, key, value) {
     return isclock;
 }
 
-function refreshTile(aid, bid, thetype, hubid) {
+function refreshTile(tileid, bid, thetype, hubid, tType) {
     var pname = $("#showversion span#infoname").html();
     $.post(cm_Globals.returnURL, 
-        {useajax: "doquery", userid: cm_Globals.options.userid, pname: pname, id: bid, type: thetype, value: "none", attr: "none", hubid: hubid} );
+        {api: "doquery", userid: cm_Globals.options.userid, pname: pname, id: bid, tileid: tileid, type: thetype, hubid: hubid, attr: tType},
+         function (presult, pstatus) {
+            if ( pstatus==="success" && presult && typeof presult==="object" ) {
+                console.log("Tile:", tileid, " id:", bid, " of type:", thetype, " refreshed to value:", presult);
+            }
+        }, "json");         
 }
 
 // refresh tiles on this page when switching to it
@@ -3310,40 +3323,38 @@ function clockUpdater(whichclock, forceget) {
 
 }
 
-function setupTimer(timertype, timerval, hubid) {
+function setupTimer(timertype, timerval, hub) {
 
     // we now pass the unique hubId value instead of numerical hub
     // since the number can now change when new hubs are added and deleted
-    var pname = $("#showversion span#infoname").html();
+    if ( hub ) {
+        var hubid = hub.hubid;
+    } else {
+        hubid = "-1";
+    }
     var updarray = [timertype, timerval, hubid];
     updarray.myMethod = function() {
 
         var that = this;
-        // console.log("hub #" + that[2] + " timer = " + that[1] + " timertype = " + that[0] + " priorOpmode= " + priorOpmode + " modalStatus= " + modalStatus);
-        var err;
-
-        if ( priorOpmode === "operate" && modalStatus === 0 ) {
-
+        if ( priorOpmode === "operate" ) {
             try {
                 // just do the post and nothing else since the post call pushClient to refresh the tiles
-                var thingid = that[0];
-                $.post(cm_Globals.returnURL, 
-                    {useajax: "doquery", userid: cm_Globals.options.userid, pname: pname, thingid: thingid, hubid: that[2]},
-                    function (presult, pstatus) {
-                        if (pstatus==="success" && typeof presult==="object" ) {
-                            if ( cm_Globals.logwebsocket ) {
-                                // console.log("timer poll refresh. pstatus = ", pstatus, " presult: ", presult);
-                            }
-                        }
-                    }, "json"
-                );
+                var tType = that[0];
+                var hubid = that[2];
+                $("div[hub='" + hubid+"']").each( function() {
+                    var tileid = $(this).attr("tile");
+                    var bid = $(this).attr("bid");
+                    var thetype = $(this).attr("type");
+                    refreshTile(tileid, bid, thetype, hubid, tType);
+                });
+
             } catch(err) {
                 console.error ("Polling error", err.message);
             }
         }
 
         // repeat the method above indefinitely
-        // console.log("timer= " + that[1]);
+        // console.log("timer: ", that[0], that[1], that[2], priorOpmode);
         setTimeout(function() {updarray.myMethod();}, that[1]);
     };
 
