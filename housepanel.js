@@ -219,6 +219,7 @@ function getHubs() {
     try {
         var userid = $("#userid").val();
         var pname = cm_Globals.pname;
+        var config = cm_Globals.options.config;
 
         // read the hubs
         $.post(cm_Globals.returnURL, 
@@ -230,7 +231,13 @@ function getHubs() {
                     // if Sonos hub, then set up timer to refresh every 30 seconds
                     cm_Globals.hubs.forEach(hub => {
                         if ( hub.hubtype === "Sonos" ) {
-                            setupTimer("hub", 30000, hub);
+                            var fast_timer = config.fast_timer;
+                            fast_timer = parseInt(fast_timer, 10);
+                            setupTimer("hub", fast_timer, hub);
+                        } else if ( hub.hubtype === "None" && hub.hubid === "-1" ) {
+                            var slow_timer = config.slow_timer;
+                            slow_timer = parseInt(slow_timer, 10);
+                            setupTimer("hub", slow_timer, hub);
                         }
                     });
 
@@ -245,29 +252,6 @@ function getHubs() {
     }
 }
 
-function setFastSlow(config) {
-    try {
-        var fast_timer = config.fast_timer;
-        fast_timer = parseInt(fast_timer, 10);
-    } catch(err) {
-        console.log ("Couldn't retrieve fast timer; disabling fast timer refresh feature. err: ", err);
-        fast_timer = 0;
-    }
-    try {
-        var slow_timer = config.slow_timer;
-        slow_timer = parseInt(slow_timer, 10);
-    } catch(err) {
-        console.log ("Couldn't retrieve slow timer; disabling slow timer refresh feature. err: ", err);
-        slow_timer = 0;
-    }
-    if ( fast_timer && fast_timer >= 1000 ) {
-        setupTimer("fast", fast_timer, null);
-    }
-    if ( slow_timer && slow_timer >= 1000 ) {
-        setupTimer("slow", slow_timer, null);
-    }
-}
-
 $(document).ready(function() {
     // set the global return URL value
     try {
@@ -277,7 +261,7 @@ $(document).ready(function() {
         }
     } catch(e) {
         console.log("***Warning*** ", e);
-        cm_Globals.returnURL = "https://housepanel.net:3080";
+        cm_Globals.returnURL = "http://localhost:8580";
     }
 
     try {
@@ -682,41 +666,12 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                     panelItems.each(function() {
                         try {
                             var aid = $(this).attr("aid");
-                            updateTile(aid, pvalue);
+                            updateTile(aid, bid, pvalue);
                         } catch (e) {
                             console.log("Error updating tile of type: "+ thetype," id: ", bid, " value: ", pvalue, " error: ", e);
                         }
                     });
                 }
-
-                // we now handle links in the updateTile function which is more consistent
-                // $('div.panel div[command="LINK"][linkbid="' + bid + '"][subid="' + subid + '"]').each(function() {
-                //     // get the id to see if it is the thing being updated
-                //     // var linkedtile = $(this).attr("linkid");
-                //     var sibid = $(this).attr("aid");
-                //     var sibling = $(this).next();
-                //     var dothis = true;
-
-                //     // if we have a match, update the sibling field
-                //     if ( sibling && sibling.attr("aid")=== sibid ) {
-                //         var value = pvalue[subid];
-
-                //         // replace newlines with breaks for proper html rendering
-                //         if ( typeof value==="string" && value.indexOf("\n")!==-1 ) {
-                //             value = value.replace(/\n/g, "<br>");
-                //         }
-
-                //         // skip objects except single entry arrays
-                //         if ( typeof value==="object" || ( typeof value==="string" && value.startsWith("{") ) ) {
-                //             dothis = false;
-                //         }
-                //         if ( dothis ) {
-                //             var targetid = "#" + sibling.attr("id");
-                //             processKeyVal(targetid, sibid, subid, value);                        
-                //         }
-
-                //     }
-                // });
 
                 // blank screen if night mode set
                 if ( (thetype==="mode" || thetype==="location" ) && 
@@ -1229,9 +1184,9 @@ function setupPagemove() {
             $.post(cm_Globals.returnURL, 
                 {useajax: "setorder", userid: userid, pname: pname, id: "none", type: "rooms", value: pages},
                 function (presult, pstatus) {
-                    if (pstatus==="success" ) {
-                        console.log( "setorder POST returned: ", presult );
-                    }
+                    // if (pstatus==="success" ) {
+                    //     console.log( "setorder POST returned: ", presult );
+                    // }
                 }, "json"
             );
         }
@@ -1295,9 +1250,9 @@ function setupSortable() {
                 $.post(cm_Globals.returnURL, 
                     {useajax: "setorder", userid: userid, pname: pname, id: "none", type: "things", value: tilenums, hubid: hubid, roomid: roomid},
                     function (presult, pstatus) {
-                        if (pstatus==="success" ) {
-                            console.log("setorder POST returned: ", presult );
-                        }
+                        // if (pstatus==="success" ) {
+                        //     console.log("setorder POST returned: ", presult );
+                        // }
                     }, "json"
                 );
             }
@@ -1499,9 +1454,9 @@ function setupDraggable() {
                                {useajax: "setposition", userid: cm_Globals.options.userid, pname: pname, id: bid, type: thingtype, value: panel, attr: startPos, tileid: tile, hubid: hubid, thingid: thingid, roomid: roomid},
                                function (presult, pstatus) {
                                 // check for an object returned which should be a promise object
-                                if (pstatus==="success" && ( typeof presult==="object" || (typeof presult === "string" && !presult.startsWith("error"))) ) {
-                                    console.log("setposition presult: ", presult );
-                                }
+                                // if (pstatus==="success" && ( typeof presult==="object" || (typeof presult === "string" && !presult.startsWith("error"))) ) {
+                                //     console.log("setposition presult: ", presult );
+                                // }
                             }
                         );
                     }
@@ -1822,8 +1777,6 @@ function execValidateUser() {
 function execButton(buttonid) {
 
     if ( buttonid==="optSave") {
-        // first save our filters
-        // if ( !checkInputs() ) { return; }
 
         // var fobj = formToObject("filteroptions");
         var oobj = formToObject("optionspage");
@@ -2017,20 +1970,18 @@ function execButton(buttonid) {
         // console.log("Tile movement snap mode: ",snap);
 
     } else if ( buttonid==="refreshpage" ) {
-        var pstyle = "position: absolute; background-color: blue; color: white; font-weight: bold; font-size: 32px; left: 300px; top: 300px; width: 600px; height: 100px; margin-top: 50px;";
+        var pstyle = "position: absolute; background-color: blue; color: white; font-weight: bold; font-size: 24px; left: 300px; top: 300px; width: 600px; height: 100px; margin-left: 50px; margin-top: 50px;";
+        var rstyle = "position: absolute; background-color: blue; color: white; font-weight: normal; font-size: 24px; left: 200px; top: 200px; width: 800px; height: 250px; margin-left: 50px; margin-top: 50px;";
         createModal("info", "Screen will reload when hub refresh is done...","body", false, {style: pstyle});
         dynoPost(buttonid, "", function(presult, pstatus) {
             setTimeout(function() {
                 closeModal("info");
-                createModal("info", presult, "body", false, {style: pstyle});
+                createModal("info", presult, "body", false, {style: rstyle});
                 setTimeout(function() {
                     window.location.href = cm_Globals.returnURL;
                 },2000);
             },2000);
         });
-
-    } else if ( buttonid==="refactor" ) {
-        alert("This feature is not yet available.");
 
     // default is to call main node app with the id as a path
     } else {
@@ -2051,42 +2002,6 @@ function checkInpval(field, val, regexp) {
         errs = "field: " + field + "= " + val + " is not a valid entry";
     }
     return errs;
-}
-
-function checkInputs() {
-
-    // var port = $("input[name='port']").val().trim();
-    // var webSocketServerPort = $("input[name='webSocketServerPort']").val().trim();
-    var fast_timer = $("input[name='fast_timer']").val().trim();
-    var slow_timer = $("input[name='slow_timer']").val().trim();
-    // var uname = $("input[name='uname']").val().trim();
-    // var pword = $("input[name='pword']").val().trim();
-
-    var errs = {};
-    var isgood = true;
-    var intre = /^\d{1,6}$/;         // only up to 6 digits allowed
-    var unamere = /^\D\S{2,}$/;      // start with a letter and be two long at least
-    var pwordre = /^\S{6,}$/;        // start with anything but no white space and at least 6 digits 
-
-    errs.fast_timer = checkInpval("fast_timer", fast_timer, intre);
-    errs.slow_timer = checkInpval("slow_timer", slow_timer, intre);
-    // errs.uname = checkInpval("username", uname, unamere);
-    // errs.pword = pword==="" ? "" : checkInpval("password", pword, pwordre);
-
-    // show all errors
-    var str = "";
-    $.each(errs, function(key, val) {
-        if ( val ) {
-            str = str + "Invalid " + key + val + "\n"; 
-        }
-    });
-
-    if ( str ) {
-        alert(str);
-        isgood = false;
-    }
-
-    return isgood;
 }
 
 function setupButtons() {
@@ -2947,7 +2862,7 @@ function fixTrack(tval) {
 // note that some sub-items can update the values of other subitems
 // this is exactly what happens in music tiles when you hit next and prev song
 // third parameter will skip links - but this is not used for now
-function updateTile(aid, presult) {
+function updateTile(aid, bid, presult) {
 
     // if ( !presult.time ) {
     //     console.log(">>>> presult: ", presult);
@@ -2995,7 +2910,7 @@ function updateTile(aid, presult) {
     // var dupcheck = {};
     // var swid = $("#t-"+aid).attr("bid");
     // var tileid = $("#t-"+aid).attr("tile");
-    var bid = $("#t-"+aid).attr("bid");
+    // var bid = $("#t-"+aid).attr("bid");
     // $.each( presult, function( key, value ) {
     for (var key in presult) {
         var value = presult[key];
@@ -3171,15 +3086,21 @@ function processKeyVal(targetid, aid, key, value) {
     return isclock;
 }
 
-function refreshTile(tileid, bid, thetype, hubid, tType) {
+function refreshTile(tileid, aid, bid, thetype, hubid) {
     var pname = $("#showversion span#infoname").html();
-    $.post(cm_Globals.returnURL, 
-        {api: "doquery", userid: cm_Globals.options.userid, pname: pname, id: bid, tileid: tileid, type: thetype, hubid: hubid, attr: tType},
-         function (presult, pstatus) {
-            if ( pstatus==="success" && presult && typeof presult==="object" ) {
-                console.log("Tile:", tileid, " id:", bid, " of type:", thetype, " refreshed to value:", presult);
-            }
-        }, "json");         
+    // console.log(">>>> ", tileid, aid, bid, thetype, hubid, cm_Globals.returnURL);
+    try {
+        $.post(cm_Globals.returnURL, 
+            {api: "doquery", userid: cm_Globals.options.userid, pname: pname, id: bid, tileid: tileid, type: thetype, hubid: hubid},
+            function (presult, pstatus) {
+                if ( pstatus==="success" && presult && typeof presult==="object" ) {
+                    // console.log("Tile:", tileid, " id:", bid, " type:", thetype, " refreshed to value:", presult);
+                    updateTile(aid, bid, presult);
+                } else {
+                    console.log("pstatus: ", pstatus, " refresh problem: ", presult);
+                }
+            }, "json");
+    } catch(e) { }
 }
 
 // refresh tiles on this page when switching to it
@@ -3316,7 +3237,7 @@ function clockUpdater(whichclock, forceget) {
         $('div.panel div.thing[bid="'+clocktype+'"]').each(function() {
             var aid = $(this).attr("aid");
             if ( aid ) {
-                updateTile(aid, updobj);
+                updateTile(aid, clocktype, updobj);
             }
         });
     }
@@ -3327,11 +3248,11 @@ function setupTimer(timertype, timerval, hub) {
 
     // we now pass the unique hubId value instead of numerical hub
     // since the number can now change when new hubs are added and deleted
-    if ( hub ) {
-        var hubid = hub.hubid;
-    } else {
-        hubid = "-1";
+    if ( !hub || timerval < 1000 ) {
+        // console.log(">>>> hub not provided, or timerval (", timerval, ") is less than 1 second so timer cannot be set up");
+        return;
     }
+    var hubid = hub.hubid;
     var updarray = [timertype, timerval, hubid];
     updarray.myMethod = function() {
 
@@ -3343,9 +3264,10 @@ function setupTimer(timertype, timerval, hub) {
                 var hubid = that[2];
                 $("div[hub='" + hubid+"']").each( function() {
                     var tileid = $(this).attr("tile");
+                    var aid = $(this).attr("aid");
                     var bid = $(this).attr("bid");
                     var thetype = $(this).attr("type");
-                    refreshTile(tileid, bid, thetype, hubid, tType);
+                    refreshTile(tileid, aid, bid, thetype, hubid);
                 });
 
             } catch(err) {
@@ -3403,7 +3325,7 @@ function setupPage() {
         
         // handle special control type tiles that perform javascript actions
         // if we are not in operate mode only do this if click is on operate
-        if ( thetype==="control" && (priorOpmode==="operate" || subid==="operate") ) {
+        if ( subid!=="name" && thetype==="control" && (priorOpmode==="operate" || subid==="operate") ) {
             if ( $(this).hasClass("confirm") ) {
                 var pos = {top: 100, left: 100};
                 createModal("modalexec","<p>Perform " + subid + " operation ... Are you sure?</p>", "body", true, pos, function(ui) {

@@ -1610,6 +1610,10 @@ function getDevices(hub) {
             console.log( (ddbg()), "error - hubid not found in DB. hub: ", hub);
             reject("error - hubid not proviced");
             // pushClient(userid, "reload", "all", reloadpath);
+
+        } else if ( hubid === "-1" ) {
+            getDefaultDevices();
+
         } else if ( !hubAccess || !hubEndpt ) {
             console.log( (ddbg()), "error - hub has not been authorized. hub: ", hub);
             reject("error - hub has not been authorized");
@@ -1638,6 +1642,42 @@ function getDevices(hub) {
             console.log( (ddbg()), "error - attempt to read an unknown hub type= ", hubType);
             reject("error - attempt to read an unknown hub type= " + hubType);
             // pushClient(userid, "reload", "all", reloadpath);
+        }
+
+        // this retrieves the devices not tied to a hub
+        // all of these are already in the database and don't need changing
+        // clocks will be updated with current time and images will be updated
+        function getDefaultDevices() {
+            var dclock;
+            var aclock;
+    
+            var dclock = getClock("clockdigital");
+            dclock = encodeURI2(dclock);
+            var aclock = getClock("clockanalog");
+            aclock = encodeURI2(aclock);
+
+            return mydb.getRows("devices", "*", "userid = "+userid + " AND (devicetype = 'clock' OR devicetype = 'control' or hint = 'special')")
+            .then( rows => {
+                var mydevices = {};
+                if ( rows ) {
+                    rows.forEach(device => {
+                        if ( device.deviceid === "clockdigital" ) {
+                            device.pvalue = dclock;
+                        } else if ( device.deviceid === "clockanalog" ) {
+                            device.pvalue = aclock;
+                        }
+                        mydevices[device.deviceid] = device;
+                    });
+                    resolve(mydevices);
+                } else {
+                    reject("no rows returned for default devices");
+                }
+                return mydevices;
+            })
+            .catch (reason => {
+                console.log( (ddbg()), reason);
+                reject(reason);
+            });
         }
 
         // Hubitat call to Groovy API
@@ -3904,6 +3944,8 @@ async function makeNewConfig(userid) {
     configs.push( await addConfigItem(userid, "rules", "true") );
     configs.push( await addConfigItem(userid, "timezone", "America/Los_Angeles") );
     configs.push( await addConfigItem(userid, "phototimer","0") );
+    configs.push( await addConfigItem(userid, "fast_timer","30000") );        // timers for sonos polling
+    configs.push( await addConfigItem(userid, "slow_timer","300000") );       // timers for images, frames, customs, blanks, videos polling
     configs.push( await addConfigItem(userid, "fcastcity", "san-carlos") );   // addConfigItem(userid, "fcastcity") || "ann-arbor" );
     configs.push( await addConfigItem(userid, "fcastregion","San Carlos") );  // addConfigItem(userid, "fcastregion","Ann Arbor") );
     configs.push( await addConfigItem(userid, "fcastcode","37d51n122d26") );  // addConfigItem(userid, "fcastcode","42d28n83d74") );
@@ -4011,9 +4053,10 @@ function makeDefaultDevices(userid, hubid) {
 }
 
 function getController() {
-    var controlval = {"name": "Controller", "showoptions": "Options","refreshpage": "Refresh","c__refactor": "Reset",
+    var controlval = {"name": "Controller", "showoptions": "Options","refreshpage": "Refresh",
     "c__userauth": "Re-Auth","showid": "Show Info","toggletabs": "Toggle Tabs", "showdoc": "Documentation",
     "blackout": "Blackout","operate": "Operate","reorder": "Reorder","edit": "Edit"};
+    return controlval;
     return controlval;
 }
 
@@ -5686,8 +5729,6 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     
     return $tc;
 
-// compare this logic with how siblings are defined
-// in the getCustomTile function
 function putLinkElement(bid, hint, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, twidth, theight) {
 
     var linktype = thingtype;
@@ -8661,8 +8702,14 @@ function queryHub(device, pname) {
 
     var promise = new Promise( function(resolve, reject) {
 
-        mydb.getRow("hubs","*","id = " + hubindex)
-        .then(hub => {
+        Promise.all([
+            mydb.getRows("configs","*","userid = "+userid),
+            mydb.getRow("hubs","*","id = " + hubindex)
+        ])
+        .then(results => {
+            var configoptions = results[0];
+            var hub = results[1];
+
             var host = hub["hubhost"];
             var access_token = hub["hubaccess"];
             var endpt = hub["hubendpt"];
@@ -8678,7 +8725,10 @@ function queryHub(device, pname) {
                     pvalue = getController();
                 } else {
                     pvalue = decodeURI2(device.pvalue);
+                    // pvalue = getCustomTile(userid, configoptions, pvalue, swid);
+                    pvalue = returnFile(userid, pname, pvalue, swtype, configoptions);
                 }
+                resolve(pvalue);
 
             } else if ( hub.hubtype==="Hubitat" ) {
                 var host = endpt + "/doquery";
@@ -8718,14 +8768,14 @@ function queryHub(device, pname) {
                                 };
                                 var group = findGroup(player, sonosGroups);
 
-                                if ( DEBUGtmp ) {
+                                if ( DEBUGsonos ) {
                                     console.log( (ddbg()), "group: ", group, " player: ", player);
                                 }
                                 if ( group && player.id === swid ) {
                                     resolved = true;
                                     getSonosDevice(endpt, header, player, group, pvalue)
                                     .then(pvalue => {
-                                        if ( DEBUGtmp ) {
+                                        if ( DEBUGsonos ) {
                                             console.log( (ddbg()), "getSonosDevice returned pvalue: ", pvalue);
                                         }
                                         resolve(pvalue);
@@ -8779,7 +8829,11 @@ function queryHub(device, pname) {
                 if ( typeof body==="object" ) {
                     pvalue = body;
                 } else if ( typeof body==="string" ) {
-                    pvalue = JSON.parse(body);
+                    try {
+                        pvalue = JSON.parse(body);
+                    } catch (e) {
+                        console.log(">>>> parse error: body: ", body, "\n error: ", e);
+                    }
                 } else {
                     reject("Invalid object in getQueryResponse.");
                 }
@@ -8847,7 +8901,9 @@ function queryHub(device, pname) {
 
                 
                 var metadata = JSON.parse(metabody);
-                console.log(">>>> metabody: ", metabody, "\n metadata: ", metadata);
+                if ( DEBUGsonos ) {
+                    console.log( (ddbg()), ">>>> metadata: ", metadata);
+                }
 
                 var serviceUrl = "";
                 var albumUrl = "";
@@ -9217,91 +9273,45 @@ function doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, co
 
 }
 
-function doQuery(userid, tileid, attr, pname, protocol) {
+function doQuery(userid, tileid, pname) {
     var result;
-
-    if ( attr==="all" || attr==="fast" || attr==="slow" ) {
-
-        var conditions;
-        if ( attr==="all" ) {
-            conditions = "userid = " + userid + " AND refresh != never";
-        } else {
-            conditions = "id = " + tileid + " AND refresh = " + attr;
-        }
-        result = mydb.getRows("devices","*", conditions)
-        .then(devices => {
-
-            // fix up music and weather and add file info
-            for ( var i=0; i < devices.length; i++ ) {
-                var swid = devices[i]["deviceid"];
-                var swtype = devices[i]["devicetype"];
-                var pvalue = decodeURI2(devices[i]["pvalue"]);
-    
-                if ( pvalue ) {
-                    var firstsubid = Object.keys(pvalue)[0];
-                    // push result to the clients
-                    pushClient(userid, swid, swtype, firstsubid, pvalue);
-                }
-            }
-            return devices;
-        }).catch(reason => {
-            console.log( (ddbg()), "doQuery - ", reason);
-            return null;
-        });
-
-    // a specific device is being requested
-    // lets get the device info and call its hub function if a POST request
-    } else {
-
-        var conditions = "id = "+tileid;
-        result = mydb.getRow("devices","*", conditions)
-        .then(device => {
-            var swid = device.deviceid;
-            var swtype = device.devicetype;
+    var conditions = "id = "+tileid;
+    result = mydb.getRow("devices","*", conditions)
+    .then(device => {
         
-            if ( !device ) {
-                throw "error - invalid device: id = " + tileid;
-            } else {
-
-                // query the hub which pushes update to GUI if we queried using POST
-                // which normally is only from GUI but user could use POST so beware
-                // that if you use the HP api in POST mode that all clients will be updated
-                // whenever you query a tile. To avoid this use the GET method to query a tile
-                // note that actions will always update clients to keep them in sync
-                // the GET function waits for the promise to put results to the browser
-
-                return queryHub(device, pname)
-                .then(pvalue => {
-                    if ( DEBUG5 || DEBUGtmp ) {
-                        console.log( (ddbg()), "queryHub results: ", pvalue);
-                    }
-
-                    // store results back in DB
-                    var pvaluestr = encodeURI2(pvalue);
-                    mydb.updateRow("devices", {pvalue: pvaluestr}, "id = " + tileid)
-                    .then( result => {
-                        var firstsubid = Object.keys(pvalue)[0];
-                        if ( DEBUG5 || DEBUGtmp ) {
-                            console.log( (ddbg()), "doQuery updated device: ", pvalue, " pvalstr: ", pvaluestr, " swid:", swid, 
-                                                   " swtype:", swtype, " firstsubid:", firstsubid, " result: ", result);
-                        }
-                        pushClient(userid, swid, swtype, firstsubid, pvalue);
-                    })
-                    .catch( reason => {
-                        console.log( (ddbg()), reason);
-                    });
-                    return pvalue;
-                })
-                .catch(reason => {
-                    console.log( (ddbg()), reason);
-                });
+        if ( !device ) throw "error - invalid device: id = " + tileid;
+        var swid = device.deviceid;
+        var swtype = device.devicetype;
+    
+        // query the hub to return the value of the tile as an object
+        return queryHub(device, pname)
+        .then(pvalue => {
+            if ( DEBUG5 ) {
+                console.log( (ddbg()), "queryHub results: ", pvalue);
             }
-        }).catch(reason => {
-            console.log( (ddbg()), "doQuery - ", reason);
-            return null;
-        });
 
-    }
+            // store results back in DB
+            var pvaluestr = encodeURI2(pvalue);
+            mydb.updateRow("devices", {pvalue: pvaluestr}, "id = " + tileid)
+            .then( result => {
+                // var firstsubid = Object.keys(pvalue)[0];
+                if ( DEBUG5 ) {
+                    console.log( (ddbg()), "doQuery updated device: ", pvalue, " pvalstr: ", pvaluestr, " swid:", swid, 
+                                            " swtype:", swtype, " result: ", result);
+                }
+                // this is now done on the js side so GET queries don't impact the GUI
+                // pushClient(userid, swid, swtype, firstsubid, pvalue);
+            });
+            return pvalue;
+        })
+        .catch(reason => {
+            console.log( (ddbg()), reason);
+        });
+        
+    }).catch(reason => {
+        console.log( (ddbg()), reason);
+        return null;
+    });
     return result;
 }
 
@@ -10118,20 +10128,20 @@ function getOptionsPage(user, configoptions, hubs, req) {
 
     function renderOptionsPage(rooms, devices, sensors, panels) {
 
-        // var $fast_timer = getConfigItem(configoptions, "fast_timer") || "0";
-        // var $slow_timer = getConfigItem(configoptions, "slow_timer") || "0";
+        var fast_timer = getConfigItem(configoptions, "fast_timer") || "0";
+        var slow_timer = getConfigItem(configoptions, "slow_timer") || "0";
         var $kioskoptions = getConfigItem(configoptions, "kiosk") || "false";
-        var $blackout = getConfigItem(configoptions, "blackout") || "false";
+        var blackout = getConfigItem(configoptions, "blackout") || "false";
         var $ruleoptions = getConfigItem(configoptions, "rules") || "true";
         var timezone = getConfigItem(configoptions, "timezone") || "America/Detroit";
         var phototimer = parseInt(getConfigItem(configoptions, "phototimer"));
         if ( isNaN(phototimer) ) { phototimer = 0; }
-        var fcastcity = getConfigItem(configoptions, "fcastcity") || "ann-arbor";
-        var fcastregion = getConfigItem(configoptions, "fcastregion") || "Ann Arbor";
-        var fcastcode = getConfigItem(configoptions, "fcastcode") || "42d28n83d74";   //  ann-arbor code is 42d28n83d74
-        var accucity = getConfigItem(configoptions, "accucity") || "ann-arbor-mi";
+        var fcastcity = getConfigItem(configoptions, "fcastcity") || "san-carlos";
+        var fcastregion = getConfigItem(configoptions, "fcastregion") || "San Carlos";
+        var fcastcode = getConfigItem(configoptions, "fcastcode") || "37d51n122d26";
+        var accucity = getConfigItem(configoptions, "accucity") || "sa-carlos";
         var accuregion = getConfigItem(configoptions, "accuregion") || "us";
-        var accucode = getConfigItem(configoptions, "accucode") || "329380";      // ann-arbor-mi code is 329380
+        var accucode = getConfigItem(configoptions, "accucode") || "337226";
         var hubpick = getConfigItem(configoptions, "hubpick") || "all";
         var webSocketUrl = getSocketUrl(hostname);
         var useroptions = getConfigItem(configoptions, "useroptions");
@@ -10231,16 +10241,16 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $kstr = ($ruleoptions===true || $ruleoptions==="true") ? " checked" : "";
         $tc += "<input class=\"optionchk\" id=\"ruleid\" type=\"checkbox\" name=\"rules\"  value=\"" + $ruleoptions + "\"" + $kstr + "/></div>";
         $tc += "<div><label for=\"clrblackid\" class=\"optioninp\">Blackout on Night Mode: </label>";    
-        $kstr = ($blackout===true || $blackout==="true") ? " checked" : "";
-        $tc+= "<input class=\"optionchk\" id=\"clrblackid\" type=\"checkbox\" name=\"blackout\"  value=\"" + $blackout + "\"" + $kstr + "/></div>";
+        $kstr = (blackout===true || blackout==="true") ? " checked" : "";
+        $tc+= "<input class=\"optionchk\" id=\"clrblackid\" type=\"checkbox\" name=\"blackout\"  value=\"" + blackout + "\"" + $kstr + "/></div>";
         $tc+= "<div><label for=\"photoid\" class=\"optioninp\">Photo timer (sec): </label>";
         $tc+= "<input class=\"optioninp\" id=\"photoid\" name=\"phototimer\" type=\"number\"  min='0' max='300' step='5' value=\"" + phototimer + "\" /></div>";
         $tc += "<div><label class=\"optioninp\">Timezone: </label>";
         $tc += "<input id=\"newtimezone\" class=\"optioninp\" name=\"timezone\" size=\"20\" type=\"text\" value=\"" + timezone + "\"/></div>"; 
-        // $tc += "<div><label class=\"optioninp\">Fast Timer: </label>";
-        // $tc += "<input id=\"newfast_timer\" class=\"optioninp\" name=\"fast_timer\" size=\"20\" type=\"text\" value=\"" + $fast_timer + "\"/></div>"; 
-        // $tc += "<div><label class=\"optioninp\">Slow Timer: </label>";
-        // $tc += "<input id=\"newslow_timer\" class=\"optioninp\" name=\"slow_timer\" size=\"20\" type=\"text\" value=\"" + $slow_timer + "\"/></div>"; 
+        $tc += "<div><label class=\"optioninp\">Sonos polling timer: </label>";
+        $tc += "<input class=\"optioninp\" name=\"fast_timer\" size=\"20\" type=\"text\" value=\"" + fast_timer + "\"/></div>"; 
+        $tc += "<div><label class=\"optioninp\">Default polling timer: </label>";
+        $tc += "<input class=\"optioninp\" name=\"slow_timer\" size=\"20\" type=\"text\" value=\"" + slow_timer + "\"/></div>"; 
         $tc += "</div>";
 
         $tc += "<div class=\"filteroption\">";
@@ -11420,7 +11430,7 @@ function apiCall(user, body, protocol, req, res) {
             case "doquery":
             case "query":
                 if ( !pname ) { pname = "default"; }
-                result = doQuery(userid, tileid, swattr, pname, protocol);
+                result = doQuery(userid, tileid, pname);
                 break;
 
             case "status":
@@ -11516,18 +11526,11 @@ function apiCall(user, body, protocol, req, res) {
                 result = getPhotos(userid, "photos");
                 break;
                 
-            case "refactor":
-                result = "error - api call [" + api + "] is no longer supported";
-                break;
-
-            case "refreshtiles":
-                result = refreshTiles(user, body);
-                break;
-        
             case "refreshpage":
                 if ( protocol==="POST" ) {
                     var numdevices = 0;
-                    result = mydb.getRows("hubs","*","userid = "+userid+ " AND hubid != '-1' AND hubid != 'new'")
+                    // result = mydb.getRows("hubs","*","userid = "+userid+ " AND hubid != '-1' AND hubid != 'new'")
+                    result = mydb.getRows("hubs","*","userid = "+userid+ " AND hubid != 'new'")
                     .then(hubs => {
                         var numhubs = hubs ? Object.keys(hubs).length : 0;
                         if ( numhubs === 0 ) {
@@ -11535,14 +11538,19 @@ function apiCall(user, body, protocol, req, res) {
                         } else {
                             var promise = new Promise(function(resolve, reject) {
                                 var n = 0;
+                                var strmsg = "";
                                 hubs.forEach(hub => {
                                     getDevices(hub)
                                     .then(mydevices => {
                                         n++;
                                         var num = Object.keys(mydevices).length;
+                                        strmsg+= hub.hubname + " refreshed " + num + " devices";
                                         numdevices+= num;
                                         if ( n >= numhubs ) {
-                                            resolve("refreshed " + numdevices + " devices from " + numhubs + " hubs ");
+                                            resolve(strmsg);
+                                            // resolve("refreshed " + numdevices + " devices from " + numhubs + " hubs ");
+                                        } else {
+                                            strmsg+= "<br>";
                                         }
                                     })
                                     .catch(reason => {
@@ -12825,7 +12833,7 @@ if ( app && applistening ) {
             var hubid = req.headers['x-sonos-household-id'];
             mydb.getRow("hubs","*","hubid = '"+hubid+"'")
             .then(hub => {
-                if ( !hub ) throw "No Sonos hub available to update";
+                if ( !hub ) throw "No Sonos hub available to update. hubid = " + hubid;
                 var sigvals = [
                     req.headers['x-sonos-event-seq-id'],
                     req.headers['x-sonos-namespace'],

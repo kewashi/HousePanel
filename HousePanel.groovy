@@ -1487,6 +1487,7 @@ def doQuery() {
 
     case "shade" :
         cmdresult = getShade(swid)
+        break;
          
     case "momentary" :
         cmdresult = getMomentary(swid)
@@ -1805,7 +1806,7 @@ def setPresence(swid, cmd, swattr, subid) {
 // a non-zero button number must be passed into cmd
 // and the command signalled from the subid value
 def setButton(swid, cmd, swattr, subid, item=null ) {
-    logcaller("setButton", swid, cmd, swattr, subid, "info")
+    logcaller("setButton", swid, cmd, swattr, subid, "debug")
     def resp = false
     def buttonnum = cmd.isNumber() ? cmd.toInteger() : 0
     item  = item ? item : mybuttons.find{it.id == swid }
@@ -2266,7 +2267,7 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
                 newcolor = hsv2rgb(h, s, v)
                 // item.setColor([hue:hue, saturation: s, level: v])
                 newonoff = "on"
-                logger("hue command result: hue= ${hue}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","info")
+                logger("hue command result: hue= ${hue}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
             break
               
         case "hue-dn":
@@ -2280,7 +2281,7 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
                 newcolor = hsv2rgb(h, s, v)
                 // item.setColor([hue:hue, saturation: s, level: v])
                 newonoff = (v == 0) ? "off" : "on"
-                logger("hue command result: hue= ${hue}, h= ${h}, del= ${del} s= ${s}, v= ${v}, newcolor= ${newcolor}","info")
+                logger("hue command result: hue= ${hue}, h= ${h}, del= ${del} s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
             break
               
         case "hue":
@@ -2296,7 +2297,7 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
                 newcolor = hsv2rgb(h, s, v)
                 // item.setColor([hue:hue, saturation: s, level: v])
                 newonoff = (v == 0) ? "off" : "on"
-                logger("hue command result: hue= ${hue}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","info")
+                logger("hue command result: hue= ${hue}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
             break
 
         case "saturation-up":
@@ -2310,7 +2311,7 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
                 newcolor = hsv2rgb(h, s, v)
                 // item.setColor([hue: hue100, saturation: s, level: v])
                 newonoff = "on"
-                logger("saturation command result: hue= ${hue100}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","info")
+                logger("saturation command result: hue= ${hue100}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
             break
               
         case "saturation-dn":
@@ -2325,7 +2326,7 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
                 newcolor = hsv2rgb(h, saturation, v)
                 // item.setColor([hue: hue100, saturation: s, level: v])
                 newonoff = (v == 0) ? "off" : "on"
-                logger("saturation command result: hue= ${hue100}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","info")
+                logger("saturation command result: hue= ${hue100}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
             break
               
         case "saturation":

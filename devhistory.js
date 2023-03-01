@@ -1,4 +1,5 @@
 const devhistory = `
+3.053   Added polling option for Sonos and default tiles and shade query bugfix
 3.052   Merged into mainline and added NewST and Sonos query support
 3.051   Debugged and fixed the API feature to work again with query and aciton
 3.050   Silly bugfix in hubauth, add right and bottom to editor, fix defaults
