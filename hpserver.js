@@ -1470,7 +1470,6 @@ function refreshSonosToken(userid, hub, refresh_token, clientId, clientSecret, r
         .then(result => {
             if ( !result ) {
                 console.log( (ddbg()), "error - hub update to DB failed while trying to refresh new Sonos token");
-                return;
             }
         })
         .catch( reason => {
@@ -7063,71 +7062,101 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
     var rbid = bid;
     var rtype = thetype;
 
-    var lines;
-    var hubs;
-    var devices;
-    var rulesdone = {configs: false, hubs: false, devices: false};
-
     // retrieve customization for this device
-    mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
+    Promise.all([
+        mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'"),
+        mydb.getRows("hubs", "*", "userid = "+userid),
+        mydb.getRows("devices", "*", "userid = "+userid)
+    ])
     .then(results => {
-        if ( results ) {
-            lines = decodeURI2(results.configval);
-            if ( DEBUG11 ) {
-                console.log( (ddbg()), "Rule processing for bid: ", bid," lines: ", lines);
-            }
-        } else {
-            lines = null;
+        var configs = results[0];
+        var lines = null;
+        if ( configs ) {
+            lines = decodeURI2(configs.configval);
         }
-        checkDone("configs");
-        return lines;
-    })
-    .then(items => {
-
-        // if a set of lines was found then retrieve all hubs and all devices since rules can act on any of these
-        if ( items ) {
-            mydb.getRows("hubs", "*", "userid = "+userid)
-            .then(dbhubs => {
-                hubs = {};
-                for ( var ahub in dbhubs ) {
-                    var id = dbhubs[ahub].id;
-                    hubs[id] = dbhubs[ahub];
-                }
-                checkDone("hubs");
-            })
-            .then(results => {
-                mydb.getRows("devices", "*", "userid = "+userid)
-                .then(dbdevices => {
-                    devices = {};
-                    for ( var adev in dbdevices ) {
-                        var id = dbdevices[adev].id;
-                        devices[id] = dbdevices[adev]
-                    }
-                    checkDone("devices");
-                });
-            })
-            .catch(reason => {
-                console.log( (ddbg()), reason );
-            });
+        var dbhubs = results[1];
+        var hubs = {};
+        for ( var ahub in dbhubs ) {
+            var id = dbhubs[ahub].id;
+            hubs[id] = dbhubs[ahub];
+        }
+        var dbdevices = results[2];
+        var devices = {};
+        for ( var adev in dbdevices ) {
+            var id = dbdevices[adev].id;
+            devices[id] = dbdevices[adev]
+        }
+        if ( lines ) {
+            invokeRules(deviceid, lines, hubs, devices);
         }
     })
     .catch(reason => {
         console.log( (ddbg()), "processRules - ", reason);
     });
 
-    return;
+    // var lines;
+    // var hubs;
+    // var devices;
+    // var rulesdone = {configs: false, hubs: false, devices: false};
+    // mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
+    // .then(results => {
+    //     if ( results ) {
+    //         lines = decodeURI2(results.configval);
+    //         if ( DEBUG11 ) {
+    //             console.log( (ddbg()), "Rule processing for bid: ", bid," lines: ", lines);
+    //         }
+    //     } else {
+    //         lines = null;
+    //     }
+    //     checkDone("configs");
+    //     return lines;
+    // })
+    // .then(items => {
 
-    function checkDone(element) {
-        if ( element ) {
-            rulesdone[element] = true;
-        }
+    //     // if a set of lines was found then retrieve all hubs and all devices since rules can act on any of these
+    //     if ( items ) {
+    //         mydb.getRows("hubs", "*", "userid = "+userid)
+    //         .then(dbhubs => {
+    //             hubs = {};
+    //             for ( var ahub in dbhubs ) {
+    //                 var id = dbhubs[ahub].id;
+    //                 hubs[id] = dbhubs[ahub];
+    //             }
+    //             checkDone("hubs");
+    //         })
+    //         .then(results => {
+    //             mydb.getRows("devices", "*", "userid = "+userid)
+    //             .then(dbdevices => {
+    //                 devices = {};
+    //                 for ( var adev in dbdevices ) {
+    //                     var id = dbdevices[adev].id;
+    //                     devices[id] = dbdevices[adev]
+    //                 }
+    //                 checkDone("devices");
+    //             });
+    //         })
+    //         .catch(reason => {
+    //             console.log( (ddbg()), reason );
+    //         });
+    //     }
+    // })
+    // .catch(reason => {
+    //     console.log( (ddbg()), "processRules - ", reason);
+    // });
 
-        if ( rulesdone.configs && rulesdone.hubs && rulesdone.devices ) {
-            if ( lines && hubs && devices ) {
-                invokeRules(deviceid, lines, hubs, devices);
-            }
-        }
-    }
+    // return;
+
+    // function checkDone(element) {
+    //     if ( element ) {
+    //         rulesdone[element] = true;
+    //     }
+
+    //     if ( rulesdone.configs && rulesdone.hubs && rulesdone.devices ) {
+    //         if ( lines && hubs && devices ) {
+    //             invokeRules(deviceid, lines, hubs, devices);
+    //         }
+    //     }
+    // }
 
     function invokeRules(tileid, items, hubs, devices) {
         // rule structure
@@ -7259,7 +7288,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                                 var kv = rulevalue.indexOf("$");
                                 var rvindex;
                                 if ( jv === "$" ) {
-                                    rvindex = rulevalue.substr(1);
+                                    rvindex = rulevalue.substring(1);
                                     if ( array_key_exists(rvindex, pvalue) ) {
                                         rulevalue = pvalue[rvindex];
                                     }
@@ -7270,7 +7299,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                                 // use another tile's existing value for check using @tilenum$fieldname syntax
                                 } else if ( jv === "@" && kv !== -1 ) {
                                     var rvtile = rulevalue.substring(1, kv);
-                                    rvindex = rulevalue.substr(kv+1);
+                                    rvindex = rulevalue.substring(kv+1);
                                     var rulepvalue = decodeURI2(devices[rvtile].pvalue);
                                     if ( rulepvalue ) {
                                         rulevalue = rulepvalue[rvindex];
@@ -7278,7 +7307,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                                         rulevalue = false;
                                     }
                                     if ( DEBUG11 ) {
-                                        console.log( (ddbg()), "rule: rvtile = ", rvtile, " rulevalue= ", rulevalue);
+                                        console.log( (ddbg()), "rule: rvtile = ", rvtile, " rvindex: ", rvindex, " rulevalue= ", rulevalue);
                                     }
                                 }
 
@@ -8481,7 +8510,6 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                 return;
             }
 
-
         });
 
     }
@@ -8753,7 +8781,9 @@ function queryHub(device, pname) {
                         var sonosGroups = jsonbody.groups;
                         var sonosPlayers = jsonbody.players;
                         if ( !sonosPlayers ) {
-                            reject("no Sonos devices found for Household: " + hubid);
+                            console.log((ddbg()), "Obtaining Sonos refresh tokenin queryHub");
+                            refreshSonosToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, false);
+                            reject("no Sonos devices found in queryHub for Household: " + hubid);
                             return;
                         }
     
@@ -8769,7 +8799,7 @@ function queryHub(device, pname) {
                                 var group = findGroup(player, sonosGroups);
 
                                 if ( DEBUGsonos ) {
-                                    console.log( (ddbg()), "group: ", group, " player: ", player);
+                                    console.log( (ddbg()), "Sonos queryHub, group: ", group, " player: ", player);
                                 }
                                 if ( group && player.id === swid ) {
                                     resolved = true;
@@ -8902,7 +8932,7 @@ function queryHub(device, pname) {
                 
                 var metadata = JSON.parse(metabody);
                 if ( DEBUGsonos ) {
-                    console.log( (ddbg()), ">>>> metadata: ", metadata);
+                    console.log( (ddbg()), "Sonos group: ", group.id," metadata: ", metadata);
                 }
 
                 var serviceUrl = "";
@@ -12162,19 +12192,6 @@ function setupISYSocket() {
     // unlike ST and HE below, communication from ISY happens over a real webSocket
     var wshost;
 
-    // close any prior sockets
-    for (var hubid in isyServers) {
-        var server = isyServers[hubid];
-        try {
-            console.log( (ddbg()), "dropped server for hub: ", hubid);
-            server.drop(1001,"HousePanel page refreshing");
-            delete isyServers[hubid];
-        } catch(e) {
-            console.log( (ddbg()), "error trying to dropped server for hub: ", hubid, "\n", err);
-        }
-    }
-    isyServers = {};
-
     // get all the ISY hubs for every user - this assumes no two users use the same ISY hub
     mydb.getRows("hubs","*","hubtype = 'ISY'")
     .then(hubs => {
@@ -12211,7 +12228,6 @@ function setupISYSocket() {
                 var opts = {rejectUnauthorized: false};
                 var wsconfigs = {tlsOptions: opts, closeTimeout: 2000};
                 var wsclient = new webSocketClient(wsconfigs);
-                isyServers[hubid] = wsclient;
                 wsclient["userid"] = userid;
                 wsclient["hubid"] = hubid;
 
@@ -12236,8 +12252,7 @@ function setupISYSocket() {
                     });
                 
                     connection.on("close", function(reasonCode, description) {
-                        console.log( (ddbg()), "ISY socket closed for hub: ", that.hubid," reason: ", reasonCode, description, );
-                        delete isyServers[that.hubid];
+                        console.log( (ddbg()), "ISY socket closed for hub: ", that.hubid," reason: ", reasonCode, description );
                     });
                 
                 });
@@ -12377,7 +12392,6 @@ GLB.newcss = {};
 
 var wsServers = [];
 var clients = [];
-var isyServers = {};
 
 // start our main server
 var httpServer;
@@ -12435,6 +12449,7 @@ try {
 // client pages are refreshed when each hub is done reading
 // the dbtype parameter controls whether we use mySQL or SQLITE engines
 // these are the only two choices - if something else given, sqlite is used
+// *** warning *** mysql has not been tested with the most recent updates
 if ( app && applistening ) {
 
     var mydb = new sqlclass.sqlDatabase(GLB.dbinfo.dbhost, GLB.dbinfo.dbname, GLB.dbinfo.dbuid, GLB.dbinfo.dbpassword, GLB.dbinfo.dbtype);
@@ -12767,7 +12782,9 @@ if ( app && applistening ) {
         // handle initialize events from Hubitat here
         if ( req.path==="/" && req.body['msgtype'] === "initialize" ) {
             hubid = req.body['hubid'] || null;
-            console.log( (ddbg()), "init request - req.body: ", req.body);
+            if ( DEBUG1 ) {
+                console.log( (ddbg()), "init request - req.body: ", req.body);
+            }
 
             if ( hubid ) {
                 // if we find an existing hub then just update the devices
@@ -12806,7 +12823,7 @@ if ( app && applistening ) {
             }
             res.end();
 
-        // handle msg events from Groovy legacy SmartThings and Hubitat here
+        // handle msg events from Hubitat here
         // these message can now only come from Hubitat since ST groovy is gone
         } else if ( req.path==="/" && req.body['msgtype'] === "update" ) {
             if ( DEBUG12 ) {
@@ -12833,7 +12850,7 @@ if ( app && applistening ) {
             var hubid = req.headers['x-sonos-household-id'];
             mydb.getRow("hubs","*","hubid = '"+hubid+"'")
             .then(hub => {
-                if ( !hub ) throw "No Sonos hub available to update. hubid = " + hubid;
+                if ( !hub ) throw "No Sonos hub available to update";
                 var sigvals = [
                     req.headers['x-sonos-event-seq-id'],
                     req.headers['x-sonos-namespace'],
@@ -12859,17 +12876,13 @@ if ( app && applistening ) {
                     res.send("200 OK");
                     res.end();
                 } else {
-                    if ( DEBUGsonos ) {
-                        console.log( (ddbg()),"Sonos event ignored, signatures do not match. signatures:\n ", sonossig, "\n ", mysig,"\n body: ", req.body);
-                    }
+                    console.log( (ddbg()),"Sonos event ignored, signatures do not match. signature 1: ", sonossig, " signature 2: ", mysig);
                     res.send("200 OK");
                     res.end();
                 }
             })
             .catch(reason => {
-                if ( DEBUGsonos ) {
-                    console.log( (ddbg()), reason);
-                }
+                console.log( (ddbg()), "problem retrieving Sonos hubid: ", hubid," reason: ", reason);
                 res.send("200 OK");
                 res.end();
             });
@@ -13011,11 +13024,11 @@ if ( app && applistening ) {
             res.end();
             
         // handle all api calls upon the server from js client and external api calls here
-        // note - if user calls this externally then the userid and thingid values must be provided
-        // most users won't know these values but they are shown on the showid page
+        // note - if user calls this externally then the userid and tileid values must be provided
+        // most users won't know these values but they are shown on the showid page or when in edit mode
         // GET calls from a browser are easier because the cookie will be set
         // this means that user GET API calls can only be made from a device that has HP running on it
-        // POST calls can be made from any platform as long as the userid and thingid values are known
+        // POST calls can be made from any platform as long as the userid and tileid values are known
         } else if ( req.path==="/" &&  typeof req.body['useajax']!=="undefined" || typeof req.body["api"]!=="undefined" ) {
             var result = apiCall(null, req.body, "POST", req, res);
 
@@ -13035,12 +13048,14 @@ if ( app && applistening ) {
                 }
                 res.send(result);
                 res.end;
-            } else if ( result && typeof result === "object") {
+            } else if ( typeof result === "object") {
+                if ( DEBUG1 ) {
+                    console.log( (ddbg()), "apiCall object returned: ", req.body["api"] || req.body["useajax"], " = ", result );
+                }
                 res.json(result);
                 res.end();
             } else {
-                var reason = "Invalid POST request";
-                res.send(reason);
+                res.send("Invalid HousePanel POST request");
                 res.end();
             };
 
