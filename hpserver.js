@@ -9561,7 +9561,7 @@ function addThing(userid, pname, bid, thingtype, panel, hubid, hubindex, roomid,
         var fields = "devices.id as devices_id, devices.userid as devices_userid, devices.deviceid as devices_deviceid, " +
         "devices.name as devices_name, devices.devicetype as devices_devicetype, devices.hint as devices_hint, " +
         "devices.refresh as devices_refresh, devices.pvalue as devices_pvalue, " +
-        "hubs.id as hubs_id, hubs.hubid as hubs_hubid";
+        "hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubtype as hubs_hubtype";
         return mydb.getRow("devices", fields, "devices.userid = "+userid+" AND hubs.hubid='"+hubid+"' AND devices.deviceid='"+bid+"' AND devices.devicetype='"+thingtype+"'", joinstr)
         .then(row => {
             if ( row && is_object(row) ) {
@@ -9570,6 +9570,7 @@ function addThing(userid, pname, bid, thingtype, panel, hubid, hubindex, roomid,
                 var tileid = device["devices_id"];
                 var hint = device["devices_hint"];
                 var refresh = device["devices_refresh"];
+                var hubtype = device["hubs_hubtype"];
                 var pvalue = decodeURI2(device["devices_pvalue"]);
                 hubindex = device["hubs_id"];
                 var result;
@@ -9586,7 +9587,7 @@ function addThing(userid, pname, bid, thingtype, panel, hubid, hubindex, roomid,
                             // now make the visual tile and return it as a promised value
                             // construct the old things element equivalent but add the unique thingid and roomid fields
                             var thesensor = {id: bid, thingid: thingid, roomid: roomid, type: thingtype, hubnum: hubid, hubindex: hubindex,
-                                            hint: hint, refresh: refresh, value: pvalue};
+                                            hubtype: hubtype, hint: hint, refresh: refresh, value: pvalue};
                             var thing = makeThing(userid, pname, configoptions, thingid, tileid, thesensor, panel, 0, 0, 1, "", false, null);
                             if ( DEBUG6 ) {
                                 console.log( (ddbg()), "added tile #",tileid," (thingid = ",thingid,") of type: ",thingtype," to page: ",panel,
@@ -10555,7 +10556,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
     "devices.id as devices_id, devices.userid as devices_userid, devices.deviceid as devices_deviceid, " +
     "devices.name as devices_name, devices.devicetype as devices_devicetype, devices.hint as devices_hint, " +
     "devices.refresh as devices_refresh, devices.pvalue as devices_pvalue, " +
-    "hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubhost as hubs_hubhost, hubs.hubname as hubs_hubname, " +
+    "hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubhost as hubs_hubhost, hubs.hubname as hubs_hubname, hubs.hubtype as hubs_hubtype, " +
     "hubs.clientid as hubs_clientid, hubs.clientsecret as hubs_clientsecret, hubs.hubaccess as hubs_hubaccess, hubs.hubrefresh as hubs_hubrefresh, " +
     "hubs.useraccess as hubs_useraccess, hubs.userendpt as hubs_userendpt, hubs.hubtimer as hubs_hubtimer, " +
     "rooms.id as rooms_id, rooms.panelid as rooms_panelid, rooms.rname as rooms_rname, rooms.rorder as rooms_rorder";
@@ -11543,7 +11544,7 @@ function apiCall(user, body, protocol, req, res) {
                 if ( protocol==="POST" ) {
                     // make the fake tile for the room for editing purposes
                     var faketile = {"panel": "panel", "name": swval, "tab": "Tab Inactive", "tabon": "Tab Selected"};
-                    var thesensor = { "id": "r_" + swid, "name": swval, thingid: 0, roomid: roomid, 
+                    var thesensor = { "id": "r_" + swid, "name": swval, thingid: 0, roomid: roomid, hubtype: "None",
                                       "hubnum": "-1", "hubindex": 0, "type": "page", "value": faketile};
                     result = makeThing(userid, pname, null, 0, tileid, thesensor, "wysiwyg", 0, 0, 500, "", "te_wysiwyg", null);
                 } else {
