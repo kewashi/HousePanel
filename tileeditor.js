@@ -80,7 +80,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
     var jqxhr = null;
     if ( str_type==="page" ) {
         jqxhr = $.post(returnURL, 
-            {useajax: "pagetile", userid: et_Globals.userid, thingid: et_Globals.thingid, id: hubid, type: 'page', tile: thingindex, value: thingindex, attr: customname},
+            {useajax: "pagetile", userid: et_Globals.userid, thingid: et_Globals.thingid, id: hubid, type: 'page', tileid: thingindex, value: thingindex, attr: customname},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;
@@ -88,13 +88,23 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
             }
         );
         
-    } else if ( htmlcontent ) {
+    } else if ( htmlcontent && false ) {
         htmlcontent = "<div class=\"" + thingclass + "\" id='te_wysiwyg'>" + htmlcontent + "</div>";
     } else {
         // put placeholder and populate after Ajax finishes retrieving true content
         // this is actually no longer used but left code here in case I want to use it later
         htmlcontent = "<div id='error'>Edit dialog cannot be displayed</div>";
         htmlcontent = "<div class=\"" + thingclass + "\" id='te_wysiwyg'>" + htmlcontent + "</div>";
+
+        jqxhr = $.post(returnURL, 
+            {useajax: "wysiwyg", userid: et_Globals.userid, thingid: et_Globals.thingid, id: bid, type: str_type, tile: thingindex, value: "", attr: ""},
+            function (presult, pstatus) {
+                if (pstatus==="success" ) {
+                    htmlcontent = presult;
+                }
+            }
+        );
+
     }
     // console.log(">>> htmlcontent: ", htmlcontent);
 
@@ -225,6 +235,8 @@ function getOnOff(str_type, subid, val) {
         } else {
             onoff = ["heat","cool","auto","off"];
         }
+    } else if ( str_type==="thermostat" && subid.startsWith("temperature" ) ) {
+        onoff = ["idle","heating","cooling","off"];
     } else if ( subid.startsWith("thermostatOperatingState" ) ) {
         if ( hubType==="ISY" || str_type==="isy" ) {
             onoff = ["Idle","Heating","Cooling","Off"];
@@ -236,7 +248,7 @@ function getOnOff(str_type, subid, val) {
     } else if ( subid.startsWith("musicmute" ) || (str_type==="audio" && subid.startsWith("mute")) ) {
         onoff = ["muted","unmuted"];
     } else if ( subid.startsWith("presence" ) ) {
-        onoff = ["present","absent"];
+        onoff = ["present","absent","not_present"];
     } else if ( str_type==="shm" && subid.startsWith("state" ) ) {
         onoff = ["Away","Home","Night","Disarmed"];
     } else if ( str_type==="hsm" && subid.startsWith("state") ) {
@@ -424,9 +436,14 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
 }
 
 function toggleTile(target, str_type, subid, thingindex) {
+    var ostarget = target;
     var swval = $(target).html();
     if ( swval ) {
         swval = swval.replace(" ","_");
+    }
+    if ( str_type === "thermostat" && subid==="temperature" ) {
+        ostarget = "#a-" + et_Globals.aid + "-thermostatOperatingState";
+        swval = $(ostarget).html();
     }
     $('#onoffTarget').html("");
     
@@ -445,6 +462,9 @@ function toggleTile(target, str_type, subid, thingindex) {
                 if ( newsub >= onoff.length ) { newsub= 0; }
                 $(target).addClass( onoff[newsub] ); 
                 $(target).html( onoff[newsub] );
+                if ( ostarget !== target ) {
+                    $(ostarget).html( onoff[newsub] );
+                }
                 $('#onoffTarget').html(onoff[newsub]);
                 break;
             }
@@ -2418,7 +2438,8 @@ function updateColor(strCaller, cssRuleTarget, str_type, subid, thingindex, strC
 
 // the old ST icons are now stored locally and obtained from an internal list for efficiency
 function getIconCategories(iCategory) {
-    var specialCat = ["Main_Icons","Main_Media","Main_Photos","Modern_Icons","Modern_Media","Modern_Photos","User_Icons","User_Media","User_Photos"];
+    var specialCat = ["Main_Icons","Main_Media","User_Icons","User_Media"];
+    // var specialCat = ["Main_Icons","Main_Media","Main_Photos","Modern_Icons","Modern_Media","Modern_Photos","User_Icons","User_Media","User_Photos"];
     // var arrCat = [];
     
     var arrCat = ["Alarm","Appliances","BMW","Bath","Bedroom","Camera","Categories","Colors","Contact","Custom",
@@ -2427,7 +2448,7 @@ function getIconCategories(iCategory) {
                   "Particulate","People","Presence","Quirky","Samsung","Seasonal_Fall","Seasonal_Winter","Secondary",
                   "Security","Shields","Sonos","Switches","Tesla","Thermostat","Transportation","Unknown","Valves",
                   "Vents","Weather"];
-                  arrCat = specialCat.concat(arrCat);
+    arrCat = specialCat.concat(arrCat);
                   
     $('#iconSrc').empty();
     arrCat.forEach(function(iconCat) {

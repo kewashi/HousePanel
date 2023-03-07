@@ -1228,6 +1228,7 @@ div.radiogroup label, div.radiogroup input {
     width: auto;
     display: inline-block;
     margin-left: 2px; margin-right: 3px;
+    margin-top: 10px;
 }
 
 #colorpicker .minicolors-swatch {
@@ -2065,6 +2066,21 @@ div.thing.isy-thing div.overlay div.arrow-dn {
 div.thing.isy-thing div.overlay div.arrow-it {
     display: inline-block;
     width: 30%; margin-top: 5px;
+}
+div.thing.isy-thing div.overlay.enabled,
+div.thing.isy-thing div.overlay.deviceClass,
+div.thing.isy-thing div.overlay.dcPeriod,
+div.thing.isy-thing div.overlay.startDelay,
+div.thing.isy-thing div.overlay.endDelay,
+div.thing.isy-thing div.overlay.pnode,
+div.thing.isy-thing div.overlay.rpnode,
+div.thing.isy-thing div.overlay.sgid,
+div.thing.isy-thing div.overlay.wattage,
+div.thing.isy-thing div.overlay.custom,
+div.thing.isy-thing div.overlay.devtype,
+div.thing.isy-thing div.overlay.property
+{
+    display: none;
 }
 div.lock-thing div.overlay._getCodes,
 div.lock-thing div.overlay.lastCodeName,

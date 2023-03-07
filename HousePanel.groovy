@@ -3083,18 +3083,6 @@ def changeHandler(evt) {
                 color = hsv2rgb(h, s, v)
             }
 
-            // postHub(state.directIP, state.directPort, "update", deviceName, deviceid, "hue", devtype, h100)
-            // postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, "hue", devtype, h100)
-            // postHub(state.directIP3, state.directPort3, "update", deviceName, deviceid, "hue", devtype, h100)
-
-            // postHub(state.directIP, state.directPort, "update", deviceName, deviceid, "saturation", devtype, s)
-            // postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, "saturation", devtype, s)
-            // postHub(state.directIP3, state.directPort3, "update", deviceName, deviceid, "saturation", devtype, s)
-
-            // postHub(state.directIP, state.directPort, "update", deviceName, deviceid, "level", devtype, v)
-            // postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, "level", devtype, v)
-            // postHub(state.directIP3, state.directPort3, "update", deviceName, deviceid, "level", devtype, v)
-
             // for colors we have to set all parameters at the same time to avoid race conditions
             def colorarray = [h100, s, v, color]
             postHub(state.directIP, state.directPort, "update", deviceName, deviceid, "color", devtype, colorarray)

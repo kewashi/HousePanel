@@ -858,6 +858,7 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
     modalcontent = modalcontent + "</div>";
     
     modalhook.prepend(modalcontent);
+    // modalhook.append(modalcontent);
     
     // call post setup function if provided
     if ( loadfunction ) {
@@ -3064,7 +3065,7 @@ function processKeyVal(targetid, aid, key, value) {
 
     // add status of things to the class and remove old status
     } else if ( oldvalue && extra && 
-            key!=="name" && key!=="trackImage" && 
+            key!=="name" && key!=="trackImage" && key!=="temperature" &&
             key!=="trackDescription" && key!=="mediaSource" &&
             key!=="currentArtist" && key!=="currentAlbum" &&
             $.isNumeric(extra)===false && 

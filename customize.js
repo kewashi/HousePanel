@@ -1196,7 +1196,7 @@ function showPreview() {
     
     $.post(cm_Globals.returnURL, 
         {useajax: "wysiwyg", userid: cm_Globals.options.userid, tileid: tileid, id: bid, thingid: aid, type: str_type, 
-         tile: tileid, value: thingvalue, attr: swattr},
+         value: thingvalue, attr: swattr},
         function (presult, pstatus) {
             if (pstatus==="success" ) {
                 $("#cm_preview").html(presult);

@@ -13,7 +13,7 @@ div.panel-Family, div.panel-family, div.panel-Familyroom, div.panel-familyroom {
     background-size: cover;
 }
 div.panel-Kitchen, div.panel-kitchen, div.panel-Dinette, div.panel-dinette {
-    background-image: url('media/kitchenroom.jpg');
+    background-image: url('media/kitchen.jpg');
     background-size: cover;
 }
 div.panel-Living, div.panel-living, div.panel-Livingroom, div.panel-livingroom {
@@ -41,7 +41,7 @@ div.panel-Entertainment, div.panel-entertainment {
     background-image: url('media/music.jpg');
     background-size: cover;
 }
-div.panel-Basement, div.panel-Downstairs {
+div.panel-Basement, div.panel-basement, div.panel-Downstairs, div.panel-downstairs {
     background-image: url('media/basement.jpg');
     background-size: cover;
 }

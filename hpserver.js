@@ -370,6 +370,46 @@ function hsv2rgb(h, s, v) {
     return "#"+rhex+ghex+bhex;
 }
 
+function rgb2hsv(r, g, b) {
+    r /= 255;
+    g /= 255;
+    b /= 255;
+
+    var max = Math.max(r, Math.max(g, b));
+    var min = Math.min(r, Math.min(g, b));
+    var h = max;
+    var v = max;
+    var d = max - min;
+    var s = max == 0 ? 0 : d / max;
+    if (max === min) {
+        h = 0
+    } else {
+        switch (max) {
+            case r:
+                h = (g - b) / d + (g < b ? 6 : 0);
+                break;
+            case g:
+                h = (b - r) / d + 2;
+                break;
+            case b:
+                h = (r - g) / d + 4;
+                break;
+        }
+        h /= 6;
+    }
+
+    var h100 = h*100;
+    h100 = h100.toInteger();
+    h = h*360;
+    h = h.toInteger();
+    // h = mapMinMax(h,0,1,0,360);
+    s *= 100;
+    s = s.toInteger();
+    v *= 100;
+    v = v.toInteger();
+    return [h, s, v, h100]
+}
+
 function objCount(obj) {
     if ( typeof obj === "object" )  {
         return Object.keys(obj).length;
@@ -480,6 +520,7 @@ function getTypes() {
     thingtypes.push("clock");
     thingtypes.push("ford");
     thingtypes.push("isy");
+    thingtypes.push("isysub");
     thingtypes.push("hsm");
     thingtypes.push("shm");
     thingtypes.push("mode");
@@ -830,7 +871,7 @@ function getHubInfo(hub) {
                         hub.hubid = households[0].id;
                         updateHub(hub, oldhubId);
                     } else {
-                        updateMultiSonos(sonoscount, households, hub);
+                        updateMultiSonos(households, hub);
                     }
                 } else {
                     reject(errMsg);
@@ -854,17 +895,24 @@ function getHubInfo(hub) {
                 }
                 // update any hub with the same hubid attribute
                 // if no such hub exists this will add it
-                mydb.updateRow("hubs", hub, "userid = " + userid+" AND hubid = '"+oldhubId+"'")
+                if ( oldhubId ) {
+                    var upditem = "userid = " + userid+" AND hubid = '"+oldhubId+"'";
+                } else {
+                    upditem = "userid = " + userid;
+                }
+                mydb.updateRow("hubs", hub, upditem)
                 .then( row => {
                     hub.id = mydb.getId();
                     var autoid = row.getAutoIncrementValue();
                     if ( DEBUG2 ) {
-                        console.log( (ddbg()), "updated hub with id: ", hub.id, " auto: ", autoid, " hub: ", hub, " row: , row");
+                        console.log( (ddbg()), "updated hub with id: ", hub.id, " auto: ", autoid, " hub: ", hub, " row: ", row);
                     }
                     return getDevices(hub);
                 })
                 .then(mydevices => {
-                    resolve(mydevices);
+                    if ( oldhubId ) {
+                        resolve(mydevices);
+                    }
                 }).catch(reason => {
                     console.log( (ddbg()), reason);
                     reject(reason);
@@ -876,17 +924,16 @@ function getHubInfo(hub) {
             });
         }
 
-        function updateMultiSonos(numhubs, households, hub) {
-            // function checkSonosDone(hubid) {
-            //     nsonos ++;
-            //     if ( nsonos >= sonoscount ) {
-            //         mydb.updateRow("users",{defhub: hubid},"id = "+userid)
-            //         .then( () => {
-            //             resolve(mydevices);
-            //         });
-            //     }
-            // }
-
+        function updateMultiSonos(households, hub) {
+            for ( var i = 1; i < households.length; i++ ) {
+                delete hub.id;
+                hub.hubid = households[i].id;
+                updateHub(hub, null);
+                hub = clone(savehub);
+            }
+            var oldhubId = hub.hubid;
+            hub.hubid = households[0].id;
+            updateHub(hub, oldhubId);
         }
 
         function hubitatCallback(err, res, body) {
@@ -1732,7 +1779,7 @@ function getDevices(hub) {
                         origname = origname.replace(/'/g, "");
                         
                         // deal with presence tiles
-                        if ( pvalue["presence"]==="not present" ) {
+                        if ( pvalue["presence"]==="not present" || pvalue["presence"]==="not_present" ) {
                             pvalue["presence"] = "absent";
                         }
 
@@ -3189,7 +3236,7 @@ function getDevices(hub) {
                 }
                 
                 // console.log("ISY Nodes body: ", body);
-                const thetype = "isy";
+                var thetype = "isy";
                 xml2js(body, function(xmlerr, result) {
                     if ( !result ) {
                         checkDone("nodes");
@@ -3225,30 +3272,51 @@ function getDevices(hub) {
                         var name = node["name"][0] || "Node";
                         var pvalue = {"name": name};
 
-                        const ignoreNodes = ["$","address","name","family","type","pnode"];
+                        const ignoreNodes = ["$","address","name","family","type"];
+                        var ignoreNode = false;
+                        thetype = "isy";
                         for (var nodeitem in node) {
                             if ( !ignoreNodes.includes(nodeitem) ) {
-                                pvalue[nodeitem] = node[nodeitem][0].toString();
+                                pvalue[nodeitem] = node[nodeitem][0];
+                                // handle items that are sub-devices
+                                if ( nodeitem === "pnode" && pvalue[nodeitem]!== id ) {
+                                    thetype = "isysub";
+                                }
                             }
                         }
 
-                        var pvalstr = encodeURI2(pvalue);
-    
-                        // set bare minimum info
-                        // this is updated below in the callback after getting node details
-                        var device = {userid: userid, hubid: hubindex, deviceid: id, name: name, 
-                            devicetype: thetype, hint: hint, refresh: "never", pvalue: pvalstr};
-                        mydevices[id] = device;
-                        mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + id + "'")
-                        .then(res => {
-                            n++;
-                            if ( n >= numnodes ) {
-                                checkDone("nodes");
-                            }
-                        })
-                        .catch(reason => {
-                            console.log( (ddbg()), reason);
-                        });
+                        if ( ignoreNode ) {
+                            mydb.deleteRow("devices", "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + id + "'")
+                            .then( () => {
+                                n++;
+                                if ( n >= numnodes ) {
+                                    checkDone("nodes");
+                                }                        
+                            })
+                            .catch(reason => {
+                                console.log( (ddbg()), reason);
+                            });
+                        } else {
+
+                            pvalue = translateObjects(pvalue);
+                            var pvalstr = encodeURI2(pvalue);
+        
+                            // set bare minimum info
+                            // this is updated below in the callback after getting node details
+                            var device = {userid: userid, hubid: hubindex, deviceid: id, name: name, 
+                                          devicetype: thetype, hint: hint, refresh: "never", pvalue: pvalstr};
+                            mydevices[id] = device;
+                            mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + id + "'")
+                            .then( () => {
+                                n++;
+                                if ( n >= numnodes ) {
+                                    checkDone("nodes");
+                                }
+                            })
+                            .catch(reason => {
+                                console.log( (ddbg()), reason);
+                            });
+                        }
                     }
 
                     for ( var obj in groups ) {
@@ -3301,6 +3369,7 @@ function getDevices(hub) {
 
                                 var props = node["property"];
                                 if ( props && mydevices[nodeid] ) {
+                                    // console.log(">>>> nodeid, props: ", nodeid, props);
                                     var pvalstr = setIsyFields(nodeid, mydevices[nodeid], props);
                                     mydevices[nodeid]["pvalue"] = pvalstr;
                                     var device = mydevices[nodeid];
@@ -3316,7 +3385,7 @@ function getDevices(hub) {
                                     if ( n >= numnodes ) {
                                         checkDone("states");
                                     }
-                            }
+                                }
                             });
                         } else {
                             checkDone("states");
@@ -3367,7 +3436,7 @@ function translateIsy(nodeid, objid, uom, subid, value, val, formatted) {
     }
 
     // set the HP equivalent subid for this type of node field
-    // if maps are not present then the native ISY subid will show up
+    // if maps are not there then the native ISY subid will show up
     var newvalue = clone(value);
 
     // handle special cases
@@ -4970,7 +5039,7 @@ function getNewPage(userid, pname, skin, configoptions, cnt, roomid, roomname, k
             // this starts at 199 and counts down to 100 assuming fewer than 100 color things on a page
             // but only do this for relative placement tiles
             // we handle color separately for dragged tiles
-            if ( array_key_exists("color", thesensor.value) && zindex < 100 && posleft===0 && postop===0 ) {
+            if ( array_key_exists("color", thesensor.pvalue) && zindex < 100 && posleft===0 && postop===0 ) {
                 zcolor--;
                 zindex = zcolor;
                 if ( zcolor < 100 ) { zcolor = 200; }
@@ -5435,7 +5504,7 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     var $tc = "";
     var thingtype = thesensor["type"];
     var bid = thesensor["id"];
-    if ( thingtype==="audio" || thingtype==="sonos" || thesensor.value.audioTrackData ) {
+    if ( (thingtype==="audio" || thingtype==="sonos") || thesensor.value.audioTrackData ) {
         if ( !thesensor.value.audioTrackData || objCount(thesensor.value.audioTrackData)===0 ) {
             thesensor.value.audioTrackData = {
                 title: "None",
@@ -5631,6 +5700,12 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
         for ( var tkey in thingvalue ) {
             var helperkey = "user_" + tkey;
             var tval = thingvalue[tkey];
+            var userSubtype = subtype;
+
+            // add operating state for thermostats
+            if ( thingtype === "thermostat" && tkey==="temperature" && thingvalue["thermostatOperatingState"] ) {
+                userSubtype = userSubtype + " " + thingvalue["thermostatOperatingState"];
+            }
 
             // check value for "json" strings
             var jsontval;
@@ -5714,9 +5789,9 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
                 if ( typeof tval === "string" && (tval.startsWith("LINK::") || tval.startsWith("TEXT::")) && alldevices ) {
                     // if (  array_key_exists(helperkey, thingvalue) ) { // } && thingvalue[helperkey] && thingvalue[helperkey].substr(0,2)==="::" ) {
                     var helperval = tval;
-                    $tc += putLinkElement(bid, hint, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, twidth, theight);
+                    $tc += putLinkElement(bid, hint, helperval, kindex, cnt, j, thingtype, tval, tkey, userSubtype, bgcolor, twidth, theight);
                 } else {
-                    $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, null, null, twidth, theight);
+                    $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, userSubtype, bgcolor, null, null, twidth, theight);
                 }
 
                 j++;
@@ -5856,7 +5931,7 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
     var ttype = " type=\"" + thingtype + "\"";
     if ( typeof subtype === "undefined" ) {
         subtype = "";
-    } else if ( typeof subtype === "string" && subtype.substr(0,1)!==" " ) {
+    } else if ( typeof subtype === "string" && subtype.substring(0,1)!==" " ) {
         subtype = " " + subtype;
     }
 
@@ -6369,18 +6444,17 @@ function processHubMessage(userid, hubmsg, newST) {
     var subid = hubmsg['change_attribute'];
     var hubmsgid = hubmsg['change_device'].toString();
     var change_type = hubmsg["change_type"];
-    var value = hubmsg['change_value'];
     if ( DEBUG12 ) {
         console.log( (ddbg()), "processHubMessage - userid: ", userid, " hubmsg: ", hubmsg);
     }
-
     var pvalue;
     // pvalue[subid] = hubmsg['change_value'];
 
     // deal with presence tiles
-    if ( hubmsg['change_value']==="not present" ) {
+    if ( hubmsg['change_value']==="not present" || hubmsg['change_value']==="not_present" ) {
         hubmsg['change_value'] = "absent";
     }
+    var value = hubmsg['change_value'];
 
     // update all devices from our list belonging to this user
     // the root device values are updated in the DB which causes all instances to update when pushClient is called below
@@ -6521,11 +6595,6 @@ function processHubMessage(userid, hubmsg, newST) {
         });
         return devices;
     })
-    // .then(devices => {
-    //     if ( DEBUG12 ) {
-    //         console.log( (ddbg()), "processHubMessage - hubmsg: ", hubmsg, " devices: ", devices);
-    //     }
-    // })
     .catch(reason => {
         console.log( (ddbg()), "processHubMessage - DB error: ", reason);
     });
@@ -6570,7 +6639,7 @@ function processIsyMessage(userid, jsondata) {
         {
             var bid = node[0];
 
-            var conditions = "userid = "+userid+" AND devicetype = 'isy' AND deviceid = '"+bid+"'";
+            var conditions = "userid = "+userid+" AND deviceid = '"+bid+"'";
             mydb.getRow("devices", "*", conditions)
             .then(results => {
 
@@ -6610,6 +6679,7 @@ function processIsyMessage(userid, jsondata) {
 
                 var subid = mapIsy(control[0], uom);
                 pvalue = translateIsy(bid, control[0], uom, subid, pvalue, newval, "");
+                var devtype = device.devicetype;
 
                 if ( array_key_exists("duration",pvalue) && array_key_exists("deltaT",pvalue) ) {
                     if ( subid==="level" || subid==="position" || pvalue[subid]==="on" || pvalue[subid]==="DON" ) {
@@ -6651,10 +6721,10 @@ function processIsyMessage(userid, jsondata) {
                     pvalue["event_1"] = timestr + " " + subid;
                 }
 
-                pushClient(userid, bid, "isy", subid, pvalue);
+                pushClient(userid, bid, devtype, subid, pvalue);
 
                 pvalue.subid = subid;
-                processRules(userid, device.id, bid, "isy", subid, pvalue, "processMsg");
+                processRules(userid, device.id, bid, devtype, subid, pvalue, "processMsg");
                 delete pvalue.subid;
                 
                 // update the DB
@@ -6677,12 +6747,13 @@ function processIsyMessage(userid, jsondata) {
         } else if ( is_array(eventInfo) && eventInfo.length && is_object(eventInfo[0]) && array_key_exists("var", eventInfo[0]) && action && action[0]==="6" ) {
             var varobj = eventInfo[0].var[0];
             var bid = "vars";
-            mydb.getRow("devices", "*", "userid = "+userid+" AND devicetype = 'isy' AND deviceid = '"+bid+"'")
+            mydb.getRow("devices", "*", "userid = "+userid+" AND deviceid = '"+bid+"'")
             .then(results => {
 
                 if ( !results ) { return; }
 
                 var device = results;
+                var devtype = device.devicetype;
                 
                 try {
                     if ( device.pvalue && device.pvalue!=="undefined" ) {
@@ -6731,10 +6802,10 @@ function processIsyMessage(userid, jsondata) {
                             pvalue["event_1"] = timestr + " " + subid + " " + pvalue[subid];
                         }
 
-                        pushClient(userid, bid, "isy", subid, pvalue);
+                        pushClient(userid, bid, devtype, subid, pvalue);
                         
                         pvalue.subid = subid;
-                        processRules(userid, device.id, bid, "isy", subid, pvalue, "processMsg");
+                        processRules(userid, device.id, bid, devtype, subid, pvalue, "processMsg");
                         delete pvalue.subid;
 
                         // update the DB
@@ -6774,6 +6845,7 @@ function processIsyMessage(userid, jsondata) {
                 if ( !results ) { return; }
 
                 var device = results;
+                var devtype = device.devicetype;
                 try {
                     pvalue = decodeURI2(device.pvalue);
                     if ( !pvalue ) { pvalue = {}; }
@@ -6819,10 +6891,10 @@ function processIsyMessage(userid, jsondata) {
                     } else if ( array_key_exists("nr", eventInfo[0])  ) {
                         pvalue["runAtStartup"] = "false";
                     }
-                    pushClient(userid, bid, "isy", "lastRunTime", pvalue);
+                    pushClient(userid, bid, devtype, "lastRunTime", pvalue);
 
                     pvalue.subid = subid;
-                    processRules(userid, device.id, bid, "isy", subid, pvalue, "processMsg");
+                    processRules(userid, device.id, bid, devtype, subid, pvalue, "processMsg");
                     delete pvalue.subid;
 
                     // update the DB
@@ -6830,7 +6902,7 @@ function processIsyMessage(userid, jsondata) {
                         console.log( (ddbg()), "ISY webSocket updated program: ", bid, " pvalue: ", device);
                     }
                     device.pvalue = encodeURI2(pvalue);
-                    mydb.updateRow("devices", device, "userid = "+userid+" AND devicetype = 'isy' AND id = "+device.id)
+                    mydb.updateRow("devices", device, "userid = "+userid+" AND id = "+device.id)
                     .then( () => {
                     })
                     .catch( reason => {
@@ -8873,7 +8945,7 @@ function queryHub(device, pname) {
                 }
                 if ( pvalue ) {
                     // deal with presence tiles
-                    if ( pvalue["presence"]==="not present" ) {
+                    if ( pvalue["presence"]==="not present" || pvalue["presence"]==="not_present" ) {
                         pvalue["presence"] = "absent";
                     }
                     resolve(pvalue);
@@ -9099,23 +9171,21 @@ function translateMusic(pvalue) {
     return nvalue;
 }
 
+// recursively expand objects
 function translateObjects(pvalue) {
-    var nvalue = {};
+    var nvalue = pvalue;
     for  (var tkey in pvalue) {
         var tval = pvalue[tkey];
         if ( typeof tval==="object" ) {
             for (var jtkey in tval ) {
                 var jtval = tval[jtkey];
-                // expand arrays and objects onto the base
                 var newkey = tkey + "_" + jtkey.toString();
-
-                // skip adding an object element if it duplicates an existing one
                 if ( typeof jtval!=="object" ) {
-                    nvalue[newkey] = jtval;
+                    nvalue[newkey] = jtval.toString();
+                    console.log(">>>> nvalue str: ", nvalue);
                 }
             }
-        } else {
-            nvalue[tkey] = tval;
+            delete nvalue[tkey];
         }
     }
     return nvalue;
@@ -11184,7 +11254,7 @@ function updCustom(userid, swid, rules) {
     var configkey = "user_" + swid;
 
     // console.log("rules: ", rules);
-    if ( rules && is_object(rules) ) {
+    if ( rules && is_array(rules) && rules.length ) {
         // handle encryption
         for (var i = 0; i < rules.length; i++) {
             var rule = rules[i];
@@ -11483,11 +11553,19 @@ function apiCall(user, body, protocol, req, res) {
 
             case "wysiwyg":
                 if ( protocol==="POST" ) {
-                    var result = mydb.getRows("configs", "*", "userid = "+userid)
-                    .then(configoptions => {
-                        var device = JSON.parse(decodeURI(body.value));
+                    // var result = mydb.getRows("configs", "*", "userid = "+userid)
+                    var result = Promise.all([
+                        mydb.getRows("configs", "*", "userid = "+userid),
+                        mydb.getRow("devices", "*", "userid = "+userid + " AND id = " + tileid)
+                    ])
+                    .then(results => {
+                        var configoptions = results[0];
+                        var device = results[1];
+                        var pvalue = decodeURI2(device.pvalue);
+                        console.log(">>>> sensor: ", device);
+                        // var device = JSON.parse(decodeURI(body.value));
                         var thesensor = {id: swid, name: device.name, thingid: thingid, roomid: 0, type: device.devicetype, hubnum: "-1", hubindex: 0, hubtype: "None", 
-                                        hint: device.hint, refresh: device.refresh, value: device.pvalue};
+                                        hint: device.hint, refresh: device.refresh, value: pvalue};
                         var customname = swattr;
                         return makeThing(userid, pname, configoptions, 0, tileid, thesensor, "wysiwyg", 0, 0, 999, customname, "te_wysiwyg", null);
                     }).catch(reason => {
@@ -12915,48 +12993,66 @@ if ( app && applistening ) {
                     .then(row => {
                         if ( !row ) { return; }
                         var userid = row["hubs_userid"];
-                        var msg = {
-                            msgtype: "update", 
-                            hubid: hubid,
-                            change_name: "",
-                            change_device: swid,
-                            change_attribute: attr,
-                            change_type: valueType,
-                            change_value: value
-                        };
-                        processHubMessage(userid, msg, true);
                         if ( DEBUG21 ) {
                             console.log( (ddbg()), "Event sink msg from new ST hub: ", hubid, " msg: ", msg );
                         }
 
                         // set color if any of the color attributes change
                         var pvalue = decodeURI2(row["devices_pvalue"]);
+
                         if ( DEBUG21 ) {
                             console.log( (ddbg()), "Event sink msg pvalue: ", pvalue );
                         }
-                        if ( pvalue && (attr==="hue" || attr==="saturation" || attr==="level") && array_key_exists("color", pvalue) ) {
-                            var h = attr==="hue" ? value : pvalue.hue;
-                            var s = attr==="saturation" ? value : pvalue.saturation;
-                            var v = attr==="level" ? value : pvalue.level;
-                            h = Math.round((parseInt(h * 360) / 100));
-                            s = Math.round(parseInt(s));
-                            v = Math.round(parseInt(v));
-                            var colorvalue = hsv2rgb(h, s, v);
+                        if ( pvalue && (attr==="hue" || attr==="saturation" || attr==="level" || attr==="color") && array_key_exists("color", pvalue) ) {
+
+                            if ( attr === "color" && value.substring(0,1)==="#") {
+                                var r = value.substring(1,3);
+                                var g = value.substring(3,5);
+                                var b = value.substring(5,7);
+                                r = parseInt(r,16);
+                                g = parseInt(g,16);
+                                b = parseInt(b,16);
+                                var hsv = rgb2hsv(r, g, b);
+                                var h = hsv[0];
+                                var s = hsv[1];
+                                var v = hsv[2];
+                                var h100 = hsv[3];
+                                var colorvalue = value;
+                            } else {
+                                var h = attr==="hue" ? value : pvalue.hue;
+                                var s = attr==="saturation" ? value : pvalue.saturation;
+                                var v = attr==="level" ? value : pvalue.level;
+                                var h100 = h;
+                                h = Math.round((parseInt(h100 * 360) / 100));
+                                s = Math.round(parseInt(s));
+                                v = Math.round(parseInt(v));
+                                var colorvalue = hsv2rgb(h, s, v);
+                            }
+                            var colorarray = [h100, s, v, colorvalue];
                             var msg = {
                                 msgtype: "update", 
                                 hubid: hubid,
                                 change_name: "",
                                 change_device: swid,
                                 change_attribute: "color",
-                                change_type: "string",
-                                change_value: colorvalue
+                                change_type: valueType,
+                                change_value: colorarray
                             };
                             if ( DEBUG21 ) {
-                                console.log( (ddbg()), "Event sink msg changed color. h,s,l: ", h, s, v, " color: ", colorvalue );
+                                console.log( (ddbg()), "Event sink msg changed color. h100, h,s,l: ", h100, h, s, v, " color: ", colorvalue );
                             }
-                            setTimeout(function() {
-                                processHubMessage(userid, msg, true);
-                            }, 500);
+                            processHubMessage(userid, msg, true);
+                        } else {
+                            var msg = {
+                                msgtype: "update", 
+                                hubid: hubid,
+                                change_name: "",
+                                change_device: swid,
+                                change_attribute: attr,
+                                change_type: valueType,
+                                change_value: value
+                            };    
+                            processHubMessage(userid, msg, true);
                         }
                     }).catch(reason => {
                         console.log( (ddbg()), reason );
