@@ -2078,7 +2078,19 @@ div.thing.isy-thing div.overlay.sgid,
 div.thing.isy-thing div.overlay.wattage,
 div.thing.isy-thing div.overlay.custom,
 div.thing.isy-thing div.overlay.devtype,
-div.thing.isy-thing div.overlay.property
+div.thing.isy-thing div.overlay.property,
+div.thing.isysub-thing div.overlay.enabled,
+div.thing.isysub-thing div.overlay.deviceClass,
+div.thing.isysub-thing div.overlay.dcPeriod,
+div.thing.isysub-thing div.overlay.startDelay,
+div.thing.isysub-thing div.overlay.endDelay,
+div.thing.isysub-thing div.overlay.pnode,
+div.thing.isysub-thing div.overlay.rpnode,
+div.thing.isysub-thing div.overlay.sgid,
+div.thing.isysub-thing div.overlay.wattage,
+div.thing.isysub-thing div.overlay.custom,
+div.thing.isysub-thing div.overlay.devtype,
+div.thing.isysub-thing div.overlay.property
 {
     display: none;
 }
