@@ -197,6 +197,8 @@ function getOnOff(str_type, subid, val) {
     var onoff;
     var hubType = et_Globals.hubType;
 
+    console.log(">>>> subid: ", subid);
+
     // handle the cases for custom tiles that could have any subid starting with valid names
     if ( subid.startsWith("switch" ) ) {
         if ( hubType==="ISY" || str_type==="isy" ) {
@@ -278,6 +280,8 @@ function getOnOff(str_type, subid, val) {
         }
     }
     onoff.push("");
+
+    console.log(" >>>> onoff: ", onoff);
     
     return onoff;
 }
@@ -446,6 +450,14 @@ function toggleTile(target, str_type, subid, thingindex) {
         swval = $(ostarget).html();
     }
     $('#onoffTarget').html("");
+
+    if ( swval && swval.startsWith("LINK::") ) {
+        var ipos = swval.lastIndexOf("::");
+        var linkid = swval.substring(ipos+2);
+        var linkaid = $("div.thing[tile='"+linkid+"']").attr("aid");
+        swval = $("#a-"+linkaid+"-"+subid).html();
+        // console.log(">>>> link click: ", linkid, str_type, subid, linkaid, swval);
+    }
     
     // activate the icon click to use this
     var onoff = getOnOff(str_type, subid, swval);

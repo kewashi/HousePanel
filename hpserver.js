@@ -8821,6 +8821,12 @@ function queryHub(device, pname) {
                 var pvalue;
                 if ( swtype==="clock") {
                     pvalue = getClock(swid);
+
+                    // delete everything except the time fields
+                    delete pvalue.skin;
+                    delete pvalue.tzone;
+                    delete pvalue["fmt_date"];
+                    delete pvalue["fmt_time"];
                 } else if ( swtype==="control" ) {
                     pvalue = getController();
                 } else {
@@ -9390,18 +9396,20 @@ function doQuery(userid, tileid, pname) {
                 console.log( (ddbg()), "queryHub results: ", pvalue);
             }
 
-            // store results back in DB
-            var pvaluestr = encodeURI2(pvalue);
-            mydb.updateRow("devices", {pvalue: pvaluestr}, "id = " + tileid)
-            .then( result => {
-                // var firstsubid = Object.keys(pvalue)[0];
-                if ( DEBUG5 ) {
-                    console.log( (ddbg()), "doQuery updated device: ", pvalue, " pvalstr: ", pvaluestr, " swid:", swid, 
-                                            " swtype:", swtype, " result: ", result);
-                }
-                // this is now done on the js side so GET queries don't impact the GUI
-                // pushClient(userid, swid, swtype, firstsubid, pvalue);
-            });
+            // store results back in DB if it isn't a clock or a controller
+            if ( swtype !== "clock" && swtype!=="control" ) {
+                var pvaluestr = encodeURI2(pvalue);
+                mydb.updateRow("devices", {pvalue: pvaluestr}, "id = " + tileid)
+                .then( result => {
+                    // var firstsubid = Object.keys(pvalue)[0];
+                    if ( DEBUG5 ) {
+                        console.log( (ddbg()), "doQuery updated device: ", pvalue, " pvalstr: ", pvaluestr, " swid:", swid, 
+                                                " swtype:", swtype, " result: ", result);
+                    }
+                    // this is now done on the js side so GET queries don't impact the GUI
+                    // pushClient(userid, swid, swtype, firstsubid, pvalue);
+                });
+            }
             return pvalue;
         })
         .catch(reason => {
