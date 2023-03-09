@@ -3265,7 +3265,7 @@ function getDevices(hub) {
                         // TODO - provide a more useful mapping of hints to type names
                         // until then user can still style hints using CSS
                         if ( hint ) {
-                            hint.replace( /\./g, "_" );
+                            hint = hint.replace( /\./g, "_" );
                             hint = "ISY " + hint;
                         }
     
@@ -5605,8 +5605,7 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     // set up the class setting
     var classstr = "thing " + thingtype+"-thing" + subtype;
     if ( hint ) {
-        // classstr += " " + hint.replace(/\./g,"_");
-        if ( thingtype==="isy" ) {
+        if ( thingtype==="isy" || thingtype==="isysub" ) {
             hint = hint.replace(/\./g,"_");
         }
         $tc += " hint=\""+hint+"\"";
@@ -8276,7 +8275,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
 
         // implement the functions supported as described in the postman collection
         // but only the things that start with an underscore invoke the api call
-        } else if ( hub.hubtype==="Ford" || hub.hubtype==="Lincoln" ) {
+        } else if ( hub.hubtype==="Ford"  ) {
 
             // all API calls have the same header structure
             var host = endpt + "/" + swid; 
@@ -8409,6 +8408,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                         }
                         cmd = "/nodes/" + swid + "/cmd/" + swval;
                         isyresp[subid] = swval;
+                        // console.log(">>>> ISY command: ", swval);
                         curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
                         break;
         
@@ -8714,7 +8714,8 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
         // for save to DB - we must read all the devices and merge the pvalue with existing
         // we only do this for Sonos and Ford since they don't generate subscription events
         // if ( swtype==="ford" || swtype==="sonos" || swtype==="isy" || subid==="count") {
-        if ( swtype==="ford" || swtype==="sonos" || swtype==="isy" ) {
+            // if ( hub.hubtype==="Ford" || hub.hubtype==="Sonos" || hub.hubType==="ISY" ) {
+        if ( swtype==="ford" || swtype==="sonos" || swtype==="isy" || swtype==="isysub" ) {
             mydb.getRows("devices","*", "userid = " + userid + " AND hubid = "+hubindex + " AND deviceid = '" + swid +"'")
             .then(devices => {
         
@@ -8730,6 +8731,8 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                         // if ( typeof newpvalue.count === "undefined" ) {
                         //     newpvalue.count = "0";
                         // }
+                    } else {
+                        newpvalue = {};
                     }
                     for (var skey in pvalue) {
                         newpvalue[skey] = pvalue[skey];
@@ -8778,11 +8781,12 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
             xml2js(body, function(xmlerr, result) {
                 var rres = result.RestResponse.status[0];
                 rres = rres ? rres.toString() : "";
+                var succeed = result.RestResponse["$"]["succeeded"].toString();
                 if ( DEBUGisy ) {
-                    console.log( (ddbg()), "rres: ", rres, " swid: ", swid, " swtype: ", swtype, " subid: ", subid, " isyrep: ", isyresp, " call returned: ", UTIL.inspect(result, false, null, false));
+                    console.log( (ddbg()), "rres: ", rres, succeed, " swid: ", swid, " swtype: ", swtype, " subid: ", subid, " isyrep: ", isyresp, " call returned: ", UTIL.inspect(result, false, null, false));
                 }
 
-                if ( rres === '200' ) {
+                if ( rres === "200" && succeed === "true" ) {
                     getHubResponse(isyresp);
                 }
             });
@@ -8940,7 +8944,7 @@ function queryHub(device, pname) {
                     try {
                         pvalue = JSON.parse(body);
                     } catch (e) {
-                        console.log(">>>> parse error: body: ", body, "\n error: ", e);
+                        console.log( (ddbg()), "parse error: body: ", body, "\n error: ", e);
                     }
                 } else {
                     reject("Invalid object in getQueryResponse.");
@@ -9188,7 +9192,7 @@ function translateObjects(pvalue) {
                 var newkey = tkey + "_" + jtkey.toString();
                 if ( typeof jtval!=="object" ) {
                     nvalue[newkey] = jtval.toString();
-                    console.log(">>>> nvalue str: ", nvalue);
+                    // console.log(">>>> nvalue str: ", nvalue);
                 }
             }
             delete nvalue[tkey];
@@ -11571,7 +11575,7 @@ function apiCall(user, body, protocol, req, res) {
                         var configoptions = results[0];
                         var device = results[1];
                         var pvalue = decodeURI2(device.pvalue);
-                        console.log(">>>> sensor: ", device);
+                        // console.log(">>>> sensor: ", device);
                         // var device = JSON.parse(decodeURI(body.value));
                         var thesensor = {id: swid, name: device.name, thingid: thingid, roomid: 0, type: device.devicetype, hubnum: "-1", hubindex: 0, hubtype: "None", 
                                         hint: device.hint, refresh: device.refresh, value: pvalue};
@@ -12279,6 +12283,14 @@ function setupISYSocket() {
     // unlike ST and HE below, communication from ISY happens over a real webSocket
     var wshost;
 
+    // close all existing connections
+    for (var hubid in wsclient) {
+        if ( wsclient[hubid] && typeof wsclient[hubid].close === "function" ) {
+            wsclient[hubid].close();
+        }
+    }
+    wsclient = {};
+
     // get all the ISY hubs for every user - this assumes no two users use the same ISY hub
     mydb.getRows("hubs","*","hubtype = 'ISY'")
     .then(hubs => {
@@ -12314,16 +12326,17 @@ function setupISYSocket() {
                 wshost = wshost + "/subscribe";
                 var opts = {rejectUnauthorized: false};
                 var wsconfigs = {tlsOptions: opts, closeTimeout: 2000};
-                var wsclient = new webSocketClient(wsconfigs);
-                wsclient["userid"] = userid;
-                wsclient["hubid"] = hubid;
+                var wsone = new webSocketClient(wsconfigs);
+                wsclient[hubid] = wsone;
+                wsone["userid"] = userid;
+                wsone["hubid"] = hubid;
 
-                wsclient.connect(wshost, "ISYSUB", origin, header, opts);
-                wsclient.on("connectFailed", function(err) {
+                wsone.connect(wshost, "ISYSUB", origin, header, opts);
+                wsone.on("connectFailed", function(err) {
                     console.log( (ddbg()), "Connection failure to ISY socket: ", err.toString(), " wshost:", wshost, " header:", header);
                 });
             
-                wsclient.on("connect", function(connection) {
+                wsone.on("connect", function(connection) {
                     var that = this;
                     console.log( (ddbg()), "Success connecting to ISY socket. Listening for messages from hub:", that.hubid);
             
@@ -12479,6 +12492,7 @@ GLB.newcss = {};
 
 var wsServers = [];
 var clients = [];
+var wsclient = {};
 
 // start our main server
 var httpServer;
