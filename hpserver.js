@@ -903,9 +903,8 @@ function getHubInfo(hub) {
                 mydb.updateRow("hubs", hub, upditem)
                 .then( row => {
                     hub.id = mydb.getId();
-                    var autoid = row.getAutoIncrementValue();
                     if ( DEBUG2 ) {
-                        console.log( (ddbg()), "updated hub with id: ", hub.id, " auto: ", autoid, " hub: ", hub, " row: ", row);
+                        console.log( (ddbg()), "updated hub with id: ", hub.id, " hub: ", hub, " row: ", row);
                     }
                     return getDevices(hub);
                 })
@@ -1015,7 +1014,7 @@ function getAccessToken(userid, code, hub) {
             }
 
             // we now always assume clientId and clientSecret are already encoded
-            var tokenhost = "https://dah2vb2cprod.b2clogin.com/" + GLB.dbinfo.fordapicode + "/oauth2/v2.0/token";
+            var tokenhost = hubHost  + "/oauth2/v2.0/token";
             var nvpreq = "p=" + policy;
             var formData = {"grant_type": "authorization_code", "code": code, "client_id": clientId, 
                             "client_secret": clientSecret, "redirect_uri": encodeURI(redirect)};
@@ -1115,13 +1114,14 @@ function getAccessToken(userid, code, hub) {
                         hub.hubendpt = "https://api.ws.sonos.com/control/api";
 
                         var expiresin = jsonbody["expires_in"];
-                        expiresin = (parseInt(expiresin) - 3600) * 1000;
+                        expiresin = parseInt(expiresin) - 120;
                         hub.hubtimer = expiresin.toString();
+                        expiresin*= 1000;
 
                         // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
                         if ( expiresin ) {
                             setTimeout( function() {
-                                refreshSonosToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, true);
+                                refreshSonosToken(userid, hub, true);
                             }, expiresin);
                         }
                         // assign random hub id and save our info
@@ -1173,11 +1173,16 @@ function getAccessToken(userid, code, hub) {
 
             // we can safely ignore the legacy device_id field
             hub.hubid = jsonbody["installed_app_id"];
-            var expiresin = jsonbody["expires_in"];
 
-            // convert refresh token from seconds to msec and two minutes before expiration
-            expiresin = (parseInt(expiresin) - 3600) * 1000;
+            var expiresin;
+            try {
+                expiresin = jsonbody["expires_in"];
+                expiresin = parseInt(expiresin) - 120;
+            } catch(e) {
+                expiresin = 23 * 3600;
+            }
             hub.hubtimer = expiresin.toString();
+            expiresin*= 1000;
 
             if ( DEBUG2 ) {
                 console.log( (ddbg()),"newTokenCallback: New SmartThings access_token: ", access_token, " refresh_token: ", refresh_token, 
@@ -1185,42 +1190,45 @@ function getAccessToken(userid, code, hub) {
             }
 
             // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
-            if ( expiresin ) {
-                setTimeout( function() {
-                    refreshSTToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, true, null);
-                }, expiresin);
-            }
+            setTimeout( function() {
+                refreshSTToken(userid, hub, true, null);
+            }, expiresin);
 
             // register the sinks to cause events to come back to me
             newSTRegisterEvents(hub);
 
             // save our info - could skip this and save options and reload screen
-            getHubInfo(hub);
+            getHubInfo(hub)
+            .then(mydevices => {
+                resolve(mydevices);
+            }) .catch(reason => { reject(reason); });
         }
 
         function fordCallback(err, res, body) {
-            var jsonbody = JSON.parse(body);
-            access_token = jsonbody["access_token"] || "";
-            refresh_token = jsonbody["refresh_token"] || "";
-            var newexpire = jsonbody["expires_in"] || "";
+            try {
+                var jsonbody = JSON.parse(body);
+                access_token = jsonbody["access_token"] || "";
+                refresh_token = jsonbody["refresh_token"] || "";
+            } catch(e) {
+                console.log( (ddbg()), e, "\n body: ", body);
+                reject("error - could not parse body from Ford login attempt");
+            }
 
-            var expiresin;        
-            if ( hub.hubtimer && hub.hubtimer!=="0" && !isNaN(parseInt(hub.hubtimer)) ) {
-                expiresin = parseInt(hub.hubtimer);
-            } else {
-                expiresin = "";
+            var expiresin;
+            try {
+                expiresin = jsonbody["expires_in"];
+                expiresin = parseInt(expiresin) - 120;
+            } catch(e) {
+                expiresin = 23 * 3600;
             }
-        
-            // if an expire in is returned from api then set hubTimer to it minus two minutes
-            if ( newexpire  && !isNaN(parseInt(newexpire)) && parseInt(newexpire)>120 ) {
-                expiresin = (parseInt(newexpire) - 120) * 1000;
-                hub.hubtimer = expiresin.toString();
-            }
+            hub.hubtimer = expiresin.toString();
+            expiresin*= 1000;
+
             endpt = "https://api.mps.ford.com/api/fordconnect/vehicles/v1";
+            hub.hubendpt = endpt;
             if ( access_token && refresh_token ) {
                 hub.hubaccess = access_token;
                 hub.hubrefresh = refresh_token;
-                hub.hubendpt = endpt;
 
                 if ( DEBUG2 ) {
                     console.log( (ddbg()),"Ford access_token: ", access_token, " refresh_token: ", refresh_token, " endpoint: ", endpt);
@@ -1241,7 +1249,7 @@ function getAccessToken(userid, code, hub) {
                 }) .catch(reason => { reject(reason); });
 
             } else {
-                var errMsg = "fordCallback error authorizing hub, access_token: " + access_token +", endpt: " + endpt + ", refresh: " + refresh_token;
+                var errMsg = "error authorizing Ford hub, access_token: " + access_token +", endpt: " + endpt + ", refresh: " + refresh_token;
                 console.log( (ddbg()), errMsg, "\n body: ", body);
                 reject(errMsg);
             }
@@ -1293,6 +1301,11 @@ function getAccessToken(userid, code, hub) {
             });
 
             function regNewFilter() {
+
+                // skip registering if there is not a valid sink defined
+                if ( !GLB.dbinfo["st_sinkalias"] || GLB.dbinfo["st_sinkalias"]==="new" ) {
+                    return;
+                }
 
                 // gather all the capability events as groups
                 // for now just get a few categories to limit things
@@ -1377,7 +1390,7 @@ function getAccessToken(userid, code, hub) {
 
             if ( access_token && endpt ) {
                 if ( DEBUG2 ) {
-                    console.log( (ddbg()),"endptCallback - access_token: ", access_token," endpoint: ", endpt);
+                    console.log( (ddbg()),"access_token: ", access_token," endpoint: ", endpt);
                 }
                 hub.hubaccess = access_token;
                 hub.hubendpt = endpt;
@@ -1400,9 +1413,12 @@ function getAccessToken(userid, code, hub) {
 
 }
 
-function refreshSTToken(userid, hub, refresh_token, clientId, clientSecret, refresh, postCallback) {
-    // var nohttp = hub.hubhost.substr(8);
-    var nohttp = "api.smartthings.com";
+function refreshSTToken(userid, hub, refresh, postCallback) {
+    // var nohttp = "api.smartthings.com";
+    var nohttp = hub.hubhost;
+    var refresh_token = hub.hubrefresh;
+    var clientId = hub.clientid;
+    var clientSecret = hub.clientsecret;
     var header = {'Content-Type' : "application/x-www-form-urlencoded"};
     var tokenhost = "https://" + clientId + ":" + clientSecret + "@" + nohttp + "/oauth/token";
     var nvpreq = "grant_type=refresh_token" + "&client_id=" + clientId + 
@@ -1430,14 +1446,15 @@ function refreshSTToken(userid, hub, refresh_token, clientId, clientSecret, refr
         hub.hubrefresh = jsonbody["refresh_token"];
         
         // handle refresh expiration times
-        var newexpire = jsonbody["expires_in"];
         var expiresin;
-        if ( newexpire  && !isNaN(parseInt(newexpire)) && parseInt(newexpire) > 3600 ) {
-            expiresin = (parseInt(newexpire) - 3600) * 1000;
-        } else {
-            expiresin = (23 * 3600000);
+        try {
+            expiresin = jsonbody["expires_in"];
+            expiresin = parseInt(expiresin) - 120;
+        } catch(e) {
+            expiresin = 23 * 3600;
         }
         hub.hubtimer = expiresin.toString();
+        expiresin*= 1000;
 
         if ( DEBUG2 ) {
             console.log( (ddbg()),"New SmartThings refresh results. access_token: ", hub.hubaccess, " refresh_token: ", hub.hubrefresh, " expiresin: ", expiresin, " jsonbody: ", jsonbody, " hub: ", hub);
@@ -1462,9 +1479,9 @@ function refreshSTToken(userid, hub, refresh_token, clientId, clientSecret, refr
         });
 
         // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
-        if ( refresh && hub.hubtimer ) {
+        if ( refresh ) {
             setTimeout( function() {
-                refreshSTToken(userid, hub, hub.hubrefresh, clientId, clientSecret, true, null);
+                refreshSTToken(userid, hub, true, null);
             }, expiresin);
         }
 
@@ -1472,8 +1489,11 @@ function refreshSTToken(userid, hub, refresh_token, clientId, clientSecret, refr
 
 }
 
-function refreshSonosToken(userid, hub, refresh_token, clientId, clientSecret, refresh) {
+function refreshSonosToken(userid, hub, refresh) {
     var tokenhost = hub.hubhost + "/login/v3/oauth/access";
+    var refresh_token = hub.hubrefresh;
+    var clientId = hub.clientid;
+    var clientSecret = hub.clientsecret;
     var idsecret = clientId + ":" + clientSecret;
     var buff = Buffer.from(idsecret);
     var base64 = buff.toString('base64');
@@ -1503,11 +1523,13 @@ function refreshSonosToken(userid, hub, refresh_token, clientId, clientSecret, r
         var newexpire = jsonbody["expires_in"];
         var expiresin;
         if ( newexpire  && !isNaN(parseInt(newexpire)) && parseInt(newexpire) > 3600 ) {
-            expiresin = (parseInt(newexpire) - 3600) * 1000;
+            expiresin = parseInt(newexpire) - 120;
         } else {
-            expiresin = (23 * 3600000);
+            expiresin = 23 * 3600;
         }
         hub.hubtimer = expiresin.toString();
+        expiresin*= 1000;
+
         if ( DEBUG2 ) {
             console.log( (ddbg()),"Sonos refresh results. access_token: ", hub.hubaccess, " refresh_token: ", hub.hubrefresh, " expiresin: ", expiresin, " jsonbody: ", jsonbody, " hub: ", hub);
         }
@@ -1526,7 +1548,7 @@ function refreshSonosToken(userid, hub, refresh_token, clientId, clientSecret, r
         // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
         if ( refresh && expiresin ) {
             setTimeout( function() {
-                refreshSonosToken(userid, hub, hub.hubrefresh, clientId, clientSecret, true);
+                refreshSonosToken(userid, hub, true);
             }, expiresin);
         }
 
@@ -1537,6 +1559,7 @@ function refreshFordToken(userid, hub, refresh) {
 
     var access_token = hub["hubaccess"];
     var endpt = hub["hubendpt"];
+    var hubhost = hub["hubhost"];
     var refresh_token = hub["hubrefresh"];
     var clientId = hub["clientid"];
     var clientSecret = hub["clientsecret"];
@@ -1546,19 +1569,13 @@ function refreshFordToken(userid, hub, refresh) {
     if ( hub.hubtype==="Lincoln" ) {
         policy = policy + "_Lincoln";
     }
-    var tokenhost = "https://dah2vb2cprod.b2clogin.com/" + GLB.dbinfo.fordapicode + "/oauth2/v2.0/token";
+    var tokenhost = hubhost + "/oauth2/v2.0/token";
     var nvpreq = "p=" + policy;
     var formData = {"grant_type": "refresh_token", "refresh_token": refresh_token, "client_id": clientId, "client_secret": clientSecret};
 
     if ( DEBUG2 ) {
         console.log( (ddbg()), "clientId, clientSecret: ", clientId, clientSecret);
         console.log( (ddbg()), "tokenhost: ", tokenhost, " nvpreq: ", nvpreq, " formData: ", formData);
-    }
-    var expiresin;
-    if ( hub.hubtimer && hub.hubtimer!=="0" && !isNaN(parseInt(hub.hubtimer)) ) {
-        expiresin = parseInt(hub.hubtimer);
-    } else {
-        expiresin = "";
     }
 
     curl_call(tokenhost, header, nvpreq, formData, "POST", function(err, res, body) {
@@ -1567,7 +1584,7 @@ function refreshFordToken(userid, hub, refresh) {
             var jsonbody = JSON.parse(body);
             access_token = jsonbody["access_token"] || "";
             refresh_token = jsonbody["refresh_token"] || "";
-            var newexpire = jsonbody["expires_in"] || "";
+            var expiresin = jsonbody["expires_in"] || "";
             
             // save the updated tokens
             if ( access_token && refresh_token ) {
@@ -1576,28 +1593,23 @@ function refreshFordToken(userid, hub, refresh) {
                 
                 // if an expire in is returned from api then set hubTimer to it minus two minutes
                 // but only is user refresh is zero or not a number
-                if ( expiresin==="" && newexpire  && !isNaN(parseInt(newexpire)) && parseInt(newexpire)>120 ) {
-                    expiresin = (parseInt(newexpire) - 120) * 1000;
-                    hub.hubtimer = expiresin.toString();
-                }
+                expiresin = parseInt(expiresin) - 120;
+                hub.hubtimer = expiresin.toString();
+                expiresin*= 1000;
 
                 // schedule the next refresh
-                if ( refresh && expiresin ) {
+                if ( refresh ) {
                     setTimeout( function() {
                         refreshFordToken(userid, hub, true);
                     }, expiresin);
                 }
     
                 // update hub in DB
-                mydb.updateRow("hubs",hub,"userid = "+userid+" AND hubid = '"+hub.hubid+"'")
+                return mydb.updateRow("hubs",hub,"userid = "+userid+" AND hubid = '"+hub.hubid+"'")
                 .then( () => {
                     hub.id = mydb.getId();
-                    return getDevices(hub);
-                })
-                .then(mydevices => {
-                    // var devices = Object.values(mydevices);
-                    // console.log( (ddbg()), "Ford token refreshed, devices: ", devices);
-                    pushClient(userid,"reload","all","/");
+                    getDevices(hub);
+                    return hub;
                 })
                 .catch(reason => {
                     console.log( (ddbg()), reason );
@@ -1856,7 +1868,6 @@ function getDevices(hub) {
                 } else {
                     // an error occurred with this hub
                     reject(errMsg);
-                    // updateOptions(userid, reload, reloadpath, 0);
                 }
             }
         }
@@ -2295,12 +2306,11 @@ function getDevices(hub) {
                     resolve(mydevices);
                     removeDeadNodes(userid, hubindex, currentDevices)
                     .then(results => {
-                        console.log( (ddbg()), results);
+                        console.log( (ddbg()), "removed dead nodes: ", results);
                     })
                     .catch(reason => {
-                        console.log( (ddbg()), reason );
+                        console.log( (ddbg()), "error trying to remove dead nodes: ", reason );
                     });
-                    // updateOptions(userid, reload, reloadpath, 2000);
                 }
             }
 
@@ -2405,7 +2415,8 @@ function getDevices(hub) {
                                                        " AND devicetype = 'location' AND deviceid = '"+locationId+"'")
                                         .then( result => {
                                             if ( !result ) throw "location device not updated or added";
-                                            rowdevice.id = result.getAutoIncrementValue();
+                                            // rowdevice.id = result.getAutoIncrementValue();
+                                            rowdevice.id = mydb.getId();
                                             mydevices[locationId] = rowdevice;
                                             devicecnt++;
                                             if ( devicecnt >= numlocations ) {
@@ -2653,7 +2664,8 @@ function getDevices(hub) {
                             mydb.updateRow("devices", rowdevice, "userid = "+userid+" AND hubid = "+hubindex+
                                 " AND devicetype = '"+swtype+"' AND deviceid = '"+deviceid+"'")
                             .then( result => {
-                                rowdevice.id = result.getAutoIncrementValue();
+                                // rowdevice.id = result.getAutoIncrementValue();
+                                rowdevice.id = mydb.getId();
                                 mydevices[deviceid] = rowdevice;
                                 devicecnt++;
     
@@ -2760,7 +2772,6 @@ function getDevices(hub) {
                     var numdevices = jsonbody.vehicles.length;
                     jsonbody.vehicles.forEach(function(obj) {
                         var vehicleid = obj.vehicleId;
-                        var idx = thetype + "|" + vehicleid;
                         if ( obj.nickName ) {
                             var vehiclename = obj.nickName;
                         } else {
@@ -2790,7 +2801,7 @@ function getDevices(hub) {
 
                         // place holders for info detail return values
                         // *** note *** inconsistent cases for timestamp and timeStamp
-                        pvalue.engineTYpe = "";
+                        pvalue.engineType = "";
                         pvalue.mileage = "";
                         pvalue.info = "";
                         pvalue.lastUpdated = "";
@@ -2844,19 +2855,23 @@ function getDevices(hub) {
                         mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+
                                                         " AND devicetype = '"+thetype+"' AND deviceid = '"+vehicleid+"'")
                         .then(result => {
+                            device.id = mydb.getId();
+                            mydevices[vehicleid] = device;
                             devicecnt++;
 
                             // check if this is our last one
                             if ( devicecnt >= numdevices ) {
-                                updateOptions(userid, reload, reloadpath, 2000);
+                                resolve(mydevices);
                             }
                         }).catch(reason => {
                             console.log( (ddbg()), reason);
+                            reject(reason);
                         });
 
                     });
                 } else {
-                    updateOptions(userid, false, reloadpath, 0);
+                    console.log( (ddbg()), "invalid Ford vehicle device returned. jsonbody: ", jsonbody);
+                    reject("Problem reading Ford vehicle device");
                 }
             }
         }
@@ -3595,21 +3610,6 @@ function getMaxIndex() {
     return maxindex;
 }
 
-// updates the global options array with new things found on hub
-function updateOptions(userid, reload, reloadpath, delay) {
-
-    if ( reload && reloadpath ) {
-
-        if ( delay && delay > 0 ) {
-            setTimeout(function pc() {
-                pushClient(userid, "reload", "all", reloadpath);
-            }, delay);
-        } else {
-            pushClient(userid, "reload", "all", reloadpath);
-        }
-    }
-}
-
 function getSpecials(configoptions) {
 
     var spobj = getConfigItem(configoptions, "specialtiles");
@@ -4012,8 +4012,8 @@ async function makeNewConfig(userid) {
     configs.push( await addConfigItem(userid, "rules", "true") );
     configs.push( await addConfigItem(userid, "timezone", "America/Los_Angeles") );
     configs.push( await addConfigItem(userid, "phototimer","0") );
-    configs.push( await addConfigItem(userid, "fast_timer","30000") );        // timers for sonos polling
-    configs.push( await addConfigItem(userid, "slow_timer","300000") );       // timers for images, frames, customs, blanks, videos polling
+    configs.push( await addConfigItem(userid, "fast_timer","30") );        // timers for sonos polling
+    configs.push( await addConfigItem(userid, "slow_timer","300") );       // timers for images, frames, customs, blanks, videos polling
     configs.push( await addConfigItem(userid, "fcastcity", "san-carlos") );   // addConfigItem(userid, "fcastcity") || "ann-arbor" );
     configs.push( await addConfigItem(userid, "fcastregion","San Carlos") );  // addConfigItem(userid, "fcastregion","Ann Arbor") );
     configs.push( await addConfigItem(userid, "fcastcode","37d51n122d26") );  // addConfigItem(userid, "fcastcode","42d28n83d74") );
@@ -4546,60 +4546,39 @@ function processLogin(body, res) {
     return results;
 }
 
-function getAuthPage(user, configoptions, hostname, rmsg) {
+function getAuthPage(user, configoptions, hubs, hostname, rmsg) {
 
     // get the current settings from options file
     var userid = user["users_id"];
     var useremail = user["users_email"];
     var uname = user["users_uname"];
-    var defhub = user["users_defhub"] || "new";
-    var usertype = user["users_usertype"];
+    var defhub = user["users_defhub"];
+    if ( !defhub || defhub === "new" ) {
+        defhub = "-1";
+    }
     var panelid = user["panels_id"];
     var pname = user["panels_pname"];
     var skin = user["panels_skin"];
-    // if ( !rmsg ) { rmsg = ""; }
-    var conditions = "userid = " + userid;
-    var display = mydb.getRows("hubs","*",conditions)
-    .then(hubs => {
-        var vals = {};
-        vals.configs = configoptions;
-        vals.hubs = hubs;
-        return vals;
-        // });
-        // return result;
-    })
-    .then(vals => {
-        // we can't query by hubid because it may not be unique to this user
-        var joinstr = mydb.getJoinStr("devices","hubid","hubs","id");
-        var fields = "devices.id as devices_id, devices.userid as devices_userid, devices.deviceid as devices_deviceid, " +
-        "devices.name as devices_name, devices.devicetype as devices_devicetype, devices.hint as devices_hint, " +
-        "devices.refresh as devices_refresh, devices.pvalue as devices_pvalue, " +
-        "hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubhost as hubs_hubhost, hubs.hubname as hubs_hubname, " +
-        "hubs.clientid as hubs_clientid, hubs.clientsecret as hubs_clientsecret, hubs.hubaccess as hubs_hubaccess, hubs.hubrefresh as hubs_hubrefresh, " +
-        "hubs.useraccess as hubs_useraccess, hubs.userendpt as hubs_userendpt, hubs.hubtimer as hubs_hubtimer";
-        var result = mydb.getRows("devices", fields, "devices.userid = " + userid, joinstr)
-        .then(devices => {
-            var len = devices ? devices.length : 0;
-            vals.devices = devices;
-            return vals;
-        });
-        return result;
-    })
-    .then(vals => {
+    var hub = findHub(defhub, hubs);
 
-        // var configoptions = vals.configs;
-        var hubs = vals.hubs;
-        var devices = vals.devices;
-        return getinfocontents(configoptions, hubs, devices);
+    // this was replaced with a simple device query based on default hub index since hubs is already available
+    var result = mydb.getRows("devices","*","userid = "+userid+ " AND hubid = " + hub.id)
+    .then(devices => {
+        if ( devices ) {
+            var numdev = devices.length;
+        } else {
+            numdev = 0;
+        }
+        return getinfocontents(configoptions, hubs, hub, numdev);
     })
     .catch(reason => {
         console.log( (ddbg()), reason );
-        return "error - something went wrong trying to display auth page \n" + reason.toString();
+        return "error - something went wrong trying to display auth page";
     });
 
-    return display;
+    return result;
 
-    function getinfocontents(configoptions, hubs, devices) {
+    function getinfocontents(configoptions, hubs, hub, numdev) {
 
         var $tc = "";
 
@@ -4613,16 +4592,19 @@ function getAuthPage(user, configoptions, hostname, rmsg) {
 
         $tc +="<p>This is where you link a Hubitat or ISY hub to " +
                 "HousePanel to gain access to your smart home devices. " +
-                "Sonos hubs are also supported but updates will not be received. " +
+                "Sonos hubs are also supported but updates requires polling set on the Options page. " +
                 "Ford and Lincoln vehicles are also supported if you have a Ford-Connect API developer account. " +
                 "You can link any number and combination of hubs. " + 
-                "To authorize Legacy SmartThings and Hubitat hubs you must have the following info: " +
-                "API URL, Client ID, and Client Secret.  No additional info is needed for New SmartThings hubs " +
-                "other than an optional user-provided hub name. Refresh timer is in seconds and is used to reload " +
-                "a hub's devices every so often. This applies to all hubs." +
-                // "For ISY hubs enter your username in the ClientID field and " +
-                // "password in the Client Secret field, and enter the URL of your ISY hub in the API Url field." +
-                "</p><br />";
+                "To authorize Hubitat and Sonos hubs you must have " +
+                "Client ID and Client Secret values to start the OAUTH flow process. " +
+                "For Hubitat hubs you can skip OAUTH flow by providing a useraccess and userendpt if they are known. " +
+                "For ISY hubs enter your username and password in the fields shown, " +
+                "and enter the IP of your hub in the Host API Url field " +
+                "using format https://xxx.xxx.xxx.xxx:8443  <br>ISY hubs do not use OAUTH flows. " +
+                // "Refresh timer is in seconds and is used to reload " +
+                // "a hub's devices every so often. This is optional for most hubs but required for hubs that have a refresh token. " +
+                // "For such cases the Refresh timer field will be filled in automatically in the OAUTH flow process." +
+                "</p>";
         $tc += "</div>";
 
         if ( DONATE===true ) {
@@ -4653,7 +4635,6 @@ function getAuthPage(user, configoptions, hostname, rmsg) {
         }
         $tc += hidden("configsid", JSON.stringify(configs), "configsid");
         $tc += "<div class=\"greetingopts\">";
-        // $tc += "<h3><span class=\"startupinp\">Last update: " + lastedit + "</span></h3>";
             
         if ( hubs ) {
             var authhubs = clone(hubs);
@@ -4677,19 +4658,15 @@ function getAuthPage(user, configoptions, hostname, rmsg) {
         authhubs.push(newhub);
 
         // determine how many things are in the default hub
-        if ( rmsg==="" && defhub && defhub !== "new" && devices ) {
-            var num = 0;
-            devices.forEach(function(device) {
-                if ( device["hubs_hubid"] === defhub ) {
-                    num++;
-                }
-            });
-            var ntc= "Hub with hubId= " + defhub + " is authorized with " + num + " devices";
+        if ( rmsg==="" && defhub ) {
+            if ( defhub === "-1" ) {
+                var ntc= "Null hub has " + numdev + " devices";
+            } else {
+                ntc= "Hub " + hub.hubname + " (" + hub.hubtype + ") is authorized with " + numdev + " devices";
+            }
             $tc += "<div id=\"newthingcount\">" + ntc + "</div>";
         } else {
-            if ( !rmsg ) {
-                rmsg = "";
-            }
+            if ( !rmsg ) rmsg = "";
             $tc += "<div id=\"newthingcount\">" + rmsg + "</div>";
         }
 
@@ -4703,157 +4680,157 @@ function getAuthPage(user, configoptions, hostname, rmsg) {
 
     function getHubPanels(authhubs, defhub) {
 
-        // TODO - finish fixing Ford and Sonos hubs so we can enable it
         // var allhubtypes = { SmartThings:"SmartThings", NewSmartThings:"New SmartThings", Hubitat: "Hubitat", ISY: "ISY", Ford: "Ford", Lincoln: "Lincoln" };
         // var allhubtypes = { SmartThings:"Legacy SmartThings", NewSmartThings:"SmartThings", Hubitat: "Hubitat", Sonos: "Sonos", Ford: "Ford" };
         // var allhubtypes = { SmartThings:"Legacy SmartThings", NewSmartThings:"SmartThings", Hubitat: "Hubitat" };
-        var allhubtypes = { Hubitat: "Hubitat", ISY: "ISY", NewSmartThings:"SmartThings", Sonos: "Sonos", Ford: "Ford" };
+        // var allhubtypes = { Hubitat: "Hubitat", ISY: "ISY", NewSmartThings:"SmartThings", Sonos: "Sonos", Ford: "Ford" };
+        var allhubtypes = GLB.dbinfo.hubs;
         var $tc = "";
         $tc += "<div class='hubopt'><label for=\"pickhub\" class=\"startupinp\">Authorize Hub: </label>";
         $tc += "<select name=\"pickhub\" id=\"pickhub\" class=\"startupinp pickhub\">";
 
-        var i= 0;
         var selected = false;
-        authhubs.forEach(function(hub) {
-            var hubName = hub["hubname"];
-            var hubType = hub["hubtype"];
-            var hubId = hub["hubid"].toString();
-            var hubindex = hub.id || 0;
+        var hub = authhubs[0];
+        var id = 0;
+        var theid = 0;
+        authhubs.forEach(function(ahub) {
+            id++;
+            var hubName = ahub["hubname"];
+            var hubType = ahub["hubtype"];
+            var hubId = ahub["hubid"].toString();
+            var hubindex = ahub.id;
             var hoptid = "hubopt_"+hubindex;
-            var id = i+1;
             if ( !selected && hubId === defhub) {
                 var hubselected = "selected";
                 selected = true;
+                hub = ahub;
+                theid = id;
             } else {
                 hubselected = "";
             }
-            $tc += "<option id=\"" + hoptid + "\" hubid=\"" + hubId + "\" value=\"" + hubindex + "\" " + hubselected + ">Hub #" + id + " " + hubName + " (" + hubType + ")</option>";
-            i++;
+            $tc += "<option id=\"" + hoptid + "\" value=\"" + hubId + "\" " + hubselected + ">Hub #" + id + " " + hubName + " (" + hubType + ")</option>";
         });
         $tc += "</select></div>";
 
         $tc +="<div id=\"authhubwrapper\">";
-        i = 0;
 
-        selected = false;
-        authhubs.forEach(function(hub) {
-            
-            // putStats(hub);
-            var hubType = hub["hubtype"];secretclass
-            var hubId = hub["hubid"].toString();
-            var hubindex = hub.id;
-            var id = i+1;
-            if ( !selected && hubId === defhub) {
-                var hubclass = "authhub";
-                selected = true;
-            } else {
-                hubclass = "authhub hidden";
-            }
+        var hubType = hub["hubtype"];
+        var hubId = hub["hubid"].toString();
+        var hubindex = hub.id;
+        var hubclass = "";
+        var authclass = "";
+        if ( hubId==="-1" || hubId==="new" ) {
+            hubclass = " hidden";
+        }
+        if ( hubId==="-1" ) {
+            authclass = " hidden";
+        }
 
-            // set fixed parameters for New SmartThings and Sonos
-            var disabled = "";
-            var secretclass = "startupinp";
-            if ( hubType === "None" ) {
-                hub.clientid = "";
-                hub.clientsecret = "";
-                hub.hubhost = "";
-                secretclass += " hidden";
-                disabled = " disabled";
-            } else if ( !hub.hubhost && hubType === "Hubitat" ) {
+        // set fixed parameters for New SmartThings and Sonos
+        var disabled = "";
+        var clientIdLabel = "Client ID: ";
+        var clientSecretLabel = "Client Secret: ";
+        if ( hubType === "None" ) {
+            hub.clientid = "";
+            hub.clientsecret = "";
+            hub.hubhost = "";
+            disabled = " disabled";
+        } else if ( hubType === "Hubitat" ) {
+            if ( !hub.hubhost ) {
                 hub.hubhost = "https://oauth.cloud.hubitat.com";
-            } else if ( hubType === "NewSmartThings" ) {
-                hub.clientid = GLB.dbinfo["st_clientid"];
-                hub.clientsecret = encodeURI(GLB.dbinfo["st_clientsecret"]);
-                hub.hubhost = "https://api.smartthings.com";
-                secretclass += " hidden";
-            } else if ( hubType === "Sonos" ) {
-                hub.hubhost = "https://api.sonos.com";
-            } else if ( !hub.hubhost && hubType === "ISY" ) {
-                hub.hubhost = "https://192.168.4.4:8443";
-            } else {
-                hub.hubhost = "";
             }
+        } else if ( hubType === "NewSmartThings" ) {
+            hub.hubhost = "https://api.smartthings.com";
+        } else if ( hubType === "Sonos" ) {
+            hub.hubhost = "https://api.sonos.com";
+        } else if ( hubType === "Ford" || hubType === "Lincoln") {
+            hub.hubhost = "https://dah2vb2cprod.b2clogin.com/914d88b1-3523-4bf6-9be4-1b96b4f6f919";
+        } else if ( hubType === "ISY" ) {
+            clientIdLabel = "Username: ";
+            clientSecretLabel = "Password: ";
+            if ( !hub.hubhost ) {
+                hub.hubhost = "https://192.168.xxx.yyy:8443";
+            }
+        } else {
+            hub.hubhost = "";
+        }
 
-            // for each hub make a section with its own form that comes back here as a post
-            $tc +="<div id=\"authhub_" + hubindex + "\" hubnum=\"" + id + "\" hubid=\"" + hubId + "\" hubtype=\"" + hubType + "\" class=\"" + hubclass + "\">";
-                $tc += "<form id=\"hubform_" + hubindex + "\" hubnum=\"" + id + "\" class=\"houseauth\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
+        // rewrote this to only create a single web interface
+        // this changes dynamically when new hubs are selected
+        $tc += "<div id=\"authhub\">";
+        $tc += "<form id=\"hubform\" class=\"houseauth\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
 
-                // insert the fields neede in the apiCall function
-                $tc += hidden("userid", userid);
-                $tc += hidden("uname", uname);
-                $tc += hidden("panelid", panelid);
-                $tc += hidden("pname", pname);
-                $tc += hidden("skin", skin);
+        // insert the fields needed in the apiCall function
+        $tc += hidden("userid", userid);
+        $tc += hidden("uname", uname);
+        $tc += hidden("panelid", panelid);
+        $tc += hidden("pname", pname);
+        $tc += hidden("skin", skin);
+        $tc += hidden("hubindex", hubindex);
 
-                // we use this div below to grab the hub type dynamically chosen
-                if ( hubId!=="-1" ) {
-                    $tc += "<div id=\"hubdiv_" + hubId + "\"><label class=\"startupinp\">Hub Type: </label>";
-                    $tc += "<select name=\"hubtype\" class=\"hubtypeinp\">";
-                    for (var ht in allhubtypes) {
-                        if ( ht === hubType ) {
-                            $tc += "<option value=\"" + ht + "\" selected>" + allhubtypes[ht] + "</option>";
-                        } else {
-                            $tc += "<option value=\"" + ht + "\">" + allhubtypes[ht] + "</option>";
-                        }
-                    }
-                    $tc += "</select>";
+        // for new hubs give user option to pick the hub type
+        // existing hubs cannot change type
+        if ( hubId==="new" ) {
+            $tc += "<div id=\"hubdiv\" class=\"startupinp\">";
+        } else {
+            $tc += "<div id=\"hubdiv\" class=\"startupinp disabled\">";
+        }
+        $tc += "<label class=\"startupinp\">Hub Type: </label>";
+        $tc += "<select disabled name=\"hubtype\" class=\"hubtypeinp\">";
+        for (var ht in allhubtypes) {
+            if ( ht === hubType ) {
+                $tc += "<option value=\"" + ht + "\" selected>" + allhubtypes[ht] + "</option>";
+            } else {
+                $tc += "<option value=\"" + ht + "\">" + allhubtypes[ht] + "</option>";
+            }
+        }
+        $tc += "</select></div>";
 
-                    $tc += "<br><br><label class=\"startupinp\">Host API Url: </label>";
-                    $tc += "<input class=\"startupinp" + secretclass + "\" title=\"Enter the hub OAUTH address here\" name=\"hubhost\" size=\"80\" type=\"text\" value=\"" + hub["hubhost"] + "\"/>"; 
-    
-                    $tc += "</div>";
-                }
-                // we load client secret in js since it could have special chars that mess up doing it here
-                var csecret = decodeURI(hub.clientsecret);
-                $tc += hidden("csecret", csecret, "csecret_"+hubindex);
-                    
-                // $tc += "<div><label class=\"startupinp required\">Host API Url: </label>";
-                // $tc += "<input class=\"startupinp\" title=\"Enter the hub OAUTH address here\" name=\"hubhost\" size=\"80\" type=\"text\" value=\"" + hub["hubhost"] + "\"/></div>"; 
+        // we load client secret in js since it could have special chars that mess up doing it here
+        // var csecret = decodeURI(hub.clientsecret);
+        // $tc += hidden("csecret", csecret, "csecret");
+        
+        $tc += "<div><label class=\"startupinp required\">Host API Url: </label>";
+        $tc += "<input id='inp_hubhost' class=\"startupinp\" title=\"Enter the hub address here\" name=\"hubhost\" size=\"80\" type=\"text\" value=\"" + hub["hubhost"] + "\"/></div>"; 
 
-                // wrap all of this in a group that can be hidden for New SmartThings, Sonos, and blanks
-                $tc += "<div id=\"hideid_" + hubindex + "\" class=\"" + secretclass + "\">";
+        $tc += "<div id='inp_clientid'><label id=\"labelclientId\" class=\"startupinp\">" + clientIdLabel + "</label>";
+        $tc += "<input class=\"startupinp\" name=\"clientid\" size=\"80\" type=\"text\" value=\"" + hub["clientid"] + "\"/></div>";
 
-                $tc += "<div><label class=\"startupinp\">Client ID: </label>";
-                $tc += "<input class=\"startupinp\" name=\"clientid\" size=\"80\" type=\"text\" value=\"" + hub["clientid"] + "\"/></div>";
+        $tc += "<div id='inp_clientsecret'><label id=\"labelclientSecret\" class=\"startupinp\">" + clientSecretLabel + "</label>";
+        $tc += "<input class=\"startupinp\" name=\"clientsecret\" size=\"80\" type=\"password\" value=\"\"/></div>"; 
 
-                $tc += "<div class=\"fixClientSecret\"><label class=\"startupinp\">Client Secret: </label>";
-                $tc += "<input class=\"startupinp\" name=\"clientsecret\" size=\"80\" type=\"text\" value=\"\"/></div>"; 
+        // wrap user values in a group that can be hidden for New SmartThings, Sonos, and Ford
+        $tc += "<div id=\"hideaccess_hub\">";
 
-                $tc += "<div><label class=\"startupinp\">Fixed access_token: </label>";
-                $tc += "<input class=\"startupinp\" name=\"useraccess\" size=\"80\" type=\"text\" value=\"" + hub["useraccess"] + "\"/></div>"; 
+        $tc += "<div id ='inp_useraccess'><label class=\"startupinp\">Fixed access_token: </label>";
+        $tc += "<input class=\"startupinp\" name=\"useraccess\" size=\"80\" type=\"text\" value=\"" + hub["useraccess"] + "\"/></div>"; 
 
-                $tc += "<div><label class=\"startupinp\">Fixed Endpoint: </label>";
-                $tc += "<input class=\"startupinp\" name=\"userendpt\" size=\"80\" type=\"text\" value=\"" + hub["userendpt"] + "\"/></div>"; 
+        $tc += "<div id='inp_userendpt'><label class=\"startupinp\">Fixed Endpoint: </label>";
+        $tc += "<input class=\"startupinp\" name=\"userendpt\" size=\"80\" type=\"text\" value=\"" + hub["userendpt"] + "\"/></div>"; 
 
-                $tc += "<div><label class=\"startupinp\">hub ID or App ID: </label>";
-                $tc += "<input class=\"startupinp\" name=\"hubid\" size=\"80\" type=\"text\" value=\"" + hub["hubid"] + "\"/></div>"; 
+        $tc += "</div>";
 
-                $tc += "</div>";
+        $tc += "<div id='inp_hubname'><label class=\"startupinp\">Hub Name: </label>";
+        $tc += "<input class=\"startupinp\"" + disabled + " name=\"hubname\" size=\"80\" type=\"text\" value=\"" + hub["hubname"] + "\"/></div>"; 
 
-                $tc += "<div><label class=\"startupinp\">Hub Name: </label>";
-                $tc += "<input class=\"startupinp\"" + disabled + " name=\"hubname\" size=\"80\" type=\"text\" value=\"" + hub["hubname"] + "\"/></div>"; 
+        $tc += "<div id='inp_hubid' class='hidden'><label class=\"startupinp\">hub ID or App ID: </label>";
+        $tc += "<input class=\"startupinp\" name=\"hubid\" size=\"80\" type=\"text\" value=\"" + hub["hubid"] + "\"/></div>"; 
 
-                $tc += "<div><label class=\"startupinp\">Refresh Timer: </label>";
-                $tc += "<input class=\"startupinp\"" + disabled + " name=\"hubtimer\" size=\"10\" type=\"text\" value=\"" + hub["hubtimer"] + "\"/></div>"; 
+        $tc += "<div id='inp_hubtimer'><label class=\"startupinp\">Refresh Timer: </label>";
+        $tc += "<input class=\"startupinp\" name=\"hubtimer\" size=\"10\" type=\"text\" value=\"" + hub["hubtimer"] + "\"/></div>"; 
 
-                $tc += "<input class=\"hidden\" name=\"hubaccess\" type=\"hidden\" value=\"" + hub["hubaccess"] + "\"/>"; 
-                $tc += "<input class=\"hidden\" name=\"hubendpt\" type=\"hidden\" value=\"" + hub["hubendpt"] + "\"/>"; 
-                $tc += "<input class=\"hidden\" name=\"hubrefresh\" type=\"hidden\" value=\"" + hub["hubrefresh"] + "\"/>"; 
-                
-                $tc += "<div>";
-                $tc += "<input hubindex=\"" + hubindex + "\" hubnum=\"" + id + "\" hubid=\"" + hubId + "\" class=\"authbutton hubauth\" value=\"Authorize Hub #" + id + "\" type=\"button\" />";
-                if ( hubId !== "new" && hubId!=="-1" ) {
-                    $tc += "<input hubindex=\"" + hubindex + "\" hubnum=\"" + id + "\" hubid=\"" + hubId + "\" class=\"authbutton hubdel\" value=\"Remove Hub #" + id + "\" type=\"button\" />";
-                } else {
-                    $tc += "<input hubindex=\"" + hubindex + "\" hubnum=\"" + id + "\" hubid=\"" + hubId + "\" class=\"authbutton hubdel hidden\" value=\"Remove Hub #" + id + "\" type=\"button\" />";
-                }
-                $tc += "</div>";
-                
-                $tc += "</form>";
-            $tc += "</div>";
-            
-            i++;
-        });
+        $tc += "<input class=\"hidden\" name=\"hubaccess\" type=\"hidden\" value=\"" + hub["hubaccess"] + "\"/>"; 
+        $tc += "<input class=\"hidden\" name=\"hubendpt\" type=\"hidden\" value=\"" + hub["hubendpt"] + "\"/>"; 
+        $tc += "<input class=\"hidden\" name=\"hubrefresh\" type=\"hidden\" value=\"" + hub["hubrefresh"] + "\"/>"; 
+        
+        $tc += "<div class=\"buttonrow\">";
+        $tc += "<input class=\"authbutton hubauth" + authclass + "\" value=\"Authorize Hub\" type=\"button\" />";
+        $tc += "<input class=\"authbutton hubdel" + hubclass + "\" value=\"Remove Hub\" type=\"button\" />";
+        $tc += "</div>";
+        
+        $tc += "</form>";
+        $tc += "</div>";
+
         $tc += "</div>";
         return $tc;
     }
@@ -8162,7 +8139,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                         // if we get an unauthorized message error, refresh the token and try again later
                         if ( err === 401 && inrule!=="refresh" ) {
                             console.log((ddbg()), "Obtaining refresh token for user: ", userid);
-                            refreshSTToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, false, function () {
+                            refreshSTToken(userid, hub, false, function () {
                                 callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, "refresh");
                             });
                             return;
@@ -8275,7 +8252,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
 
         // implement the functions supported as described in the postman collection
         // but only the things that start with an underscore invoke the api call
-        } else if ( hub.hubtype==="Ford"  ) {
+        } else if ( hub.hubtype==="Ford" || hub.hubtype==="Lincoln" ) {
 
             // all API calls have the same header structure
             var host = endpt + "/" + swid; 
@@ -8575,13 +8552,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
             getHubResponse(pvalue);
         })
         .catch(err => {
-            // the curl failed so try refreshing token and repeating
-            if ( err && inrule!=="refresh" ) {
-                console.log((ddbg()), "Obtaining Sonos refresh token for user: ", userid, " err: ", err);
-                refreshSonosToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, false);
-                return;
-            }
-
+            console.log((ddbg()), "Error updating Sonos meta info for user: ", userid, " err: ", err);
         });
 
     }
@@ -8863,8 +8834,8 @@ function queryHub(device, pname) {
                         var sonosGroups = jsonbody.groups;
                         var sonosPlayers = jsonbody.players;
                         if ( !sonosPlayers ) {
-                            console.log((ddbg()), "Obtaining Sonos refresh tokenin queryHub");
-                            refreshSonosToken(userid, hub, hub.hubrefresh, hub.clientid, hub.clientsecret, false);
+                            console.log((ddbg()), "Obtaining Sonos refresh token in queryHub");
+                            refreshSonosToken(userid, hub, false);
                             reject("no Sonos devices found in queryHub for Household: " + hubid);
                             return;
                         }
@@ -11312,7 +11283,7 @@ function updCustom(userid, swid, rules) {
 }
 
 function findHub(hubid, hubs) {
-    var thehub = null;
+    var thehub = hubs[0];
     hubs.forEach( function(hub) {
         if ( hub.hubid === hubid ) {
             thehub = hub;
@@ -11375,12 +11346,15 @@ function getHubObj(userid, hub) {
         } else {
 
             // oauth flow for Ford and Lincoln vehicles
+            // the hubhost is used for access token only and has the apicode embedded in it
+            // the first call is always to the same place noted below
             // we complete the flow later when redirection happens back to /oauth GET call
             // user must provide the application ID in the hubid field for this to work
             var result;
             if ( hubType==="Ford" || hubType==="Lincoln" ) {
                 var model = hubType.substr(0,1);
-                var hosturl = host + "/common/login";
+                var hubid = hub.hubid;
+                var hosturl = "https://fordconnect.cv.ford.com/common/login";
                 result = {action: "oauth", userid: userid, host: hosturl, model: model, hubName: hubName, appId: hubid, 
                             state: thestate, clientId: clientId, clientSecret: clientSecret, hubType: hubType,
                             scope: "access", url: returnloc};
@@ -11943,6 +11917,28 @@ function apiCall(user, body, protocol, req, res) {
                 result = getIcons(userid, pname, skin, swval, swattr);
                 break;
 
+            case "setdefhub":
+                // this sets the default hub in the users table
+                // and sets the hubtimer in the hubs table
+                // so that value can be updated without running OAUTH flow
+                var usrobj = {defhub: swval};
+                result = mydb.updateRow("users", usrobj, "id = "+userid)
+                .then( ()=> {
+                    var hubobj = {hubtimer: swattr};
+                    if ( swid > 0 ) {
+                        return mydb.updateRow("hubs", hubobj, "id = "+swid)
+                        .then( () => {
+                            return {defhub: swval, hubtimer: swattr};
+                        });
+                    } else {
+                        return {defhub: swval, hubtimer: 0};
+                    }
+                })
+                .catch(reason => {
+                    console.log( (ddbg()), reason);
+                })
+                break;
+
             // this isn't used, but it is here to return the next port available to connect
             case "getwsport":
 
@@ -11975,6 +11971,27 @@ function apiCall(user, body, protocol, req, res) {
                 }
                 break;
 
+            case "hubrefresh":
+                result = mydb.getRow("hubs","*","userid = "+userid + " AND hubid = '" + hubid +"'")
+                .then(hub => {
+                    if ( !hub ) throw "Hub not found for hubid = " + hubid;
+
+                    if (hub.hubtype==="Sonos") {
+
+                    } else if (hub.hubtype==="NewSmartThings") {
+
+                    } else if (hub.hubtype==="Ford" || hub.hubtype==="Lincoln") {
+                        hub = refreshFordToken(userid, hub, false);
+                    } else {
+                        return hub;
+                    }
+                })
+                .catch(reason => {
+
+                });
+
+                break;
+
             // this api call starts the hub authorization process
             // the actual redirection to the first auth site is done in js file
             case "hubauth":
@@ -11996,6 +12013,13 @@ function apiCall(user, body, protocol, req, res) {
                     hub["useraccess"] = body.useraccess || "";
                     hub["userendpt"] = body.userendpt || "";
                     hub["hubtimer"] = body.hubtimer || 0;
+
+                    // set alias fields for new ST
+                    // we repurposed the hubid field to do this temporarily
+                    if ( hub.hubtype === "NewSmartThings" ) {
+                        GLB.dbinfo["st_sinkalias"] = hub.hubid;
+                        hub.hubid = "new";
+                    }
                     // hub["sinkFilterId"] = "";
 
                     // for now set the hubid to value user gave
@@ -12056,9 +12080,8 @@ function apiCall(user, body, protocol, req, res) {
                     // add the hub to the database or update it
                     .then(result => {
                         hub.id = mydb.getId();
-                        var autoid = result.getAutoIncrementValue();
                         if ( DEBUG2 ) {
-                            console.log( (ddbg()), "oauth hub: ", hub, " id: ", hub.id, autoid );
+                            console.log( (ddbg()), "oauth hub: ", hub, " id: ", hub.id );
                         }
                         return getHubObj(userid, hub);
                     })
@@ -12083,28 +12106,26 @@ function apiCall(user, body, protocol, req, res) {
             case "hubdelete":
                 // TODO - implement hubDelete() function
                 if ( protocol === "POST" ) {
-                    mydb.deleteRow("hubs","userid = "+userid+" AND id = " + swid)
+                    result = mydb.deleteRow("hubs","userid = "+userid+" AND id = " + swid)
                     .then(results => {
                         if ( results && results.getAffectedItemsCount() > 0 ) {
-                            mydb.updateRow("users",{defhub: ""}, "id = " + userid)
+                            return mydb.updateRow("users",{defhub: "-1"}, "id = " + userid)
                             .then( res4 => {
-                                var msg = "removed a hub with ID = " + hubid;
-                                pushClient(userid, "pagemsg", "auth", "#newthingcount", msg );
+                                // pushClient(userid, "pagemsg", "auth", "#newthingcount", msg );
+                                return "removed hub " + swid + " with hubid = " + hubid;
                             })
                             .catch( reason => {
                                 console.log( (ddbg()), reason);
-                                msg = "error - could not remove hub with ID = " + hubid;
-                                pushClient(userid, "pagemsg", "auth", "#newthingcount", msg );
+                                // pushClient(userid, "pagemsg", "auth", "#newthingcount", msg );
+                                return "error - could not remove hub with ID = " + hubid;
                             });
                         } else {
-                            msg = "error - could not remove hub with ID = " + hubid;
-                            pushClient(userid, "pagemsg", "auth", "#newthingcount", msg );
+                            return "error - could not remove hub " + swid + " with hubid = " + hubid;
                         }
                     })
                     .catch(reason => {
-                        console.log( (ddbg()), "error - ", reason);
+                        console.log( (ddbg()), reason);
                     });
-                    result = "Removing hub #" + swattr + " hubid = " + hubid;
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -12453,39 +12474,46 @@ function buildDatabaseTable(tableindex) {
 // beginning of main routine
 // ***************************************************
 
-// read config file
+// default behavior is no new user validation
+GLB.dbinfo = {
+    "dbhost": "localhost",
+    "dbname": "housepanel",
+    "dbuid": "housepanel",
+    "dbpassword": "housepanel",
+    "dbtype": "sqlite",
+    "port": "8580",
+    "websocketport": "8380",
+    "allownewuser" : "true",
+    "service": "none"
+};
+GLB.dbinfo.hubs = { Hubitat: "Hubitat", ISY: "ISY", Sonos: "Sonos" };
+
+// read config file if one exists
 try {
-    GLB.dbinfo = JSON.parse(fs.readFileSync("housepanel.cfg","utf8"));
-    if ( !GLB.dbinfo.port ) GLB.dbinfo.port = "8580";
-    if ( !GLB.dbinfo.webSocketServerPort ) GLB.dbinfo.webSocketServerPort = "8380";
+    var newinfo = JSON.parse(fs.readFileSync("housepanel.cfg","utf8"));
+    for (var key in newinfo) {
+        GLB.dbinfo[key] = newinfo[key];
+    }
+} catch (e) {}
+
+if ( GLB.dbinfo["twilio_sid"] && GLB.dbinfo["twilio_token"] && GLB.dbinfo["twilio_service"] ) {
     var twilioSid =  GLB.dbinfo["twilio_sid"];
     var twilioToken =  GLB.dbinfo["twilio_token"];
     var twilioService = GLB.dbinfo["twilio_service"];
-    if ( twilioSid && twilioToken && twilioService ) {
-        var twilioClient = require('twilio')(twilioSid, twilioToken); 
-    } else {
-        twilioClient = null;
-    }
-} catch (e) {
-
-    // default behavior is no new user validation
-    GLB.dbinfo = {
-        "dbhost": "localhost",
-        "dbname": "housepanel",
-        "dbuid": "housepanel",
-        "dbpassword": "housepanel",
-        "dbtype": "sqlite",
-        "port": "8580",
-        "websocketport": "8380",
-        "allownewuser" : "true",
-        "service": "none"
-    };
-    twilioClient = null;
+    var twilioClient = require('twilio')(twilioSid, twilioToken); 
+} else {
     twilioService = null;
+    twilioClient = null;
 }
 
 GLB.port = parseInt(GLB.dbinfo["port"]);
 GLB.webSocketServerPort = parseInt(GLB.dbinfo["websocketport"]);
+
+if ( !GLB.dbinfo.hubs ) {
+    // GLB.dbinfo.hubs = { Hubitat: "Hubitat", ISY: "ISY", NewSmartThings:"SmartThings", Sonos: "Sonos", Ford: "Ford", Lincoln: "Lincoln" };
+    GLB.dbinfo.hubs = { Hubitat: "Hubitat", ISY: "ISY", Sonos: "Sonos" };
+}
+console.log( (ddbg()), "Supported hub types: ", GLB.dbinfo.hubs);
 
 var port = GLB.port;
 GLB.newcss = {};
@@ -12582,25 +12610,28 @@ if ( app && applistening ) {
         setTimeout(function() {
             console.log( (ddbg()), "Fixing up the database, building all missing tables for HousePanel...");
         }, 3000);
-    })
+    });
+
+    
+    // set up sockets
+    setupBrowserSocket();
 
     // handler functions for HousePanel
     // this is where we render the baseline web page for the dashboard
-    // define all the mime types that can be rendered
-    var mime = {
-        html: 'text/html',
-        txt: 'text/plain',
-        css: 'text/css',
-        gif: 'image/gif',
-        jpg: 'image/jpeg',
-        png: 'image/png',
-        svg: 'image/svg+xml',
-        js: 'application/javascript'
-    };
 
     app.get('*', function (req, res) {
 
-        // var $tc = "";
+        // define all the mime types that can be rendered
+        var mime = {
+            html: 'text/html',
+            txt: 'text/plain',
+            css: 'text/css',
+            gif: 'image/gif',
+            jpg: 'image/jpeg',
+            png: 'image/png',
+            svg: 'image/svg+xml',
+            js: 'application/javascript'
+        };
 
         // handle ngrok which thinks it is http but is really https
         var hostname = req.headers.host;
@@ -12770,14 +12801,14 @@ if ( app && applistening ) {
                         res.end();
 
                     } else if ( req.path==="/reauth" ) {
-                        getAuthPage(user, configoptions, req.headers.host, false)
+                        getAuthPage(user, configoptions, hubs, req.headers.host, false)
                         .then(result => {
                             res.send(result);
                             res.end();
                         });
 
                     } else if ( req.path==="/userauth") {
-                        getAuthPage(user, configoptions, req.headers.host, false)
+                        getAuthPage(user, configoptions, hubs, req.headers.host, false)
                         .then(result => {
                             res.send(result);
                             res.end();
@@ -12804,7 +12835,7 @@ if ( app && applistening ) {
                                     if ( DEBUG2 ) {
                                         console.log( (ddbg()), msg);
                                     }
-                                    getAuthPage(user, configoptions, req.headers.host, msg)
+                                    getAuthPage(user, configoptions, hubs, req.headers.host, msg)
                                     .then(result => {
                                         res.send(result);
                                         res.end();
@@ -12813,7 +12844,7 @@ if ( app && applistening ) {
                             })
                             .catch(reason => {
                                 console.log( (ddbg()), reason);
-                                getAuthPage(user, configoptions, req.headers.host, reason)
+                                getAuthPage(user, configoptions, hubs, req.headers.host, reason)
                                 .then(result => {
                                     res.send(result);
                                     res.end();
@@ -12821,7 +12852,7 @@ if ( app && applistening ) {
                             });
                              
                         } else {
-                            getAuthPage(user, configoptions, req.headers.host, "Invalid hub authorization request")
+                            getAuthPage(user, configoptions, hubs, req.headers.host, "Invalid hub authorization request")
                             .then(result => {
                                 res.send(result);
                                 res.end();
@@ -13186,8 +13217,5 @@ if ( app && applistening ) {
         }
 
     });
-    
-    // set up sockets
-    setupBrowserSocket();
 }
  

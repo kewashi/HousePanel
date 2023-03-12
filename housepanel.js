@@ -230,21 +230,35 @@ function getHubs() {
 
                     // if Sonos hub, then set up timer to refresh every 30 seconds
                     cm_Globals.hubs.forEach(hub => {
+
+                        // setup refresh timer for Sonos art if timer is there
                         if ( hub.hubtype === "Sonos" ) {
                             var fast_timer = config.fast_timer;
                             fast_timer = parseInt(fast_timer, 10);
-                            setupTimer("hub", fast_timer, hub);
+                            fast_timer*= 1000;
+                            setupTimer("fast", fast_timer, hub);
                         } else if ( hub.hubtype === "None" && hub.hubid === "-1" ) {
                             var slow_timer = config.slow_timer;
                             slow_timer = parseInt(slow_timer, 10);
-                            setupTimer("hub", slow_timer, hub);
+                            slow_timer*= 1000;
+                            setupTimer("slow", slow_timer, hub);
                         }
+                        
+                        // now set up timers for any hub if the timer is set
+                        // if there is a hubrefresh code that will be used to refresh accesstoken
+                        // otherwise the hub devices will just be retrieved from the hub
+                        var hubtimer = parseInt(hub.hubtimer, 10);
+                        hubtimer*= 1000;
+                        setupTimer("hub", hubtimer, hub);
                     });
 
                 } else {
                     cm_Globals.hubs = {};
                     console.log("error - failure reading hubs from database for user = " + userid);
                 }
+
+                setupButtons();
+
             }, "json"
         );
     } catch(e) {
@@ -415,7 +429,7 @@ $(document).ready(function() {
     if ( pagename==="main" || pagename==="auth" || pagename==="options" ) {
 
         getOptions();
-        getHubs();
+        // getHubs();
         
         // disable return key
         $("body").off("keypress");
@@ -427,7 +441,8 @@ $(document).ready(function() {
     }
     
     // handle button setup for all pages
-    setupButtons();
+    getHubs();
+    // setupButtons();
     
     // handle interactions for the options page
     // if (pagename==="options") {
@@ -1173,9 +1188,9 @@ function setupPagemove() {
             // fix nasty bug to correct room tab move
             // updated to pass the object the DB is expecting to update each room
             $("#roomtabs >li.ui-tab").each(function() {
-                var pagename = $(this).children().first().text();
-                var roomid = $("#panel-"+pagename).attr("roomid");
-                pages[k] = {id: roomid, rorder: k, rname: pagename};
+                var pgname = $(this).children().first().text();
+                var roomid = $("#panel-"+pgname).attr("roomid");
+                pages[k] = {id: roomid, rorder: k, rname: pgname};
                 k++;
                 // updateSortNumber(this, k.toString());
             });
@@ -2043,8 +2058,14 @@ function setupButtons() {
             
         $("button.infobutton").on('click', function() {
             // location.reload(true);
-            // $.post(cm_Globals.returnURL, 
-            //     {useajax: "reload", id: 0, type: "none"} );
+            if ( pagename=="auth" ) {
+                var defhub = $("#pickhub").val();
+                var hubtimer = $("input[name='hubtimer']").val();
+                var hubindex = $("input[name='hubindex']").val();
+                $.post(cm_Globals.returnURL, 
+                       {useajax: "setdefhub", userid: cm_Globals.options.userid, hubid: defhub, value: defhub, id: hubindex, attr: hubtimer}
+                );
+            }
             window.location.href = cm_Globals.returnURL;
         });
     }
@@ -2159,138 +2180,91 @@ function setupButtons() {
 
     } else if ( pagename==="auth" ) {
 
-        $("input[name='csecret']").each(function(i) {
-            var funkysecret = $(this).val();
-            var target = $(this).parent().parent().find("input[name='clientsecret']")
-            $(target).val(funkysecret);
-        });
+        // populate the clientSecret field that could have funky characters
+        // var funkysecret = $("input[name='csecret']").val();
+        // $("input[name='clientsecret']").val(funkysecret);
+        $("#newthingcount").html("Select a hub to re-authorize or select the 'New' hub to add a hub");
+        var hubId = $("#pickhub").val();
+        setupAuthHub(hubId);
 
         // now we use the DB index of the hub to ensure it is unique
         $("#pickhub").on('change',function(evt) {
-            var hubindex = $(this).val();
-            var target = "#authhub_" + hubindex;
-            var defhub = findHub(hubindex,"id");
-            var defhost = defhub["hubhost"];
-            
-            // this is only the starting type and all we care about is New
-            // if we needed the actual type we would have used commented code
-            var hubType = $(target).attr("hubtype");
-            var hubId = $(target).attr("hubid");
-            // console.log( ">>>> allhubs: ", cm_Globals.hubs );
-            // console.log( ">>>> hubindex: ", hubindex, " hubId: ", hubId, defhost) ;
-            // alert("hubType = " + hubType);
-            // var realhubType = $("#hubdiv_" + hubId).children("select").val();
-            // alert("realhubType= " + realhubType);
-            if ( hubId==="new" ) {
-                $("input.hubauth").removeClass("hidden");
-                $("input.hubdel").addClass("hidden");
-                $("#newthingcount").html("Fill out the fields below to add a New hub");
-            } else if ( hubId==="-1" ) {
-                $("#newthingcount").html("The \"null\" hub for things not associated with a hub. It cannot be altered or authorized.");
-                $("input.hubdel").addClass("hidden");
-                $("input.hubauth").addClass("hidden");
-            } else {
-                $("#newthingcount").html("You can re-authorize the existing " + hubType + " hub/account here.");
-                $("input.hubauth").removeClass("hidden");
-                $("input.hubdel").removeClass("hidden");
-                var hubTarget = $("#authhubwrapper").find("input[name='hubhost']");
-                hubTarget.val(defhost);
-            }
-            $("div.authhub").each(function() {
-                if ( !$(this).hasClass("hidden") ) {
-                    $(this).addClass("hidden");
-                }
-            });
-            $(target).removeClass("hidden");
-
-            // populate the clientSecret field that could have funky characters
-            // if ( hubindex ) {
-            //     var funkysecret = $("#csecret_"+hubindex).val();
-            //     $(target + " div.fixClientSecret >input").val(funkysecret);
-            // }
-
+            var hubId = $(this).val();
+            setupAuthHub(hubId);
             evt.stopPropagation(); 
         });
 
-        // set the hub host based on the type
+        // set a new hub to authorize based on the type
+        // note that types can only be set when a new hub is being added
         $("select[name='hubtype']").on('change', function(evt) {
             var hubType = $(this).val();
-            var hubindex = $("#pickhub").val();
-            var hideid = $("#hideid_"+hubindex);
-            // var hubTarget = $(this).parent().find("input[name='hubhost']");
-            var hubTarget = $("#authhubwrapper").find("input[name='hubhost']");
-            var hubNameTarget = $(this).parent().parent().find("input[name='hubname']");
-            var defhub = findHub(hubindex,"id");
-            var defhost = defhub["hubhost"];
-            // console.log("hubs: ", cm_Globals.hubs);
+            var hideaccess = $("#hideaccess_hub");
+            var hubTarget = $("input[name='hubhost']");
+            var hubhost = hubTarget.val();
+            var hubname = $("input[name='hubname']").val();
+            var clientid = $("input[name='clientid']").val();
+            var clientsecret = $("input[name='clientsecret']").val();
+            var useraccess = $("input[name='useraccess']").val();
+            var userendpt = $("input[name='userendpt']").val();
+            var hubtimer = $("input[name='hubtimer']").val();
+            var hub = {id: 0, hubhost: "", hubname: hubname, clientid: clientid, clientsecret: clientsecret, useraccess: useraccess, userendpt: userendpt, hubid: "new",
+                       hubtimer: hubtimer, hubaccess: "", hubendpt: "", hubrefresh: ""};
+            var clientLabel = "Client ID: ";
+            var secretLabel = "Client Secret: ";
+            $("#inp_hubid").hide();
+            hideaccess.hide();
 
-            if ( hubType==="SmartThings" || hubType==="NewSmartThings" ) {
-                hideid.addClass("hidden");
-                hubTarget.val("https://api.smartthings.com");
+            if ( hubType==="NewSmartThings" ) {
+                hub.hubhost = "https://api.smartthings.com";
+                hub.hubtimer = 0;
+                hub.hubname = "SmartThings Home";
                 hubTarget.prop("disabled", true);
-                hubNameTarget.val("SmartThings Home");
-                $("#newthingcount").html("Ready to authorize your new SmartThings API account. You must provide info in housepanel.cfg for this");
+                $("#inp_hubid").show();
+                $("#newthingcount").html("Ready to authorize your new SmartThings API account. Provide alias for ST sink in the hub ID field, or skip to disable real-time updates");
             } else if ( hubType==="Sonos" ) {
-                hideid.removeClass("hidden");
-                hubTarget.val("https://api.sonos.com");
-                $(hubNameTarget).val("Sonos");
+                hub.hubhost = "https://api.sonos.com";
+                hub.hubtimer = 0;
+                hub.hubname = "Sonos";
                 hubTarget.prop("disabled", true);
                 $("#newthingcount").html("Ready to authorize your Sonos account. The hub name can be set to anything or the name Sonos will be assigned.");
             } else if ( hubType==="Hubitat" ) {
-                hideid.removeClass("hidden");
-                hubTarget.val("https://oauth.cloud.hubitat.com");
-                hubNameTarget.val("");
+                hub.hubhost = "https://oauth.cloud.hubitat.com";
+                hub.hubname = "Hubitat Home";
                 hubTarget.prop("disabled", false);
-                $("#newthingcount").html("Ready to authorize your Hubitat hub. The hub ID and name will be obtained automatically.");
+                hideaccess.show();
+                $("#newthingcount").html("Ready to authorize your Hubitat hub. For local use, change Hub API above to your hub's local IP. The hub name will be obtained automatically.");
             } else if ( hubType==="Ford" || hubType==="Lincoln" ) {
-                hideid.removeClass("hidden");
-                hubTarget.val("https://fordconnect.cv.ford.com");
+                hub.hubhost = "https://dah2vb2cprod.b2clogin.com/914d88b1-3523-4bf6-9be4-1b96b4f6f919";
+                hub.hubtimer = 0;
+                hub.hubname = hubType + " Vehicle";
                 hubTarget.prop("disabled", true);
-                hubNameTarget.val("");
-                $("#newthingcount").html("Ready to authorize your Ford or Lincoln vehicle. Be sure to provide a valid App ID");
+                $("#inp_hubid").show();
+                $("#newthingcount").html("Ready to authorize your Ford or Lincoln vehicle. Be sure to provide a valid App ID in the Hub Id field");
             } else if ( hubType==="ISY" ) {
-                hideid.removeClass("hidden");
-                hubTarget.val("https://192.168.4.4:8443/rest");
-                hubNameTarget.val("");
+                hub.hubhost = "https://192.168.xxx.yyy:8443/rest";
+                hub.hubname = "ISY Home";
                 hubTarget.prop("disabled", false);
-                $("#newthingcount").html("Ready to authorize your Universal Devices ISY account. Client ID is your ISY username, Client Secret is your ISY password.");
+                clientLabel = "Username: ";
+                secretLabel = "Password: ";
+                $("#newthingcount").html("To authorize your Universal Devices ISY account, enter your ISY username and password and set the IP last two digits.");
             } else {
-                hideid.removeClass("hidden");
-                // hubTarget.prop("disabled", false);
-                hubTarget.val("");
+                hideaccess.show();
+                hubTarget.prop("disabled", false);
             }
-        });
-
-        $("select[name='hubtype']").each( function(i) {
-            var hubType = $(this).val();
-            var hubindex = $("#pickhub").val();
-            var hideid = $("#hideid_"+hubindex);
-            var hubTarget = $(this).parent().find("input[name='hubhost']");
-            if ( hubType=== "NewSmartThings" ) {
-                hideid.addClass("hidden");
-                hubTarget.val("https://api.smartthings.com");
-                // hubTarget.prop("disabled", true);
-            } else if ( hubType=== "Sonos" ) {
-                hideid.addClass("hidden");
-                hubTarget.val("https://api.sonos.com");
-                // hubTarget.prop("disabled", true);
-            } else if ( hubType==="Hubitat" ) {
-                hideid.removeClass("hidden");
-                hubTarget.val("https://oauth.cloud.hubitat.com");
-                // hubTarget.prop("disabled", false);
-            } else if ( hubType==="Ford" || hubType==="Lincoln" ) {
-                hideid.removeClass("hidden");
-                hubTarget.val("https://fordconnect.cv.ford.com");
-                // hubTarget.prop("disabled", true);
-            } else if ( hubType==="ISY" ) {
-                hideid.removeClass("hidden");
-                // hubTarget.val("http://192.168.x.x");
-                // hubTarget.prop("disabled", false);
-            } else {
-                hideid.removeClass("hidden");
-                hubTarget.val("");
-                // hubTarget.prop("disabled", false);
-            }
+            $("#labelclientId").html(clientLabel);
+            $("#labelclientSecret").html(secretLabel);
+            $("input[name='hubindex']").val(hub.id);
+            $("input[name='hubhost']").val(hub.hubhost);
+            $("input[name='hubname']").val(hub.hubname);
+            $("input[name='clientid']").val(hub.clientid);
+            $("input[name='clientsecret']").val(hub.clientsecret);
+            $("input[name='useraccess']").val(hub.useraccess);
+            $("input[name='userendpt']").val(hub.userendpt);
+            $("input[name='hubid']").val(hub.hubid);
+            $("input[name='hubtimer']").val(hub.hubtimer);
+            $("input[name='hubaccess']").val(hub.hubaccess);
+            $("input[name='hubendpt']").val(hub.hubendpt);
+            $("input[name='hubrefresh']").val(hub.hubrefresh);
         });
         
         // this clears out the message window
@@ -2302,9 +2276,7 @@ function setupButtons() {
         // add on one time info from user
         $("input.hubauth").click(function(evt) {
             try {
-                // var hubId = $(this).attr("hubid");
-                var hubindex = $(this).attr("hubindex");
-                var formData = formToObject("hubform_"+hubindex);
+                var formData = formToObject("hubform");
             } catch(err) {
                 evt.stopPropagation(); 
                 alert("Something went wrong when trying to authenticate your hub...\n" + err.message);
@@ -2317,9 +2289,12 @@ function setupButtons() {
             // make an api call and process results
             // some hubs return devices on server and pushes results later
             // others return a request to start an OATH redirection flow
-            var pname = $("#showversion span#infoname").html();
             formData["api"] = "hubauth";
-            formData.pname = pname;
+            formData.hubtype = $("select[name='hubtype']").val();
+            formData.hubhost = $("input[name='hubhost']").val();
+
+            // console.log(">>>> formData: ", formData);
+
             $.post(cm_Globals.returnURL, formData,  function(presult, pstatus) {
                 // console.log("hubauth: ", presult);
                 // alert("wait... presult.action = " + presult.action);
@@ -2377,6 +2352,7 @@ function setupButtons() {
                         $("#newthingcount").html(presult);
                     } else {
                         $("#newthingcount").html("Something went wrong with hub auth request");
+                        console.log(">>>> error result: ", presult);
                     }
                 }
             });
@@ -2385,35 +2361,34 @@ function setupButtons() {
         
         // this feature works but not on the last hub
         $("input.hubdel").click(function(evt) {
-            var hubnum = $(this).attr("hubnum");
-            var hubId = $(this).attr("hubid");
-            var hubindex = $(this).attr("hubindex");
+            var hubId = $("input[name='hubid']").val();
+            if ( !hubId || hubId==="-1" ) return;
+            var hub = findHub(hubId, "hubid");
+            if ( !hub ) return;
+
+            var hubname = hub.hubname;
+            var hubindex = hub.id;
             var bodytag = "body";
             var pname = $("#showversion span#infoname").html();
             var pos = {position: "absolute", top: 100, left: 100, 
                        width: 600, height: 120, border: "4px solid"};
-            // alert("Remove request for hub: " + hubnum + " hubID: " + hubId );
+            var msg = "Remove hub: " + hubname + "<br>hubID: " + hubId + "? <br><br>Are you sure?";
 
-            createModal("modalhub","Remove Hub #" + hubnum + " hubID: " + hubId + "? <br>Are you sure?", bodytag , true, pos, function(ui, content) {
+            createModal("modalhub", msg, bodytag , true, pos, function(ui, content) {
                 var clk = $(ui).attr("name");
                 if ( clk==="okay" ) {
                     // remove it from the system
                     $.post(cm_Globals.returnURL, 
                         {useajax: "hubdelete", userid: cm_Globals.options.userid, pname: pname, hubid: hubId, id: hubindex},
                         function (presult, pstatus) {
-                            if (pstatus==="success" && !presult.startsWith("error")) {
+                            if (pstatus==="success" && typeof presult === "string") {
                                 $("#newthingcount").html(presult);
-
                                 setTimeout(function() {
                                     var location = cm_Globals.returnURL + "/reauth";
                                     window.location.href = location;
                                 }, 3000);
-
-                                // $("#authhub_"+hubindex).remove();
-                                // $("#hubopt_"+hubindex).remove();
-                                // $("#newthingcount").html(presult);
                             } else {
-                                $("#newthingcount").html("error - could not remove hub #" + hubnum + " hub ID: " + hubId);
+                                $("#newthingcount").html("error - could not remove hub: " + hubname + " hub ID: " + hubId);
                                 // console.log(presult);
                             }
                         }
@@ -2425,7 +2400,80 @@ function setupButtons() {
         });
     
     }
+}
 
+function setupAuthHub(hubId) {
+    var hub = findHub(hubId,"hubid");
+    var hubindex = hub.id;
+
+    // replace all the values
+    $("input[name='hubindex']").val(hubindex);
+    $("input[name='hubhost']").val(hub.hubhost);
+    $("input[name='clientid']").val(hub.clientid);
+    $("input[name='clientsecret']").val(hub.clientsecret);
+    $("input[name='useraccess']").val(hub.useraccess);
+    $("input[name='userendpt']").val(hub.userendpt);
+    $("input[name='hubname']").val(hub.hubname);
+    $("input[name='hubid']").val(hub.hubid);
+    $("input[name='hubtimer']").val(hub.hubtimer);
+    $("input[name='hubaccess']").val(hub.hubaccess);
+    $("input[name='hubendpt']").val(hub.hubendpt);
+    $("input[name='hubrefresh']").val(hub.hubrefresh);
+    $("select[name='hubtype']").val(hub.hubtype);
+    var clientLabel = "Client ID: ";
+    var secretLabel = "Client Secret: ";
+    var hideaccess = $("#hideaccess_hub");
+    $("#inp_hubid").hide();
+    hideaccess.hide();
+    $("#inp_clientid").show();
+    $("#inp_clientsecret").show();
+
+    // console.log( ">>>> hubindex: ", hubindex, " hubId: ", hubId, " hub: ", hub ) ;
+    if ( hubId==="new" ) {
+        $("select[name='hubtype']").val("Hubitat").prop("disabled", false);
+        $("input[name='hubhost']").prop("disabled", false);
+        $("input[name='hubname']").prop("disabled", false);
+        $("input[name='hubhost']").val("https://oauth.cloud.hubitat.com");
+        $("input[name='hubname']").val("Hubitat Home");
+        $("input.hubauth").removeClass("hidden");
+        $("input.hubdel").addClass("hidden");
+        hideaccess.show();
+        $("#newthingcount").html("Fill out the fields below, starting with selecting a hub type to add a new hub");
+    } else if ( hubId==="-1" ) {
+        $("select[name='hubtype']").prop("disabled", true);
+        $("input[name='hubhost']").prop("disabled", true);
+        $("input[name='hubname']").prop("disabled", true);
+        $("input.hubdel").addClass("hidden");
+        $("input.hubauth").addClass("hidden");
+        $("#inp_clientid").hide();
+        $("#inp_clientsecret").hide();
+        hideaccess.hide();
+        $("#newthingcount").html("This \"hub\" is reserved for things not associated with a real hub. It cannot be altered, removed, or authorized. " +
+                                 "You can change the Refresh timer before returning to main page to change how often special tiles get updated."
+        );
+    } else {
+        // existing hubs, don't allow type to be changed
+        $("select[name='hubtype']").prop("disabled", true);
+        $("input[name='hubhost']").prop("disabled", false);
+        $("input[name='hubname']").prop("disabled", false);
+        $("input.hubauth").removeClass("hidden");
+        $("input.hubdel").removeClass("hidden");
+        $("#newthingcount").html("Re-authorize or delete the " + hub.hubname + " (" + hub.hubtype + ") hub/account here. " +
+                                 "You can change the Refresh timer before returning to main page to change how often " + hub.hubtype + " tiles get updated."
+        );
+        if ( hub.hubtype === "ISY" ) {
+            clientLabel = "Username: ";
+            secretLabel = "Password: ";    
+        }
+        if ( hub.hubtype === "Ford" ) {
+            $("#inp_hubid").show();
+        }
+        if ( hub.hubtype === "Hubitat" ) {
+            hideaccess.show();
+        }
+    }
+    $("#labelclientId").html(clientLabel);
+    $("#labelclientSecret").html(secretLabel);
 }
 
 function addEditLink() {
@@ -3268,6 +3316,9 @@ function setupTimer(timertype, timerval, hub) {
                     var aid = $(this).attr("aid");
                     var bid = $(this).attr("bid");
                     var thetype = $(this).attr("type");
+
+                    console.log(">>>> setupTimer: ", tileid, aid, bid, thetype, hubid, that[1] );
+
                     refreshTile(tileid, aid, bid, thetype, hubid);
                 });
 

@@ -1,4 +1,6 @@
 const devhistory = `
+3.057   Complete rewite of hubauth function to simplify and clarify user experience
+3.056   Minor bugfix for ISY to close websocket before creating new ones
 3.055   Fix timer for clocks and tile edits for linked items
 3.054   Put minor ISY nodes in isysub type and other cleanup and bug fixes
 3.053   Added polling option for Sonos and default tiles and shade query bugfix

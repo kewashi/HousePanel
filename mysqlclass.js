@@ -13,7 +13,7 @@ exports.sqlDatabase = class sqlDatabase {
         this.recentResults;
         this.recentRequest = "";
         this.error;
-        this.dbtype = (dbtype==="mysql" || dbtype==="sqlite") ? dbtype : "mysql";
+        this.dbtype = (dbtype==="mysql" || dbtype==="sqlite") ? dbtype : "sqlite";
         // var hpcrt = fs.readFileSync(__dirname + 'rootCA.crt');
 
         this.config = {
