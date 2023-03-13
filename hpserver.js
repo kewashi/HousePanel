@@ -5006,7 +5006,8 @@ function getNewPage(userid, pname, skin, configoptions, cnt, roomid, roomname, k
         }
 
         // construct the old all things equivalent but add the unique thingid and roomid fields
-        var thesensor = {id: id, name: thingname, thingid: thingid, roomid: roomid, type: swtype, hubnum: hubid, hubindex: hubindex, hubtype: hubtype,
+        var thesensor = {id: id, name: thingname, thingid: thingid, roomid: roomid, type: swtype, 
+                         hubnum: hubid, hubindex: hubindex, hubtype: hubtype,
                          hint: hint, refresh: refresh, value: pvalue};
 
         // if our thing is an object show it
@@ -11549,11 +11550,13 @@ function apiCall(user, body, protocol, req, res) {
                         var configoptions = results[0];
                         var device = results[1];
                         var pvalue = decodeURI2(device.pvalue);
-                        // console.log(">>>> sensor: ", device);
                         // var device = JSON.parse(decodeURI(body.value));
-                        var thesensor = {id: swid, name: device.name, thingid: thingid, roomid: 0, type: device.devicetype, hubnum: "-1", hubindex: 0, hubtype: "None", 
-                                        hint: device.hint, refresh: device.refresh, value: pvalue};
+                        
+                        var thesensor = {id: swid, name: device.name, thingid: thingid, roomid: 0, 
+                                         type: device.devicetype, hubnum: "-1", hubindex: device.hubid, hubtype: "None", 
+                                         hint: device.hint, refresh: device.refresh, value: pvalue};
                         var customname = swattr;
+                        // console.log(">>>> sensor: ", thesensor);
                         return makeThing(userid, pname, configoptions, 0, tileid, thesensor, "wysiwyg", 0, 0, 999, customname, "te_wysiwyg", null);
                     }).catch(reason => {
                         console.log( (ddbg()), reason);

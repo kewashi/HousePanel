@@ -1,10 +1,10 @@
 /* Tile Editor for HousePanel
  * 
- * Original version by @nitwit on SmartThings forum
- * heavily modified by Ken Washington @kewashi on the forum
+ * Inspired by @nitwit on SmartThings forum
+ * rewritten by Ken Washington @kewashi on the forum
  * 
  * Designed for use only with HousePanel
- * (c) Ken Washington 2017 - 2020
+ * (c) Ken Washington 2017 - 2023
  * 
  */
 var et_Globals = {};
@@ -13,26 +13,14 @@ var priorIcon = "none";
 var defaultOverlay = "block";
 var tileCount = 0;
 var DEBUGte = false;
-// const fs = require('fs');
 
-// popup dialog box now uses createModal
-//       editTile(userid, roomid,  roomname, "page",   roomname,   0,   0,   "",         0,      "None",  "None",     null);
 function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thingclass, hubid, hubindex, hubType, customname, htmlcontent) {  
-    // var returnURL;
-    // try {
-    //     returnURL = $("input[name='returnURL']").val();
-    // } catch(e) {
-    //     returnURL = "housepanel.php";
-    // }
     var returnURL = cm_Globals.returnURL;
-    
-    if ( str_type!=="page") {
-        et_Globals.aid = aid;
-        et_Globals.id = bid;
-    }
+    et_Globals.aid = aid;
+    et_Globals.id = bid;
     et_Globals.hubid = hubid;
     et_Globals.hubindex = hubindex;
-    et_Globals.hubType = hubType || "None";
+    et_Globals.hubType = hubType;
     et_Globals.pagename = pagename;
     et_Globals.userid = userid;
     et_Globals.thingid = thingid;
@@ -50,12 +38,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
         saveCSSFile(str_type, thingindex, "", false);
     }
 
-
-    // * DIALOG START *	
-    var dialog_html = "<div id='tileDialog' class='tileDialog' str_type='" + 
-                      str_type + "' thingindex='" + thingindex +"' >";
-	
-    // header
+    var dialog_html = "<div id='tileDialog' class='tileDialog' str_type='" + str_type + "' thingindex='" + thingindex +"' >";
     if ( str_type==="page" ) {
         dialog_html += "<div class='editheader' id='editheader'>Editing Page#" + et_Globals.hubid + 
                    " Name: " + thingindex + "</div>";
@@ -88,7 +71,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
             }
         );
         
-    } else if ( htmlcontent && false ) {
+    } else if ( htmlcontent && false) {
         htmlcontent = "<div class=\"" + thingclass + "\" id='te_wysiwyg'>" + htmlcontent + "</div>";
     } else {
         // put placeholder and populate after Ajax finishes retrieving true content
@@ -197,7 +180,7 @@ function getOnOff(str_type, subid, val) {
     var onoff;
     var hubType = et_Globals.hubType;
 
-    console.log(">>>> subid: ", subid);
+    // console.log(">>>> subid: ", subid);
 
     // handle the cases for custom tiles that could have any subid starting with valid names
     if ( subid.startsWith("switch" ) ) {
@@ -280,8 +263,7 @@ function getOnOff(str_type, subid, val) {
         }
     }
     onoff.push("");
-
-    console.log(" >>>> onoff: ", onoff);
+    // console.log(" >>>> onoff: ", onoff);
     
     return onoff;
 }
@@ -296,12 +278,6 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
         scope = $("#scopeEffect").val();
     }
 
-    // dh += "<option value=\"thistile\"" + seltile + ">This tile, All pages</option>";       // old mode 0
-    // dh += "<option value=\"thispage\"" + selpage + ">This tile, This page</option>";       // old mode 0 w/ floorplan
-    // dh += "<option value=\"typetile\">All " + str_type + " tiles, All pages</option>";     // old mode 1
-    // dh += "<option value=\"typepage\">All " + str_type + " tiles, This page</option>";     // new mode
-    // dh += "<option value=\"alltile\">All tiles, All pages</option>";                       // old mode 2
-    // dh += "<option value=\"allpage\">All tiles This page</option>";                        // new mode
     function getScope() {
         // start with alltile and allpage assumptions
         var tg = "div.thing";

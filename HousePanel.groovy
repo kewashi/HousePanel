@@ -759,7 +759,8 @@ def getPower(swid, item=null) {
 
 def getMyMode(swid, item=null) {
     def curmode = location.getCurrentMode()
-    def resp = [ name: "Mode ${swid}", sitename: location.getName(), themode: curmode?.getName() ];
+//    def resp = [ name: "Mode ${swid}", sitename: location.getName(), themode: curmode?.getName() ];
+    def resp = [ name: "Mode", sitename: location.getName(), themode: curmode?.getName() ];
     def allmodes = location.getModes()
     for (defcmd in allmodes) {
         def modecmd = defcmd.getName()

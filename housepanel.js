@@ -438,6 +438,36 @@ $(document).ready(function() {
                 return false;
             }
         });
+    } else if ( pagename==="info" ) {
+        $("#listhistory").on('click', function() {
+            if ( $("#showhistory").hasClass("hidden") ) {
+                $("#showhistory").removeClass("hidden");
+                $(this).html("Dev History");
+            } else {
+                $("#showhistory").addClass("hidden");
+                $(this).html("Show Dev History");
+            }
+        });
+
+        $("#listthing").on('click', function() {
+            if ( $("#showthing").hasClass("hidden") ) {
+                $("#showthing").removeClass("hidden");
+                $(this).html("Authorized Things");
+            } else {
+                $("#showthing").addClass("hidden");
+                $(this).html("Show Authorized Things");
+            }
+        });
+
+        $("#listcustom").on('click', function() {
+            if ( $("#showcustom").hasClass("hidden") ) {
+                $("#showcustom").removeClass("hidden");
+                $(this).html("Customizations");
+            } else {
+                $("#showcustom").addClass("hidden");
+                $(this).html("Show Customizations");
+            }
+        });
     }
     
     // handle button setup for all pages
@@ -468,14 +498,26 @@ $(document).ready(function() {
         });
     }
 
+    if ( $("button.infobutton") ) {
+        $("button.infobutton").addClass("disabled").prop("disabled", true);
+        setTimeout(function() {
+            $("button.infobutton").removeClass("disabled").prop("disabled", false);
+        }, 200);
+            
+        $("button.infobutton").on('click', function() {
+            // location.reload(true);
+            if ( pagename=="auth" ) {
+                var defhub = $("#pickhub").val();
+                var hubtimer = $("input[name='hubtimer']").val();
+                var hubindex = $("input[name='hubindex']").val();
+                $.post(cm_Globals.returnURL, 
+                       {useajax: "setdefhub", userid: cm_Globals.options.userid, hubid: defhub, value: defhub, id: hubindex, attr: hubtimer}
+                );
+            }
+            window.location.href = cm_Globals.returnURL;
+        });
+    }
     
-    // handle interactions for the options page
-    // if (pagename==="options") {
-    //     getOptions();
-    //     setupCustomCount();
-    //     setupFilters();
-    // }
-
     // handle interactions for main page
     // note that setupFilters will be called when entering edit mode
     if ( pagename==="main" ) {
@@ -1865,11 +1907,10 @@ function execButton(buttonid) {
 
     } else if ( buttonid==="dologin") {
 
-        // if ( !checkLogin() ) { return; }
+        if ( !checkLogin() ) { return; }
 
         var genobj = formToObject("loginform");
-
-        console.log(genobj);
+        // console.log(genobj);
 
         dynoPost("dologin", genobj, function(presult, pstatus) {
             if ( pstatus === "success" && presult && typeof presult === "object" ) {
@@ -2049,55 +2090,7 @@ function checkInpval(field, val, regexp) {
 
 function setupButtons() {
 
-    // if ( $("div.formbutton") ) {
-    //     $("div.formbutton").on('click', function(evt) {
-    //         var buttonid = $(this).attr("id");
-    //         var textname = $(this).text();
-
-    //         // do nothing for name field
-    //         if ( textname === "name" ) {
-    //             return;
-    //         }
-
-    //         if ( $(this).hasClass("confirm") ) {
-    //             var pos = {top: 100, left: 100};
-    //             createModal("modalexec","Perform " + textname + " operation... Are you sure?", "body", true, pos, function(ui, content) {
-    //                 var clk = $(ui).attr("name");
-    //                 if ( clk==="okay" ) {
-    //                     execButton(buttonid);
-    //                     evt.stopPropagation();
-    //                 }
-    //             });
-    //         } else {
-    //             execButton(buttonid);
-    //             evt.stopPropagation();
-    //         }
-    //     });
-    // }
-
-    // disable cancel auth button when page first loads
-    // and turn it on after a seconds which gives time for hubs to load
-    if ( $("button.infobutton") ) {
-        $("button.infobutton").addClass("disabled").prop("disabled", true);
-        setTimeout(function() {
-            $("button.infobutton").removeClass("disabled").prop("disabled", false);
-        }, 200);
-            
-        $("button.infobutton").on('click', function() {
-            // location.reload(true);
-            if ( pagename=="auth" ) {
-                var defhub = $("#pickhub").val();
-                var hubtimer = $("input[name='hubtimer']").val();
-                var hubindex = $("input[name='hubindex']").val();
-                $.post(cm_Globals.returnURL, 
-                       {useajax: "setdefhub", userid: cm_Globals.options.userid, hubid: defhub, value: defhub, id: hubindex, attr: hubtimer}
-                );
-            }
-            window.location.href = cm_Globals.returnURL;
-        });
-    }
-
-    if ( pagename==="main" && !cm_Globals.disablepub ) {
+    if ( pagename==="main" ) {
 
         // prevent mode from changing when editing a tile
         $("div.modeoptions").on("click","input.radioopts",function(evt){
@@ -2120,38 +2113,6 @@ function setupButtons() {
                     closeModal("modalexec");
                 }
             });
-        });
-
-    } else if ( pagename==="info" ) {
-        
-        $("#listhistory").on('click', function() {
-            if ( $("#showhistory").hasClass("hidden") ) {
-                $("#showhistory").removeClass("hidden");
-                $(this).html("Dev History");
-            } else {
-                $("#showhistory").addClass("hidden");
-                $(this).html("Show Dev History");
-            }
-        });
-
-        $("#listthing").on('click', function() {
-            if ( $("#showthing").hasClass("hidden") ) {
-                $("#showthing").removeClass("hidden");
-                $(this).html("Authorized Things");
-            } else {
-                $("#showthing").addClass("hidden");
-                $(this).html("Show Authorized Things");
-            }
-        });
-
-        $("#listcustom").on('click', function() {
-            if ( $("#showcustom").hasClass("hidden") ) {
-                $("#showcustom").removeClass("hidden");
-                $(this).html("Customizations");
-            } else {
-                $("#showcustom").addClass("hidden");
-                $(this).html("Show Customizations");
-            }
         });
 
     } else if ( pagename==="options") {
