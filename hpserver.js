@@ -4590,17 +4590,17 @@ function getAuthPage(user, configoptions, hubs, hostname, rmsg) {
         // or if a reauth is requested or when converting old passwords
         $tc += "<div class=\"greeting\">";
 
-        $tc +="<p>This is where you link a Hubitat or ISY hub to " +
+        $tc +="<p>This is where you link a hub to " +
                 "HousePanel to gain access to your smart home devices. " +
-                "Sonos hubs are also supported but updates requires polling set on the Options page. " +
-                "Ford and Lincoln vehicles are also supported if you have a Ford-Connect API developer account. " +
+                "ISY, Hubitat, and Sonos hubs are supported. " +
+                "Sonos hubs require polling to be set up on the Options page to be dynamically updated. " +
                 "You can link any number and combination of hubs. " + 
                 "To authorize Hubitat and Sonos hubs you must have " +
                 "Client ID and Client Secret values to start the OAUTH flow process. " +
-                "For Hubitat hubs you can skip OAUTH flow by providing a useraccess and userendpt if they are known. " +
-                "For ISY hubs enter your username and password in the fields shown, " +
+                "For Hubitat hubs you can skip OAUTH flow by providing useraccess and userendpt if they are known from a prior successful OAUTH flow. " +
+                "ISY hubs require you to enter your username and password in the fields shown below, " +
                 "and enter the IP of your hub in the Host API Url field " +
-                "using format https://xxx.xxx.xxx.xxx:8443  <br>ISY hubs do not use OAUTH flows. " +
+                "using format https://xxx.xxx.xxx.xxx:8443" +
                 // "Refresh timer is in seconds and is used to reload " +
                 // "a hub's devices every so often. This is optional for most hubs but required for hubs that have a refresh token. " +
                 // "For such cases the Refresh timer field will be filled in automatically in the OAUTH flow process." +
@@ -10680,7 +10680,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
             if ( usertype > 0 ) {
                 tc +='<div id="showoptions" class="formbutton">Options</div>';
                 tc +='<div id="refreshpage" class="formbutton">Refresh</div>';
-                tc +='<div id="userauth" class="formbutton confirm">Hub Auth</div>';
+                tc +='<div id="userauth" class="formbutton">Hub Auth</div>';
                 tc +='<div id="showid" class="formbutton">Show Info</div>';
                 tc +='<div id="toggletabs" class="formbutton">Hide Tabs</div>';
                 tc +='<div id="blackout" class="formbutton">Blackout</div>';

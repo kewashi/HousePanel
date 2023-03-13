@@ -2452,12 +2452,16 @@ function setupAuthHub(hubId) {
         if ( hub.hubtype === "ISY" ) {
             clientLabel = "Username: ";
             secretLabel = "Password: ";    
-        }
-        if ( hub.hubtype === "Ford" ) {
+        } else if ( hub.hubtype === "Ford" || hub.hubtype === "Lincoln" ) {
             $("#inp_hubid").show();
-        }
-        if ( hub.hubtype === "Hubitat" ) {
+            $("input[name='hubhost']").prop("disabled", true);
+        } else if ( hub.hubtype === "Hubitat" ) {
             hideaccess.show();
+        } else if ( hub.hubtype === "Sonos" ) {
+            $("input[name='hubhost']").prop("disabled", true);
+        } else if ( hub.hubtype === "NewSmartThings" ) {
+            $("#inp_hubid").show();
+            $("input[name='hubhost']").prop("disabled", true);
         }
     }
     $("#labelclientId").html(clientLabel);

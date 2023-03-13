@@ -1,4 +1,5 @@
 const devhistory = `
+3.060   More bug fixes with hub auth setup and code clean up
 3.059   Tile editor cleanup and fix buttons that return to main page
 3.058   Fix login issue
 3.057   Complete rewite of hubauth function to simplify and clarify user experience
