@@ -181,8 +181,7 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
                         // var allthings = cm_Globals.allthings;
                         // var thing = allthings[idx];
                         var thing = cm_Globals.devices[tileid];
-                        // console.log(">>>> thing: ", thing);
-                        $("#cm_subheader").html(thing.devicename);
+                        $("#cm_subheader").html(thing.name);
                         initCustomActions();
                         handleBuiltin(cm_Globals.defaultclick);
                     } catch (e) {
