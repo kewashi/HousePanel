@@ -1,4 +1,5 @@
 const devhistory = `
+3.058   Fix login issue
 3.057   Complete rewite of hubauth function to simplify and clarify user experience
 3.056   Minor bugfix for ISY to close websocket before creating new ones
 3.055   Fix timer for clocks and tile edits for linked items

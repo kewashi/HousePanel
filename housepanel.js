@@ -429,7 +429,7 @@ $(document).ready(function() {
     if ( pagename==="main" || pagename==="auth" || pagename==="options" ) {
 
         getOptions();
-        // getHubs();
+        getHubs();
         
         // disable return key
         $("body").off("keypress");
@@ -441,8 +441,33 @@ $(document).ready(function() {
     }
     
     // handle button setup for all pages
-    getHubs();
     // setupButtons();
+    if ( $("div.formbutton") ) {
+        $("div.formbutton").on('click', function(evt) {
+            var buttonid = $(this).attr("id");
+            var textname = $(this).text();
+
+            // do nothing for name field
+            if ( textname === "name" ) {
+                return;
+            }
+
+            if ( $(this).hasClass("confirm") ) {
+                var pos = {top: 100, left: 100};
+                createModal("modalexec","Perform " + textname + " operation... Are you sure?", "body", true, pos, function(ui, content) {
+                    var clk = $(ui).attr("name");
+                    if ( clk==="okay" ) {
+                        execButton(buttonid);
+                        evt.stopPropagation();
+                    }
+                });
+            } else {
+                execButton(buttonid);
+                evt.stopPropagation();
+            }
+        });
+    }
+
     
     // handle interactions for the options page
     // if (pagename==="options") {
@@ -1840,9 +1865,11 @@ function execButton(buttonid) {
 
     } else if ( buttonid==="dologin") {
 
-        if ( !checkLogin() ) { return; }
+        // if ( !checkLogin() ) { return; }
 
         var genobj = formToObject("loginform");
+
+        console.log(genobj);
 
         dynoPost("dologin", genobj, function(presult, pstatus) {
             if ( pstatus === "success" && presult && typeof presult === "object" ) {
@@ -2022,31 +2049,31 @@ function checkInpval(field, val, regexp) {
 
 function setupButtons() {
 
-    if ( $("div.formbutton") ) {
-        $("div.formbutton").on('click', function(evt) {
-            var buttonid = $(this).attr("id");
-            var textname = $(this).text();
+    // if ( $("div.formbutton") ) {
+    //     $("div.formbutton").on('click', function(evt) {
+    //         var buttonid = $(this).attr("id");
+    //         var textname = $(this).text();
 
-            // do nothing for name field
-            if ( textname === "name" ) {
-                return;
-            }
+    //         // do nothing for name field
+    //         if ( textname === "name" ) {
+    //             return;
+    //         }
 
-            if ( $(this).hasClass("confirm") ) {
-                var pos = {top: 100, left: 100};
-                createModal("modalexec","Perform " + textname + " operation... Are you sure?", "body", true, pos, function(ui, content) {
-                    var clk = $(ui).attr("name");
-                    if ( clk==="okay" ) {
-                        execButton(buttonid);
-                        evt.stopPropagation();
-                    }
-                });
-            } else {
-                execButton(buttonid);
-                evt.stopPropagation();
-            }
-        });
-    }
+    //         if ( $(this).hasClass("confirm") ) {
+    //             var pos = {top: 100, left: 100};
+    //             createModal("modalexec","Perform " + textname + " operation... Are you sure?", "body", true, pos, function(ui, content) {
+    //                 var clk = $(ui).attr("name");
+    //                 if ( clk==="okay" ) {
+    //                     execButton(buttonid);
+    //                     evt.stopPropagation();
+    //                 }
+    //             });
+    //         } else {
+    //             execButton(buttonid);
+    //             evt.stopPropagation();
+    //         }
+    //     });
+    // }
 
     // disable cancel auth button when page first loads
     // and turn it on after a seconds which gives time for hubs to load
