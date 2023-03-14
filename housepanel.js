@@ -199,8 +199,6 @@ function getOptions() {
                         priorOpmode = "operate";
                         setCookie("opmode", priorOpmode);
                     }
-
-                    // console.log(">>>> getOptions returned: ", presult, " opmode: ", priorOpmode);
                 } else {
                     console.log("error - failure reading config options from database for user = " + userid);
                 }
@@ -316,9 +314,7 @@ $(document).ready(function() {
                 setCookie('defaultTab', defaultTab);
                 try {
                     $("#"+defaultTab).click();
-                } catch (f) {
-                    console.log(">>>> error retrieving default Tab cookie:", f);
-                }
+                } catch (f) { }
             }
         }
 
@@ -586,8 +582,6 @@ function initWebsocket() {
             var port = webSocketPort + parseInt(portnum);
             webSocketUrl += ":" + port;
             $("#infoport").html("#"+portnum);
-            // alert("webSocketUrl: " + webSocketUrl);
-            // console.log(">>>> port:", port, " webSocketUrl:", webSocketUrl);
             setupWebsocket(userid, port, webSocketUrl);
         }
     } catch(err) {
@@ -833,7 +827,7 @@ function getMaxZindex(panel) {
         var zindex = $(this).css("z-index");
         if ( zindex ) {
             zindex = parseInt(zindex, 10);
-            if ( !isNaN(zindex) && zindex > zmax && zindex < 999) { zmax = zindex; }
+            if ( !isNaN(zindex) && zindex > zmax ) { zmax = zindex; }
         }
     });
     if ( zmax >= 998 ) {
@@ -1137,15 +1131,7 @@ function setupSliders() {
         console.log("Slider action: command= ", command, " bid= ", bid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", linkhub, " type= ", linktype, " subid= ", realsubid, " hint= ", hint, " value= ", thevalue, " linkval= ", linkval);
         $.post(cm_Globals.returnURL, 
             {useajax: "doaction", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: thevalue, attr: subid, hint: hint,
-            subid: realsubid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval},
-            function(presult, pstatus) {
-                if (pstatus==="success") {
-                    if ( presult && presult.startsWith("error") ) {
-                        console.error(">>>> error adjusting a slider: ", presult);
-                    }
-                }
-            }, "json"
-        );
+            subid: realsubid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval});
     }
 
     
@@ -1518,12 +1504,13 @@ function setupDraggable() {
                         startPos.left = 0;
                         startPos.top = 0;
                         startPos.position = "relative";
+
+                        if (thingtype==="bulb") {
+                            var zmax = getMaxZindex(panel) + 1;
+                            startPos["z-index"] = zmax;    
+                        }
                     } else {
                         var zmax = getMaxZindex(panel);
-                        var thisz = startPos["z-index"];
-                        if ( zmax > thisz ) {
-                            zmax++;
-                        }
                         startPos["z-index"] = zmax;
                         startPos.position = "absolute";
                     }
@@ -2280,28 +2267,16 @@ function setupButtons() {
             formData["api"] = "hubauth";
             formData.hubtype = $("select[name='hubtype']").val();
             formData.hubhost = $("input[name='hubhost']").val();
-
-            // console.log(">>>> formData: ", formData);
-
             $.post(cm_Globals.returnURL, formData,  function(presult, pstatus) {
                 // console.log("hubauth: ", presult);
                 // alert("wait... presult.action = " + presult.action);
 
                 if ( pstatus==="success" && typeof presult==="object" && presult.action ) {
                     var obj = presult;
-                    // console.log(">>>> result returned form auth: ", presult);
 
                     // for hubs that have auth info in the config file we do nothing but notify user of retrieval
                     if ( obj.action === "things" ) {
                         $("#newthingcount").html("Hub " + obj.hubName + " of type (" + obj.hubType+") authorized " + obj.numdevices + " devices");
-                        // reload the page after 15 seconds of trying to get the devices in the background
-                        // while we are waiting the server is reading the devices from the hub asyncronously
-                        // if this reload happens that means the device read likely failed
-                        // setTimeout(function() {
-                        //     var location = cm_Globals.returnURL + "/reauth";
-                        //     window.location.href = location;
-                        // }, 15000);
-
                     }
 
                     // if oauth flow then start the process with a redirection to site
@@ -2340,7 +2315,7 @@ function setupButtons() {
                         $("#newthingcount").html(presult);
                     } else {
                         $("#newthingcount").html("Something went wrong with hub auth request");
-                        console.log(">>>> error result: ", presult);
+                        console.log("hub auth error: ", presult);
                     }
                 }
             });
@@ -2416,7 +2391,6 @@ function setupAuthHub(hubId) {
     $("#inp_clientid").show();
     $("#inp_clientsecret").show();
 
-    // console.log( ">>>> hubindex: ", hubindex, " hubId: ", hubId, " hub: ", hub ) ;
     if ( hubId==="new" ) {
         $("select[name='hubtype']").val("Hubitat").prop("disabled", false);
         $("input[name='hubhost']").prop("disabled", false);
@@ -2905,9 +2879,6 @@ function fixTrack(tval) {
 // third parameter will skip links - but this is not used for now
 function updateTile(aid, bid, presult) {
 
-    // if ( !presult.time ) {
-    //     console.log(">>>> presult: ", presult);
-    // }
     // do something for each tile item returned by ajax call
     var isclock = false;
     
@@ -3058,10 +3029,6 @@ function processKeyVal(targetid, aid, key, value) {
         oldvalue = false;
 
     // handle button fields that are input values
-    // } else if ( key==="pushed" || key==="held" || key==="released" || key==="doubleTapped") {
-    //     value = "<input type=\"number\" size=\"3\" min=\"1\" max=\"20\" class=\"buttonval\" value=\"" + value + "\">";
-        // console.log(">>>> key: ", key, " button value: ", value, " targetid: ", targetid);
-
     // we now make color values work by setting the mini colors circle
     } else if ( key==="color") {
         $(targetid).html(value);
@@ -3129,7 +3096,6 @@ function processKeyVal(targetid, aid, key, value) {
 
 function refreshTile(tileid, aid, bid, thetype, hubid) {
     var pname = $("#showversion span#infoname").html();
-    // console.log(">>>> ", tileid, aid, bid, thetype, hubid, cm_Globals.returnURL);
     try {
         $.post(cm_Globals.returnURL, 
             {api: "doquery", userid: cm_Globals.options.userid, pname: pname, id: bid, tileid: tileid, type: thetype, hubid: hubid},
@@ -3226,9 +3192,6 @@ function clockUpdater(whichclock, forceget) {
     if ( whichclock !=="clockdigital" && whichclock !=="clockanalog" ) {
         return;
     }
-
-    // console.log(">>>> clockUpdater, options: ", cm_Globals.options);
-
     // get the global clock devices if not previously set
     if ( cm_Globals[whichclock] && !forceget ) {
         updateClock(whichclock, cm_Globals[whichclock]);
@@ -3255,11 +3218,9 @@ function clockUpdater(whichclock, forceget) {
         clockoptions.push(opt1);
         clockoptions.push(opt2);
 
-        // console.log(">>>> force getting clock: ", cm_Globals.returnURL, whichclock, userid, pname, thingid, tileid);
         $.post(cm_Globals.returnURL, 
             {useajax: "getclock", userid: userid, pname: pname, id: whichclock, thingid: thingid, tileid: tileid, type: "clock", attr: clockoptions},
             function (presult, pstatus) {
-                // console.log(">>>> forceget results: ", pstatus, presult);
                 if ( pstatus==="success" && presult && typeof presult==="object" ) {
                     cm_Globals[whichclock] = presult;
                     updateClock(whichclock, cm_Globals[whichclock]);
@@ -3290,7 +3251,6 @@ function setupTimer(timertype, timerval, hub) {
     // we now pass the unique hubId value instead of numerical hub
     // since the number can now change when new hubs are added and deleted
     if ( !hub || timerval < 1000 ) {
-        // console.log(">>>> hub not provided, or timerval (", timerval, ") is less than 1 second so timer cannot be set up");
         return;
     }
     var hubid = hub.hubid;
@@ -3308,9 +3268,6 @@ function setupTimer(timertype, timerval, hub) {
                     var aid = $(this).attr("aid");
                     var bid = $(this).attr("bid");
                     var thetype = $(this).attr("type");
-
-                    console.log(">>>> setupTimer: ", tileid, aid, bid, thetype, hubid, that[1] );
-
                     refreshTile(tileid, aid, bid, thetype, hubid);
                 });
 
@@ -3513,7 +3470,6 @@ function getNewValue(tile, thingname, ro, subid, thevalue) {
         var clk = $(ui).attr("name");
         if ( clk==="okay" ) {
             thevalue = $("#newsubidValue").val();
-            // console.log(">>>> newValue: ", thevalue);
             processClick(tile, thingname, ro, thevalue);
         }
     },
@@ -3831,8 +3787,6 @@ function processClick(that, thingname, ro, thevalue) {
         // the attr action was a terrible workaround put in a much earlier version
         if ( (subid==="switch") && (thevalue==="on" || thevalue==="off")  ) {
             thevalue = thevalue==="on" ? "off" : "on";
-            // } else if ( subid==="button" && thevalue==="held" ) {
-            //     thevalue = "pushed";
         }
 
         // we grab the value in the input field to pass to the click routines
@@ -3841,7 +3795,6 @@ function processClick(that, thingname, ro, thevalue) {
         //     var findval = butmap[subid];
         //     thevalue = $(that).parent().parent().find("div[subid='" + findval + "'] > input").val();
         //     if ( !thevalue ) { thevalue = "1"; }
-        //     // console.log(">>>> button pressed. value = ", thevalue, " findval = ", findval);
         //     // return;
         // }
 

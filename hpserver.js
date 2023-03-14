@@ -4985,7 +4985,7 @@ function getNewPage(userid, pname, skin, configoptions, cnt, roomid, roomname, k
         var tileid = thing["things_tileid"];
         var postop = thing["things_posy"];
         var posleft = thing["things_posx"];
-        var zindex = thing["things_zindex"];
+        var zindex = parseInt(thing["things_zindex"]);
         var customname = thing["things_customname"];
         var id = thing["devices_deviceid"];
         var swtype = thing["devices_devicetype"];
@@ -5017,7 +5017,7 @@ function getNewPage(userid, pname, skin, configoptions, cnt, roomid, roomname, k
             // this starts at 199 and counts down to 100 assuming fewer than 100 color things on a page
             // but only do this for relative placement tiles
             // we handle color separately for dragged tiles
-            if ( array_key_exists("color", thesensor.pvalue) && zindex < 100 && posleft===0 && postop===0 ) {
+            if ( array_key_exists("color", thesensor.value) && posleft===0 && postop===0 ) {
                 zcolor--;
                 zindex = zcolor;
                 if ( zcolor < 100 ) { zcolor = 200; }
@@ -5547,7 +5547,7 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     // use the position provided
     postop= parseInt(postop);
     posleft = parseInt(posleft);
-    zindex = parseInt(zindex);
+    // zindex = parseInt(zindex);
 
     // now swap out cnt for thingid since thingid is guaranteed to be unique
     cnt = thingid;

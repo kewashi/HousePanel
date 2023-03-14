@@ -141,13 +141,13 @@ div.contact.door {
 div.contact.open {
     background-image: url('icons/opencontact.png');
 }
-div.contact.closed {
+div.contact.closed, div.overlay.contact div.contact {
     background-image: url('icons/closecontact.png');
 }
-div.contact.mat.open, div.contact.pressure.open {
+div.overlay.contact div.contact.mat.open, div.overlay.contact div.contact.pressure.open {
     background-image: url('icons/matempty.png');
 }
-div.contact.mat.closed, div.contact.pressure.closed {
+div.contact.mat.closed, div.contact.pressure.closed, div.overlay.contact div.contact.mat, div.overlay.contact div.contact.pressure {
     background-image: url('icons/matfull.png');
     color: rgba(255, 255, 255, 0.01);
     background-size: 55px;
@@ -173,14 +173,14 @@ div.garage-thing div.overlay.contact, div.door-thing.garage div.overlay.contact 
 div.contact.window.open {
     background-image: url('icons/openwindow.png');
 }
-div.contact.window.closed {
+div.contact.window.closed, div.overlay.contact div.contact.window {
     background-image: url('icons/closewindow.png');
 }
 div.door.garage.open {
     background-image: url('icons/garage-opened.png');
     background-size: 100px;
 }
-div.door.garage.closed {
+div.door.garage.closed, div.overlay.door div.door.garage {
     background-image: url('icons/garage-closed.png');
     background-size: 100px;
 }
@@ -193,25 +193,25 @@ div.door.garage.opening, div.door.garage.closing {
 div.valve.open {
     background-image: url('icons/sprinkler-on.png');
 }
-div.valve.closed {
+div.valve.closed, div.overlay.valve div.valve {
     background-image: url('icons/sprinkler-off.png');
 }
 /* special handling of garage entry which is a door */
 div.contact.garage.entry.open {
     background-image: url('icons/opendoor.png');
 }
-div.contact.garage.entry.closed {
+div.contact.garage.entry.closed, div.contact.garage.entry {
     background-image: url('icons/closedoor.png');
 }
 /* motion styling */
-div.motion.inactive {
+div.overlay.motion div.motion.inactive, div.overlay.motion div.motion {
     background-image: url('icons/stand.png');
 }
-div.motion.active {
+div.overlay.motion div.motion.active {
     background-image: url('icons/run.png');
 }
 /* lock styling */
-div.overlay.lock div.lock.locked {
+div.overlay.lock div.lock.locked, div.overlay.lock div.lock {
     background-image: url('icons/lock.png');
     background-size: 55px;
 }
@@ -222,30 +222,29 @@ div.overlay.lock div.lock.unlocked, div.overlay.lock div.lock.unknown {
 
 /* switch styling */
 
-div.switch.on, div.switch.light.on, div.bulb.on, div.light.on,
-div.switch.flash, div.switch.light.flash, div.bulb.flash, div.light.flash, div.isy.DON {
+div.switch.on, div.bulb.on, div.switch.flash, div.bulb.flash, div.isy.DON {
     background-image: url('icons/bulbon.png');
 }
-div.switch.off, div.switch.light.off, div.bulb.off, div.light.off, div.isy.DOF {
+div.switch.off, div.bulb.off, div.isy.DOF, div.overlay.switch div.switch, div.overlay.bulb div.bulb {
     background-image: url('icons/bulboff.png');
 }
 div.switch.plug.on {
     background-image: url('icons/plugon.png');
 }
-div.switch.plug.off {
+div.switch.plug.off, div.overlay.switch div.switch.plug {
     background-image: url('icons/plugoff.png');
 }
-div.overlay.alloff div.alloff, div.overlay.allon div.allon.on, div.overlay.alloff div.alloff.on {
+div.overlay.allon div.allon.on, div.overlay.alloff div.alloff.on {
     background-image: url('icons/switchon.png');
 }
-div.overlay.allon div.allon, div.overlay.alloff div.alloff.off, div.overlay.allon div.allon.off {
+div.overlay.alloff div.alloff.off, div.overlay.allon div.allon.off {
     background-image: url('icons/switchoff.png');
 }
 div.overlay.windowShade div.windowShade.open {
     background-image: url('icons/shades_open.png');
     background-size: 80px; height: 80px;
 }
-div.overlay.windowShade div.windowShade.closed {
+div.overlay.windowShade div.windowShade.closed, div.overlay.windowShade div.windowShade {
     background-image: url('icons/shades_closed.png');
     background-size: 80px; height: 80px;
 }
@@ -288,10 +287,10 @@ div.thing div.overlay.position, div.thing div.overlay.level {
 }
 
 /* momentary styling */
-div.momentary.off {
+div.momentary.off, div.switch.button.off, div.overlay.momentary div.momentary, div.overlay.switch div.switch.button {
     background-image: url('icons/3dbutton.png');
 }
-div.momentary.on {
+div.momentary.on, div.switch.button.on {
     background-image: url('icons/3dbuttonpush.png');
 }
 
@@ -737,7 +736,7 @@ div.shm.state.stay, div.hsm.state.armedHome, div.state.Home {
 div.shm.state.away, div.hsm.state.armedAway, div.state.Away {
     background-image: url('icons/security-red.png');
 }
-div.shm.state.off, div.hsm.state.disarmed, div.state.Disarmed, div.state.allDisarmed {
+div.shm.state.off, div.hsm.state.disarmed, div.state.Disarmed, div.state.allDisarmed, div.overlay.hsm div.hsm.state, div.overlay.state div.state {
     background-image: url('icons/security-green.png');
 }
 div.hsm.state.armedNight, div.state.Night {
@@ -771,10 +770,10 @@ div.thing.frame-thing {
 }
 
 /* presence styling */
-div.presence.present, div.custom.present {
+div.presence.present, div.overlay.presence div.presence {
     background-image: url('icons/boypresent.png');
 }
-div.presence.absent, div.custom.absent {
+div.presence.absent, div.presence.not_present {
     background-image: url('icons/boyabsent.png');
 }
 

@@ -15,6 +15,7 @@
  * This is a Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history:
+ * 03/13/2023 - change postHub to always use http and tweak logging
  * 02/18/2023 - fix thermostat to support directly changing temperatures
  * 02/13/2023 - rewrote logic for handling colors including a nasty bugfix in hsv2rgb
  * 02/11/2023 - removed event here since we do it on node side and changed to status_
@@ -3016,7 +3017,7 @@ def changeHandler(evt) {
     def skip = false
     
     def devtype = autoType(deviceid)
-    logger("handling id = ${deviceid} devtype = ${devtype} name = ${deviceName} attr = ${attr} value = ${value}", "debug")
+    logger("handling id = ${deviceid} devtype = ${devtype} name = ${deviceName} attr = ${attr} value = ${value}", "trace")
 
     // handle power changes to skip if not changed by at least 15%
     // this value was set by trial and error for my particular plug
@@ -3091,14 +3092,14 @@ def changeHandler(evt) {
             postHub(state.directIP3, state.directPort3, "update", deviceName, deviceid, "color", devtype, colorarray)
 
             // set it to change color based on attribute change
-            logger("color update in changeHandler: ${deviceName} of type ${devtype} changed to ${color} by changing ${attr} to ${value}, h100: ${h100}, h: ${h}, s: ${s}, v: ${v} ", "debug") 
+            logger("color update: ${deviceName} id ${deviceid} type ${devtype} changed to ${color} by changing ${attr} to ${value}, h100: ${h100}, h: ${h}, s: ${s}, v: ${v} ", "info") 
         } else {
             // make the original attribute change
             postHub(state.directIP, state.directPort, "update", deviceName, deviceid, attr, devtype, value)
             postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, attr, devtype, value)
             postHub(state.directIP3, state.directPort3, "update", deviceName, deviceid, attr, devtype, value)
 
-            logger("thing update in changeHandler, ${deviceName} of type ${devtype} changed to ${value} by changing ${attr} to ${value}", "debug")
+            logger("thing update: ${deviceName} id ${deviceid} type ${devtype} changed to ${value} by changing ${attr} to ${value}", "info")
         }
 
     }
@@ -3169,17 +3170,19 @@ def postHub(ip, port, msgtype, name, id, attr, type, value) {
         if (ip.startsWith("http") ) {
             sendHttpPost(ip, port, abody)
         } else {
-            def params = [
-                method: "POST",
-                path: "/",
-                headers: [
-                    HOST: "${ip}:${port}",
-                    'Content-Type': 'application/json'
-                ],
-                body: abody
-            ]
-            def result = hubitat.device.HubAction.newInstance(params)
-            sendHubCommand(result)
+            def iphttp = "http://${ip}"
+            sendHttpPost(iphttp, port, abody)
+            // def params = [
+            //     method: "POST",
+            //     path: "/",
+            //     headers: [
+            //         HOST: "${ip}:${port}",
+            //         'Content-Type': 'application/json'
+            //     ],
+            //     body: abody
+            // ]
+            // def result = hubitat.device.HubAction.newInstance(params)
+            // sendHubCommand(result)
         }
     }
 }
@@ -3194,12 +3197,16 @@ void sendHttpPost(ip, port, Map body) {
         ignoreSSLIssues: true,
         timeout: 20
     ]
-    asynchttpPost("asyncHttpCmdResp", params, [execDt: now()])
+    asynchttpPost("asyncHttpCmdResp", params, [execDt: now(), ip: ip])
 }
 
 void asyncHttpCmdResp(response, data) {
     def dt = now() - data.execDt
-    logger("Resp: ${response} | Process time: ${dt}", "trace")
+    if ( data.ip == state.directIP ) {
+        logger("Resp: ${response} | Process time: ${dt}", "info")
+    } else {
+        logger("Resp: ${response} | Process time: ${dt}", "trace")
+    }
 }
 
 // Wrapper nction for all logging.

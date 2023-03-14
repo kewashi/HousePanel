@@ -146,12 +146,13 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
         dh+= "</tr>";
         dh+= "<tr>";
             dh+= "<td colspan='2'>" +  customInfoPanel() + "</td>";
-        dh+= "</tr>";
+        dh+= "</tr></table>";
 
         // end of dialog
         dh += "</div>";
 
         var pos = {top: 150, left: 250, zindex: 999};
+        // console.log(dh);
         createModal("modalcustom", dh, "body", "Done", pos, 
             // function invoked upon leaving the dialog
             function(ui, content) {

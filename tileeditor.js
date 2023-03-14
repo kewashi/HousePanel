@@ -71,7 +71,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
             }
         );
         
-    } else if ( htmlcontent && false) {
+    } else if ( htmlcontent ) {
         htmlcontent = "<div class=\"" + thingclass + "\" id='te_wysiwyg'>" + htmlcontent + "</div>";
     } else {
         // put placeholder and populate after Ajax finishes retrieving true content
@@ -100,6 +100,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
     // create a function to display the tile
     var dodisplay = function() {
         var pos = {top: 100, left: 200, zindex: 998};
+        // console.log(dialog_html);
         createModal("modalid", dialog_html, "body", true, pos, 
             // function invoked upon leaving the dialog
             function(ui, content) {
