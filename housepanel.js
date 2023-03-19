@@ -14,17 +14,19 @@ cm_Globals.options = null;
 cm_Globals.returnURL = "";
 cm_Globals.hubId = "all";
 cm_Globals.wsclient = null;
+cm_Globals.tabs = "Hide Tabs";
 cm_Globals.hubs =  {};
 
 var modalStatus = 0;
 var modalWindows = {};
-var priorOpmode = "operate";
+var priorOpmode = "Operate";
 var pagename = "main";
 
 // set a global socket variable to manage two-way handshake
 // var webSocketUrl = null;
 // var wsinterval = null;
 var reordered = false;
+var edited = false;
 
 // set this global variable to true to disable actions
 // I use this for testing the look and feel on a public hosting location
@@ -164,7 +166,7 @@ function findHub(hubid, id) {
 // could probably read Options file instead
 // but doing it this way ensure we get what main app sees
 function getOptions() {
-    priorOpmode = getCookie("opmode") || "operate";
+    priorOpmode = getCookie("opmode") || "Operate";
     try {
         var userid = $("#userid").val();
         var email = $("#emailid").val();
@@ -193,10 +195,10 @@ function getOptions() {
                     }
         
                     // handle black screen
-                    if ( priorOpmode === "sleep" && blackout ) {
+                    if ( priorOpmode === "Sleep" && blackout ) {
                         execButton("blackout");
                     } else {
-                        priorOpmode = "operate";
+                        priorOpmode = "Operate";
                         setCookie("opmode", priorOpmode);
                     }
                 } else {
@@ -213,7 +215,6 @@ function getOptions() {
 // could probably read Options file instead
 // but doing it this way ensure we get what main app sees
 function getHubs() {
-    priorOpmode = getCookie("opmode") || "operate";
     try {
         var userid = $("#userid").val();
         var pname = cm_Globals.pname;
@@ -298,6 +299,51 @@ $(document).ready(function() {
     if ( pagename==="main" ) {
         $("#tabs").tabs();
         var tabcount = $("li.ui-tabs-tab").length;
+
+        $(document).on("keydown",function(e) {
+            if ( e.which===27  ){
+                edited = false;
+                $("#mode_Operate").prop("checked",true).focus();
+                priorOpmode = "Operate";
+                closeModal("menuibox");
+                cancelSortable();
+                cancelPagemove();
+                cancelDraggable();
+                delEditLink();
+            }
+        });
+
+        $("div#hpmenu").on("click", function(evt) {
+            var pos = {top: 40, left: 10};
+            //     var controlval = {"name": "Controller", "showoptions": "Options","refreshpage": "Refresh",
+            // "c__userauth": "Re-Auth","showid": "Show Info","toggletabs": "Toggle Tabs", "showdoc": "Documentation",
+            // "blackout": "Blackout","operate": "Operate","reorder": "Reorder","edit": "Edit"};
+
+            evt.stopPropagation();
+
+            var mc = '<div class="menubar">Main Menu</div>';
+            mc +='<div id="m_showoptions" class="menuitem">Options</div>';
+            mc +='<div id="m_refreshpage" class="menuitem">Refresh</div>';
+            mc +='<div id="m_userauth" class="menuitem">Hub Auth</div>';
+            mc +='<div id="m_showid" class="menuitem">Show Info</div>';
+            mc +='<div id="m_toggletabs" class="menuitem">' + cm_Globals.tabs + '</div>';
+            mc +='<div id="m_blackout" class="menuitem">Blackout</div>';
+            mc +='<div id="m_reorder" class="menuitem">Reorder</div>';
+            mc +='<div id="m_edit" class="menuitem">Edit</div>';
+            mc +='<div id="m_operate" class="menuitem">Operate</div>';
+            var good = createModal("modalpopup", mc, "body" , false, pos, function(ui, content) {
+                var buttonid = $(ui).attr("id");
+                if ( buttonid && $(ui).attr("class") === "menuitem" ) {
+                    var buttonid = buttonid.substring(2);
+                    execButton(buttonid);
+                } else {
+                }
+            });
+
+            if (!good ) {
+                closeModal("modalpopup");
+            }
+        });
 
         // hide tabs if there is only one room
         // if ( tabcount === 1 ) {
@@ -467,7 +513,6 @@ $(document).ready(function() {
     }
     
     // handle button setup for all pages
-    // setupButtons();
     if ( $("div.formbutton") ) {
         $("div.formbutton").on('click', function(evt) {
             var buttonid = $(this).attr("id");
@@ -494,6 +539,8 @@ $(document).ready(function() {
         });
     }
 
+    // this is button that returns to main HP page
+    // it saves the default hub before returning if on the auth page
     if ( $("button.infobutton") ) {
         $("button.infobutton").addClass("disabled").prop("disabled", true);
         setTimeout(function() {
@@ -649,9 +696,9 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
             if ( bid==="reload" ) {
 
                 // skip reload if we are asleep
-                if ( priorOpmode !== "operate" ) {
-                    return;
-                }
+                // if ( priorOpmode !== "Operate" ) {
+                //     return;
+                // }
 
                 // only reload this page if the trigger is this page name, blank, or all
                 if ( !thetype || thetype==="all" || thetype===pagename ) {
@@ -751,16 +798,16 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
 
                 // blank screen if night mode set
                 if ( (thetype==="mode" || thetype==="location" ) && 
-                     (blackout==="true" || blackout===true) && (priorOpmode === "operate" || priorOpmode === "sleep") ) {
+                     (blackout==="true" || blackout===true) && (priorOpmode === "Operate" || priorOpmode === "Sleep") ) {
 
                     // console.log("mode: ", pvalue.themode, " priorMode: ", priorOpmode);
                     if ( pvalue.themode === "Night" ) {
                         execButton("blackout");
-                        priorOpmode = "sleep";
+                        priorOpmode = "Sleep";
                     } else if ( $("#blankme") ) {
                         $("#blankme").off("click");
                         $("#blankme").remove(); 
-                        priorOpmode = "operate";
+                        priorOpmode = "Operate";
                     }
                     setCookie("opmode", priorOpmode);
                 }
@@ -852,7 +899,7 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
 
     // skip if this modal window is already up...
     if ( typeof modalWindows[modalid]!=="undefined" && modalWindows[modalid]>0 ) { 
-        return; 
+        return false; 
     }
     
     modalWindows[modalid] = 1;
@@ -960,23 +1007,35 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
             closeModal(modalid);
         });
     } else {
-        // body clicks turn of modals unless clicking on box itself
-        // or if this is a popup window any click will close it
-        $("body").off("click");
-        $("body").on("click",function(evt) {
-            if ( (evt.target.id === modalid && modalid!=="modalpopup") || modalid==="waitbox") {
-                evt.stopPropagation();
-                return;
-            } else {
-                if ( responsefunction ) {
-                    responsefunction(evt.target, modaldata);
-                }
+
+        if ( modalid==="menubox" ) {
+            $("#"+modalid + " .menuitem").on("click", function(evt) {
                 closeModal(modalid);
-                $("body").off("click");
-            }
-        });
+                if ( responsefunction ) {
+                    responsefunction(this, modaldata);
+                }
+            })
+        }
+
+            // body clicks turn of modals unless clicking on box itself
+            // or if this is a popup window any click will close it
+            $("body").off("click");
+            $("body").on("click",function(evt) {
+                if ( (evt.target.id === modalid && modalid!=="modalpopup" )  ) {
+                    // console.log("modal opt 1");
+                    evt.stopPropagation();
+                } else {
+                    // console.log("modal opt 2");
+                    closeModal(modalid);
+                    if ( responsefunction ) {
+                        responsefunction(evt.target, modaldata);
+                    }
+                    $("body").off("click");
+                }
+            });
     }
-    
+    return true;
+
 }
 
 function closeModal(modalid) {
@@ -1343,6 +1402,7 @@ function setupDraggable() {
     var startPos = {top: 0, left: 0, "z-index": 0, position: "relative", priorStart: "relative"};
     var delx;
     var dely;
+    edited = false;
 
     xhrdone();
 
@@ -1924,7 +1984,7 @@ function execButton(buttonid) {
             }
         });
 
-    } else if ( buttonid === "blackout") {
+    } else if ( buttonid === "blackout"  && (priorOpmode==="Operate" || priorOpmode==="Sleep") ) {
         // blank out screen with a black box size of the window and pause timers
         var w = window.innerWidth;
         var h = window.innerHeight;
@@ -1937,7 +1997,7 @@ function execButton(buttonid) {
         } catch(e) {
             phototimer = 0;
         }
-        priorOpmode = "sleep";
+        priorOpmode = "Sleep";
         setCookie("opmode", priorOpmode);
         $("div.maintable").after("<div id=\"blankme\"></div>");
         var photos;
@@ -1989,58 +2049,67 @@ function execButton(buttonid) {
                 clearInterval(photohandle);
             }
             $("#blankme").remove(); 
-            priorOpmode = "operate";
+            priorOpmode = "Operate";
             setCookie("opmode",priorOpmode);
             evt.stopPropagation();
         });
-    } else if ( buttonid === "toggletabs") {
+    } else if ( buttonid === "toggletabs" && priorOpmode==="Operate" ) {
         toggleTabs();
     } else if ( buttonid === "reorder" ) {
-        if ( priorOpmode === "edit" ) {
-            updateFilters();
-            cancelDraggable();
-            delEditLink();
+        console.log("Reorder button: ", buttonid, " opmode: ", priorOpmode);
+        if ( priorOpmode!=="Operate" ) {
+            $("#mode_"+priorOpmode).prop("checked",true);
+        } else {
+            setupSortable();
+            setupPagemove();
+            $("#mode_Reorder").prop("checked",true);
+            priorOpmode = "Reorder";
+            setCookie("opmode", priorOpmode);
         }
-        setupSortable();
-        setupPagemove();
-        $("#mode_Reorder").prop("checked",true);
-        priorOpmode = "reorder";
-        setCookie("opmode", priorOpmode);
-    } else if ( buttonid === "edit" ) {
-        if ( priorOpmode === "reorder" ) {
-            cancelSortable();
-            cancelPagemove();
+    } else if ( buttonid === "edit") {
+        console.log("Edit button: ", buttonid, " opmode: ", priorOpmode);
+        if ( priorOpmode!=="Operate" ) {
+            $("#mode_"+priorOpmode).prop("checked",true);
+        } else {
+            setupDraggable();
+            addEditLink();
+            $("#mode_Edit").prop("checked",true);
+            priorOpmode = "Edit";
+            setCookie("opmode", priorOpmode);
         }
-        setupDraggable();
-        addEditLink();
-        $("#mode_Edit").prop("checked",true);
-        priorOpmode = "edit";
-        setCookie("opmode", priorOpmode);
+    } else if ( buttonid==="operate" ) {
+        console.log("Edit button: ", buttonid, " opmode: ", priorOpmode);
+
+        // if modal box is open and we are editing or customizing, do nothing
+        if ( priorOpmode!=="Operate" && modalStatus!==0 ) {
+            $("#mode_"+priorOpmode).prop("checked",true);
+        } else {
+            if ( priorOpmode === "Reorder" ) {
+                if ( reordered ) {
+                    window.location.href = cm_Globals.returnURL;
+                } else {
+                    cancelSortable();
+                    cancelPagemove();
+                }
+            } else if ( priorOpmode === "Edit" ) {
+                if ( edited ) {
+                    window.location.href = cm_Globals.returnURL;
+                } else {
+                    updateFilters();
+                    cancelDraggable();
+                    delEditLink();
+                }
+            }
+            priorOpmode = "Operate";
+            setCookie("opmode", priorOpmode);
+        }
     } else if ( buttonid==="showdoc" ) {
         window.open("https://housepanel.net",'_blank');
         return;
-    // } else if ( buttonid==="name" ) {
-    //     return;
-    } else if ( buttonid==="operate" ) {
-        if ( priorOpmode === "reorder" ) {
-            cancelSortable();
-            cancelPagemove();
-            if ( reordered ) {
-                window.location.href = cm_Globals.returnURL;
-            }
-        } else if ( priorOpmode === "edit" ) {
-            updateFilters();
-            cancelDraggable();
-            delEditLink();
-        }
-        $("#mode_Operate").prop("checked",true);
-        priorOpmode = "operate";
-        setCookie("opmode", priorOpmode);
-    } else if ( buttonid==="snap" ) {
-        var snap = $("#mode_Snap").prop("checked");
-        // console.log("Tile movement snap mode: ",snap);
+    } else if ( buttonid==="Snap" ) {
+        $("#mode_Snap").prop("checked");
 
-    } else if ( buttonid==="refreshpage" ) {
+    } else if ( buttonid==="refreshpage" && priorOpmode==="Operate" ) {
         var pstyle = "position: absolute; background-color: blue; color: white; font-weight: bold; font-size: 24px; left: 300px; top: 300px; width: 600px; height: 100px; margin-left: 50px; margin-top: 50px;";
         var rstyle = "position: absolute; background-color: blue; color: white; font-weight: normal; font-size: 24px; left: 200px; top: 200px; width: 800px; height: 250px; margin-left: 50px; margin-top: 50px;";
         createModal("info", "Screen will reload when hub refresh is done...","body", false, {style: pstyle});
@@ -2053,10 +2122,19 @@ function execButton(buttonid) {
                 },2000);
             },2000);
         });
+    
+    // remaining menu buttons
+    } else if ( (buttonid==="showid" || buttonid==="userauth" || buttonid==="showoptions") && priorOpmode==="Operate" ) {
+        window.location.href = cm_Globals.returnURL + "/" + buttonid;
 
     // default is to call main node app with the id as a path
     } else {
-        window.location.href = cm_Globals.returnURL + "/" + buttonid;
+        if ( priorOpmode!=="Operate") {
+            console.log("command not supported while editing or customizing: ", buttonid);
+        } else {
+            console.log("command not supported: ", buttonid);
+        }
+        // window.location.href = cm_Globals.returnURL + "/" + buttonid;
     }
 }
 
@@ -2081,10 +2159,10 @@ function setupButtons() {
 
         // prevent mode from changing when editing a tile
         $("div.modeoptions").on("click","input.radioopts",function(evt){
-            if ( modalStatus === 0  ) {
-                var opmode = $(this).attr("value");
+            // if ( modalStatus === 0  ) {
+                var opmode = $(this).attr("id");
                 execButton(opmode);
-            }
+            // }
             evt.stopPropagation();
         });
         
@@ -2488,6 +2566,7 @@ function addEditLink() {
 
         // replace all the id tags to avoid dynamic updates
         strhtml = strhtml.replace(/ id="/g, " id=\"x_");
+        edited = true;
 
         editTile(userid, thingid, pagename, str_type, tile, aid, bid, thingclass, hubid, hubindex, hubType, customname, strhtml);
     });
@@ -2500,11 +2579,11 @@ function addEditLink() {
         var userid = cm_Globals.options.userid;
         if ( pwsib && pwsib.length > 0 ) {
             pw = pwsib.children("div.password").html();
-            checkPassword(thing, "Tile editing", pw, false, runCustom);
+            checkPassword(thing, "Tile customize", pw, false, "", runCustom);
         } else {
             runCustom(thing," ", false);
         }
-        function runCustom(thing, name, ro) {
+        function runCustom(thing, name, ro, thevalue) {
             var str_type = $(thing).attr("type");
             var tile = $(thing).attr("tile");
             var bid = $(thing).attr("bid");
@@ -2851,16 +2930,18 @@ function setupCustomCount() {
 }
 
 function toggleTabs() {
-    var hidestatus = $("#toggletabs");
     if ( $("#roomtabs").hasClass("hidden") ) {
-        $("#showversion").removeClass("hidden");
+        // $("#showversion").removeClass("hidden");
         $("#roomtabs").removeClass("hidden");
-        if ( hidestatus ) hidestatus.html("Hide Tabs");
+        $("#hpmenu").css("float","left");
+        cm_Globals.tabs = "Hide Tabs";
     } else {
-        $("#showversion").addClass("hidden");
+        // $("#showversion").addClass("hidden");
         $("#roomtabs").addClass("hidden");
-        if ( hidestatus ) hidestatus.html("Show Tabs");
+        $("#hpmenu").css("float","none");
+        cm_Globals.tabs = "Show Tabs";
     }
+    $("#m_toggletabs").html(cm_Globals.tabs);
 }
 
 function fixTrack(tval) {
@@ -3258,7 +3339,7 @@ function setupTimer(timertype, timerval, hub) {
     updarray.myMethod = function() {
 
         var that = this;
-        if ( priorOpmode === "operate" ) {
+        if ( priorOpmode === "Operate" ) {
             try {
                 // just do the post and nothing else since the post call pushClient to refresh the tiles
                 var tType = that[0];
@@ -3292,7 +3373,15 @@ function setupTimer(timertype, timerval, hub) {
 // setup clicking on the action portion of this thing
 // this used to be done by page but now it is done by sensor type
 function setupPage() {
-    
+
+    $("div.thing div.thingname").off("click");
+    $("div.thing div.thingname").on("click", function(evt) {
+        var thevalue = $(this).html()
+        console.log("value: ", thevalue);
+        processClick(this, thevalue, true, thevalue);
+        evt.stopPropagation();
+    });
+
     $("div.overlay > div").off("click.tileactions");
     $("div.overlay > div").on("click.tileactions", function(evt) {
 
@@ -3326,26 +3415,24 @@ function setupPage() {
         
         // handle special control type tiles that perform javascript actions
         // if we are not in operate mode only do this if click is on operate
-        if ( subid!=="name" && thetype==="control" && (priorOpmode==="operate" || subid==="operate") ) {
+        if ( subid!=="name" && thetype==="control" && (priorOpmode==="Operate" || subid==="operate") ) {
             if ( $(this).hasClass("confirm") ) {
                 var pos = {top: 100, left: 100};
                 createModal("modalexec","<p>Perform " + subid + " operation ... Are you sure?</p>", "body", true, pos, function(ui) {
                     var clk = $(ui).attr("name");
-                    if ( clk==="okay" && subid!=="name" ) {
+                    if ( clk==="okay" ) {
                         execButton(subid);
                     }
                 });
             } else {
-                if ( subid!=="name" ) {
-                    execButton(subid);
-                }
+                execButton(subid);
             }
             return;
         }
 
         // ignore all other clicks if not in operate mode
         // including any password protected ones
-        if ( priorOpmode!=="operate" ) {
+        if ( priorOpmode!=="Operate" ) {
             return;
         }
 
@@ -3365,7 +3452,7 @@ function setupPage() {
         // this can only be true if user has added one using tile customizer
         var pw = false;
         if ( subid==="password" ) {
-            pw = $(this).html();
+            pw = false;
         } else {
             var pwsib = $(this).parent().siblings("div.overlay.password");
             if ( pwsib && pwsib.length > 0 ) {
@@ -3377,7 +3464,7 @@ function setupPage() {
         // or if an empty password is given this becomes a confirm box
         // the dynamically created dialog box includes an input string if pw given
         // uses a simple md5 hash to store user password - this is not strong security
-        if ( pw && typeof pw === "string" && pw!=="false" ) {
+        if ( pw!==false && typeof pw === "string" && pw!=="false" ) {
             checkPassword(that, thingname, pw, ro, thevalue, processClick);
         } else if ( subid==="color" || 
                     (subid.startsWith("Int_") && !subid.endsWith("-up") && !subid.endsWith("-dn") )|| 
@@ -3404,7 +3491,7 @@ function checkPassword(tile, thingname, pw, ro, thevalue, yesaction) {
     var pname = $("#showversion span#infoname").html();
     var htmlcontent;
     if ( pw==="" ) {
-        htmlcontent = "<p>Operate action for tile [" + thingname + "] Are you sure?</p>";
+        htmlcontent = "<p>Operate action for: " + thingname + "</p><p>Are you sure?</p>";
     } else {
         htmlcontent = "<p>" + thingname + " is Password Protected</p>";
         htmlcontent += "<div class='ddlDialog'><label for='userpw'>Password:</label>";
@@ -3556,7 +3643,11 @@ function processClick(that, thingname, ro, thevalue) {
         var slen = subid.length;
         targetid = '#a-'+aid+'-'+subid.substring(0,slen-3);
     } else {
-        targetid = '#a-'+aid+'-'+subid;
+        if ( subid==="thingname" ) {
+            targetid = "#s-"+aid;
+        } else {
+            targetid = '#a-'+aid+'-'+subid;
+        }
     }
 
     // var thevalue = $(targetid).html();
@@ -3648,7 +3739,7 @@ function processClick(that, thingname, ro, thevalue) {
     // no longer treat TEXT custom fields as passive since they could be relabeling of action fields which is fine
     // if they are not leaving them as an active hub call does no harm - it just returns false but you loose inspections
     // to compensate for loss of inspection I added any custom field starting with "label" or "text" subid will inspect
-    var ispassive = (ro || subid==="custom" || subid==="temperature" || subid==="feelsLike" || subid==="battery" || //  (command==="TEXT" && subid!=="allon" && subid!=="alloff") ||
+    var ispassive = (ro || subid==="thingname" || subid==="custom" || subid==="temperature" || subid==="feelsLike" || subid==="battery" || //  (command==="TEXT" && subid!=="allon" && subid!=="alloff") ||
         subid==="presence" || subid==="motion" || subid==="contact" || subid==="status_" || subid==="status" || subid==="deviceType" || subid==="localExec" ||
         subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" || subid==="name" || subid==="skin" ||
         subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") || subid==="illuminance" ||
@@ -3819,7 +3910,7 @@ function processClick(that, thingname, ro, thevalue) {
             thevalue = $(targetvol).attr("value");
         }
 
-        console.log("userid= ", userid, " thingid= ", thingid, " tileid= ", tileid, " thingname= ", thingname, " hint= ", hint,
+        console.log("userid= ", userid, " thingid= ", thingid, " tileid= ", tileid, " hint= ", hint,
                     " command= ", command, " bid= ", bid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", hubid, " linkhub= ", linkhub,
                     " type= ", thetype, " linktype= ", linktype, " subid= ", subid, " value= ", thevalue, 
                     " linkval= ", linkval, " attr=", theattr);

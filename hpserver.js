@@ -4125,7 +4125,6 @@ function getController() {
     "c__userauth": "Re-Auth","showid": "Show Info","toggletabs": "Toggle Tabs", "showdoc": "Documentation",
     "blackout": "Blackout","operate": "Operate","reorder": "Reorder","edit": "Edit"};
     return controlval;
-    return controlval;
 }
 
 
@@ -5608,7 +5607,7 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
 
 
     // same thingname field for each tile with the original name
-    $tc += "<div aid=\""+cnt+"\" type=\""+thingtype+"\" title=\""+thingname+"\" class=\"thingname "+thingtype+" t_"+kindex+"\" id=\"s-"+cnt+"\">";
+    $tc += "<div aid=\""+cnt+"\" type=\""+thingtype+"\" subid=\"thingname\" title=\""+thingname+"\" class=\"thingname "+thingtype+" t_"+kindex+"\" id=\"s-"+cnt+"\">";
     $tc += thingname;
     $tc += "</div>";
 
@@ -10596,7 +10595,16 @@ function getMainPage(user, configoptions, hubs, req, res) {
         }
     
         tc += '<div id="dragregion">';
-        tc += '<div id="tabs"><ul id="roomtabs">';
+        tc += '<div id="tabs">';
+
+        // if we are not in kiosk mode, show the main hamburger menu
+        if ( !kioskmode ) {
+            tc += '<div id="hpmenu">';
+            tc += "____<br>____<br>____";
+            tc += '</div>';
+        }
+
+        tc += '<ul id="roomtabs">';
 
         for (var i in rooms) {
             var row = rooms[i];
@@ -10636,7 +10644,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
         tc += '<div id="showversion" class="showversion">';
         tc += '<span id="emailname">' + displayname + '</span> | <span id="infoname">' + pname + '</span><span> | V' + GLB.HPVERSION + '</span> | <span id="infoport"></span>';
         tc += '</div>';
-        tc += '<div id="showopts"><a href="' +  GLB.returnURL + '/showoptions"><img width="24" height=24 src="media/editgear.png"/></a></div>';
+        // tc += '<div id="showopts"><a href="' +  GLB.returnURL + '/showoptions"><img width="24" height=24 src="media/editgear.png"/></a></div>';
         tc += '<div id="showdocs"><a href="https://www.housepanel.net" target="_blank">?</a></div>';
         // tc += "</div>";
 
@@ -10675,25 +10683,25 @@ function getMainPage(user, configoptions, hubs, req, res) {
         tc += hidden("configsid", JSON.stringify(configs), "configsid");
 
         // show user buttons if we are not in kiosk mode
-        if ( !kioskmode ) {
-            tc += "<div id=\"controlpanel\">";
-            if ( usertype > 0 ) {
-                tc +='<div id="showoptions" class="formbutton">Options</div>';
-                tc +='<div id="refreshpage" class="formbutton">Refresh</div>';
-                tc +='<div id="userauth" class="formbutton">Hub Auth</div>';
-                tc +='<div id="showid" class="formbutton">Show Info</div>';
-                tc +='<div id="toggletabs" class="formbutton">Hide Tabs</div>';
-                tc +='<div id="blackout" class="formbutton">Blackout</div>';
-            }
+        // if ( !kioskmode ) {
+        //     tc += "<div id=\"controlpanel\">";
+        //     if ( usertype > 0 ) {
+        //         tc +='<div id="showoptions" class="formbutton">Options</div>';
+        //         tc +='<div id="refreshpage" class="formbutton">Refresh</div>';
+        //         tc +='<div id="userauth" class="formbutton">Hub Auth</div>';
+        //         tc +='<div id="showid" class="formbutton">Show Info</div>';
+        //         tc +='<div id="toggletabs" class="formbutton">Hide Tabs</div>';
+        //         tc +='<div id="blackout" class="formbutton">Blackout</div>';
+        //     }
 
-            tc += "<div class=\"modeoptions\" id=\"modeoptions\"> \
-            <input id=\"mode_Operate\" class=\"radioopts\" type=\"radio\" name=\"usemode\" value=\"operate\" checked><label for=\"mode_Operate\" class=\"radioopts\">Operate</label> \
-            <input id=\"mode_Reorder\" class=\"radioopts\" type=\"radio\" name=\"usemode\" value=\"reorder\" ><label for=\"mode_Reorder\" class=\"radioopts\">Reorder</label> \
-            <input id=\"mode_Edit\" class=\"radioopts\" type=\"radio\" name=\"usemode\" value=\"edit\" ><label for=\"mode_Edit\" class=\"radioopts\">Edit</label> \
-            <input id=\"mode_Snap\" class=\"radioopts\" type=\"checkbox\" name=\"snapmode\" value=\"snap\"><label for=\"mode_Snap\" class=\"radioopts\">Grid Snap?</label> \
-            </div><div id=\"opmode\"></div>";
-            tc +="</div>";
-        }
+        //     tc += "<div class=\"modeoptions\" id=\"modeoptions\"> \
+        //     <input id=\"operate\" class=\"radioopts\" type=\"radio\" name=\"usemode\" value=\"Operate\" checked><label for=\"mode_Operate\" class=\"radioopts\">Operate</label> \
+        //     <input id=\"reorder\" class=\"radioopts\" type=\"radio\" name=\"usemode\" value=\"Reorder\" ><label for=\"mode_Reorder\" class=\"radioopts\">Reorder</label> \
+        //     <input id=\"edit\" class=\"radioopts\" type=\"radio\" name=\"usemode\" value=\"Edit\" ><label for=\"mode_Edit\" class=\"radioopts\">Edit</label> \
+        //     <input id=\"snap\" class=\"radioopts\" type=\"checkbox\" name=\"snapmode\" value=\"Snap\"><label for=\"mode_Snap\" class=\"radioopts\">Grid Snap?</label> \
+        //     </div><div id=\"opmode\"></div>";
+        //     tc +="</div>";
+        // }
         tc += "</form>";
 
         // alldevices = sortedSensors(alldevices, "hubid", "name", "devicetype");

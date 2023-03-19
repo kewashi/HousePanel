@@ -48,15 +48,19 @@ body {
         padding-right: 0px;
     }
     .showversion {
-        display: inline-block;
+        display: block;
         color: #cccccc;
         position: absolute;
-        top: 10px;
-        right: 80px;
+        top: 5px;
+        right: 35px;
         width: auto; height: 25px;
         padding-left: 5px; padding-right: 5px;
+        padding-top: 8px;
         text-align: left; 
         cursor: pointer;
+    }
+    #showdocs {
+        display: inline-block;
     }
 }
 @media (orientation: portrait) {
@@ -71,7 +75,7 @@ body {
         width: 100%;
         padding-right: 0px;
     }
-    .showversion {
+    .showversion, #showdocs {
         display: none;
     }    
 }
@@ -146,16 +150,13 @@ div.inlinebutton {
     overflow-wrap: break-word;
 }
 
-#showdocs, #showopts {
-    display: inline-block;
-/*    position: absolute;
-    top: 1px;
-    right: 40px; */ 
-    margin-left: 10px; margin-top: 2px;
-    width: 30px; height: 22px; padding-top: 2px;
+#showdocs {
+    margin-left: 10px; margin-top: 0px;
+    padding-top: 3px;
+    width: 22px; height: 19px;
     border-radius: 50%;
     background-color: rgba(140,140,140,0.5);
-    border: 1px solid rgba(50,50,50,0.5);
+    border: 2px solid white;
     text-align: center; 
     color: white;
     cursor: pointer;
@@ -169,14 +170,8 @@ div.inlinebutton {
 #showdocs a {
     text-decoration: none;
 }
-#showdocs:hover, #showopts:hover {
+#showdocs:hover {
     filter: invert(1);
-}
-#showopts {
-    text-decoration: none;
-    position: absolute;
-    top: 5px;
-    right: 45px;
 }
 div.showversion:hover {
     color: black;
@@ -326,7 +321,7 @@ div#catalog {
 }
 
 .ui-widget.ui-widget-content{
-    background-color: #adadad;
+    background-color: #333333;
     border: none;
 }
 .ui-widget-content a {
@@ -365,7 +360,7 @@ ul.ui-tabs-nav {
 .error, .error_description {
     background-color: #ff0000;  color: #ffffff;
 }
-div.overlay.hidden, .hidden, ul.ul-tabs-nav.hidden {
+.hidden {
     display: none;
 }
 input.disabled, button.disabled {
@@ -2053,9 +2048,6 @@ div.overlay.Evening div.location.Evening {
 div.rule {
     display: none;
 }
-div.hidden, div.filteroption div.hidden {
-    display: none;
-}
 div.thing.isy-thing div.overlay div.arrow-up,
 div.thing.isy-thing div.overlay div.arrow-dn {
     display: inline-block;
@@ -2099,4 +2091,25 @@ div.lock-thing div.overlay.lastCodeName,
 div.lock-thing div.overlay._lock,
 div.lock-thing div.overlay._unlock {
     display: none;
+}
+div#hpmenu {
+    display: block;
+    float: left;
+    padding-top: 2px;
+    margin-left: 6px; margin-right: 6px;
+    line-height: 8px;
+    width: 40px; height: 40px;
+    text-align: center;
+    background-color: black; color: white;
+    cursor: pointer;
+}
+div.menuitem {
+    display: block;
+    background-color: #e5e5e0; color:rgb(22, 21, 21);
+    margin-left: 10px;
+    font-size: 10pt;
+    cursor: pointer;
+}
+div.menuitem:hover {
+    color: #929273; background-color:rgb(10, 10, 10);
 }

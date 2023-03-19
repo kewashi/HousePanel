@@ -24,6 +24,9 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
     et_Globals.pagename = pagename;
     et_Globals.userid = userid;
     et_Globals.thingid = thingid;
+
+    console.log("edited: ", edited, " priorOpmode: ", priorOpmode);
+
     if ( str_type==="page" ) {
         et_Globals.wholetarget = getCssRuleTarget(str_type, "name", thingindex, "thistile");
     } else {

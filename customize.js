@@ -1122,8 +1122,8 @@ function applyCustomField(action, subid) {
          ( !content.startsWith("http://") && !content.startsWith("https://") ) ) {
         errors.push("User content for web type entries must begin with http or https"); 
     }
-    if ( action==="addcustom" && customtype==="TEXT" && content.length===0 ) {
-        errors.push("Custom text provided for TEXT type addition cannot be an empty string.");
+    if ( action==="addcustom" && customtype==="TEXT" && content.length===0 && subid!=="password") {
+        errors.push("Custom text provided for TEXT type addition cannot be an empty string other than password fields to create confirmation.");
     }
 
     // don't update if we are adding
