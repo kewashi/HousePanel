@@ -360,7 +360,7 @@ ul.ui-tabs-nav {
 .error, .error_description {
     background-color: #ff0000;  color: #ffffff;
 }
-.hidden {
+div.overlay.hidden, .hidden {
     display: none;
 }
 input.disabled, button.disabled {

@@ -138,23 +138,24 @@ div.contact.door {
 
 /* this section is for specific thing icons and texts */
 /* the transparency is set to near zero so text doesn't show */
-div.contact.open {
+div.overlay.contact div.contact.open {
     background-image: url('icons/opencontact.png');
 }
-div.contact.closed, div.overlay.contact div.contact {
+div.overlay.contact div.contact.closed, div.overlay.contact div.contact {
     background-image: url('icons/closecontact.png');
 }
 div.overlay.contact div.contact.mat.open, div.overlay.contact div.contact.pressure.open {
     background-image: url('icons/matempty.png');
 }
-div.contact.mat.closed, div.contact.pressure.closed, div.overlay.contact div.contact.mat, div.overlay.contact div.contact.pressure {
+div.overlay.contact div.contact.mat.closed, div.overlay.contact div.contact.pressure.closed, 
+div.overlay.contact div.contact.mat, div.overlay.contact div.contact.pressure {
     background-image: url('icons/matfull.png');
     color: rgba(255, 255, 255, 0.01);
     background-size: 55px;
 }
 
 /* specific contact types one might find */
-div.door.open, div.contact.door.open {
+div.overlay.door div.door.open, div.overlay.contact div.contact.door.open {
     background-image: url('icons/opendoor.png');
 }
 div.door.closed, div.contact.door.closed {
@@ -163,24 +164,24 @@ div.door.closed, div.contact.door.closed {
 div.overlay.water div.water.wet {
     background-image: url('icons/wet@2x.png');
 }
-div.overlay.water div.water.dry {
+div.overlay.water div.water.dry, div.overlay.water div.water {
     background-image: url('icons/dry@2x.png');
 }
 /* hide the contact part of garage doors that include an embedded contact sensor */
 div.garage-thing div.overlay.contact, div.door-thing.garage div.overlay.contact {
     display: none;
 }
-div.contact.window.open {
+div.overlay.contact div.contact.window.open {
     background-image: url('icons/openwindow.png');
 }
 div.contact.window.closed, div.overlay.contact div.contact.window {
     background-image: url('icons/closewindow.png');
 }
-div.door.garage.open {
+div.overlay.door div.door.garage.open {
     background-image: url('icons/garage-opened.png');
     background-size: 100px;
 }
-div.door.garage.closed, div.overlay.door div.door.garage {
+div.overlay.door div.door.garage.closed, div.overlay.door div.door.garage {
     background-image: url('icons/garage-closed.png');
     background-size: 100px;
 }
@@ -190,17 +191,17 @@ div.door.garage.opening, div.door.garage.closing {
 }
 
 /* fill tile with valve image */
-div.valve.open {
+div.overlay.valve div.valve.open {
     background-image: url('icons/sprinkler-on.png');
 }
-div.valve.closed, div.overlay.valve div.valve {
+div.overlay.valve div.valve.closed, div.overlay.valve div.valve {
     background-image: url('icons/sprinkler-off.png');
 }
 /* special handling of garage entry which is a door */
-div.contact.garage.entry.open {
+div.overlay.contact div.contact.garage.entry.open {
     background-image: url('icons/opendoor.png');
 }
-div.contact.garage.entry.closed, div.contact.garage.entry {
+div.overlay.contact div.contact.garage.entry.closed, div.overlay.contact div.contact.garage.entry {
     background-image: url('icons/closedoor.png');
 }
 /* motion styling */
@@ -222,16 +223,16 @@ div.overlay.lock div.lock.unlocked, div.overlay.lock div.lock.unknown {
 
 /* switch styling */
 
-div.switch.on, div.bulb.on, div.switch.flash, div.bulb.flash, div.isy.DON {
+div.overlay.switch div.switch.on, div.overlay.bulb div.bulb.on, div.overlay.switch div.switch.flash, div.overlay.bulb div.bulb.flash, div.overlay.switch div.switch.DON {
     background-image: url('icons/bulbon.png');
 }
-div.switch.off, div.bulb.off, div.isy.DOF, div.overlay.switch div.switch, div.overlay.bulb div.bulb {
+div.overlay.switch div.switch.off, div.overlay.bulb div.bulb.off, div.overlay.switch div.switch.DOF, div.overlay.switch div.switch, div.overlay.bulb div.bulb {
     background-image: url('icons/bulboff.png');
 }
-div.switch.plug.on {
+div.overlay.switch div.switch.plug.on {
     background-image: url('icons/plugon.png');
 }
-div.switch.plug.off, div.overlay.switch div.switch.plug {
+div.overlay.switch div.switch.plug.off, div.overlay.switch div.switch.plug {
     background-image: url('icons/plugoff.png');
 }
 div.overlay.allon div.allon.on, div.overlay.alloff div.alloff.on {

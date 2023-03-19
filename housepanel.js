@@ -315,10 +315,6 @@ $(document).ready(function() {
 
         $("div#hpmenu").on("click", function(evt) {
             var pos = {top: 40, left: 10};
-            //     var controlval = {"name": "Controller", "showoptions": "Options","refreshpage": "Refresh",
-            // "c__userauth": "Re-Auth","showid": "Show Info","toggletabs": "Toggle Tabs", "showdoc": "Documentation",
-            // "blackout": "Blackout","operate": "Operate","reorder": "Reorder","edit": "Edit"};
-
             evt.stopPropagation();
 
             var mc = '<div class="menubar">Main Menu</div>';
@@ -384,32 +380,34 @@ $(document).ready(function() {
         var unamere = /^\D\S{2,}$/;      // start with a letter and be three long at least
         // $("#uname").val("default");
         $("#emailid").focus();
-        $("#loginform").on("keydown", function(e) {
-            if ( e.which===27  ){
+        $("#loginform").on("keydown", function(evt) {
+            if ( evt.which===27  ){
                 $("#emailid").val("");
+                $("#mobileid").val("");
                 $("#pname").val("");
                 $("#pword").val("");
                 $("#panelpword").val("");
+                $("#emailid").focus();
             }
         });
 
-        $("#emailid").on("keydown",function(e) {
+        $("#emailid").on("keydown",function(evt) {
+            evt.stopPropagation();
             var unameval = $("#emailid").val();
-            if ( e.which===13 || e.which===9 ){
+            if ( evt.which===13 ){
                 var msg = checkInpval("username", unameval, unamere);
                 if ( msg ) {
                     $("#emailid").focus();
                     alert(msg);
                 } else {
-                    $("#pword").val("");
-                    $("#pword").focus();
+                    $("#mobilid").focus();
                 }
-                // e.stopPropagation();
             }
         });
 
         $("#moreinfo").off("click");
         $("#moreinfo").on("click",function(evt) {
+            evt.stopPropagation();
             if ( $("#loginmore").hasClass("hidden") ) {
                 $("#loginmore").removeClass("hidden");
                 $(evt.target).html("Less...");
@@ -426,43 +424,49 @@ $(document).ready(function() {
         });
 
         $("#olduser").off("click");
-        $("#olduser").on("click",function(e) {
+        $("#olduser").on("click",function(evt) {
+            evt.stopPropagation();
             $("#newuserform").addClass("hidden");
             $("#loginform").removeClass("hidden");
-            e.stopPropagation();
         });
 
         $("#revertolduser").off("click");
-        $("#revertolduser").on("click",function(e) {
+        $("#revertolduser").on("click",function(evt) {
             window.location.href = cm_Globals.returnURL + "/logout";
         });
 
         $("#forgotpw").off("click");
-        $("#forgotpw").on("click",function(e) {
+        $("#forgotpw").on("click",function(evt) {
+            evt.stopPropagation();
             execForgotPassword();
-            e.stopPropagation();
         });
 
-        $("#pword").on("keydown",function(e) {
-            if ( e.which===13 || e.which===9 ){
+        $("#pword").on("keydown",function(evt) {
+            evt.stopPropagation();
+            if ( evt.which===13 ){
                 $("#pname").val("default");
                 $("#pname").focus();
-                e.stopPropagation();
             }
         });
 
-        $("#pname").on("keydown",function(e) {
-            if ( e.which===13 || e.which===9 ){
-                $("#panelpword").val("");
+        $("#pname").on("keydown",function(evt) {
+            evt.stopPropagation();
+            if ( evt.which===13 ){
+                $("#pnumber").focus();
+            }
+        });
+
+        $("#pnumber").on("keydown",function(evt) {
+            evt.stopPropagation();
+            if ( evt.which===13 ){
                 $("#panelpword").focus();
-                e.stopPropagation();
             }
         });
 
-        $("#panelpword").on("keydown",function(e) {
-            if ( e.which===13 ){
+        $("#panelpword").on("keydown",function(evt) {
+            evt.stopPropagation();
+            if ( evt.which===13 ){
                 execButton("dologin");
-                e.stopPropagation();
             }
         });
     }
@@ -523,18 +527,18 @@ $(document).ready(function() {
                 return;
             }
 
-            if ( $(this).hasClass("confirm") ) {
+            if ( $(this).hasClass("confirm") || buttonid.startsWith("c__") ) {
                 var pos = {top: 100, left: 100};
                 createModal("modalexec","Perform " + textname + " operation... Are you sure?", "body", true, pos, function(ui, content) {
                     var clk = $(ui).attr("name");
                     if ( clk==="okay" ) {
-                        execButton(buttonid);
                         evt.stopPropagation();
+                        execButton(buttonid);
                     }
                 });
             } else {
-                execButton(buttonid);
                 evt.stopPropagation();
+                execButton(buttonid);
             }
         });
     }
@@ -2112,14 +2116,14 @@ function execButton(buttonid) {
     } else if ( buttonid==="refreshpage" && priorOpmode==="Operate" ) {
         var pstyle = "position: absolute; background-color: blue; color: white; font-weight: bold; font-size: 24px; left: 300px; top: 300px; width: 600px; height: 100px; margin-left: 50px; margin-top: 50px;";
         var rstyle = "position: absolute; background-color: blue; color: white; font-weight: normal; font-size: 24px; left: 200px; top: 200px; width: 800px; height: 250px; margin-left: 50px; margin-top: 50px;";
-        createModal("info", "Screen will reload when hub refresh is done...","body", false, {style: pstyle});
+        createModal("modalpopup", "Screen will reload when hub refresh is done...","body", false, {style: pstyle});
         dynoPost(buttonid, "", function(presult, pstatus) {
             setTimeout(function() {
-                closeModal("info");
-                createModal("info", presult, "body", false, {style: rstyle});
+                closeModal("modalpopup");
+                createModal("modalpopup", presult, "body", false, {style: rstyle});
                 setTimeout(function() {
                     window.location.href = cm_Globals.returnURL;
-                },2000);
+                },5000);
             },2000);
         });
     
@@ -2159,11 +2163,9 @@ function setupButtons() {
 
         // prevent mode from changing when editing a tile
         $("div.modeoptions").on("click","input.radioopts",function(evt){
-            // if ( modalStatus === 0  ) {
-                var opmode = $(this).attr("id");
-                execButton(opmode);
-            // }
+            var opmode = $(this).attr("id");
             evt.stopPropagation();
+            execButton(opmode);
         });
         
         $("#showversion").on("click", function(e) {
@@ -2265,18 +2267,23 @@ function setupButtons() {
             var clientLabel = "Client ID: ";
             var secretLabel = "Client Secret: ";
             $("#inp_hubid").hide();
+            $("#inp_clientid").show();
+            $("#inp_clientsecret").show();
             hideaccess.hide();
 
             if ( hubType==="NewSmartThings" ) {
                 hub.hubhost = "https://api.smartthings.com";
                 hub.hubtimer = 0;
+                $("#inp_clientid").hide();
+                $("#inp_clientsecret").hide();
                 hub.hubname = "SmartThings Home";
                 hubTarget.prop("disabled", true);
-                $("#inp_hubid").show();
-                $("#newthingcount").html("Ready to authorize your new SmartThings API account. Provide alias for ST sink in the hub ID field, or skip to disable real-time updates");
+                $("#newthingcount").html("Ready to authorize your new SmartThings API account. Account access information required in cfg file");
             } else if ( hubType==="Sonos" ) {
                 hub.hubhost = "https://api.sonos.com";
                 hub.hubtimer = 0;
+                $("#inp_clientid").hide();
+                $("#inp_clientsecret").hide();
                 hub.hubname = "Sonos";
                 hubTarget.prop("disabled", true);
                 $("#newthingcount").html("Ready to authorize your Sonos account. The hub name can be set to anything or the name Sonos will be assigned.");
@@ -2287,12 +2294,11 @@ function setupButtons() {
                 hideaccess.show();
                 $("#newthingcount").html("Ready to authorize your Hubitat hub. For local use, change Hub API above to your hub's local IP. The hub name will be obtained automatically.");
             } else if ( hubType==="Ford" || hubType==="Lincoln" ) {
-                hub.hubhost = "https://dah2vb2cprod.b2clogin.com/914d88b1-3523-4bf6-9be4-1b96b4f6f919";
+                hub.hubhost = "https://dah2vb2cprod.b2clogin.com";
                 hub.hubtimer = 0;
                 hub.hubname = hubType + " Vehicle";
                 hubTarget.prop("disabled", true);
-                $("#inp_hubid").show();
-                $("#newthingcount").html("Ready to authorize your Ford or Lincoln vehicle. Be sure to provide a valid App ID in the Hub Id field");
+                $("#newthingcount").html("Ready to authorize your Ford or Lincoln vehicle. Account access information required in cfg file");
             } else if ( hubType==="ISY" ) {
                 hub.hubhost = "https://192.168.xxx.yyy:8443/rest";
                 hub.hubname = "ISY Home";
@@ -2505,14 +2511,16 @@ function setupAuthHub(hubId) {
             clientLabel = "Username: ";
             secretLabel = "Password: ";    
         } else if ( hub.hubtype === "Ford" || hub.hubtype === "Lincoln" ) {
-            $("#inp_hubid").show();
             $("input[name='hubhost']").prop("disabled", true);
         } else if ( hub.hubtype === "Hubitat" ) {
             hideaccess.show();
         } else if ( hub.hubtype === "Sonos" ) {
             $("input[name='hubhost']").prop("disabled", true);
+            $("#inp_clientid").hide();
+            $("#inp_clientsecret").hide();
         } else if ( hub.hubtype === "NewSmartThings" ) {
-            $("#inp_hubid").show();
+            $("#inp_clientid").hide();
+            $("#inp_clientsecret").hide();
             $("input[name='hubhost']").prop("disabled", true);
         }
     }
@@ -3404,6 +3412,11 @@ function setupPage() {
         }
         
         // var tile = '#t-'+aid;
+        var doconfirm = $(this).hasClass("confirm") || subid.startsWith("c__");
+        var trigger = subid;
+        if ( subid.startsWith("c__") ) {
+            trigger = subid.substring(3);
+        }
         var thetype = $(that).attr("type");
         var thingname = $("#s-"+aid).html();
         var targetid = '#a-'+aid+'-'+subid;
@@ -3416,16 +3429,17 @@ function setupPage() {
         // handle special control type tiles that perform javascript actions
         // if we are not in operate mode only do this if click is on operate
         if ( subid!=="name" && thetype==="control" && (priorOpmode==="Operate" || subid==="operate") ) {
-            if ( $(this).hasClass("confirm") ) {
+            evt.stopPropagation();
+            if ( doconfirm ) {
                 var pos = {top: 100, left: 100};
-                createModal("modalexec","<p>Perform " + subid + " operation ... Are you sure?</p>", "body", true, pos, function(ui) {
+                createModal("modalexec","<p>Perform " + trigger + " operation ... Are you sure?</p>", "body", true, pos, function(ui) {
                     var clk = $(ui).attr("name");
                     if ( clk==="okay" ) {
-                        execButton(subid);
+                        execButton(trigger);
                     }
                 });
             } else {
-                execButton(subid);
+                execButton(trigger);
             }
             return;
         }
@@ -3474,7 +3488,20 @@ function setupPage() {
                     (thetype==="variables" && subid!=="name") || subid==="hue" || subid==="saturation" ) {
             getNewValue(that, thingname, ro, subid, thevalue);
         } else {
-            processClick(that, thingname, ro, thevalue);
+
+            if ( doconfirm && !ro ) {
+                var tpos = $(that).offset();
+                var ttop = (tpos.top > 125) ? tpos.top - 120 : 5;
+                var pos = {top: ttop, left: tpos.left};
+                createModal("modalexec","<p>Perform " + trigger + " operation</p><p>Are you sure?</p>", "body", true, pos, function(ui) {
+                    var clk = $(ui).attr("name");
+                    if ( clk==="okay" ) {
+                        processClick(that, thingname, ro, thevalue);
+                    }
+                });
+            } else {
+                processClick(that, thingname, ro, thevalue);
+            }
         }
         evt.stopPropagation();
 

@@ -1,4 +1,5 @@
 const devhistory = `
+3.064   cleanup user interface and minor bug fixes
 3.063   added menu and removed ugly blue buttons from bottom of screen
 3.062   disable button selections when editing or customizing tiles, fix color z-index
 3.061   bug fix in customizer & tileeditor, zindex fix, skin tweaks, more code cleanup
