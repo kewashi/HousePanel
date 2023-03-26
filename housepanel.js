@@ -3424,11 +3424,13 @@ function setupPage() {
             var slen = subid.length;
             targetid = '#a-'+aid+'-'+subid.substring(0,slen-3);
         }
-        var thevalue = $(targetid).html()
+        var thevalue = $(targetid).html();
         
         // handle special control type tiles that perform javascript actions
         // if we are not in operate mode only do this if click is on operate
-        if ( subid!=="name" && thetype==="control" && (priorOpmode==="Operate" || subid==="operate") ) {
+        // also skip links to web calls that have the control type
+        if ( subid!=="name" && thetype==="control" && (priorOpmode==="Operate" || subid==="operate") && 
+             !thevalue.startsWith("URL::") && !thevalue.startsWith("POST::") && !thevalue.startsWith("GET::") && !thevalue.startsWith("PUT::") && !thevalue.startsWith("RULE::") ) {
             evt.stopPropagation();
             if ( doconfirm ) {
                 var pos = {top: 100, left: 100};

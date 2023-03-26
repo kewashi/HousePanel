@@ -65,6 +65,7 @@ div.thing {
     height: 211px;
     z-index: 1;
     background-repeat: no-repeat;
+    border-radius: 5%;
 
     transform: scale(1.0);
     -moz-transform: scale(1.0);

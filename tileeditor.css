@@ -2100,11 +2100,14 @@ div#hpmenu {
     background-color: black; color: white;
     cursor: pointer;
 }
+div.menubar {
+    font-size: 14pt;
+}
 div.menuitem {
     display: block;
     background-color: #e5e5e0; color:rgb(22, 21, 21);
-    margin-left: 10px;
-    font-size: 10pt;
+    margin-left: 10px; margin-right: 5px;
+    font-size: 12pt;
     cursor: pointer;
 }
 div.menuitem:hover {

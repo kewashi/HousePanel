@@ -2049,23 +2049,33 @@ function initColor(str_type, subid, thingindex) {
         var border = "<div class='editSection_input'><label>Border Type:</label>";
         border += "<select name=\"borderType\" id=\"borderType\" class=\"ddlDialog\">";
         var borderopts = {"Select Option":"",
-                          "Default": "border: unset; border-right: unset; border-bottom: unset; border-radius: 0%; box-shadow: unset;",
+                          "None": "border: none; border-radius: 0%; box-shadow: none;",
                           "Shadow Square": "border: 2px solid #999999; border-right: 2px solid #333333; border-bottom: 2px solid #333333; border-radius: 0%; box-shadow: 2px 2px 7px black;",
-                          "ActionTiles Look": "border: 4px solid #666666; border-right: 4px solid #666666; border-bottom: 4px solid #666666; border-radius: 0%; box-shadow: none; margin: 0px;",
-                          "Thin Border": "border: 1px solid black;",
-                          "2x Border": "border: 2px solid black;",
-                          "3x Border": "border: 3px solid black;",
-                          "Thick Border": "border: 6px solid black;",
+                          "Simple Square": "border: 4px solid #666666; border-right: 4px solid #666666; border-bottom: 4px solid #666666; border-radius: 0%; box-shadow: none;",
+                          "Solid Style": "border-style: solid;",
+                          "Dashed Style": "border-style: dashed;",
+                          "Dotted Style": "border-style: dotted;",
+                          "Double Style": "border-style: double;",
+                          "1x Border": "border-width: 1px;",
+                          "2x Border": "border-width: 2px;",
+                          "4x Border": "border-width: 4px;",
+                          "6x Border": "border-width: 6px;",
+                          "10x Border": "border-width: 10px;",
                           "White Color": "border-color: white;", 
                           "Black Color": "border-color: black;", 
+                          "Red Color": "border-color: red;", 
+                          "Green Color": "border-color: green;", 
+                          "Blue Color": "border-color: blue;", 
+                          "Purple Color": "border-color: purple;", 
+                          "Cyan Color": "border-color: cyan;", 
                           "No Color" : "border-color: rgba(0,0,0,0.01);",
-                          "White Shadow": "box-shadow: 5px 4px 15px #cccccc;",
+                          "White Shadow": "box-shadow: 5px 4px 15px white;",
                           "Black Shadow": "box-shadow: 5px 4px 15px black;",
                           "No Shadow": "box-shadow: none;",
                           "Square": "border-radius: 0%;",
                           "Circle": "border-radius: 50%;",
-                          "Rounded Rect": "border-radius: 25%;",
-                          "None": "border: none; box-shadow: none;" };
+                          "Small Rounded Rect": "border-radius: 5%;",
+                          "Large Rounded Rect": "border-radius: 15%;"};
         for ( var bopt in borderopts ) {
             var checked = "";
             if ( bopt==="Select Option" ) { checked = " selected"; }
