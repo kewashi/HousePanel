@@ -187,14 +187,15 @@ function getOnOff(str_type, subid, val) {
     // console.log(">>>> subid: ", subid);
 
     // handle the cases for custom tiles that could have any subid starting with valid names
+    // get rid of flash since the state actually never gets set by the Hubitat hub
     if ( subid.startsWith("switch" ) ) {
-        if ( hubType==="ISY" || str_type==="isy" ) {
+        if ( str_type==="isy" || str_type==="isysub" ) {
             onoff = ["DON","DOF"];
-        } else if ( hubType==="Hubitat" ) {
-            onoff = ["on","off","flash"];
         } else {
             onoff = ["on","off"];
         }
+    } else if ( subid.startsWith("ecoMode") ) {
+        onoff = ["ON","OFF"];
     } else if ( (str_type==="momentary") && subid.startsWith("momentary" ) ) {
         onoff = ["on","off"];
     } else if ( str_type==="button" && subid.startsWith("button") ) {

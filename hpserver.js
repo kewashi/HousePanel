@@ -5845,6 +5845,9 @@ function putLinkElement(bid, hint, helperval, kindex, cnt, j, thingtype, tval, t
                         linktileval = translateObjects(linktileval);
                     }
 
+                    // put linked val through the customization
+                    linktileval = getCustomTile(userid, configoptions, linktileval, linkbid);
+
                 } catch(e) {
                     linktileval = {};
                 }
@@ -5928,31 +5931,34 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         return $tc;
     }
         
-    // fix thermostats to have proper consistent tags
-    // this is supported by changes in the .js file and .css file
+    // ignore keys for single attribute items and keys that match types
+    var tkeyshow = (tkey === thingtype) ? "" : " " + tkey;
+
+    // add real sub for linked tiles
+    if ( realsubid && realsubid!==tkey ) {
+        tkeyshow = tkeyshow + " " + realsubid;
+    }
     
     if ( tkey==="hue" || tkey==="saturation" ||
          tkey==="heatingSetpoint" || tkey==="coolingSetpoint"  ||
          (tkey.startsWith("Int_") && thingtype==="isy") ||
          (tkey.startsWith("State_") && thingtype==="isy") ) {
 
-        var modvar = tkey;
-
         // fix thermostats to have proper consistent tags
         // this is supported by changes in the .js file and .css file
         // notice we use alias name in actual value and original key in up/down arrows
         $tc += "<div class=\"overlay " + tkey + " " + subtype + " v_" + kindex + "\">";
         if (sibling) { $tc += sibling; }
-        $tc += aidi + " subid=\"" + modvar + "-dn\" title=\"" + modvar + " down\" class=\"" + thingtype + " arrow-dn " + modvar + "-dn " + pkindex + "\"></div>";
-        $tc += aidi + " subid=\"" + modvar + "\" title=\"" + thingtype + " " + modvar + "\" class=\"" + thingtype + " arrow-it " + modvar + pkindex + "\"" + " id=\"" + aitkey + "\">" + tval + "</div>";
-        $tc += aidi + " subid=\"" + modvar + "-up\" title=\"" + modvar + " up\" class=\"" + thingtype + " arrow-up " + modvar + "-up " + pkindex + "\"></div>";
+        $tc += aidi + " subid=\"" + tkey + "-dn\" title=\"" + tkey + " down\" class=\"" + thingtype + " arrow-dn " + tkey + "-dn " + pkindex + "\"></div>";
+        $tc += aidi + " subid=\"" + tkey + "\" title=\"" + thingtype + " " + tkey + "\" class=\"" + thingtype + " arrow-it " + tkeyshow + pkindex + "\"" + " id=\"" + aitkey + "\">" + tval + "</div>";
+        $tc += aidi + " subid=\"" + tkey + "-up\" title=\"" + tkey + " up\" class=\"" + thingtype + " arrow-up " + tkey + "-up " + pkindex + "\"></div>";
         $tc += "</div>";
 
     // process analog clocks signalled by use of a skin with a valid name other than digital
     } else if ( thingtype==="clock" && tkey==="skin" && tval && tval!=="digital" ) {
         $tc += "<div class=\"overlay "+tkey+" v_"+kindex+"\">";
         if (sibling) { $tc += sibling; }
-        $tc += aidi + ttype + "\"  subid=\""+tkey+"\" title=\"Analog Clock\" class=\"" + thingtype + subtype + pkindex + "\" id=\""+aitkey+"\">" +
+        $tc += aidi + ttype + "\"  subid=\""+tkey+"\" title=\"Analog Clock\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\""+aitkey+"\">" +
               "<canvas id=\"clock_"+i+"\" class=\""+tval+"\"></canvas></div>";
         $tc += "</div>";
     } else {
@@ -6026,24 +6032,6 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
             $tc += "</div>";
         }
 
-        // ignore keys for single attribute items and keys that match types
-        var tkeyshow;
-        if ( (tkey===thingtype ) || 
-             (tkey==="value" && j===0) ) {
-            tkeyshow= "";
-        // add confirm class for keys that start with c__ so we can treat like buttons
-        // now we do this on the js side to avoid messing up customs made with c__
-        // } else if ( tkey.substr(0,3) === "c__" ) {
-        //     tkey = tkey.substr(3);
-        //     tkeyshow = " " + tkey + " confirm";
-        } else {
-            tkeyshow = " " + tkey;
-        }
-
-        // add real sub for linked tiles
-        if ( realsubid && realsubid!==tkey ) {
-            tkeyshow = tkeyshow + " " + realsubid;
-        }
          // include class for main thing type, the subtype, a sub-key, and a state (extra)
         // also include a special hack for other tiles that return number_ to remove that
         // this allows KuKu Harmony to show actual numbers in the tiles
@@ -6058,20 +6046,14 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         if (sibling) { $tc += sibling; }
         if ( tkey === "level" || tkey==="onlevel" || tkey==="colorTemperature" || tkey==="volume" || tkey==="position" ) {
             $tc += aidi + ttype + " subid=\"" + tkey+"\" value=\""+tval+"\" title=\""+tkey+"\" class=\"" + thingtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\"></div>";
-        // } else if ( thingtype==="location" && tkey.substr(0,1)==="_" && tval.substr(0,6)!=="RULE::" ) {
-        //     $tc += aidi + ttype + " subid=\"" + tkey+"\" modeid=\""+tval+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + extra + "\" id=\"" + aitkey + "\">" + tkey.substr(1) + "</div>";
-        } else if ( typeof tkey==="string" && typeof tval==="string" && tkey.substr(0,8)==="_number_" && tval.substr(0,7)==="number_" ) {
+        } else if ( typeof tkey==="string" && typeof tval==="string" && tkey.substring(0,8)==="_number_" && tval.substring(0,7)==="number_" ) {
             var numval = tkey.substring(8);
             $tc += aidi + ttype + " subid=\"" + tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\">" + numval + "</div>";
         } else {
             if ( typeof tval==="string" && tval.substring(0,6)==="RULE::" && subtype!=="rule" ) {
                 tkeyshow += " rule";
             }
-            // if ( thingtype === "variables" ) {
-            //     $tc += "<div aid=\""+i+"\" type=\""+thingtype+"\"  subid=\""+tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + extra + "\" id=\"" + aitkey + "\">" + tkey + " = " + tval + "</div>";
-            // } else {
-            $tc += "<div aid=\""+i+"\" type=\""+thingtype+"\"  subid=\""+tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + extra + "\" id=\"" + aitkey + "\">" + tval + "</div>";
-            // }
+            $tc += aidi + ttype + "  subid=\""+tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + extra + "\" id=\"" + aitkey + "\">" + tval + "</div>";
         }
         $tc += "</div>";
     }

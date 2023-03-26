@@ -223,7 +223,7 @@ div.overlay.lock div.lock.unlocked, div.overlay.lock div.lock.unknown {
 
 /* switch styling */
 
-div.overlay.switch div.switch.on, div.overlay.bulb div.bulb.on, div.overlay.switch div.switch.flash, div.overlay.bulb div.bulb.flash, div.overlay.switch div.switch.DON {
+div.overlay.switch div.switch.on, div.overlay.bulb div.bulb.on, div.overlay.switch div.switch.DON {
     background-image: url('icons/bulbon.png');
 }
 div.overlay.switch div.switch.off, div.overlay.bulb div.bulb.off, div.overlay.switch div.switch.DOF, div.overlay.switch div.switch, div.overlay.bulb div.bulb {

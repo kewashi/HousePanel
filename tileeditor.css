@@ -1486,14 +1486,12 @@ div.clock.tzone, div.thingname.mode, div.bulb.colorMode, div.light.colorMode,
 div.illuminance-thing div.overlay.temperature,
 div.overlay.occupancy
 {
-    display:none;
+    display: none;
 }
 
 /* by default put digital stuff in analog clock as an overlay*/
 div.clock-thing.analog div.overlay {
     position: absolute;
-    top: 0px;
-    left: 0px;
 }
 div.clock-thing div.clock.time,
 div.clock-thing div.clock.weekday,
@@ -1504,15 +1502,14 @@ div.clock-thing div.clock.date {
 
 div.clock-thing.digital div.overlay.skin {
     display: none;
-    position: absolute;
+    position: relative;
 }
 
-div.clock-thing div.overlay.skin {
-    display: inline-block;
-    position: absolute;
-    top: 20px;
-    left: 0px;
+div.clock-thing.analog div.overlay.skin {
+    display: block;
+    position: relative;
     border: none;
+    width: auto;
 }
 div.clock-thing div.overlay.fmt_date, div.clock-thing div.overlay.fmt_time,
 div.clock-thing div.overlay.tzone {

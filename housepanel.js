@@ -3484,7 +3484,8 @@ function setupPage() {
                     (subid.startsWith("Int_") && !subid.endsWith("-up") && !subid.endsWith("-dn") )|| 
                     (subid.startsWith("State_") && !subid.endsWith("-up") && !subid.endsWith("-dn") ) ||
                     subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" ||
-                    subid==="heatingSetpoint" || subid==="coolingSetpoint" ||
+                    subid==="heatingSetpoint" || subid==="coolingSetpoint" || 
+                    subid==="ecoHeatPoint" || subid==="ecoCoolPoint" ||
                     (thetype==="variables" && subid!=="name") || subid==="hue" || subid==="saturation" ) {
             getNewValue(that, thingname, ro, subid, thevalue);
         } else {
@@ -3792,8 +3793,11 @@ function processClick(that, thingname, ro, thevalue) {
             this[0].html(this[2]);
         };
 
+        // reverse the values of on and off in upper and lower case
         if ( thevalue && (thevalue==="on" || thevalue==="off") ) {
             thevalue = thevalue==="on" ? "off" : "on";
+        } else if ( thevalue  && (thevalue==="ON" || thevalue==="OFF") ) {
+            thevalue = thevalue==="OFF" ? "OFF" : "ON";
         }
         // console.log(ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" linkbid+ "+linkbid+" linkhub= " + linkhub + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
 
