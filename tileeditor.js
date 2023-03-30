@@ -25,8 +25,6 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
     et_Globals.userid = userid;
     et_Globals.thingid = thingid;
 
-    console.log("edited: ", edited, " priorOpmode: ", priorOpmode);
-
     if ( str_type==="page" ) {
         et_Globals.wholetarget = getCssRuleTarget(str_type, "name", thingindex, "thistile");
     } else {
@@ -1552,7 +1550,7 @@ function updateNames(str_type, thingindex) {
                     thingindex = newname;
                 }
                 // console.log(presult);
-                cm_Globals.reload = true;
+                cm_Globals.edited = true;
                 $(target1).html(newname);
             } else {
                 console.log("error - failed to update names. pstatus: ", pstatus," presult: ", presult);
@@ -1641,12 +1639,13 @@ function saveCSSFile(str_type, thingindex, sheetContents, reload) {
 
                     // reload if tile updated and if we are saving the last file part
                     if ( done ) {
-                        if ( cm_Globals.reload && reload ) {
-                            window.location.href = cm_Globals.returnURL;
+                        if ( cm_Globals.edited && reload ) {
+                            return;
+                            // window.location.href = cm_Globals.returnURL;
                         } else if ( !reload ) {
                             // savedSheet = document.getElementById('customtiles').sheet;
-                            window.location.href = cm_Globals.returnURL;
                             alert("A new custom CSS file was generated for panel = [" + pname + "] This will be automatically updated as you make edits. You must relaunch editor again.");
+                            window.location.href = cm_Globals.returnURL;
                         }
                     }
                 }
@@ -1660,10 +1659,9 @@ function saveCSSFile(str_type, thingindex, sheetContents, reload) {
 
 function cancelTileEdit(str_type, thingindex) {
     document.getElementById('customtiles').sheet = savedSheet;
-    if ( cm_Globals.reload ) {
-        // location.reload(true);
-        window.location.href = cm_Globals.returnURL;
-    }
+    // if ( cm_Globals.edited ) {
+    //     window.location.href = cm_Globals.returnURL;
+    // }
 }
 
 function resetInverted(selector) {
@@ -2609,7 +2607,7 @@ function addCSSRule(selector, rules, resetFlag, beforetag){
 
     // get main sheet with selectors and rules
     var sheet = document.getElementById('customtiles').sheet; // returns an Array-like StyleSheetList
-    cm_Globals.reload = true;
+    cm_Globals.edited = true;
 
     //Searching of the selector matching cssRules
     var index = -1;
@@ -2642,7 +2640,8 @@ function addCSSRule(selector, rules, resetFlag, beforetag){
 
 function resetCSSRules(str_type, subid, thingindex){
 
-        cm_Globals.reload = true;
+        // cm_Globals.reload = true;
+        cm_Globals.edited = true;
         var ruletypes = ['wholetile','head','name'];
         ruletypes.forEach( function(rule, idx, arr) {
             var subtarget = getCssRuleTarget(str_type, rule, thingindex);

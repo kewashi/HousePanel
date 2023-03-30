@@ -15,6 +15,9 @@ cm_Globals.returnURL = "";
 cm_Globals.hubId = "all";
 cm_Globals.wsclient = null;
 cm_Globals.tabs = "Hide Tabs";
+cm_Globals.snap = false;
+cm_Globals.edited = false;
+cm_Globals.reordered = false;
 cm_Globals.hubs =  {};
 
 var modalStatus = 0;
@@ -25,8 +28,6 @@ var pagename = "main";
 // set a global socket variable to manage two-way handshake
 // var webSocketUrl = null;
 // var wsinterval = null;
-var reordered = false;
-var edited = false;
 
 // set this global variable to true to disable actions
 // I use this for testing the look and feel on a public hosting location
@@ -302,14 +303,46 @@ $(document).ready(function() {
 
         $(document).on("keydown",function(e) {
             if ( e.which===27  ){
-                edited = false;
-                $("#mode_Operate").prop("checked",true).focus();
-                priorOpmode = "Operate";
-                closeModal("menuibox");
-                cancelSortable();
-                cancelPagemove();
-                cancelDraggable();
-                delEditLink();
+                execButton("operate");
+            } else if ( e.which >= 65 && e.which <= 90 ) {
+                var letter = String.fromCharCode(e.which);
+                switch (letter) {
+                    case "O":
+                        execButton("showoptions");
+                        break;
+                    case "F":
+                        execButton("refreshpage");
+                        break;
+                    case "A":
+                        execButton("userauth");
+                        break;
+                    case "I":
+                        execButton("showid");
+                        break;
+                    case "T":
+                        execButton("toggletabs");
+                        break;
+                    case "B":
+                        execButton("blackout");
+                        break;
+                    case "S":
+                        execButton("snap");
+                        break;
+                    case "R":
+                        execButton("reorder");
+                        break;
+                    case "E":
+                        execButton("edit");
+                        break;
+                    case "P":
+                        execButton("operate");
+                        break;
+                    case "D":
+                        execButton("showdoc");
+                        break;
+                    default:
+                        console.log("pressed letter: ", letter, " code: ", e.which);
+                }
             }
         });
 
@@ -319,11 +352,13 @@ $(document).ready(function() {
 
             var mc = '<div class="menubar">Main Menu</div>';
             mc +='<div id="m_showoptions" class="menuitem">Options</div>';
-            mc +='<div id="m_refreshpage" class="menuitem">Refresh</div>';
+            mc +='<div id="m_refreshpage" class="menuitem">reFresh</div>';
             mc +='<div id="m_userauth" class="menuitem">Hub Auth</div>';
             mc +='<div id="m_showid" class="menuitem">Show Info</div>';
             mc +='<div id="m_toggletabs" class="menuitem">' + cm_Globals.tabs + '</div>';
             mc +='<div id="m_blackout" class="menuitem">Blackout</div>';
+            var snapstr = cm_Globals.snap ? "Unset Snap" : "Set Snap";
+            mc +='<div id="m_snap" class="menuitem">' + snapstr + '</div>';
             mc +='<div id="m_reorder" class="menuitem">Reorder</div>';
             mc +='<div id="m_edit" class="menuitem">Edit</div>';
             mc +='<div id="m_operate" class="menuitem">Operate</div>';
@@ -552,7 +587,6 @@ $(document).ready(function() {
         }, 200);
             
         $("button.infobutton").on('click', function() {
-            // location.reload(true);
             if ( pagename=="auth" ) {
                 var defhub = $("#pickhub").val();
                 var hubtimer = $("input[name='hubtimer']").val();
@@ -578,10 +612,11 @@ $(document).ready(function() {
         clockUpdater("clockdigital", true);
         clockUpdater("clockanalog", true);
 
-        // repeat digital clock update every second and analog clock every minute
-        setInterval( function() 
-            { clockUpdater("clockdigital", false) }, 1000
-        );
+        // update times on the clocks every second 
+        setInterval( function() { 
+            clockUpdater("clockdigital", false);
+            clockUpdater("clockanalog", false);
+        }, 1000);
 
         // run clockdigital and clockanalog once every minute for rules
         setInterval( function() 
@@ -1328,7 +1363,7 @@ function setupPagemove() {
 function setupSortable() {
     
     // loop through each room panel
-    reordered = false;
+    cm_Globals.reordered = false;
     $("div.panel").each( function() {
         var panel = $(this).attr("title");
         
@@ -1406,7 +1441,7 @@ function setupDraggable() {
     var startPos = {top: 0, left: 0, "z-index": 0, position: "relative", priorStart: "relative"};
     var delx;
     var dely;
-    edited = false;
+    cm_Globals.edited = false;
 
     xhrdone();
 
@@ -1414,7 +1449,7 @@ function setupDraggable() {
         var snapgrid = false;
     
         if ( snap ) {
-            snapgrid = [10, 10];
+            snapgrid = [20, 20];
         }
         var panel = catpanel;
         thing.draggable({
@@ -1474,8 +1509,7 @@ function setupDraggable() {
         $("#catalog").show();
 
         // the active things on a panel
-        var snap = $("#mode_Snap").prop("checked");
-        thingDraggable( $("div.panel div.thing"), snap, null );
+        thingDraggable( $("div.panel div.thing"), cm_Globals.snap, null );
     
         // enable dropping things from the catalog into panel
         // and movement of existing things around on the panel itself
@@ -1521,6 +1555,7 @@ function setupDraggable() {
                             createModal("modaladd","Add: "+ thingname + " of Type: "+thingtype+" to Room: "+panel+"?<br /><br />Are you sure?", "body", true, pos, function(ui, content) {
                                 var clk = $(ui).attr("name");
                                 if ( clk==="okay" ) {
+                                    cm_Globals.edited = true;
                                     // add it to the system
                                     // the ajax call must return a valid "div" block for the dragged new thing
                                     $.post(cm_Globals.returnURL, 
@@ -1534,8 +1569,7 @@ function setupDraggable() {
                                                 // lastthing.after(presult);
                                                 // var newthing = lastthing.next();
                                                 $(newthing).css( startPos );
-                                                var snap = $("#mode_Snap").prop("checked");
-                                                thingDraggable( newthing, snap, panel );
+                                                thingDraggable( newthing, cm_Globals.snap, panel );
                                                 setupPage();
                                                 setupSliders();
                                                 setupColors();
@@ -1580,16 +1614,17 @@ function setupDraggable() {
                     }
 
                     $(thing).css(startPos);
+                    cm_Globals.edited = true;
                     
                     // now post back to housepanel to save the position
                     // also send the dragthing object to get panel name and tile pid index
                     if ( ! $("#catalog").hasClass("ui-droppable-hover") ) {
                         $.post(cm_Globals.returnURL, 
-                               {useajax: "setposition", userid: cm_Globals.options.userid, pname: pname, id: bid, type: thingtype, value: panel, attr: startPos, tileid: tile, hubid: hubid, thingid: thingid, roomid: roomid},
+                               {useajax: "setposition", userid: cm_Globals.options.userid, pname: pname, id: bid, type: thingtype, value: panel, attr: startPos, tileid: tile, hubid: hubid, thingid: thingid},
                                function (presult, pstatus) {
                                 // check for an object returned which should be a promise object
                                 // if (pstatus==="success" && ( typeof presult==="object" || (typeof presult === "string" && !presult.startsWith("error"))) ) {
-                                //     console.log("setposition presult: ", presult );
+                                    console.log("setposition: ", presult );
                                 // }
                             }
                         );
@@ -1910,6 +1945,8 @@ function execValidateUser() {
 
 function execButton(buttonid) {
 
+    console.log("buttonid: ", buttonid, " priorOpmode: ", priorOpmode, " modalStatus: ", modalStatus, " edited? ", cm_Globals.edited);
+
     if ( buttonid==="optSave") {
 
         // var fobj = formToObject("filteroptions");
@@ -2059,59 +2096,47 @@ function execButton(buttonid) {
         });
     } else if ( buttonid === "toggletabs" && priorOpmode==="Operate" ) {
         toggleTabs();
-    } else if ( buttonid === "reorder" ) {
-        console.log("Reorder button: ", buttonid, " opmode: ", priorOpmode);
-        if ( priorOpmode!=="Operate" ) {
-            $("#mode_"+priorOpmode).prop("checked",true);
-        } else {
-            setupSortable();
-            setupPagemove();
-            $("#mode_Reorder").prop("checked",true);
-            priorOpmode = "Reorder";
-            setCookie("opmode", priorOpmode);
-        }
-    } else if ( buttonid === "edit") {
-        console.log("Edit button: ", buttonid, " opmode: ", priorOpmode);
-        if ( priorOpmode!=="Operate" ) {
-            $("#mode_"+priorOpmode).prop("checked",true);
-        } else {
-            setupDraggable();
-            addEditLink();
-            $("#mode_Edit").prop("checked",true);
-            priorOpmode = "Edit";
-            setCookie("opmode", priorOpmode);
-        }
-    } else if ( buttonid==="operate" ) {
-        console.log("Edit button: ", buttonid, " opmode: ", priorOpmode);
+    } else if ( buttonid === "reorder" && priorOpmode==="Operate" ) {
+        setupSortable();
+        setupPagemove();
+        priorOpmode = "Reorder";
+        setCookie("opmode", priorOpmode);
+    } else if ( buttonid === "edit" && priorOpmode==="Operate") {
+        // console.log("Edit button: ", buttonid, " opmode: ", priorOpmode);
+        setupDraggable();
+        addEditLink();
+        priorOpmode = "Edit";
+        setCookie("opmode", priorOpmode);
+    } else if ( buttonid==="operate" && priorOpmode!=="Operate" ) {
 
         // if modal box is open and we are editing or customizing, do nothing
-        if ( priorOpmode!=="Operate" && modalStatus!==0 ) {
-            $("#mode_"+priorOpmode).prop("checked",true);
-        } else {
-            if ( priorOpmode === "Reorder" ) {
-                if ( reordered ) {
-                    window.location.href = cm_Globals.returnURL;
-                } else {
-                    cancelSortable();
-                    cancelPagemove();
-                }
-            } else if ( priorOpmode === "Edit" ) {
-                if ( edited ) {
-                    window.location.href = cm_Globals.returnURL;
-                } else {
-                    updateFilters();
-                    cancelDraggable();
-                    delEditLink();
-                }
+        // if ( (priorOpmode!=="Operate" && modalStatus!==0) || priorOpmode==="Operate") {
+        //     // $("#mode_"+priorOpmode).prop("checked",true);
+        //     return;
+        if ( priorOpmode === "Reorder" ) {
+            cancelSortable();
+            cancelPagemove();
+            if ( cm_Globals.reordered ) {
+                window.location.href = cm_Globals.returnURL;
             }
-            priorOpmode = "Operate";
-            setCookie("opmode", priorOpmode);
+        } else if ( priorOpmode === "Edit" ) {
+            cancelDraggable();
+            delEditLink();
+            if ( cm_Globals.edited ) {
+                updateFilters();
+                window.location.href = cm_Globals.returnURL;
+            }
         }
-    } else if ( buttonid==="showdoc" ) {
+        priorOpmode = "Operate";
+        setCookie("opmode", priorOpmode);
+        console.log("2 buttonid: ", buttonid, " priorOpmode: ", priorOpmode, " modalStatus: ", modalStatus, " edited? ", cm_Globals.edited);
+        
+    } else if ( buttonid==="showdoc" && priorOpmode==="Operate") {
         window.open("https://housepanel.net",'_blank');
         return;
-    } else if ( buttonid==="Snap" ) {
-        $("#mode_Snap").prop("checked");
+    } else if ( buttonid==="snap" && priorOpmode==="Operate" ) {
+        // $("#mode_Snap").prop("checked");
+        cm_Globals.snap =  ! cm_Globals.snap;
 
     } else if ( buttonid==="refreshpage" && priorOpmode==="Operate" ) {
         var pstyle = "position: absolute; background-color: blue; color: white; font-weight: bold; font-size: 24px; left: 300px; top: 300px; width: 600px; height: 100px; margin-left: 50px; margin-top: 50px;";
@@ -2574,7 +2599,7 @@ function addEditLink() {
 
         // replace all the id tags to avoid dynamic updates
         strhtml = strhtml.replace(/ id="/g, " id=\"x_");
-        edited = true;
+        // cm_Globals.edited = true;
 
         editTile(userid, thingid, pagename, str_type, tile, aid, bid, thingclass, hubid, hubindex, hubType, customname, strhtml);
     });
@@ -3069,22 +3094,18 @@ function processKeyVal(targetid, aid, key, value) {
     // fix images to use width and height if custom items are in this tile
     // handle native track images - including audio devices above
     var oldvalue = $(targetid).html();
-    var oldclass = $(targetid).attr("class");
     var isclock = false;
 
     // swap out blanks from old value and value
     if ( oldvalue && typeof oldvalue === "string" ) {
         oldvalue = oldvalue.trim();
-        oldvalue = oldvalue.replace(/ /g,"_");
     }
 
     // remove spaces from class
-    var extra = value;
     if ( value && typeof value === "string" ) {
         value = value.trim();
-        extra = extra.trim();
-        extra = extra.replace(/ /g,"_");
     }
+    var extra = value;
 
     // remove the old class type and replace it if they are both
     // single word text fields like open/closed/on/off
@@ -3160,18 +3181,22 @@ function processKeyVal(targetid, aid, key, value) {
         } 
 
     // add status of things to the class and remove old status
-    } else if ( oldvalue && extra && 
+    } else {
+        oldvalue = oldvalue.replace(/ /g,"_");
+        extra = extra.replace(/ /g,"_");
+        if ( oldvalue && extra && 
             key!=="name" && key!=="trackImage" && key!=="temperature" &&
             key!=="trackDescription" && key!=="mediaSource" &&
             key!=="currentArtist" && key!=="currentAlbum" &&
             $.isNumeric(extra)===false && 
             $.isNumeric(oldvalue)===false &&
             $(targetid).hasClass(oldvalue) ) 
-    {
-        if ( key !== oldvalue ) {
-            $(targetid).removeClass(oldvalue);
+        {
+            if ( key !== oldvalue ) {
+                $(targetid).removeClass(oldvalue);
+            }
+            $(targetid).addClass(extra);
         }
-        $(targetid).addClass(extra);
     }
 
     // update the content 
@@ -3324,7 +3349,7 @@ function clockUpdater(whichclock, forceget) {
         // only update the time elements
         var updobj = {time: clockdevice.time, date: clockdevice.date, weekday: clockdevice.weekday};
 
-        // first update all the clock tiles
+        // update all the clock tiles for this type
         $('div.panel div.thing[bid="'+clocktype+'"]').each(function() {
             var aid = $(this).attr("aid");
             if ( aid ) {

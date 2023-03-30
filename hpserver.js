@@ -6199,7 +6199,7 @@ function getClock(clockid) {
     var clockskin = "";
     if ( clockid==="clockanalog" ) {
         clockname = "Analog Clock";
-        clockskin = "CoolClock:swissRail:72";
+        clockskin = "CoolClock:housePanel:80";
     }
     var d = new Date();
     var fmtdate = "M d, Y";
@@ -9403,20 +9403,19 @@ function setOrder(userid, swtype, swval) {
                     if ( DEBUG6 ) {
                         console.log( (ddbg()),"move room results: ", results.getAffectedItemsCount() );
                     }
-                    num++;
                 }
             })
             .catch(reason => {
                 console.log( (ddbg()), "setOrder - ", reason);
             });
         }
-        result = "success - updated order of " + num + " rooms for user = " + userid;
+        result = "success - updated order of rooms for user = " + userid;
 
     } else if ( swtype==="things" ) {
 
+        var promiseArray = [];
         for ( var kk in swval ) {
             var thingid = swval[kk].id;
-            // var updval = swval[kk].updval;
             var updval = {tileid: swval[kk].tileid, torder: swval[kk].torder};
             if ( updval ) {
                 if ( DEBUG6 ) {
@@ -9424,8 +9423,10 @@ function setOrder(userid, swtype, swval) {
                 }
                 mydb.updateRow("things", updval, "userid = " + userid + " AND id = "+thingid)
                 .then(results => {
-                    if ( results && swval[kk].position==="relative" ) {
-                        num++;
+                    if ( results ) {
+                        if ( DEBUG6 ) {
+                            console.log( (ddbg()),"move things results: ", results.getAffectedItemsCount() );
+                        }
                     }
                 })
                 .catch( reason => {
@@ -9433,6 +9434,8 @@ function setOrder(userid, swtype, swval) {
                 });
             }
         }
+
+        // Promise.all(promiseArray);
         result = "success - updated order of things for user = " + userid;
 
     } else {
@@ -9441,7 +9444,7 @@ function setOrder(userid, swtype, swval) {
     return result;
 }
 
-function setPosition(userid, swid, swtype, panel, swattr, tileid, thingid) {
+function setPosition(userid, thingid, swattr) {
     
     // first find which index this tile is
     // note that this code will not work if a tile is duplicated on a page
@@ -9471,18 +9474,18 @@ function setPosition(userid, swid, swtype, panel, swattr, tileid, thingid) {
             //  this id value should be exactly the same as thingid
             // update the location permanently and also push new location to all other panels
             var id = thing.id;
-            mydb.updateRow("things", thing, "userid = " + userid + " AND id = " + id)
+            return mydb.updateRow("things", thing, "userid = " + userid + " AND id = " + id)
             .then(result => {
                 if ( result ) {
-                    var tileloc = {left: left, top: top, "z-index": zindex, position: postype};
-                    pushClient(userid, "setposition", thingid, "", tileloc);
+                    var tileloc = {top: top, left: left, "z-index": zindex, position: postype};
+                    // pushClient(userid, "setposition", thingid, "", tileloc);
                     if ( DEBUG6 ) {
-                        console.log( (ddbg()), "moved tile: ", thing, " to a new position: ", tileloc);
+                        console.log( (ddbg()), "moved tile: ", thingid, " to a new position: ", tileloc);
                     }
                     return tileloc;
                 } else {
-                    console.log( (ddbg()), "error - failed to update position for tile: ", tileid, " to permanent position: ", top, left, zindex, postype);
-                    return "error - failed up to update position for tile: " + tileid;
+                    console.log( (ddbg()), "error - failed to update position for tile: ", thingid, " to permanent position: ", top, left, zindex, postype);
+                    return "error - failed up to update position for tile: " + thingid;
                 }
             })
             .catch( reason => {
@@ -9490,11 +9493,11 @@ function setPosition(userid, swid, swtype, panel, swattr, tileid, thingid) {
                 return "error - something went wrong";
             });
         } else {
-            console.log( (ddbg()), "error - could not find tile: ", tileid, " to move to position: ", top, left, zindex);
-            return "error - could not find tile: " + tileid;
+            console.log( (ddbg()), "error - could not find tile: ", thingid, " to move to position: ", top, left, zindex, postype);
+            return "error - could not find tile: " + thingid;
         }
     }).catch(reason => {
-        console.log( (ddbg()), "setPosition - ", reason);
+        console.log( (ddbg()), reason);
         return "error - something went wrong";
     });
 
@@ -11575,7 +11578,7 @@ function apiCall(user, body, protocol, req, res) {
 
             case "setposition":
                 if ( protocol==="POST" ) {
-                    result = setPosition(userid, swid, swtype, swval, swattr, tileid, thingid);
+                    result = setPosition(userid, thingid, swattr);
                     // result = "moved tile - results pushed to database";
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
