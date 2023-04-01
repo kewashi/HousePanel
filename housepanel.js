@@ -14,7 +14,7 @@ cm_Globals.options = null;
 cm_Globals.returnURL = "";
 cm_Globals.hubId = "all";
 cm_Globals.wsclient = null;
-cm_Globals.tabs = "Hide Tabs";
+cm_Globals.tabs = true;
 cm_Globals.snap = false;
 cm_Globals.edited = false;
 cm_Globals.reordered = false;
@@ -340,6 +340,9 @@ $(document).ready(function() {
                     case "D":
                         execButton("showdoc");
                         break;
+                    case "L":
+                        execButton("rehome");
+                        break;
                     default:
                         console.log("pressed letter: ", letter, " code: ", e.which);
                 }
@@ -355,13 +358,14 @@ $(document).ready(function() {
             mc +='<div id="m_refreshpage" class="menuitem">reFresh</div>';
             mc +='<div id="m_userauth" class="menuitem">Hub auth</div>';
             mc +='<div id="m_showid" class="menuitem">show Info</div>';
-            mc +='<div id="m_toggletabs" class="menuitem">' + cm_Globals.tabs + '</div>';
+            var tabstr = cm_Globals.tabs ? "hide Tabs" : "show Tabs";
+            mc +='<div id="m_toggletabs" class="menuitem">' + tabstr + '</div>';
             mc +='<div id="m_blackout" class="menuitem">Blackout</div>';
             var snapstr = cm_Globals.snap ? "unset Snap" : "set Snap";
             mc +='<div id="m_snap" class="menuitem">' + snapstr + '</div>';
             mc +='<div id="m_reorder" class="menuitem">Reorder</div>';
             mc +='<div id="m_edit" class="menuitem">Edit</div>';
-            mc +='<div id="m_rehome" class="menuitem">Rehome Tiles</div>';
+            mc +='<div id="m_rehome" class="menuitem">rehome tiLes</div>';
             mc +='<div id="m_operate" class="menuitem">oPerate</div>';
             var good = createModal("modalpopup", mc, "body" , false, pos, function(ui, content) {
                 var buttonid = $(ui).attr("id");
@@ -2994,18 +2998,14 @@ function setupCustomCount() {
 }
 
 function toggleTabs() {
-    if ( $("#roomtabs").hasClass("hidden") ) {
-        // $("#showversion").removeClass("hidden");
+    cm_Globals.tabs = ! cm_Globals.tabs;
+    if ( cm_Globals.tabs ) {
         $("#roomtabs").removeClass("hidden");
         $("#hpmenu").css("float","left");
-        cm_Globals.tabs = "Hide Tabs";
     } else {
-        // $("#showversion").addClass("hidden");
         $("#roomtabs").addClass("hidden");
         $("#hpmenu").css("float","none");
-        cm_Globals.tabs = "Show Tabs";
     }
-    $("#m_toggletabs").html(cm_Globals.tabs);
 }
 
 function fixTrack(tval) {

@@ -9461,7 +9461,7 @@ function setPosition(userid, swtype, thingid, swattr) {
                 if ( result ) {
                     var tileloc = {top: top, left: left, "z-index": zindex, position: postype, thingid: thingid};
                     pushClient(userid, "setposition", swtype, "", tileloc);
-                    if ( DEBUG6 || DEBUGtmp) {
+                    if ( DEBUG6 ) {
                         console.log( (ddbg()), "moved tile: ", thingid, " to a new position: ", tileloc);
                     }
                     return tileloc;
@@ -12053,7 +12053,7 @@ function apiCall(user, body, protocol, req, res) {
                         hub.hubendpt = hub.userendpt;
                     }
 
-                    if ( DEBUG2 || DEBUGtmp ) {
+                    if ( DEBUG2 ) {
                         console.log((ddbg()), "hub in hubauth: ", hub);
                     }
 
