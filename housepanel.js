@@ -313,7 +313,7 @@ $(document).ready(function() {
                     case "F":
                         execButton("refreshpage");
                         break;
-                    case "A":
+                    case "H":
                         execButton("userauth");
                         break;
                     case "I":
@@ -353,15 +353,16 @@ $(document).ready(function() {
             var mc = '<div class="menubar">Main Menu</div>';
             mc +='<div id="m_showoptions" class="menuitem">Options</div>';
             mc +='<div id="m_refreshpage" class="menuitem">reFresh</div>';
-            mc +='<div id="m_userauth" class="menuitem">Hub Auth</div>';
-            mc +='<div id="m_showid" class="menuitem">Show Info</div>';
+            mc +='<div id="m_userauth" class="menuitem">Hub auth</div>';
+            mc +='<div id="m_showid" class="menuitem">show Info</div>';
             mc +='<div id="m_toggletabs" class="menuitem">' + cm_Globals.tabs + '</div>';
             mc +='<div id="m_blackout" class="menuitem">Blackout</div>';
-            var snapstr = cm_Globals.snap ? "Unset Snap" : "Set Snap";
+            var snapstr = cm_Globals.snap ? "unset Snap" : "set Snap";
             mc +='<div id="m_snap" class="menuitem">' + snapstr + '</div>';
             mc +='<div id="m_reorder" class="menuitem">Reorder</div>';
             mc +='<div id="m_edit" class="menuitem">Edit</div>';
-            mc +='<div id="m_operate" class="menuitem">Operate</div>';
+            mc +='<div id="m_rehome" class="menuitem">Rehome Tiles</div>';
+            mc +='<div id="m_operate" class="menuitem">oPerate</div>';
             var good = createModal("modalpopup", mc, "body" , false, pos, function(ui, content) {
                 var buttonid = $(ui).attr("id");
                 if ( buttonid && $(ui).attr("class") === "menuitem" ) {
@@ -775,10 +776,13 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                     }
                 }
 
+            // changed this to use type correctly and to get thingid from the value passed
             } else if (bid==="setposition" ) {
-                var thing = $("#t-"+thetype);
+                var thingid = pvalue.thingid;
+                var thing = $("#t-"+thingid);
+                console.log("pushClient setposition: ", thingid, thetype, pvalue);
                 if ( thing ) {
-                    relocateTile(thing, pvalue);
+                    relocateTile(thing, thetype, pvalue);
                 }
 
             } else if ( bid && thetype && pvalue && typeof pvalue==="object" ) {
@@ -1343,16 +1347,15 @@ function setupPagemove() {
                 var roomid = $("#panel-"+pgname).attr("roomid");
                 pages[k] = {id: roomid, rorder: k, rname: pgname};
                 k++;
-                // updateSortNumber(this, k.toString());
+                updateSortNumber(this, k.toString());
             });
             var userid = cm_Globals.options.userid;
             var pname = $("#showversion span#infoname").html();
-            // console.log("reordering " + k + " rooms: ", pages);
             $.post(cm_Globals.returnURL, 
                 {useajax: "setorder", userid: userid, pname: pname, id: "none", type: "rooms", value: pages},
                 function (presult, pstatus) {
                     // if (pstatus==="success" ) {
-                    //     console.log( "setorder POST returned: ", presult );
+                    console.log("setorder: ", presult );
                     // }
                 }, "json"
             );
@@ -1383,8 +1386,6 @@ function setupSortable() {
         grid: [1, 1],
         stop: function(evt, ui) {
             var panel = $(ui.item).attr("panel");
-            var roomid = $("#panel-"+panel).attr("roomid");
-            var hubid = $(ui.item).attr("hub");
             var userid = cm_Globals.options.userid;
             var pname = $("#showversion span#infoname").html();
             var tilenums = [];
@@ -1415,11 +1416,11 @@ function setupSortable() {
                 });
 
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "setorder", userid: userid, pname: pname, id: "none", type: "things", value: tilenums, hubid: hubid, roomid: roomid},
+                    {useajax: "setorder", userid: userid, pname: pname, id: "none", type: "things", value: tilenums},
                     function (presult, pstatus) {
-                        // if (pstatus==="success" ) {
-                        //     console.log("setorder POST returned: ", presult );
-                        // }
+                        if (pstatus==="success" ) {
+                            console.log("setorder: ", presult );
+                        }
                     }, "json"
                 );
             }
@@ -1439,8 +1440,8 @@ function updateSortNumber(thetile, num) {
 
 function setupDraggable() {
     var startPos = {top: 0, left: 0, "z-index": 0, position: "relative", priorStart: "relative"};
-    var delx;
-    var dely;
+    var delx = 0;
+    var dely = 0;
     cm_Globals.edited = false;
 
     xhrdone();
@@ -1451,21 +1452,12 @@ function setupDraggable() {
         if ( snap ) {
             snapgrid = [20, 20];
         }
-        var panel = catpanel;
+        // var panel = catpanel;
         thing.draggable({
             revert: "invalid",
     
             start: function(evt, ui) {
 
-                // get the panel name - if the target is in catalog we have to do more work
-                if ( catpanel ) {
-                    panel = catpanel;
-                } else if ( $(evt.target).attr("panel") ) {
-                    panel = $(evt.target).attr("panel");
-                } else {
-                    var deftabid = getCookie("defaultTab");
-                    panel = $("#"+deftabid).text();
-                }
                 startPos["z-index"] = parseInt($(evt.target).css("z-index"));
                 
                 // while dragging make sure we are on top
@@ -1473,21 +1465,20 @@ function setupDraggable() {
                 if (  modalStatus===0 ) {
                     $(evt.target).css("z-index", 999);
                 }
+
     
                 // set relative for new things and absolute for moving existing things
                 if ( $(evt.target).hasClass("catalog-thing") ) {
                     startPos.left = 0;
                     startPos.top = 0;
-                    delx = 0;
-                    dely = 0;
-                    startPos.position = "relative";
                     startPos.priorStart = "relative";
+                    startPos.position = "relative";
                 } else {
+                    // $(evt.target).css({"position":startPos.position, "left": startPos.left, "top": startPos.top} );
                     startPos.left = parseInt($(evt.target).position().left);
                     startPos.top  = parseInt($(evt.target).position().top);
                     delx = evt.pageX - startPos.left;
                     dely = evt.pageY - startPos.top;
-                    // $(evt.target).css({"position":startPos.position, "left": startPos.left, "top": startPos.top} );
                     startPos.priorStart = $(evt.target).css("position");
                     startPos.position = "absolute";
                 }
@@ -1526,7 +1517,7 @@ function setupDraggable() {
             drop: function(evt, ui) {
                 var thing = ui.draggable;
                 var bid = $(thing).attr("bid");
-                var thingtype = $(thing).attr("type");
+                var thingtype = $(thing).attr("type");0
                 var thingname = $(thing).find(".thingname").text();
                 var hubid = $(thing).attr("hubid");
                 var hubindex = $(thing).attr("hubindex");
@@ -1552,6 +1543,19 @@ function setupDraggable() {
                             pos = {position: "absolute", top: evt.pageY, left: evt.pageX, width: 300, height: "auto"};
                             var zmax = getMaxZindex(panel);
                             startPos["z-index"] = zmax;
+                            // if we drop it anywhere other than near last tile, make it absolute
+                            // var lastThing = $("div.thing[panel="+panel+"][style*='relative']").last();
+                            // var lastTop = parseInt( $(lastThing).position().top );
+                            // var lastLeft = parseInt( $(lastThing).position().left );
+                            // var thingTop = evt.pageY;
+                            // var thingLeft = evt.pageX;
+                            // console.log("Y, X, LastY, LastX, class: ", thingTop, thingLeft, lastTop, lastLeft );
+                            // if ( (Math.abs( thingTop - lastTop) > 150) || (Math.abs(thingLeft - lastLeft) > 150) ) {
+                            //     startPos.top = thingTop;
+                            //     startPos.left = thingLeft;
+                            //     startPos.position = "absolute";
+                            // }
+
                             createModal("modaladd","Add: "+ thingname + " of Type: "+thingtype+" to Room: "+panel+"?<br /><br />Are you sure?", "body", true, pos, function(ui, content) {
                                 var clk = $(ui).attr("name");
                                 if ( clk==="okay" ) {
@@ -1563,11 +1567,9 @@ function setupDraggable() {
                                                               attr: startPos, hubid: hubid, hubindex: hubindex, roomid: roomid, pname: pname},
                                         function (presult, pstatus) {
                                             if (pstatus==="success" && !presult.startsWith("error") ) {
-                                                console.log( "Added " + thingname + " of type " + thingtype + " and bid= " + bid + " to room " + panel, " pos: ", startPos, " thing: ", presult);
+                                                console.log( "Added " + thingname + " of type " + thingtype + " and bid= " + bid + " to room " + panel, " pos: ", startPos);
                                                 $("div.panel-"+panel).append(presult);
                                                 var newthing = $("div.panel-"+panel+" div.thing").last();
-                                                // lastthing.after(presult);
-                                                // var newthing = lastthing.next();
                                                 $(newthing).css( startPos );
                                                 thingDraggable( newthing, cm_Globals.snap, panel );
                                                 setupPage();
@@ -1585,15 +1587,10 @@ function setupDraggable() {
                     });
                 // otherwise this is an existing thing we are moving
                 } else {
-
-                    // var lastthing = $("div.panel-"+panel+" div.thing").last();
-                    // startPos.left = $(evt.target).css("left");
-                    // startPos.top = $(evt.target).css("top");
                     startPos.left = evt.pageX - delx;   // parseInt($(evt.target).offset().left);
                     startPos.top  = evt.pageY - dely;   // parseInt($(evt.target).offset().top);
                     var panel = $(thing).attr("panel");
                     var tile = $(thing).attr("tile");
-                    var roomid = $("#panel-"+panel).attr("roomid");
                     var thingid = $(thing).attr("thingid");
                     $(thing).css("z-index", startPos["z-index"] );
 
@@ -1620,7 +1617,7 @@ function setupDraggable() {
                     // also send the dragthing object to get panel name and tile pid index
                     if ( ! $("#catalog").hasClass("ui-droppable-hover") ) {
                         $.post(cm_Globals.returnURL, 
-                               {useajax: "setposition", userid: cm_Globals.options.userid, pname: pname, id: bid, type: thingtype, value: panel, attr: startPos, tileid: tile, hubid: hubid, thingid: thingid},
+                               {useajax: "setposition", userid: cm_Globals.options.userid, pname: pname, id: bid, type: thingtype, attr: startPos, tileid: tile, thingid: thingid},
                                function (presult, pstatus) {
                                 // check for an object returned which should be a promise object
                                 // if (pstatus==="success" && ( typeof presult==="object" || (typeof presult === "string" && !presult.startsWith("error"))) ) {
@@ -1694,7 +1691,7 @@ function setupDraggable() {
                     // this isn't a clone so we have to revert to original place
                     } else {
                         startPos.position = startPos.priorStart;
-                        relocateTile(thing, startPos);
+                        relocateTile(thing, thingtype, startPos);
                     }
                 });
             }
@@ -1703,13 +1700,17 @@ function setupDraggable() {
     }
 }
 
-function relocateTile(thing, tileloc) {
+function relocateTile(thing, thingtype, tileloc) {
 
     // force positions of relative tiles back to zero
     if ( tileloc.position && tileloc.position==="relative") {
         tileloc.left = 0;
         tileloc.top = 0;
-        tileloc["z-index"] = 1;
+        var zmax = 1;
+        if ( thingtype === "bulb" ) {
+            zmax = getMaxZindex(panel);
+        }
+        tileloc["z-index"] = zmax;
     }
 
     try {
@@ -1728,6 +1729,32 @@ function relocateTile(thing, tileloc) {
     } catch(e) { 
         console.log("error - Tile reposition error: ", e); 
     }
+
+}
+
+function rehomeTiles() {
+
+    var startPos = {top: 0, left: 0, "z-index": 1, position: "relative"};
+    var pid = $("li[aria-selected='true']").attr("aria-labelledby");
+    var panel = $("#"+pid).html();
+    // console.log("panel: ", pid, panel);
+
+    $("div.thing[panel="+panel+"][style*='absolute']").each( function() {
+
+        var bid = $(this).attr("bid");
+        var thingtype = $(this).attr("type");
+        var tile = $(this).attr("tile");
+        var thingid = $(this).attr("thingid");
+        var pname = $("#showversion span#infoname").html();
+        // console.log(bid, thingtype, tile, thingid, pname, startPos);
+        $.post(cm_Globals.returnURL, 
+            {useajax: "setposition", userid: cm_Globals.options.userid, pname: pname, id: bid, type: thingtype, attr: startPos, tileid: tile, thingid: thingid},
+            function (presult, pstatus) {
+                console.log(presult);
+            }
+        );
+
+    });
 
 }
 
@@ -1945,8 +1972,7 @@ function execValidateUser() {
 
 function execButton(buttonid) {
 
-    console.log("buttonid: ", buttonid, " priorOpmode: ", priorOpmode, " modalStatus: ", modalStatus, " edited? ", cm_Globals.edited);
-
+    // console.log("buttonid: ", buttonid, " priorOpmode: ", priorOpmode, " modalStatus: ", modalStatus, " edited? ", cm_Globals.edited);
     if ( buttonid==="optSave") {
 
         // var fobj = formToObject("filteroptions");
@@ -2096,6 +2122,9 @@ function execButton(buttonid) {
         });
     } else if ( buttonid === "toggletabs" && priorOpmode==="Operate" ) {
         toggleTabs();
+    } else if ( buttonid === "rehome" && priorOpmode==="Operate" ) {
+        rehomeTiles();
+        window.location.href = cm_Globals.returnURL;
     } else if ( buttonid === "reorder" && priorOpmode==="Operate" ) {
         setupSortable();
         setupPagemove();
@@ -2107,7 +2136,7 @@ function execButton(buttonid) {
         addEditLink();
         priorOpmode = "Edit";
         setCookie("opmode", priorOpmode);
-    } else if ( buttonid==="operate" && priorOpmode!=="Operate" ) {
+    } else if ( buttonid==="operate" ) {
 
         // if modal box is open and we are editing or customizing, do nothing
         // if ( (priorOpmode!=="Operate" && modalStatus!==0) || priorOpmode==="Operate") {
@@ -2126,10 +2155,12 @@ function execButton(buttonid) {
                 updateFilters();
                 window.location.href = cm_Globals.returnURL;
             }
+        } else {
+            console.log("Operate command has no effect in mode: ", priorOpmode);
+            return;
         }
         priorOpmode = "Operate";
         setCookie("opmode", priorOpmode);
-        console.log("2 buttonid: ", buttonid, " priorOpmode: ", priorOpmode, " modalStatus: ", modalStatus, " edited? ", cm_Globals.edited);
         
     } else if ( buttonid==="showdoc" && priorOpmode==="Operate") {
         window.open("https://housepanel.net",'_blank');
@@ -2187,11 +2218,11 @@ function setupButtons() {
     if ( pagename==="main" ) {
 
         // prevent mode from changing when editing a tile
-        $("div.modeoptions").on("click","input.radioopts",function(evt){
-            var opmode = $(this).attr("id");
-            evt.stopPropagation();
-            execButton(opmode);
-        });
+        // $("div.modeoptions").on("click","input.radioopts",function(evt){
+        //     var opmode = $(this).attr("id");
+        //     evt.stopPropagation();
+        //     execButton(opmode);
+        // });
         
         $("#showversion").on("click", function(e) {
             var username = $("#infoname").html();
@@ -3182,8 +3213,12 @@ function processKeyVal(targetid, aid, key, value) {
 
     // add status of things to the class and remove old status
     } else {
-        oldvalue = oldvalue.replace(/ /g,"_");
-        extra = extra.replace(/ /g,"_");
+        if ( typeof oldvalue === "string" ) {
+            oldvalue = oldvalue.replace(/ /g,"_");
+        }
+        if ( typeof extra === "string" ) {
+            extra = extra.replace(/ /g,"_");
+        }
         if ( oldvalue && extra && 
             key!=="name" && key!=="trackImage" && key!=="temperature" &&
             key!=="trackDescription" && key!=="mediaSource" &&

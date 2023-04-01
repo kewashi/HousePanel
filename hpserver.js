@@ -5604,7 +5604,9 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     classstr = uniqueWords(classstr);
 
     $tc += " panel=\""+panelname+"\" class=\""+classstr+"\"";
-    $tc += " refresh=\""+refresh+"\"";
+    if ( refresh!=="never" && refresh!=="" ) {
+        $tc += " refresh=\""+refresh+"\"";
+    }
     var pos = "absolute";
     if ( wysiwyg || (postop===0 && posleft===0) ) {
         pos = "relative";
@@ -9390,61 +9392,42 @@ function doQuery(userid, tileid, pname) {
 
 function setOrder(userid, swtype, swval) {
     var result;
-    var num = 0;
+    var promiseArray = [];
 
     if ( swtype==="rooms" ) {
-
         for ( var k in swval ) {
             var roomid = swval[k].id;
             var updval = { rorder: swval[k]["rorder"], rname: swval[k]["rname"] };
-            mydb.updateRow("rooms", updval, "userid = " + userid + " AND id = "+roomid)
-            .then(results => {
-                if ( results ) {
-                    if ( DEBUG6 ) {
-                        console.log( (ddbg()),"move room results: ", results.getAffectedItemsCount() );
-                    }
-                }
-            })
-            .catch(reason => {
-                console.log( (ddbg()), "setOrder - ", reason);
-            });
+            var apr = mydb.updateRow("rooms", updval, "userid = " + userid + " AND id = "+roomid);
+            promiseArray.push(apr);
         }
-        result = "success - updated order of rooms for user = " + userid;
-
     } else if ( swtype==="things" ) {
-
-        var promiseArray = [];
         for ( var kk in swval ) {
             var thingid = swval[kk].id;
             var updval = {tileid: swval[kk].tileid, torder: swval[kk].torder};
-            if ( updval ) {
-                if ( DEBUG6 ) {
-                    console.log((ddbg()),"move tile results: thingid: ", thingid, " updval: ", updval);
-                }
-                mydb.updateRow("things", updval, "userid = " + userid + " AND id = "+thingid)
-                .then(results => {
-                    if ( results ) {
-                        if ( DEBUG6 ) {
-                            console.log( (ddbg()),"move things results: ", results.getAffectedItemsCount() );
-                        }
-                    }
-                })
-                .catch( reason => {
-                    console.log( (ddbg()), reason);
-                });
-            }
+            var arow = mydb.updateRow("things", updval, "userid = " + userid + " AND id = "+thingid);
+            promiseArray.push(arow);
         }
-
-        // Promise.all(promiseArray);
-        result = "success - updated order of things for user = " + userid;
-
-    } else {
-        result = "error - unrecognized request to sort order. type: " + swtype;
     }
+
+    if ( promiseArray.length ) {
+        result = Promise.all(promiseArray)
+        .then(results => {
+            var num = results.length;
+            return "success - updated order of " + num + " " + swtype + " for user: " + userid;
+        })
+        .catch( reason => {
+            console.log( (ddbg()), reason);
+            return "error - something went wrong in reorder request for " + swtype;
+        });
+    } else {
+        result = "Something went wrong with reorder request";
+    }
+
     return result;
 }
 
-function setPosition(userid, thingid, swattr) {
+function setPosition(userid, swtype, thingid, swattr) {
     
     // first find which index this tile is
     // note that this code will not work if a tile is duplicated on a page
@@ -9460,8 +9443,7 @@ function setPosition(userid, thingid, swattr) {
     var zindex = parseInt(swattr["z-index"]);
     var postype = swattr["position"] || "absolute";
 
-    // check user and tileid even though just the thingid should be enough
-    // this is to protect against any random API post call updating the DB without doing it right
+    // thingid is all we need to get this tile
     var pr = mydb.getRow("things","*","userid = "+userid+" AND id = "+thingid)
     .then(thing => {
 
@@ -9477,9 +9459,9 @@ function setPosition(userid, thingid, swattr) {
             return mydb.updateRow("things", thing, "userid = " + userid + " AND id = " + id)
             .then(result => {
                 if ( result ) {
-                    var tileloc = {top: top, left: left, "z-index": zindex, position: postype};
-                    // pushClient(userid, "setposition", thingid, "", tileloc);
-                    if ( DEBUG6 ) {
+                    var tileloc = {top: top, left: left, "z-index": zindex, position: postype, thingid: thingid};
+                    pushClient(userid, "setposition", swtype, "", tileloc);
+                    if ( DEBUG6 || DEBUGtmp) {
                         console.log( (ddbg()), "moved tile: ", thingid, " to a new position: ", tileloc);
                     }
                     return tileloc;
@@ -9552,7 +9534,7 @@ function addThing(userid, pname, bid, thingtype, panel, hubid, hubindex, roomid,
                 var result;
                 if ( pvalue ) {                
                     // construct the thing to add to the things list
-                    var athing = {userid: userid, roomid: roomid, tileid: tileid, posx: 0, posy: 0, zindex: 1, torder: maxtorder, customname: ""};
+                    var athing = {userid: userid, roomid: roomid, tileid: tileid, posy: pos.top, posx: pos.left, zindex: pos["z-index"], torder: maxtorder, customname: ""};
                     result = mydb.addRow("things", athing)
                     .then(row => {
                         if ( row ) {
@@ -9564,7 +9546,7 @@ function addThing(userid, pname, bid, thingtype, panel, hubid, hubindex, roomid,
                             // construct the old things element equivalent but add the unique thingid and roomid fields
                             var thesensor = {id: bid, thingid: thingid, roomid: roomid, type: thingtype, hubnum: hubid, hubindex: hubindex,
                                             hubtype: hubtype, hint: hint, refresh: refresh, value: pvalue};
-                            var thing = makeThing(userid, pname, configoptions, thingid, tileid, thesensor, panel, 0, 0, 1, "", false, null);
+                            var thing = makeThing(userid, pname, configoptions, thingid, tileid, thesensor, panel, pos.top, pos.left, pos["z-index"], "", false, null);
                             if ( DEBUG6 ) {
                                 console.log( (ddbg()), "added tile #",tileid," (thingid = ",thingid,") of type: ",thingtype," to page: ",panel,
                                                     " deviceid: ", bid, " hubid: ", hubid, " hubindex: ", hubindex);
@@ -11578,7 +11560,7 @@ function apiCall(user, body, protocol, req, res) {
 
             case "setposition":
                 if ( protocol==="POST" ) {
-                    result = setPosition(userid, thingid, swattr);
+                    result = setPosition(userid, swtype, thingid, swattr);
                     // result = "moved tile - results pushed to database";
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
@@ -12071,7 +12053,7 @@ function apiCall(user, body, protocol, req, res) {
                         hub.hubendpt = hub.userendpt;
                     }
 
-                    if ( DEBUG2 ) {
+                    if ( DEBUG2 || DEBUGtmp ) {
                         console.log((ddbg()), "hub in hubauth: ", hub);
                     }
 

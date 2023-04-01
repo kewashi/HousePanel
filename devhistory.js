@@ -1,4 +1,5 @@
 const devhistory = `
+3.067   bugfixes, clean up tile movement, hot keys for menus
 3.066   more options for borders, bigger menu, and set round corners as default
 3.065   enable linked items to take on attribute of original such as clocks
 3.064   cleanup user interface and minor bug fixes
