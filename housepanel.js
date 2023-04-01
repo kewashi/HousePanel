@@ -3645,6 +3645,7 @@ function getNewValue(tile, thingname, ro, subid, thevalue) {
     createModal("modalexec", htmlcontent, "body", true, pos, 
     function(ui) {
         var clk = $(ui).attr("name");
+        priorOpmode = "Operate";
         if ( clk==="okay" ) {
             thevalue = $("#newsubidValue").val();
             processClick(tile, thingname, ro, thevalue);
@@ -3652,13 +3653,16 @@ function getNewValue(tile, thingname, ro, subid, thevalue) {
     },
     // after box loads set focus to field
     function(hook, content) {
+        priorOpmode = "Modal";
         $("#newsubidValue").focus();
         $("#newsubidValue").off("keydown");
         $("#newsubidValue").on("keydown",function(e) {
             if ( e.which===13  ){
+                priorOpmode = "Operate";
                 $("#modalokay").click();
             }
             if ( e.which===27  ){
+                priorOpmode = "Operate";
                 $("#modalcancel").click();
             }
         });
