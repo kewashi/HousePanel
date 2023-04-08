@@ -35,7 +35,7 @@ var pagename = "main";
 // end-users are welcome to use this but it is intended for development only
 // use the timers options to turn off polling
 cm_Globals.disablepub = false;
-cm_Globals.logwebsocket = false;
+cm_Globals.logwebsocket = true;
 
 Number.prototype.pad = function(size) {
     var s = String(this);
@@ -167,7 +167,8 @@ function findHub(hubid, id) {
 // could probably read Options file instead
 // but doing it this way ensure we get what main app sees
 function getOptions() {
-    priorOpmode = getCookie("opmode") || "Operate";
+    var amode = getCookie("opmode");
+    priorOpmode = amode === "Sleep" ? amode : "Operate";
     try {
         var userid = $("#userid").val();
         var email = $("#emailid").val();
@@ -818,8 +819,8 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                     }
                 });
                 
-                if ( cm_Globals.logwebsocket ) {
-                    console.log("webSocket message from: ", webSocketUrl," bid= ",bid," name:",pname," client:",client," of: ",clientcount," type= ",thetype," subid= ",subid," value= ",pvalue);
+                if ( cm_Globals.logwebsocket && bid==="1901") {
+                    console.log("webSocket message from: ", webSocketUrl," bid= ",bid," name:",pname," of type= ",thetype," subid= ",subid," value= ",pvalue);
                 }
         
                 // change not present to absent for presence tiles
@@ -951,7 +952,7 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
     
     modalWindows[modalid] = 1;
     modalStatus = modalStatus + 1;
-    // console.log("modalid= ", modalid, "modaltag= ", modaltag, " addok= ", addok, " pos= ", pos, " modalWindows= ", modalWindows, " modalStatus= ", modalStatus);
+    console.log("modalid= ", modalid, "modaltag= ", modaltag, " addok= ", addok, " pos= ", pos, " modalWindows= ", modalWindows, " modalStatus= ", modalStatus, "\n content: ", modalcontent);
     
     var modaldata = modalcontent;
     var modalhook;
@@ -1064,22 +1065,24 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
             })
         }
 
-            // body clicks turn of modals unless clicking on box itself
-            // or if this is a popup window any click will close it
-            $("body").off("click");
-            $("body").on("click",function(evt) {
-                if ( (evt.target.id === modalid && modalid!=="modalpopup" )  ) {
-                    // console.log("modal opt 1");
-                    evt.stopPropagation();
-                } else {
-                    // console.log("modal opt 2");
-                    closeModal(modalid);
-                    if ( responsefunction ) {
-                        responsefunction(evt.target, modaldata);
-                    }
-                    $("body").off("click");
+        console.log(">>>> addok: ", addok," hook: ", modalhook);
+
+        // body clicks turn of modals unless clicking on box itself
+        // or if this is a popup window any click will close it
+        $("body").off("click");
+        $("body").on("click",function(evt) {
+            if ( (evt.target.id === modalid && modalid!=="modalpopup" )  ) {
+                // console.log("modal opt 1");
+                evt.stopPropagation();
+            } else {
+                // console.log("modal opt 2");
+                closeModal(modalid);
+                if ( responsefunction ) {
+                    responsefunction(evt.target, modaldata);
                 }
-            });
+                $("body").off("click");
+            }
+        });
     }
     return true;
 
@@ -2645,9 +2648,11 @@ function addEditLink() {
         var aid = taid.substring(2);
         var pwsib = $(evt.target).siblings("div.overlay.password");
         var userid = cm_Globals.options.userid;
+        priorOpmode = "Customize";
         if ( pwsib && pwsib.length > 0 ) {
             pw = pwsib.children("div.password").html();
             checkPassword(thing, "Tile customize", pw, false, "", runCustom);
+            priorOpmode = "Edit";
         } else {
             runCustom(thing," ", false);
         }
@@ -3548,7 +3553,8 @@ function setupPage() {
                     subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" ||
                     subid==="heatingSetpoint" || subid==="coolingSetpoint" || 
                     subid==="ecoHeatPoint" || subid==="ecoCoolPoint" ||
-                    (thetype==="variables" && subid!=="name") || subid==="hue" || subid==="saturation" ) {
+                    (thetype==="variables" && subid!=="name" && !thevalue.startsWith("RULE::") && !subid.startsWith("_")) || 
+                    subid==="hue" || subid==="saturation" ) {
             getNewValue(that, thingname, ro, subid, thevalue);
         } else {
 
@@ -3559,10 +3565,12 @@ function setupPage() {
                 createModal("modalexec","<p>Perform " + trigger + " operation</p><p>Are you sure?</p>", "body", true, pos, function(ui) {
                     var clk = $(ui).attr("name");
                     if ( clk==="okay" ) {
+                        evt.stopPropagation();
                         processClick(that, thingname, ro, thevalue);
                     }
                 });
             } else {
+                evt.stopPropagation();
                 processClick(that, thingname, ro, thevalue);
             }
         }
@@ -3835,13 +3843,12 @@ function processClick(that, thingname, ro, thevalue) {
     // to compensate for loss of inspection I added any custom field starting with "label" or "text" subid will inspect
     var ispassive = (ro || subid==="thingname" || subid==="custom" || subid==="temperature" || subid==="feelsLike" || subid==="battery" || //  (command==="TEXT" && subid!=="allon" && subid!=="alloff") ||
         subid==="presence" || subid==="motion" || subid==="contact" || subid==="status_" || subid==="status" || subid==="deviceType" || subid==="localExec" ||
-        subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" || subid==="name" || subid==="skin" ||
+        subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" || subid==="name" || subid==="skin" || subid==="themode" ||
         subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") || subid==="illuminance" ||
         (command==="TEXT" && subid.startsWith("label")) || (command==="TEXT" && subid.startsWith("text")) ||
         (thetype==="weather" && !subid.startsWith("_")) ||
         (thetype==="ford" && !subid.startsWith("_"))
     );
-
     // console.log("linkval = ", linkval," command = ", command, " subid: ", subid, " realsubid: ", realsubid, " passive: ", ispassive);
 
     // turn momentary and piston items on or off temporarily
@@ -3962,6 +3969,7 @@ function processClick(that, thingname, ro, thevalue) {
         // console.log("Inspecting passive tile subid: ", subid, " type: ", thetype, " aid: ", aid, " msg: ", msg);
         var offset = $(that).offset();
         var pos = {top: offset.top, left: offset.left, width: "auto", height: "auto", zindex: 998};
+        // console.log(msg);
         createModal("modalpopup", msg, "body", false, pos);
 
     } else {
@@ -4028,11 +4036,9 @@ function processClick(that, thingname, ro, thevalue) {
             function (presult, pstatus) {
                 if (pstatus==="success") {
                     if ( presult && typeof presult === "object" ) {
-                        // console.log("Success: ", presult);
-                    } else if ( presult && typeof presult === "string" && !presult.startsWith("error") ) {
-                        // console.log(presult);
+                        console.log("Success: ", presult);
                     } else {
-                        // console.log("Unrecognized return from POST call. result: ", presult);
+                        console.log(presult);
                     }
                 }
             }, "json"

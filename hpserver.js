@@ -32,8 +32,6 @@ const DEBUGisy = false;              // ISY debug info
 const DEBUGtmp = true;              // used to debug anything temporarily using ||
 
 // various control options
-const DONATE = false;                 // set this to true to enable donation section
-const ENABLERULES = true;             // set this to false to neuter all rules
 const FORDAPIVERSION = "2020-06-01";  // api version number to use for Ford api calls
 
 // websocket and http servers
@@ -842,9 +840,23 @@ function getHubInfo(hub) {
     
         // for legacy ST and Hubitat hubs we make a call to get hub name and other info
         if ( hub.hubtype==="Hubitat" ) {
+
+            var header;
+            var nvpreq;
+            if ( hub.useraccess && hub.userendpt ) {
+                endpt = hub.userendpt;
+                nvpreq = {"access_token": hub.useraccess};
+                header = {
+                    "Content-Type": "application/json"
+                };
+            } else {
+                header = {
+                    "Authorization": "Bearer " + access_token,
+                    "Content-Type": "application/json"
+                };
+                nvpreq = {"client_id": clientId, "client_secret": clientSecret};
+            }
             var namehost = endpt + "/gethubinfo";
-            var header = {"Authorization": "Bearer " + access_token};
-            var nvpreq = {"scope": "app", "client_id": clientId, "client_secret": clientSecret};
             curl_call(namehost, header, nvpreq, false, "POST", hubitatCallback);
 
         // handle Sonos hubs
@@ -909,9 +921,7 @@ function getHubInfo(hub) {
                     return getDevices(hub);
                 })
                 .then(mydevices => {
-                    if ( oldhubId ) {
-                        resolve(mydevices);
-                    }
+                    resolve(mydevices);
                 }).catch(reason => {
                     console.log( (ddbg()), reason);
                     reject(reason);
@@ -938,8 +948,6 @@ function getHubInfo(hub) {
         function hubitatCallback(err, res, body) {
             var jsonbody;
             var hubName = hub.hubname;;
-            var access_token = hub.hubaccess;
-            var endpt = hub.hubendpt;
             var hubId = hub.hubid;
             var oldhubId = hubId;
 
@@ -964,7 +972,7 @@ function getHubInfo(hub) {
             }
 
             if ( DEBUG2 ) {
-                console.log( (ddbg()), "hub info: access_token= ", access_token, " endpt= ", endpt, " hubName= ", hubName, " hubId= ", hubId);
+                console.log( (ddbg()), "hub info: ", hub);
             }
             
             // now update the placeholders with the real hub name and ID
@@ -1395,8 +1403,11 @@ function getAccessToken(userid, code, hub) {
                 if ( DEBUG2 ) {
                     console.log( (ddbg()),"access_token: ", access_token," endpoint: ", endpt);
                 }
+                // save the oAUTH determiend tokens and set user tokens to blanks to force oAUTH use
                 hub.hubaccess = access_token;
                 hub.hubendpt = endpt;
+                hub.useraccess = "";
+                hub.userendpt = "";
                 getHubInfo(hub)
                 .then(mydevices => {
                     resolve(mydevices);
@@ -1659,8 +1670,6 @@ function getDevices(hub) {
         var hubType = hub.hubtype;
         var hubAccess  = hub.hubaccess;
         var hubEndpt = hub.hubendpt;
-        var clientId = hub.clientid;
-        var clientSecret = hub.clientsecret;
 
         if ( !is_object(hub) ) {
             reject("error - hub object not provided to getDevices call");
@@ -1752,13 +1761,25 @@ function getDevices(hub) {
         // Hubitat call to Groovy API
         function getGroovyDevices() {
             const errMsg = "error retrieving devices from this Hubitat hub";
-            var stheader = {"Authorization": "Bearer " + hubAccess};
+
+            var header;
+            var params;
+            if ( hub.useraccess && hub.userendpt ) {
+                hubEndpt = hub.userendpt;
+                params = {"access_token": hub.useraccess};
+                header = {
+                    "Content-Type": "application/json"
+                };
+            } else {
+                header = {
+                    "Authorization": "Bearer " + hubAccess,
+                    "Content-Type": "application/json"
+                };
+                params = null;
+            }
+
             var mydevices = {};
-            var params = {client_secret: clientId,
-                scope: "app",
-                client_id: clientSecret};
-            // _curl(hubEndpt + "/getallthings", stheader, params, "POST")
-            curl_call(hubEndpt + "/getallthings", stheader, params, false, "POST", hubInfoCallback);
+            curl_call(hubEndpt + "/getallthings", header, params, false, "POST", hubInfoCallback);
             return;
 
             // callback for loading Hubitat devices
@@ -4616,7 +4637,7 @@ function getAuthPage(user, configoptions, hubs, hostname, rmsg) {
                 "</p>";
         $tc += "</div>";
 
-        if ( DONATE===true ) {
+        if ( GLB.dbinfo.donate===true ) {
             $tc += '<br /><h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
                 <br /><div><form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank"> \
                 <input type="hidden" name="cmd" value="_s-xclick"> \
@@ -5929,7 +5950,7 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
     else if ( typeof tval === "undefined" ) { tval = ""; }
 
     // do nothing if this is a rule and rules are disabled
-    if ( !ENABLERULES && typeof tval==="string" && tval.substring(0,6)==="RULE::" ) {
+    if ( !GLB.dbinfo.enablerules && typeof tval==="string" && tval.substring(0,6)==="RULE::" ) {
         return $tc;
     }
         
@@ -7083,7 +7104,7 @@ function getTimeStr(ifvalue, str, thedate) {
 
 function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rulecaller) {
 
-    if ( !ENABLERULES || (typeof pvalueinput !== "object") ) {
+    if ( !GLB.dbinfo.enablerules || (typeof pvalueinput !== "object") ) {
         return;
     }
 
@@ -7816,7 +7837,9 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
         if ( !hub ) { return null; }
 
         var access_token = hub.hubaccess;
+        var user_token = hub.useraccess;
         var endpt = hub.hubendpt;
+        var user_endpt = hub.userendpt;
         var result = "success";
         // var hubid = hub.hubid;
 
@@ -7837,16 +7860,17 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
             }
 
             // get counter from DB and update if it is there
-            mydb.getRow("devices", "*", "userid = " + userid + " AND hubid = "+hubindex+" AND deviceid = '"+swid+"'")
+            return mydb.getRow("devices", "*", "userid = " + userid + " AND hubid = "+hubindex+" AND deviceid = '"+swid+"'")
             .then(subdevice => {
                 var pvalue = decodeURI2(subdevice.pvalue);
                 pvalue[subid] = newval;
                 subdevice.pvalue = encodeURI2(pvalue);
-                mydb.updateRow("devices", subdevice, "userid = " + userid + " AND id = "+subdevice.id)
+                return mydb.updateRow("devices", subdevice, "userid = " + userid + " AND id = "+subdevice.id)
                 .then( () => {
                     var body = {};
                     body[subid] = newval;
                     getHubResponse(body);
+                    return pvalue;
                 })
                 .catch(reason => {
                     console.log( (ddbg()), "***warning***", reason );
@@ -7855,32 +7879,53 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
             .catch(reason => {
                 console.log( (ddbg()), "***warning***", reason );
             });
-            return "success - " + subid + " reset to " + newval;
+            // return "success - " + subid + " reset to " + newval;
         }
 
         // this function calls the Groovy hub api
+        // if a user accesstoken is provided then we use it without a bearer token
         if ( hub.hubtype==="Hubitat" ) {
-            var host = endpt + "/doaction";
-            var header = {"Authorization": "Bearer " + access_token};
-            var nvpreq = {"swid": swid,  
-                        "swattr": swattr,
-                        "swvalue": swval, 
-                        "swtype": swtype};
-            if ( subid && subid!=="none" ) { nvpreq["subid"] = subid; }
-            curl_call(host, header, nvpreq, false, "POST", function(err, res, body) {
-                if ( DEBUG7 ) {
-                    console.log( (ddbg()), "curl response: body: ", body, " params: ", nvpreq );
-                }
-                if ( !err || err===200 ) {
-                    if ( !body ) {
-                        body = {};
-                        body[subid] = swval;
-                    }
+            var host;
+            var header;
+            var nvpreq;
+            if ( user_token && user_endpt ) {
+                host = user_endpt + "/doaction";
+                nvpreq = {
+                    "access_token": user_token,
+                    "swid": swid, "swattr": swattr, "swvalue": swval, "swtype": swtype
+                };
+                header = {
+                    "Content-Type": "application/json"
+                };
 
-                    // send info back to hub for quick feedback
-                    getHubResponse(body);
-                }
+            } else {
+                host = endpt + "/doaction";
+                header = {
+                    "Authorization": "Bearer " + access_token,
+                    "Content-Type": "application/json"
+                };
+                nvpreq = {"swid": swid, "swattr": swattr, "swvalue": swval, "swtype": swtype};
+            }
+
+            if ( subid && subid!=="none" ) { nvpreq["subid"] = subid; }
+            var promise = new Promise( function(resolve, reject) {
+
+                curl_call(host, header, nvpreq, false, "POST", function(err, res, body) {
+                    if ( DEBUG7 ) {
+                        console.log( (ddbg()), "curl response: body: ", body, " params: ", nvpreq );
+                    }
+                    if ( !err || err===200 ) {
+                        if ( !body ) {
+                            body = {};
+                            body[subid] = swval;
+                        }
+
+                        // send info back to hub for quick feedback
+                        getHubResponse(body, resolve, reject);
+                    }
+                });
             });
+            return promise;
 
         // make the call to the new ST API to control the device clicked on
         } else if ( hub.hubtype==="NewSmartThings" ) {
@@ -8588,7 +8633,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
         fs.writeFileSync("thumbnail.png", base64);
     }
 
-    function getHubResponse(body) {
+    function getHubResponse(body, resolve, reject) {
         // update all clients - this is actually not needed if your server is accessible to websocket updates
         // It is left here because my dev machine sometimes doesn't get websocket pushes
         // you can comment this if your server gets pushes reliably
@@ -8602,11 +8647,14 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
             } else {
                 throw "Invalid object in getHubResponse.";
             }
+            if ( !pvalue ) throw "Nothing returned";
         } catch (e) {
             console.error( (ddbg()), "failed converting hub call return to JSON object. body: ", body, " error: ", e);
+            if ( typeof reject === "function" ) {
+                reject(e);
+            }
             return;
         }
-        if ( !pvalue ) { return; }
 
         // pluck out just vehicle data and good status for info call
         if ( swtype==="ford" && subid==="_info" && pvalue.vehicle && pvalue.status && pvalue.status==="SUCCESS" ) {
@@ -8724,6 +8772,9 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
             }).catch(reason => { console.log( (ddbg()), reason ); } );
         } else {
 
+            if ( typeof resolve === "function" ) {
+                resolve(pvalue);
+            }
             // push new values to all clients and execute rules
             pushClient(userid, swid, swtype, subid, pvalue);
             // if ( !inrule ) {
@@ -8731,6 +8782,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
             //     processRules(userid, device.id, swid, swtype, subid, pvalue, "callHub");
             //     delete pvalue.subid;
             // }
+            return pvalue;
         }
      
     }
@@ -8828,7 +8880,7 @@ function queryHub(device, pname) {
                         var sonosPlayers = jsonbody.players;
                         if ( !sonosPlayers ) {
                             var msg = "no Sonos devices found for Household: " + hubid + " You may need to reauthorize your account.";
-                            console.log((ddbg()), msg);
+                            // console.log((ddbg()), msg);
                             reject(msg);
                             return;
                         }
@@ -9233,18 +9285,17 @@ function doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, co
 
         } else if ( command==="LINK" ) {
             // processLink(linkval);
-            callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, null, false);
-            msg = "success - link action executed on device id: " + swid + " device type: " + swtype;
+            msg = callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, null, false);
+            // msg = "success - link action executed on device id: " + swid + " device type: " + swtype;
         
         } else if ( command==="RULE" ) {
-            if ( !ENABLERULES ) {
+            if ( !GLB.dbinfo.enablerules ) {
                 msg = "error - rules are disabled.";
             } else {
                 var configkey = "user_" + swid;
                 linkval = linkval.toString();
-                msg = "success - manually running RULE " + configkey + " " + linkval;
-                
-                Promise.all( [
+                // msg = "success - manually running RULE " + configkey + " " + linkval;
+                msg = Promise.all( [
                     mydb.getRows("devices", "*", "userid = "+userid),  
                     mydb.getRows("hubs", "*", "userid = "+userid),
                     mydb.getRow("configs","*","userid = "+userid+" AND configkey='"+configkey+"'")
@@ -9285,12 +9336,12 @@ function doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, co
                                     execRules(userid, "callHub", swid, swtype, istart, testcommands, pvalue, hubs, devices);
                                 }
                             });
-                            resolve("success - rule manually executed: " + configrow.configval);
+                            return "success - rule manually executed: " + configkey + " = " + linkval + ": " + configrow.configval;
                         } else {
-                            reject("error - rule not found for id = " + swid)
+                            throw "error - rule not found for id = " + swid
                         }
                     } else {
-                        reject("error - rule not found for id = " + swid)
+                        throw "error - rule not found for id = " + swid
                     }
                 }).catch(reason => { console.log( (ddbg()), reason ); } );
             }
@@ -9300,8 +9351,8 @@ function doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, co
         if ( DEBUG1 ) {
             console.log( (ddbg()), "callHub: ", userid, hubindex, swid, swtype, swval, swattr, subid, hint);
         }
-        callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, null, false);
-        msg = "success - hub action executed on device id: " + swid + " device type: " + swtype;
+        msg = callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, null, false);
+        // msg = "success - hub action executed on device id: " + swid + " device type: " + swtype;
     }
     return msg;
 
@@ -10631,7 +10682,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
         
         // include form with useful data for js operation
         tc += "<form id='kioskform'>";
-        var erstr =  ENABLERULES ? "true" : "false"
+        var erstr =  GLB.dbinfo.enablerules ? "true" : "false"
         tc += hidden("enablerules", erstr);
 
         // save the socket address for use on js side
@@ -12472,6 +12523,8 @@ GLB.dbinfo = {
     "service": "none"
 };
 GLB.dbinfo.hubs = { Hubitat: "Hubitat", ISY: "ISY" };
+GLB.dbinfo.donate = true;
+GLB.dbinfo.enablerules = true;
 
 // read config file if one exists
 try {

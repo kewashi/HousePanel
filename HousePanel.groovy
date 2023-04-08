@@ -15,6 +15,8 @@
  * This is a Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history:
+ * 04/05/2023 - update ip reporting to support use of user provided access tokens
+ * 04/04/2023 - fix other, contact, and doors to work with custom device handlers
  * 03/13/2023 - change postHub to always use http and tweak logging
  * 02/18/2023 - fix thermostat to support directly changing temperatures
  * 02/13/2023 - rewrote logic for handling colors including a nasty bugfix in hsv2rgb
@@ -429,7 +431,6 @@ def updated() {
 }
 
 def initialize() {
-    def hubtype = getPlatform()
     state.usepistons = settings?.usepistons ?: false
 
     // reset variable usage
@@ -460,7 +461,7 @@ def initialize() {
         webCoRE_init()
     }
     state.loggingLevelIDE = settings.configLogLevel?.toInteger() ?: 3
-    logger("Installed ${hubtype} hub with settings: ${settings} ", "debug")
+    logger("Installed hub with settings: ${settings} ", "debug")
     
     def pattern = ~/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/
     def portpatt = ~/\d+/
@@ -495,49 +496,29 @@ def initialize() {
     }
 }
 
-// legacy ST groovy is gone so we just return true here
-private Boolean isHubitat() {
-    // def istrue = physicalgraph?.device?.HubAction ? false : true
-    // def istrue = hubUID ? true : false
-    return true
-}
-private String getPlatform() {
-    def hubtype = isHubitat() ? 'Hubitat' : 'Unknown'
-    return hubtype
-}
 private String getPrefix() {
     def hubpre = 'h_'
     return hubpre
 }
 
 def configureHub() {
-    def hub = location.hubs[0]
-    def hubid
-    def hubip
-    def endpt
-    def cloudhubip
-    def cloudendpt
-    
-    state.hubid = app.getHubUID() 
+    if (!state.accessToken) {
+        state.accessToken = createAccessToken()
+    }
     // hubUID
-    cloudhubip = app.getApiServerUrl()
-    // "https://oauth.cloud.hubitat.com";
-    cloudendpt = app.getFullApiServerUrl()
-    // "${cloudhubip}/${hubUID}/apps/${app.id}/"
-    hubip = app.getLocalApiServerUrl() 
-    // hub.localIP
-    endpt = app.getFullLocalApiServerUrl()
-    // "${hubip}/apps/api/${app.id}/"
-    // logger("Hubitat AccessToken = ${state.accessToken}", "debug")
+    def hubip = app.getLocalApiServerUrl() 
+    def cloudhubip = app.getApiServerUrl()
+    state.endpt = app.getFullLocalApiServerUrl()
+    def cloudendpt = app.getFullApiServerUrl()
+    state.hubid = app.getHubUID() 
 
     logger("Use this information on the Auth page of HousePanel.", "info")
-    logger("Hub Platform = ${getPlatform()}", "info")
     logger("Hubitat Hub IP = ${hubip}", "info")
-    logger("Hubitat EndPoint = ${endpt}", "info")
-    logger("Hubitat Cloud Hub = ${cloudhubip}", "info")
+    logger("Hubitat Cloud Hub IP = ${cloudhubip}", "info")
+    logger("Hubitat EndPoint = ${state.endpt}", "info")
     logger("Hubitat Cloud EndPoint = ${cloudendpt}", "info")
     logger("Hub ID = ${state.hubid}", "info")
-    logger("The Access Token is obtained only through OAUTH flow as a Bearer Token", "debug")
+    logger("Access Token = ${state.accessToken}, use this in useraccess field, or the Access Token can be obtained via OAUTH flow", "info")
 
     logger("Other useful information to know", "debug")
     logger("IP Address = ${state.directIP}", "debug")
@@ -1256,7 +1237,9 @@ def getPowers(resp) {
 def getHubInfo() {
     def resp =  [ sitename: location.getName(),
                   hubId: state.hubid,
-                  hubtype: getPlatform() ]
+                  accessToken: state.accessToken,
+                  endpt: state.endpt,
+                  hubtype: "Hubitat" ]
     return resp
 }
 
@@ -1581,7 +1564,12 @@ def setDoor(swid, cmd, swattr, subid) {
 
 def setContact(swid, cmd, swattr, subid) {
     logcaller("setContact", swid, cmd, swattr, subid)
-    setGenericDoor(mycontacts, swid, cmd, swattr, subid)
+    if ( subid=="switch" ) {
+        setGenericLight(mycontacts, swid, cmd, swattr, subid)
+    } else {
+        setGenericDoor(mycontacts, swid, cmd, swattr, subid)
+    }
+    // setGenericDoor(mycontacts, swid, cmd, swattr, subid)
 }
 
 def setGarage(swid, cmd, swattr, subid) {
@@ -1594,20 +1582,29 @@ def setGenericDoor(things, swid, cmd, swattr, subid, item=null) {
     def resp = false
     item  = item ? item : things.find{it.id == swid }
     if (item) {
-        if ( subid=="door" && ( swattr.endsWith(" closed") || swattr.endsWith(" closing") ) ) {
+        if ( subid=="door" && (cmd=="open" || swattr.endsWith(" closed") || swattr.endsWith(" closing") ) ) {
             cmd = "open"
             newonoff = "opening";
-        } else if ( subid=="door" && ( swattr.endsWith(" open") || swattr.endsWith(" opening") ) ) {
+            newonoff = (subid=="door" && swattr.endsWith(" closed")) ? "opening" : "open";
+        } else if ( subid=="door" && (cmd=="close" || swattr.endsWith(" open") || swattr.endsWith(" opening") ) ) {
             cmd = "close"
-            newonoff = "closing";
-        } else if (cmd=="open") {
-            newonoff = "opening"
-        } else if (cmd=="close") {
-            newonoff = "closing"
+            newonoff = (subid=="door" && swattr.endsWith(" open")) ? "closing" : "closed";
         } else {
-            newonoff = (item.currentValue(subid)=="closed" ||
-                        item.currentValue(subid)=="closing" )  ? "open" : "closed"
-            cmd = (newonoff == "open") ? "open" : "close"
+            if (subid.startsWith("_")) {
+                cmd = subid.substring(1)
+                newonoff = cmd
+            } else {
+                if ( subid == "contact" || subid=="door" ) {
+                    newonoff = (item.currentValue(subid)=="closed" ||
+                                item.currentValue(subid)=="closing" )  ? "open" : "closed"
+                    cmd = (newonoff == "open") ? "open" : "close"
+                } else if ( subid=="switch" ) {
+                    newonoff = (item.currentValue(subid)=="off")  ? "on" : "off"
+                    cmd = (newonoff == "on") ? "on" : "off"
+                } else {
+                    newonoff = item.currentValue(subid)
+                }
+            }
         }
         // newonoff=="open" ? item.open() : item.close()
         // if command is valid, do it
@@ -1617,6 +1614,11 @@ def setGenericDoor(things, swid, cmd, swattr, subid, item=null) {
         // resp = [door: newonoff]
         resp = [:]
         resp.put(subid, newonoff)
+        if ( item.hasCommand("open") ) resp.put("_open","open");
+        if ( item.hasCommand("close") ) resp.put("_close","close");
+        if ( item.hasCommand("on") ) resp.put("_on","on");
+        if ( item.hasCommand("off") ) resp.put("_off","off");
+
         // resp = addAttr(resp, item, "contact")
         // resp = addBattery(resp, item)
     }
@@ -1858,7 +1860,7 @@ def setOther(swid, cmd, swattr, subid, item=null ) {
     def newsw
     item  = item ? item : myothers.find{it.id == swid }
     def lightflags = ["switch","level","hue","saturation","colorTemperature","color"]
-    def doorflags = ["door","contact","shade"]
+    def doorflags = ["door","contact"]
     def buttonflags = ["pushed","held","doubleTapped","released"]
     
     if ( item ) {
@@ -2179,6 +2181,15 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
             newonoff = cmd
             break
 
+        case "contact":
+            if ( swattr.endsWith(" open" ) ) {
+                cmd = "close"
+            } else if ( swattr.endsWith(" closed" ) ) {
+                cmd = "open"
+            }
+            newonoff = cmd
+            break
+
         // handle cases where switches have buttons
         case "pushed":
         case "held":
@@ -2453,6 +2464,11 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
         if ( item.hasAttribute("colorTemperature") && temperature ) { resp.put("colorTemperature", temperature) }
         if ( item.hasAttribute("level") && newlevel ) { resp.put("level", newlevel) }
         if ( item.hasAttribute("position") && newlevel ) { resp.put("position", newlevel) }
+
+        if ( item.hasCommand("open") ) { resp.put("_open","open"); }
+        if ( item.hasCommand("close") ) { resp.put("_close","close"); }
+        if ( item.hasCommand("on") ) { resp.put("_on","on"); }
+        if ( item.hasCommand("off") ) { resp.put("_off","off"); }
     }
     logger("generic light setter returned: ${resp}", "debug")
     return resp

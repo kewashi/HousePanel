@@ -167,7 +167,9 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
                 if ( cm_Globals.reload && ( typeof modalWindows["modalid"] === "undefined" || modalWindows["modalid"] === 0 ) ) {
                     // location.reload(true);
                     window.location.href = cm_Globals.returnURL;
-                }
+                } else {
+                    priorOpmode = "Edit"
+       ;         }
             },
             // function invoked upon starting the dialog
             function(hook, content) {
