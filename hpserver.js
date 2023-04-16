@@ -11364,6 +11364,12 @@ function getHubObj(userid, hub) {
                     if ( DEBUG2 ) {
                         console.log( (ddbg()), result );
                     }
+
+                    // reactivate websocket here if we reauthorized an ISY hub
+                    if ( hubType==="ISY" ) {
+                        setupISYSocket();
+                    }
+
                     resolve(result);
                     // msg = "Hub " + hubName +" returned " + ndev + " devices";
                     // pushClient(userid, "pagemsg", "auth", "#newthingcount", msg );
@@ -12648,6 +12654,7 @@ if ( app && applistening ) {
     
     // set up sockets
     setupBrowserSocket();
+    setupISYSocket();
 
     // handler functions for HousePanel
     // this is where we render the baseline web page for the dashboard
@@ -12801,7 +12808,7 @@ if ( app && applistening ) {
 
                         // this is what makes the main page
                         } else {
-                            setupISYSocket();
+                            // setupISYSocket();
                             getMainPage(user, configoptions, hubs, req, res);
                         }
 
