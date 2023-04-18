@@ -3115,7 +3115,12 @@ function getDevices(hub) {
                         return;
                     }
 
-                    var varobj = result.vars.var;
+                    console.log( (ddbg()), "variables read: ", result)
+                    try {
+                        var varobj = result.vars.var;
+                    } catch (e) {
+                        varobj = null;
+                    }
                     if ( !is_object(varobj) ) {
                         checkDone(vartype);
                         return;
