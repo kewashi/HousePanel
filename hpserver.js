@@ -2930,6 +2930,8 @@ function getDevices(hub) {
             var mydevices = {};
             var variables = {name: "ISY Variables", "status_": "INACTIVE"};
 
+            console.log(">>>> ISY hub call: ", hubAccess, hubEndpt, stheader);
+
             curl_call(hubEndpt + "/vars/definitions/1", stheader, false, false, "GET", getIntVarsDef);
             curl_call(hubEndpt + "/vars/definitions/2", stheader, false, false, "GET", getStateVarsDef);
             curl_call(hubEndpt + "/vars/get/1", stheader, false, false, "GET", getIntVars);
