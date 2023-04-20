@@ -12095,9 +12095,13 @@ function apiCall(user, body, protocol, req, res) {
 
                     // if user provides hub access info, use it
                     // for ISY hubs we know the endpoint as /rest so use it
+                    // but if user included it, skip
                     if ( body.hubtype==="ISY" ) {
                         body.useraccess = body.clientid + ":" + body.clientsecret;
-                        body.userendpt = body.hubhost + "/rest";
+                        body.userendpt = body.hubhost;
+                        if ( ! body.userendpt.endsWith("/rest") ) {
+                            body.userendpt = body.userendpt + "/rest"
+                        }
                         hub.useraccess= body.useraccess;
                         hub.userendpt = body.userendpt;
                         hub.hubaccess = hub.useraccess;
@@ -12356,7 +12360,8 @@ function setupISYSocket() {
     // close all existing connections
     for (var hubid in wsclient) {
         if ( wsclient[hubid] && typeof wsclient[hubid].close === "function" ) {
-            wsclient[hubid].close();
+            console.log( (ddbg()), "Gracefully closing ISY websocket for hub: ", hubid);
+            wsclient[hubid].close(WebSocketConnection.CLOSE_REASON_NORMAL);
         }
     }
     wsclient = {};
@@ -12397,7 +12402,6 @@ function setupISYSocket() {
                 var opts = {rejectUnauthorized: false};
                 var wsconfigs = {tlsOptions: opts, closeTimeout: 2000};
                 var wsone = new webSocketClient(wsconfigs);
-                wsclient[hubid] = wsone;
                 wsone["userid"] = userid;
                 wsone["hubid"] = hubid;
 
@@ -12408,6 +12412,7 @@ function setupISYSocket() {
             
                 wsone.on("connect", function(connection) {
                     var that = this;
+                    wsclient[that.hubid] = connection;
                     console.log( (ddbg()), "Success connecting to ISY socket. Listening for messages from hub:", that.hubid);
             
                     // handle incoming state messages from ISY
@@ -12422,7 +12427,8 @@ function setupISYSocket() {
                     });
                 
                     connection.on("close", function(reasonCode, description) {
-                        console.log( (ddbg()), "ISY socket closed for hub: ", that.hubid," reason: ", reasonCode, description );
+                        delete wsclient[that.hubid];
+                        console.log( (ddbg()), "ISY socket closed for hub: ", that.hubid," reason: ", reasonCode, " desc: ", description );
                     });
                 
                 });

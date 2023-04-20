@@ -2363,7 +2363,7 @@ function setupButtons() {
                 hubTarget.prop("disabled", true);
                 $("#newthingcount").html("Ready to authorize your Ford or Lincoln vehicle. Account access information required in cfg file");
             } else if ( hubType==="ISY" ) {
-                hub.hubhost = "https://192.168.xxx.yyy:8443/rest";
+                hub.hubhost = "https://192.168.xxx.yyy:8443";
                 hub.hubname = "ISY Home";
                 hubTarget.prop("disabled", false);
                 clientLabel = "Username: ";
