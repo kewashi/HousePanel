@@ -90,6 +90,10 @@ GLB.ignoredAttributes = [
     'dmv','di','pi','mnml','mnmn','mnpv','mnsl','icv','washerSpinLevel','mnmo','mnos','mnhw','mnfv','supportedCourses','washerCycle','cycle'
 ];
 
+GLB.ignoredISY = [
+    "parent__", "deviceClass", "pnode", "startDelay", "endDelay"
+];
+
 // this map contains the base capability for each type and all valid commands for that capability
 // the keys here are unique to HousePanel and are used to define the type of thing on the panel
 GLB.capabilities = { 
@@ -825,11 +829,11 @@ function curl_call(host, headertype, nvpstr, formdata, calltype, callback) {
 // this way hub authorizations work and return number of devices properly
 function getHubInfo(hub) {
     if ( DEBUG2 ) {
-        console.log( (ddbg()), "in getHubInfo - hub: ", hub);
+        console.log( (ddbg()), "hub: ", hub);
     }
 
     // use promises so we can return actual number of devices returned
-    const errMsg = "error processing getHubInfo";
+    const errMsg = "error reading hub";
     var access_token = hub.hubaccess;
     var clientId = hub.clientid;
     var clientSecret = hub.clientsecret;
@@ -949,7 +953,6 @@ function getHubInfo(hub) {
             var jsonbody;
             var hubName = hub.hubname;;
             var hubId = hub.hubid;
-            var oldhubId = hubId;
 
             try {
                 jsonbody = JSON.parse(body);
@@ -978,7 +981,7 @@ function getHubInfo(hub) {
             // now update the placeholders with the real hub name and ID
             hub["hubname"]  = hubName;
             hub["hubid"] = hubId;
-            updateHub(hub, oldhubId);
+            updateHub(hub, hubId);
 
         }
     
@@ -1066,10 +1069,10 @@ function getAccessToken(userid, code, hub) {
             var formData = {"grant_type": "authorization_code", "code": code, "redirect_uri": encodeURI(redirect)};
             // var nvpreq = "grant_type=authorization_code&code=" + code + "&redirect_uri=" + encodeURI(redirect);
             if ( DEBUG2 ) {
-                console.log( (ddbg()), "clientId: ", clientId," clientSecret: ", clientSecret," base64: ", base64);
-                console.log( (ddbg()), "tokenhost: ", tokenhost, " nvpreq: ", nvpreq, " formData: ", formData);
+                console.log( (ddbg()), "clientId: ", clientId," clientSecret: ", clientSecret," base64: ", base64,
+                                       " tokenhost: ", tokenhost, " nvpreq: ", nvpreq, " formData: ", formData);
             }
-            curl_call(tokenhost, header, false, formData, "POST", tokenCallback);
+            curl_call(tokenhost, header, false, formData, "POST", sonosCallback);
 
         // Any other types of hubs assume a Hubitat style flow for accesstoken and endpoint
         } else {
@@ -1106,50 +1109,60 @@ function getAccessToken(userid, code, hub) {
                 if ( jsonbody["refresh_token"] ) {
                     refresh_token = jsonbody["refresh_token"];
                 }
-                if (access_token) {
-                    var ephost;
-                    hub.hubaccess = access_token;
-                    hub.hubrefresh = refresh_token;
-                    hub.hubtype = hubType;
-                    if ( !hub.hubname ) {
-                        hub.hubname = hubType;
-                    }
-                    if ( hubType === "Hubitat" ) {
-                        header = {"Authorization": "Bearer " + access_token};
-                        ephost = hubHost + "/apps/api/endpoints";
-                        curl_call(ephost, header, false, false, "GET", endptCallback);
-                    } else if ( hubType === "Sonos" ) {
-                        hub.hubendpt = "https://api.ws.sonos.com/control/api";
-
-                        var expiresin = jsonbody["expires_in"];
-                        expiresin = parseInt(expiresin) - 120;
-                        hub.hubtimer = expiresin.toString();
-                        expiresin*= 1000;
-
-                        // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
-                        if ( expiresin ) {
-                            setTimeout( function() {
-                                refreshSonosToken(userid, hub, true);
-                            }, expiresin);
-                        }
-                        // assign random hub id and save our info
-                        return getHubInfo(hub)
-                        .then(mydevices => {
-                            resolve(mydevices);
-                        }). catch(reason => { 
-                            reject(reason);
-                        });
-
-                    } else {
-                        console.log( (ddbg()), "Invalid hub type: ", hubType, " in access_token request call");
-                        reject("Invalid hub type: " + hubType + " in access_token request call");
-                    }
-
+                var ephost;
+                hub.hubaccess = access_token;
+                hub.hubrefresh = refresh_token;
+                hub.hubtype = hubType;
+                if ( !hub.hubname ) {
+                    hub.hubname = hubType;
                 }
+
+                header = {"Authorization": "Bearer " + access_token};
+                ephost = hubHost + "/apps/api/endpoints";
+                curl_call(ephost, header, false, false, "GET", endptCallback);
             } else {
-                console.log( (ddbg()), "Unknown error authorizing hub: ", hubName, " error: ", err, " body: ", body);
-                reject("Unknown error authorizing hub: " + hubName);
+                console.log( (ddbg()), "Unknown error authorizing hub: ", hub, " body: ", body);
+                reject("Unknown error authorizing hub: " + hub.hubname);
             }
+        }
+
+        function sonosCallback(err, res, body) {
+            var hubType = hub.hubtype;
+            // save the access_token
+            try {
+                var jsonbody = JSON.parse(body);
+            } catch(e) {
+                jsonbody = null;
+            }
+            if ( DEBUG2 || DEBUGsonos ) {
+                console.log( (ddbg()), " access_token sonos return body: ", body," jsonbody:", jsonbody);
+            }
+
+            if ( (err && err!==200) || !jsonbody ) {
+                console.log( (ddbg()), "error authorizing hub ", hubType, " error: ", err);
+                reject("error authorizing hub " + hubType);                
+                return;
+            }
+
+            hub.hubendpt = "https://api.ws.sonos.com/control/api";
+            var expiresin = jsonbody["expires_in"];
+            expiresin = parseInt(expiresin) - 120;
+            hub.hubtimer = expiresin.toString();
+            expiresin*= 1000;
+
+            // refresh the access_token using the refresh token and signal to repeat again inside itself if success before expiration
+            if ( expiresin && hub.hubrefresh ) {
+                setTimeout( function() {
+                    refreshSonosToken(userid, hub, true);
+                }, expiresin);
+            }
+            // assign random hub id and save our info
+            return getHubInfo(hub)
+            .then(mydevices => {
+                resolve(mydevices);
+            }). catch(reason => { 
+                reject(reason);
+            });
         }
 
         function newTokenCallback(body) {
@@ -3460,13 +3473,12 @@ function getDevices(hub) {
 // ------ end of getDevices
 
 function mapIsy(isyid, uom) {
-    const idmap = {"ST": "switch", "OL": "onlevel", "SETLVL": "level", "BATLVL": "battery", "CV": "voltage", "TPW": "power",
+    const idmap = {"ST": "switch", "OL": "level", "BATLVL": "battery", "CV": "voltage", "TPW": "power",
+                   "GV0": "status_",
                    "CLISPH": "heatingSetpoint", "CLISPC": "coolingSetpoint", "CLIHUM": "humidity", "LUMIN": "illuminance", 
-                   "CLIMD": "thermostatMode", "CLIHCS": "thermostatState", "CLIFS": "thermostatFanMode",
+                   "CLIMD": "thermostatMode", "CLIHCS": "thermostatState", "CLIFS": "thermostatFanMode", "MODE": "themode",
                    "CLIFRS": "thermostatOperatingState", "CLISMD": "thermostatHold", "CLITEMP":"temperature"};
 
-    // TODO - what is GV0 ?
-                
     var id = isyid;
     if ( uom==="17" && isyid==="ST" ) {
         id = "temperature";
@@ -3476,8 +3488,7 @@ function mapIsy(isyid, uom) {
     return id;
 }
 
-// pvalue = translateIsy(bid, control[0], uom, subid, pvalue, newval, "");
-function translateIsy(nodeid, objid, uom, subid, value, val, formatted) {
+function translateIsy(nodeid, objid, uom, subid, value, val, objuom, formatted) {
 
     // convert levels for Insteon range
     if ( uom && uom==="100" ) {
@@ -3493,21 +3504,25 @@ function translateIsy(nodeid, objid, uom, subid, value, val, formatted) {
     // if maps are not there then the native ISY subid will show up
     var newvalue = clone(value);
 
+    if ( objuom ) {
+        newvalue["uom_" + subid] = objuom;
+    }
+
     // handle special cases
     switch (objid) {
 
         case "ST":
             if ( (uom==="51" || uom==="100") ) {
                 // newvalue["level"]= val;  // formatted.substr(0, formatted.length-1);
-                if ( val!=="0" && val!=="100") {
-                    newvalue["level"] = val;
-                }
+                // if ( val!=="0" && val!=="100") {
+                //     newvalue["level"] = val;
+                // }
                 if ( val==="0" ) {
                     val = "DOF";
                 } else if ( val==="100" ) {
                     val = "DON";
                 } else {
-                    newvalue["level"] = val;
+                    // newvalue["level"] = val;
                     val = "DON";
                 }
                 newvalue[subid] = val;
@@ -3517,10 +3532,7 @@ function translateIsy(nodeid, objid, uom, subid, value, val, formatted) {
                 newvalue[subid] = val;
 
             } else if ( uom==="17" && subid==="temperature" ) {
-                if ( typeof formatted==="undefined" || formatted==="" ) {
-                    formatted = val + "°F";
-                }
-                newvalue[subid]= formatted;
+                newvalue[subid] = formatted ? formatted : val;
 
             } else {
                 val = (formatted==="Off" || val==="0" ? "DOF" : "DON");
@@ -3553,7 +3565,7 @@ function translateIsy(nodeid, objid, uom, subid, value, val, formatted) {
                 }
             }
             newvalue[subid] = val;
-            newvalue["level"] = val;
+            // newvalue["level"] = val;
             break;
 
         // case "CLIHUM":
@@ -3563,42 +3575,40 @@ function translateIsy(nodeid, objid, uom, subid, value, val, formatted) {
 
         case "CLISPC":
         case "CLISPH":
-            if ( uom==="17" && (typeof formatted === "undefined" || formatted==="") ) {
-                formatted = val + "°F";
-            } else if ( (typeof formatted === "undefined" || formatted==="") ) {
-                formatted = val;
+            if ( uom==="17" && !formatted ) {
+                val = val + "°F";
             }
-            newvalue[subid] = formatted;
+            newvalue[subid] = formatted ? formatted : val;
             break;
 
         case "RR":
             var index = parseInt(val);
-            if ( uom==="25" && !isNaN(index) && index<=31 ) {
+            if ( uom==="25" && !formatted && !isNaN(index) && index<=31 ) {
                 const RRindex = ["9.0 min", "8.0 min", "7.0 min", "6.0 min", "5.0 min", "4.5 min", "4.0 min", "3.5 min",
                                  "3.0 min", "2.5 min", "2.0 min", "1.5 min", "1.0 min", "47.0 sec", "43.0 sec", "38.5 sec",
                                  "34.0 sec", "32.0 sec", "30.0 sec", "28.0 sec", "26.0 sec", "23.5 sec", "21.5 sec", "19.0 sec",
                                  "8.5 sec", "6.5 sec", "4.5 sec", "2.0 sec", "0.5 sec", "0.3 sec", "0.2 sec", "0.1 sec"];
                 val = RRindex[index];
             }
-            newvalue[subid] = val;
+            newvalue[subid] = formatted ? formatted : val;
             break;
 
         case "CLIFRS":
             var index = parseInt(val);
             const CLHindex = ["Off", "On", "On High", "On Medium", "Circulation", "Humidity Circ", "R/L Circ", "U/D Circ", "Quiet"];
-            if ( uom==="80" && !isNaN(index) && index < CLHindex.length ) {
+            if ( uom==="80" && !formatted && !isNaN(index) && index < CLHindex.length ) {
                 val = CLHindex[index];
             }
-            newvalue[subid] = val;
+            newvalue[subid] = formatted ? formatted : val;
             break;
 
         case "CLIHCS":
             var index = parseInt(val);
             const CLFindex = ["Idle", "Heating", "Cooling", "Off"];
-            if ( uom==="25" && !isNaN(index) && index < CLFindex.length ) {
+            if ( uom==="25" && !formatted && !isNaN(index) && index < CLFindex.length ) {
                 val = CLFindex[index];
             }
-            newvalue[subid] = val;
+            newvalue[subid] = formatted ? formatted : val;
             break;
         
         default:
@@ -3622,9 +3632,9 @@ function setIsyFields(nodeid, device, props) {
             var obj = aprop['$'];
             // map ISY logic to the HousePanel logic based on SmartThings and Hubitat
             var subid = mapIsy(obj.id, obj.uom);
-            value["uom_" + subid] = obj.uom;
+            // value["uom_" + subid] = obj.uom;
             var val = obj.value;
-            value = translateIsy(nodeid, obj.id, obj.uom, subid, value, val, obj.formatted);
+            value = translateIsy(nodeid, obj.id, obj.uom, subid, value, val, obj.uom, obj.formatted);
         });        
         if ( DEBUGisy ) {
             console.log( (ddbg()), "in setIsyFields - node: ", nodeid, " device: ", device, " value: ", value, " props: ", props);
@@ -5619,9 +5629,9 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     // set up the class setting
     var classstr = "thing " + thingtype+"-thing" + subtype;
     if ( hint ) {
-        if ( thingtype==="isy" || thingtype==="isysub" ) {
-            hint = hint.replace(/\./g,"_");
-        }
+        // if ( thingtype==="isy" || thingtype==="isysub" ) {
+        //     hint = hint.replace(/\./g,"_");
+        // }
         $tc += " hint=\""+hint+"\"";
     }
     classstr += " p_"+kindex;
@@ -6676,7 +6686,7 @@ function processIsyMessage(userid, jsondata) {
                 }
 
                 var subid = mapIsy(control[0], uom);
-                pvalue = translateIsy(bid, control[0], uom, subid, pvalue, newval, "");
+                pvalue = translateIsy(bid, control[0], uom, subid, pvalue, newval, "", "");
                 var devtype = device.devicetype;
 
                 if ( array_key_exists("duration",pvalue) && array_key_exists("deltaT",pvalue) ) {
@@ -12360,8 +12370,7 @@ function setupISYSocket() {
     // close all existing connections
     for (var hubid in wsclient) {
         if ( wsclient[hubid] && typeof wsclient[hubid].close === "function" ) {
-            console.log( (ddbg()), "Gracefully closing ISY websocket for hub: ", hubid);
-            wsclient[hubid].close(WebSocketConnection.CLOSE_REASON_NORMAL);
+            wsclient[hubid].close();
         }
     }
     wsclient = {};
@@ -12402,6 +12411,7 @@ function setupISYSocket() {
                 var opts = {rejectUnauthorized: false};
                 var wsconfigs = {tlsOptions: opts, closeTimeout: 2000};
                 var wsone = new webSocketClient(wsconfigs);
+                wsclient[hubid] = wsone;
                 wsone["userid"] = userid;
                 wsone["hubid"] = hubid;
 
@@ -12412,7 +12422,6 @@ function setupISYSocket() {
             
                 wsone.on("connect", function(connection) {
                     var that = this;
-                    wsclient[that.hubid] = connection;
                     console.log( (ddbg()), "Success connecting to ISY socket. Listening for messages from hub:", that.hubid);
             
                     // handle incoming state messages from ISY
@@ -12427,8 +12436,7 @@ function setupISYSocket() {
                     });
                 
                     connection.on("close", function(reasonCode, description) {
-                        delete wsclient[that.hubid];
-                        console.log( (ddbg()), "ISY socket closed for hub: ", that.hubid," reason: ", reasonCode, " desc: ", description );
+                        console.log( (ddbg()), "ISY socket closed for hub: ", that.hubid," reason: ", reasonCode, description );
                     });
                 
                 });
