@@ -12169,25 +12169,23 @@ function apiCall(user, body, protocol, req, res) {
             case "hubdelete":
                 // TODO - implement hubDelete() function
                 if ( protocol === "POST" ) {
-                    result = mydb.deleteRow("hubs","userid = "+userid+" AND id = " + swid)
+                    Promise.all([
+                        mydb.deleteRow("hubs", "userid = "+userid+" AND id = " + swid),
+                        mydb.deleteRow("devices", "userid = "+userid+" AND hubid = " + swid),
+                        mydb.updateRow("users", {defhub: "-1"}, "id = " + userid)
+                    ])
                     .then(results => {
-                        if ( results && results.getAffectedItemsCount() > 0 ) {
-                            return mydb.updateRow("users",{defhub: "-1"}, "id = " + userid)
-                            .then( res4 => {
-                                // pushClient(userid, "pagemsg", "auth", "#newthingcount", msg );
-                                return "removed hub " + swid + " with hubid = " + hubid;
-                            })
-                            .catch( reason => {
-                                console.log( (ddbg()), reason);
-                                // pushClient(userid, "pagemsg", "auth", "#newthingcount", msg );
-                                return "error - could not remove hub with ID = " + hubid;
-                            });
+                        numHubDel = results[0].getAffectedItemsCount();
+                        numDevDel = results[1].getAffectedItemsCount();
+                        if ( numHubDel > 0 ) {
+                            return "Removed " + numHubDel + " hubs: " + swid + " hubid: " + hubid + " and removed " + numDevDel + " devices";
                         } else {
-                            return "error - could not remove hub " + swid + " with hubid = " + hubid;
+                            return "No hubs removed";
                         }
                     })
-                    .catch(reason => {
+                    .catch( reason => {
                         console.log( (ddbg()), reason);
+                        return "error - could not remove hub with ID = " + hubid;
                     });
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
