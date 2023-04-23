@@ -1918,13 +1918,6 @@ div.audio-thing div.groupId {
     display: none;
 }
 
-/* hide unwanted items from ISY */
-div.isy.RR,
-div.isy.thermostatState, div.isy.thermostatOperatingState, div.isy.thermostatHold,
-div.isy.GV1, div.isy.GV2, div.isy.GV3, div.isy.GV4, div.isy.GV5, div.isy.GV6,
-div.isy.GV7, div.isy.GV8, div.isy.GV9, div.isy.GV10, div.isy.GV11, div.isy.GV12 {
-    display: none;
-}
 div.level-dn, div.switchlevel-dn, div.arrow-dn,
 div.colorTemperature-dn, div.hue-dn, div.saturation-dn,
 div.heatingSetpoint-dn, div.coolingSetpoint-dn {
@@ -1958,14 +1951,6 @@ div.overlay div.arrow-it {
     vertical-align: middle;
 }
 
-/* turn off ISY program date fields by default */
-div.isy.lastRunTime, div.isy.lastFinishTime {
-    display: none;
-}
-
-div.thing.isy-thing div.overlay.ERR {
-    display: none;
-}
 div.overlay._media_ {
     display: none;
 }
@@ -2009,7 +1994,7 @@ div.thing div.status_.Unknown, div.thing div.status_.HUB_Disconnected {
     background-color: rgb(202, 0, 222);
 }
 
-/* by default hide all the other program stuff in this skin */
+/* turn off ISY program fields by default */
 div.isy-thing.program div.overlay.runElse,
 div.isy-thing.program div.overlay.stop,
 div.isy-thing.program div.overlay.lastRunTime,
@@ -2045,43 +2030,29 @@ div.overlay.Evening div.location.Evening {
 div.rule {
     display: none;
 }
-div.thing.isy-thing div.overlay div.arrow-up,
-div.thing.isy-thing div.overlay div.arrow-dn {
+div.thing div.overlay div.arrow-up,
+div.thing div.overlay div.arrow-dn {
     display: inline-block;
     height: 25px; width: 25px; border: none;
     background-size: 25px;
     padding-left: 3px; padding-right: 3px;
 }
-div.thing.isy-thing div.overlay div.arrow-it {
+div.thing div.overlay div.arrow-it {
     display: inline-block;
     width: 30%; margin-top: 5px;
 }
-div.thing.isy-thing div.overlay.enabled,
-div.thing.isy-thing div.overlay.deviceClass,
-div.thing.isy-thing div.overlay.dcPeriod,
-div.thing.isy-thing div.overlay.startDelay,
-div.thing.isy-thing div.overlay.endDelay,
-div.thing.isy-thing div.overlay.pnode,
-div.thing.isy-thing div.overlay.parent__,
-div.thing.isy-thing div.overlay.rpnode,
-div.thing.isy-thing div.overlay.sgid,
-div.thing.isy-thing div.overlay.wattage,
-div.thing.isy-thing div.overlay.custom,
-div.thing.isy-thing div.overlay.devtype,
-div.thing.isy-thing div.overlay.property,
-div.thing.isysub-thing div.overlay.enabled,
-div.thing.isysub-thing div.overlay.deviceClass,
-div.thing.isysub-thing div.overlay.dcPeriod,
-div.thing.isysub-thing div.overlay.startDelay,
-div.thing.isysub-thing div.overlay.endDelay,
-div.thing.isysub-thing div.overlay.pnode,
-div.thing.isysub-thing div.overlay.parent__,
-div.thing.isysub-thing div.overlay.rpnode,
-div.thing.isysub-thing div.overlay.sgid,
-div.thing.isysub-thing div.overlay.wattage,
-div.thing.isysub-thing div.overlay.custom,
-div.thing.isysub-thing div.overlay.devtype,
-div.thing.isysub-thing div.overlay.property
+div.thing div.overlay.enabled,
+div.thing div.overlay.deviceClass,
+div.thing div.overlay.dcPeriod,
+div.thing div.overlay.startDelay,
+div.thing div.overlay.endDelay,
+div.thing div.overlay.pnode,
+div.thing div.overlay.parent__,
+div.thing div.overlay.rpnode,
+div.thing div.overlay.sgid,
+div.thing div.overlay.wattage,
+div.thing div.overlay.devtype,
+div.thing div.overlay.property
 {
     display: none;
 }

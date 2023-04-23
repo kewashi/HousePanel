@@ -40,14 +40,14 @@ function getDefaultSubids() {
 function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {  
 
     // save our tile id in a global variable
-    // cm_Globals.devices = {};
+    cm_Globals.devices = null;
     cm_Globals.aid = aid;
     cm_Globals.id = bid;
     cm_Globals.hubnum = hubnum;
     cm_Globals.reload = false;
     cm_Globals.userid = userid;
     cm_Globals.type = str_type;
-    cm_Globals.rules = null;
+    cm_Globals.rules = [];
     var isdone = {getrules: false, devices: false};
 
     // confirm we have options
@@ -83,7 +83,8 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
                 // console.log("getrules: ", presult);
                 checkDone("getrules");
             } else {
-                console.log("error - failure reading rules from database for user = " + userid);
+                checkDone("getrules");
+                console.log(">>>> error - failure reading rules from database");
             }
         }, "json"
     );
@@ -107,6 +108,8 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
                 checkDone("devices");
                 // dodisplay();
             } else {
+                cm_Globals.devices = null;
+                checkDone("devices");
                 console.log(">>>> error - could not load devices to use the customizer");
             }
         }, "json"
@@ -168,14 +171,15 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
                     // location.reload(true);
                     window.location.href = cm_Globals.returnURL;
                 } else {
-                    priorOpmode = "Edit"
-       ;         }
+                    priorOpmode = "Edit";
+                }
             },
             // function invoked upon starting the dialog
             function(hook, content) {
                 // grab the global list of all things and options
                 if ( !cm_Globals.devices ) {
                     console.log("error - you have no devices to use in the Tile Customoizer ...");
+                    closeModal("modalcustom");
                     return;
                 } else {
                     try {
@@ -190,10 +194,11 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
                     } catch (e) {
                         console.log("error attempting to load the Tile Customoizer ...", e);
                         closeModal("modalcustom");
+                        return;
                     }
                 }
                 
-                // initialize the actions
+                // make the modal box moveable
                 $("#modalcustom").draggable();
             }
         );
@@ -1042,9 +1047,8 @@ function handleBuiltin(subid) {
 
 }
 
-// function uses php to save the custom info to hmoptions.cfg
+// function uses server to save the custom info
 // for this call value and attr mean something different than usual
-// changed type back to what it usually is
 function applyCustomField(action, subid) {
     var tileid = cm_Globals.tileid;
     var thing = cm_Globals.devices[tileid]
@@ -1059,9 +1063,7 @@ function applyCustomField(action, subid) {
 
     // var value = thing.pvalue;
     var customtype = $("#cm_customtype").val();
-    var content = null;
-
-
+    var content;
     var errors = [];
 
     var existing = false;
@@ -1072,26 +1074,31 @@ function applyCustomField(action, subid) {
             var olditem = cm_Globals.devices[cm_Globals.currentid];
             if ( olditem ) {
                 content = olditem.id;
+            } else {
+                errors.push("Tile being linked to does not exist");
+                content = null;
             }
         } else {
             content = $("#cm_text").val();
         }
 
-        var therule = [customtype, content, subid];
-        if ( !cm_Globals.rules ) {
-            cm_Globals.rules = [];
-        }
-        for ( var i = 0; i < oldrules.length; i++ ) {
-            var rule = oldrules[i];
-            if ( rule[2]===subid ) {
-                cm_Globals.rules[i] = therule;
-                existing = true;
-                break;
+        if ( content!==null ) {
+            var therule = [customtype, content, subid];
+            if ( !cm_Globals.rules ) {
+                cm_Globals.rules = [];
             }
-        }
-        if ( !existing && action==="addcustom" ) {
-            cm_Globals.rules.push(therule);
-            existing = true;
+            for ( var i = 0; i < oldrules.length; i++ ) {
+                var rule = oldrules[i];
+                if ( rule[2]===subid ) {
+                    cm_Globals.rules[i] = therule;
+                    existing = true;
+                    break;
+                }
+            }
+            if ( !existing && action==="addcustom" ) {
+                cm_Globals.rules.push(therule);
+                existing = true;
+            }
         }
     } 
     else if ( action==="delcustom" && cm_Globals.rules && cm_Globals.rules.length ) {
@@ -1139,33 +1146,28 @@ function applyCustomField(action, subid) {
             cm_Globals.rules = "";
         }
     }
-        
-        // show processing window
-        // var pos = {top: 5, left: 5, zindex: 9999, background: "red", color: "white"};
-        // createModal("waitbox", "Processing " + action + " Please wait...", "table.cm_table", false, pos);
-        var rules = encodeURI(JSON.stringify(cm_Globals.rules));
-        // console.log(">>>> rules : ", rules);
-        $.post(cm_Globals.returnURL, 
-            {useajax: action, userid: cm_Globals.options.userid, id: bid, value: customtype, 
-                rules: rules, tileid: tileid, subid: subid},
-            function (presult, pstatus) {
-                if (pstatus==="success") {
-                    cm_Globals.reload = true;
-                    
-                    // update the visual boxes on screen
-                    if ( action==="addcustom" ) {
-                        loadExistingFields(tileid, subid, false);
-                        handleBuiltin(subid);
-                    } else {
-                        getDefaultSubids();
-                    }
-                    // closeModal("waitbox");
+
+    // send rules to server
+    var rules = encodeURI(JSON.stringify(cm_Globals.rules));
+    $.post(cm_Globals.returnURL, 
+        {useajax: action, userid: cm_Globals.options.userid, id: bid, value: customtype, 
+            rules: rules, tileid: tileid, subid: subid},
+        function (presult, pstatus) {
+            if (pstatus==="success") {
+                cm_Globals.reload = true;
+                
+                // update the visual boxes on screen
+                if ( action==="addcustom" ) {
+                    loadExistingFields(tileid, subid, false);
+                    handleBuiltin(subid);
                 } else {
-                    console.log("Error attempting to perform " + action + ". presult: ", presult);
-                    // closeModal("waitbox");
+                    getDefaultSubids();
                 }
-            }, "json"
-        );
+            } else {
+                console.log("Error attempting to perform " + action + ". presult: ", presult);
+            }
+        }, "json"
+    );
    
 }
 

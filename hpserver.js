@@ -96,47 +96,56 @@ GLB.ignoredISY = [
 
 // this map contains the base capability for each type and all valid commands for that capability
 // the keys here are unique to HousePanel and are used to define the type of thing on the panel
+// the third entry is for mapping ISY hints to our types
 GLB.capabilities = { 
-    switch: [ ["switch"], ["_on","_off"]],
-    switchlevel: [ ["switch","switchLevel"], ["_on","_off"]],
-    bulb: [ ["colorControl","switch"],["_on","_off","color"]], 
-    button: [ ["button"],["_pushed","_held"]],
-    presence: [ ["presenceSensor"],null], 
-    motion: [ ["motionSensor"],null], 
-    contact: [ ["contactSensor"],null], 
-    door: [ ["doorControl"],["_open","_close"]], 
-    garage: [ ["garageDoorControl"],["_open","_close"] ],
-    dust: [ ["dustSensor"],null], 
-    fanspeed: [ ["fanSpeed"],null],
-    acceleration: [ ["accelerationSensor"],null], 
-    airquality: [ ["airQualitySensor"],null], 
-    alarm: [ ["alarm"],["_both","_off","_siren","_strobe"]], 
-    illuminance: [ ["illuminanceMeasurement"],null],
-    lock: [ ["lock"],["_unlock","_lock"]],
-    thermostat: [ ["temperatureMeasurement","thermostatMode","thermostatHeatingSetpoint","thermostatCoolingSetpoint","thermostatOperatingState"],null],
-                //   ["heatingSetpoint-up","heatingSetpoint-dn","coolingSetpoint-up","coolingSetpoint-dn"]], 
-    temperature: [ ["temperatureMeasurement"],null], 
-    power: [ ["powerMeter","energyMeter"],null],
-    // energy: [ ["energyMeter"],null],
-    fan: [ ["fanSpeed"],null],
-    smoke: [ ["smokeDetector"],null], 
-    sound: [ ["soundSensor"],null], 
-    tamper: [ ["tamperAlert"],null], 
-    cosensor: [ ["carbonMonoxideMeasurement"],null], 
-    co2sensor: [ ["carbonDioxideMeasurement"],null], 
-    valve: [ ["valve"],["_open","_close"]], 
-    weather: [ ["temperatureMeasurement","relativeHumidityMeasurement","illuminanceMeasurement"],["_refresh"]],
-    audio: [ ["mediaPlayback","audioVolume","audioMute"],["_previousTrack","_pause","_play","_stop","_nextTrack","_volumeDown","_volumeUp","_mute","_unmute","_refresh"]], 
-    shade: [ ["windowShade","switchLevel"],["_open","_close","_pause","_presetPosition"]], 
-    tone: [ ["tone"],["_beep"]], 
-    uvindex: [["ultravioletIndex"],null],
-    voltage: [["voltageMeasurement"],null],
-    washer: [ ["washerOperatingState","washerMode","switch"],["_on","_off","_pause","_run","_stop","_setWasherMode"]],
-    vacuum: [ ["robotCleanerCleaningMode"],["_auto","_part","_repeat","_manual","_stop"]],
-    water: [ ["waterSensor"],null],
-    location: [ ["location"],["_refresh"]]
-    // , other: ["sensor",null], 
-    // actuator: ["actuator",null] 
+    other: [ [], ["_on","_off"], "0.1" ],
+    actuator: [ [], ["_on","_off"], "0.2" ],
+    switch: [ ["switch"], ["_on","_off"], "1."],
+    switchlevel: [ ["switch","switchLevel"], ["_on","_off"], "1.2"],
+    bulb: [ ["colorControl","switch"],["_on","_off","color"], "1.3"], 
+    button: [ ["button"],["_pushed","_held"], "1.4"],
+    power: [ ["powerMeter","energyMeter"],null, "1.5"],
+    
+    door: [ ["doorControl"],["_open","_close"], "2.1"], 
+    garage: [ ["garageDoorControl"],["_open","_close"], "2.2"],
+    shade: [ ["windowShade","switchLevel"],["_open","_close","_pause","_presetPosition"], "2.3"], 
+
+    vacuum: [ ["robotCleanerCleaningMode"],["_auto","_part","_repeat","_manual","_stop"], "3.1"],
+    washer: [ ["washerOperatingState","washerMode","switch"],["_on","_off","_pause","_run","_stop","_setWasherMode"], "3.2"],
+    
+    valve: [ ["valve"],["_open","_close"], "4.1"], 
+    
+    sensor: [ [], null, "7."], 
+    contact: [ ["contactSensor"],null, "7.1"], 
+    motion: [ ["motionSensor"],null, "7.2"], 
+    presence: [ ["presenceSensor"],null, "7.3"], 
+    acceleration: [ ["accelerationSensor"],null, "7.4"], 
+    dust: [ ["dustSensor"],null, "7.5"], 
+    voltage: [["voltageMeasurement"],null, "7.6"],
+    alarm: [ ["alarm"],["_both","_off","_siren","_strobe"], "7.9"], 
+    water: [ ["waterSensor"],null, "7.9.1"],
+    smoke: [ ["smokeDetector"],null, "7.9.2"],
+    cosensor: [ ["carbonMonoxideMeasurement"],null, "7.9.3"], 
+    co2sensor: [ ["carbonDioxideMeasurement"],null, "7.9.4"], 
+    sound: [ ["soundSensor"],null, "7.9.5"], 
+    tamper: [ ["tamperAlert"],null, "7.9.6"], 
+    tone: [ ["tone"],["_beep"], "7.9.7"], 
+
+    thermostat: [ ["temperatureMeasurement","thermostatMode","thermostatHeatingSetpoint","thermostatCoolingSetpoint","thermostatOperatingState"],null, "5."],
+    temperature: [ ["temperatureMeasurement"],null, "5.2"], 
+    illuminance: [ ["illuminanceMeasurement"],null, "5.3"],
+    fan: [ ["fanSpeed"],null, "5.4"],
+    // fanspeed: [ ["fanSpeed"],null, null],
+    weather: [ ["temperatureMeasurement","relativeHumidityMeasurement","illuminanceMeasurement"],["_refresh"], "5.5"],
+    airquality: [ ["airQualitySensor"],null, "5.6"], 
+    uvindex: [["ultravioletIndex"],null, "5.7"],
+
+    lock: [ ["lock"],["_unlock","_lock"], "8."],
+    
+    music: [ ["mediaPlayback"], ["_previousTrack","_pause","_play","_stop","_nextTrack","_volumeDown","_volumeUp","_mute","_unmute","_refresh"], "9.1" ],
+    audio: [ ["mediaPlayback","audioVolume","audioMute"],["_previousTrack","_pause","_play","_stop","_nextTrack","_volumeDown","_volumeUp","_mute","_unmute","_refresh"], "9.2"],
+
+    location: [ ["location"],["_refresh"], null]
 };
 
 // list of capabilities that generate an event
@@ -498,13 +507,6 @@ async function getUserName(req) {
 
 // TODO - use DB query on devices table
 function getTypes() {
-    // var thingtypes = [
-    //     "actuator", "audio", "blank", "bulb", "button", "clock", "contact", "control", "custom", "door", "ford", "frame", "hsm", 
-    //     "illuminance", "image", "isy", "lock", "mode", "momentary", "motion", "music", 
-    //     "other", "piston", "power", "presence", "shade", "shm", "smoke", "switch", "switchlevel", "temperature", "thermostat", 
-    //     "vacuum", "valve", "video", "washer", "water", "weather"
-    // ];
-
     // add capabilities from the new SmartThings list
     var thingtypes = Object.keys(GLB.capabilities);
 
@@ -515,18 +517,16 @@ function getTypes() {
     thingtypes.push("image");
     thingtypes.push("video");
     thingtypes.push("control");
-    thingtypes.push("momentary");
-    thingtypes.push("actuator");
-    thingtypes.push("sensor");
-    thingtypes.push("other");
+    // thingtypes.push("momentary");
+    // thingtypes.push("actuator");
+    // thingtypes.push("sensor");
+    // thingtypes.push("other");
     thingtypes.push("clock");
-    thingtypes.push("ford");
-    thingtypes.push("isy");
-    thingtypes.push("isysub");
     thingtypes.push("hsm");
-    thingtypes.push("shm");
     thingtypes.push("mode");
-    thingtypes.push("music");
+    // thingtypes.push("music");
+    thingtypes.push("isy");
+    thingtypes.push("ford");
     thingtypes.push("sonos");
     thingtypes.push("variables");
     thingtypes.push("piston");
@@ -2168,10 +2168,12 @@ function getDevices(hub) {
                 var params = "";
 
                 // create the "and" filter for the devices to get
-                thecapabilityList.forEach(function(thecapability) {
-                    if ( params ) { params+= "&"; }
-                    params+= "capability="+thecapability;
-                });
+                if ( thecapabilityList && is_array(thecapabilityList) ) {
+                    thecapabilityList.forEach(function(thecapability) {
+                        if ( params ) { params+= "&"; }
+                        params+= "capability="+thecapability;
+                    });
+                }
 
                 if ( DEBUG2 ) {
                     console.log( (ddbg()), "inside getNewSmartDevices and type: ", swtype," params: ", params);
@@ -2933,7 +2935,6 @@ function getDevices(hub) {
             var buff = Buffer.from(hubAccess);
             var base64 = buff.toString('base64');
             var stheader = {"Authorization": "Basic " + base64};
-            var thetype = "isy";
             // var vardefs = {};
     
             // use this object to keep track of which things are done
@@ -3012,11 +3013,12 @@ function getDevices(hub) {
                     // sort variables so names show up in front of variable values
                     variables = sortVariables(variables);
                     var pvalstr = encodeURI2(variables);
-                    var device = {userid: userid, hubid: hubindex, deviceid: "vars", name: variables.name, 
-                                  devicetype: thetype, hint: "ISY_variable", refresh: "never", pvalue: pvalstr};
+                    var devid = "isy_variables";
+                    var device = {userid: userid, hubid: hubindex, deviceid: devid, name: variables.name, 
+                                  devicetype: "variables", hint: "ISY_variable", refresh: "never", pvalue: pvalstr};
                                   
-                    mydevices["vars"] = device;
-                    mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = 'vars'")
+                    mydevices[devid] = device;
+                    mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + devid + "'")
                     .then( () => {
                         done["variables"] = true;
                     })
@@ -3247,8 +3249,6 @@ function getDevices(hub) {
                                 progname = "Program " + progname;
                             }
 
-                            // var progcommands = "run|runThen|runElse|stop|enable|disable";
-                            // var progarr = progcommands.split("|");
                             var progarr = ["run","runThen","runElse","stop","enable","disable"];
                             pvalue = {name: progname};
                             progarr.forEach(function(command) {
@@ -3273,7 +3273,7 @@ function getDevices(hub) {
                             var pvalstr = encodeURI2(pvalue);
 
                             var device = {userid: userid, hubid: hubindex, deviceid: progid, name: progname, 
-                                            devicetype: thetype, hint: "ISY_program", refresh: "never", pvalue: pvalstr};
+                                          devicetype: thetype, hint: "ISY_program", refresh: "never", pvalue: pvalstr};
                             mydevices[progid] = device;
                             mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + progid + "'")
                             .then( res => {
@@ -3324,28 +3324,34 @@ function getDevices(hub) {
                         var node = thenodes[obj];
                         var id = fixISYid(node["address"][0].toString());
                         var hint = node["type"][0].toString();
-    
-                        // set hint to nothing if default of zeros is provided
-                        // TODO - provide a more useful mapping of hints to type names
-                        // until then user can still style hints using CSS
-                        if ( hint ) {
-                            hint = hint.replace( /\./g, "_" );
-                            hint = "ISY " + hint;
+                        if ( !hint ) {
+                            hint = "0.0.0.0";
                         }
     
-                        var name = node["name"][0] || "Node";
+                        // use hints to inform what type to set - if no match then use isy type
+                        thetype = "isy";
+                        for (var key in GLB.capabilities) {
+                            var caphint = GLB.capabilities[key][2];
+                            if ( caphint && hint.startsWith(caphint) ) {
+                                thetype = key;
+                            }
+                        }
+
+                        // now fix up the hint so we can style using it
+                        hint = hint.replace( /\./g, "_" );
+    
+                        var name = node["name"][0] || "Unnamed Node";
                         var pvalue = {"name": name};
 
                         const ignoreNodes = ["$","address","name","family","type"];
                         var ignoreNode = false;
-                        thetype = "isy";
                         for (var nodeitem in node) {
                             if ( !ignoreNodes.includes(nodeitem) ) {
                                 pvalue[nodeitem] = node[nodeitem][0];
                                 // handle items that are sub-devices
-                                if ( nodeitem === "pnode" && pvalue[nodeitem]!== id ) {
-                                    thetype = "isysub";
-                                }
+                                // if ( nodeitem === "pnode" && pvalue[nodeitem]!== id ) {
+                                //     thetype = "isysub";
+                                // }
                             }
                         }
 
@@ -3368,7 +3374,7 @@ function getDevices(hub) {
                             // set bare minimum info
                             // this is updated below in the callback after getting node details
                             var device = {userid: userid, hubid: hubindex, deviceid: id, name: name, 
-                                          devicetype: thetype, hint: hint, refresh: "never", pvalue: pvalstr};
+                                          devicetype: thetype, hint: `ISY_${hint}`, refresh: "never", pvalue: pvalstr};
                             mydevices[id] = device;
                             mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + id + "'")
                             .then( () => {
@@ -3401,7 +3407,7 @@ function getDevices(hub) {
                         }
                         var pvalstr = encodeURI2(pvalue);
                         var device = {userid: userid, hubid: hubindex, deviceid: id, name: name, 
-                                      devicetype: thetype, hint: hint, refresh: "never", pvalue: pvalstr};
+                                      devicetype: "isy", hint: hint, refresh: "never", pvalue: pvalstr};
                         mydevices[id] = device;
                         mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + id + "'")
                         .then(res => {
@@ -5790,11 +5796,10 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
             //     tval = thingvalue["def_"+tkey] + " = " + tval;
             //     $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, null, null, twidth, theight);
             // }
-
-            else if ( hint==="ISY_scene" && tkey.substring(0,6)==="scene_" ) {
-                tval = thingvalue["name"] + "<br>" + tval;
-                $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, null, null, twidth, theight);
-            }
+            // else if ( hint==="ISY_scene" && tkey.substring(0,6)==="scene_" ) {
+            //     tval = thingvalue["name"] + " " + tval;
+            //     $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, null, null, twidth, theight);
+            // }
 
             // else if ( tkey.substring(0,5)!=="user_" && typeof tval!=="object" ) { 
             else if ( typeof tval!=="object" ) { 
@@ -5978,8 +5983,8 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
     
     if ( tkey==="hue" || tkey==="saturation" ||
          tkey==="heatingSetpoint" || tkey==="coolingSetpoint"  ||
-         (tkey.startsWith("Int_") && thingtype==="isy") ||
-         (tkey.startsWith("State_") && thingtype==="isy") ) {
+         tkey.startsWith("Int_") || tkey.startsWith("State_") ) 
+    {
 
         // fix thermostats to have proper consistent tags
         // this is supported by changes in the .js file and .css file
@@ -6049,7 +6054,7 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         }
 
         // hide variable precisions and definitions
-        if ( thingtype==="isy" && (tkey.startsWith("prec_") || tkey.startsWith("def_")) ) {
+        if ( tkey.startsWith("prec_") || tkey.startsWith("def_") ) {
             extra += " user_hidden";
         }
         
@@ -6751,7 +6756,7 @@ function processIsyMessage(userid, jsondata) {
         // include test for an init action which is skipped (kudos to @KMan)
         } else if ( is_array(eventInfo) && eventInfo.length && is_object(eventInfo[0]) && array_key_exists("var", eventInfo[0]) && action && action[0]==="6" ) {
             var varobj = eventInfo[0].var[0];
-            var bid = "vars";
+            var bid = "isy_variables";
             mydb.getRow("devices", "*", "userid = "+userid+" AND deviceid = '"+bid+"'")
             .then(results => {
 
@@ -6844,7 +6849,7 @@ function processIsyMessage(userid, jsondata) {
             var bid = "prog_" + "0000".substring(0,len) + idsymbol;
             var subid = "status";
 
-            mydb.getRow("devices","*", "userid = "+userid+" AND devicetype = 'isy' AND deviceid = '"+bid+"'")
+            mydb.getRow("devices","*", "userid = "+userid+" AND deviceid = '"+bid+"'")
             .then(results => {
 
                 if ( !results ) { return; }
@@ -7418,9 +7423,10 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                                         }
                                     }
 
-                                    // fix up ISY hubs
-                                    if ( rtype==="isy" && rulevalue==="on" ) { rulevalue = "DON"; }
-                                    if ( rtype==="isy" && rulevalue==="off" ) { rulevalue = "DOF"; }
+                                    // fix up ISY hubs - no longer do this because ISY devices now can be any type
+                                    // this means when writing rules you have to use DON and DOF if that is what you want
+                                    // if ( rtype==="isy" && rulevalue==="on" ) { rulevalue = "DON"; }
+                                    // if ( rtype==="isy" && rulevalue==="off" ) { rulevalue = "DOF"; }
 
                                     if ( DEBUG11 ) {
                                         console.log( (ddbg()), "RULE debug: rtype= ", rtype, " rbid= ", rbid, " ifvalue: ", ifvalue, "rulevalue: ", rulevalue, " ruletileid: ", ruletileid, " parts: ", ruleparts );
@@ -9229,22 +9235,6 @@ function translateObjects(pvalue) {
     }
     return nvalue;
 }
-
-// function testclick(clktype, clkid) {
-//     const infoclicks = [
-//         "temperature", "name", "contact", "presence", "motion", "battery",
-//         "date","time", "weekday", "tzone", "heatingSetpoint", "coolingSetpoint",
-//         "camera", "statusMessage", "numberOfButtons", 
-//         "time", "weekday", "date"
-//     ];
-//     var test = false;
-//     if ( clkid.startsWith("_") || clkid.endsWith("-up") || clkid.endsWith("-dn") ) {
-//         test = false;
-//     } else if ( clktype==="weather" || clkid.startsWith("Int_") || clkid.startsWith("State_") || clkid.startsWith("event_") || in_array(clkid, infoclicks) ) {
-//         test = true;
-//     }
-//     return test;
-// }
 
 function doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, command, linkval) {
 
@@ -11281,54 +11271,47 @@ function pw_verify(pword, hash, algo) {
     return (pw_hash(pword, algo) === hash);
 }
 
-// TODO - test and debug
 function updCustom(userid, swid, rules) {
     // var reserved = ["index","rooms","things","config","control","time","useroptions"];
     var configkey = "user_" + swid;
+    var goodrules = [];
 
-    // console.log("rules: ", rules);
+    // handle encryption and check for valid customization
     if ( rules && is_array(rules) && rules.length ) {
-        // handle encryption
         for (var i = 0; i < rules.length; i++) {
             var rule = rules[i];
-            if ( is_array(rule) && rule.length>2 ) {
+            if ( is_array(rule) && rule.length>2 && rule[0] && rule[2] ) {
                 var customval = rule[1].toString();
                 var subid = rule[2];
-                if ( rule[0]==="TEXT" && subid==="password" && customval.length < 60 ) {
-                    rules[i][1] = pw_hash(customval);
+                var rtype = rule[0];
+                if ( rtype==="TEXT" && subid==="password" && customval.length < 60 ) {
+                    customval = pw_hash(customval);
                 }
-            } else {
-                var k = (i+1).toString();
-                rules[i] = ["TEXT","","user"+k];
+                goodrules.push( [rtype, customval, subid] );
             }
         }
+    }
 
+    if ( goodrules.length > 0 ) {
         var rulejson = JSON.stringify(rules);
         var rulerow = {userid: userid, configkey: configkey, configval: rulejson};
-        // console.log("rulerow: ", rulerow);
         return mydb.updateRow("configs", rulerow, "userid = "+userid+" AND configkey = '"+configkey+"'")
         .then(result => {
-            if ( result ) {
-                return rulerow;
-            } else {
-                return null;
-            }
+            return "updated " + goodrules.length + " customizations for field: " + swid + " and user " + userid;
         })
         .catch( reason => {
             console.log( (ddbg()), reason);
-            return null;
         });
-
     } else {
         return mydb.deleteRow("configs", "userid = "+userid+" AND configkey='"+configkey+"'")
         .then(result => {
-            return null;
+            return "removed customizations for field: " + swid + " and user: " + userid;
         })
         .catch( reason => {
             console.log( (ddbg()), reason);
-            return null;
         });
     }
+
 }
 
 function findHub(hubid, hubs) {
