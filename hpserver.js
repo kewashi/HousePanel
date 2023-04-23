@@ -2941,7 +2941,7 @@ function getDevices(hub) {
     
             // now read in any int and state variables and their definitions
             var mydevices = {};
-            var variables = {name: "ISY Variables", "status_": "INACTIVE"};
+            var variables = {name: "ISY Variables", "status_": "ACTIVE"};
 
             console.log(">>>> ISY hub call: ", hubAccess, hubEndpt, stheader);
 
@@ -3277,9 +3277,6 @@ function getDevices(hub) {
                             mydevices[progid] = device;
                             mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + progid + "'")
                             .then( res => {
-                                if ( DEBUGisy ) {
-                                    console.log("prog update: ", res);
-                                }
                                 if ( n >= nprogs ) {
                                     checkDone("programs");
                                 }
@@ -6637,7 +6634,7 @@ function processIsyMessage(userid, jsondata) {
         var eventInfo = jsondata.eventInfo;
 
         var uom;
-        if ( DEBUG9 || DEBUGisy ) {
+        if ( DEBUG9 ) {
             console.log( (ddbg()), "ISY event: ", jsonshow(jsondata) );
         }
 
@@ -6739,8 +6736,8 @@ function processIsyMessage(userid, jsondata) {
                 if ( DEBUG9 ) {
                     console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " uom: ", uom, " newval: ", newval, " pvalue: ", pvalue);
                 }
-                device.pvalue = encodeURI2(pvalue);
-                mydb.updateRow("devices", device, "userid = "+userid+" AND devicetype = 'isy' AND id = "+device.id)
+                var pvalstr = encodeURI2(pvalue);
+                mydb.updateRow("devices", {pvalue: pvalstr}, "userid = "+userid+" AND id = "+device.id)
                 .then( () => {
                 })
                 .catch( reason => {
@@ -6820,8 +6817,8 @@ function processIsyMessage(userid, jsondata) {
                         if ( DEBUG9 ) {
                             console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " varobj: ", varobj, " subid: ", subid, " pvalue: ", pvalue);
                         }
-                        device.pvalue = encodeURI2(pvalue);
-                        mydb.updateRow("devices", device, "userid = "+userid+" AND devicetype = 'isy' AND id = "+device.id)
+                        var pvalstr = encodeURI2(pvalue);
+                        mydb.updateRow("devices", {pvalue: pvalstr}, "userid = "+userid+" AND id = "+device.id)
                         .then( () => {
                         })
                         .catch( reason => {
@@ -6909,8 +6906,8 @@ function processIsyMessage(userid, jsondata) {
                     if ( DEBUG9 ) {
                         console.log( (ddbg()), "ISY webSocket updated program: ", bid, " pvalue: ", device);
                     }
-                    device.pvalue = encodeURI2(pvalue);
-                    mydb.updateRow("devices", device, "userid = "+userid+" AND id = "+device.id)
+                    var pvalstr = encodeURI2(pvalue);
+                    mydb.updateRow("devices", {pvalue: pvalstr}, "userid = "+userid+" AND id = "+device.id)
                     .then( () => {
                     })
                     .catch( reason => {
@@ -12169,14 +12166,14 @@ function apiCall(user, body, protocol, req, res) {
             case "hubdelete":
                 // TODO - implement hubDelete() function
                 if ( protocol === "POST" ) {
-                    Promise.all([
+                    result = Promise.all([
                         mydb.deleteRow("hubs", "userid = "+userid+" AND id = " + swid),
                         mydb.deleteRow("devices", "userid = "+userid+" AND hubid = " + swid),
                         mydb.updateRow("users", {defhub: "-1"}, "id = " + userid)
                     ])
                     .then(results => {
-                        numHubDel = results[0].getAffectedItemsCount();
-                        numDevDel = results[1].getAffectedItemsCount();
+                        var numHubDel = results[0].getAffectedItemsCount();
+                        var numDevDel = results[1].getAffectedItemsCount();
                         if ( numHubDel > 0 ) {
                             return "Removed " + numHubDel + " hubs: " + swid + " hubid: " + hubid + " and removed " + numDevDel + " devices";
                         } else {
@@ -12185,7 +12182,7 @@ function apiCall(user, body, protocol, req, res) {
                     })
                     .catch( reason => {
                         console.log( (ddbg()), reason);
-                        return "error - could not remove hub with ID = " + hubid;
+                        return "error - could not remove hub with ID = " + hubid + " errcode: " + reason;
                     });
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
@@ -12378,9 +12375,6 @@ function setupISYSocket() {
     .then(hubs => {
         hubs.forEach(hub => {
 
-            // if ( DEBUGisy ) {
-            //     console.log( (ddbg()), "Setting up callback socket for hub: ", hub);
-            // }
             var userid = hub.userid;
             var hubid = hub.hubid;
             wshost = false;
@@ -12392,10 +12386,6 @@ function setupISYSocket() {
                 } else if ( hubhost.startsWith("http://") ) {
                     wshost = "ws://" + hubhost.substr(7);
                 }
-            }
-
-            if ( DEBUGisy ) {
-                console.log( (ddbg()), "wshost: ", wshost);
             }
 
             // set up socket for ISY hub if one is there
@@ -13264,7 +13254,8 @@ if ( app && applistening ) {
                 res.json(result);
                 res.end();
             } else {
-                res.send("Invalid HousePanel POST request");
+                console.log(">>>> invalid POST: ", result);
+                res.send("Invalid HousePanel POST request - check logs");
                 res.end();
             };
 

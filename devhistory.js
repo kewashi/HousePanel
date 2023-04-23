@@ -1,4 +1,5 @@
 const devhistory = `
+3.069   fix isy devices to be removed when hub is removed and other isy bugfixes
 3.068   enable user accessToken and end poitns to skip oAUTH flow for Hubitat hubs
 3.067   bugfixes, clean up tile movement, hot keys for menus
 3.066   more options for borders, bigger menu, and set round corners as default

@@ -1985,8 +1985,8 @@ div.thing.switch-thing div.overlay.switch {
 
 div.thing div.status_.ONLINE, div.thing div.status_.OFFLINE, div.thing div.status_.SUCCESS, div.thing div.status_.ERROR,
 div.thing div.status_.ACTIVE, div.thing div.status_.UNKNOWN, div.thing div.status_.HUB_DISCONNECTED, div.thing div.status_.INACTIVE,
-div.thing div.status.ONLINE, div.thing div.status.OFFLINE, div.thing div.status.SUCCESS, div.thing div.status.ERROR,
-div.thing div.status.ACTIVE, div.thing div.status.UNKNOWN, div.thing div.status.HUB_DISCONNECTED, div.thing div.status.INACTIVE {
+div.thing div.status_.Online, div.thing div.status_.Offline, div.thing div.status_.Success, div.thing div.status_.Error,
+div.thing div.status_.Active, div.thing div.status_.Unknown, div.thing div.status_.HUB_Disconnected, div.thing div.status_.Inactive {
     position: absolute;
     cursor: default;
     border-radius: 50%;
@@ -1997,15 +1997,15 @@ div.thing div.status.ACTIVE, div.thing div.status.UNKNOWN, div.thing div.status.
     top: 5px; left: 5px;
 }
 div.thing div.status_.INACTIVE,
-div.thing div.status.INACTIVE {
+div.thing div.status_.Inactive {
     background-color: rgb(255, 155, 0);
 }
 div.thing div.status_.OFFLINE, div.thing div.status_.ERROR,
-div.thing div.status.OFFLINE, div.thing div.status.ERROR {
+div.thing div.status_.Offline, div.thing div.status_.Error {
     background-color: rgb(192, 0, 0);
 }
 div.thing div.status_.UNKNOWN, div.thing div.status_.HUB_DISCONNECTED,
-div.thing div.status.UNKNOWN, div.thing div.status.HUB_DISCONNECTED {
+div.thing div.status_.Unknown, div.thing div.status_.HUB_Disconnected {
     background-color: rgb(202, 0, 222);
 }
 
@@ -2062,6 +2062,7 @@ div.thing.isy-thing div.overlay.dcPeriod,
 div.thing.isy-thing div.overlay.startDelay,
 div.thing.isy-thing div.overlay.endDelay,
 div.thing.isy-thing div.overlay.pnode,
+div.thing.isy-thing div.overlay.parent__,
 div.thing.isy-thing div.overlay.rpnode,
 div.thing.isy-thing div.overlay.sgid,
 div.thing.isy-thing div.overlay.wattage,
@@ -2074,6 +2075,7 @@ div.thing.isysub-thing div.overlay.dcPeriod,
 div.thing.isysub-thing div.overlay.startDelay,
 div.thing.isysub-thing div.overlay.endDelay,
 div.thing.isysub-thing div.overlay.pnode,
+div.thing.isysub-thing div.overlay.parent__,
 div.thing.isysub-thing div.overlay.rpnode,
 div.thing.isysub-thing div.overlay.sgid,
 div.thing.isysub-thing div.overlay.wattage,
@@ -2083,6 +2085,7 @@ div.thing.isysub-thing div.overlay.property
 {
     display: none;
 }
+
 div.lock-thing div.overlay._getCodes,
 div.lock-thing div.overlay.lastCodeName,
 div.lock-thing div.overlay._lock,
