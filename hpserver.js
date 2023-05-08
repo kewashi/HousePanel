@@ -21,7 +21,7 @@ const DEBUG14 = false;              // tile link details
 const DEBUG15 = false;              // new user and forgot password
 const DEBUG16 = false;              // writing and custom names
 const DEBUG17 = false;              // push client
-const DEBUG18 = false;              // ST, HE, and Ford messages in callHub -> getHubResponse
+const DEBUG18 = false;              // Ford, ISY, and Sonos messages in callHub
 const DEBUG19 = false;              // new ST Event Sink debugs
 const DEBUG20 = false;              // New SmartThings detail
 const DEBUG21 = false;              // New ST sink message debug
@@ -97,39 +97,41 @@ GLB.ignoredISY = [
 // this map contains the base capability for each type and all valid commands for that capability
 // the keys here are unique to HousePanel and are used to define the type of thing on the panel
 // the third entry is for mapping ISY hints to our types
+// irrigation set same as switches and use pool hint for valves
 GLB.capabilities = { 
     other: [ [], ["_on","_off"], "0.1" ],
-    actuator: [ [], ["_on","_off"], "0.2" ],
-    switch: [ ["switch"], ["_on","_off"], "1."],
-    switchlevel: [ ["switch","switchLevel"], ["_on","_off"], "1.2"],
-    bulb: [ ["colorControl","switch"],["_on","_off","color"], "1.3"], 
-    button: [ ["button"],["_pushed","_held"], "1.4"],
-    power: [ ["powerMeter","energyMeter"],null, "1.5"],
+    actuator: [ [], ["_on","_off"], "1." ],
+    switch: [ ["switch"], ["_on","_off"], ["1.1.","4."]],
+    switchlevel: [ ["switch","switchLevel"], ["_on","_off"], "1.2."],
+    bulb: [ ["colorControl","switch"],["_on","_off","color"], "1.3."], 
+    button: [ ["button"],["_pushed","_held"], "1.4."],
+    power: [ ["powerMeter","energyMeter"],null, "1.5."],
     
-    door: [ ["doorControl"],["_open","_close"], "2.1"], 
+    door: [ ["doorControl"],["_open","_close"], "2."], 
     garage: [ ["garageDoorControl"],["_open","_close"], "2.2"],
     shade: [ ["windowShade","switchLevel"],["_open","_close","_pause","_presetPosition"], "2.3"], 
 
     vacuum: [ ["robotCleanerCleaningMode"],["_auto","_part","_repeat","_manual","_stop"], "3.1"],
     washer: [ ["washerOperatingState","washerMode","switch"],["_on","_off","_pause","_run","_stop","_setWasherMode"], "3.2"],
     
-    valve: [ ["valve"],["_open","_close"], "4.1"], 
+    pool: [ ["valve"], null, "6."], 
+    valve: [ ["valve"],["_open","_close"], "6.2."], 
     
     sensor: [ [], null, "7."], 
     contact: [ ["contactSensor"],null, "7.1"], 
     motion: [ ["motionSensor"],null, "7.2"], 
     presence: [ ["presenceSensor"],null, "7.3"], 
     acceleration: [ ["accelerationSensor"],null, "7.4"], 
-    dust: [ ["dustSensor"],null, "7.5"], 
-    voltage: [["voltageMeasurement"],null, "7.6"],
+    voltage: [["voltageMeasurement"],null, "7.5"],
+    cosensor: [ ["carbonMonoxideMeasurement"],null, "7.6.1"], 
+    co2sensor: [ ["carbonDioxideMeasurement"],null, "7.6.2"], 
+    dust: [ ["dustSensor"],null, "7.6.3"], 
+    water: [ ["waterSensor"],null, "7.7"],
+    smoke: [ ["smokeDetector"],null, "7.8"],
     alarm: [ ["alarm"],["_both","_off","_siren","_strobe"], "7.9"], 
-    water: [ ["waterSensor"],null, "7.9.1"],
-    smoke: [ ["smokeDetector"],null, "7.9.2"],
-    cosensor: [ ["carbonMonoxideMeasurement"],null, "7.9.3"], 
-    co2sensor: [ ["carbonDioxideMeasurement"],null, "7.9.4"], 
-    sound: [ ["soundSensor"],null, "7.9.5"], 
-    tamper: [ ["tamperAlert"],null, "7.9.6"], 
-    tone: [ ["tone"],["_beep"], "7.9.7"], 
+    sound: [ ["soundSensor"],null, "7.9.2"], 
+    tamper: [ ["tamperAlert"],null, "7.9.3"], 
+    tone: [ ["tone"],["_beep"], "7.9.4"], 
 
     thermostat: [ ["temperatureMeasurement","thermostatMode","thermostatHeatingSetpoint","thermostatCoolingSetpoint","thermostatOperatingState"],null, "5."],
     temperature: [ ["temperatureMeasurement"],null, "5.2"], 
@@ -341,7 +343,7 @@ function hsv2rgb(h, s, v) {
     var r, g, b;
 
     function toHex(thenumber) {
-        var hex = thenumber.toString(16);
+        var hex = parseInt(thenumber.toString(),16);
         if (hex.length === 1) {
           hex = "0" + hex;
         }
@@ -371,9 +373,9 @@ function hsv2rgb(h, s, v) {
         case 5: r = v; g = p; b = q; break;
     }
     
-    r = parseInt(Math.round(r*255));
-    g = parseInt(Math.round(g*255));
-    b = parseInt(Math.round(b*255));
+    r = Math.round(r*255);
+    g = Math.round(g*255);
+    b = Math.round(b*255);
     
     var rhex = toHex(r);
     var ghex = toHex(g);
@@ -2507,9 +2509,7 @@ function getDevices(hub) {
                     return;
                 }
 
-                // var requestedcap = GLB.capabilities[swtype];
                 var caparray = GLB.capabilities[swtype];
-                var capabilitiesList = caparray[0];
                 var commands = caparray[1];
 
                 // keep track of how many devices complete
@@ -3161,15 +3161,21 @@ function getDevices(hub) {
                             varid = 0;
                             vartypeid = 0;
                         }
+
+                        // moved the precision handling to translate function
                         if ( varid > 0 && vartype === vartypes[vartypeid] ) {
-                            var prec = parseInt(obj.prec[0]);
-                            var val10 = obj.val[0];
-                            if ( !isNaN(prec) && prec !== 0 ) {
-                                val10 = parseFloat(val10) / Math.pow(10, prec);
-                            }
+                            // var prec = parseInt(obj.prec[0]);
+                            // var val10 = obj.val[0];
+                            // if ( !isNaN(prec) && prec !== 0 ) {
+                            //     val10 = parseFloat(val10) / Math.pow(10, prec);
+                            // }
+                            // variables[vartype+"_"+varid] = val10.toString();
+                            var val = obj["val"][0];
+                            var prec = obj["prec"][0];
+                            var subid = vartype + "_" + varid;
                             variables["status_"] = "ACTIVE";
-                            variables[vartype+"_"+varid] = val10.toString();
-                            variables["prec_"+vartype+"_"+varid] = prec.toString();
+                            variables = translateIsy("variables", variables, subid, val, "", 0, prec, false);
+                            // variables["prec_"+vartype+"_"+varid] = prec.toString();
                         }
                     });
                     
@@ -3300,7 +3306,6 @@ function getDevices(hub) {
                 }
                 
                 // console.log("ISY Nodes body: ", body);
-                var thetype = "isy";
                 xml2js(body, function(xmlerr, result) {
                     if ( !result ) {
                         checkDone("nodes");
@@ -3329,12 +3334,22 @@ function getDevices(hub) {
                         }
     
                         // use hints to inform what type to set - if no match then use isy type
-                        thetype = "isy";
+                        var thetype = "";
                         for (var key in GLB.capabilities) {
-                            var caphint = GLB.capabilities[key][2];
-                            if ( caphint && hint.startsWith(caphint) ) {
-                                thetype = key;
+                            var caphintarray = GLB.capabilities[key][2];
+                            if ( !is_array(caphintarray) ) {
+                                caphintarray = [caphintarray];
                             }
+                            caphintarray.forEach( function(caphint) {
+                                if ( caphint && hint.startsWith(caphint) ) {
+                                    thetype = key;
+                                }
+                            })
+                        }
+
+                        // if no match found then use generic type
+                        if ( !thetype ) {
+                            thetype = "isy";
                         }
 
                         // now fix up the hint so we can style using it
@@ -3343,50 +3358,40 @@ function getDevices(hub) {
                         var name = node["name"][0] || "Unnamed Node";
                         var pvalue = {"name": name};
 
-                        const ignoreNodes = ["$","address","name","family","type"];
-                        var ignoreNode = false;
+                        const ignoreNodes = ["$","address","name","family","type","deviceClass","sgid","rpnode","custom","devtype","enabled"];
                         for (var nodeitem in node) {
                             if ( !ignoreNodes.includes(nodeitem) ) {
                                 pvalue[nodeitem] = node[nodeitem][0];
-                                // handle items that are sub-devices
-                                // if ( nodeitem === "pnode" && pvalue[nodeitem]!== id ) {
-                                //     thetype = "isysub";
-                                // }
                             }
                         }
 
-                        if ( ignoreNode ) {
-                            mydb.deleteRow("devices", "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + id + "'")
-                            .then( () => {
-                                n++;
-                                if ( n >= numnodes ) {
-                                    checkDone("nodes");
-                                }                        
-                            })
-                            .catch(reason => {
-                                console.log( (ddbg()), reason);
-                            });
+                        // use the enabled field to set status
+                        if ( node["enabled"] && node["enabled"][0]=="true" ) {
+                            pvalue["status_"] = "ACTIVE";
                         } else {
-
-                            pvalue = translateObjects(pvalue);
-                            var pvalstr = encodeURI2(pvalue);
-        
-                            // set bare minimum info
-                            // this is updated below in the callback after getting node details
-                            var device = {userid: userid, hubid: hubindex, deviceid: id, name: name, 
-                                          devicetype: thetype, hint: `ISY_${hint}`, refresh: "never", pvalue: pvalstr};
-                            mydevices[id] = device;
-                            mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + id + "'")
-                            .then( () => {
-                                n++;
-                                if ( n >= numnodes ) {
-                                    checkDone("nodes");
-                                }
-                            })
-                            .catch(reason => {
-                                console.log( (ddbg()), reason);
-                            });
+                            pvalue["status_"] = "INACTIVE";
                         }
+
+                        // this is where we change the device items
+
+                        pvalue = translateObjects(pvalue);
+                        var pvalstr = encodeURI2(pvalue);
+    
+                        // set bare minimum info
+                        // this is updated below in the callback after getting node details
+                        var device = {userid: userid, hubid: hubindex, deviceid: id, name: name, 
+                                      devicetype: thetype, hint: `ISY_${hint}`, refresh: "never", pvalue: pvalstr};
+                        mydevices[id] = device;
+                        mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + id + "'")
+                        .then( () => {
+                            n++;
+                            if ( n >= numnodes ) {
+                                checkDone("nodes");
+                            }
+                        })
+                        .catch(reason => {
+                            console.log( (ddbg()), reason);
+                        });
                     }
 
                     for ( var obj in groups ) {
@@ -3439,7 +3444,7 @@ function getDevices(hub) {
 
                                 var props = node["property"];
                                 if ( props && mydevices[nodeid] ) {
-                                    // console.log(">>>> nodeid, props: ", nodeid, props);
+                                    console.log(">>>> nodeid, props: ", nodeid, props);
                                     var pvalstr = setIsyFields(nodeid, mydevices[nodeid], props);
                                     mydevices[nodeid]["pvalue"] = pvalstr;
                                     var device = mydevices[nodeid];
@@ -3475,26 +3480,52 @@ function getDevices(hub) {
 }
 // ------ end of getDevices
 
-function mapIsy(isyid, uom) {
+function mapIsy(isyid, devicetype) {
     const idmap = {"ST": "switch", "OL": "level", "BATLVL": "battery", "CV": "voltage", "TPW": "power",
                    "GV0": "status_",
                    "CLISPH": "heatingSetpoint", "CLISPC": "coolingSetpoint", "CLIHUM": "humidity", "LUMIN": "illuminance", 
                    "CLIMD": "thermostatMode", "CLIHCS": "thermostatState", "CLIFS": "thermostatFanMode", "MODE": "themode",
                    "CLIFRS": "thermostatOperatingState", "CLISMD": "thermostatHold", "CLITEMP":"temperature"};
 
+    // this maps all supported types to their equivalents in ISY
+    // if the type is not supported then nothing is translated
+    const mainMap = {
+        "switch": {"GV0": "status_", "BATLVL": "battery", "ST": "switch"},
+        "switchlevel": {"GV0": "status_", "BATLVL": "battery", "ST": "switch", "OL": "level"},
+        "bulb": {"GV0": "status_", "ST": "switch", "OL": "level", "GV2":"colorindex", "GV3": "hue", "GV4":"saturation", "GV5":"color"},
+        "contact": {"GV0": "status_", "BATLVL": "battery", "ST": "contact"},
+        "door": {"GV0": "status_", "BATLVL": "battery", "ST": "door"},
+        "garage": {"GV0": "status_", "BATLVL": "battery", "ST": "door"},
+        "shade": {"GV0": "status_", "BATLVL": "battery", "ST": "windowShade", "OL": "position"},
+        "motion": {"GV0": "status_", "BATLVL": "battery", "ST": "motion"},
+        "presence{": {"GV0": "status_", "BATLVL": "battery", "ST": "presence"},
+        "mode": {"GV0": "status_", "ST": "themode"},
+        "power":  {"GV0": "status_", "BATLVL": "battery", "TPW": "power", "ST": "switch"},
+        "thermostat": {"GV0": "status_", "BATLVL": "battery", "ST": "temperature", "CLISPH": "heatingSetpoint", "CLISPC": "coolingSetpoint", "CLIHUM": "humidity", "LUMIN": "illuminance", 
+                       "CLIMD": "thermostatMode", "CLIHCS": "thermostatState", "CLIFS": "thermostatFanMode",
+                       "CLIFRS": "thermostatOperatingState", "CLISMD": "thermostatHold"}
+    }
+
     var id = isyid;
-    if ( uom==="17" && isyid==="ST" ) {
-        id = "temperature";
-    } else if ( array_key_exists(isyid, idmap) ) {
-        id = idmap[isyid];
+    if ( array_key_exists(devicetype, mainMap) && array_key_exists(isyid, mainMap[devicetype]) ) {
+        id = mainMap[devicetype][isyid];
     }
     return id;
 }
 
-function translateIsy(nodeid, objid, uom, subid, value, val, objuom, formatted) {
+// devicetype, value, obj.id, obj.value, obj.formatted, obj.uom, obj.prec, setuom
+function translateIsy(devicetype, value, subid, val, formatted, uom, prec, setuom) {
+
+    // either use the ISY id or map it to the equivalent HP version
+    // var subid = mapIsy(objid, device["devicetype"]);
+    // var devicetype = device["devicetype"];
 
     // convert levels for Insteon range
-    if ( uom && uom==="100" ) {
+    if ( typeof uom === "string" ) {
+        uom = parseInt(uom);
+    }
+
+    if ( uom && uom===100 ) {
         val = Math.floor(parseInt(val) * 100 / 255);
     }
     val = val.toString();
@@ -3503,56 +3534,62 @@ function translateIsy(nodeid, objid, uom, subid, value, val, objuom, formatted) 
         formatted = "";
     }
 
+    // adjust value based on prec
+    if ( prec ) {
+        var oldval = val;
+        if ( typeof prec === "string" ) {
+            prec = parseInt(prec);
+        }
+        val = parseFloat(val);
+        if ( !isNaN(prec) && !isNaN(val) && prec > 0 ) {
+            var pow10 = Math.pow(10,prec);
+            val = val / pow10;
+            val = val.toString();
+        } else {
+            prec = 0;
+            val = oldval;
+        }
+    }
+
     // set the HP equivalent subid for this type of node field
     // if maps are not there then the native ISY subid will show up
     var newvalue = clone(value);
 
-    if ( objuom ) {
-        newvalue["uom_" + subid] = objuom;
+    if ( setuom ) {
+        newvalue["uom_" + subid] = uom;
     }
 
-    // handle special cases
-    switch (objid) {
+    if ( DEBUGisy ) {
+        console.log( (ddbg()), "translate - subid: ", subid, " type: ", devicetype, " value: ", value);
+    }
 
-        case "ST":
-            if ( (uom==="51" || uom==="100") ) {
-                // newvalue["level"]= val;  // formatted.substr(0, formatted.length-1);
-                // if ( val!=="0" && val!=="100") {
-                //     newvalue["level"] = val;
-                // }
-                if ( val==="0" ) {
-                    val = "DOF";
-                } else if ( val==="100" ) {
-                    val = "DON";
-                } else {
-                    // newvalue["level"] = val;
-                    val = "DON";
-                }
-                newvalue[subid] = val;
+    function setDefault() {
+        newvalue[subid] = formatted ? formatted : val;
+        return true;
+    }
 
-            } else if (uom==="78") {
-                val = (formatted==="Off" || val==="0") ? "DOF" : "DON";
-                newvalue[subid] = val;
-
-            } else if ( uom==="17" && subid==="temperature" ) {
-                newvalue[subid] = formatted ? formatted : val;
-
-            } else {
-                val = (formatted==="Off" || val==="0" ? "DOF" : "DON");
-                newvalue[subid] = val;
+    function setSelect(id, target, hestates) {
+        if ( subid===id ) {
+            var i = parseInt(val);
+            if ( !isNaN(i) && array_key_exists(i,hestates) ) {
+                newvalue[target] = hestates[i];
+                return true;
             }
-            break;
+        }
+        return false;
+    }
 
-        // handle situation where DOF and DON are sent as the command
-        case "DOF":
-        case "DON":
-                if ( newvalue.switch ) {
-                    newvalue.switch = objid;
-                }
-                newvalue[subid] = val;
-                break;
+    function setDirect(id, target) {
+        if ( subid===id ) {
+            newvalue[target] = val;
+            return true;
+        }
+        return false;
+    }
 
-        case "OL":
+
+    function setLevel(target) {
+        if ( subid==="OL" ) {
             if ( formatted && formatted==="On" ) {
                 val = "100";
             } else if ( formatted && formatted==="Off" ) {
@@ -3562,66 +3599,193 @@ function translateIsy(nodeid, objid, uom, subid, value, val, objuom, formatted) 
                 if ( isNaN(parseInt(val)) ) {
                     val = "0";
                 }
-            } else {
-                if ( isNaN(parseInt(val)) ) {
-                    val = "0";
-                }
+            } else if ( isNaN(parseInt(val)) ) {
+                val = "0";
             }
-            newvalue[subid] = val;
-            // newvalue["level"] = val;
-            break;
-
-        // case "CLIHUM":
-        // case "BATLVL":
-        //     newvalue[subid] = val;
-        //     break;
-
-        case "CLISPC":
-        case "CLISPH":
-            if ( uom==="17" && !formatted ) {
-                val = val + "°F";
+            newvalue[target] = val;
+            if ( target === "position" ) {
+                newvalue["level"] = val;
             }
-            newvalue[subid] = formatted ? formatted : val;
-            break;
+            return true;
+        }
+        return false;
+    }
 
-        case "RR":
+    function setColor() {
+        var colors = [
+            "Black",
+            "White",
+            'Azure',
+            "Beige",
+            'Blue',
+            'Coral',
+            'Crimson',
+            'Forest',
+            'Fuchsia',
+            'Golden',
+            'Gray',
+            'Green',
+            'Pink',
+            'Indigo',
+            'Lavender',
+            'Lime',
+            'Maroon',
+            'Navy',
+            'Olive',
+            'Red',
+            'Royal',
+            'Tan',
+            'Teal',
+            'Purple',
+            'Yellow',
+            'Orange',
+            'Brown',
+            'Silver',
+            'Cyan',
+            'Custom'
+        ]
+        if ( subid==="GV2" ) {
+            var index = parseInt(val) - 1;
+            if ( index >= 0 && index < 30 ) {
+                newvalue["colorname"] = colors[index];
+            }
+            return true;
+        } else if ( subid==="GV5" ) {
+            val = parseInt(val);
+            var colorhex = "#" + val.toString(16);
+            newvalue["color"] = colorhex;
+            return true;
+        }
+        return false;
+    }
+
+    function setRamp() {
+        if ( subid==="RR" && formatted ) {
+            newvalue[subid] = formatted;
+            return true;
+        } else if ( subid==="RR" && uom==="25" ) {
             var index = parseInt(val);
-            if ( uom==="25" && !formatted && !isNaN(index) && index<=31 ) {
+            if ( !isNaN(index) && index<=31 ) {
                 const RRindex = ["9.0 min", "8.0 min", "7.0 min", "6.0 min", "5.0 min", "4.5 min", "4.0 min", "3.5 min",
-                                 "3.0 min", "2.5 min", "2.0 min", "1.5 min", "1.0 min", "47.0 sec", "43.0 sec", "38.5 sec",
-                                 "34.0 sec", "32.0 sec", "30.0 sec", "28.0 sec", "26.0 sec", "23.5 sec", "21.5 sec", "19.0 sec",
-                                 "8.5 sec", "6.5 sec", "4.5 sec", "2.0 sec", "0.5 sec", "0.3 sec", "0.2 sec", "0.1 sec"];
-                val = RRindex[index];
+                             "3.0 min", "2.5 min", "2.0 min", "1.5 min", "1.0 min", "47.0 sec", "43.0 sec", "38.5 sec",
+                             "34.0 sec", "32.0 sec", "30.0 sec", "28.0 sec", "26.0 sec", "23.5 sec", "21.5 sec", "19.0 sec",
+                             "8.5 sec", "6.5 sec", "4.5 sec", "2.0 sec", "0.5 sec", "0.3 sec", "0.2 sec", "0.1 sec"];
+                newvalue[subid] = RRindex[index];
+                return true;
             }
-            newvalue[subid] = formatted ? formatted : val;
+        }
+        return false;
+    }
+
+    // reverse mapping of Hubitat to ISY here
+    switch (devicetype) {
+
+        case "switch":
+            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
+            setSelect("ST", "switch", {0:"DOF", 100: "DON", 101:"Unknown"}) ||
+            setRamp() ||
+            setDefault();
             break;
 
-        case "CLIFRS":
-            var index = parseInt(val);
-            const CLHindex = ["Off", "On", "On High", "On Medium", "Circulation", "Humidity Circ", "R/L Circ", "U/D Circ", "Quiet"];
-            if ( uom==="80" && !formatted && !isNaN(index) && index < CLHindex.length ) {
-                val = CLHindex[index];
-            }
-            newvalue[subid] = formatted ? formatted : val;
+        case "switchlevel":
+            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
+            setSelect("ST", "switch", {0:"DOF", 100: "DON", 101:"Unknown"}) ||
+            setLevel("level") ||
+            setRamp() ||
+            setDefault();
             break;
 
-        case "CLIHCS":
-            var index = parseInt(val);
-            const CLFindex = ["Idle", "Heating", "Cooling", "Off"];
-            if ( uom==="25" && !formatted && !isNaN(index) && index < CLFindex.length ) {
-                val = CLFindex[index];
-            }
-            newvalue[subid] = formatted ? formatted : val;
+        case "bulb":
+            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
+            setSelect("ST", "switch", {0:"DOF", 100: "DON", 101:"Unknown"}) ||
+            setLevel("level") ||
+            setDirect("GV3", "hue") ||
+            setDirect("GV4", "saturation") ||
+            setColor() ||
+            setRamp() ||
+            setDefault();
             break;
-        
+
+        case "contact":
+            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
+            setSelect("ST", "contact", {1:"open", 2:"closed", 3:"unknown"}) ||
+            setDefault();
+            break;
+
+        case "motion":
+            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
+            setSelect("ST", "motion", {1:"active", 2:"inactive"}) ||
+            setDefault();
+            break;
+
+        case "presence":
+            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
+            setSelect("ST", "presence", {1:"present", 2:"absent"}) ||
+            setDefault();
+            break;
+
+        case "door":
+            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
+            setSelect("ST", "door", {1:"open", 2:"closed", 3:"opening", 4:"closing", 5:"unknown"}) ||
+            setDefault();
+            break;
+ 
+        case "shade":
+            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
+            setSelect("ST", "windowShade", {1:"open", 2:"closed", 3:"partially open", 4:"unknown"}) ||
+            setLevel("position") ||
+            setDefault();
+            break;
+
+        case "power":
+            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
+            setSelect("ST", "switch", {0:"DOF", 100: "DON", 101:"Unknown"}) ||
+            setDirect("GV6", "power") ||
+            setDirect("GV7", "energy") ||
+            setDirect("GV8", "voltage") ||
+            setDirect("GV9", "current") ||
+            setDefault();
+            break;
+
+        case "lock":
+            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
+            setSelect("ST", "lock", {0:"unlocked", 1:"locked", 2:"unknown", 3:"jammed"}) ||
+            setDefault();
+            break;
+
+        case "thermostat":
+            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
+            setSelect("CLIFRS", "clifrs", {0:"Off", 1:"On", 2:"On High", 3:"On Medium", 4:"Circulation", 
+                                            5:"Humidity Circ", 6:"R/L Circ", 7:"U/D Circ", 8:"Quiet"}) ||
+            setSelect("CLIHCS", "clihcs", {0:"Idle", 1:"Heating", 2:"Cooling", 3:"Off"} ) ||
+            setSelect("ST", "thermostatOperatingState", {1:"idle", 2:"heating", 3:"cooling",4:"emergency"}) ||
+            setDirect("GV10", "temperature") ||
+            setDirect("GV11", "humidity") ||
+            setDirect("GV12", "heatingSetpoint") ||
+            setDirect("GV13", "coolingSetpoint") ||
+            setSelect("GV14", "thermostatMode", {1:"off", 2: "heat", 3:"cool",4:"auto"}) ||
+            setSelect("GV15", "thermostatFanMode", {1:"auto", 2: "on", 3:"circulate",4:"other"}) ||
+            setDefault();
+            break;
+
+        case "variables":
+            newvalue[subid] = val;
+            break;
+
         default:
-            newvalue[subid] = formatted ? formatted : val;
-            if ( newvalue[subid].substr(-1)==="F" || newvalue[subid].substr(-1)==="C" ) {
-                newvalue[subid] = parseInt(newvalue[subid].substr(0, newvalue[subid].length-2)).toString();
-            }
+            setDefault();
+            // newvalue[subid] = formatted ? formatted : val;
+            // if ( formatted && (newvalue[subid].substr(-1)==="F" || newvalue[subid].substr(-1)==="C") ) {
+            //     newvalue[subid] = parseInt(newvalue[subid].substr(0, newvalue[subid].length-2)).toString();
+            // }
             break;
 
     }
+
+    // if ( DEBUGtmp ) {
+    //     console.log( (ddbg()), "post translate - subid: ", subid, " type: ", devicetype, " newvalue: ", newvalue);
+    // }
+
     return newvalue;
 }
 
@@ -3629,15 +3793,13 @@ function translateIsy(nodeid, objid, uom, subid, value, val, objuom, formatted) 
 function setIsyFields(nodeid, device, props) {
 
     var value = device.pvalue;
+    var devicetype = device.devicetype;
     if ( props && value && is_array(props) ) {
         value = decodeURI2(value);
         props.forEach(function(aprop) {
             var obj = aprop['$'];
-            // map ISY logic to the HousePanel logic based on SmartThings and Hubitat
-            var subid = mapIsy(obj.id, obj.uom);
-            // value["uom_" + subid] = obj.uom;
-            var val = obj.value;
-            value = translateIsy(nodeid, obj.id, obj.uom, subid, value, val, obj.uom, obj.formatted);
+            // devicetype, value, obj.id, obj.value, obj.formatted, obj.uom, obj.prec, setuom
+            value = translateIsy(devicetype, value, obj.id, obj.value, obj.formatted, obj.uom, obj.prec, true);
         });        
         if ( DEBUGisy ) {
             console.log( (ddbg()), "in setIsyFields - node: ", nodeid, " device: ", device, " value: ", value, " props: ", props);
@@ -5632,9 +5794,6 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     // set up the class setting
     var classstr = "thing " + thingtype+"-thing" + subtype;
     if ( hint ) {
-        // if ( thingtype==="isy" || thingtype==="isysub" ) {
-        //     hint = hint.replace(/\./g,"_");
-        // }
         $tc += " hint=\""+hint+"\"";
     }
     classstr += " p_"+kindex;
@@ -6054,8 +6213,9 @@ function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibli
         }
 
         // hide variable precisions and definitions
-        if ( tkey.startsWith("prec_") || tkey.startsWith("def_") ) {
-            extra += " user_hidden";
+        // if ( tkey.startsWith("prec_") || tkey.startsWith("def_") ) {
+        if ( tkey.startsWith("def_") ) {
+                extra += " user_hidden";
         }
         
         // for music status show a play bar in front of it
@@ -6638,7 +6798,9 @@ function processIsyMessage(userid, jsondata) {
         var node = jsondata.node;
         var eventInfo = jsondata.eventInfo;
 
-        var uom;
+        var uom = 0;
+        var prec = 0;
+        var formatted = "";
         if ( DEBUG9 ) {
             console.log( (ddbg()), "ISY event: ", jsonshow(jsondata) );
         }
@@ -6648,6 +6810,8 @@ function processIsyMessage(userid, jsondata) {
                 action[0] && action[0]["$"] && action[0]["_"] ) 
         {
             var bid = node[0];
+            newval = action[0]["_"];
+            var obj = action[0]["$"];
 
             var conditions = "userid = "+userid+" AND deviceid = '"+bid+"'";
             mydb.getRow("devices", "*", conditions)
@@ -6660,7 +6824,6 @@ function processIsyMessage(userid, jsondata) {
                     console.log( (ddbg()), "in processISYMessage - device: ", device);
                 }
                 try {
-
                     if ( device.pvalue && device.pvalue!=="undefined" ) {
                         pvalue = decodeURI2(device.pvalue);
                         if ( !pvalue ) {
@@ -6671,25 +6834,18 @@ function processIsyMessage(userid, jsondata) {
                     }
                     
                     // adjust the value based on precision
-                    newval = action[0]["_"];
-                    if ( action[0]["$"]["prec"] ) {
-                        newval = parseFloat(newval);
-                        uom = action[0]["$"]["uom"] || "";
-                        var prec = parseInt(action[0]["$"]["prec"]);
-                        if ( ! isNaN(prec) && prec > 0 ) {
-                            var pow10 = Math.pow(10,prec);
-                            newval = newval / pow10;
-                        }
-                    }
-                    newval = newval.toString();
+                    // moved this to translate function - and obj always exists here
+                    uom = obj["uom"] || 0;
+                    prec = obj["prec"] || 0;
+                    formatted = obj["formatted"] || "";
                 } catch (e) {
-                    console.log( (ddbg()), "warning - node // processIsyMessage: ", e, device);
+                    console.log( (ddbg()), "warning - processIsyMessage failed: ", e);
                     return;
                 }
-
-                var subid = mapIsy(control[0], uom);
-                pvalue = translateIsy(bid, control[0], uom, subid, pvalue, newval, "", "");
                 var devtype = device.devicetype;
+                
+                // devicetype, value, obj.id, obj.value, obj.formatted, obj.uom, obj.prec, setuom
+                pvalue = translateIsy(devtype, pvalue, control[0], newval, "", uom, prec, false);
 
                 if ( array_key_exists("duration",pvalue) && array_key_exists("deltaT",pvalue) ) {
                     if ( subid==="level" || subid==="position" || pvalue[subid]==="on" || pvalue[subid]==="DON" ) {
@@ -6790,13 +6946,14 @@ function processIsyMessage(userid, jsondata) {
                         } else {
                             newval = parseFloat(varobj.val);
                         }
+
+                        // moved precision handling to translate function
+                        var prec = 0;
                         if ( array_key_exists("prec", varobj) && is_array(varobj.prec) ) {
-                            var prec = parseInt(varobj.prec[0]);
-                            if ( !isNaN(newval) && ! isNaN(prec) && prec > 0 ) {
-                                newval = newval / Math.pow(10,prec);
-                            }
-                        } 
-                        pvalue[subid] = newval.toString();
+                            prec = varobj["prec"][0];
+                        }
+                        pvalue = translateIsy("variables", pvalue, subid, newval, "", 0, prec, false)
+                        // pvalue[subid] = newval.toString();
 
                         // set rolling event time info - convert from europe style time for consistent treatment
                         // unlike programs variables use a 4 digit year, programs use a 2 digit year for some reason
@@ -7849,6 +8006,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
 
     // used to grab responses for ISY hubs
     var isyresp = {};
+    var hubtype;
 
     // first get the hub from the DB
     return mydb.getRow("hubs","*","userid = "+userid+" AND id = " + hubindex)
@@ -7889,7 +8047,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                 .then( () => {
                     var body = {};
                     body[subid] = newval;
-                    getHubResponse(body);
+                    getHubResponse(body, hub.hubtype);
                     return pvalue;
                 })
                 .catch(reason => {
@@ -7941,7 +8099,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                         }
 
                         // send info back to hub for quick feedback
-                        getHubResponse(body, resolve, reject);
+                        getHubResponse(body, hub.hubtype, resolve, reject);
                     }
                 });
             });
@@ -8005,7 +8163,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                     .then( () => {
                         // set the mode and handle resposne
                         presult.themode = modename;
-                        getHubResponse(presult);
+                        getHubResponse(presult, hub.hubtype);
                     });
                     return "success";
 
@@ -8123,7 +8281,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                             subid==="trackImage" || subid==="mediaSource" ) {
                     return queryNewST(hub, swid, swtype).then(presult => {
                         if ( presult && typeof presult === "object" ) {
-                            getHubResponse(presult);
+                            getHubResponse(presult, hub.hubtype);
                         }
                         return presult;
                     });
@@ -8154,7 +8312,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                 } else if ( subid === "_refresh" ) {
                     return queryNewST(hub, swid, swtype).then(pquery => {
                         if ( pquery && typeof pquery === "object" ) {
-                            getHubResponse(pquery);
+                            getHubResponse(pquery, hub.hubtype);
                         }
                         if ( DEBUG20 ) {
                             console.log((ddbg()), "Refresh tile: ", swid," of type: " , swtype, " result: ", pquery);
@@ -8207,13 +8365,13 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                         // push results immediately to give user a responsive feel
                         if ( presult && typeof presult === "object" ) {
                             presult[subid] = swval;
-                            getHubResponse(presult);
+                            getHubResponse(presult, hub.hubtype);
                         }
                     });
                     result = "success";
                 } else {
                     presult[subid] = swval;
-                    getHubResponse(presult);
+                    getHubResponse(presult, hub.hubtype);
                     result = "success";
                     console.log( (ddbg()),"Unrecognized command for user: ", userid, " hub: ", hubindex, " deviceid: ", swid, " subid: ", subid, " type: ", swtype, " value: ", swval, " attr: ", swattr, " inrule: ", inrule);
                 }
@@ -8240,7 +8398,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                     .then( () => {
                         var stat = cmd==="play" ? "playing" : "paused";
                         var pvalue = {playbackStatus: stat};
-                        getHubResponse(pvalue);
+                        getHubResponse(pvalue, hub.hubtype);
                     });
                 break;
 
@@ -8325,8 +8483,10 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
 
                 case "_info":
                     // set completion status to blank
-                    pushClient(userid, swid, swtype, subid, {commandStatus: ""});
-                    curl_call(host, header, false, false, "GET", getHubResponse);
+                    curl_call(host, header, false, false, "GET", function(err, res, body) {
+                        getHubResponse(body, hub.hubtype);
+                        pushClient(userid, swid, swtype, subid, {commandStatus: ""});
+                    });
                     break;
 
                 case "_unlock":
@@ -8338,10 +8498,11 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                 case "_location":
 
                     // set completion status to running
-                    pushClient(userid, swid, swtype, subid, {commandStatus: "RUNNING"});
-
                     host = host + "/" + subid.substr(1);
-                    curl_call(host, header, false, false, "POST", getHubResponse);
+                    curl_call(host, header, false, false, "POST", function(err, res, body) {
+                        getHubResponse(body, hub.hubtype);
+                        pushClient(userid, swid, swtype, subid, {commandStatus: "RUNNING"});
+                    });
                     break;
 
                 case "_thumbnail":
@@ -8486,7 +8647,6 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                                 } else {
                                     varnum = subid.substr(4);
                                     realsubid = subid;
-                                    // intvar++;
                                 }
                                 cmd = "/vars/set/1/" + varnum + "/" + intvar.toString();
                                 isyresp[realsubid] = intvar.toString();
@@ -8498,7 +8658,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                         } else if ( hint==="ISY_variable" && subid.startsWith("State_") ) {
                             // get the real subid that the arrows are pointing toward
                             var intvar = parseFloat(swval);
-                            var prec = 0;
+                            // var prec = 0;
                             if ( !isNaN(intvar) ) {
                                 if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
                                     var varnum = subid.substr(6, subid.length-9);
@@ -8508,11 +8668,11 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                                     varnum = subid.substr(6);
                                     realsubid = subid;
                                     // intvar++;
-                                    prec = parseInt(pvalue["prec_State_"+varnum]);
-                                    if ( ! isNaN(prec) && prec > 0 ) {
-                                        var pow10 = Math.pow(10,prec);
-                                        intvar = Math.round(intvar*pow10) / pow10;
-                                    }
+                                    // prec = parseInt(pvalue["prec_State_"+varnum]);
+                                    // if ( ! isNaN(prec) && prec > 0 ) {
+                                    //     var pow10 = Math.pow(10,prec);
+                                    //     intvar = Math.round(intvar*pow10) / pow10;
+                                    // }
                                 }
                                 cmd = "/vars/set/2/" + varnum + "/" + intvar.toString();
                                 isyresp[realsubid] = intvar.toString();
@@ -8608,7 +8768,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                     }
                 }
             }
-            getHubResponse(pvalue);
+            getHubResponse(pvalue, "Sonos");
         })
         .catch(err => {
             console.log((ddbg()), "Error updating Sonos meta info for user: ", userid, " err: ", err);
@@ -8653,7 +8813,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
         fs.writeFileSync("thumbnail.png", base64);
     }
 
-    function getHubResponse(body, resolve, reject) {
+    function getHubResponse(body, hubtype, resolve, reject) {
         // update all clients - this is actually not needed if your server is accessible to websocket updates
         // It is left here because my dev machine sometimes doesn't get websocket pushes
         // you can comment this if your server gets pushes reliably
@@ -8677,7 +8837,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
         }
 
         // pluck out just vehicle data and good status for info call
-        if ( swtype==="ford" && subid==="_info" && pvalue.vehicle && pvalue.status && pvalue.status==="SUCCESS" ) {
+        if ( hubtype==="Ford" && subid==="_info" && pvalue.vehicle && pvalue.status && pvalue.status==="SUCCESS" ) {
             var vehicle = clone(pvalue["vehicle"]);
             pvalue = {status: "SUCCESS"};
             for (var key in vehicle) {
@@ -8724,7 +8884,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                     }
                 }
             }
-        } else if ( swtype==="ford" ) {
+        } else if ( hubtype==="Ford" ) {
             if ( pvalue.error || (pvalue.status && pvalue.status!=="SUCCESS") ) {
                 pvalue.status = "ERROR";
                 pvalue.error = "invalid_grant";
@@ -8743,11 +8903,9 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
             pvalue = translateObjects(pvalue);
         }
 
-        // for save to DB - we must read all the devices and merge the pvalue with existing
-        // we only do this for Sonos and Ford since they don't generate subscription events
+        // save to DB - we must read all the devices and merge the pvalue with existing
         // if ( swtype==="ford" || swtype==="sonos" || swtype==="isy" || subid==="count") {
-            // if ( hub.hubtype==="Ford" || hub.hubtype==="Sonos" || hub.hubType==="ISY" ) {
-        if ( swtype==="ford" || swtype==="sonos" || swtype==="isy" || swtype==="isysub" ) {
+        if ( hubtype==="Ford" || hubtype==="Sonos" || hubtype==="ISY" ) {
             mydb.getRows("devices","*", "userid = " + userid + " AND hubid = "+hubindex + " AND deviceid = '" + swid +"'")
             .then(devices => {
         
@@ -8771,11 +8929,11 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                     }
                     // pvalue = clone(newpvalue);
                     pushClient(userid, swid, swtype, subid, newpvalue);
-                    if ( !inrule && ndev===0 ) {
-                        newpvalue.subid = subid;
-                        processRules(userid, device.id, swid, swtype, subid, newpvalue, "callHub");
-                        delete newpvalue.subid;
-                    }
+                    // if ( !inrule && ndev===0 ) {
+                    //     newpvalue.subid = subid;
+                    //     processRules(userid, device.id, swid, swtype, subid, newpvalue, "callHub");
+                    //     delete newpvalue.subid;
+                    // }
                     ndev++;
     
                     var pvalstr = encodeURI2(newpvalue);
@@ -8797,11 +8955,6 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
             }
             // push new values to all clients and execute rules
             pushClient(userid, swid, swtype, subid, pvalue);
-            // if ( !inrule ) {
-            //     pvalue.subid = subid;
-            //     processRules(userid, device.id, swid, swtype, subid, pvalue, "callHub");
-            //     delete pvalue.subid;
-            // }
             return pvalue;
         }
      
@@ -8823,7 +8976,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                 }
 
                 if ( rres === "200" && succeed === "true" ) {
-                    getHubResponse(isyresp);
+                    getHubResponse(isyresp, "ISY");
                 }
             });
         }
