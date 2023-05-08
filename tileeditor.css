@@ -2039,7 +2039,8 @@ div.thing div.overlay div.arrow-dn {
 }
 div.thing div.overlay div.arrow-it {
     display: inline-block;
-    width: 30%; margin-top: 5px;
+    height: 32px; width: 32px;
+    margin-top: 5px;
 }
 div.thing div.overlay.enabled,
 div.thing div.overlay.deviceClass,
