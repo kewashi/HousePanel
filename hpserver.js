@@ -3481,11 +3481,6 @@ function getDevices(hub) {
 // ------ end of getDevices
 
 function mapIsy(isyid, devicetype) {
-    const idmap = {"ST": "switch", "OL": "level", "BATLVL": "battery", "CV": "voltage", "TPW": "power",
-                   "GV0": "status_",
-                   "CLISPH": "heatingSetpoint", "CLISPC": "coolingSetpoint", "CLIHUM": "humidity", "LUMIN": "illuminance", 
-                   "CLIMD": "thermostatMode", "CLIHCS": "thermostatState", "CLIFS": "thermostatFanMode", "MODE": "themode",
-                   "CLIFRS": "thermostatOperatingState", "CLISMD": "thermostatHold", "CLITEMP":"temperature"};
 
     // this maps all supported types to their equivalents in ISY
     // if the type is not supported then nothing is translated
@@ -3495,15 +3490,18 @@ function mapIsy(isyid, devicetype) {
         "bulb": {"GV0": "status_", "ST": "switch", "OL": "level", "GV2":"colorindex", "GV3": "hue", "GV4":"saturation", "GV5":"color"},
         "contact": {"GV0": "status_", "BATLVL": "battery", "ST": "contact"},
         "door": {"GV0": "status_", "BATLVL": "battery", "ST": "door"},
+        "lock": {"GV0": "status_", "BATLVL": "battery", "ST": "lock"},
         "garage": {"GV0": "status_", "BATLVL": "battery", "ST": "door"},
         "shade": {"GV0": "status_", "BATLVL": "battery", "ST": "windowShade", "OL": "position"},
         "motion": {"GV0": "status_", "BATLVL": "battery", "ST": "motion"},
         "presence{": {"GV0": "status_", "BATLVL": "battery", "ST": "presence"},
         "mode": {"GV0": "status_", "ST": "themode"},
-        "power":  {"GV0": "status_", "BATLVL": "battery", "TPW": "power", "ST": "switch"},
-        "thermostat": {"GV0": "status_", "BATLVL": "battery", "ST": "temperature", "CLISPH": "heatingSetpoint", "CLISPC": "coolingSetpoint", "CLIHUM": "humidity", "LUMIN": "illuminance", 
-                       "CLIMD": "thermostatMode", "CLIHCS": "thermostatState", "CLIFS": "thermostatFanMode",
-                       "CLIFRS": "thermostatOperatingState", "CLISMD": "thermostatHold"}
+        "power":  {"GV0": "status_", "BATLVL": "battery", "TPW": "power", "GV6": "power", "GV7":"energy", "CV":"voltage", "GV8":"voltage", "GV9":"current", "ST": "switch"},
+        "thermostat": {"GV0": "status_", "BATLVL": "battery", "ST": "thermostatOperatingState", 
+                    "GV10":"temperature", "GV11":"humidity", "GV12":"heatingSetpoint", "GV13":"coolingSetpoint", "GV14":"thermostatMode", "GV15":"thermostatFanMode",
+                    "CLISPH": "heatingSetpoint", "CLISPC": "coolingSetpoint", "CLIHUM": "humidity", "LUMIN": "illuminance", 
+                    "CLIMD": "thermostatMode", "CLIHCS": "thermostatState", "CLIFS": "thermostatFanMode",
+                    "CLIFRS": "thermostatOperatingState", "CLISMD": "thermostatHold"}
     }
 
     var id = isyid;
@@ -3613,36 +3611,11 @@ function translateIsy(devicetype, value, subid, val, formatted, uom, prec, setuo
 
     function setColor() {
         var colors = [
-            "Black",
-            "White",
-            'Azure',
-            "Beige",
-            'Blue',
-            'Coral',
-            'Crimson',
-            'Forest',
-            'Fuchsia',
-            'Golden',
-            'Gray',
-            'Green',
-            'Pink',
-            'Indigo',
-            'Lavender',
-            'Lime',
-            'Maroon',
-            'Navy',
-            'Olive',
-            'Red',
-            'Royal',
-            'Tan',
-            'Teal',
-            'Purple',
-            'Yellow',
-            'Orange',
-            'Brown',
-            'Silver',
-            'Cyan',
-            'Custom'
+            'Black',  'White',  'Azure',    'Beige',  'Blue',   'Coral',
+            'Crimson','Forest', 'Fuchsia',  'Golden', 'Gray',   'Green',
+            'Pink',   'Indigo', 'Lavender', 'Lime',   'Maroon', 'Navy',
+            'Olive',  'Red',    'Royal',    'Tan',    'Teal',   'Purple',
+            'Yellow', 'Orange', 'Brown',    'Silver', 'Cyan',   'Custom'
         ]
         if ( subid==="GV2" ) {
             var index = parseInt(val) - 1;
@@ -3758,13 +3731,13 @@ function translateIsy(devicetype, value, subid, val, formatted, uom, prec, setuo
             setSelect("CLIFRS", "clifrs", {0:"Off", 1:"On", 2:"On High", 3:"On Medium", 4:"Circulation", 
                                             5:"Humidity Circ", 6:"R/L Circ", 7:"U/D Circ", 8:"Quiet"}) ||
             setSelect("CLIHCS", "clihcs", {0:"Idle", 1:"Heating", 2:"Cooling", 3:"Off"} ) ||
-            setSelect("ST", "thermostatOperatingState", {1:"idle", 2:"heating", 3:"cooling",4:"emergency"}) ||
+            setSelect("ST", "thermostatOperatingState", {1:"idle", 2:"heating", 3:"cooling", 4:"emergency"}) ||
             setDirect("GV10", "temperature") ||
             setDirect("GV11", "humidity") ||
             setDirect("GV12", "heatingSetpoint") ||
             setDirect("GV13", "coolingSetpoint") ||
             setSelect("GV14", "thermostatMode", {1:"off", 2: "heat", 3:"cool",4:"auto"}) ||
-            setSelect("GV15", "thermostatFanMode", {1:"auto", 2: "on", 3:"circulate",4:"other"}) ||
+            setSelect("GV15", "thermostatFanMode", {1:"auto", 2: "on", 3:"circulate", 4:"other"}) ||
             setDefault();
             break;
 
@@ -6801,7 +6774,7 @@ function processIsyMessage(userid, jsondata) {
         var uom = 0;
         var prec = 0;
         var formatted = "";
-        if ( DEBUG9 ) {
+        if ( DEBUG9 || DEBUGtmp ) {
             console.log( (ddbg()), "ISY event: ", jsonshow(jsondata) );
         }
 
@@ -6820,6 +6793,10 @@ function processIsyMessage(userid, jsondata) {
                 if ( !results ) { return; }
 
                 var device = results;
+                var devtype = device.devicetype;
+                var isyid = control[0];
+                var subid = mapIsy(isyid, devtype);
+                
                 if ( DEBUGisy ) {
                     console.log( (ddbg()), "in processISYMessage - device: ", device);
                 }
@@ -6842,7 +6819,6 @@ function processIsyMessage(userid, jsondata) {
                     console.log( (ddbg()), "warning - processIsyMessage failed: ", e);
                     return;
                 }
-                var devtype = device.devicetype;
                 
                 // devicetype, value, obj.id, obj.value, obj.formatted, obj.uom, obj.prec, setuom
                 pvalue = translateIsy(devtype, pvalue, control[0], newval, "", uom, prec, false);
@@ -6881,12 +6857,15 @@ function processIsyMessage(userid, jsondata) {
                 if ( pvalue["event_3"] ) { pvalue["event_4"] = pvalue["event_3"]; }
                 if ( pvalue["event_2"] ) { pvalue["event_3"] = pvalue["event_2"]; }
                 if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
-                if ( typeof pvalue[subid] === "string" && pvalue[subid].length < 15 ) {
+                if ( subid && typeof pvalue[subid] === "string" && pvalue[subid].length < 15 ) {
                     pvalue["event_1"] = timestr + " " + subid + " " + pvalue[subid];
                 } else {
-                    pvalue["event_1"] = timestr + " " + subid;
+                    pvalue["event_1"] = timestr;
                 }
 
+                if ( DEBUG9 || DEBUGtmp ) {
+                    console.log( (ddbg()), "ISY pushing data: ", jsonshow(pvalue) );
+                }
                 pushClient(userid, bid, devtype, subid, pvalue);
 
                 pvalue.subid = subid;
@@ -6964,9 +6943,9 @@ function processIsyMessage(userid, jsondata) {
                             var lrun = varobj.ts[0];
                             var d2 = new Date(lrun.substring(4,6)+"/"+lrun.substring(6,8)+"/"+lrun.substring(0,4)+lrun.substring(8));
                             var goodts = d2.toLocaleDateString() + " " +  d2.toLocaleTimeString();
-                            pvalue["event_1"] = goodts  + " " + subid + " " + pvalue[subid];
+                            pvalue["event_1"] = goodts;
                         } else {
-                            pvalue["event_1"] = timestr + " " + subid + " " + pvalue[subid];
+                            pvalue["event_1"] = timestr;
                         }
 
                         pushClient(userid, bid, devtype, subid, pvalue);
