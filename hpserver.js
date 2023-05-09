@@ -3591,22 +3591,17 @@ function translateIsy(devicetype, value, subid, val, formatted, uom, prec, setuo
 
     function setLevel(target) {
         if ( subid==="OL" ) {
-            if ( formatted && formatted==="On" ) {
-                val = "100";
-            } else if ( formatted && formatted==="Off" ) {
-                val = "0";
-            } else if ( formatted && formatted.substr(-1) === "%" ) {
-                val = formatted.substr(0, formatted.length-1);
-                if ( isNaN(parseInt(val)) ) {
-                    val = "0";
-                }
-            } else if ( isNaN(parseInt(val)) ) {
-                val = "0";
-            }
-            newvalue[target] = val;
-            if ( target === "position" ) {
-                newvalue["level"] = val;
-            }
+            newvalue["level"] = 50;
+            // if ( formatted && formatted==="On" ) {
+            //     val = "100";
+            // } else if ( formatted && formatted==="Off" ) {
+            //     val = "0";
+            // }
+
+            // newvalue[target] = val;
+            // if ( target === "position" ) {
+            //     newvalue["level"] = val;
+            // }
             return true;
         }
         return false;
