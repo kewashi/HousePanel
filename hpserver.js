@@ -3518,6 +3518,8 @@ function translateIsy(devicetype, value, subid, val, formatted, uom, prec, setuo
     // var subid = mapIsy(objid, device["devicetype"]);
     // var devicetype = device["devicetype"];
 
+    console.log(">>>> in translate: ", devicetype, value, subid, val, formatted, uom, prec, setuom);
+
     // convert levels for Insteon range
     if ( typeof uom === "string" ) {
         uom = parseInt(uom);
