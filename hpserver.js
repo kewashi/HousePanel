@@ -1742,7 +1742,6 @@ function getDevices(hub) {
             aclock = encodeURI2(aclock);
             var acontrol = getController();
             acontrol = encodeURI2(acontrol);
-            // console.log(">>>> new controller: ", acontrol, " hubindex: ", hubindex);
 
             return mydb.getRows("devices", "*", "userid = "+userid + " AND (devicetype = 'clock' OR devicetype = 'control' or hint = 'special')")
             .then( rows => {
@@ -2944,7 +2943,9 @@ function getDevices(hub) {
             var mydevices = {};
             var variables = {name: "ISY Variables", "status_": "ACTIVE"};
 
-            console.log(">>>> ISY hub call: ", hubAccess, hubEndpt, stheader);
+            if ( DEBUGisy ) {
+                console.log( (ddbg()), "ISY hub call: ", hubAccess, hubEndpt, stheader);
+            }
 
             curl_call(hubEndpt + "/vars/definitions/1", stheader, false, false, "GET", getIntVarsDef);
             curl_call(hubEndpt + "/vars/definitions/2", stheader, false, false, "GET", getStateVarsDef);
@@ -3444,7 +3445,6 @@ function getDevices(hub) {
 
                                 var props = node["property"];
                                 if ( props && mydevices[nodeid] ) {
-                                    console.log(">>>> nodeid, props: ", nodeid, props);
                                     var pvalstr = setIsyFields(nodeid, mydevices[nodeid], props);
                                     mydevices[nodeid]["pvalue"] = pvalstr;
                                     var device = mydevices[nodeid];
@@ -3517,9 +3517,6 @@ function translateIsy(devicetype, value, subid, val, formatted, uom, prec, setuo
     // either use the ISY id or map it to the equivalent HP version
     // var subid = mapIsy(objid, device["devicetype"]);
     // var devicetype = device["devicetype"];
-
-    console.log(">>>> in translate: ", devicetype, value, subid, val, formatted, uom, prec, setuom);
-
     // convert levels for Insteon range
     if ( typeof uom === "string" ) {
         uom = parseInt(uom);
@@ -3559,7 +3556,7 @@ function translateIsy(devicetype, value, subid, val, formatted, uom, prec, setuo
         newvalue["uom_" + subid] = uom;
     }
 
-    if ( DEBUGisy || DEBUGtmp ) {
+    if ( DEBUGisy ) {
         console.log( (ddbg()), "translate - subid: ", subid, " type: ", devicetype, " value: ", value, " val: ", val);
     }
 
@@ -3654,15 +3651,14 @@ function translateIsy(devicetype, value, subid, val, formatted, uom, prec, setuo
 
         case "switch":
             setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
-            setSelect("ST", "switch", {"0":"DOF", "100": "DON", "101":"Unknown"}) ||
+            setSelect("ST", "switch", {0:"DOF", 100: "DON", 101:"Unknown"}) ||
             setRamp() ||
             setDefault();
             break;
 
         case "switchlevel":
-            console.log(">>>> setting switchlevel in translate");
             setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
-            setSelect("ST", "switch", {"0":"DOF", "100": "DON", "101":"Unknown"}) ||
+            setSelect("ST", "switch", {0:"DOF", 100: "DON", 101:"Unknown"}) ||
             setLevel("level") ||
             setRamp() ||
             setDefault();
@@ -3670,7 +3666,7 @@ function translateIsy(devicetype, value, subid, val, formatted, uom, prec, setuo
 
         case "bulb":
             setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
-            setSelect("ST", "switch", {"0":"DOF", "100": "DON", "101":"Unknown"}) ||
+            setSelect("ST", "switch", {0:"DOF", 100: "DON", 101:"Unknown"}) ||
             setLevel("level") ||
             setDirect("GV3", "hue") ||
             setDirect("GV4", "saturation") ||
@@ -3754,10 +3750,6 @@ function translateIsy(devicetype, value, subid, val, formatted, uom, prec, setuo
             break;
 
     }
-
-    // if ( DEBUGtmp ) {
-    //     console.log( (ddbg()), "post translate - subid: ", subid, " type: ", devicetype, " newvalue: ", newvalue);
-    // }
 
     return newvalue;
 }
@@ -4581,7 +4573,6 @@ function updatePassword(body) {
     var pword = pw_hash(body.pword);
     var panelpw = pw_hash(body.panelpw);
 
-    // console.log(">>>> ", userid, emailname, uname, mobile, pname, hpcode, pword);
     if ( !userid || !emailname ) {
         return "error - invalid user or the user account was not found - password cannot be updated.";
     }
@@ -4594,7 +4585,6 @@ function updatePassword(body) {
     var retobj = mydb.getRow("users","*","id = " + userid + " AND hpcode = '" + hpcode + "'")
     .then(row => {
         if ( row ) {
-            // console.log(">>>> users row: ", row);
             var upduser = {email: emailname, uname: uname, mobile: mobile, password: pword, usertype: userid, defhub: "", hpcode: ""};
             return mydb.updateRow("users", upduser, "id = " + userid)
             .then( row => {
@@ -6773,7 +6763,7 @@ function processIsyMessage(userid, jsondata) {
 
         var uom = 0;
         var prec = 0;
-        if ( DEBUG9 || DEBUGtmp ) {
+        if ( DEBUG9 ) {
             console.log( (ddbg()), "ISY event: ", jsonshow(jsondata) );
         }
 
@@ -6796,9 +6786,6 @@ function processIsyMessage(userid, jsondata) {
                 var isyid = control[0];
                 var subid = mapIsy(isyid, devtype);
                 
-                if ( DEBUGisy || bid==="n001_dm_1820" ) {
-                    console.log( (ddbg()), "in processISYMessage - device: ", device, isyid, subid);
-                }
                 try {
                     if ( device.pvalue && device.pvalue!=="undefined" ) {
                         pvalue = decodeURI2(device.pvalue);
@@ -6861,7 +6848,7 @@ function processIsyMessage(userid, jsondata) {
                     pvalue["event_1"] = timestr;
                 }
 
-                if ( DEBUG9 || DEBUGtmp ) {
+                if ( DEBUG9 ) {
                     console.log( (ddbg()), "ISY pushing data: ", jsonshow(pvalue) );
                 }
                 pushClient(userid, bid, devtype, subid, pvalue);
@@ -8582,7 +8569,6 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                         }
                         cmd = "/nodes/" + swid + "/cmd/" + swval;
                         isyresp[subid] = swval;
-                        // console.log(">>>> ISY command: ", swval);
                         curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
                         break;
         
@@ -9357,7 +9343,6 @@ function translateObjects(pvalue) {
                 var newkey = tkey + "_" + jtkey.toString();
                 if ( typeof jtval!=="object" ) {
                     nvalue[newkey] = jtval.toString();
-                    // console.log(">>>> nvalue str: ", nvalue);
                 }
             }
             delete nvalue[tkey];
@@ -11723,7 +11708,6 @@ function apiCall(user, body, protocol, req, res) {
                                          type: device.devicetype, hubnum: "-1", hubindex: device.hubid, hubtype: "None", 
                                          hint: device.hint, refresh: device.refresh, value: pvalue};
                         var customname = swattr;
-                        // console.log(">>>> sensor: ", thesensor);
                         return makeThing(userid, pname, configoptions, 0, tileid, thesensor, "wysiwyg", 0, 0, 999, customname, "te_wysiwyg", null);
                     }).catch(reason => {
                         console.log( (ddbg()), reason);
@@ -12048,7 +12032,6 @@ function apiCall(user, body, protocol, req, res) {
 
             case "forgotpw":
                 if ( protocol==="POST" ) {
-                    // console.log(">>>> email: ", body.email, " mobile: ", body.mobile);
                     result = forgotPassword(body.email, body.mobile);
                 } else {
                     result = "error - api call [" + api + "] is not supported";
@@ -13367,7 +13350,7 @@ if ( app && applistening ) {
                 res.json(result);
                 res.end();
             } else {
-                console.log(">>>> invalid POST: ", result);
+                console.log( (ddbg()), "Invalid POST: ", result);
                 res.send("Invalid HousePanel POST request - check logs");
                 res.end();
             };
