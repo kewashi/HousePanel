@@ -3557,8 +3557,8 @@ function translateIsy(devicetype, value, subid, val, formatted, uom, prec, setuo
         newvalue["uom_" + subid] = uom;
     }
 
-    if ( DEBUGisy ) {
-        console.log( (ddbg()), "translate - subid: ", subid, " type: ", devicetype, " value: ", value);
+    if ( DEBUGisy || DEBUGtmp ) {
+        console.log( (ddbg()), "translate - subid: ", subid, " type: ", devicetype, " value: ", value, " val: ", val);
     }
 
     function setDefault() {
@@ -3568,8 +3568,11 @@ function translateIsy(devicetype, value, subid, val, formatted, uom, prec, setuo
 
     function setSelect(id, target, hestates) {
         if ( subid===id ) {
-            var i = parseInt(val);
-            if ( !isNaN(i) && array_key_exists(i,hestates) ) {
+            var i = val;
+            if ( typeof val === "string" ) {
+                i = parseInt(val);
+            }
+            if ( array_key_exists(i,hestates) ) {
                 newvalue[target] = hestates[i];
                 return true;
             }
@@ -3655,14 +3658,14 @@ function translateIsy(devicetype, value, subid, val, formatted, uom, prec, setuo
 
         case "switch":
             setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
-            setSelect("ST", "switch", {0:"DOF", 100: "DON", 101:"Unknown"}) ||
+            setSelect("ST", "switch", {"0":"DOF", "100": "DON", "101":"Unknown"}) ||
             setRamp() ||
             setDefault();
             break;
 
         case "switchlevel":
             setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
-            setSelect("ST", "switch", {0:"DOF", 100: "DON", 101:"Unknown"}) ||
+            setSelect("ST", "switch", {"0":"DOF", "100": "DON", "101":"Unknown"}) ||
             setLevel("level") ||
             setRamp() ||
             setDefault();
@@ -3670,7 +3673,7 @@ function translateIsy(devicetype, value, subid, val, formatted, uom, prec, setuo
 
         case "bulb":
             setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
-            setSelect("ST", "switch", {0:"DOF", 100: "DON", 101:"Unknown"}) ||
+            setSelect("ST", "switch", {"0":"DOF", "100": "DON", "101":"Unknown"}) ||
             setLevel("level") ||
             setDirect("GV3", "hue") ||
             setDirect("GV4", "saturation") ||
@@ -6773,7 +6776,6 @@ function processIsyMessage(userid, jsondata) {
 
         var uom = 0;
         var prec = 0;
-        var formatted = "";
         if ( DEBUG9 || DEBUGtmp ) {
             console.log( (ddbg()), "ISY event: ", jsonshow(jsondata) );
         }
@@ -6797,8 +6799,8 @@ function processIsyMessage(userid, jsondata) {
                 var isyid = control[0];
                 var subid = mapIsy(isyid, devtype);
                 
-                if ( DEBUGisy ) {
-                    console.log( (ddbg()), "in processISYMessage - device: ", device);
+                if ( DEBUGisy || bid==="n001_dm_1820" ) {
+                    console.log( (ddbg()), "in processISYMessage - device: ", device, isyid, subid);
                 }
                 try {
                     if ( device.pvalue && device.pvalue!=="undefined" ) {
@@ -6814,7 +6816,6 @@ function processIsyMessage(userid, jsondata) {
                     // moved this to translate function - and obj always exists here
                     uom = obj["uom"] || 0;
                     prec = obj["prec"] || 0;
-                    formatted = obj["formatted"] || "";
                 } catch (e) {
                     console.log( (ddbg()), "warning - processIsyMessage failed: ", e);
                     return;

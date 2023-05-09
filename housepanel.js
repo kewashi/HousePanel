@@ -3958,7 +3958,8 @@ function processClick(that, thingname, ro, thevalue) {
                 } else if ( strval.indexOf("img src") !== -1 ) {
                     msg += inspectsubid + " =  (image)<br>";
                 } else if ( inspectsubid==="level" || inspectsubid==="onlevel" || inspectsubid==="colorTemperature" || inspectsubid==="volume" || inspectsubid==="groupVolume" || inspectsubid==="position" ) {
-                    msg += inspectsubid + " = " + $(this).children().attr("style").substring(6) + "<br>";
+                    msg += inspectsubid + " = " + $(this).attr("value") + "<br>";
+                    // msg += inspectsubid + " = " + $(this).children().attr("style").substring(6) + "<br>";
                 } else if ( strval.length > 40 ) {
                     msg += inspectsubid + " ... <br>";
                 } else {
