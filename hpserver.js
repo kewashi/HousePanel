@@ -3484,7 +3484,7 @@ function mapIsy(isyid, devicetype) {
 
     // this maps all supported types to their equivalents in ISY
     // if the type is not supported then nothing is translated
-    const mainMap = {
+    var mainMap = {
         "switch": {"GV0": "status_", "BATLVL": "battery", "ST": "switch"},
         "switchlevel": {"GV0": "status_", "BATLVL": "battery", "ST": "switch", "OL": "level"},
         "bulb": {"GV0": "status_", "ST": "switch", "OL": "level", "GV2":"colorindex", "GV3": "hue", "GV4":"saturation", "GV5":"color"},
