@@ -3591,17 +3591,16 @@ function translateIsy(devicetype, value, subid, val, formatted, uom, prec, setuo
 
     function setLevel(target) {
         if ( subid==="OL" ) {
-            newvalue["level"] = 50;
-            // if ( formatted && formatted==="On" ) {
-            //     val = "100";
-            // } else if ( formatted && formatted==="Off" ) {
-            //     val = "0";
-            // }
+            if ( formatted && formatted==="On" ) {
+                val = "100";
+            } else if ( formatted && formatted==="Off" ) {
+                val = "0";
+            }
 
-            // newvalue[target] = val;
-            // if ( target === "position" ) {
-            //     newvalue["level"] = val;
-            // }
+            newvalue[target] = val;
+            if ( target === "position" ) {
+                newvalue["level"] = val;
+            }
             return true;
         }
         return false;
@@ -3659,6 +3658,7 @@ function translateIsy(devicetype, value, subid, val, formatted, uom, prec, setuo
             break;
 
         case "switchlevel":
+            console.log(">>>> setting switchlevel in translate");
             setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
             setSelect("ST", "switch", {"0":"DOF", "100": "DON", "101":"Unknown"}) ||
             setLevel("level") ||
