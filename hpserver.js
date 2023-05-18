@@ -588,7 +588,7 @@ function getTypes() {
     // all sessions have these types
     var hubtypes = Object.keys(GLB.mainISYMap);
     var blanktypes = ["blank", "blank", "custom", "frame", "image", "piston",
-                      "video", "control", "variables", "clock", "mode"];
+                      "video", "control", "variables", "clock"];
     var thingtypes = hubtypes.concat(blanktypes);
 
     // add hubitat specific types
