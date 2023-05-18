@@ -15,6 +15,8 @@
  * This is a Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history
+ * 05/17/2023 - remove momentaries and fix attribute checks
+ * 05/11/2023 - modify mode setting to work with isy app
  * 05/02/2023 - clean up dimmers and shades
  * 04/30/2023 - fix windowShade operation
  * 04/05/2023 - update ip reporting to support use of user provided access tokens
@@ -258,7 +260,6 @@ def mainPage() {
             String desc = sBLANK
             desc += myswitches ? spanSmBld("Switch${myswitches.size() > 1 ? 'es' : sBLANK}") + spanSmBr(" (${myswitches.size()})") : sBLANK
             desc += mydimmers ? spanSmBld("Dimmers${mydimmers.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mydimmers.size()})") : sBLANK
-            desc += mymomentaries ? spanSmBld("Momentary Button${mymomentaries.size() > 1 ? "s" : sBLANK}") + spanSmBr(" (${mymomentaries.size()})") : sBLANK
             desc += mybuttons ? spanSmBld("Pushable Button${mybuttons.size() > 1 ? "s" : sBLANK}") + spanSmBr(" (${mybuttons.size()})") : sBLANK
             desc += mybulbs ? spanSmBld("Bulb${mybulbs.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mybulbs.size()})") : sBLANK
             desc += mypowers ? spanSmBld("Power${mypowers.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mypowers.size()})") : sBLANK
@@ -359,7 +360,6 @@ def deviceSelectPage() {
         section(sectHead("Switches, Dimmers and Buttons", "bulbon.png")) {
                 input "myswitches", "capability.switch", multiple: true, required: false, title: "Switches"
                 input "mydimmers", "capability.switchLevel", hideWhenEmpty: true, multiple: true, required: false, title: "Switch Level Dimmers"
-                input "mymomentaries", "capability.momentary", hideWhenEmpty: true, multiple: true, required: false, title: "Momentary Switches"
                 input "mybuttons", "capability.pushableButton", hideWhenEmpty: true, multiple: true, required: false, title: "Buttons"
                 input "mybulbs", "capability.colorControl", hideWhenEmpty: true, multiple: true, required: false, title: "Color Control Bulbs"
                 input "mypowers", "capability.powerMeter", hideWhenEmpty: true, multiple: true, required: false, title: "Power Meters"
@@ -597,23 +597,6 @@ def getBulb(swid, item=null) {
     return resp
 }
 
-// handle momentary devices as push buttons
-def getMomentary(swid, item=null) {
-    def resp = false
-    item = item ? item : mymomentaries.find{it.id == swid }
-    if ( item ) {
-        resp = [name: item.displayName]
-        resp = addBattery(resp, item)
-        if ( item.hasCapability("Switch") || item.hasCommand("push") ) {
-            def curval = item.currentValue("switch")
-            if (curval!="on" && curval!="off") { curval = "off" }
-            resp.put("momentary", curval)
-        }
-        resp = addHistory(resp, item)
-    }
-    return resp
-}
-
 def getActuator(swid, item=null) {
     getThing(myactuators, swid, item)
 }
@@ -722,6 +705,9 @@ def getTemperature(swid, item=null) {
         resp = [name: item.displayName]
         resp = addBattery(resp, item)
         resp.put("temperature", item.currentValue("temperature") )
+        if ( item.hasAttribute("humidity") ) {
+            resp.put("humidity", item.currentValue("humidity") )
+        }
         resp = addHistory(resp, item)
     }
     return resp
@@ -954,8 +940,6 @@ def getAllThings() {
     run = logStepAndIncrement(run)
     resp = getShades(resp)
     run = logStepAndIncrement(run)
-    resp = getMomentaries(resp)
-    run = logStepAndIncrement(run)
     resp = getButtons(resp)
     run = logStepAndIncrement(run)
     resp = getBulbs(resp)
@@ -1135,18 +1119,6 @@ def getShades(resp) {
     getThings(resp, myshades, "shade")
 }
 
-def getMomentaries(resp) {
-    try {
-        mymomentaries?.each {
-            if ( it.hasCapability("Switch") || it.hasCommand("push") ) {
-                def val = getMomentary(it.id, it)
-                resp << [name: it.displayName, id: it.id, value: val, type: "momentary" ]
-            }
-        }
-    } catch (e) {}
-    return resp
-}
-
 def getLocks(resp) {
     try {
         mylocks?.each {
@@ -1211,7 +1183,14 @@ def getGarages(resp) {
     getThings(resp, mygarages, "garage")
 }
 def getIlluminances(resp) {
-    getThings(resp, myilluminances, "illuminance")
+    try {
+        myilluminances?.each {
+            def val = getIlluminance(it.id, it)
+            resp << [name: it.displayName, id: it.id, value: val, type: "illuminance"]
+        }
+    } catch (e) {}
+    return resp
+
 }
 def getSmokes(resp) {
     getThings(resp, mysmokes, "smoke")
@@ -1232,11 +1211,9 @@ def getOthers(resp) {
 
 def getPowers(resp) {
     try {
-        def n  = mypowers ? mypowers.size() : 0
-        if ( n > 0 ) { logger("Number of selected power things = ${n}","debug"); }
         mypowers?.each {
-            def multivalue = getPower(it.id, it)
-            resp << [name: it.displayName, id: it.id, value: multivalue, type: "power"]
+            def val = getPower(it.id, it)
+            resp << [name: it.displayName, id: it.id, value: val, type: "power"]
         }
     } catch (e) {
         log.error e
@@ -1258,7 +1235,6 @@ def autoType(swid) {
     swid = swid.toInteger()
 
     if ( mydimmers?.find{it.id.toInteger() == swid } ) { swtype= "switchlevel" }
-    else if ( mymomentaries?.find{it.id.toInteger() == swid } ) { swtype= "momentary" }
     else if ( mybulbs?.find{it.id.toInteger() == swid } ) { swtype= "bulb" }
     else if ( myswitches?.find{it.id.toInteger() == swid } ) { swtype= "switch" }
     else if ( mybuttons?.find{it.id.toInteger() == swid } ) { swtype= "button" }
@@ -1326,10 +1302,6 @@ def doAction() {
 
       case "switchlevel" :
         cmdresult = setDimmer(swid, cmd, swattr, subid)
-        break
-
-      case "momentary" :
-        cmdresult = setMomentary(swid, cmd, swattr, subid)
         break
 
       case "lock" :
@@ -1484,10 +1456,6 @@ def doQuery() {
         cmdresult = getShade(swid)
         break;
          
-    case "momentary" :
-        cmdresult = getMomentary(swid)
-        break
-        
     case "motion" :
         cmdresult = getMotion(swid)
         break
@@ -2037,25 +2005,39 @@ def setMode(swid, cmd, swattr, subid) {
     def idx
     def allmodes = location.getModes()
     
-    if ( subid=="themode" ) {
+    // if the mode icon was clicked on or we send API themode as subid
+    if ( subid=="themode" && swattr ) {
         def themode = swattr.substring(swattr.lastIndexOf(" ")+1)
         idx=allmodes.findIndexOf{it.name == themode}
 
+        // first try to rotate the mode based on existing mode
         if (idx!=null) {
             idx = idx+1
             if (idx == allmodes.size() ) { idx = 0 }
             newsw = allmodes[idx].getName()
+
+        // next try using whatever mode was sent as cmd
         } else {
-            newsw = allmodes[0].getName()
+            idx=allmodes.findIndexOf{it.name == cmd}
+            if ( idx!=null) {
+                newsw = allmodes[idx].getName()
+            } else {
+                newsw = allmodes[0].getName()
+            }
         }
+
     // handle commands sent by GUI or user
     } else if (subid.startsWith("_")) {
         cmd = subid.substring(1)
         idx=allmodes.findIndexOf{it.name == cmd}
         newsw = (idx!=null) ? cmd : allmodes[0].getName()
+
+    // finally use cmd sent directly if attr was missing
     } else if ( cmd ) {
         idx=allmodes.findIndexOf{it.name == cmd}
         newsw = (idx!=null) ? cmd : allmodes[0].getName()
+
+    // default is to do set mode again to current
     } else {
         newsw = allmodes[0].getName()
     }
@@ -2632,21 +2614,6 @@ def rgb2hsv(r, g, b) {
     return [h, s, v, h100]
 }
 
-def setMomentary(swid, cmd, swattr, subid) {
-    logcaller("setMomentary", swid, cmd, swattr, subid)
-    def resp = false
-    def item  = mymomentaries?.find{it.id == swid }
-    if ( item ) {
-        if ( (subid=="momentary" || subid=="_push") && item.hasCommand("push") ) {
-            item.push()
-        } else if ( cmd && item.hasCommand(cmd) ) {
-            item."$cmd"()
-        }
-        resp = getMomentary(swid, item)
-    }
-    return resp
-}
-
 def setLock(swid, cmd, swattr, subid) {
     logcaller("setLock", swid, cmd, swattr, subid)
     def resp = false
@@ -2684,9 +2651,9 @@ def setLock(swid, cmd, swattr, subid) {
             newsw = item.currentLock
         }
 
-        // execute the new command
+        // include battery
         resp = [lock: newsw]
-        if ( item.hasCapability("Battery") ) {
+        if ( item.hasAttribute("battery") ) {
             resp.put("battery", item.currentValue("battery"))
         }
     }

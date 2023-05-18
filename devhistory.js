@@ -1,4 +1,6 @@
 const devhistory = `
+3.071   bugfix isy mapping for Hubitat node server
+3.070   update isy mapping to include commands and other tweaks
 3.069   fix isy devices to be removed when hub is removed and other isy bugfixes
 3.068   enable user accessToken and end poitns to skip oAUTH flow for Hubitat hubs
 3.067   bugfixes, clean up tile movement, hot keys for menus

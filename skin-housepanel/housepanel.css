@@ -752,6 +752,10 @@ div.hsm-thing div.overlay._cancelAlerts {
     display: none;
 }
 
+div.overlay._query {
+    display: none;
+}
+
 /* images */
 div.thing.image-thing, div.thing.blank-thing {
     border: 0px none;

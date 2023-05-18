@@ -64,6 +64,7 @@ var GLB = {};
 GLB.devhistory = devhistory.DEV;
 GLB.HPVERSION = GLB.devhistory.substring(1,9).trim();
 GLB.APPNAME = 'HousePanel V' + GLB.HPVERSION;
+GLB.warnonce = {};
 
 GLB.defaultrooms = {
     "Kitchen": "clock|kitchen|sink|pantry|dinette" ,
@@ -94,60 +95,134 @@ GLB.ignoredISY = [
     "parent__", "deviceClass", "pnode", "startDelay", "endDelay"
 ];
 
+    // this maps all supported types to their equivalents in ISY
+    // if the type is not supported then nothing is translated
+    // first element is a map of ISY id's to HousePanel id's
+    // second element is a list of commands to add to the device
+    // third element is an array of hints that tell us the device type
+    // final element is a map of ST states to ST names
+    // switch inludes 4.16.x to support Zwave switches that show up with this hint
+GLB.mainISYMap = {
+    "isy":         [{"ST": "ST"}, ["query"], "0.0." ],
+    "switch":      [{"GV0": "status_", "ST": "switch"}, ["query","on","off"], ["1.1.","4.16."] ],
+    "switchlevel": [{"GV0": "status_", "ST": "switch", "OL": "level"}, ["query","on","off"], "1.2." ],
+    "bulb":        [{"GV0": "status_", "ST": "switch", "OL": "level", "GV1":"color", "GV2":"colorname", "GV3": "hue", "GV4":"saturation"}, ["query","on","off"], "1.3." ],
+    "button":      [{"GV0": "status_", "BATLVL": "battery", "ST": "button"}, ["query","push","hold","doubleTap","release"], "1.4." ],
+    "power":       [{"GV0": "status_", "ST": "switch", "CPW": "power", "TPW":"energy", "CV":"voltage", "CC":"current"}, ["query","on", "off"], "1.5" ],
+    "water":       [{"GV0": "status_", "BATLVL": "battery", "ST": "water"}, ["query","on", "off"], "1.6" ],
+    "contact":     [{"GV0": "status_", "BATLVL": "battery", "ST": "contact"}, ["query","open","close"], "7.1" ],
+    "motion":      [{"GV0": "status_", "BATLVL": "battery", "ST": "motion"}, ["query"], "7.2" ],
+    "presence":    [{"GV0": "status_", "BATLVL": "battery", "ST": "presence"}, ["query","arrived","departed"], "7.3" ],
+    "door":        [{"GV0": "status_", "BATLVL": "battery", "ST": "door"}, ["query","open","close"], "2.1" ],
+    "garage":      [{"GV0": "status_", "BATLVL": "battery", "ST": "door"}, ["query","open","close"], "2.2" ],
+    "shade":       [{"GV0": "status_", "BATLVL": "battery", "ST": "windowShade", "OL": "position"}, ["query","open","close","stop"], "2.3" ],
+    "valve":       [{"GV0": "status_", "BATLVL": "battery", "ST": "valve"},["open","close"], "2.4" ],
+    "lock":        [{"GV0": "status_", "BATLVL": "battery", "ST": "lock"}, ["query","unlock","lock"], "8.1" ],
+    "mode":        [{"GV0": "status_", "ST": "themode"}, ["query","day", "evening", "night", "away"], "8.2" ],
+    "thermostat":  [{"GV0": "status_", "BATLVL": "battery", "ST": "switch", 
+                    "CLITEMP":"temperature", "CLIHUM": "humidity", "CLISPH": "heatingSetpoint", "CLISPC": "coolingSetpoint", 
+                    "CLIMD": "thermostatMode", "CLIHCS": "thermostatOperatingState", "CLIFS": "thermostatFanMode",
+                    "CLIFRS": "thermostatFanSetting", "CLISMD": "thermostatHold"}, ["query"], "5.1" ],
+    "temperature": [{"GV0": "status_", "BATLVL": "battery", "TEMPOUT": "temperature"}, ["query"], "5.2" ], 
+    "illuminance": [{"GV0": "status_", "BATLVL": "battery", "LUMIN": "illuminance"}, ["query"], "5.3" ],
+    "cosensor":    [{"GV0": "status_", "BATLVL": "battery", "CO": "cosensor"}, ["query"], "5.4" ],
+    "co2sensor":   [{"GV0": "status_", "BATLVL": "battery", "CO2LVL": "co2sensor"}, ["query"], "5.5" ]
+    // "music":       [ {"GV0": "status_", "ST": "status"}, ["previousTrack","pause","play","stop","nextTrack","volumeDown","volumeUp","mute","unmute"], "9.1" ]
+
+};
+
+// these are maps of index 25 integers to names
+// they should match the en_us.txt file contents
+GLB.index25Map = {
+    "switch":      ["RR", {1:"9.0 min", 2:"8.0 min", 3:"7.0 min", 4:"6.0 min", 5:"5.0 min", 6:"4.5 min", 7:"4.0 min", 8:"3.5 min",
+                           9:"3.0 min", 10:"2.5 min", 11:"2.0 min", 12:"1.5 min", 13:"1.0 min", 14:"47.0 sec", 15:"43.0 sec", 16:"38.5 sec",
+                           17:"34.0 sec", 18:"32.0 sec", 19:"30.0 sec", 20:"28.0 sec", 21:"26.0 sec", 22:"23.5 sec", 23:"21.5 sec", 24:"19.0 sec",
+                           25:"8.5 sec", 26:"6.5 sec", 27:"4.5 sec", 28:"2.0 sec", 29:"0.5 sec", 30:"0.3 sec", 31:"0.2 sec", 32:"0.1 sec"} ],
+    "switchlevel": ["RR", {1:"9.0 min", 2:"8.0 min", 3:"7.0 min", 4:"6.0 min", 5:"5.0 min", 6:"4.5 min", 7:"4.0 min", 8:"3.5 min",
+                           9:"3.0 min", 10:"2.5 min", 11:"2.0 min", 12:"1.5 min", 13:"1.0 min", 14:"47.0 sec", 15:"43.0 sec", 16:"38.5 sec",
+                           17:"34.0 sec", 18:"32.0 sec", 19:"30.0 sec", 20:"28.0 sec", 21:"26.0 sec", 22:"23.5 sec", 23:"21.5 sec", 24:"19.0 sec",
+                           25:"8.5 sec", 26:"6.5 sec", 27:"4.5 sec", 28:"2.0 sec", 29:"0.5 sec", 30:"0.3 sec", 31:"0.2 sec", 32:"0.1 sec"} ],
+    "bulb":        ["RR", {1:"9.0 min", 2:"8.0 min", 3:"7.0 min", 4:"6.0 min", 5:"5.0 min", 6:"4.5 min", 7:"4.0 min", 8:"3.5 min",
+                           9:"3.0 min", 10:"2.5 min", 11:"2.0 min", 12:"1.5 min", 13:"1.0 min", 14:"47.0 sec", 15:"43.0 sec", 16:"38.5 sec",
+                           17:"34.0 sec", 18:"32.0 sec", 19:"30.0 sec", 20:"28.0 sec", 21:"26.0 sec", 22:"23.5 sec", 23:"21.5 sec", 24:"19.0 sec",
+                           25:"8.5 sec", 26:"6.5 sec", 27:"4.5 sec", 28:"2.0 sec", 29:"0.5 sec", 30:"0.3 sec", 31:"0.2 sec", 32:"0.1 sec"} ],
+    "button":    ["ST",  {1:"pushed", 2: "held", 3:"doubleTapped", 4:"released"} ],
+    "water":     ["ST",  {1:"dry", 2: "wet", 3:"unknown"} ],
+    "motion":    ["ST",  {0:"inactive", 1:"active"} ],
+    "presence":  ["ST",  {0:"absent", 1:"present"} ],
+    "door":      ["ST",  {1:"open", 2:"closed", 3:"opening", 4:"closing", 5:"unknown"} ],
+    "garage":    ["ST",  {1:"open", 2:"closed", 3:"opening", 4:"closing", 5:"unknown"} ],
+    "shade":     ["ST",  {1:"open", 2:"closed", 3:"partially_open", 4:"unknown"} ],
+    "mode":      ["ST",  {1:"Day", 2:"Evening", 3:"Night", 4:"Away"} ]
+};
+
+// this map is for all supported uom values that use an array of settings
+// all others just capture the numerica value into the field
+// any uom = 25 must have the values specified in the above mapping object
+// color is a special case
+// refer to url: https://wiki.universal-devices.com/index.php?title=Polisy_Developers:ISY:API:Appendix:Units_of_Measure
+GLB.uomMap = {
+    2 :     {0:"false", 1:"true"},
+    11 :    {0:"unlocked", 100: "locked", 101: "unknown", 102: "jammed"},
+    66 :    {0:"idle", 1:"heating", 2:"cooling", 3:"fan_only", 4:"pending_heat",  5:"pending_cool",
+             6:"vent", 7:"emergency", 8:"2nd_stage_heating", 9:"2nd_stage_cooling", 10:"2nd_stage_aux_heat", 11:"3rd_stage_aux_heat"},
+    67 :    {0:"off", 1:"heat", 2:"cool", 3:"auto", 4:"emergency", 5:"resume", 6:"fan_only",
+             7:"furnace", 8:"dry_air", 9:"moist_air", 10:"auto_changeover", 11:"energy_save_heat",
+             12:"energy_save_cool", 13:"away", 14:"program_auto", 15:"program_heat", 16:"program_cool"},
+    68 :    {0:"auto", 1:"on", 2:"auto_high", 3:"high", 4:"auto_medium", 5:"medium", 6:"circulation", 7:"humidity_circulation",
+             8:"left_right_circulation", 9:"up_down_circulation", 10:"quiet"},
+    75 :    {0:"Sunday", 1:"Monday", 2: "Tuesday", 3:"Wednesday", 4:"Thursday", 5:"Friday", 6:"Saturday"},
+    78 :    {0:"off", 100: "on", 101:"unknown"},
+    79 :    {0:"open", 100: "closed", 101:"unknown"},
+    97 :    {0:"closed",100:"open",101:"unknown",102:"stopped",103:"closing",104:"opening"}
+};
+
 // this map contains the base capability for each type and all valid commands for that capability
 // the keys here are unique to HousePanel and are used to define the type of thing on the panel
 // the third entry is for mapping ISY hints to our types
 // irrigation set same as switches and use pool hint for valves
 GLB.capabilities = { 
-    other: [ [], ["_on","_off"], "0.1" ],
-    actuator: [ [], ["_on","_off"], "1." ],
-    switch: [ ["switch"], ["_on","_off"], ["1.1.","4."]],
-    switchlevel: [ ["switch","switchLevel"], ["_on","_off"], "1.2."],
-    bulb: [ ["colorControl","switch"],["_on","_off","color"], "1.3."], 
-    button: [ ["button"],["_pushed","_held"], "1.4."],
-    power: [ ["powerMeter","energyMeter"],null, "1.5."],
+    other: [ [], ["_on","_off"] ],
+    actuator: [ [], ["_on","_off"] ],
+    switch: [ ["switch"], ["_on","_off"] ],
+    switchlevel: [ ["switch","switchLevel"], ["_on","_off"] ],
+    bulb: [ ["colorControl","switch"],["_on","_off","color"] ], 
+    button: [ ["button"],["_pushed","_held"] ],
+    power: [ ["powerMeter","energyMeter"],null ],
     
-    door: [ ["doorControl"],["_open","_close"], "2."], 
-    garage: [ ["garageDoorControl"],["_open","_close"], "2.2"],
-    shade: [ ["windowShade","switchLevel"],["_open","_close","_pause","_presetPosition"], "2.3"], 
+    door: [ ["doorControl"],["_open","_close"] ], 
+    garage: [ ["garageDoorControl"],["_open","_close"] ],
+    shade: [ ["windowShade","switchLevel"],["_open","_close","_pause","_presetPosition"] ], 
 
-    vacuum: [ ["robotCleanerCleaningMode"],["_auto","_part","_repeat","_manual","_stop"], "3.1"],
-    washer: [ ["washerOperatingState","washerMode","switch"],["_on","_off","_pause","_run","_stop","_setWasherMode"], "3.2"],
-    
-    pool: [ ["valve"], null, "6."], 
-    valve: [ ["valve"],["_open","_close"], "6.2."], 
-    
-    sensor: [ [], null, "7."], 
-    contact: [ ["contactSensor"],null, "7.1"], 
-    motion: [ ["motionSensor"],null, "7.2"], 
-    presence: [ ["presenceSensor"],null, "7.3"], 
-    acceleration: [ ["accelerationSensor"],null, "7.4"], 
-    voltage: [["voltageMeasurement"],null, "7.5"],
-    cosensor: [ ["carbonMonoxideMeasurement"],null, "7.6.1"], 
-    co2sensor: [ ["carbonDioxideMeasurement"],null, "7.6.2"], 
-    dust: [ ["dustSensor"],null, "7.6.3"], 
-    water: [ ["waterSensor"],null, "7.7"],
-    smoke: [ ["smokeDetector"],null, "7.8"],
-    alarm: [ ["alarm"],["_both","_off","_siren","_strobe"], "7.9"], 
-    sound: [ ["soundSensor"],null, "7.9.2"], 
-    tamper: [ ["tamperAlert"],null, "7.9.3"], 
-    tone: [ ["tone"],["_beep"], "7.9.4"], 
+    vacuum: [ ["robotCleanerCleaningMode"],["_auto","_part","_repeat","_manual","_stop"] ],
+    washer: [ ["washerOperatingState","washerMode","switch"],["_on","_off","_pause","_run","_stop","_setWasherMode"] ],
+    valve: [ ["valve"],["_open","_close"] ], 
+    contact: [ ["contactSensor"],null ], 
+    motion: [ ["motionSensor"],null ], 
+    presence: [ ["presenceSensor"],null ], 
+    acceleration: [ ["accelerationSensor"],null ], 
+    voltage: [["voltageMeasurement"],null ],
+    cosensor: [ ["carbonMonoxideMeasurement"],null ], 
+    co2sensor: [ ["carbonDioxideMeasurement"],null ], 
+    dust: [ ["dustSensor"],null ], 
+    water: [ ["waterSensor"],null ],
+    smoke: [ ["smokeDetector"],null ],
+    alarm: [ ["alarm"],["_both","_off","_siren","_strobe"] ], 
+    sound: [ ["soundSensor"],null ], 
+    tamper: [ ["tamperAlert"],null ], 
+    tone: [ ["tone"],["_beep"] ], 
+    thermostat: [ ["temperatureMeasurement","thermostatMode","thermostatHeatingSetpoint","thermostatCoolingSetpoint","thermostatOperatingState"],null ],
+    temperature: [ ["temperatureMeasurement"],null ], 
+    illuminance: [ ["illuminanceMeasurement"],null ],
+    fan: [ ["fanSpeed"],null ],
+    weather: [ ["temperatureMeasurement","relativeHumidityMeasurement","illuminanceMeasurement"],["_refresh"] ],
+    airquality: [ ["airQualitySensor"],null ], 
+    uvindex: [["ultravioletIndex"],null ],
+    lock: [ ["lock"],["_unlock","_lock"] ],
+    music: [ ["mediaPlayback"], ["_previousTrack","_pause","_play","_stop","_nextTrack","_volumeDown","_volumeUp","_mute","_unmute","_refresh"] ],
+    audio: [ ["mediaPlayback","audioVolume","audioMute"],["_previousTrack","_pause","_play","_stop","_nextTrack","_volumeDown","_volumeUp","_mute","_unmute","_refresh"] ],
 
-    thermostat: [ ["temperatureMeasurement","thermostatMode","thermostatHeatingSetpoint","thermostatCoolingSetpoint","thermostatOperatingState"],null, "5."],
-    temperature: [ ["temperatureMeasurement"],null, "5.2"], 
-    illuminance: [ ["illuminanceMeasurement"],null, "5.3"],
-    fan: [ ["fanSpeed"],null, "5.4"],
-    // fanspeed: [ ["fanSpeed"],null, null],
-    weather: [ ["temperatureMeasurement","relativeHumidityMeasurement","illuminanceMeasurement"],["_refresh"], "5.5"],
-    airquality: [ ["airQualitySensor"],null, "5.6"], 
-    uvindex: [["ultravioletIndex"],null, "5.7"],
-
-    lock: [ ["lock"],["_unlock","_lock"], "8."],
-    
-    music: [ ["mediaPlayback"], ["_previousTrack","_pause","_play","_stop","_nextTrack","_volumeDown","_volumeUp","_mute","_unmute","_refresh"], "9.1" ],
-    audio: [ ["mediaPlayback","audioVolume","audioMute"],["_previousTrack","_pause","_play","_stop","_nextTrack","_volumeDown","_volumeUp","_mute","_unmute","_refresh"], "9.2"],
-
-    location: [ ["location"],["_refresh"], null]
+    location: [ ["location"],["_refresh"],null ]
 };
 
 // list of capabilities that generate an event
@@ -509,29 +584,42 @@ async function getUserName(req) {
 
 // TODO - use DB query on devices table
 function getTypes() {
-    // add capabilities from the new SmartThings list
-    var thingtypes = Object.keys(GLB.capabilities);
 
-    // add unique things to HousePanel, ISY, Ford, and other hubs
-    thingtypes.push("blank");
-    thingtypes.push("custom");
-    thingtypes.push("frame");
-    thingtypes.push("image");
-    thingtypes.push("video");
-    thingtypes.push("control");
-    // thingtypes.push("momentary");
-    // thingtypes.push("actuator");
-    // thingtypes.push("sensor");
-    // thingtypes.push("other");
-    thingtypes.push("clock");
-    thingtypes.push("hsm");
-    thingtypes.push("mode");
-    // thingtypes.push("music");
-    thingtypes.push("isy");
-    thingtypes.push("ford");
-    thingtypes.push("sonos");
-    thingtypes.push("variables");
-    thingtypes.push("piston");
+    // all sessions have these types
+    var hubtypes = Object.keys(GLB.mainISYMap);
+    var blanktypes = ["blank", "blank", "custom", "frame", "image", "piston",
+                      "video", "control", "variables", "clock", "mode"];
+    var thingtypes = hubtypes.concat(blanktypes);
+
+    // add hubitat specific types
+    if ( array_key_exists("Hubitat", GLB.dbinfo.hubs) ) {
+        var hetypes = ["hsm","smoke","piston","music","audio"];
+        hetypes.forEach( key => {
+            if ( !thingtypes.includes(key) ) {
+                thingtypes.push(key);
+            }
+        });
+    }
+
+    // add new SmartThings specific types
+    if ( array_key_exists("NewSmartThings", GLB.dbinfo.hubs) ) {
+        hubtypes = Object.keys(GLB.capabilities);
+        hubtypes.forEach( key => {
+            if ( !thingtypes.includes(key) ) {
+                thingtypes.push(key);
+            }
+        });
+    }
+
+    if ( array_key_exists("Ford", GLB.dbinfo.hubs) ) {
+        thingtypes.push("ford");
+    }
+    if ( array_key_exists("Sonos", GLB.dbinfo.hubs) ) {
+        thingtypes.push("sonos");
+    }
+    if ( array_key_exists("ISY", GLB.dbinfo.hubs) ) {
+        thingtypes.push("isy");
+    }
 
     thingtypes.sort();
     return thingtypes;
@@ -3133,7 +3221,7 @@ function getDevices(hub) {
                         return;
                     }
 
-                    console.log( (ddbg()), "variables read: ", result)
+                    // console.log( (ddbg()), "variables read: ", result)
                     try {
                         var varobj = result.vars.var;
                     } catch (e) {
@@ -3335,15 +3423,18 @@ function getDevices(hub) {
                         }
     
                         // use hints to inform what type to set - if no match then use isy type
-                        var thetype = "";
-                        for (var key in GLB.capabilities) {
-                            var caphintarray = GLB.capabilities[key][2];
+                        var thetype = null;
+                        var thecommands = null;
+
+                        for (var key in GLB.mainISYMap) {
+                            var caphintarray = GLB.mainISYMap[key][2];
                             if ( !is_array(caphintarray) ) {
                                 caphintarray = [caphintarray];
                             }
                             caphintarray.forEach( function(caphint) {
                                 if ( caphint && hint.startsWith(caphint) ) {
                                     thetype = key;
+                                    thecommands = GLB.mainISYMap[key][1];
                                 }
                             })
                         }
@@ -3359,22 +3450,35 @@ function getDevices(hub) {
                         var name = node["name"][0] || "Unnamed Node";
                         var pvalue = {"name": name};
 
-                        const ignoreNodes = ["$","address","name","family","type","deviceClass","sgid","rpnode","custom","devtype","enabled"];
+                        if ( name==="Mode" ) {
+                            console.log(">>>> ", thetype, thecommands, hint, node);
+                        }
+
+                        const ignoreNodes = ["$","address","name","family","type","deviceClass","sgid","rpnode","custom","devtype","enabled",
+                                             "dcPeriod","startDelay","endDelay","parent__"];
                         for (var nodeitem in node) {
                             if ( !ignoreNodes.includes(nodeitem) ) {
                                 pvalue[nodeitem] = node[nodeitem][0];
                             }
                         }
 
-                        // use the enabled field to set status
-                        if ( node["enabled"] && node["enabled"][0]=="true" ) {
-                            pvalue["status_"] = "ACTIVE";
-                        } else {
-                            pvalue["status_"] = "INACTIVE";
+                        // use the enabled field to set status unless it is already there
+                        if  ( !array_key_exists("status_", pvalue ) ) {
+                            if ( node["enabled"] && node["enabled"][0]=="true" ) {
+                                pvalue["status_"] = "ACTIVE";
+                            } else {
+                                pvalue["status_"] = "INACTIVE";
+                            }
+                        }
+
+                        // add commands if they are present
+                        if ( is_array(thecommands) ) {
+                            thecommands.forEach( function(acommand) {
+                                pvalue["_"+acommand] = acommand;
+                            });
                         }
 
                         // this is where we change the device items
-
                         pvalue = translateObjects(pvalue);
                         var pvalstr = encodeURI2(pvalue);
     
@@ -3442,10 +3546,10 @@ function getDevices(hub) {
                             var n = 0;
                             nodes.forEach(function(node) {
                                 var nodeid = fixISYid(node["$"]["id"]);
-
                                 var props = node["property"];
                                 if ( props && mydevices[nodeid] ) {
-                                    var pvalstr = setIsyFields(nodeid, mydevices[nodeid], props);
+                                    var pvalue = setIsyFields(nodeid, mydevices[nodeid], props);
+                                    var pvalstr = encodeURI2(pvalue);
                                     mydevices[nodeid]["pvalue"] = pvalstr;
                                     var device = mydevices[nodeid];
                                     mydb.updateRow("devices", device, "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + nodeid + "'")
@@ -3480,42 +3584,36 @@ function getDevices(hub) {
 }
 // ------ end of getDevices
 
+// maps an ISY id to a Hubitat subid field
 function mapIsy(isyid, devicetype) {
-
-    // this maps all supported types to their equivalents in ISY
-    // if the type is not supported then nothing is translated
-    var mainMap = {
-        "switch": {"GV0": "status_", "BATLVL": "battery", "ST": "switch"},
-        "switchlevel": {"GV0": "status_", "BATLVL": "battery", "ST": "switch", "OL": "level"},
-        "bulb": {"GV0": "status_", "ST": "switch", "OL": "level", "GV2":"colorindex", "GV3": "hue", "GV4":"saturation", "GV5":"color"},
-        "contact": {"GV0": "status_", "BATLVL": "battery", "ST": "contact"},
-        "door": {"GV0": "status_", "BATLVL": "battery", "ST": "door"},
-        "lock": {"GV0": "status_", "BATLVL": "battery", "ST": "lock"},
-        "garage": {"GV0": "status_", "BATLVL": "battery", "ST": "door"},
-        "shade": {"GV0": "status_", "BATLVL": "battery", "ST": "windowShade", "OL": "position"},
-        "motion": {"GV0": "status_", "BATLVL": "battery", "ST": "motion"},
-        "presence{": {"GV0": "status_", "BATLVL": "battery", "ST": "presence"},
-        "mode": {"GV0": "status_", "ST": "themode"},
-        "power":  {"GV0": "status_", "BATLVL": "battery", "TPW": "power", "GV6": "power", "GV7":"energy", "CV":"voltage", "GV8":"voltage", "GV9":"current", "ST": "switch"},
-        "thermostat": {"GV0": "status_", "BATLVL": "battery", "ST": "thermostatOperatingState", 
-                    "GV10":"temperature", "GV11":"humidity", "GV12":"heatingSetpoint", "GV13":"coolingSetpoint", "GV14":"thermostatMode", "GV15":"thermostatFanMode",
-                    "CLISPH": "heatingSetpoint", "CLISPC": "coolingSetpoint", "CLIHUM": "humidity", "LUMIN": "illuminance", 
-                    "CLIMD": "thermostatMode", "CLIHCS": "thermostatState", "CLIFS": "thermostatFanMode",
-                    "CLIFRS": "thermostatOperatingState", "CLISMD": "thermostatHold"}
-    }
-
     var id = isyid;
-    if ( array_key_exists(devicetype, mainMap) && array_key_exists(isyid, mainMap[devicetype]) ) {
-        id = mainMap[devicetype][isyid];
+    if ( array_key_exists(devicetype, GLB.mainISYMap) ) {
+        var mainMap = GLB.mainISYMap[devicetype][0];
+        if ( array_key_exists(isyid, mainMap) ) {
+            id = mainMap[isyid];
+        }
     }
     return id;
 }
 
+function getColorName(index) {
+    const colors = [
+        'Black',  'White',  'Azure',    'Beige',  'Blue',   'Coral',
+        'Crimson','Forest', 'Fuchsia',  'Golden', 'Gray',   'Green',
+        'Pink',   'Indigo', 'Lavender', 'Lime',   'Maroon', 'Navy',
+        'Olive',  'Red',    'Royal',    'Tan',    'Teal',   'Purple',
+        'Yellow', 'Orange', 'Brown',    'Silver', 'Cyan',   'Custom'
+    ];
+    if ( index < 0 || index >= colors.length ) {
+        index = colors.length - 1;
+    }
+    return colors[index];
+}
+
 // devicetype, value, obj.id, obj.value, obj.formatted, obj.uom, obj.prec, setuom
-function translateIsy(devicetype, value, subid, val, formatted, uom, prec, setuom) {
+function translateIsy(devicetype, value, isyid, val, formatted, uom, prec, setuom) {
 
     // either use the ISY id or map it to the equivalent HP version
-    // var subid = mapIsy(objid, device["devicetype"]);
     // var devicetype = device["devicetype"];
     // convert levels for Insteon range
     if ( typeof uom === "string" ) {
@@ -3548,209 +3646,82 @@ function translateIsy(devicetype, value, subid, val, formatted, uom, prec, setuo
         }
     }
 
-    // set the HP equivalent subid for this type of node field
-    // if maps are not there then the native ISY subid will show up
     var newvalue = clone(value);
-
     if ( setuom ) {
-        newvalue["uom_" + subid] = uom;
+        newvalue["uom_" + isyid] = uom;
     }
-
     if ( DEBUGisy ) {
-        console.log( (ddbg()), "translate - subid: ", subid, " type: ", devicetype, " value: ", value, " val: ", val);
+        console.log( (ddbg()), "translate: type: ", devicetype, " isyid: ", isyid, " val: ", val, " formatted: ", formatted, " uom: ", uom, " prec: ", prec, " value: ", value);
     }
 
-    function setDefault() {
-        newvalue[subid] = formatted ? formatted : val;
-        return true;
-    }
-
-    function setSelect(id, target, hestates) {
-        if ( subid===id ) {
-            var i = val;
-            if ( typeof val === "string" ) {
-                i = parseInt(val);
-            }
-            if ( array_key_exists(i,hestates) ) {
-                newvalue[target] = hestates[i];
-                return true;
-            }
+    // functions that return mapped values based on type
+    // if the object map is not an object or val is not there return val
+    function setSelect(target, hestates) {
+        var i = val;
+        if ( typeof val === "string" ) {
+            i = parseInt(val);
         }
-        return false;
-    }
-
-    function setDirect(id, target) {
-        if ( subid===id ) {
+        if ( !isNaN(i) && array_key_exists(i,hestates) ) {
+            newvalue[target] = hestates[i];
+        } else {
             newvalue[target] = val;
-            return true;
         }
-        return false;
     }
-
 
     function setLevel(target) {
-        if ( subid==="OL" ) {
-            if ( formatted && formatted==="On" ) {
-                val = "100";
-            } else if ( formatted && formatted==="Off" ) {
-                val = "0";
-            }
-
-            newvalue[target] = val;
-            if ( target === "position" ) {
-                newvalue["level"] = val;
-            }
-            return true;
+        if ( formatted && formatted==="On" ) {
+            val = "100";
+        } else if ( formatted && formatted==="Off" ) {
+            val = "0";
         }
-        return false;
+        newvalue[target] = val;
+        if ( target === "position" ) {
+            newvalue["level"] = val;
+        }
     }
 
-    function setColor() {
-        var colors = [
-            'Black',  'White',  'Azure',    'Beige',  'Blue',   'Coral',
-            'Crimson','Forest', 'Fuchsia',  'Golden', 'Gray',   'Green',
-            'Pink',   'Indigo', 'Lavender', 'Lime',   'Maroon', 'Navy',
-            'Olive',  'Red',    'Royal',    'Tan',    'Teal',   'Purple',
-            'Yellow', 'Orange', 'Brown',    'Silver', 'Cyan',   'Custom'
-        ]
-        if ( subid==="GV2" ) {
-            var index = parseInt(val) - 1;
-            if ( index >= 0 && index < 30 ) {
-                newvalue["colorname"] = colors[index];
-            }
-            return true;
-        } else if ( subid==="GV5" ) {
-            val = parseInt(val);
-            var colorhex = "#" + val.toString(16);
-            newvalue["color"] = colorhex;
-            return true;
-        }
-        return false;
+    function setColor(target) {
+        var index = parseInt(val);
+        var colorhex = "#" + index.toString(16);
+        newvalue[target] = colorhex;
     }
 
-    function setRamp() {
-        if ( subid==="RR" && formatted ) {
-            newvalue[subid] = formatted;
-            return true;
-        } else if ( subid==="RR" && uom==="25" ) {
-            var index = parseInt(val);
-            if ( !isNaN(index) && index<=31 ) {
-                const RRindex = ["9.0 min", "8.0 min", "7.0 min", "6.0 min", "5.0 min", "4.5 min", "4.0 min", "3.5 min",
-                             "3.0 min", "2.5 min", "2.0 min", "1.5 min", "1.0 min", "47.0 sec", "43.0 sec", "38.5 sec",
-                             "34.0 sec", "32.0 sec", "30.0 sec", "28.0 sec", "26.0 sec", "23.5 sec", "21.5 sec", "19.0 sec",
-                             "8.5 sec", "6.5 sec", "4.5 sec", "2.0 sec", "0.5 sec", "0.3 sec", "0.2 sec", "0.1 sec"];
-                newvalue[subid] = RRindex[index];
-                return true;
-            }
-        }
-        return false;
-    }
+    // do a lookup to translate isyid into a HP subid
+    var subid = mapIsy(isyid, devicetype);
 
-    // reverse mapping of Hubitat to ISY here
-    switch (devicetype) {
-
-        case "switch":
-            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
-            setSelect("ST", "switch", {0:"DOF", 100: "DON", 101:"Unknown"}) ||
-            setRamp() ||
-            setDefault();
-            break;
-
-        case "switchlevel":
-            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
-            setSelect("ST", "switch", {0:"DOF", 100: "DON", 101:"Unknown"}) ||
-            setLevel("level") ||
-            setRamp() ||
-            setDefault();
-            break;
-
-        case "bulb":
-            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
-            setSelect("ST", "switch", {0:"DOF", 100: "DON", 101:"Unknown"}) ||
-            setLevel("level") ||
-            setDirect("GV3", "hue") ||
-            setDirect("GV4", "saturation") ||
-            setColor() ||
-            setRamp() ||
-            setDefault();
-            break;
-
-        case "contact":
-            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
-            setSelect("ST", "contact", {1:"open", 2:"closed", 3:"unknown"}) ||
-            setDefault();
-            break;
-
-        case "motion":
-            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
-            setSelect("ST", "motion", {1:"active", 2:"inactive"}) ||
-            setDefault();
-            break;
-
-        case "presence":
-            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
-            setSelect("ST", "presence", {1:"present", 2:"absent"}) ||
-            setDefault();
-            break;
-
-        case "door":
-            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
-            setSelect("ST", "door", {1:"open", 2:"closed", 3:"opening", 4:"closing", 5:"unknown"}) ||
-            setDefault();
-            break;
- 
-        case "shade":
-            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
-            setSelect("ST", "windowShade", {1:"open", 2:"closed", 3:"partially open", 4:"unknown"}) ||
-            setLevel("position") ||
-            setDefault();
-            break;
-
-        case "power":
-            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
-            setSelect("ST", "switch", {0:"DOF", 100: "DON", 101:"Unknown"}) ||
-            setDirect("GV6", "power") ||
-            setDirect("GV7", "energy") ||
-            setDirect("GV8", "voltage") ||
-            setDirect("GV9", "current") ||
-            setDefault();
-            break;
-
-        case "lock":
-            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
-            setSelect("ST", "lock", {0:"unlocked", 1:"locked", 2:"unknown", 3:"jammed"}) ||
-            setDefault();
-            break;
-
-        case "thermostat":
-            setSelect("GV0", "status_", {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"}) ||
-            setSelect("CLIFRS", "clifrs", {0:"Off", 1:"On", 2:"On High", 3:"On Medium", 4:"Circulation", 
-                                            5:"Humidity Circ", 6:"R/L Circ", 7:"U/D Circ", 8:"Quiet"}) ||
-            setSelect("CLIHCS", "clihcs", {0:"Idle", 1:"Heating", 2:"Cooling", 3:"Off"} ) ||
-            setSelect("ST", "thermostatOperatingState", {1:"idle", 2:"heating", 3:"cooling", 4:"emergency"}) ||
-            setDirect("GV10", "temperature") ||
-            setDirect("GV11", "humidity") ||
-            setDirect("GV12", "heatingSetpoint") ||
-            setDirect("GV13", "coolingSetpoint") ||
-            setSelect("GV14", "thermostatMode", {1:"off", 2: "heat", 3:"cool",4:"auto"}) ||
-            setSelect("GV15", "thermostatFanMode", {1:"auto", 2: "on", 3:"circulate", 4:"other"}) ||
-            setDefault();
-            break;
-
-        case "variables":
+    // set values based on uom and index25Map
+    // all status_ nodes are a special case as it applies to all devices
+    var obj = null;
+    if ( subid === "status_" ) {
+        obj = {1:"ACTIVE", 2:"INACTIVE", 3:"ONLINE", 4:"OFFLINE", 5:"UNKNOWN"};
+        setSelect(subid, obj);
+    } else if ( subid==="color" ) {
+        setColor(subid);
+    } else if ( subid==="colorname" ) {
+        var index = parseInt(val);
+        newvalue[subid] = getColorName(index - 1);
+    } else if ( isyid === "OL") {
+        setLevel(subid);
+    } else if ( uom === 25 ) {
+        if ( array_key_exists(devicetype, GLB.index25Map) && GLB.index25Map[devicetype][0] === isyid ) {
+            obj = GLB.index25Map[devicetype][1];
+            setSelect(subid, obj);
+        } else {
             newvalue[subid] = val;
-            break;
-
-        default:
-            setDefault();
-            // newvalue[subid] = formatted ? formatted : val;
-            // if ( formatted && (newvalue[subid].substr(-1)==="F" || newvalue[subid].substr(-1)==="C") ) {
-            //     newvalue[subid] = parseInt(newvalue[subid].substr(0, newvalue[subid].length-2)).toString();
+        }
+    } else {
+        if ( array_key_exists(uom, GLB.uomMap) ) {
+            obj = GLB.uomMap[uom];
+            setSelect(subid, obj);
+        } else {
+            // var warnid = "uom_"+isyid;
+            // if ( typeof GLB.warnonce[warnid] === "undefined" || GLB.warnonce[warnid]===false ) {
+            //     console.log( (ddbg()), "Warning, no translation provided for ISY id: ", isyid);
+            //     GLB.warnonce[warnid] = true;
             // }
-            break;
-
+            newvalue[subid] = val;
+        }
     }
-
     return newvalue;
 }
 
@@ -3769,7 +3740,6 @@ function setIsyFields(nodeid, device, props) {
         if ( DEBUGisy ) {
             console.log( (ddbg()), "in setIsyFields - node: ", nodeid, " device: ", device, " value: ", value, " props: ", props);
         }
-        value = encodeURI2(value);
     }
     return value;
 }
@@ -6568,6 +6538,54 @@ function setValOrder(val) {
     return newval;
 }
 
+function updateTimeStamp(subid, pvalue) {
+    var d = new Date();
+    var timestr = d.toLocaleDateString() + " " +  d.toLocaleTimeString();
+    if ( !subid ) return;
+
+    if ( array_key_exists("duration",pvalue) && array_key_exists("deltaT",pvalue) ) {
+        if ( pvalue[subid]==="on" || pvalue[subid]==="DON" || pvalue[subid]==="active" || pvalue[subid]==="present" || pvalue[subid]==="open" || pvalue[subid]==="unlocked" ) {
+            if ( pvalue.deltaT > 0 ) {
+                pvalue.duration = parseFloat(pvalue.duration);
+                if ( isNaN(pvalue.duration) ) { pvalue.duration = 0.0; }
+                pvalue.duration += (d.getTime() - pvalue.deltaT) / 60000.0;
+                pvalue.duration = (Math.round(pvalue.duration*10.0)/10.0).toString();
+            }
+            pvalue.deltaT = d.getTime();
+            if ( pvalue.count ) {
+                var n = parseInt(pvalue.count);
+                if ( isNaN(n) ) { 
+                    n = 1; 
+                } else {
+                    n++;
+                }
+                pvalue.count = n.toString();
+            } else {
+                pvalue.count = "1";
+            }
+        } else if ( pvalue[subid]==="off" || pvalue[subid]==="DOF" || pvalue[subid]==="inactive" || pvalue[subid]==="absent" || pvalue[subid]==="closed" || pvalue[subid]==="locked" ) {
+            pvalue.duration = parseFloat(pvalue.duration);
+            if ( isNaN(pvalue.duration) ) { pvalue.duration = 0.0; }
+            if ( pvalue.deltaT > 0 ) {
+                pvalue.duration += (d.getTime() - pvalue.deltaT) / 60000.0;
+            }
+            pvalue.duration = (Math.round(pvalue.duration*10.0)/10.0).toString();
+            pvalue.deltaT = 0;
+        }
+    }
+    if ( pvalue["event_3"] ) { pvalue["event_4"] = pvalue["event_3"]; }
+    if ( pvalue["event_2"] ) { pvalue["event_3"] = pvalue["event_2"]; }
+    if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
+    if ( typeof pvalue[subid] === "number" ) {
+        pvalue["event_1"] = timestr + " " + subid + " " + pvalue[subid].toString();
+    } else if ( typeof pvalue[subid] === "string" && pvalue[subid].length < 15 ) {
+        pvalue["event_1"] = timestr + " " + subid + " " + pvalue[subid];
+    } else {
+        pvalue["event_1"] = timestr;
+    }
+    return pvalue;
+}
+
 function processHubMessage(userid, hubmsg, newST) {
     // loop through all devices tied to this message for any hub
     // push info to all things that match
@@ -6613,17 +6631,6 @@ function processHubMessage(userid, hubmsg, newST) {
                 pvalue = {};
             }
 
-            // handle colors - now we do this in the hub app
-            // if ( array_key_exists("color",pvalue) && (subid==="hue" || subid==="saturation" || subid==="level") ) {
-            //     var h = Math.round((parseInt(pvalue["hue"]) * 360) / 100);
-            //     var s = Math.round(parseInt(pvalue["saturation"]));
-            //     var v = Math.round(parseInt(pvalue["level"]));
-            //     var color = hsv2rgb(h, s, v);
-            //     if ( color ) {
-            //         pvalue["color"] = color;
-            //     }
-            //     pvalue[subid] = value;
-
             // handle special case where groovy pushes an array for color changes
             if ( subid==="color" && is_array(value) ) {
                 pvalue["hue"] = value[0];
@@ -6640,60 +6647,15 @@ function processHubMessage(userid, hubmsg, newST) {
             }
 
             // increment the count if this is not the inverse of a turn on action
-            var d = new Date();
-            if ( array_key_exists("duration",pvalue) && array_key_exists("deltaT",pvalue) ) {
-                if ( pvalue[subid]==="on" || pvalue[subid]==="active" || pvalue[subid]==="present" || pvalue[subid]==="open" || pvalue[subid]==="unlocked" ) {
-                    if ( pvalue.deltaT > 0 ) {
-                        pvalue.duration = parseFloat(pvalue.duration);
-                        if ( isNaN(pvalue.duration) ) { pvalue.duration = 0.0; }
-                        pvalue.duration += (d.getTime() - pvalue.deltaT) / 60000.0;
-                        pvalue.duration = (Math.round(pvalue.duration*10.0)/10.0).toString();
-                    }
-                    pvalue.deltaT = d.getTime();
-                    if ( pvalue.count ) {
-                        var n = parseInt(pvalue.count);
-                        if ( isNaN(n) ) { 
-                            n = 1; 
-                        } else {
-                            n++;
-                        }
-                        pvalue.count = n.toString();
-                    } else {
-                        pvalue.count = "1";
-                    }
-                } else {
-                    pvalue.duration = parseFloat(pvalue.duration);
-                    if ( isNaN(pvalue.duration) ) { pvalue.duration = 0.0; }
-                    if ( pvalue.deltaT > 0 ) {
-                        pvalue.duration += (d.getTime() - pvalue.deltaT) / 60000.0;
-                    }
-                    pvalue.duration = (Math.round(pvalue.duration*10.0)/10.0).toString();
-                    pvalue.deltaT = 0;
-                }
-            }
+            pvalue = updateTimeStamp(subid, pvalue);
             var swtype = device.devicetype;
-
-            // set the event string to this time
-            var timestr = d.toLocaleDateString() + " " +  d.toLocaleTimeString();
-            if ( pvalue["event_3"] ) { pvalue["event_4"] = pvalue["event_3"]; }
-            if ( pvalue["event_2"] ) { pvalue["event_3"] = pvalue["event_2"]; }
-            if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
-            if ( typeof pvalue[subid] === "string" && pvalue[subid].length < 15 ) {
-                pvalue["event_1"] = timestr + " " + subid + " " + pvalue[subid];
-            } else {
-                pvalue["event_1"] = timestr + " " + subid;
-            }
-
-            if ( DEBUG12 ) {
-                console.log( (ddbg()), "processHubMessage - hubmsgid: ", hubmsgid, " swtype: ", swtype, " subid: ", subid, " pvalue: ", pvalue);
-            }
 
             // update the DB
             device.pvalue = encodeURI2(pvalue);
             mydb.updateRow("devices", device, "userid = " + userid + " AND id = "+device.id)
             .then( res => {
                 if ( DEBUG12 ) {
-                    console.log( (ddbg()), "processHubMessage - db update: ", res);
+                    console.log( (ddbg()), "processHubMessage - db update: ", subid, " swtype: ", swtype, " pvalue: ", pvalstr, " dbres: ", res);
                 }
             })
             .catch( reason => {
@@ -6752,9 +6714,6 @@ function processIsyXMLMessage(userid, isymsg) {
 function processIsyMessage(userid, jsondata) {
     var newval;
     var pvalue;
-    var d = new Date();
-    var timestr = d.toLocaleDateString() + " " +  d.toLocaleTimeString();
-
     if ( jsondata ) {
         var control = jsondata.control;
         var action = jsondata.action;
@@ -6774,100 +6733,58 @@ function processIsyMessage(userid, jsondata) {
             var bid = node[0];
             newval = action[0]["_"];
             var obj = action[0]["$"];
-
+            var isyid = control[0];
             var conditions = "userid = "+userid+" AND deviceid = '"+bid+"'";
-            mydb.getRow("devices", "*", conditions)
-            .then(results => {
 
-                if ( !results ) { return; }
+            mydb.getRows("devices", "*", conditions)
+            .then(devices => {
 
-                var device = results;
-                var devtype = device.devicetype;
-                var isyid = control[0];
-                var subid = mapIsy(isyid, devtype);
-                
-                try {
-                    if ( device.pvalue && device.pvalue!=="undefined" ) {
-                        pvalue = decodeURI2(device.pvalue);
-                        if ( !pvalue ) {
+                if ( !devices ) { return; }
+                devices.forEach(function(device) {
+                    var devtype = device.devicetype;
+                    var subid = mapIsy(isyid, devtype);
+                    try {
+                        if ( device.pvalue && device.pvalue!=="undefined" ) {
+                            pvalue = decodeURI2(device.pvalue);
+                            if ( !pvalue ) {
+                                pvalue = {};
+                            }
+                        } else {
                             pvalue = {};
                         }
-                    } else {
-                        pvalue = {};
+                        
+                        // adjust the value based on precision
+                        // moved this to translate function - and obj always exists here
+                        uom = obj["uom"] || 0;
+                        prec = obj["prec"] || 0;
+                    } catch (e) {
+                        console.log( (ddbg()), "warning - processIsyMessage failed: ", e);
+                        return;
                     }
                     
-                    // adjust the value based on precision
-                    // moved this to translate function - and obj always exists here
-                    uom = obj["uom"] || 0;
-                    prec = obj["prec"] || 0;
-                } catch (e) {
-                    console.log( (ddbg()), "warning - processIsyMessage failed: ", e);
-                    return;
-                }
-                
-                // devicetype, value, obj.id, obj.value, obj.formatted, obj.uom, obj.prec, setuom
-                pvalue = translateIsy(devtype, pvalue, control[0], newval, "", uom, prec, false);
+                    // devicetype, value, obj.id, obj.value, obj.formatted, obj.uom, obj.prec, setuom
+                    pvalue = translateIsy(devtype, pvalue, control[0], newval, "", uom, prec, false);
 
-                if ( array_key_exists("duration",pvalue) && array_key_exists("deltaT",pvalue) ) {
-                    if ( subid==="level" || subid==="position" || pvalue[subid]==="on" || pvalue[subid]==="DON" ) {
-                        if ( pvalue.deltaT > 0 ) {
-                            pvalue.duration = parseFloat(pvalue.duration);
-                            if ( isNaN(pvalue.duration) ) { pvalue.duration = 0.0; }
-                            pvalue.duration += (d.getTime() - pvalue.deltaT) / 60000.0;
-                            pvalue.duration = (Math.round(pvalue.duration*10.0)/10.0).toString();
+                    pvalue = updateTimeStamp(subid, pvalue);
+                    pushClient(userid, bid, devtype, subid, pvalue);
+                    pvalue.subid = subid;
+                    processRules(userid, device.id, bid, devtype, subid, pvalue, "processMsg");
+                    delete pvalue.subid;
+                    
+                    // update the DB
+                    var pvalstr = encodeURI2(pvalue);
+                    mydb.updateRow("devices", {pvalue: pvalstr}, "userid = "+userid+" AND id = "+device.id)
+                    .then( res => {
+                        if ( DEBUG9 ) {
+                            console.log( (ddbg()), "ISY webSocket updated: ", bid, " trigger:", control[0], " subid: ", subid, " pvalue: ", pvalstr, " dbresult: ", res);
                         }
-                        pvalue.deltaT = d.getTime();
-                        if ( pvalue.count ) {
-                            var n = parseInt(pvalue.count);
-                            if ( isNaN(n) ) { 
-                                n = 1; 
-                            } else {
-                                n++;
-                            }
-                            pvalue.count = n.toString();
-                        } else {
-                            pvalue.count = "1";
-                        }
-                    } else {
-                        pvalue.duration = parseFloat(pvalue.duration);
-                        if ( isNaN(pvalue.duration) ) { pvalue.duration = 0.0; }
-                        if ( pvalue.deltaT > 0 ) {
-                            pvalue.duration += (d.getTime() - pvalue.deltaT) / 60000.0;
-                        }
-                        pvalue.duration = (Math.round(pvalue.duration*10.0)/10.0).toString();
-                        pvalue.deltaT = 0;
-                    }
-                }
-
-                if ( pvalue["event_3"] ) { pvalue["event_4"] = pvalue["event_3"]; }
-                if ( pvalue["event_2"] ) { pvalue["event_3"] = pvalue["event_2"]; }
-                if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
-                if ( subid && typeof pvalue[subid] === "string" && pvalue[subid].length < 15 ) {
-                    pvalue["event_1"] = timestr + " " + subid + " " + pvalue[subid];
-                } else {
-                    pvalue["event_1"] = timestr;
-                }
-
-                if ( DEBUG9 ) {
-                    console.log( (ddbg()), "ISY pushing data: ", jsonshow(pvalue) );
-                }
-                pushClient(userid, bid, devtype, subid, pvalue);
-
-                pvalue.subid = subid;
-                processRules(userid, device.id, bid, devtype, subid, pvalue, "processMsg");
-                delete pvalue.subid;
-                
-                // update the DB
-                if ( DEBUG9 ) {
-                    console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " subid: ", subid, " uom: ", uom, " newval: ", newval, " pvalue: ", pvalue);
-                }
-                var pvalstr = encodeURI2(pvalue);
-                mydb.updateRow("devices", {pvalue: pvalstr}, "userid = "+userid+" AND id = "+device.id)
-                .then( () => {
-                })
-                .catch( reason => {
-                    console.log( (ddbg()), reason);
+                    })
+                    .catch( reason => {
+                        console.log( (ddbg()), reason);
+                    });
                 });
+
+
             }).catch(reason => {
                 console.log( (ddbg()), "processIsyMessage - ", reason);
             });
@@ -6919,33 +6836,19 @@ function processIsyMessage(userid, jsondata) {
                         pvalue = translateIsy("variables", pvalue, subid, newval, "", 0, prec, false)
                         // pvalue[subid] = newval.toString();
 
-                        // set rolling event time info - convert from europe style time for consistent treatment
-                        // unlike programs variables use a 4 digit year, programs use a 2 digit year for some reason
-                        if ( pvalue["event_3"] ) { pvalue["event_4"] = pvalue["event_3"]; }
-                        if ( pvalue["event_2"] ) { pvalue["event_3"] = pvalue["event_2"]; }
-                        if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
-                        if ( array_key_exists("ts", varobj) && is_array(varobj.ts) ) {
-                            var lrun = varobj.ts[0];
-                            var d2 = new Date(lrun.substring(4,6)+"/"+lrun.substring(6,8)+"/"+lrun.substring(0,4)+lrun.substring(8));
-                            var goodts = d2.toLocaleDateString() + " " +  d2.toLocaleTimeString();
-                            pvalue["event_1"] = goodts;
-                        } else {
-                            pvalue["event_1"] = timestr;
-                        }
-
+                        pvalue = updateTimeStamp(subid, pvalue);
                         pushClient(userid, bid, devtype, subid, pvalue);
-                        
                         pvalue.subid = subid;
                         processRules(userid, device.id, bid, devtype, subid, pvalue, "processMsg");
                         delete pvalue.subid;
 
                         // update the DB
-                        if ( DEBUG9 ) {
-                            console.log( (ddbg()), "ISY webSocket updated node: ", bid, " trigger:", control[0], " varobj: ", varobj, " subid: ", subid, " pvalue: ", pvalue);
-                        }
                         var pvalstr = encodeURI2(pvalue);
                         mydb.updateRow("devices", {pvalue: pvalstr}, "userid = "+userid+" AND id = "+device.id)
-                        .then( () => {
+                        .then( res => {
+                            if ( DEBUG9 ) {
+                                console.log( (ddbg()), "ISY webSocket updated: ", bid, " trigger:", control[0], " subid: ", subid, " pvalue: ", pvalstr, " dbresult: ", res);
+                            }
                         })
                         .catch( reason => {
                             console.log( (ddbg()), reason);
@@ -6968,7 +6871,7 @@ function processIsyMessage(userid, jsondata) {
             var idsymbol = eventInfo[0]["id"][0].toString().trim();
             var len = 4 - idsymbol.length;
             var bid = "prog_" + "0000".substring(0,len) + idsymbol;
-            var subid = "status";
+            var subid = "status_";
 
             mydb.getRow("devices","*", "userid = "+userid+" AND deviceid = '"+bid+"'")
             .then(results => {
@@ -6991,12 +6894,6 @@ function processIsyMessage(userid, jsondata) {
                     d = new Date(lrun.substring(2,4)+"/"+lrun.substring(4,6)+"/"+lrun.substring(0,2)+lrun.substring(6));
                     timestr = d.toLocaleDateString() + " " +  d.toLocaleTimeString();
                     pvalue["lastFinishTime"] = timestr;
-
-                    // set our rolling event log
-                    if ( pvalue["event_3"] ) { pvalue["event_4"] = pvalue["event_3"]; }
-                    if ( pvalue["event_2"] ) { pvalue["event_3"] = pvalue["event_2"]; }
-                    if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
-                    pvalue["event_1"] = pvalue["lastRunTime"];
 
                     // use decoder ring documented for ISY_program events
                     if ( array_key_exists("s", eventInfo[0]) ) {
@@ -7022,19 +6919,20 @@ function processIsyMessage(userid, jsondata) {
                     } else if ( array_key_exists("nr", eventInfo[0])  ) {
                         pvalue["runAtStartup"] = "false";
                     }
-                    pushClient(userid, bid, devtype, "lastRunTime", pvalue);
 
+                    pvalue = updateTimeStamp(subid, pvalue);
+                    pushClient(userid, bid, devtype, "lastRunTime", pvalue);
                     pvalue.subid = subid;
                     processRules(userid, device.id, bid, devtype, subid, pvalue, "processMsg");
                     delete pvalue.subid;
 
                     // update the DB
-                    if ( DEBUG9 ) {
-                        console.log( (ddbg()), "ISY webSocket updated program: ", bid, " pvalue: ", device);
-                    }
                     var pvalstr = encodeURI2(pvalue);
                     mydb.updateRow("devices", {pvalue: pvalstr}, "userid = "+userid+" AND id = "+device.id)
-                    .then( () => {
+                    .then( res => {
+                        if ( DEBUG9 ) {
+                            console.log( (ddbg()), "ISY webSocket updated: ", bid, " pvalue: ", pvalstr, " dbres: ", res);
+                        }
                     })
                     .catch( reason => {
                         console.log( (ddbg()), reason);
@@ -8881,9 +8779,6 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                         if ( !newpvalue ) {
                             newpvalue = {};
                         }
-                        // if ( typeof newpvalue.count === "undefined" ) {
-                        //     newpvalue.count = "0";
-                        // }
                     } else {
                         newpvalue = {};
                     }
@@ -9127,8 +9022,7 @@ function queryHub(device, pname) {
                         var nodeid = result.nodeInfo.node[0]["address"];
                         if ( nodeid ) {
                             var props = result.nodeInfo.properties[0].property;
-                            var pvaluestr = setIsyFields(nodeid, device, props);
-                            var pvalue = decodeURI2(pvaluestr);
+                            var pvalue = setIsyFields(nodeid, device, props);
                             resolve(pvalue);
                         } else {
                             throw "nodeid invalid while trying to read node from ISY in getNodeQueryResponse";
@@ -12634,7 +12528,7 @@ GLB.dbinfo = {
     "service": "none"
 };
 GLB.dbinfo.hubs = { Hubitat: "Hubitat", ISY: "ISY" };
-GLB.dbinfo.donate = true;
+GLB.dbinfo.donate = false;
 GLB.dbinfo.enablerules = true;
 
 // read config file if one exists
