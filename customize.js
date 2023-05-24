@@ -165,13 +165,10 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
                 cm_Globals.tileid = null;
                 // cm_Globals.thingidx = null;
 
-                // only reload if edit window isn't open
-                // which will be true if we invoked the customizer from the edit window
-                if ( cm_Globals.reload && ( typeof modalWindows["modalid"] === "undefined" || modalWindows["modalid"] === 0 ) ) {
-                    // location.reload(true);
+                // only reload if we made changes
+                closeModal("modalcustom");
+                if ( cm_Globals.reload  ) {
                     window.location.href = cm_Globals.returnURL;
-                } else {
-                    priorOpmode = "Edit";
                 }
             },
             // function invoked upon starting the dialog

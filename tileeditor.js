@@ -102,7 +102,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
     var dodisplay = function() {
         var pos = {top: 100, left: 200, zindex: 998};
         // console.log(dialog_html);
-        createModal("modalid", dialog_html, "body", true, pos, 
+        createModal("modaledit", dialog_html, "body", true, pos, 
             // function invoked upon leaving the dialog
             function(ui, content) {
                 $("body").off("keydown");
@@ -113,6 +113,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
                     cancelTileEdit(str_type, thingindex);
                 }
                 tileCount = 0;
+                closeModal("modaledit");
             },
             // function invoked upon starting the dialog
             function(hook, content) {
@@ -124,7 +125,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
                         $("#modalcancel").click();
                     }
                 });
-                $("#modalid").draggable();
+                $("#modaledit").draggable();
             }
         );
     };
@@ -207,7 +208,13 @@ function getOnOff(str_type, subid, val) {
         onoff = ["locked","unlocked","unknown"];
     } else if ( subid.startsWith("motion") ) {
         onoff = ["active","inactive"];
-    } else if ( subid.startsWith("windowShade") ) {
+    } else if ( subid.startsWith("water") ) {
+        onoff = ["dry","wet"];
+    } else if ( subid.startsWith("smoke") ) {
+        onoff = ["clear","tested","detected"];
+    } else if ( subid.startsWith("carbonMonoxide") ) {
+        onoff = ["clear","tested","detected"];
+    } else if ( subid.startsWith("windowShade") || subid.startsWith("windowBlind") ) {
         onoff = ["open","closed","opening","closing","partially_open","unknown"];
     } else if ( subid.startsWith("pistonName" ) ) {
         onoff = ["firing","idle"];
@@ -218,19 +225,11 @@ function getOnOff(str_type, subid, val) {
             onoff = ["auto","on","followschedule","circulate"];
         }
     } else if ( subid.startsWith("thermostatMode" ) ) {
-        if ( hubType==="ISY" || str_type==="isy" ) {
-            onoff = ["Heat","Cool","Auto","Off"];
-        } else {
-            onoff = ["heat","cool","auto","off"];
-        }
+        onoff = ["heat","cool","auto","off","emergency_heat"];
     } else if ( str_type==="thermostat" && subid.startsWith("temperature" ) ) {
         onoff = ["idle","heating","cooling","off"];
     } else if ( subid.startsWith("thermostatOperatingState" ) ) {
-        if ( hubType==="ISY" || str_type==="isy" ) {
-            onoff = ["Idle","Heating","Cooling","Off"];
-        } else {
-            onoff = ["idle","heating","cooling","off"];
-        }
+        onoff = ["idle","heating","cooling","off","fan_only","pending_heat","pending_cool"];
     } else if ( subid.startsWith("musicstatus" ) || subid.startsWith("playbackStatus") ) {
         onoff = ["stopped","paused","playing"];
     } else if ( subid.startsWith("musicmute" ) || (str_type==="audio" && subid.startsWith("mute")) ) {
@@ -1659,9 +1658,6 @@ function saveCSSFile(str_type, thingindex, sheetContents, reload) {
 
 function cancelTileEdit(str_type, thingindex) {
     document.getElementById('customtiles').sheet = savedSheet;
-    // if ( cm_Globals.edited ) {
-    //     window.location.href = cm_Globals.returnURL;
-    // }
 }
 
 function resetInverted(selector) {

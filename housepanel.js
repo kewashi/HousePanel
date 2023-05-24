@@ -303,6 +303,10 @@ $(document).ready(function() {
         var tabcount = $("li.ui-tabs-tab").length;
 
         $(document).on("keydown",function(e) {
+            if ( priorOpmode === "Modal" ) {
+                return;
+            }
+
             if ( e.which===27  ){
                 execButton("operate");
             } else if ( e.which >= 65 && e.which <= 90 ) {
@@ -373,7 +377,6 @@ $(document).ready(function() {
                 if ( buttonid && $(ui).attr("class") === "menuitem" ) {
                     var buttonid = buttonid.substring(2);
                     execButton(buttonid);
-                } else {
                 }
             });
 
@@ -572,6 +575,7 @@ $(document).ready(function() {
                 var pos = {top: 100, left: 100};
                 createModal("modalexec","Perform " + textname + " operation... Are you sure?", "body", true, pos, function(ui, content) {
                     var clk = $(ui).attr("name");
+                    closeModal("modalexec");
                     if ( clk==="okay" ) {
                         evt.stopPropagation();
                         execButton(buttonid);
@@ -587,24 +591,15 @@ $(document).ready(function() {
     // this is button that returns to main HP page
     // it saves the default hub before returning if on the auth page
     if ( $("button.infobutton") ) {
-        $("button.infobutton").addClass("disabled").prop("disabled", true);
-        setTimeout(function() {
-            $("button.infobutton").removeClass("disabled").prop("disabled", false);
-        }, 200);
-            
+        // $("button.infobutton").addClass("disabled").prop("disabled", true);
+        // setTimeout(function() {
+        //     $("button.infobutton").removeClass("disabled").prop("disabled", false);
+        // }, 200);
         $("button.infobutton").on('click', function() {
-            if ( pagename=="auth" ) {
-                var defhub = $("#pickhub").val();
-                var hubtimer = $("input[name='hubtimer']").val();
-                var hubindex = $("input[name='hubindex']").val();
-                $.post(cm_Globals.returnURL, 
-                       {useajax: "setdefhub", userid: cm_Globals.options.userid, hubid: defhub, value: defhub, id: hubindex, attr: hubtimer}
-                );
-            }
-            window.location.href = cm_Globals.returnURL;
+            returnMainPage();
         });
     }
-    
+
     // handle interactions for main page
     // note that setupFilters will be called when entering edit mode
     if ( pagename==="main" ) {
@@ -643,6 +638,18 @@ $(document).ready(function() {
     }
 
 });
+
+function returnMainPage() {
+    if ( pagename=="auth" ) {
+        var defhub = $("#pickhub").val();
+        var hubtimer = $("input[name='hubtimer']").val();
+        var hubindex = $("input[name='hubindex']").val();
+        $.post(cm_Globals.returnURL, 
+                {useajax: "setdefhub", userid: cm_Globals.options.userid, hubid: defhub, value: defhub, id: hubindex, attr: hubtimer}
+        );
+    }
+    window.location.href = cm_Globals.returnURL;
+}
 
 function checkLogin() {
     var pwordre = /^\S{6,}$/;        // start with anything but no white space and at least 6 digits 
@@ -949,10 +956,13 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
     if ( typeof modalWindows[modalid]!=="undefined" && modalWindows[modalid]>0 ) { 
         return false; 
     }
-    
+    saveOpmode = priorOpmode;
+    priorOpmode = "Modal";
     modalWindows[modalid] = 1;
     modalStatus = modalStatus + 1;
-    console.log("modalid= ", modalid, "modaltag= ", modaltag, " addok= ", addok, " pos= ", pos, " modalWindows= ", modalWindows, " modalStatus= ", modalStatus, "\n content: ", modalcontent);
+
+    console.log("saveOpmode: ", saveOpmode, " modalid: ", modalid, " cnt: ", modalWindows[modalid]);
+    // console.log("modalid= ", modalid, "modaltag= ", modaltag, " addok= ", addok, " pos= ", pos, " modalWindows= ", modalWindows, " modalStatus= ", modalStatus, "\n content: ", modalcontent);
     
     var modaldata = modalcontent;
     var modalhook;
@@ -1049,10 +1059,12 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
         });
 
         $("#"+modalid).on("click",".dialogbtn", function(evt) {
+            // if a handler is provided it must make the call to closeModal otherwise the default response does that and only that
             if ( responsefunction ) {
                 responsefunction(this, modaldata);
+            } else {
+                closeModal(modalid);
             }
-            closeModal(modalid);
         });
     } else {
 
@@ -1065,9 +1077,8 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
             })
         }
 
-        console.log(">>>> addok: ", addok," hook: ", modalhook);
-
-        // body clicks turn of modals unless clicking on box itself
+        // console.log(">>>> addok: ", addok," hook: ", modalhook);
+        // body clicks turn off modals unless clicking on box itself
         // or if this is a popup window any click will close it
         $("body").off("click");
         $("body").on("click",function(evt) {
@@ -1096,6 +1107,9 @@ function closeModal(modalid) {
     modalWindows[modalid] = 0;
     modalStatus = modalStatus - 1;
     if ( modalStatus < 0 ) { modalStatus = 0; }
+
+    priorOpmode = saveOpmode;
+    console.log("priorOpmode = " + priorOpmode, " modalid: ", modalid);
 }
 
 function setupColors() {
@@ -1589,6 +1603,7 @@ function setupDraggable() {
                                         } 
                                     );
                                 }
+                                closeModal("modaladd");
                             });
                         } 
                     });
@@ -1678,7 +1693,7 @@ function setupDraggable() {
                 var pos = {top: 100, left: 10};
                 var pname = $("#showversion span#infoname").html();
 
-                createModal("modaladd","Remove: "+ tilename + " (thing # " + thingid + ") of type: "+thingtype+" from room "+panel+"? Are you sure?", "body" , true, pos, function(ui, content) {
+                createModal("modaldel","Remove: "+ tilename + " (thing # " + thingid + ") of type: "+thingtype+" from room "+panel+"? Are you sure?", "body" , true, pos, function(ui, content) {
                     var clk = $(ui).attr("name");
                     if ( clk==="okay" ) {
                         $.post(cm_Globals.returnURL, 
@@ -1700,6 +1715,7 @@ function setupDraggable() {
                         startPos.position = startPos.priorStart;
                         relocateTile(thing, thingtype, startPos);
                     }
+                    closeModal("modaldel");
                 });
             }
         });
@@ -1829,6 +1845,7 @@ function execForgotPassword() {
                     var userid = presult.id;
                     // console.log("user: ", presult);
                     createModal("loginfo","Login reset code sent and printed to log for user# " + userid + "<br>On the next screen please provide that code <br>along with the new password information.<br>", "body", "Done", pos, function(ui) {
+                        closeModal("loginfo");
                         window.location.href = cm_Globals.returnURL + "/forgotpw?userid="+userid;
                     });
                     // setTimeout(function() {
@@ -2044,6 +2061,7 @@ function execButton(buttonid) {
                         if ( clk==="okay" ) {
                             window.location.href = cm_Globals.returnURL;
                         }
+                        closeModal("loginfo");
                     });
                 // window.location.href = cm_Globals.returnURL;
             } else {
@@ -2163,7 +2181,7 @@ function execButton(buttonid) {
                 window.location.href = cm_Globals.returnURL;
             }
         } else {
-            console.log("Operate command has no effect in mode: ", priorOpmode);
+            // console.log("Operate command has no effect in mode: ", priorOpmode);
             return;
         }
         priorOpmode = "Operate";
@@ -2186,7 +2204,7 @@ function execButton(buttonid) {
                 createModal("modalpopup", presult, "body", false, {style: rstyle});
                 setTimeout(function() {
                     window.location.href = cm_Globals.returnURL;
-                },5000);
+                },4000);
             },2000);
         });
     
@@ -2260,6 +2278,7 @@ function setupButtons() {
             const pname = $("#panelname").val();
             createModal("modalhub","Delete Panel: " + pname + " Are you sure?", "body" , true, pos, function(ui) {
                 var clk = $(ui).attr("name");
+                closeModal("modalhub");
                 if ( clk==="okay" ) {
                     alert("Removing panel: " + pname);
                     $.post(cm_Globals.returnURL, 
@@ -2272,6 +2291,7 @@ function setupButtons() {
             const pname = $("#panelname").val();
             createModal("modalhub","Activate and switch to Panel: " + pname + " Are you sure?", "body" , true, pos, function(ui) {
                 var clk = $(ui).attr("name");
+                closeModal("modalhub");
                 if ( clk==="okay" ) {
                     alert("Using panel: " + pname);
                     $.post(cm_Globals.returnURL, 
@@ -2286,6 +2306,7 @@ function setupButtons() {
             const userid = cm_Globals.options.userid;
             createModal("modalhub","Remove User #" + userid + " uname: " + uname + " email: " + emailname + " Are you sure?", "body" , true, pos, function(ui) {
                 var clk = $(ui).attr("name");
+                closeModal("modalhub");
                 if ( clk==="okay" ) {
                     alert("Removing user: " + uname + " | " + emailname);
                     $.post(cm_Globals.returnURL, 
@@ -2293,6 +2314,16 @@ function setupButtons() {
                     );
                 }
             });
+        });
+        $(document).on("keydown", function(evt) {
+            if ( evt.which === 27 ) {
+                window.location.href = cm_Globals.returnURL;
+            }
+        });
+        $("div.filteroption div, div.filteroption table").on("keydown", function(evt) {
+            if ( evt.which === 27 ) {
+                window.location.href = cm_Globals.returnURL;
+            }
         });
 
 
@@ -2503,6 +2534,7 @@ function setupButtons() {
                             }
                         }
                     );
+                    closeModal("modalhub");
                 }
             });
             
@@ -2699,6 +2731,7 @@ function addEditLink() {
                     }
                 );
             }
+            closeModal("modaladd");
         });
         
     });
@@ -2711,7 +2744,7 @@ function addEditLink() {
         var clickid = $(evt.target).parent().attr("aria-labelledby");
         var pos = {top: 100, left: 10};
         var pname = $("#showversion span#infoname").html();
-        createModal("modaladd","Remove Room #" + roomnum + " with Name: " + roomname +" from HousePanel. Are you sure?", "body" , true, pos, function(ui, content) {
+        createModal("modaldel","Remove Room #" + roomnum + " with Name: " + roomname +" from HousePanel. Are you sure?", "body" , true, pos, function(ui, content) {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
                 
@@ -2733,6 +2766,7 @@ function addEditLink() {
                     }
                 );
             }
+            closeModal("modaldel");
         });
         
     });
@@ -2767,6 +2801,7 @@ function addEditLink() {
                     }
                 );
             }
+            closeModal("modaladd");
         });
         
     });    
@@ -3501,6 +3536,7 @@ function setupPage() {
                 var pos = {top: 100, left: 100};
                 createModal("modalexec","<p>Perform " + trigger + " operation ... Are you sure?</p>", "body", true, pos, function(ui) {
                     var clk = $(ui).attr("name");
+                    closeModal("modalexec");
                     if ( clk==="okay" ) {
                         execButton(trigger);
                     }
@@ -3550,6 +3586,7 @@ function setupPage() {
         } else if ( subid==="color" || 
                     (subid.startsWith("Int_") && !subid.endsWith("-up") && !subid.endsWith("-dn") )|| 
                     (subid.startsWith("State_") && !subid.endsWith("-up") && !subid.endsWith("-dn") ) ||
+                    subid==="_push" || subid==="_hold" || subid==="_doubleTap" || subid==="_release" || subid==="_docmd" ||
                     subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" ||
                     subid==="heatingSetpoint" || subid==="coolingSetpoint" || 
                     subid==="ecoHeatPoint" || subid==="ecoCoolPoint" ||
@@ -3564,6 +3601,7 @@ function setupPage() {
                 var pos = {top: ttop, left: tpos.left};
                 createModal("modalexec","<p>Perform " + trigger + " operation</p><p>Are you sure?</p>", "body", true, pos, function(ui) {
                     var clk = $(ui).attr("name");
+                    closeModal("modalexec");
                     if ( clk==="okay" ) {
                         evt.stopPropagation();
                         processClick(that, thingname, ro, thevalue);
@@ -3622,6 +3660,7 @@ function checkPassword(tile, thingname, pw, ro, thevalue, yesaction) {
         } else {
             console.log("Protected tile [" + thingname + "] access cancelled.");
         }
+        closeModal("modalexec");
     },
     // after box loads set focus to pw field
     function(hook, content) {
@@ -3646,31 +3685,33 @@ function getNewValue(tile, thingname, ro, subid, thevalue) {
     var pos = {top: ttop, left: tpos.left};
     var htmlcontent;
     htmlcontent = "<p>Enter new value for tile: " + thingname + "</p>";
-    htmlcontent += "<div class='ddlDialog'><label for='userpw'>" + subid + ":</label>";
+    htmlcontent += "<div class='ddlDialog'><label for='newsubidValue'>" + subid + ":</label>";
     htmlcontent += "<input class='ddlDialog' id='newsubidValue' type='text' size='20' value='" + thevalue + "' />";
     htmlcontent += "</div>";
     
     createModal("modalexec", htmlcontent, "body", true, pos, 
     function(ui) {
         var clk = $(ui).attr("name");
-        priorOpmode = "Operate";
+        // priorOpmode = "Operate";
         if ( clk==="okay" ) {
             thevalue = $("#newsubidValue").val();
+            console.log("thevlaue = ", thevalue);
             processClick(tile, thingname, ro, thevalue);
         }
+        closeModal("modalexec");
     },
     // after box loads set focus to field
     function(hook, content) {
-        priorOpmode = "Modal";
+        // priorOpmode = "Modal";
         $("#newsubidValue").focus();
         $("#newsubidValue").off("keydown");
         $("#newsubidValue").on("keydown",function(e) {
             if ( e.which===13  ){
-                priorOpmode = "Operate";
+                // priorOpmode = "Operate";
                 $("#modalokay").click();
             }
             if ( e.which===27  ){
-                priorOpmode = "Operate";
+                // priorOpmode = "Operate";
                 $("#modalcancel").click();
             }
         });
@@ -3741,6 +3782,10 @@ function processClick(that, thingname, ro, thevalue) {
     var hubtype = $(tile).attr('hubtype') || "";
     var pname = $("#showversion span#infoname").html();
     var targetid;
+    if ( !subid ) {
+        return;
+    }
+
     if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
         var slen = subid.length;
         targetid = '#a-'+aid+'-'+subid.substring(0,slen-3);
@@ -4029,7 +4074,7 @@ function processClick(that, thingname, ro, thevalue) {
         // if an object is returned then show it in a popup dialog
         // removed this behavior since it is confusing - only do it above for passive tiles
         // values returned from actions are pushed back to GUI from server via pushClient call
-        // alert("API call: " + ajaxcall + " bid: " + bid + " type: " + thetype + " value: " + thevalue);
+        // alert("API call: " + ajaxcall + " bid: " + bid + " type: " + thetype + " value: " + thevalue + " subid: " + realsubid + " hint: " + hint + " hubid: " + hubid);
 
         $.post(cm_Globals.returnURL, 
             {useajax: ajaxcall, userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: thevalue, hint: hint,

@@ -105,46 +105,53 @@ GLB.ignoredISY = [
     // switch inludes 4.16.x to support Zwave switches that show up with this hint
 GLB.mainISYMap = {
     "isy":         [{"ST": "ST"},                                                      {"_query":"QUERY","_queryall":"QUERYALL","_discover":"DISCOVER"}, "0.0." ],
+
     "switch":      [{"GV0": "status_", "ST": "switch"},                                {"_query":"QUERY","_on":"DON","_off":"DOF","switch":"ST","ST:on":"DON","ST:off":"DOF"}, ["1.1.","4.16."] ],
-    "switchlevel": [{"GV0": "status_", "ST": "switch", "OL": "level"},                 {"_query":"QUERY","_on":"DON","_off":"DOF","level":"SET_BRI","_brighten":"BRIGHTEN","_dim":"DIM",
+    "switchlevel": [{"GV0": "status_", "ST": "switch", "OL": "level"},                 {"_query":"QUERY","_on":"DON","_off":"DOF","level":"SET_BRI","_dim":"DIM","_brighten":"BRIGHTEN",
                                                                                         "level-up":"BRIGHTEN","level-dn":"DIM","switch":"ST","ST:on":"DON","ST:off":"DOF"}, "1.2." ],
     "bulb":        [{"GV0": "status_", "ST": "switch", "OL": "level", "GV1":"color", 
-                     "GV2":"colorname", "GV3": "hue", "GV4":"saturation"}, 
-                                                                                       {"_query":"QUERY","_on":"DON","_off":"DOF","level":"SET_BRI","_brighten":"BRIGHTEN","_dim":"DIM",
-                                                                                        "hue":"SET_HUE","saturation":"SET_SAT","colorname":"SET_COLOR",
+                     "GV2":"colorname", "GV3": "hue", "GV4":"saturation"},             {"_query":"QUERY","_on":"DON","_off":"DOF","level":"SET_BRI","_dim":"DIM","_brighten":"BRIGHTEN",
+                                                                                        "hue":"SET_HUE","saturation":"SET_SAT",
                                                                                         "switch":"ST","ST:on":"DON","ST:off":"DOF"}, "1.3." ],
-    "button":      [{"GV0": "status_", "BATLVL": "battery", "ST": "button"},           {"_query":"QUERY","_push":"PUSH","_hold":"HOLD","_doubleTap":"DOUBLETAP","_release":"RELEASE"}, "1.4." ],
+    "button":      [{"GV0": "status_", "BATLVL": "battery", "ST": "numberOfButtons",
+                     "GV1": "pushed", "GV2":"held", "GV3":"doubleTapped"},             {"_query":"QUERY","_push":"1","_hold":"1","_doubleTap":"1"}, "1.4." ],
     "power":       [{"GV0": "status_", "ST": "switch", "CPW": "power", 
-                     "TPW":"energy", "CV":"voltage", "CC":"current"}, 
-                                                                                       {"_query":"QUERY","_on":"DON", "_off":"DOF"}, "1.5" ],
+                     "TPW":"energy", "CV":"voltage", "CC":"current"},                  {"_query":"QUERY","_on":"DON", "_off":"DOF"}, "1.5" ],
     "water":       [{"GV0": "status_", "BATLVL": "battery", "ST": "water"},            {"_query":"QUERY","_wet":"WET", "_dry":"DRY"}, "1.6" ],
+
     "contact":     [{"GV0": "status_", "BATLVL": "battery", "ST": "contact"},          {"_query":"QUERY","_open":"OPEN","_close":"CLOSE"}, "7.1" ],
     "motion":      [{"GV0": "status_", "BATLVL": "battery", "ST": "motion"},           {"_query":"QUERY"}, "7.2" ],
     "presence":    [{"GV0": "status_", "BATLVL": "battery", "ST": "presence"},         {"_query":"QUERY","_arrived":"ARRIVE","_departed":"DEPART"}, "7.3" ],
+    "cosensor":    [{"GV0": "status_", "BATLVL": "battery", "ST": "carbonMonoxide"},   {"_query":"QUERY","_clear":"CLEAR","_detected":"DETECTED","_test":"TEST"}, "7.4" ],
+    "co2sensor":   [{"GV0": "status_", "BATLVL": "battery", "CO2LVL":"carbonDioxide"}, {"_query":"QUERY"}, "7.5" ],
+    "smoke":       [{"GV0": "status_", "BATLVL": "battery", "ST": "smoke"},            {"_query":"QUERY","_clear":"CLEAR","_detected":"DETECTED","_test":"TEST"}, "7.6" ],
+
     "door":        [{"GV0": "status_", "BATLVL": "battery", "ST": "door"},             {"_query":"QUERY","_open":"OPEN","_close":"CLOSE","door":"ST","ST:open":"OPEN","ST:close":"CLOSE"}, "2.1" ],
     "garage":      [{"GV0": "status_", "BATLVL": "battery", "ST": "door"},             {"_query":"QUERY","_open":"OPEN","_close":"CLOSE","door":"ST","ST:open":"OPEN","ST:close":"CLOSE"}, "2.2" ],
     "shade":       [{"GV0": "status_", "BATLVL": "battery", "ST": "windowShade", 
-                     "OL": "position"}, 
-                                                                                       {"_query":"QUERY","_open":"OPEN","_close":"CLOSE","_stop":"STOP","position":"SET_POS",
-                                                                                        "_raise":"RAISE","_lower":"LOWER","windowShade":"ST","ST:open":"OPEN",
-                                                                                        "ST:close":"CLOSE","ST:STOP":"STOP"}, "2.3" ],
-    "valve":       [{"GV0": "status_", "BATLVL": "battery", "ST": "valve"},            {"_query":"QUERY", "_open":"OPEN","_close":"CLOSE"}, "2.4" ],
-    "lock":        [{"GV0": "status_", "BATLVL": "battery", "ST": "lock"},             {"_query":"QUERY","_unlock":"UNLOCK","_lock":"LOCK"}, "8.1" ],
-    "mode":        [{"GV0": "status_", "ST": "themode"},                               {"_query":"QUERY","_day":"SET_DAY", "_evening":"SET_EVENING", "_night":"SET_NIGHT", "_away":"SET_AWAY", "themode":"SET_HMODE",
-                                                                                        "themode":"ST","ST:Day":"SET_EVENING","ST:Evening":"SET_NIGHT","ST:Night":"SET_AWAY","ST:Away":"SET_DAY"}, "8.2" ],
+                     "OL": "position"},                                                {"_query":"QUERY","_open":"OPEN","_close":"CLOSE","_stop":"STOP","position":"SET_POS",
+                                                                                        "_raise":"RAISE","_lower":"LOWER","windowShade":"ST","ST:open":"OPEN","ST:close":"CLOSE"}, "2.3" ],
+    "valve":       [{"GV0": "status_", "BATLVL": "battery", "ST": "valve"},            {"valve":"ST","ST:open":"OPEN","ST:close":"CLOSE","_query":"QUERY","_open":"OPEN","_close":"CLOSE"}, "2.4" ],
+
+    "lock":        [{"GV0": "status_", "BATLVL": "battery", "ST": "lock"},             {"_query":"QUERY","_unlock":"UNLOCK","_lock":"LOCK","lock":"ST","ST:lock":"UNLOCK","ST:unlock":"LOCK"}, "8.1" ],
+    "mode":        [{"GV0": "status_", "MODE": "themode"},                             {"_query":"QUERY","_day":"SET_DAY", "_evening":"SET_EVENING", "_night":"SET_NIGHT", "_away":"SET_AWAY", "themode":"SET_HMODE",
+                                                                                        "themode":"MODE","MODE:Day":"SET_EVENING","MODE:Evening":"SET_NIGHT","MODE:Night":"SET_AWAY","MODE:Away":"SET_DAY"}, "8.2" ],
+    "hsm":          [{"GV0": "status_", "ST": "status"},                               {"_query":"QUERY","_armaway":"armAway","_armHome":"armHome","_armNight":"armNight",
+                                                                                        "_disarm":"disarm","_disarmAll":"disarmAll","_cancelAlerts":"cancelAlerts"}, "8.3" ],
     "thermostat":  [{"GV0": "status_", "BATLVL": "battery", "ST": "switch", 
                     "CLITEMP":"temperature", "CLIHUM": "humidity", 
                     "CLISPH": "heatingSetpoint", "CLISPC": "coolingSetpoint", 
                     "CLIMD": "thermostatMode", "CLIHCS": "thermostatOperatingState", 
                     "CLIFS": "thermostatFanMode", "CLIFRS": "thermostatFanSetting", 
-                    "CLISMD": "thermostatHold"}, 
-                                                                                       {"_query":"QUERY", "heatingSetpoint":"SET_HEAT", "heatingSetpoint-up":"HUP", "heatingSetpoint-dn":"HDN",
+                    "CLISMD": "thermostatHold"},                                       {"_query":"QUERY", "heatingSetpoint":"SET_HEAT", "heatingSetpoint-up":"HUP", "heatingSetpoint-dn":"HDN",
                                                                                         "coolingSetpoint":"SET_COOL", "coolingSetpoint-up":"CUP", "coolingSetpoint-dn":"CDN",
                                                                                         "thermostatMode":"SET_TMODE", "thermostatFanMode":"SET_FMODE"}, "5.1" ],
-    "temperature": [{"GV0": "status_", "BATLVL": "battery", "TEMPOUT": "temperature"}, {"_query":"QUERY"}, "5.2" ], 
+    "temperature": [{"GV0": "status_", "BATLVL": "battery", "TEMPOUT": "temperature",
+                     "CLIHUM":"humidity"},                                             {"_query":"QUERY"}, "5.2" ], 
     "illuminance": [{"GV0": "status_", "BATLVL": "battery", "LUMIN": "illuminance"},   {"_query":"QUERY"}, "5.3" ],
-    "cosensor":    [{"GV0": "status_", "BATLVL": "battery", "CO": "cosensor"},         {"_query":"QUERY"}, "5.4" ],
-    "co2sensor":   [{"GV0": "status_", "BATLVL": "battery", "CO2LVL": "co2sensor"},    {"_query":"QUERY"}, "5.5" ]
+    "other":       [{"GV0":"status_","BATLVL":"battery","ST":"switch","OL":"level"},   {"_query":"QUERY"}, "9.1" ],
+    "actuator":    [{"GV0":"status_","BATLVL":"battery","ST":"switch","OL":"level"},   {"_query":"QUERY","_docmd":"DOCMD"}, "9.2" ]
+
     // "music":       [ {"GV0": "status_", "ST": "status"}, ["previousTrack","pause","play","stop","nextTrack","volumeDown","volumeUp","mute","unmute"}, "9.1" ]
 
 };
@@ -164,14 +171,16 @@ GLB.indexMap = {
                            9:"3.0 min", 10:"2.5 min", 11:"2.0 min", 12:"1.5 min", 13:"1.0 min", 14:"47.0 sec", 15:"43.0 sec", 16:"38.5 sec",
                            17:"34.0 sec", 18:"32.0 sec", 19:"30.0 sec", 20:"28.0 sec", 21:"26.0 sec", 22:"23.5 sec", 23:"21.5 sec", 24:"19.0 sec",
                            25:"8.5 sec", 26:"6.5 sec", 27:"4.5 sec", 28:"2.0 sec", 29:"0.5 sec", 30:"0.3 sec", 31:"0.2 sec", 32:"0.1 sec"} ],
-    "button":    ["ST",  {1:"pushed", 2: "held", 3:"doubleTapped", 4:"released"} ],
     "water":     ["ST",  {1:"dry", 2: "wet", 3:"unknown"} ],
-    "motion":    ["ST",  {0:"inactive", 1:"active"} ],
-    "presence":  ["ST",  {0:"absent", 1:"present"} ],
+    "motion":    ["ST",  {1:"inactive", 2:"active", 3:"unknown"} ],
+    "presence":  ["ST",  {1:"present", 2:"absent", 3:"unknown"} ],
     "door":      ["ST",  {1:"open", 2:"closed", 3:"opening", 4:"closing", 5:"unknown"} ],
     "garage":    ["ST",  {1:"open", 2:"closed", 3:"opening", 4:"closing", 5:"unknown"} ],
     "shade":     ["ST",  {1:"open", 2:"closed", 3:"partially_open", 4:"unknown"} ],
-    "mode":      ["ST",  {1:"Day", 2:"Evening", 3:"Night", 4:"Away"} ]
+    "cosensor":  ["ST",  {1:"clear", 2:"tested", 3:"detected", 4:"unknown"} ],
+    "smoke":     ["ST",  {1:"clear", 2:"tested", 3:"detected", 4:"unknown"} ],
+    "hsm":       ["ST",  {1:"disarmed", 2:"armedAway", 3:"armedHome", 4:"armedNight", 5:"armingAway", 6:"armingHome", 7:"armingNight", 8:"allDisarmed", 9:"Not Installed", 10:"unknown"} ],
+    "mode":      ["MODE",{1:"Day", 2:"Evening", 3:"Night", 4:"Away", 3:"unknown"} ]
 };
 
 GLB.ISYcolors = [
@@ -619,7 +628,7 @@ function getTypes() {
 
     // add hubitat specific types
     if ( array_key_exists("Hubitat", GLB.dbinfo.hubs) ) {
-        var hetypes = ["hsm","smoke","piston","music","audio"];
+        var hetypes = ["hsm","piston","music","audio","actuator","other"];
         hetypes.forEach( key => {
             if ( !thingtypes.includes(key) ) {
                 thingtypes.push(key);
@@ -4200,8 +4209,8 @@ async function makeNewConfig(userid) {
     configs.push( await addConfigItem(userid, "rules", "true") );
     configs.push( await addConfigItem(userid, "timezone", "America/Los_Angeles") );
     configs.push( await addConfigItem(userid, "phototimer","0") );
-    configs.push( await addConfigItem(userid, "fast_timer","30") );        // timers for sonos polling
-    configs.push( await addConfigItem(userid, "slow_timer","300") );       // timers for images, frames, customs, blanks, videos polling
+    configs.push( await addConfigItem(userid, "fast_timer","30") );           // timers for music and others requesting fast poll
+    configs.push( await addConfigItem(userid, "slow_timer","300") );          // timers for images, frames, customs, blanks, videos polling
     configs.push( await addConfigItem(userid, "fcastcity", "san-carlos") );   // addConfigItem(userid, "fcastcity") || "ann-arbor" );
     configs.push( await addConfigItem(userid, "fcastregion","San Carlos") );  // addConfigItem(userid, "fcastregion","Ann Arbor") );
     configs.push( await addConfigItem(userid, "fcastcode","37d51n122d26") );  // addConfigItem(userid, "fcastcode","42d28n83d74") );
@@ -7991,8 +8000,8 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
             var promise = new Promise( function(resolve, reject) {
 
                 curl_call(host, header, nvpreq, false, "POST", function(err, res, body) {
-                    if ( DEBUG7 ) {
-                        console.log( (ddbg()), "curl response: body: ", body, " params: ", nvpreq );
+                    if ( DEBUG7 || DEBUGtmp ) {
+                        console.log( (ddbg()), "curl response: err: ", err, " body: ", body, " params: ", nvpreq );
                     }
                     if ( !err || err===200 ) {
                         if ( !body ) {
@@ -8501,6 +8510,32 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                     } else {
                         result = "error - program: " + subid + " not supported for ISY programs";
                     } 
+
+                } else if ( subid==="color" ) {
+                    var color = swval;
+                    var i1 = color.indexOf(",");
+                    var i2 = color.indexOf(",", i1+1);
+                    var i3 = color.indexOf(")");
+                    var h = Math.round(parseInt(color.substring(4,i1)) * 100 / 360);
+                    var s = parseInt(color.substring(i1+1,i2));
+                    var v = parseInt(color.substring(i2+1,i3));
+                    console.log(">>>> hsv: ", h, s, v);
+
+                    // set hue based on color
+                    cmd = "/nodes/" + swid + "/cmd/SET_HUE/" + h.toString();
+                    result = cmd;
+                    curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+
+                    // set sat based on color
+                    cmd = "/nodes/" + swid + "/cmd/SET_SAT/" + s.toString();
+                    result = result + "\n" + cmd;
+                    curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+
+                    // set level based on color
+                    cmd = "/nodes/" + swid + "/cmd/SET_BRI/" + v.toString();
+                    result = result + "\n" + cmd;
+                    curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
+
                 } else {
 
                     // get the commands for this device
@@ -8529,170 +8564,6 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                     }
                 }
                 return result;
-                   
-                /*
-                switch(subid) {
-    
-                    case "level":
-                        // for now semd both level commands since either could be expected
-                        // one is for Insteon other is for Polyglot nodes
-                        // later we will flag this in the item
-                        var cmd1 = "/nodes/" + swid + "/cmd/SETLVL/" + swval;
-                        isyresp["level"] = swval;
-                        curl_call(endpt + cmd1, isyheader, false, false, "GET", getNodeResponse);
-        
-                        // convert percentage to 0 - 256 range for Insteon
-                        var irange = Math.floor(parseInt(swval) * 255 / 100);
-                        var cmd2 = "/nodes/" + swid + "/cmd/DON/" + irange;
-                        isyresp["switch"] = "DON";
-                        curl_call(endpt + cmd2, isyheader, false, false, "GET", getNodeResponse);
-        
-                        // comment this code to preserve the prior dimmer setting; 
-                        // otherwise the onlevel is set to current level
-                        // the default behavior for Insteon lights would be to comment this
-                        // setTimeout(function() {
-                        //     var cmd3 = "/nodes/" + swid + "/cmd/OL/" + irange;
-                        //     isyresp["onlevel"] = swval;
-                        //     curl_call(endpt + cmd3, isyheader, false, false, "GET", getNodeResponse);
-                        // }, 200 );
-                        break;
-        
-                    case "onlevel":    
-                        // convert percentage to 0 - 256 range for Insteon
-                        var irange = Math.floor(parseInt(swval) * 255 / 100);
-                        var cmd3 = "/nodes/" + swid + "/set/OL/" + irange;
-                        isyresp["onlevel"] = swval;
-                        curl_call(endpt + cmd3, isyheader, false, false, "GET", getNodeResponse);
-        
-                        // pause before we turn on the light to prevent slider from toggling
-                        setTimeout(function() {
-                            var cmd2 = "/nodes/" + swid + "/cmd/DON/" + irange;
-                            isyresp["switch"] = "DON";
-                            curl_call(endpt + cmd2, isyheader, false, false, "GET", getNodeResponse);
-                        }, 200 );
-                        break;
-            
-                    case "switch":
-                    case "DOF":
-                    case "DON":
-                        // handle toggle command - note that the GUI will never produce a toggle swval command
-                        // but the RULE logic can and so can users when using api calls
-                        if ( swval==="toggle" ) {
-                                var currentval = pvalue[subid];
-                                if ( currentval==="DON" || currentval==="on" ) {
-                                    swval = "DOF";
-                                } else {
-                                    swval = "DON";
-                                }
-                        }
-                        cmd = "/nodes/" + swid + "/cmd/" + swval;
-                        isyresp[subid] = swval;
-                        curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
-                        break;
-            
-                    case "DOF":
-                        cmd = "/nodes/" + swid + "/cmd/DOF";
-                        isyresp[subid] = swval;
-                        curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
-                        break;
-        
-                    case "heatingSetpoint-up":
-                    case "coolingSetpoint-up":
-                    case "heatingSetpoint-dn":
-                    case "coolingSetpoint-dn":
-                        // do some fancy footwork here to get either CLISPH or CLISPC so we can use same code
-                        var hcletter = subid.substr(0,1).toUpperCase();
-                        var clicommand = "CLISP" + hcletter;
-        
-                        // determine if up or down
-                        var isup = subid.substr(-2);
-        
-                        // get existing value and then proceed with adjust if it is a number
-                        var newval = extractTemp(swval);
-                        if ( !isNaN(newval) ) { 
-                            newval = (isup === "up") ? newval + 1 : newval - 1;
-                            cmd = "/nodes/" + swid + "/cmd/" + clicommand + "/" + newval.toString();
-                            isyresp[subid] = newval;
-                            curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
-                        } else {
-                            result = "error - ISY thermostat set point cannot be interpreted.  value: " + swval;
-                            console.log( (ddbg()), result);
-                        }
-                        break;
-            
-                    default:
-        
-                        // handle arrows for variable changes
-                        if ( hint==="ISY_variable" && subid.startsWith("Int_") ) {
-                            // get the real subid that the arrows are pointing toward
-                            var intvar = parseInt(swval);
-                            if ( !isNaN(intvar) ) {
-                                if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
-                                    var varnum = subid.substr(4, subid.length-7);
-                                    var realsubid = subid.substr(0, subid.length-3);
-                                    intvar = subid.endsWith("-up") ? intvar + 1 : intvar - 1;
-                                } else {
-                                    varnum = subid.substr(4);
-                                    realsubid = subid;
-                                }
-                                cmd = "/vars/set/1/" + varnum + "/" + intvar.toString();
-                                isyresp[realsubid] = intvar.toString();
-                                curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
-                            } else {
-                                result = "error - Int variable setting invalid: " + swval;
-                            }
-        
-                        } else if ( hint==="ISY_variable" && subid.startsWith("State_") ) {
-                            // get the real subid that the arrows are pointing toward
-                            var intvar = parseFloat(swval);
-                            // var prec = 0;
-                            if ( !isNaN(intvar) ) {
-                                if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
-                                    var varnum = subid.substr(6, subid.length-9);
-                                    var realsubid = subid.substr(0, subid.length-3);
-                                    intvar = subid.endsWith("-up") ? intvar + 1 : intvar - 1;
-                                } else {
-                                    varnum = subid.substr(6);
-                                    realsubid = subid;
-                                    // intvar++;
-                                    // prec = parseInt(pvalue["prec_State_"+varnum]);
-                                    // if ( ! isNaN(prec) && prec > 0 ) {
-                                    //     var pow10 = Math.pow(10,prec);
-                                    //     intvar = Math.round(intvar*pow10) / pow10;
-                                    // }
-                                }
-                                cmd = "/vars/set/2/" + varnum + "/" + intvar.toString();
-                                isyresp[realsubid] = intvar.toString();
-                                curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
-                            } else {
-                                result = "error - State variable setting invalid: " + swval;
-                            }
-        
-                        // run commands
-                        } else if ( hint==="ISY_program" ) {
-                            const progarr = ["run","runThen","runElse","stop","enable","disable"];
-                            if ( progarr.includes(subid) ) {
-                                var progid = subdevice.deviceid;
-                                progid = progid.substring(5);
-                                cmd = "/programs/" + progid + "/" + subid;
-                                curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
-                            } else {
-                                result = "error - program: " + subid + " not supported for ISY programs";
-                            } 
-                        } else {
-                            // try setting a property
-                            try {
-                                cmd = "/nodes/" + swid + "/set/" + subid + "/" + swval;
-                                // isyresp[subid] = swval;
-                                curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
-                            } catch (e) {
-                                console.log( (ddbg()), result, " value: ", swval, " msg: ", e);
-                                result = "error - property: " + subid + " not supported for ISY hubs";
-                            }
-                        }
-                    // end of switch
-                }
-*/    
             })
             .catch(reason => {
                 console.log( (ddbg()), "callHub ISY - failed to get device: ", reason, "\n swid: ", swid, " subid: ", subid);
@@ -8936,27 +8807,12 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
      
     }
 
-    // I don't think I need to use this because the ISY pushes a webSocket that I use
-    // to do the same thing in the processIsyMessage function
+    // I don't need to use this because the ISY pushes a webSocket that I use
+    // to do the same thing in the processIsyMessage function so we just report the result in a debug
     function getNodeResponse(err, res, body) {
-        console.log( (ddbg()), ">>>> getNodeResponse: ", body);
-    //     if ( err ) {
-    //         console.log( (ddbg()), "error calling ISY node: ", err);
-    //     } else {
-
-    //         xml2js(body, function(xmlerr, result) {
-    //             var rres = result.RestResponse.status[0];
-    //             rres = rres ? rres.toString() : "";
-    //             var succeed = result.RestResponse["$"]["succeeded"].toString();
-    //             if ( DEBUGisy ) {
-    //                 console.log( (ddbg()), "rres: ", rres, succeed, " swid: ", swid, " swtype: ", swtype, " subid: ", subid, " isyrep: ", isyresp, " call returned: ", UTIL.inspect(result, false, null, false));
-    //             }
-
-    //             if ( rres === "200" && succeed === "true" ) {
-    //                 getHubResponse(isyresp, "ISY");
-    //             }
-    //         });
-    //     }
+        if ( DEBUGisy ) {
+            console.log( (ddbg()),"getNodeResponse: ", body);
+        }
     }
 }
 
@@ -10488,9 +10344,9 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc+= "<input class=\"optioninp\" id=\"photoid\" name=\"phototimer\" type=\"number\"  min='0' max='300' step='5' value=\"" + phototimer + "\" /></div>";
         $tc += "<div><label class=\"optioninp\">Timezone: </label>";
         $tc += "<input id=\"newtimezone\" class=\"optioninp\" name=\"timezone\" size=\"20\" type=\"text\" value=\"" + timezone + "\"/></div>"; 
-        $tc += "<div><label class=\"optioninp\">Sonos polling timer: </label>";
+        $tc += "<div><label class=\"optioninp\" title=\"music art polling\">Fast polling timer: </label>";
         $tc += "<input class=\"optioninp\" name=\"fast_timer\" size=\"20\" type=\"text\" value=\"" + fast_timer + "\"/></div>"; 
-        $tc += "<div><label class=\"optioninp\">Default polling timer: </label>";
+        $tc += "<div><label class=\"optioninp\" title=\"Blanks, customs, frames, images polling\">Slow polling timer: </label>";
         $tc += "<input class=\"optioninp\" name=\"slow_timer\" size=\"20\" type=\"text\" value=\"" + slow_timer + "\"/></div>"; 
         $tc += "</div>";
 
