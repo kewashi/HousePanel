@@ -15,6 +15,7 @@
  * This is a Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history
+ * 05/24/2023 - change port to include a range so we can support more callbacks
  * 05/22/2023 - tweak buttons to be compatible with ISY node server
  * 05/20/2023 - add CO and CO2 sensor support
  * 05/17/2023 - remove momentaries and fix attribute checks
@@ -323,17 +324,20 @@ def settingsPage() {
             paragraph "Enable Pistons? You must have WebCore installed for this to work. Beta feature for Hubitat hubs."
             input (name: "usepistons", type: "bool", multiple: false, title: "Use Pistons?", required: false, defaultValue: false)
             paragraph "Specify these parameters to enable your panel to stay in sync with things when they change in your home. " +
-                      "This is not a hard requirement but if you don't provide the IP of where you are hositng your panel will get out of sync."
+                      "This is not a hard requirement but if you don't provide the IP of where you are hositng your panel will get out of sync. " +
+                      "A single Port number or a range can be provided, such as 8561-8563. If a range is given all ports inside the range will be updated." +
+                      "Ranges are inclusive, so 8561-8564 will update ports 8561, 8562, 8563, and 8564"
+                      "ISY node server users should make sure to set the restPort to a value inside one of theese ranges"
             input "webSocketHost", "text", title: "Host IP", defaultValue: "192.168.4.4", required: false
-            input "webSocketPort", "text", title: "Port", defaultValue: "8560", required: false
+            input "webSocketPort", "text", title: "Port or Range", defaultValue: "8560", required: false
             paragraph "The Alternate 2nd and 3rd Host IP and Port values are used to send hub pushes to additional installations of HousePanel. " +
                     "If left as 0 additional hub pushes will not occur. Only use this if you are hosting two or three versions of HP " +
                     "that need to stay in sync with this smart home hub. This app also supports the ISY Hubitat Node Server, and for that case " +
                     "you should set one of these to the port used there. Otherwise, this setting is mostly used for development debugging and can be safely left as 0"
             input "webSocketHost2", "text", title: "2nd Host IP", defaultValue: "0", required: false
-            input "webSocketPort2", "text", title: "2nd Port", defaultValue: "0", required: false
+            input "webSocketPort2", "text", title: "2nd Port or Range", defaultValue: "0", required: false
             input "webSocketHost3", "text", title: "3rd Host IP", defaultValue: "0", required: false
-            input "webSocketPort3", "text", title: "3rd Port", defaultValue: "0", required: false
+            input "webSocketPort3", "text", title: "3rd Port or Range", defaultValue: "0", required: false
             input (
                 name: "configLogLevel",
                 title: "IDE Live Logging Level:\nMessages with this level and higher will be logged to the IDE.",
@@ -467,10 +471,10 @@ def initialize() {
     logger("Installed hub with settings: ${settings} ", "debug")
     
     def pattern = ~/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/
-    def portpatt = ~/\d+/
+    def portpatt = ~/\d{3,}-?(\d{3,})?/
 
     if ( (state.directIP.startsWith("http") || state.directIP ==~ pattern) && state.directPort ==~ portpatt ) {
-        postHub(state.directIP, state.directPort, "initialize", "", "", "", "", "")
+        postHubRange(state.directIP, state.directPort, "initialize", "", "", "", "", "")
         logger("state changes will be posted to HP at IP: ${state.directIP}:${state.directPort} ", "info")
 
     } else {
@@ -478,14 +482,14 @@ def initialize() {
     }
 
     if ( (state.directIP2.startsWith("http") || state.directIP2 ==~ pattern) && state.directPort2 ==~ portpatt ) {
-        postHub(state.directIP2, state.directPort2, "initialize", "", "", "", "", "")
+        postHubRange(state.directIP2, state.directPort2, "initialize", "", "", "", "", "")
         logger("state changes will also be posted to HP at: ${state.directIP2}:${state.directPort2} ", "info")
     } else {
         state.directIP2 = "0"
     }
 
     if ( (state.directIP3.startsWith("http") || state.directIP3 ==~ pattern) && state.directPort3 ==~ portpatt ) {
-        postHub(state.directIP3, state.directPort3, "initialize", "", "", "", "", "")
+        postHubRange(state.directIP3, state.directPort3, "initialize", "", "", "", "", "")
         logger("state changes will also be posted to HP at: ${state.directIP3}:${state.directPort3} ", "info")
     } else {
         state.directIP3 = "0"
@@ -972,9 +976,9 @@ def renameVariable(String oldName, String newName) {
     resp = getVariables(resp)
     def pvalue = resp[0]
 
-    postHub(state.directIP, state.directPort, "update", "Variables", vid, oldName, "variables", pvalue)
-    postHub(state.directIP2, state.directPort2, "update", "Variables", vid, oldName, "variables", pvalue)
-    postHub(state.directIP3, state.directPort3, "update", "Variables", vid, oldName, "variables", pvalue)
+    postHubRange(state.directIP, state.directPort, "update", "Variables", vid, oldName, "variables", pvalue)
+    postHubRange(state.directIP2, state.directPort2, "update", "Variables", vid, oldName, "variables", pvalue)
+    postHubRange(state.directIP3, state.directPort3, "update", "Variables", vid, oldName, "variables", pvalue)
 }
 
 // modified to only return one mode tile
@@ -3070,17 +3074,17 @@ def changeHandler(evt) {
 
             // for colors we have to set all parameters at the same time to avoid race conditions
             def colorarray = [h100, s, v, color]
-            postHub(state.directIP, state.directPort, "update", deviceName, deviceid, "color", devtype, colorarray)
-            postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, "color", devtype, colorarray)
-            postHub(state.directIP3, state.directPort3, "update", deviceName, deviceid, "color", devtype, colorarray)
+            postHubRange(state.directIP, state.directPort, "update", deviceName, deviceid, "color", devtype, colorarray)
+            postHubRange(state.directIP2, state.directPort2, "update", deviceName, deviceid, "color", devtype, colorarray)
+            postHubRange(state.directIP3, state.directPort3, "update", deviceName, deviceid, "color", devtype, colorarray)
 
             // set it to change color based on attribute change
             logger("color update: ${deviceName} id ${deviceid} type ${devtype} changed to ${color} by changing ${attr} to ${value}, h100: ${h100}, h: ${h}, s: ${s}, v: ${v} ", "info") 
         } else {
             // make the original attribute change
-            postHub(state.directIP, state.directPort, "update", deviceName, deviceid, attr, devtype, value)
-            postHub(state.directIP2, state.directPort2, "update", deviceName, deviceid, attr, devtype, value)
-            postHub(state.directIP3, state.directPort3, "update", deviceName, deviceid, attr, devtype, value)
+            postHubRange(state.directIP, state.directPort, "update", deviceName, deviceid, attr, devtype, value)
+            postHubRange(state.directIP2, state.directPort2, "update", deviceName, deviceid, attr, devtype, value)
+            postHubRange(state.directIP3, state.directPort3, "update", deviceName, deviceid, attr, devtype, value)
 
             logger("thing update: ${deviceName} id ${deviceid} type ${devtype} changed to ${value} by changing ${attr} to ${value}", "info")
         }
@@ -3098,9 +3102,9 @@ def modeChangeHandler(evt) {
     if (themode && deviceName && state?.directIP && state?.directPort) {
         def modeid = "${state.prefix}mode"
         logger("Sending new mode= ${themode} with id= ${modeid} to HousePanel clients", "debug")
-        postHub(state.directIP, state.directPort, "update", deviceName, modeid, "themode", "mode", themode)
-        postHub(state.directIP2, state.directPort2, "update", deviceName, modeid, "themode", "mode", themode)
-        postHub(state.directIP3, state.directPort3, "update", deviceName, modeid, "themode", "mode", themode)
+        postHubRange(state.directIP, state.directPort, "update", deviceName, modeid, "themode", "mode", themode)
+        postHubRange(state.directIP2, state.directPort2, "update", deviceName, modeid, "themode", "mode", themode)
+        postHubRange(state.directIP3, state.directPort3, "update", deviceName, modeid, "themode", "mode", themode)
     }
 }
 
@@ -3113,9 +3117,9 @@ def hsmStatusHandler(evt) {
     logger("New HSM= ${themode} with attr= ${attr} and name= ${deviceName} to HousePanel clients", "debug")
     if (themode && state?.directIP && state?.directPort) {
         def modeid = "${state.prefix}hsm"
-        postHub(state.directIP, state.directPort, "update", deviceName, modeid, "state", "hsm", themode)
-        postHub(state.directIP2, state.directPort2, "update", deviceName, modeid, "state", "hsm", themode)
-        postHub(state.directIP3, state.directPort3, "update", deviceName, modeid, "state", "hsm", themode)
+        postHubRange(state.directIP, state.directPort, "update", deviceName, modeid, "state", "hsm", themode)
+        postHubRange(state.directIP2, state.directPort2, "update", deviceName, modeid, "state", "hsm", themode)
+        postHubRange(state.directIP3, state.directPort3, "update", deviceName, modeid, "state", "hsm", themode)
     }
 }
 
@@ -3131,9 +3135,9 @@ def variableHandler(evt) {
         varname = varname.substring(9)
         logger("Variable changed, name = ${varname}, val = ${theval}", "debug")
 
-        postHub(state.directIP, state.directPort, "update", "Variables", vid, varname, "variable", theval)
-        postHub(state.directIP2, state.directPort2, "update", "Variables", vid, varname, "variable", theval)
-        postHub(state.directIP3, state.directPort3, "update", "Variables", vid, varname, "variable", theval)
+        postHubRange(state.directIP, state.directPort, "update", "Variables", vid, varname, "variable", theval)
+        postHubRange(state.directIP2, state.directPort2, "update", "Variables", vid, varname, "variable", theval)
+        postHubRange(state.directIP3, state.directPort3, "update", "Variables", vid, varname, "variable", theval)
     }
 }
 
@@ -3166,6 +3170,40 @@ def postHub(ip, port, msgtype, name, id, attr, type, value) {
             // ]
             // def result = hubitat.device.HubAction.newInstance(params)
             // sendHubCommand(result)
+        }
+    }
+}
+
+def postHubRange(ip, port, msgtype, name, id, attr, type, value) {
+    // use regex to get range - this code should work and is more general, but also slower
+    // def rangepatt = /(\d{2,})\s*\-\s*(\d{2,})?/
+    // def (range, port1, port2) = ( port =~ rangepatt )[0]
+    // if ( port1 && !port2 ) {
+    //     postHub(ip, port1, msgtype, name, id, attr, type, value)
+    // } else if ( port1 && port2 ) {
+    //     int i1 = Integer.parseInt(port1)
+    //     int i2 = IntegerparseInt(port2)
+    //     if ( i2 < i1 ) {
+    //         i2 = i1
+    //     }
+    //     for (int i = i1; i <= i2; i++ ) {
+    //         port = i.toString()
+    //         postHub(ip, port, msgtype, name, id, attr, type, value)
+    //     }
+    // }
+
+    def dashloc = port.indexOf("-")
+    if ( dashloc == -1 ) {
+        postHub(ip, port, msgtype, name, id, attr, type, value)
+    } else {
+        String port1 = port.substring(0, dashloc)
+        String port2 = port.substring(dashloc+1)
+        int i1 = Integer.parseInt(port1)
+        int i2 = Integer.parseInt(port2)
+        if ( i2 < i1 ) { i2 = i1 }
+        for (int i = i1; i <= i2; i++ ) {
+            port = i.toString()
+            postHub(ip, port, msgtype, name, id, attr, type, value)
         }
     }
 }
