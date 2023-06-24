@@ -101,11 +101,11 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
     // create a function to display the tile
     var dodisplay = function() {
         var pos = {top: 100, left: 200, zindex: 998};
-        // console.log(dialog_html);
         createModal("modaledit", dialog_html, "body", true, pos, 
             // function invoked upon leaving the dialog
             function(ui, content) {
                 $("body").off("keydown");
+                $("body").off("keypress");
                 var clk = $(ui).attr("name");
                 if ( clk==="okay" ) {
                     saveTileEdit(str_type, thingindex);
@@ -234,10 +234,10 @@ function getOnOff(str_type, subid, val) {
         onoff = ["stopped","paused","playing"];
     } else if ( subid.startsWith("musicmute" ) || (str_type==="audio" && subid.startsWith("mute")) ) {
         onoff = ["muted","unmuted"];
+    } else if ( subid.startsWith("presence_type" ) ) {
+        onoff = ["enter","leave","approach","away","left_enter","left_leave","right_enter","right_leave"];
     } else if ( subid.startsWith("presence" ) ) {
         onoff = ["present","absent","not_present"];
-    } else if ( str_type==="shm" && subid.startsWith("state" ) ) {
-        onoff = ["Away","Home","Night","Disarmed"];
     } else if ( str_type==="hsm" && subid.startsWith("state") ) {
         onoff = ["armedAway", "armingAway", "armedHome", "armingHome", "armedNight", "armingNight", "disarmed", "allDisarmed"];
     } else if ( str_type==="mode" && subid.startsWith("themode" ) ) {

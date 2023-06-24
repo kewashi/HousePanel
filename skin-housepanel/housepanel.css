@@ -62,7 +62,7 @@ div.thing {
     color: rgba(250, 250, 250, 1);
     cursor: default;
     width: 180px; 
-    height: 211px;
+    height: 210px;
     z-index: 1;
     background-repeat: no-repeat;
     border-radius: 5%;
@@ -363,7 +363,7 @@ div.thing.music-thing div.overlay.status,
 div.thing.music-thing div.overlay.music-controls,
 div.thing.music-thing div.overlay.mute,
 div.thing.music-thing div.overlay.currentAlbum,
-div.thing.music-thing div.overlay.currentArtist,
+div.thing.music-thing div.overlay.trackNumber,
 div.thing.music-thing div.overlay.mediaSource {
     display: none;
 }
@@ -688,16 +688,13 @@ div.thing.control-thing {
     background-color: rgba(255, 255, 255, 0.4);
     color: rgba(204, 204, 204, 1);
     width: 180px;
-    height: 211px;
-}
-div.thing.control-thing div.overlay div.control {
-    font-size: 11pt;
+    height: 210px;
 }
 
 /* clock styling */
 div.thing.clock-thing {
     width: 180px;
-    height: 211px;
+    height: 210px;
 }
 div.thing.clock-thing.analog {
     background-color: rgba(255, 255, 255, 0.7);
@@ -819,6 +816,7 @@ div.overlay.healthStatus, div.overlay.deltaT, div.overlay.duration, div.overlay.
 div.overlay.numberOfButtons, div.overlay.pushed, div.overlay.held, div.overlay.doubleTapped,
 div.overlay._poll, div.overlay._componentOff, div.overlay._componentOn, div.overlay._componentRefresh,
 div.overlay._componentSetColor, div.overlay._componentSetColorTemperature, div.overlay._componentSetLevel,
+div.overlay._childRefresh, div.overlay._childOn, div.overlay._childOff, div.overlay._childSetLevel,
 div._startLevelChange, div._stopLevelChange, div.event_1, div.event_2, div.event_3, div.event_4,
 div.hubMeshDisabled
 {

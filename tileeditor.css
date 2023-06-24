@@ -2040,7 +2040,7 @@ div.thing div.overlay div.arrow-dn {
 }
 div.thing div.overlay div.arrow-it {
     display: inline-block;
-    height: 32px; width: 32px;
+    height: 32px; width: 36px;
     margin-top: 5px;
 }
 div.thing div.overlay.enabled,
@@ -2054,7 +2054,45 @@ div.thing div.overlay.rpnode,
 div.thing div.overlay.sgid,
 div.thing div.overlay.wattage,
 div.thing div.overlay.devtype,
-div.thing div.overlay.property
+div.thing div.overlay.property,
+div.thing div.overlay._setLevel,
+div.thing div.overlay._setPosition,
+div.thing div.overlay._startLevelChange,
+div.thing div.overlay._startPositionChange
+{
+    display: none;
+}
+
+div.thing.switch-thing div.overlay._push,
+div.thing.switch-thing div.overlay.pushed,
+div.thing.switch-thing div.overlay._hold,
+div.thing.switch-thing div.overlay.held,
+div.thing.switch-thing div.overlay._doubleTap,
+div.thing.switch-thing div.overlay.doubleTapped,
+div.thing.switch-thing div.overlay._release,
+div.thing.switch-thing div.overlay.released
+{
+    display: none;
+}
+
+div.thing.switchlevel-thing div.overlay._push,
+div.thing.switchlevel-thing div.overlay.pushed,
+div.thing.switchlevel-thing div.overlay._hold,
+div.thing.switchlevel-thing div.overlay.held,
+div.thing.switchlevel-thing div.overlay._doubleTap,
+div.thing.switchlevel-thing div.overlay.doubleTapped,
+div.thing.switchlevel-thing div.overlay._release,
+div.thing.switchlevel-thing div.overlay.released
+{
+    display: none;
+}
+
+div.thing.thermostat-thing div.overlay._setHeatingSetpoint,
+div.thing.thermostat-thing div.overlay._setCoolingSetpoint,
+div.thing.thermostat-thing div.overlay._setHeatCoolSetpoint,
+div.thing.thermostat-thing div.overlay._setEcoMode,
+div.thing.thermostat-thing div.overlay._setThermostatFanMode,
+div.thing.thermostat-thing div.overlay._setThermostatMode
 {
     display: none;
 }

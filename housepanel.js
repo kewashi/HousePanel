@@ -146,6 +146,9 @@ function strObject(o, level) {
 }
 
 function clone(obj) {
+    if ( typeof obj !== "object" ) {
+        return obj;
+    }
     return JSON.parse(JSON.stringify(obj));
 }
 
@@ -303,6 +306,7 @@ $(document).ready(function() {
         var tabcount = $("li.ui-tabs-tab").length;
 
         $(document).on("keydown",function(e) {
+            // console.log("priorOpmode: ", priorOpmode, " modalid: ", modalid, " cnt: ", modalWindows[modalid]);
             if ( priorOpmode === "Modal" ) {
                 return;
             }
@@ -816,9 +820,6 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                     }
                 }
 
-                // grab name and subid for console log
-                var pname = pvalue["name"] ? pvalue["name"] : "";
-
                 // remove reserved fields
                 $.each(reservedcap, function(index, val) {
                     if ( pvalue[val] ) {
@@ -826,10 +827,6 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                     }
                 });
                 
-                if ( cm_Globals.logwebsocket && bid==="1901") {
-                    console.log("webSocket message from: ", webSocketUrl," bid= ",bid," name:",pname," of type= ",thetype," subid= ",subid," value= ",pvalue);
-                }
-        
                 // change not present to absent for presence tiles
                 // it was an early bad design decision to alter ST's value that I'm now stuck with
                 if ( pvalue["presence"] && pvalue["presence"] ==="not present" ) {
@@ -837,18 +834,18 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                 }
 
                 // update all the tiles that match this type and id
-                // this only works if tile is on the panel
-                // $('div.panel div.thing[bid="'+bid+'"][type="'+thetype+'"]').each(function() {
                 var panelItems = $('div.panel div.thing[bid="'+bid+'"]');
-                if ( panelItems ) {
-                    panelItems.each(function() {
-                        try {
+                try {
+                    if ( panelItems ) {
+                        panelItems.each(function() {
                             var aid = $(this).attr("aid");
-                            updateTile(aid, bid, pvalue);
-                        } catch (e) {
-                            console.log("Error updating tile of type: "+ thetype," id: ", bid, " value: ", pvalue, " error: ", e);
-                        }
-                    });
+                            updateTile(aid, pvalue);
+                        });
+                    }
+                    // console.log(">>>> pvalue: ", pvalue, " bid: ", bid);
+                    updateLink(bid, pvalue);
+                } catch (e) {
+                    console.log("Error updating tile with bid: ", bid, " pvalue: ", pvalue, " error: ", e);
                 }
 
                 // blank screen if night mode set
@@ -1037,7 +1034,7 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
         modalcontent = convertToModal(modalcontent, addok);
     }
     modalcontent = modalcontent + "</div>";
-    
+
     modalhook.prepend(modalcontent);
     // modalhook.append(modalcontent);
     
@@ -2680,7 +2677,6 @@ function addEditLink() {
         var aid = taid.substring(2);
         var pwsib = $(evt.target).siblings("div.overlay.password");
         var userid = cm_Globals.options.userid;
-        priorOpmode = "Customize";
         if ( pwsib && pwsib.length > 0 ) {
             pw = pwsib.children("div.password").html();
             checkPassword(thing, "Tile customize", pw, false, "", runCustom);
@@ -3062,53 +3058,16 @@ function fixTrack(tval) {
 // note that some sub-items can update the values of other subitems
 // this is exactly what happens in music tiles when you hit next and prev song
 // third parameter will skip links - but this is not used for now
-function updateTile(aid, bid, presult) {
+function updateTile(aid, presult) {
 
-    // do something for each tile item returned by ajax call
+    // do nothing if this is not an objvect
+    if ( !aid || !presult || typeof presult !== "object" ) {
+        return;
+    }
+    
     var isclock = false;
     
-    // handle audio devices
-    if ( presult["audioTrackData"] ) {
-        var oldtrack = "";
-        if ( $("#a-"+aid+"-trackDescription") ) {
-            oldtrack = $("#a-"+aid+"-trackDescription").html();
-        }
-        if ( typeof presult["audioTrackData"] === "string" ) {
-            var audiodata = JSON.parse(presult["audioTrackData"]);
-        } else {
-            audiodata = presult["audioTrackData"];
-        }
-        presult["trackDescription"] = audiodata["title"] || "None";
-        presult["currentArtist"] = audiodata["artist"] || "";
-        presult["currentAlbum"] = audiodata["album"] || "";
-        presult["trackImage"] = audiodata["albumArtUrl"] || "";
-        presult["mediaSource"] = audiodata["mediaSource"] || "";
-        delete presult["audioTrackData"];
-    }
-
-    // change the key names for the legacy audio items
-    if ( presult["title"] && presult["trackDescription"] ) {
-        presult["trackDescription"] = presult["title"];
-        delete presult["title"];
-    }
-    if ( presult["artist"] && presult["currentArtist"] ) {
-        presult["currentArtist"] = presult["artist"];
-        delete presult["artist"];
-    }
-    if ( presult["album"] && presult["currentAlbum"] ) {
-        presult["currentAlbum"] = presult["album"];
-        delete presult["album"];
-    }
-    if ( presult["albumArtUrl"] && presult["trackImage"] ) {
-        presult["trackImage"] = presult["albumArtUrl"];
-        delete presult["albumArtUrl"];
-    }
-    
-    // var dupcheck = {};
-    // var swid = $("#t-"+aid).attr("bid");
-    // var tileid = $("#t-"+aid).attr("tile");
-    // var bid = $("#t-"+aid).attr("bid");
-    // $.each( presult, function( key, value ) {
+    // do something for each tile item returned by ajax call
     for (var key in presult) {
         var value = presult[key];
         var targetid = '#a-'+aid+'-'+key;
@@ -3126,32 +3085,13 @@ function updateTile(aid, bid, presult) {
 
         // only take action if this key is found in this tile
         if ( dothis ) {
-
-            // push to this tile
-            isclock = processKeyVal(targetid, aid, key, value);
-
-            // push to all tiles that link to this item
-            // we use bid to find linked tiles so the tile doesn't have to be on the screen for link to update
-            var items = $('div.panel div[command="LINK"][linkbid="' + bid + '"][subid="' + key + '"]');
-            // var items = $("div.user_hidden[command='LINK'][subid='"+key+"'][linkid='"+tileid+"']");
-
-            if (items) {
-                items.each( function(itemindex) {
-                    var sibid = $(this).attr("aid");
-                    var sibling = $(this).next();
-                    if ( sibling.hasClass("arrow-dn") ) {
-                        sibling = sibling.next();
-                    }
-                    if ( sibling && sibling.attr("aid")=== sibid ) {
-                        // var linkaid = $(this).attr("aid");
-                        // var linktargetid = '#a-'+linkaid+'-'+key;
-                        var linkkey = sibling.attr("subid");
-                        var linktargetid = "#" + sibling.attr("id");
-                        isclock = isclock || processKeyVal(linktargetid, sibid, linkkey, value);
-                    }
-                });
+            // fix value if it is a command
+            var pn = parseInt($(targetid).attr("pn"));
+            if ( (isNaN(pn) || pn > 0) && key.startsWith("_") ) {
+                value = key.substring(1);
             }
-        }
+            isclock = isclock || processKeyVal(targetid, aid, key, value);
+        }        
     }
     
     // if we updated a clock skin render it on the page
@@ -3159,6 +3099,52 @@ function updateTile(aid, bid, presult) {
         CoolClock.findAndCreateClocks();
     }
 }
+
+function updateLink(bid, pvalue) {
+
+    // do nothing if this is not an objvect
+    if ( !bid || !pvalue || typeof pvalue !== "object" ) {
+        return;
+    }
+    
+    // handle links - this new logic will update links even when source tile is not on a page
+    var items = $('div.panel div[command="LINK"][linkbid="'+bid+'"]');
+    if (items) {
+        try {
+            var isclock = false;
+            items.each( function() {
+                var sibid = $(this).attr("aid");
+                var sibling = $(this).next();
+                if ( sibling && sibling.hasClass("arrow-dn") ) {
+                    sibling = sibling.next();
+                }
+                if ( sibling ) {
+                    var linktargetid = "#" + sibling.attr("id");
+                    var key = $(linktargetid).attr("subid");
+                    var value = pvalue[key];
+                    if ( typeof value === "undefined" ) {
+                        key = $(this).attr("linktype");
+                        value = pvalue[key];
+                    }
+
+                    // fix value if it is a command
+                    var pn = parseInt($(linktargetid).attr("pn"));
+                    if ( (isNaN(pn) || pn > 0) && key.startsWith("_") ) {
+                        value = key.substring(1);
+                    }
+                    isclock = isclock || processKeyVal(linktargetid, sibid, key, value);
+                }
+            });
+            // if we updated a clock skin render it on the page
+            if ( isclock ) {
+                CoolClock.findAndCreateClocks();
+            }
+        } catch (e) {
+            console.log("Error updating linked tile with bid: ", bid, " pvalue: ", pvalue, " error: ", e);
+        }
+    }
+}
+
 
 function processKeyVal(targetid, aid, key, value) {
 
@@ -3188,6 +3174,10 @@ function processKeyVal(targetid, aid, key, value) {
         powmod = powmod - (powmod % 10);
         value = "<div style=\"width: " + powmod.toString() + "%\" class=\"ovbLevel L" + powmod.toString() + "\"></div>";
 
+    // if we are updating a command, change text to the command name
+    } else if ( key.startsWith("_") ) {
+        value = key.substring(1);
+
     // handle weather icons that were not converted
     // updated to address new integer indexing method in ST
     } else if ( (key==="weatherIcon" || key==="forecastIcon") && !isNaN(+value) ) {
@@ -3203,7 +3193,7 @@ function processKeyVal(targetid, aid, key, value) {
             iconimg = "media/Weather/" + iconstr + ".png";
         }
         value = "<img src=\"" + iconimg + "\" alt=\"" + iconstr + "\" width=\"80\" height=\"80\">";
-    } else if ( (key === "level" || key=== "onlevel" || key === "colorTemperature" || key==="volume" || key==="groupVolume" || key==="position") && $(targetid).slider ) {
+    } else if ( (key === "level" || key=== "onlevel" || key==="volume" || key==="groupVolume" || key==="position") && $(targetid).slider ) {
         $(targetid).slider("value", value);
         $(targetid).attr("value",value);
         value = false;
@@ -3290,12 +3280,13 @@ function refreshTile(tileid, aid, bid, thetype, hubid) {
             {api: "doquery", userid: cm_Globals.options.userid, pname: pname, id: bid, tileid: tileid, type: thetype, hubid: hubid},
             function (presult, pstatus) {
                 if ( pstatus==="success" && presult && typeof presult==="object" ) {
-                    // console.log("Tile:", tileid, " id:", bid, " type:", thetype, " refreshed to value:", presult);
-                    updateTile(aid, bid, presult);
-                } else {
-                    console.log("pstatus: ", pstatus, " refresh problem: ", presult);
+                    updateTile(aid, presult);
+                    updateLink(bid, presult);
                 }
-            }, "json");
+            }, 
+        "json");
+        
+
     } catch(e) { }
 }
 
@@ -3427,10 +3418,10 @@ function clockUpdater(whichclock, forceget) {
         // update all the clock tiles for this type
         $('div.panel div.thing[bid="'+clocktype+'"]').each(function() {
             var aid = $(this).attr("aid");
-            if ( aid ) {
-                updateTile(aid, clocktype, updobj);
-            }
+            updateTile(aid, updobj);
         });
+        updateLink(clocktype, updobj);
+
     }
 
 }
@@ -3497,6 +3488,12 @@ function setupPage() {
         var aid = $(this).attr("aid");
         var subid = $(this).attr("subid");
         var id = $(this).attr("id");
+        try {
+            var pn = parseInt($(this).attr("pn"));
+            if ( isNaN(pn) ) { pn = 0; }
+        } catch(e) {
+            pn = 0;
+        }
         
         // avoid doing click if the target was the title bar
         // also skip sliders tied to subid === level or colorTemperature
@@ -3583,16 +3580,58 @@ function setupPage() {
         // uses a simple md5 hash to store user password - this is not strong security
         if ( pw!==false && typeof pw === "string" && pw!=="false" ) {
             checkPassword(that, thingname, pw, ro, thevalue, processClick);
+        
+        // handle buttons by searching for sibling that has number of buttons listed
+        // this won't be found if the button is a link so we just make user put in a number
+        } else if ( subid==="_push" || subid==="_hold" || subid==="_doubleTap" || subid==="_release" ) {
+                    // subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" ) {
+            var numbtnid = '#a-'+aid+'-numberOfButtons';
+            if ( $(numbtnid) && $.isNumeric($(numbtnid).html()) ) {
+                var numButtons = parseInt($(numbtnid).html());
+                var thelist = [];
+                for (var i = 1; i <= numButtons; i++) {
+                   thelist.push(i.toString());
+                }                
+                processClickWithList(that, thingname, ro, subid, thelist, "Button #");
+            } else {
+                processClickWithValue(that, thingname, ro, subid, 1, 1);
+            }
+
+        // various known special cases where we select from a list
+        } else if ( subid === "_setMotion") {
+            processClickWithList(that, thingname, ro, subid, ["active","inactive"]);
+
+        } else if ( subid === "_setChirp") {
+            processClickWithList(that, thingname, ro, subid, ["ding-dong","harp","navi","wind-chime","none"]);
+       
+        } else if ( subid === "_startPositionChange") {
+            processClickWithList(that, thingname, ro, subid, ["open","close"]);
+       
+        } else if ( subid === "_startLevelChange") {
+            processClickWithList(that, thingname, ro, subid, ["up","down"]);
+
+        } else if ( subid === "themode" ) {
+            processClickWithList(that, thingname, ro, subid, ["Day","Evening","Night","Away"],"Mode: ");
+       
+        // handle commands that have parameters required
+        // this is signalled by the value set otherwise the command value is the command string name
+        } else if ( subid.startsWith("_") && $.isNumeric(thevalue) ) {
+            var numParams = parseInt(thevalue);
+            if ( isNaN(numParams) ) { numParams = 0; }
+            processClickWithValue(that, thingname, ro, subid, "", numParams);
+
+        } else if ( pn > 0 ) {
+            processClickWithValue(that, thingname, ro, subid, "", pn);
+
+        // items that require one parameter
         } else if ( subid==="color" || 
                     (subid.startsWith("Int_") && !subid.endsWith("-up") && !subid.endsWith("-dn") )|| 
                     (subid.startsWith("State_") && !subid.endsWith("-up") && !subid.endsWith("-dn") ) ||
-                    subid==="_push" || subid==="_hold" || subid==="_doubleTap" || subid==="_release" || subid==="_docmd" ||
-                    subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" ||
-                    subid==="heatingSetpoint" || subid==="coolingSetpoint" || 
+                    subid==="heatingSetpoint" || subid==="coolingSetpoint" || subid==="_docmd" ||
                     subid==="ecoHeatPoint" || subid==="ecoCoolPoint" ||
-                    (thetype==="variables" && subid!=="name" && !thevalue.startsWith("RULE::") && !subid.startsWith("_")) || 
+                    (thetype==="variables" && subid!=="name" && !thevalue.startsWith("RULE::")) || 
                     subid==="hue" || subid==="saturation" ) {
-            getNewValue(that, thingname, ro, subid, thevalue);
+            processClickWithValue(that, thingname, ro, subid, thevalue, 1);
         } else {
 
             if ( doconfirm && !ro ) {
@@ -3679,14 +3718,34 @@ function checkPassword(tile, thingname, pw, ro, thevalue, yesaction) {
     });
 }
 
-function getNewValue(tile, thingname, ro, subid, thevalue) {
+function processClickWithValue(tile, thingname, ro, subid, thevalue, numParams) {
+
+    if ( numParams <= 0 ) {
+        processClick(tile, thingname, ro, thevalue, "");
+        return;
+    }
+
     var tpos = $(tile).offset();
     var ttop = (tpos.top > 125) ? tpos.top - 120 : 5;
     var pos = {top: ttop, left: tpos.left};
     var htmlcontent;
     htmlcontent = "<p>Enter new value for tile: " + thingname + "</p>";
-    htmlcontent += "<div class='ddlDialog'><label for='newsubidValue'>" + subid + ":</label>";
-    htmlcontent += "<input class='ddlDialog' id='newsubidValue' type='text' size='20' value='" + thevalue + "' />";
+    if ( numParams > 1 ) {
+        htmlcontent = htmlcontent + "<p>For: " + subid + "</p>";
+        thevalue = "";
+    }
+    htmlcontent += "<div class='ddlDialog'>";
+    
+    for (var i = 1; i <= numParams; i++) {
+        var id = "newsubid" + i.toString()
+        if ( numParams > 1 ) {
+            var prefix = "Param #" + i.toString();
+        } else {
+            prefix = subid;
+        }
+        htmlcontent += "<p><label for='" + id + "'>" + prefix + ": </label>";
+        htmlcontent += "<input class='ddlDialog' id='" + id + "' type='text' size='20' value='" + thevalue + "' /></p>";
+     }                
     htmlcontent += "</div>";
     
     createModal("modalexec", htmlcontent, "body", true, pos, 
@@ -3694,9 +3753,15 @@ function getNewValue(tile, thingname, ro, subid, thevalue) {
         var clk = $(ui).attr("name");
         // priorOpmode = "Operate";
         if ( clk==="okay" ) {
-            thevalue = $("#newsubidValue").val();
-            console.log("thevlaue = ", thevalue);
-            processClick(tile, thingname, ro, thevalue);
+            thevalue = "";
+            for (var i = 1; i <= numParams; i++) {
+                var id = "#newsubid" + i.toString()
+                thevalue = thevalue + $(id).val();
+                if ( i < numParams ) {
+                    thevalue = thevalue + "|";
+                }
+            }
+            processClick(tile, thingname, ro, thevalue, "");
         }
         closeModal("modalexec");
     },
@@ -3712,6 +3777,44 @@ function getNewValue(tile, thingname, ro, subid, thevalue) {
             }
             if ( e.which===27  ){
                 // priorOpmode = "Operate";
+                $("#modalcancel").click();
+            }
+        });
+    });
+}
+
+function processClickWithList(tile, thingname, ro, subid, thelist, prefix = "") {
+    var tpos = $(tile).offset();
+    var ttop = (tpos.top > 125) ? tpos.top - 120 : 5;
+    var pos = {top: ttop, left: tpos.left};
+    var htmlcontent;
+    htmlcontent = "<p>Select value from list for tile: " + thingname + "</p>";
+    htmlcontent += "<div class='ddlDialog'><label for='picklist'>" + subid + ":</label>";
+    htmlcontent += "<select id=\"picklist\" name=\"picklist\" class=\"picklist\">";
+    thelist.forEach(function(val) {
+        htmlcontent += "<option value=\"" + val + "\">" + prefix + val + "</option>";
+    });
+    htmlcontent += "</select></div>";
+    
+    createModal("modalpick", htmlcontent, "body", true, pos, 
+    function(ui) {
+        var clk = $(ui).attr("name");
+        // priorOpmode = "Operate";
+        if ( clk==="okay" ) {
+            thevalue = $("#picklist").val();
+            processClick(tile, thingname, ro, thevalue, "");
+        }
+        closeModal("modalpick");
+    },
+    // after box loads set focus to field
+    function(hook, content) {
+        $("#picklist").focus();
+        $("#picklist").off("keydown");
+        $("#picklist").on("keydown",function(e) {
+            if ( e.which===13  ){
+                $("#modalokay").click();
+            }
+            if ( e.which===27  ){
                 $("#modalcancel").click();
             }
         });
@@ -3762,9 +3865,13 @@ function addOnoff(targetid, subid, thevalue) {
 // the aid value is now exactly equal to thingid -- both are the index key in the DB
 // for the main things table that holds the index keys for devices shown on pages
 // tileid below is the index in the devices table to the absolute device information
-function processClick(that, thingname, ro, thevalue) {
+function processClick(that, thingname, ro, thevalue, theattr = true) {
     var aid = $(that).attr("aid");
-    var theattr = $(that).attr("class");
+    if ( theattr===true ) {
+        theattr = $(that).attr("class");
+    } else if ( theattr===false ) {
+        theattr = "";
+    }
     var subid = $(that).attr("subid");
     var realsubid = subid;
     var tile = '#t-'+aid;
@@ -3810,9 +3917,9 @@ function processClick(that, thingname, ro, thevalue) {
     // }
 
     // set attr to name for ISY hubs
-    if ( thetype === "isy" ) {
-        theattr = $("#a-"+aid+"-name").html();
-    }
+    // if ( thetype === "isy" ) {
+    //     theattr = $("#a-"+aid+"-name").html();
+    // }
     var hint = $(tile).attr("hint");
 
     // all hubs now use the same doaction call name
@@ -3888,7 +3995,8 @@ function processClick(that, thingname, ro, thevalue) {
     // to compensate for loss of inspection I added any custom field starting with "label" or "text" subid will inspect
     var ispassive = (ro || subid==="thingname" || subid==="custom" || subid==="temperature" || subid==="feelsLike" || subid==="battery" || //  (command==="TEXT" && subid!=="allon" && subid!=="alloff") ||
         subid==="presence" || subid==="motion" || subid==="contact" || subid==="status_" || subid==="status" || subid==="deviceType" || subid==="localExec" ||
-        subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" || subid==="name" || subid==="skin" || subid==="themode" ||
+        subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" || subid==="name" || subid==="skin" || 
+        subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" || subid==="numberOfButtons" ||
         subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") || subid==="illuminance" ||
         (command==="TEXT" && subid.startsWith("label")) || (command==="TEXT" && subid.startsWith("text")) ||
         (thetype==="weather" && !subid.startsWith("_")) ||
@@ -4027,7 +4135,7 @@ function processClick(that, thingname, ro, thevalue) {
         // however, I still inverted the ST and HE values to support future update
         // where I might just look at thevalue for these hubs types as it should be
         // the attr action was a terrible workaround put in a much earlier version
-        if ( (subid==="switch") && (thevalue==="on" || thevalue==="off")  ) {
+        if ( subid.startsWith("switch") && (thevalue==="on" || thevalue==="off")  ) {
             thevalue = thevalue==="on" ? "off" : "on";
         }
 
@@ -4041,17 +4149,22 @@ function processClick(that, thingname, ro, thevalue) {
         // }
 
         // remove isy type check since it could be a link
-        else if ( subid==="switch" && (thevalue==="DON" || thevalue==="DOF" )  ) {
+        else if ( subid.startsWith("switch") && (thevalue==="DON" || thevalue==="DOF" )  ) {
             thevalue = thevalue==="DON" ? "DOF" : "DON";
         }
 
         // invert open and close for doors and valves and set commaned
-        else if ( (subid==="door" || subid==="valve") && (thevalue==="open" || thevalue==="closed") ) {
+        else if ( (subid.startsWith("door") || subid.startsWith("valve")) && (thevalue==="open" || thevalue==="closed") ) {
             thevalue = thevalue==="open" ? "close" : "open";
         }
 
+        // invert motion and set commaned
+        else if ( subid.startsWith("motion") && (thevalue==="active" || thevalue==="inactive") ) {
+            thevalue = thevalue==="active" ? "inactive" : "active";
+        }
+
         // invert and set lock command
-        else if ( subid==="lock" && (thevalue==="locked" || thevalue==="unlocked") ) {
+        else if ( subid.startsWith("lock") && (thevalue==="locked" || thevalue==="unlocked") ) {
             thevalue = thevalue==="locked" ? "unlock" : "lock";
         }
 

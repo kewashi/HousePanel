@@ -111,17 +111,18 @@ GLB.mainISYMap = {
                                                                                         "level-up":"BRIGHTEN","level-dn":"DIM","switch":"ST","ST:on":"DON","ST:off":"DOF"}, "1.2." ],
     "bulb":        [{"GV0": "status_", "ST": "switch", "OL": "level", "GV1":"color", 
                      "GV2":"colorname", "GV3": "hue", "GV4":"saturation"},             {"_query":"QUERY","_on":"DON","_off":"DOF","level":"SET_BRI","_dim":"DIM","_brighten":"BRIGHTEN",
-                                                                                        "hue":"SET_HUE","saturation":"SET_SAT",
+                                                                                        "hue":"SET_HUE","saturation":"SET_SAT","hue-up":"HUE_UP","saturation-up":"SAT_UP","hue-dn":"HUE_DN","saturation-dn":"SAT_DN",
                                                                                         "switch":"ST","ST:on":"DON","ST:off":"DOF"}, "1.3." ],
     "button":      [{"GV0": "status_", "BATLVL": "battery", "ST": "numberOfButtons",
-                     "GV1": "pushed", "GV2":"held", "GV3":"doubleTapped"},             {"_query":"QUERY","_push":"push","_hold":"hold","_doubleTap":"doubleTap",
-                                                                                                         "pushed":"push","held":"hold","doubleTapped":"doubleTap"}, "1.4." ],
+                     "GV1": "pushed", "GV2":"held", "GV3":"doubleTapped"},             {"_query":"QUERY","_push":"push","_hold":"hold","_doubleTap":"doubleTap","_release":"release"}, "1.4." ],
     "power":       [{"GV0": "status_", "ST": "switch", "CPW": "power", 
                      "TPW":"energy", "CV":"voltage", "CC":"current"},                  {"_query":"QUERY","_on":"DON", "_off":"DOF"}, "1.5" ],
     "water":       [{"GV0": "status_", "BATLVL": "battery", "ST": "water"},            {"_query":"QUERY","_wet":"WET", "_dry":"DRY"}, "1.6" ],
 
     "contact":     [{"GV0": "status_", "BATLVL": "battery", "ST": "contact"},          {"_query":"QUERY","_open":"OPEN","_close":"CLOSE"}, "7.1" ],
-    "motion":      [{"GV0": "status_", "BATLVL": "battery", "ST": "motion"},           {"_query":"QUERY"}, "7.2" ],
+    "motion":      [{"GV0": "status_", "BATLVL": "battery", "ST": "motion"},           {"_query":"QUERY"}, "7.2.0" ],
+    "aqaramotion": [{"GV0": "status_", "BATLVL": "battery", "ST": "motion",
+                     "GV1": "presence", "GV2":"presence_type"},                        {"_query":"QUERY", "_setMotion":"setMotion"}, "7.2.1" ],
     "presence":    [{"GV0": "status_", "BATLVL": "battery", "ST": "presence"},         {"_query":"QUERY","_arrived":"ARRIVE","_departed":"DEPART"}, "7.3" ],
     "cosensor":    [{"GV0": "status_", "BATLVL": "battery", "ST": "carbonMonoxide"},   {"_query":"QUERY","_clear":"CLEAR","_detected":"DETECTED","_test":"TEST"}, "7.4" ],
     "co2sensor":   [{"GV0": "status_", "BATLVL": "battery", "CO2LVL":"carbonDioxide"}, {"_query":"QUERY"}, "7.5" ],
@@ -151,37 +152,42 @@ GLB.mainISYMap = {
                      "CLIHUM":"humidity"},                                             {"_query":"QUERY"}, "5.2" ], 
     "illuminance": [{"GV0": "status_", "BATLVL": "battery", "LUMIN": "illuminance"},   {"_query":"QUERY"}, "5.3" ],
     "other":       [{"GV0":"status_","BATLVL":"battery","ST":"switch","OL":"level"},   {"_query":"QUERY"}, "9.1" ],
-    "actuator":    [{"GV0":"status_","BATLVL":"battery","ST":"switch","OL":"level"},   {"_query":"QUERY","_docmd":"DOCMD"}, "9.2" ]
+    "actuator":    [{"GV0":"status_","BATLVL":"battery","ST":"switch","OL":"level"},   {"_query":"QUERY","_docmd":"DOCMD"}, "9.2" ],
 
-    // "music":       [ {"GV0": "status_", "ST": "status"}, ["previousTrack","pause","play","stop","nextTrack","volumeDown","volumeUp","mute","unmute"}, "9.1" ]
+    "music":       [ {"GV0": "status_", "ST": "status", "OL":"level", "SVOL":"mute"},  {"_previousTrack":"previousTrack","_pause":"pause","_play":"play","_stop":"stop","_nextTrack":"nextTrack",
+                                                                                        "_volumeDown":"volumeDown","_volumeUp":"volumeUp","_mute":"mute","_unmute":"unmute"}, "3.1" ]
 
 };
 
 // these are maps of index 25 integers to names
 // they should match the en_us.txt file contents
 GLB.indexMap = {
-    "switch":      ["RR", {1:"9.0 min", 2:"8.0 min", 3:"7.0 min", 4:"6.0 min", 5:"5.0 min", 6:"4.5 min", 7:"4.0 min", 8:"3.5 min",
-                           9:"3.0 min", 10:"2.5 min", 11:"2.0 min", 12:"1.5 min", 13:"1.0 min", 14:"47.0 sec", 15:"43.0 sec", 16:"38.5 sec",
-                           17:"34.0 sec", 18:"32.0 sec", 19:"30.0 sec", 20:"28.0 sec", 21:"26.0 sec", 22:"23.5 sec", 23:"21.5 sec", 24:"19.0 sec",
-                           25:"8.5 sec", 26:"6.5 sec", 27:"4.5 sec", 28:"2.0 sec", 29:"0.5 sec", 30:"0.3 sec", 31:"0.2 sec", 32:"0.1 sec"} ],
-    "switchlevel": ["RR", {1:"9.0 min", 2:"8.0 min", 3:"7.0 min", 4:"6.0 min", 5:"5.0 min", 6:"4.5 min", 7:"4.0 min", 8:"3.5 min",
-                           9:"3.0 min", 10:"2.5 min", 11:"2.0 min", 12:"1.5 min", 13:"1.0 min", 14:"47.0 sec", 15:"43.0 sec", 16:"38.5 sec",
-                           17:"34.0 sec", 18:"32.0 sec", 19:"30.0 sec", 20:"28.0 sec", 21:"26.0 sec", 22:"23.5 sec", 23:"21.5 sec", 24:"19.0 sec",
-                           25:"8.5 sec", 26:"6.5 sec", 27:"4.5 sec", 28:"2.0 sec", 29:"0.5 sec", 30:"0.3 sec", 31:"0.2 sec", 32:"0.1 sec"} ],
-    "bulb":        ["RR", {1:"9.0 min", 2:"8.0 min", 3:"7.0 min", 4:"6.0 min", 5:"5.0 min", 6:"4.5 min", 7:"4.0 min", 8:"3.5 min",
-                           9:"3.0 min", 10:"2.5 min", 11:"2.0 min", 12:"1.5 min", 13:"1.0 min", 14:"47.0 sec", 15:"43.0 sec", 16:"38.5 sec",
-                           17:"34.0 sec", 18:"32.0 sec", 19:"30.0 sec", 20:"28.0 sec", 21:"26.0 sec", 22:"23.5 sec", 23:"21.5 sec", 24:"19.0 sec",
-                           25:"8.5 sec", 26:"6.5 sec", 27:"4.5 sec", 28:"2.0 sec", 29:"0.5 sec", 30:"0.3 sec", 31:"0.2 sec", 32:"0.1 sec"} ],
-    "water":     ["ST",  {1:"dry", 2: "wet", 3:"unknown"} ],
-    "motion":    ["ST",  {1:"inactive", 2:"active", 3:"unknown"} ],
-    "presence":  ["ST",  {1:"present", 2:"absent", 3:"unknown"} ],
-    "door":      ["ST",  {1:"open", 2:"closed", 3:"opening", 4:"closing", 5:"unknown"} ],
-    "garage":    ["ST",  {1:"open", 2:"closed", 3:"opening", 4:"closing", 5:"unknown"} ],
-    "shade":     ["ST",  {1:"open", 2:"closed", 3:"partially_open", 4:"unknown"} ],
-    "cosensor":  ["ST",  {1:"clear", 2:"tested", 3:"detected", 4:"unknown"} ],
-    "smoke":     ["ST",  {1:"clear", 2:"tested", 3:"detected", 4:"unknown"} ],
-    "hsm":       ["ST",  {1:"disarmed", 2:"armedAway", 3:"armedHome", 4:"armedNight", 5:"armingAway", 6:"armingHome", 7:"armingNight", 8:"allDisarmed", 9:"Not Installed", 10:"unknown"} ],
-    "mode":      ["MODE",{1:"Day", 2:"Evening", 3:"Night", 4:"Away", 3:"unknown"} ]
+    "switch":       {"RR": {1:"9.0 min", 2:"8.0 min", 3:"7.0 min", 4:"6.0 min", 5:"5.0 min", 6:"4.5 min", 7:"4.0 min", 8:"3.5 min",
+                            9:"3.0 min", 10:"2.5 min", 11:"2.0 min", 12:"1.5 min", 13:"1.0 min", 14:"47.0 sec", 15:"43.0 sec", 16:"38.5 sec",
+                            17:"34.0 sec", 18:"32.0 sec", 19:"30.0 sec", 20:"28.0 sec", 21:"26.0 sec", 22:"23.5 sec", 23:"21.5 sec", 24:"19.0 sec",
+                            25:"8.5 sec", 26:"6.5 sec", 27:"4.5 sec", 28:"2.0 sec", 29:"0.5 sec", 30:"0.3 sec", 31:"0.2 sec", 32:"0.1 sec"} },
+    "switchlevel":  {"RR": {1:"9.0 min", 2:"8.0 min", 3:"7.0 min", 4:"6.0 min", 5:"5.0 min", 6:"4.5 min", 7:"4.0 min", 8:"3.5 min",
+                            9:"3.0 min", 10:"2.5 min", 11:"2.0 min", 12:"1.5 min", 13:"1.0 min", 14:"47.0 sec", 15:"43.0 sec", 16:"38.5 sec",
+                            17:"34.0 sec", 18:"32.0 sec", 19:"30.0 sec", 20:"28.0 sec", 21:"26.0 sec", 22:"23.5 sec", 23:"21.5 sec", 24:"19.0 sec",
+                            25:"8.5 sec", 26:"6.5 sec", 27:"4.5 sec", 28:"2.0 sec", 29:"0.5 sec", 30:"0.3 sec", 31:"0.2 sec", 32:"0.1 sec"} },
+    "bulb":         {"RR": {1:"9.0 min", 2:"8.0 min", 3:"7.0 min", 4:"6.0 min", 5:"5.0 min", 6:"4.5 min", 7:"4.0 min", 8:"3.5 min",
+                            9:"3.0 min", 10:"2.5 min", 11:"2.0 min", 12:"1.5 min", 13:"1.0 min", 14:"47.0 sec", 15:"43.0 sec", 16:"38.5 sec",
+                            17:"34.0 sec", 18:"32.0 sec", 19:"30.0 sec", 20:"28.0 sec", 21:"26.0 sec", 22:"23.5 sec", 23:"21.5 sec", 24:"19.0 sec",
+                            25:"8.5 sec", 26:"6.5 sec", 27:"4.5 sec", 28:"2.0 sec", 29:"0.5 sec", 30:"0.3 sec", 31:"0.2 sec", 32:"0.1 sec"} },
+    "water":        {"ST":  {1:"dry", 2: "wet", 3:"unknown"} },
+    "motion":       {"ST":  {1:"inactive", 2:"active", 3:"unknown"} },
+    "aqaramotion":  {"ST":  {1:"inactive", 2:"active", 3:"unknown"},
+                     "GV1": {1:"present", 2:"absent", 3:"unknown"},
+                     "GV2": {1:"enter", 2:"leave", 3:"approach", 4:"away", 5:"left_enter", 6:"left_leave", 7:"right_enter", 8:"right_leave", 9:"unknown"} },
+    "presence":     {"ST":  {1:"present", 2:"absent", 3:"unknown"} },
+    "door":         {"ST":  {1:"open", 2:"closed", 3:"opening", 4:"closing", 5:"unknown"} },
+    "garage":       {"ST":  {1:"open", 2:"closed", 3:"opening", 4:"closing", 5:"unknown"} },
+    "shade":        {"ST":  {1:"open", 2:"closed", 3:"partially_open", 4:"unknown"} },
+    "cosensor":     {"ST":  {1:"clear", 2:"tested", 3:"detected", 4:"unknown"} },
+    "smoke":        {"ST":  {1:"clear", 2:"tested", 3:"detected", 4:"unknown"} },
+    "hsm":          {"ST":  {1:"disarmed", 2:"armedAway", 3:"armedHome", 4:"armedNight", 5:"armingAway", 6:"armingHome", 7:"armingNight", 8:"allDisarmed", 9:"Not Installed", 10:"unknown"} },
+    "music":        {"ST":  {1:"stopped", 2:"playing", 3:"paused", 4:"unknown"} },
+    "mode":         {"MODE": {1:"Day", 2:"Evening", 3:"Night", 4:"Away", 3:"unknown"} }
 };
 
 GLB.ISYcolors = [
@@ -423,24 +429,26 @@ function jsonshow(obj) {
     return UTIL.inspect(obj, false, null, false);
 }
 
-// trying to not use encoding
+// trying to not use encoding - but we have to replace single quotes to avoid messing up the DB
 function encodeURI2(obj) {
     var str = JSON.stringify(obj)
-    str = str.replace(/'/g,"");
+    str = str.replace(/'/g,"%27");
     // return encodeURI(str);
     return str;
 }
 
 function decodeURI2(str) {
-    if ( !str || typeof str !== "string" || str==="undefined" ) {
+    if ( !str || typeof str !== "string" ) {
         return null;
     }
     
     var obj;
     var decodestr = str;
-    if ( str.startsWith("%7B") ) {
-        decodestr = decodeURI(str);
-    }
+    decodestr = decodestr.replace(/%27/g,"'");
+    
+    // if ( str.startsWith("%7B") ) {
+    //     decodestr = decodeURI(str);
+    // }
     try {
         obj = JSON.parse(decodestr);
     } catch(e) {
@@ -1948,6 +1956,11 @@ function getDevices(hub) {
                         var pvalue = content["value"];
                         var hint = hubType;
                         var refresh = "";
+
+                        if ( !pvalue ) {
+                            console.log( (ddbg()),"Something went wrong loading Hubitat device: ", content);
+                            return;
+                        }
                         
                         // if a name isn't there use master name
                         if ( !pvalue.name && !origname ) {
@@ -1993,16 +2006,16 @@ function getDevices(hub) {
                             }
                         }
 
-                        // handle audio and weather tiles
-                        if ( thetype==="audio" || thetype==="sonos" || pvalue.audioTrackData ) {
+                        // handle sonos and weather tiles and any that comes as an object
+                        // we handle music tile translation now on the groovy side to support ISY node servers
+                        if ( thetype==="sonos" ) {
                             pvalue = translateAudio(pvalue);
-                        } else if ( thetype==="music" || pvalue.trackData ) {
-                            pvalue = translateMusic(pvalue);
                         } else if ( thetype==="weather" ) {
-                            var thisorigname = pvalue.name || "Weather";
-                            pvalue = translateWeather(thisorigname, pvalue);
+                            pvalue = translateWeather(pvalue);
+                        // } else if ( thetype==="audio" ) {
+                        //     console.log(">>> thetype: ", thetype, " value: ", pvalue);
                         } else {
-                            pvalue = translateObjects(pvalue);
+                            pvalue = translateObjects(pvalue, 2);
                         }
                         var pvalstr = encodeURI2(pvalue);
                         var device = {userid: userid, hubid: hubindex, deviceid: deviceid, name: origname, 
@@ -3517,7 +3530,9 @@ function getDevices(hub) {
                         }
 
                         // this is where we change the device items
-                        pvalue = translateObjects(pvalue);
+                        console.log(">>>> ISY pre pvalue: ", pvalue);
+                        pvalue = translateObjects(pvalue, 1);
+                        console.log(">>>> ISY post pvalue: ", pvalue);
                         var pvalstr = encodeURI2(pvalue);
     
                         // set bare minimum info
@@ -3755,8 +3770,9 @@ function translateIsy(devicetype, value, isyid, val, formatted, uom, prec, subid
         newvalue[subid] = getColorName(index - 1);
     } else if ( isyid === "OL") {
         setLevel(subid);
-    } else if ( array_key_exists(devicetype, GLB.indexMap) && GLB.indexMap[devicetype][0] === isyid ) {
-        obj = GLB.indexMap[devicetype][1];
+    } else if ( array_key_exists(devicetype, GLB.indexMap) && 
+                array_key_exists(isyid, GLB.indexMap[devicetype]) ) {
+        obj = GLB.indexMap[devicetype][isyid];
         setSelect(subid, obj);
     } else {
         if ( array_key_exists(uom, GLB.uomMap) ) {
@@ -5548,7 +5564,7 @@ function getWeatherIcon(num, accu) {
     return iconstr;
 }
 
-function translateWeather(name, pvalue) {
+function translateWeather(pvalue) {
 
     if ( !pvalue || typeof pvalue!=="object" ) {
         console.log( (ddbg()), "invalid weather data - object expected but not found");
@@ -5575,7 +5591,7 @@ function translateWeather(name, pvalue) {
 
     // the rest of this function fixes up the accuWeather tile
     var newvalue = {};
-    newvalue.name = name;
+    newvalue.name = "Weather";
     newvalue.temperature = pvalue.temperature;
     newvalue.realFeel = pvalue.realFeel;
     newvalue.weatherIcon = getWeatherIcon(pvalue.weatherIcon, true);
@@ -5614,7 +5630,6 @@ function translateWeather(name, pvalue) {
         forecastStr += "<tr>";
         forecastStr += "<th class='hr'>Time</th>";
         forecastStr += "<th class='temperature'>Temp</th>";
-        // forecastStr += "<th class='realFeel'>Feels</th>";
         forecastStr += "<th class='precipitation'>Icon</th>";
         forecastStr += "</tr>";
 
@@ -5677,25 +5692,6 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     var $tc = "";
     var thingtype = thesensor["type"];
     var bid = thesensor["id"];
-    if ( (thingtype==="audio" || thingtype==="sonos") || thesensor.value.audioTrackData ) {
-        if ( !thesensor.value.audioTrackData || objCount(thesensor.value.audioTrackData)===0 ) {
-            thesensor.value.audioTrackData = {
-                title: "None",
-                artist: "None",
-                album: "None",
-                albumArtUrl: GLB.returnURL + "/media/Electronics/electronics13-icn@2x.png",
-                mediaSource: "None"
-            };
-        }
-        thesensor.value = translateAudio(thesensor.value);
-    } else if ( thingtype==="music" || thesensor.value.trackData ) {
-        thesensor.value = translateMusic(thesensor.value);
-    } else if ( thingtype==="weather" ) {
-        var thisorigname = thesensor.name || "Weather";
-        thesensor.value = translateWeather(thisorigname, thesensor.value);
-    } else {
-        thesensor.value = translateObjects(thesensor.value);
-    }
 
     // set custom name provided by tile editor
     // this is overruled by any name provided in the tile customizer
@@ -5970,281 +5966,278 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     }
 
     $tc += "</div>";
-    
     return $tc;
 
-function putLinkElement(bid, hint, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, twidth, theight) {
+    function putLinkElement(bid, hint, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, twidth, theight) {
 
-    var linktype = thingtype;
-    var linkhub = 0;
-    var linkbid = bid;
-    var subid = tkey;
-    var realsubid = subid;
-    var linkid = 0;
+        var linktype = thingtype;
+        var linkhub = 0;
+        var linkbid = bid;
+        var subid = tkey;
+        var realsubid = subid;
+        var linkid = 0;
 
-    var ipos = helperval.indexOf("::");
-    var command = helperval.substr(0, ipos);
-    var linkval = helperval.substr(ipos+2);
-    var sibling;
+        var ipos = helperval.indexOf("::");
+        var command = helperval.substr(0, ipos);
+        var linkval = helperval.substr(ipos+2);
+        var sibling;
 
-    if ( command === "TEXT" ) {
-        helperval = linkval;
-        sibling= "<div id=\"sb-"+cnt+"-"+subid+"\""+" aid=\""+cnt+"\" linkid=\""+linkid+"\" linktype=\""+linktype+"\" linkhub=\""+linkhub+"\" linkval=\""+helperval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
-        tval = linkval;
+        if ( command === "TEXT" ) {
+            helperval = linkval;
+            sibling= "<div id=\"sb-"+cnt+"-"+subid+"\""+" aid=\""+cnt+"\" linkid=\""+linkid+"\" linktype=\""+linktype+"\" linkhub=\""+linkhub+"\" linkval=\""+helperval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
+            tval = linkval;
 
-    } else if ( command === "LINK" ) {
+        } else if ( command === "LINK" ) {
 
 
-        // get info for links but skip if the link had an error
-        // links use format - LINK::subid::tileid
-        // if ( linkval && command==="LINK" ) {
-        var jpos = linkval.indexOf("::");
-        if ( jpos !== -1 ) {
+            // get info for links but skip if the link had an error
+            // links use format - LINK::subid::tileid
+            // if ( linkval && command==="LINK" ) {
+            var jpos = linkval.indexOf("::");
+            if ( jpos !== -1 ) {
 
-            realsubid = linkval.substr(0, jpos)
-            var linkid = linkval.substr(jpos+2);
-            
-            // get the device for this linked tile
-            var linkdev = alldevices[linkid];
-            if ( linkdev ) {
+                realsubid = linkval.substr(0, jpos)
+                var linkid = linkval.substr(jpos+2);
                 
-                // replace the place holder value with the linked value
-                try {
-                    linktype = linkdev["devices_devicetype"];
-                    linkid = linkdev["devices_id"];
-                    linkbid = linkdev["devices_deviceid"];
-                    linkhub = linkdev["hubs_id"];
-                    hint = linkdev["devices_hint"];
-                    var linktileval = decodeURI2(linkdev["devices_pvalue"]);
+                // get the device for this linked tile
+                var linkdev = alldevices[linkid];
+                if ( linkdev ) {
+                    
+                    // replace the place holder value with the linked value
+                    try {
+                        linktype = linkdev["devices_devicetype"];
+                        linkid = linkdev["devices_id"];
+                        linkbid = linkdev["devices_deviceid"];
+                        linkhub = linkdev["hubs_id"];
+                        hint = linkdev["devices_hint"];
+                        var linktileval = decodeURI2(linkdev["devices_pvalue"]);
 
-                    // handle special audio updates
-                    if ( !linktileval ) {
+                        // put linked val through the customization
+                        linktileval = getCustomTile(userid, configoptions, linktileval, linkbid);
+
+                    } catch(e) {
                         linktileval = {};
-                    } else if ( linktype==="audio" || linktype==="sonos" || linktileval.audioTrackData ) {
-                        linktileval = translateAudio(linktileval);
-                    } else if ( linktype==="music" || linktileval.trackData ) {
-                        linktileval = translateMusic(linktileval);
-                    } else if ( linktype==="weather" ) {
-                        linktileval = translateWeather("Weather", linktileval);
-                    } else {
-                        linktileval = translateObjects(linktileval);
                     }
-
-                    // put linked val through the customization
-                    linktileval = getCustomTile(userid, configoptions, linktileval, linkbid);
-
-                } catch(e) {
-                    linktileval = {};
-                }
-                
-                // now look for the real value in this device
-                // use the link value - if subid isn't there look for subid's that form the beginning of our link subid
-                var goodlink = false;
-                if ( array_key_exists(realsubid, linktileval) ) {
-                    tval = linktileval[realsubid];
-                    goodlink = true;
-                } else {
-                    for (var ltkey in linktileval) {
-                        if ( realsubid.startsWith(ltkey) ) {
-                            realsubid = ltkey;
-                            tval = linktileval[ltkey];
-                            goodlink = true;
-                            break;
+                    
+                    // now look for the real value in this device
+                    // use the link value - if subid isn't there look for subid's that form the beginning of our link subid
+                    var goodlink = false;
+                    if ( array_key_exists(realsubid, linktileval) ) {
+                        tval = linktileval[realsubid];
+                        goodlink = true;
+                    } else {
+                        for (var ltkey in linktileval) {
+                            if ( realsubid.startsWith(ltkey) ) {
+                                realsubid = ltkey;
+                                tval = linktileval[ltkey];
+                                goodlink = true;
+                                break;
+                            }
                         }
                     }
+
+                    // handle case where link not found - set error condition
+                    if ( !goodlink ) {
+                        helperval = "LINK::"+realsubid+"::"+linkid+"::error";
+                        tval = "LINK::error";
+                    }
+
+                    // look for width and height and replace if there
+                    if ( linktileval["width"] && twidth ) {
+                        twidth = linktileval["width"];
+                    }
+                    if ( linktileval["height"] && theight ) {
+                        theight = linktileval["height"];
+                    }
+
+                } else {
+                    helperval = "LINK::error";
                 }
 
-                // handle case where link not found - set error condition
-                if ( !goodlink ) {
-                    helperval = "LINK::"+realsubid+"::"+linkid+"::error";
-                    tval = "LINK::error";
-                }
-
-                // look for width and height and replace if there
-                if ( linktileval["width"] && twidth ) {
-                    twidth = linktileval["width"];
-                }
-                if ( linktileval["height"] && theight ) {
-                    theight = linktileval["height"];
-                }
-
-            } else {
-                helperval = "LINK::error";
+                sibling= "<div id=\"sb-"+cnt+"-"+subid+"\""+" aid=\""+cnt+"\" linkid=\""+linkid+"\" hint=\""+hint+"\" linktype=\""+linktype+"\" linkhub=\""+linkhub+"\" linkval=\""+helperval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
             }
-
-            sibling= "<div id=\"sb-"+cnt+"-"+subid+"\""+" aid=\""+cnt+"\" linkid=\""+linkid+"\" hint=\""+hint+"\" linktype=\""+linktype+"\" linkhub=\""+linkhub+"\" linkval=\""+helperval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
         }
-    }
 
-    // use the original type here so we have it for later
-    // but in the actual target we use the linktype
-    // var sibling= "<div aid=\""+cnt+"\" linktype=\""+linktype+"\" value=\""+tval+"\" linkval=\""+linkval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
-    if ( DEBUG10 ) {
-        console.log( (ddbg()), "bid: ", bid, " helperval: ", helperval, " sibling: ", sibling,"\n new tval: ", tval);
-    }
-    var $tc = putElement(kindex, cnt, j, linktype, tval, tkey, subtype, bgcolor, sibling, realsubid, twidth, theight);
-    return $tc;
-}
-
-function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibling, realsubid, twidth, theight) {
-    
-    // cleans up the name of music tracks for proper html page display
-    // no longer trim the name because that breaks album art
-    function fixTrack(tval) {
-        if ( !tval || tval.trim()==="" ) {
-            tval = "None"; 
+        // use the original type here so we have it for later
+        // but in the actual target we use the linktype
+        // var sibling= "<div aid=\""+cnt+"\" linktype=\""+linktype+"\" value=\""+tval+"\" linkval=\""+linkval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
+        if ( DEBUG10 ) {
+            console.log( (ddbg()), "bid: ", bid, " helperval: ", helperval, " sibling: ", sibling,"\n new tval: ", tval);
         }
-        return tval;
-    }
-
-    var $tc = "";
-    var aitkey = "a-" + i + "-" + tkey;
-    var pkindex = " p_" + kindex;
-    var aidi = "<div aid=\"" + i + "\"";
-    var ttype = " type=\"" + thingtype + "\"";
-    if ( typeof subtype === "undefined" ) {
-        subtype = "";
-    } else if ( typeof subtype === "string" && subtype.substring(0,1)!==" " ) {
-        subtype = " " + subtype;
-    }
-
-    if ( tval===0 ) { tval = "0"; }
-    else if ( typeof tval === "undefined" ) { tval = ""; }
-
-    // do nothing if this is a rule and rules are disabled
-    if ( !GLB.dbinfo.enablerules && typeof tval==="string" && tval.substring(0,6)==="RULE::" ) {
+        var $tc = putElement(kindex, cnt, j, linktype, tval, tkey, subtype, bgcolor, sibling, realsubid, twidth, theight);
         return $tc;
     }
+
+    function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibling, realsubid, twidth, theight) {
         
-    // ignore keys for single attribute items and keys that match types
-    var tkeyshow = (tkey === thingtype) ? "" : " " + tkey;
-
-    // add real sub for linked tiles
-    if ( realsubid && realsubid!==tkey ) {
-        tkeyshow = tkeyshow + " " + realsubid;
-    }
-    
-    if ( tkey==="hue" || tkey==="saturation" ||
-         tkey==="heatingSetpoint" || tkey==="coolingSetpoint"  ||
-         tkey.startsWith("Int_") || tkey.startsWith("State_") ) 
-    {
-
-        // fix thermostats to have proper consistent tags
-        // this is supported by changes in the .js file and .css file
-        // notice we use alias name in actual value and original key in up/down arrows
-        $tc += "<div class=\"overlay " + tkey + " " + subtype + " v_" + kindex + "\">";
-        if (sibling) { $tc += sibling; }
-        $tc += aidi + " subid=\"" + tkey + "-dn\" title=\"" + tkey + " down\" class=\"" + thingtype + " arrow-dn " + tkey + "-dn " + pkindex + "\"></div>";
-        $tc += aidi + " subid=\"" + tkey + "\" title=\"" + thingtype + " " + tkey + "\" class=\"" + thingtype + " arrow-it " + tkeyshow + pkindex + "\"" + " id=\"" + aitkey + "\">" + tval + "</div>";
-        $tc += aidi + " subid=\"" + tkey + "-up\" title=\"" + tkey + " up\" class=\"" + thingtype + " arrow-up " + tkey + "-up " + pkindex + "\"></div>";
-        $tc += "</div>";
-
-    // process analog clocks signalled by use of a skin with a valid name other than digital
-    } else if ( thingtype==="clock" && tkey==="skin" && tval && tval!=="digital" ) {
-        $tc += "<div class=\"overlay "+tkey+" v_"+kindex+"\">";
-        if (sibling) { $tc += sibling; }
-        $tc += aidi + ttype + "\"  subid=\""+tkey+"\" title=\"Analog Clock\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\""+aitkey+"\">" +
-              "<canvas id=\"clock_"+i+"\" class=\""+tval+"\"></canvas></div>";
-        $tc += "</div>";
-    } else {
-        // add state of thing as a class if it isn't a number and is a single word
-        // or two words separated by a space
-        // also prevent dates and times from being added
-        // also do not include any music album or artist names in the class
-        // and finally if the value is complex with spaces or numbers, skip
-        // also skip links and rules and anything longer than 30 characters
-        var extra;
-        if ( typeof tval==="string" && tval.indexOf(" ") !== -1 ) {
-            var tvalwords = tval.split(" ");
-            if ( tvalwords.length===2 ) {
-                extra = " " + tvalwords[0] + "_" + tvalwords[1];
-            } else {
-                extra = "";
+        // cleans up the name of music tracks for proper html page display
+        // no longer trim the name because that breaks album art
+        function fixTrack(tval) {
+            if ( !tval || tval.trim()==="" ) {
+                tval = "None"; 
             }
-        } else if ( tkey==="time" || tkey==="date" || tkey==="color" || typeof tval!=="string" || tval==="" || tval==="lastRunTime" || tval==="lastFinishTime" ||
-                   (tkey.substr(0,6)==="event_") || tkey.startsWith("_") ||
-                   tkey==="trackDescription" || tkey==="currentArtist" || tkey==="groupRole" ||
-                   tkey==="currentAlbum" || tkey==="trackImage" || tkey==="mediaSource" ||
-                   tkey==="weatherIcon" || tkey==="forecastIcon" ||
-                   !isNaN(+tval) || thingtype===tval ||
-                   (tval.substring(0,7)==="number_") || 
-                   (tval.indexOf("://")!==-1) ||
-                   (tval.indexOf("::")!==-1) || tval.length > 30 ) {
-            extra = "";
-        } else {
-            extra = " " + tval;
-        }
-        
-        // fix track names for groups, empty, and super long
-        if (tkey==="trackDescription") {
-            tval = fixTrack(tval);
-        // change this over to a css so we can style it if needed
-        } else if (tkey==="trackImage") {
-            if ( tval.substr(0,4) === "http" ) {
-                if ( twidth && theight ) {
-                    tval = "<img class='" + tkey + "' width='" + twidth + "' height='" + theight + "' src='" + tval + "'>";
-                } else {
-                    tval = "<img class='" + tkey + "' width='120px' height='120px' src='" + tval + "'>";
-                }
-            }
-        } else if ( tkey === "battery") {
-            var powmod = parseInt(tval);
-            powmod = powmod - (powmod % 10);
-            tval = "<div style=\"width: " + tval + "%\" class=\"ovbLevel L" + powmod.toString() + "\"></div>";
-        } else if ( tval && typeof tval==="string" && tval.startsWith("rtsp:") && tval.length > 40 ) {
-            extra = extra + " rtsp";
-            // tval = "<div class=\"rtspwrap\">" + tval + "</div>";
+            return tval;
         }
 
-        // hide variable precisions and definitions
-        // if ( tkey.startsWith("prec_") || tkey.startsWith("def_") ) {
-        if ( tkey.startsWith("def_") ) {
-                extra += " user_hidden";
+        var $tc = "";
+        var aitkey = "a-" + i + "-" + tkey;
+        var pkindex = " p_" + kindex;
+        var aidi = `<div aid="${i}"`;
+        var ttype = ` type="${thingtype}"`;
+        var pn = ` pn="0"`;
+        var n = 0;
+        if ( tkey.startsWith("_") && tval!=="0" && tval!== tkey.substring(1) ) {
+            n = parseInt(tval);
+            if ( isNaN(n) ) { n = 0; }
+            pn = ` pn="${n}"`
+            tval = tkey.substring(1)
+        }
+
+        if ( typeof subtype === "undefined" ) {
+            subtype = "";
+        } else if ( typeof subtype === "string" && subtype.substring(0,1)!==" " ) {
+            subtype = " " + subtype;
+        }
+
+        if ( tval===0 ) { tval = "0"; }
+        else if ( typeof tval === "undefined" ) { tval = ""; }
+
+        // do nothing if this is a rule and rules are disabled
+        if ( !GLB.dbinfo.enablerules && typeof tval==="string" && tval.substring(0,6)==="RULE::" ) {
+            return $tc;
+        }
+            
+        // ignore keys for single attribute items and keys that match types
+        var tkeyshow = (tkey === thingtype) ? "" : " " + tkey;
+
+        // add real sub for linked tiles
+        if ( realsubid && realsubid!==tkey ) {
+            tkeyshow = tkeyshow + " " + realsubid;
         }
         
-        // for music status show a play bar in front of it
-        // now use the real item name and back enable old one
-        // note that we add the sibling to the music controls
-        // so that linked tiles will operate properly
-        // only one sibling for all the controls. The js file deals with this.
-        if (tkey==="musicstatus" || (thingtype==="music" && tkey==="status") ) {
-            $tc += "<div class=\"overlay music-controls" + subtype + " v_"+kindex+"\">";
+        if ( tkey==="hue" || tkey==="saturation" ||
+            tkey==="heatingSetpoint" || tkey==="coolingSetpoint"  ||
+            tkey.startsWith("Int_") || tkey.startsWith("State_") ) 
+        {
+
+            // fix thermostats to have proper consistent tags
+            // this is supported by changes in the .js file and .css file
+            // notice we use alias name in actual value and original key in up/down arrows
+            $tc += "<div class=\"overlay " + tkey + " " + subtype + " v_" + kindex + "\">";
             if (sibling) { $tc += sibling; }
-            $tc += aidi + " subid=\"music-previous\" title=\"Previous\" class=\""+thingtype+" music-previous" + pkindex + "\"></div>";
-            $tc += aidi + " subid=\"music-pause\" title=\"Pause\" class=\""+thingtype+" music-pause" + pkindex + "\"></div>";
-            $tc += aidi + " subid=\"music-play\" title=\"Play\" class=\""+thingtype+" music-play" + pkindex + "\"></div>";
-            $tc += aidi + " subid=\"music-stop\" title=\"Stop\" class=\""+thingtype+" music-stop" + pkindex + "\"></div>";
-            $tc += aidi + " subid=\"music-next\" title=\"Next\" class=\""+thingtype+" music-next" + pkindex + "\"></div>";
+            $tc += aidi + " subid=\"" + tkey + "-dn\" title=\"" + tkey + " down\" class=\"" + thingtype + " arrow-dn " + tkey + "-dn " + pkindex + "\"></div>";
+            $tc += aidi + pn + " subid=\"" + tkey + "\" title=\"" + thingtype + " " + tkey + "\" class=\"" + thingtype + " arrow-it " + tkeyshow + pkindex + "\"" + " id=\"" + aitkey + "\">" + tval + "</div>";
+            $tc += aidi + " subid=\"" + tkey + "-up\" title=\"" + tkey + " up\" class=\"" + thingtype + " arrow-up " + tkey + "-up " + pkindex + "\"></div>";
+            $tc += "</div>";
+
+        // process analog clocks signalled by use of a skin with a valid name other than digital
+        } else if ( thingtype==="clock" && tkey==="skin" && tval && tval!=="digital" ) {
+            $tc += "<div class=\"overlay "+tkey+" v_"+kindex+"\">";
+            if (sibling) { $tc += sibling; }
+            $tc += aidi + pn + ttype + "\"  subid=\""+tkey+"\" title=\"Analog Clock\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\""+aitkey+"\">" +
+                "<canvas id=\"clock_"+i+"\" class=\""+tval+"\"></canvas></div>";
+            $tc += "</div>";
+        } else {
+            // add state of thing as a class if it isn't a number and is a single word
+            // or two words separated by a space
+            // also prevent dates and times from being added
+            // also do not include any music album or artist names in the class
+            // and finally if the value is complex with spaces or numbers, skip
+            // also skip links and rules and anything longer than 30 characters
+            var extra;
+            if ( typeof tval==="string" && tval.indexOf(" ") !== -1 ) {
+                var tvalwords = tval.split(" ");
+                if ( tvalwords.length===2 ) {
+                    extra = " " + tvalwords[0] + "_" + tvalwords[1];
+                } else {
+                    extra = "";
+                }
+            } else if ( tkey==="time" || tkey==="date" || tkey==="color" || typeof tval!=="string" || tval==="" || tval==="lastRunTime" || tval==="lastFinishTime" ||
+                    (tkey.substr(0,6)==="event_") || tkey.startsWith("_") ||
+                    tkey==="trackDescription" || tkey==="currentArtist" || tkey==="groupRole" ||
+                    tkey==="currentAlbum" || tkey==="trackImage" || tkey==="mediaSource" ||
+                    tkey==="weatherIcon" || tkey==="forecastIcon" ||
+                    !isNaN(+tval) || thingtype===tval ||
+                    (tval.substring(0,7)==="number_") || 
+                    (tval.indexOf("://")!==-1) ||
+                    (tval.indexOf("::")!==-1) || tval.length > 30 ) {
+                extra = "";
+            } else {
+                extra = " " + tval;
+            }
+            
+            // fix track names for groups, empty, and super long
+            if (tkey==="trackDescription") {
+                tval = fixTrack(tval);
+            // change this over to a css so we can style it if needed
+            } else if (tkey==="trackImage") {
+                if ( tval.substring(0,4) === "http" ) {
+                    if ( twidth && theight ) {
+                        tval = "<img class='" + tkey + "' width='" + twidth + "' height='" + theight + "' src='" + tval + "'>";
+                    } else {
+                        tval = "<img class='" + tkey + "' width='120px' height='120px' src='" + tval + "'>";
+                    }
+                }
+            } else if ( tkey === "battery") {
+                var powmod = parseInt(tval);
+                powmod = powmod - (powmod % 10);
+                tval = "<div style=\"width: " + tval + "%\" class=\"ovbLevel L" + powmod.toString() + "\"></div>";
+            } else if ( tval && typeof tval==="string" && tval.startsWith("rtsp:") && tval.length > 40 ) {
+                extra = extra + " rtsp";
+                // tval = "<div class=\"rtspwrap\">" + tval + "</div>";
+            }
+
+            // hide variable precisions and definitions
+            // if ( tkey.startsWith("prec_") || tkey.startsWith("def_") ) {
+            // if ( tkey.startsWith("def_") ) {
+            //         extra += " user_hidden";
+            // }
+            
+            // for music status show a play bar in front of it
+            // now use the real item name and back enable old one
+            // note that we add the sibling to the music controls
+            // so that linked tiles will operate properly
+            // only one sibling for all the controls. The js file deals with this.
+            if (tkey==="musicstatus" || (thingtype==="music" && tkey==="status") ) {
+                $tc += "<div class=\"overlay music-controls" + subtype + " v_"+kindex+"\">";
+                if (sibling) { $tc += sibling; }
+                $tc += aidi + " subid=\"music-previous\" title=\"Previous\" class=\""+thingtype+" music-previous" + pkindex + "\"></div>";
+                $tc += aidi + " subid=\"music-pause\" title=\"Pause\" class=\""+thingtype+" music-pause" + pkindex + "\"></div>";
+                $tc += aidi + " subid=\"music-play\" title=\"Play\" class=\""+thingtype+" music-play" + pkindex + "\"></div>";
+                $tc += aidi + " subid=\"music-stop\" title=\"Stop\" class=\""+thingtype+" music-stop" + pkindex + "\"></div>";
+                $tc += aidi + " subid=\"music-next\" title=\"Next\" class=\""+thingtype+" music-next" + pkindex + "\"></div>";
+                $tc += "</div>";
+            }
+
+            // include class for main thing type, the subtype, a sub-key, and a state (extra)
+            // also include a special hack for other tiles that return number_ to remove that
+            // this allows KuKu Harmony to show actual numbers in the tiles
+            // finally, adjust for level sliders that can't have values in the content
+            // hide all fields that start with uom_ since that contains units 
+            // couid do in CSS but this is easier and faster
+            if ( tkey.startsWith("uom_") ) {
+                $tc += "<div class=\"overlay "+tkey+" hidden v_"+kindex+"\">";
+            } else {
+                $tc += "<div class=\"overlay "+tkey+" v_"+kindex+"\">";
+            }
+
+
+            if (sibling) { $tc += sibling; }
+            if ( tkey === "level" || tkey==="onlevel" || tkey==="colorTemperature" || tkey==="volume" || tkey==="position" ) {
+                $tc += aidi + pn + ttype + " subid=\"" + tkey+"\" value=\""+tval+"\" title=\""+tkey+"\" class=\"" + thingtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\"></div>";
+            } else if ( typeof tkey==="string" && typeof tval==="string" && tkey.substring(0,8)==="_number_" && tval.substring(0,7)==="number_" ) {
+                var numval = tkey.substring(8);
+                $tc += aidi + pn + ttype + " subid=\"" + tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\">" + numval + "</div>";
+            } else {
+                if ( typeof tval==="string" && tval.substring(0,6)==="RULE::" && subtype!=="rule" ) {
+                    tkeyshow += " rule";
+                }
+                $tc += aidi + pn + ttype + "  subid=\""+tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + extra + "\" id=\"" + aitkey + "\">" + tval + "</div>";
+            }
             $tc += "</div>";
         }
-
-         // include class for main thing type, the subtype, a sub-key, and a state (extra)
-        // also include a special hack for other tiles that return number_ to remove that
-        // this allows KuKu Harmony to show actual numbers in the tiles
-        // finally, adjust for level sliders that can't have values in the content
-        // hide all fields that start with uom_ since that contains units 
-        // couid do in CSS but this is easier and faster
-        if ( tkey.startsWith("uom_") ) {
-            $tc += "<div class=\"overlay "+tkey+" hidden v_"+kindex+"\">";
-        } else {
-            $tc += "<div class=\"overlay "+tkey+" v_"+kindex+"\">";
-        }
-        if (sibling) { $tc += sibling; }
-        if ( tkey === "level" || tkey==="onlevel" || tkey==="colorTemperature" || tkey==="volume" || tkey==="position" ) {
-            $tc += aidi + ttype + " subid=\"" + tkey+"\" value=\""+tval+"\" title=\""+tkey+"\" class=\"" + thingtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\"></div>";
-        } else if ( typeof tkey==="string" && typeof tval==="string" && tkey.substring(0,8)==="_number_" && tval.substring(0,7)==="number_" ) {
-            var numval = tkey.substring(8);
-            $tc += aidi + ttype + " subid=\"" + tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\">" + numval + "</div>";
-        } else {
-            if ( typeof tval==="string" && tval.substring(0,6)==="RULE::" && subtype!=="rule" ) {
-                tkeyshow += " rule";
-            }
-            $tc += aidi + ttype + "  subid=\""+tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + extra + "\" id=\"" + aitkey + "\">" + tval + "</div>";
-        }
-        $tc += "</div>";
+        return $tc;
     }
-    return $tc;
-}
 
 }
 
@@ -6532,7 +6525,7 @@ function getCustomTile(userid, configoptions, custom_val, bid) {
 
 // this little gem makes sure items are in the proper order
 function setValOrder(val) {
-    const order = {"name": 1, "battery": 2, "color": 3, "switch": 7, "momentary": 7, "presence": 7,
+    const order = {"name": 1, "battery": 2, "color": 3, "switch": 7, "momentary": 7, "presence": 7, "presence_type": 8,
                    "contact": 9, "door": 8, "garage":8, "motion": 9, "themode": 10,  
                    "make": 11, "modelName":12, "modelYear": 13, "vehiclecolor": 14, "nickName": 15,
                    "coolingSetpoint": 11, "heatingSetpoint": 12,
@@ -6701,37 +6694,28 @@ function processHubMessage(userid, hubmsg, newST) {
             pvalue = updateTimeStamp(subid, pvalue);
             var swtype = device.devicetype;
 
+            // handle special audio updates
+            if ( swtype==="audio" || swtype==="sonos" || pvalue.audioTrackData ) {
+                pvalue = translateAudio(pvalue);
+            } else if ( swtype==="weather" ) {
+                pvalue = translateWeather(pvalue);
+            } else if ( swtype==="music" ) {
+                pvalue = translateMusic(pvalue);
+            } else {
+                pvalue = translateObjects(pvalue, 2);
+            }
+
             // update the DB
             device.pvalue = encodeURI2(pvalue);
             mydb.updateRow("devices", device, "userid = " + userid + " AND id = "+device.id)
             .then( res => {
                 if ( DEBUG12 ) {
-                    console.log( (ddbg()), "processHubMessage - db update: ", subid, " swtype: ", swtype, " pvalue: ", pvalstr, " dbres: ", res);
+                    console.log( (ddbg()), "processHubMessage - db update: ", subid, " swtype: ", swtype, " pvalue: ", pvalue, " dbres: ", res);
                 }
             })
             .catch( reason => {
                 console.log( (ddbg()), reason);
             });
-
-            // handle special audio updates
-            if ( swtype==="audio" || swtype==="sonos" || pvalue.audioTrackData ) {
-                if ( !pvalue.audioTrackData || objCount(pvalue.audioTrackData)===0 ) {
-                    pvalue.audioTrackData = {
-                        title: "",
-                        artist: "",
-                        album: "",
-                        albumArtUrl: GLB.returnURL + "/media/Electronics/electronics13-icn@2x.png",
-                        mediaSource: ""
-                    };
-                }
-                pvalue = translateAudio(pvalue);
-            } else if ( swtype==="music" || pvalue.trackData ) {
-                pvalue = translateMusic(pvalue);
-            } else if ( swtype==="weather" ) {
-                pvalue = translateWeather("Weather", pvalue);
-            } else {
-                pvalue = translateObjects(pvalue);
-            }
 
             pushClient(userid, hubmsgid, swtype, subid, pvalue);
             pvalue.subid = subid;
@@ -8185,11 +8169,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                     nvpreq = {"commands": [ { component:"main", capability: "heatingSetpoint", command: "setHeatingSetpoint", arguments: [swval] } ] };
                     presult.heatingSetpoint = swval;
 
-                // parse the music commands
-                // reverse of translateAudio
-                // audiomap = {"title": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
-                // "albumArtUrl": "trackImage", "mediaSource": "mediaSource"};
-                } else if ( subid==="trackDescription" || subid==="currentArtis" || subid==="currentAlbum" ||
+                } else if ( subid==="trackDescription" || subid==="currentArtist" || subid==="currentAlbum" ||
                             subid==="trackImage" || subid==="mediaSource" ) {
                     return queryNewST(hub, swid, swtype).then(presult => {
                         if ( presult && typeof presult === "object" ) {
@@ -8750,16 +8730,6 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                 pvalue.error_description = "Access token expired. Please reauthorize your vehicles.";
             }
         }
-        if ( swtype==="audio" || swtype==="sonos" || pvalue.audioTrackData  ) {
-            pvalue = translateAudio(pvalue);
-        } else if ( swtype==="music" || pvalue.trackData ) {
-            pvalue = translateMusic(pvalue);
-        } else if ( swtype==="weather" && is_object(pvalue.forecast) ) {
-            var thisorigname = pvalue.name || "Weather";
-            pvalue = translateWeather(thisorigname, pvalue);
-        } else {
-            pvalue = translateObjects(pvalue);
-        }
 
         // save to DB - we must read all the devices and merge the pvalue with existing
         if ( hubtype==="Ford" || hubtype==="Sonos" || hubtype==="ISY" ) {
@@ -9202,22 +9172,51 @@ function translateMusic(pvalue) {
 }
 
 // recursively expand objects
-function translateObjects(pvalue) {
-    var nvalue = pvalue;
+function translateObjects(pvalue, levels) {
+    var jtval;
+    var nvalue = {};  // clone(pvalue);
+    var moreobjects = false;
     for  (var tkey in pvalue) {
         var tval = pvalue[tkey];
+
+        // attempt to convert string into object
+        if ( typeof tval === "string" ) {
+            try {
+                var tvobj = JSON.parse(tval);
+                tval = tvobj;
+            } catch(err) { }
+        }
+
         if ( typeof tval==="object" ) {
             for (var jtkey in tval ) {
                 var jtval = tval[jtkey];
                 var newkey = tkey + "_" + jtkey.toString();
-                if ( typeof jtval!=="object" ) {
+
+                if ( typeof jtval === "string" ) {
+                    try {
+                        var jtvobj = JSON.parse(jtval);
+                        jtval = jtvobj;
+                    } catch(err) { }
+                }
+        
+                if ( typeof jtval === "object" && levels > 1 ) {
+                    moreobjects = true;
+                    nvalue[newkey] = jtval;
+                } else if ( typeof jtval !== "object" ) {
                     nvalue[newkey] = jtval.toString();
                 }
             }
-            delete nvalue[tkey];
+            // delete nvalue[tkey];
+        } else {
+            nvalue[tkey] = tval;
         }
     }
-    return nvalue;
+    if ( moreobjects ) {
+        levels = levels - 1;
+        return translateObjects(nvalue, levels);
+    } else {
+        return nvalue;
+    }
 }
 
 function doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, command, linkval) {
@@ -11759,22 +11758,7 @@ function apiCall(user, body, protocol, req, res) {
                         var devices = {};
                         if ( rows ) {
                             rows.forEach(row => {
-                                var pvalue = decodeURI2(row.pvalue);
-
-                                // handle special audio updates
-                                if ( !pvalue ) {
-                                    pvalue = {};
-                                } else if ( swtype==="audio" || swtype==="sonos" || pvalue.audioTrackData ) {
-                                    pvalue = translateAudio(pvalue);
-                                } else if ( swtype==="music" || pvalue.trackData ) {
-                                    pvalue = translateMusic(pvalue);
-                                } else if ( swtype==="weather" ) {
-                                    var thisorigname = pvalue.name || "Weather";
-                                    pvalue = translateWeather(thisorigname, pvalue);
-                                } else {
-                                    pvalue = translateObjects(pvalue);
-                                }
-                                row.pvalue = pvalue;
+                                row.pvalue = decodeURI2(row.pvalue);
                                 devices[row.id] = row;
                             });
                         }

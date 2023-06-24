@@ -1,4 +1,5 @@
 const devhistory = `
+3.072   fix links to work even when parent is not on screen and other bugfixes
 3.071   bugfix isy mapping for Hubitat node server
 3.070   update isy mapping to include commands and other tweaks
 3.069   fix isy devices to be removed when hub is removed and other isy bugfixes
