@@ -15,6 +15,7 @@
  * This is a Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history
+ * 06/24/2023 - fix music tiles to work with new logic for volume
  * 06/17/2023 - merge prior edits into updated logic for commands
  * 05/31/2023 - major change to command logic to be more general
  * 05/29/2023 - move translate music to here to support HP and ISY Node Server
@@ -2941,11 +2942,11 @@ def setMusic(swid, cmd, swattr, subid) {
         
         // fix old bug from addition of extra class stuff
         // had to fix this for all settings
-        if ( subid=="mute" && (cmd=="mute" || swattr.contains(" unmuted" )) ) {
+        if ( (subid=="mute" && (cmd=="mute" || swattr.contains(" unmuted" ))) || subid=="_mute" ) {
             newsw = "muted"
             item.mute()
             resp['mute'] = newsw
-        } else if ( subid=="mute" && (cmd=="unmute" || swattr.contains(" muted" )) ) {
+        } else if ( (subid=="mute" && (cmd=="unmute" || swattr.contains(" muted" ))) || subid=="_unmute" ) {
             newsw = "unmuted"
             item.unmute()
             resp['mute'] = newsw
@@ -2960,6 +2961,16 @@ def setMusic(swid, cmd, swattr, subid) {
             newsw = (newsw <= 5) ? 0 : newsw - del
             item.setLevel(newsw)
             resp['level'] = newsw
+        } else if ( subid=="_groupVolumeUp" || subid=="_volumeUp" ) {
+            def grpvol = item.currentValue("volume")
+            grpvol = (grpvol > 95) ? 100 : grpvol + 5
+            item.setVolume(grpvol)
+            resp["volume"] = grpvol
+        } else if ( subid=="_groupVolumeDown" || subid=="_volumeDown" ) {
+            def grpvol = item.currentValue("volume")
+            grpvol = (grpvol < 5) ? 0 : grpvol - 5
+            item.setVolume(grpvol)
+            resp["volume"] = grpvol
         } else if ( subid=="level" ) {
             newsw = cmd.toInteger()
             item.setLevel(newsw)
@@ -2986,6 +2997,11 @@ def setMusic(swid, cmd, swattr, subid) {
             item.nextTrack()
             resp = getMusic(swid, item)
             // resp['trackDescription'] = item.currentValue("trackDescription")
+        } else if ( subid=="_setVolume" || subid=="_setLevel" ) {
+            def newvol = cmd.toInteger()
+            resp["level"] = newvol
+            resp["volume"] = newvol
+            item.setLevel(newvol)
         } else {
             sendCommand(item, subid, cmd)
             resp = getMusic(swid, item)

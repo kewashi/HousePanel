@@ -36,7 +36,7 @@ function getDefaultSubids() {
      initExistingFields();
 }
 
-// popup dialog box now uses createModal
+// tile custom popup box
 function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {  
 
     // save our tile id in a global variable
@@ -718,7 +718,6 @@ function initCustomActions() {
             event.stopPropagation;
             return;
         }
-        
         var pos = {top: 375, left: 380, zindex: 9999, background: "red", color: "white", position: "absolute"};
         var subid = $("#cm_userfield").val();
         var tilename = $("#cm_subheader").html();
@@ -727,6 +726,7 @@ function initCustomActions() {
             if ( clk==="okay" ) {
                 applyCustomField("delcustom", subid);
             }
+            closeModal("modalremove");
         });
         event.stopPropagation;
     });

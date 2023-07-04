@@ -957,9 +957,7 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
     priorOpmode = "Modal";
     modalWindows[modalid] = 1;
     modalStatus = modalStatus + 1;
-
-    console.log("saveOpmode: ", saveOpmode, " modalid: ", modalid, " cnt: ", modalWindows[modalid]);
-    // console.log("modalid= ", modalid, "modaltag= ", modaltag, " addok= ", addok, " pos= ", pos, " modalWindows= ", modalWindows, " modalStatus= ", modalStatus, "\n content: ", modalcontent);
+    // console.log("saveOpmode: ", saveOpmode, " modalid: ", modalid, " cnt: ", modalStatus);
     
     var modaldata = modalcontent;
     var modalhook;
@@ -1051,6 +1049,7 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
                 if ( responsefunction ) {
                     responsefunction(this, modaldata);
                 }
+                // console.log("closing modal: ", modalid);
                 closeModal(modalid);
             }
         });
@@ -1060,8 +1059,10 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
             if ( responsefunction ) {
                 responsefunction(this, modaldata);
             } else {
+                // console.log("closing modal: ", modalid);
                 closeModal(modalid);
             }
+            evt.stopPropagation();
         });
     } else {
 
@@ -1071,7 +1072,7 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
                 if ( responsefunction ) {
                     responsefunction(this, modaldata);
                 }
-            })
+            });
         }
 
         // console.log(">>>> addok: ", addok," hook: ", modalhook);
@@ -1106,7 +1107,7 @@ function closeModal(modalid) {
     if ( modalStatus < 0 ) { modalStatus = 0; }
 
     priorOpmode = saveOpmode;
-    console.log("priorOpmode = " + priorOpmode, " modalid: ", modalid);
+    // console.log("priorOpmode = " + priorOpmode, " modalid: ", modalid, " modalStatus: ", modalStatus);
 }
 
 function setupColors() {
@@ -1372,9 +1373,10 @@ function setupPagemove() {
             $.post(cm_Globals.returnURL, 
                 {useajax: "setorder", userid: userid, pname: pname, id: "none", type: "rooms", value: pages},
                 function (presult, pstatus) {
-                    // if (pstatus==="success" ) {
-                    console.log("setorder: ", presult );
-                    // }
+                    if (pstatus==="success" ) {
+                        cm_Globals.reordered = true;
+                        console.log("setorder: ", presult );
+                    }
                 }, "json"
             );
         }
@@ -1437,6 +1439,7 @@ function setupSortable() {
                     {useajax: "setorder", userid: userid, pname: pname, id: "none", type: "things", value: tilenums},
                     function (presult, pstatus) {
                         if (pstatus==="success" ) {
+                            cm_Globals.reordered = true;
                             console.log("setorder: ", presult );
                         }
                     }, "json"
