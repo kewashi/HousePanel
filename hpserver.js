@@ -136,7 +136,7 @@ GLB.mainISYMap = {
     "valve":       [{"GV0": "status_", "BATLVL": "battery", "ST": "valve"},            {"valve":"ST","ST:open":"OPEN","ST:close":"CLOSE","_query":"QUERY","_open":"OPEN","_close":"CLOSE"}, "2.4" ],
 
     "lock":        [{"GV0": "status_", "BATLVL": "battery", "ST": "lock"},             {"_query":"QUERY","_unlock":"UNLOCK","_lock":"LOCK","lock":"ST","ST:lock":"UNLOCK","ST:unlock":"LOCK"}, "8.1" ],
-    "mode":        [{"GV0": "status_", "MODE": "themode"},                             {"_query":"QUERY","_day":"SET_DAY", "_evening":"SET_EVENING", "_night":"SET_NIGHT", "_away":"SET_AWAY", "themode":"SET_HMODE",
+    "mode":        [{"GV0": "status_", "MODE": "themode"},                             {"_query":"QUERY","_Day":"SET_DAY", "_Evening":"SET_EVENING", "_Night":"SET_NIGHT", "_Away":"SET_AWAY",
                                                                                         "themode":"MODE","MODE:Day":"SET_EVENING","MODE:Evening":"SET_NIGHT","MODE:Night":"SET_AWAY","MODE:Away":"SET_DAY"}, "8.2" ],
     "hsm":          [{"GV0": "status_", "ST": "status"},                               {"_query":"QUERY","_armaway":"armAway","_armHome":"armHome","_armNight":"armNight",
                                                                                         "_disarm":"disarm","_disarmAll":"disarmAll","_cancelAlerts":"cancelAlerts"}, "8.3" ],

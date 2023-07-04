@@ -247,7 +247,9 @@ function getOnOff(str_type, subid, val) {
             var subid = $(this).attr("subid");
             if ( subid.startsWith("_") ) {
                 var locmode = $(this).html();
-                onoff.push(locmode);
+                if ( locmode !== "query" ) {
+                    onoff.push(locmode);
+                }
             }
         });
         // onoff = ["Away","Home","Night", ""];
