@@ -494,6 +494,7 @@ div.audio._groupVolumeDown, div.sonos._groupVolumeDown {
 
 /* round temperature value inside a thermostat */
 div.overlay.temperature div.temperature,
+div.overlay.temperatureApparent div.temperatureApparent,
 div.overlay.realFeel div.realFeel,
 div.overlay.DEWPT div.DEWPT,
 div.overlay.feelsLike div.feelsLike

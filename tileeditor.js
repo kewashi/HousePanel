@@ -2016,7 +2016,7 @@ function initColor(str_type, subid, thingindex) {
 
         fe += "<div class='colorgroup font'><label>Font Size (px):</label>";
         fe += "<select name=\"fontEffect\" id=\"editFont\" class=\"ddlDialog\">";
-        var sizes = [6,7,8,9,10,11,12,14,16,18,20,22,24,28,32,36,40,44,48,52,60,80,100,120,200];
+        var sizes = [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,24,28,32,36,40,44,48,52,60,80,100,120,160,200];
         sizes.forEach( function(sz, index, arr) {
             sz = parseInt(sz);
             var checked = "";

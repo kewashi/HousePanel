@@ -3614,7 +3614,7 @@ function setupPage() {
             processClickWithList(that, thingname, ro, subid, ["up","down"]);
 
         } else if ( subid === "themode" ) {
-            processClickWithList(that, thingname, ro, subid, ["Day","Evening","Night","Away"],"Mode: ");
+            processClickWithList(that, thingname, ro, subid, ["Day","Evening","Night","Away"]);
        
         // handle commands that have parameters required
         // this is signalled by the value set otherwise the command value is the command string name

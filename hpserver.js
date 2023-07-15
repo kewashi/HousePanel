@@ -637,7 +637,7 @@ function getTypes() {
 
     // add hubitat specific types
     if ( array_key_exists("Hubitat", GLB.dbinfo.hubs) ) {
-        var hetypes = ["hsm","piston","music","audio","actuator","other"];
+        var hetypes = ["hsm","piston","music","audio","weather","actuator","other"];
         hetypes.forEach( key => {
             if ( !thingtypes.includes(key) ) {
                 thingtypes.push(key);
@@ -826,25 +826,32 @@ function _curl(host, headers, nvpstr, calltype, callback) {
             host = "http://" + host;
         }
         var myURL = new URL(host);
+        var path = myURL.pathname;
         if ( DEBUGcurl ) {
             console.log( (ddbg()),"myURL: ", myURL );
         }
 
         // add query string if given separately
         var formbuff;
-        if ( typeof nvpstr === "string" || typeof nvpstr === "number" ) {
-            nvpstr = nvpstr.toString();
-            if ( calltype==="GET" ) {
-                if ( nvpstr!=="" ) { host = host + "?" + nvpstr; }
-            } else {
-                formbuff = nvpstr; // Buffer.from(nvpstr);
+        if ( nvpstr ) {
+            if ( calltype!=="GET" ) {
+                if ( typeof nvpstr === "object" ) {
+                    formbuff = Buffer.from(JSON.stringify(nvpstr));
+                } else {
+                    formbuff = nvpstr.toString(); // Buffer.from(nvpstr);
+                }
+            } else { 
+                if ( typeof nvpstr === "object" ) {
+                    nvpstr = json2query(nvpstr);
+                } else {
+                    nvpstr = nvpstr.toString();
+                }
+                path = path + "?" + nvpstr; 
             }
-        } else if ( typeof nvpstr === "object" ) {
-            formbuff = Buffer.from(JSON.stringify(nvpstr));
-        } 
+        }
 
         if ( DEBUGcurl ) {
-            console.log((ddbg()), "_curl buffer: ", formbuff);
+            console.log((ddbg()), "_curl buffer: ", formbuff, " path: ", path);
         }
 
         if ( formbuff ) {
@@ -859,18 +866,10 @@ function _curl(host, headers, nvpstr, calltype, callback) {
         }
 
         var myport = myURL.port;
-        // if ( !myport ) {
-        //     if ( myURL && myURL.protocol === "https:" ) {
-        //         myport = 443;
-        //     } else {
-        //         myport = 80;
-        //     }
-        // }
-
         const opts = {
             hostname: myURL.hostname,
             port: myport,
-            path: myURL.pathname,
+            path: path,
             rejectUnauthorized: false,
             method: calltype,
         };
@@ -881,6 +880,9 @@ function _curl(host, headers, nvpstr, calltype, callback) {
             opts.auth = myURL.auth;
         }
         // get the request
+        if ( DEBUGcurl ) {
+            console.log((ddbg()), "_curl opts: ", opts);
+        }
         var totalbody = "";
         if ( myURL.protocol === "https:" ) {
             var req = https.request(opts, curlResponse);
@@ -5487,7 +5489,7 @@ function returnFile(userid, pname, thingvalue, thingtype, configoptions) {
 // the City Name, Country Code, and the Location Code from AccuWeather must be provided
 // writeAccuWeather("ann-arbor-mi","us","329380");
 function writeAccuWeather(userid, city, region, code) {
-    if ( !city || !code || !region ) {
+    if ( !userid || !city || !code || !region ) {
         return;
     }
     const acid = "awcc1531959686475";
@@ -5507,7 +5509,7 @@ function writeAccuWeather(userid, city, region, code) {
 // the City Name and code must be provided
 // data for my home town:  ("ann-arbor","Ann Arbor","42d28n83d74");
 function writeForecastWidget(userid, city, region, code) {
-    if ( !city || !code || !region ) {
+    if ( !userid || !city || !code || !region ) {
         return;
     }
     var $tc = `
@@ -5536,78 +5538,82 @@ function writeForecastWidget(userid, city, region, code) {
     fs.writeFileSync(fname, $tc, {encoding: "utf8", flag:"w"});
 }
 
-function getWeatherIcon(num, accu) {
+function getWeatherIcon(num, weathertype) {
     var iconimg;
     var iconstr;
-    if ( typeof num === "string" && num.startsWith("<img") ) {
-        iconstr = num;
-    } else if ( !num || isNaN(+num) ) {
-        iconstr = false;
-    // accuweather's icons
-    } else if ( num==="na" ) {
-        iconimg = "media/Weather/na.png";
-        iconstr = "<img src=\"" + iconimg + "\" alt=\"na\" width=\"80\" height=\"80\">";
-    } else if ( accu ) {
-        num = num.toString() + ".svg";
+    var numstr = num.toString();
+    if ( weathertype==="accuWeather" ) {
+        num = numstr + ".svg";
         iconimg = "https://accuweather.com/images/weathericons/" + num;
         iconstr = "<img src=\"" + iconimg + "\" alt=\"" + num + "\" width=\"80\" height=\"80\">";
-    } else {
-        num = num.toString();
-        if ( num.length < 2 ) {
-            num = "0" + num;
+    } else if ( weathertype==="tomorrowio" ) {
+        iconimg = "media/tomorrowio/na.png";
+        var description = "unknown";
+        const files = fs.readdirSync("media/tomorrowio");
+        // if day or night not given assume day
+        if ( numstr.length === 4 ) {
+            numstr = numstr + "0";
         }
-        // uncomment this to use ST's copy. Default is to use local copy
-        // so everything stays local
-        iconimg = "media/Weather/" + num + ".png";
-        iconstr = "<img src=\"" + iconimg + "\" alt=\"" + num + "\" width=\"80\" height=\"80\">";
+        for (var icfile of files) {
+            const fileBase = path.basename(icfile,".png");
+            const fileExt = path.extname(icfile);
+            var i = fileBase.indexOf("_");
+
+            if ( fileExt === ".png" && fileBase.substring(0,i) === numstr ) {
+                var len = fileBase.length;
+                description = fileBase.substring(i+1, len - 6);
+                iconimg =  "media/tomorrowio/" + fileBase + fileExt;
+                break;
+            }
+        }
+        iconstr = "<img src=\"" + iconimg + "\" alt=\"" + description + "\" width=\"80\" height=\"80\">";
+
+    } else if ( weathertype==="hubitat") {
+
+        if ( typeof num === "string" && num.startsWith("<img") ) {
+            iconstr = num;
+        } else if ( num==="na" || (typeof num === "string" && num.startsWith("weather")) ) {
+            iconimg = "media/weather/" + num + ".png";
+            iconstr = "<img src=\"" + iconimg + "\" alt=\"" + num + "\" width=\"80\" height=\"80\">";
+        } else {
+            num = num.toString();
+            if ( num.length < 2 ) {
+                num = "0" + num;
+            }
+            iconimg = "media/weather/" + num + ".png";
+            iconstr = "<img src=\"" + iconimg + "\" alt=\"" + num + "\" width=\"80\" height=\"80\">";
+        }
+    } else {
+        iconimg = "media/weather/na.png";
+        iconstr = "<img src=\"" + iconimg + "\" alt=\"na\" width=\"80\" height=\"80\">";
     }
     return iconstr;
 }
 
 function translateWeather(pvalue) {
-
     if ( !pvalue || typeof pvalue!=="object" ) {
         console.log( (ddbg()), "invalid weather data - object expected but not found");
-        return pvalue;
+    } else if ( pvalue.weatherIcon && pvalue.forecastIcon ) {
+        pvalue["weatherIcon"] = getWeatherIcon(pvalue.weatherIcon,"hubitat");
+        pvalue["forecastIcon"] = getWeatherIcon(pvalue.forecastIcon,"hubitat");
+    } else if ( pvalue.weatherCode ) {
+        pvalue["weatherIcon"] = getWeatherIcon(pvalue.weatherCode, "tomorrowio");
+    } else if ( pvalue.realFeel ) {
+        pvalue = translateAccuWeather(pvalue);
     }
+    return pvalue;
+}
 
-    if ( !pvalue.realFeel ) {
-        if ( pvalue && pvalue.weatherIcon && pvalue.forecastIcon ) {
-            var wicon = getWeatherIcon(pvalue["weatherIcon"]);
-            if ( wicon===false ) {
-                delete pvalue["weatherIcon"];
-            } else {
-                pvalue["weatherIcon"] = wicon;
-            }
-            var ficon = getWeatherIcon(pvalue["forecastIcon"]);
-            if ( ficon===false ) {
-                delete pvalue["forecastIcon"];
-            } else {
-                pvalue["forecastIcon"] = ficon;
-            }
-        }
-        return pvalue;
-    }
-
+function translateAccuWeather(pvalue) {
     // the rest of this function fixes up the accuWeather tile
     var newvalue = {};
     newvalue.name = "Weather";
     newvalue.temperature = pvalue.temperature;
     newvalue.realFeel = pvalue.realFeel;
-    newvalue.weatherIcon = getWeatherIcon(pvalue.weatherIcon, true);
+    newvalue.weatherIcon = getWeatherIcon(pvalue.weatherIcon, "accuWeather");
     if ( newvalue.weatherIcon===false ) {
         delete newvalue.weatherIcon;
     }
-
-    // don't include these because they are in the summary below
-    // ----------------------------------------------------------
-    // newvalue.cloudCover = pvalue.cloudCover;
-    // newvalue.humidity = pvalue.humidity;
-    // newvalue.localSunrise = pvalue.localSunrise;
-    // newvalue.localSunset = pvalue.localSunset;
-    // newvalue.windVector = pvalue.windDirection + " " + pvalue.windSpeed;
-    // newvalue.uvIndex = pvalue.uvIndex;
-    // newvalue.alert = pvalue.alert;
 
     // fix the summary string to work with the web
     var summaryStr = pvalue.summary;
@@ -5681,14 +5687,6 @@ function uniqueWords(str) {
 }
 
 function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelname, postop, posleft, zindex, customname, wysiwyg, alldevices) {
-    // const audiomap = {"title": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
-    //                   "albumArtUrl": "trackImage", "mediaSource": "mediaSource"};
-    // const musicmap = {"name": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
-    //                   "status": "status", "trackMetaData": "trackImage", "trackImage":"trackImage", "metaData":"trackImage",
-    //                   "trackNumber":"", "music":"", "trackUri":"", "uri":"", "transportUri":"", "enqueuedUri":"",
-    //                   "audioSource": "mediaSource"};
-    const mantemp = {"temperature":"", "feelsLike":"", "name":"", "city":"", "weather":"", 
-                     "weatherIcon":"", "forecastIcon":"","alertKeys":""};
     var $tc = "";
     var thingtype = thesensor["type"];
     var bid = thesensor["id"];
@@ -5754,22 +5752,9 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     // var thingname = thingvalue["name"];
     var thingname = thesensor["name"];
 
-    // no longer do this because it is stupid
-    var bgcolor= "";
-    // if ( array_key_exists("color", thingvalue) ) {
-    //     var cval = thingvalue["color"];
-    //     try {
-    //         if ( cval && (cval.match(/^#[abcdefABCDEF\d]{6}/) !== null || cval.startsWith("rgb")) ) {
-    //             bgcolor = " style=\"background-color:"+cval+";\"";
-    //         }
-    //     } catch (e) {
-    //         bgcolor = "";
-    //     }
-    // }
-    
     // wrap thing in generic thing class and specific type for css handling
     // include the new thingid value for direct access to the specific thing in the DB
-    $tc=   "<div id=\""+idtag+"\" thingid=\""+thingid+"\" aid=\""+cnt+"\" hub=\""+hubnum+"\" hubindex=\""+hubindex+"\"  hubtype=\""+hubtype+"\" tile=\""+kindex+"\" bid=\""+bid+"\" type=\""+thingtype+"\"";
+    $tc = "<div id=\""+idtag+"\" thingid=\""+thingid+"\" aid=\""+cnt+"\" hub=\""+hubnum+"\" hubindex=\""+hubindex+"\"  hubtype=\""+hubtype+"\" tile=\""+kindex+"\" bid=\""+bid+"\" type=\""+thingtype+"\"";
     
     // set up the class setting
     var classstr = "thing " + thingtype+"-thing" + subtype;
@@ -5802,173 +5787,115 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     $tc += thingname;
     $tc += "</div>";
 
-    // special handling for weather tiles
-    // this allows for feels like and temperature to be side by side
-    // and it also handles the inclusion of the icons for status
-    if (thingtype==="weatherxxx" && array_key_exists("feelsLike", thingvalue) ) {
-        if ( !thingvalue["name"] ) {
-            thingvalue["name"] = thingname;
-        }
+    // no longer do any special handling for weather tiles since we can do side by side other ways
+    // also weather can now be from other sources
+    // create a thing in a HTML page using special tags so javascript can manipulate it
+    // multiple classes provided. One is the type of thing. "on" and "off" provided for state
+    // for multiple attribute things we provide a separate item for each one
+    // the first class tag is the type and a second class tag is for the state - either on/off or open/closed
+    // ID is used to send over the groovy thing id number passed in as $bid
+    // for multiple row ID's the prefix is a$j-$bid where $j is the jth row
+    var j = 0;
 
-        // fix icons just in case
-        var tempicon = getWeatherIcon(thingvalue["weatherIcon"], false);
-        var feelicon = getWeatherIcon(thingvalue["forecastIcon"], false);
-        
-        $tc += putElement(kindex, cnt, 0, thingtype, thingvalue["name"], "name");
-        $tc += putElement(kindex, cnt, 1, thingtype, thingvalue["city"], "city");
-        $tc += "<div class=\"weather_temps\">";
-        $tc += putElement(kindex, cnt, 2, thingtype, thingvalue["temperature"], "temperature");
-        $tc += putElement(kindex, cnt, 3, thingtype, thingvalue["feelsLike"], "feelsLike");
-        $tc += "</div>";
-        
-        // use new weather icon mapping
-        $tc += "<div class=\"weather_icons\">";
-        $tc += putElement(kindex, cnt, 4, thingtype, tempicon, "weatherIcon");
-        $tc += putElement(kindex, cnt, 5, thingtype, feelicon, "forecastIcon");
-        $tc += "</div>";
-        // $tc += putElement(kindex, cnt, 6, thingtype, "Sunrise: " + thingvalue["localSunrise"] + " Sunset: " + thingvalue["localSunset"], "sunriseset");
-        
-        // see comments below about changes to link logic and companion use removal
-        var j = 6;
-        for ( var tkey in thingvalue ) {
-            tkey = tkey.toString();
-            if ( !array_key_exists(tkey, mantemp) ) {
-                var tval = thingvalue[tkey];
-                $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor);
-                j++;
-            }
-        };
-        
-    } else {
-
-        // create a thing in a HTML page using special tags so javascript can manipulate it
-        // multiple classes provided. One is the type of thing. "on" and "off" provided for state
-        // for multiple attribute things we provide a separate item for each one
-        // the first class tag is the type and a second class tag is for the state - either on/off or open/closed
-        // ID is used to send over the groovy thing id number passed in as $bid
-        // for multiple row ID's the prefix is a$j-$bid where $j is the jth row
-
-        // removed this old check since things are now always objects
-        // if (typeof thingvalue === "object") {
-        var j = 0;
-
-        // get width and height for images if given
-        var twidth = null;
-        var theight = null;
-        if ( array_key_exists("width", thingvalue) ) {
-            twidth = thingvalue["width"];
-        }
-        if ( array_key_exists("height", thingvalue) ) {
-            theight = thingvalue["height"];
-        }
-
-        // create on screen element for each key
-        // this includes a check for helper items created in tile customizer
-        for ( var tkey in thingvalue ) {
-            var helperkey = "user_" + tkey;
-            var tval = thingvalue[tkey];
-            var userSubtype = subtype;
-
-            // add operating state for thermostats
-            if ( thingtype === "thermostat" && tkey==="temperature" && thingvalue["thermostatOperatingState"] ) {
-                userSubtype = userSubtype + " " + thingvalue["thermostatOperatingState"];
-            }
-
-            // check value for "json" strings
-            var jsontval;
-            if ( is_object(tval) ) {
-                jsontval = clone(tval);
-            } else if ( typeof tval === "string" ) {
-                try {
-                    jsontval = JSON.parse(tval);
-                } catch(jerr) {
-                    jsontval = null;
-                }
-            }
-            
-            // skip special audio and music tiles
-            if ( tkey==="audioTrackData" || tkey==="trackData" || tkey==="forecast" ) {
-                jsontval = null;
-                tval = null;
-            }
-
-            // handle other cases where the value is an object like audio or music tiles
-            // but audio, music, and weather and handled elsewhere so don't do it again here
-            if ( jsontval && is_object(jsontval) ) {
-
-                var isarr = is_array(jsontval);
-                for (var jtkey in jsontval ) {
-                    var jtval = jsontval[jtkey];
-
-                    // expand arrays onto the base
-                    // for example, this happens for buttons reporting acceptable values
-                    if ( isarr ) {
-                        jtkey = tkey + "_" + jtkey.toString();
-                    }
-
-                    // skip adding an object element if it duplicates an existing one
-                    if ( jtkey && jtval && !array_key_exists(jtkey, thingvalue) ) {
-                        if ( is_object(jtval) ) {
-                            var isarr2 = is_array(jtval);
-                            for (var jtkey2 in jtval) {
-                                var jtval2 = jtval[jtkey2];
-                                if ( isarr2 ) {
-                                    jtkey2 = jtkey + "_" + jtkey2.toString();
-                                }
-                                // only print strings and non duplicates - don't descend more than 2 levels
-                                // i should have written putElement as a recursive function call - this is to be done later
-                                if ( jtkey2 && jtval2 && (typeof jtval2!=="object") && !array_key_exists(jtkey2, thingvalue) ) {
-                                    $tc += putElement(kindex, cnt, j, thingtype, jtval2, jtkey2, subtype, bgcolor, null, null, twidth, theight);
-                                    j++;
-                                }
-                            }
-                        } else {
-                            $tc += putElement(kindex, cnt, j, thingtype, jtval, jtkey, subtype, bgcolor, null, null, twidth, theight);
-                            j++;
-                        }
-                    }
-                }
-            }
-
-            // if definition for a variable name is given then use it
-            // else if ( thingtype==="isy" && (tkey.startsWith("Int_") || tkey.startsWith("State_")) && thingvalue["def_"+tkey] ) {
-            //     tval = thingvalue["def_"+tkey] + " = " + tval;
-            //     $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, null, null, twidth, theight);
-            // }
-            // else if ( hint==="ISY_scene" && tkey.substring(0,6)==="scene_" ) {
-            //     tval = thingvalue["name"] + " " + tval;
-            //     $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, null, null, twidth, theight);
-            // }
-
-            // else if ( tkey.substring(0,5)!=="user_" && typeof tval!=="object" ) { 
-            else if ( typeof tval!=="object" ) { 
-                
-                // new logic for links - they all now follow the format LINK::code::content
-                // we no longer print the hidden companion since the link details are in the DB now
-                // and companion tags are only printed within LINK elements on the browser now
-                // print a hidden field for user web calls and links
-                // this is what enables customization of any tile to happen
-                // this special element is not displayed and sits inside the overlay
-                // we only process the non helpers and look for helpers in same list
-                // $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, null, null, twidth, theight);
-
-                if ( typeof tval === "string" && (tval.startsWith("LINK::") || tval.startsWith("TEXT::")) && alldevices ) {
-                    // if (  array_key_exists(helperkey, thingvalue) ) { // } && thingvalue[helperkey] && thingvalue[helperkey].substr(0,2)==="::" ) {
-                    var helperval = tval;
-                    $tc += putLinkElement(bid, hint, helperval, kindex, cnt, j, thingtype, tval, tkey, userSubtype, bgcolor, twidth, theight);
-                } else {
-                    $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, userSubtype, bgcolor, null, null, twidth, theight);
-                }
-
-                j++;
-            }
-        }
+    // get width and height for images if given
+    var twidth = null;
+    var theight = null;
+    if ( array_key_exists("width", thingvalue) ) {
+        twidth = thingvalue["width"];
     }
+    if ( array_key_exists("height", thingvalue) ) {
+        theight = thingvalue["height"];
+    }
+
+    // create on screen element for each key
+    // this includes a check for helper items created in tile customizer
+    for ( var tkey in thingvalue ) {
+        var tval = thingvalue[tkey];
+        var userSubtype = subtype;
+
+        // add operating state for thermostats
+        if ( thingtype === "thermostat" && tkey==="temperature" && thingvalue["thermostatOperatingState"] ) {
+            userSubtype = userSubtype + " " + thingvalue["thermostatOperatingState"];
+        }
+
+        // check value for "json" strings
+        var jsontval;
+        if ( is_object(tval) ) {
+            jsontval = clone(tval);
+        } else if ( typeof tval === "string" ) {
+            try {
+                jsontval = JSON.parse(tval);
+            } catch(jerr) {
+                jsontval = null;
+            }
+        }
+        
+        // skip special audio and music tiles
+        // if ( tkey==="audioTrackData" || tkey==="trackData" || tkey==="forecast" ) {
+            // jsontval = null;
+            // tval = null;
+        // }
+
+        // handle other cases where the value is an object like audio or music tiles
+        // but audio, music, and weather and handled elsewhere so don't do it again here
+        if ( jsontval && is_object(jsontval) ) {
+
+            var isarr = is_array(jsontval);
+            for (var jtkey in jsontval ) {
+                var jtval = jsontval[jtkey];
+
+                // expand arrays onto the base
+                // for example, this happens for buttons reporting acceptable values
+                if ( isarr ) {
+                    jtkey = tkey + "_" + jtkey.toString();
+                }
+
+                // skip adding an object element if it duplicates an existing one
+                if ( jtkey && jtval && !array_key_exists(jtkey, thingvalue) ) {
+                    if ( is_object(jtval) ) {
+                        var isarr2 = is_array(jtval);
+                        for (var jtkey2 in jtval) {
+                            var jtval2 = jtval[jtkey2];
+                            if ( isarr2 ) {
+                                jtkey2 = jtkey + "_" + jtkey2.toString();
+                            }
+                            // only print strings and non duplicates - don't descend more than 2 levels
+                            // i should have written putElement as a recursive function call - this is to be done later
+                            if ( jtkey2 && jtval2 && (typeof jtval2!=="object") && !array_key_exists(jtkey2, thingvalue) ) {
+                                $tc += putElement(kindex, cnt, j, thingtype, jtval2, jtkey2, subtype, null, null, twidth, theight);
+                                j++;
+                            }
+                        }
+                    } else {
+                        $tc += putElement(kindex, cnt, j, thingtype, jtval, jtkey, subtype, null, null, twidth, theight);
+                        j++;
+                    }
+                }
+            }
+        } else { 
+            
+            // new logic for links - they all now follow the format LINK::code::content
+            // we no longer print the hidden companion since the link details are in the DB now
+            // and companion tags are only printed within LINK elements on the browser now
+            // print a hidden field for user web calls and links
+            // this is what enables customization of any tile to happen
+            // this special element is not displayed and sits inside the overlay
+            // we only process the non helpers and look for helpers in same list
+
+            if ( alldevices && (typeof tval === "string") && (tval.startsWith("LINK::") || tval.startsWith("TEXT::")) ) {
+                $tc += putLinkElement(bid, hint, tval, kindex, cnt, j, thingtype, tval, tkey, userSubtype, twidth, theight);
+            } else {
+                $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, userSubtype, null, null, twidth, theight);
+            }
+
+            j++;
+        }
+    }    
 
     $tc += "</div>";
     return $tc;
 
-    function putLinkElement(bid, hint, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, bgcolor, twidth, theight) {
+    function putLinkElement(bid, hint, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, twidth, theight) {
 
         var linktype = thingtype;
         var linkhub = 0;
@@ -6064,11 +5991,11 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
         if ( DEBUG10 ) {
             console.log( (ddbg()), "bid: ", bid, " helperval: ", helperval, " sibling: ", sibling,"\n new tval: ", tval);
         }
-        var $tc = putElement(kindex, cnt, j, linktype, tval, tkey, subtype, bgcolor, sibling, realsubid, twidth, theight);
+        var $tc = putElement(kindex, cnt, j, linktype, tval, tkey, subtype, sibling, realsubid, twidth, theight);
         return $tc;
     }
 
-    function putElement(kindex, i, j, thingtype, tval, tkey, subtype, bgcolor, sibling, realsubid, twidth, theight) {
+    function putElement(kindex, i, j, thingtype, tval, tkey, subtype, sibling, realsubid, twidth, theight) {
         
         // cleans up the name of music tracks for proper html page display
         // no longer trim the name because that breaks album art
@@ -6525,7 +6452,7 @@ function getCustomTile(userid, configoptions, custom_val, bid) {
 
 // this little gem makes sure items are in the proper order
 function setValOrder(val) {
-    const order = {"name": 1, "battery": 2, "color": 3, "switch": 7, "momentary": 7, "presence": 7, "presence_type": 8,
+    const order = {"name": 1, "subname": 2, "battery": 2, "color": 3, "switch": 7, "momentary": 7, "presence": 7, "presence_type": 8,
                    "contact": 9, "door": 8, "garage":8, "motion": 9, "themode": 10,  
                    "make": 11, "modelName":12, "modelYear": 13, "vehiclecolor": 14, "nickName": 15,
                    "coolingSetpoint": 11, "heatingSetpoint": 12,
@@ -6541,7 +6468,7 @@ function setValOrder(val) {
                    "_number_5":65, "_number_6":66, "_number_7":67, "_number_8":68, "_number_9":69, 
                    "onlevel": 150, "level": 151, "volume": 152, "colorTemperature": 153, "hue": 141, "saturation": 142, "position": 152,
                    "allon": 41, "alloff": 42, "count": 148, "duration": 149, "deltaT": 149,
-                   "temperature": 7, "feelsLike":8, "weatherIcon":20, "forecastIcon":21 };
+                   "temperature": 7, "feelsLike":8, "temperatureApparent":8, "weatherCode":22, "weatherIcon":20, "forecastIcon":21 };
 
     function getComp(vala) {
         var comp;

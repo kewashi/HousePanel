@@ -12,7 +12,7 @@ Also, this provides styling for main HP pages including tile editor
 */
 * {
     font-family: "Droid Sans", sans-serif;
-    font-size: 11pt; padding: 0px; margin: 0px;
+    font-size: 15px; padding: 0px; margin: 0px;
     background-repeat: no-repeat;
     background-position: center center;
 }
@@ -41,7 +41,7 @@ body {
         width: 1200px;
     }
     .ui-tabs .ui-tabs-nav .ui-tabs-anchor {
-        font-size: 11pt;
+        font-size: 15px;
     }
     .ui-tabs .ui-tabs-nav {
         width: 100%;
@@ -69,7 +69,7 @@ body {
         width: 650px;
     }
     .ui-tabs .ui-tabs-nav .ui-tabs-anchor {
-        font-size: 10pt;
+        font-size: 13px;
     }
     .ui-tabs .ui-tabs-nav {
         width: 100%;
@@ -88,7 +88,7 @@ div.greeting {
     width: 1200px;
     background-color: #eeeeee;
     color: black;
-    font-size: 12pt;
+    font-size: 16px;
     padding-left: 5px;
     padding-right: 5px;
 }
@@ -101,7 +101,7 @@ div.logingreeting {
     width: 520px;
     background-color: #fffefe;
     color: black;
-    font-size: 12pt;
+    font-size: 16px;
     padding-left: 5px;
     padding-right: 5px;
     padding-bottom: 15px;
@@ -180,7 +180,7 @@ div.showversion:hover {
 
 label.startupinp, input.indent, div.filteroption select {
     font-weight: bold;
-    font-size: 12pt;
+    font-size: 16px;
     margin-left: 5px;
 }
 
@@ -190,7 +190,7 @@ label.highlight {
 }
 
 h2.login {
-    font-size: 16pt;
+    font-size: 20px;
     text-align: center;
     margin-bottom: 20px;
 }
@@ -226,7 +226,7 @@ div.loginline input {
 
 div.loginmore {
     position: absolute;
-    font-size: 14pt;
+    font-size: 19px;
     left: 550px;
     top: 10px;
     width: 400px;
@@ -238,14 +238,14 @@ div.maintable {
 
 h1, h2, h3 {
     color: #000000;
-    font-size: 24pt;
+    font-size: 32px;
     margin-bottom: 2px;    margin-top: 2px;    margin-left: 10px;
 }
 
 input.startupinp, input.optionnuminp {
     font-style: normal;
     font-weight: normal;
-    font-size: 12pt;
+    font-size: 16px;
     border-top: #cccccc solid 3px;
     border-left: #cccccc solid 3px;
     border-right: black solid 3px;
@@ -259,7 +259,7 @@ input.startupinp, input.optionnuminp {
 label.optioninp, select.optioninp {
     font-style: normal;
     font-weight: normal;
-    font-size: 12pt;
+    font-size: 16px;
     margin-left: 0px;
     margin-top: 10px;
     width: 150px;
@@ -275,7 +275,7 @@ input.optionchk {
 input.optioninp {
     font-style: normal;
     font-weight: normal;
-    font-size: 12pt;
+    font-size: 16px;
     border-top: #cccccc solid 3px;
     border-left: #cccccc solid 3px;
     border-right: black solid 3px;
@@ -338,7 +338,7 @@ div.ui-tabs-panel, ui-widget-content {
 ul.ui-tabs-nav {
     background-color: #666666;
     color: #000000;
-    font-size: 12pt;
+    font-size: 16px;
     border: none;
 }
 .ui-tabs .ui-tabs-nav li {
@@ -374,7 +374,7 @@ input.disabled, button.disabled {
 }
 
 div.skinoption, .kioskoption, div.filteroption, td label.optname {
-    font-size: 12pt;
+    font-size: 16px;
     font-weight: bold;
     margin-left: 8px;
     margin-bottom: 2px;
@@ -459,7 +459,7 @@ table.showid {
 }
 table.showid td, table.showid th {
     width: 200px;
-    font-size: 12pt;
+    font-size: 16px;
     padding-left: 2px; padding-right: 2px;
 }
 
@@ -507,7 +507,7 @@ div.optionstable {
 }
 table.roomoptions, table.headoptions {
     margin: 0px;    background-color: #ffffff;    color: #000000;
-    font-size: 11pt;    width: 100%;
+    font-size: 15px;    width: 100%;
     border-collapse: collapse;    border: 2px solid black;
     height: 24px;
 }
@@ -595,7 +595,7 @@ table.showid td.infonum, table.showid th.infonum {
 table.showid th.thingname, table.showid th.thingarr, table.showid th.infotype, 
 table.showid th.infoid, table.showid th.hubid, table.showid th.infonum {
     font-weight: bold;
-    font-size: 14pt;
+    font-size: 19px;
     border-top: 1px solid #999999;
 }
 div.infopage {
@@ -658,12 +658,13 @@ div.restoretabs, div.formbutton, button.showhistory, button.infobutton {
     color: #eeeeee;    text-align: center;    font-weight: normal;
     border-bottom: 4px solid rgba(0, 0, 0, 0.8); 
     border-right: 4px solid rgba(0, 0, 0, 0.8); 
-    font-size: 14pt;
+    font-size: 19px;
 }
 
 div.loginline div.formbutton {
     width: 200px; height: 50px;
-    padding-top: 30px; font-size: 16pt;
+    padding-top: 30px; 
+    font-size: 20px;
     background-color: rgb(34, 110, 187);
 }
 
@@ -686,7 +687,7 @@ div.restoretabs, div.formbutton {
     padding-top: 14px; padding-right: 2px;
     width: 90px; height: 24px;
     margin-left: 2px; margin-right: 2px;
-    font-size: 12pt;
+    font-size: 16px;
 }
 div.formauto {
     display: inline-block;
@@ -694,7 +695,7 @@ div.formauto {
     padding-left: 2px; padding-right: 2px;
     width: auto; height: auto;
     margin-left: 10px; margin-right: 2px;
-    font-size: 12pt;
+    font-size: 16px;
 }
 
 input.resetbutton, input.submitbutton {
@@ -702,7 +703,7 @@ input.resetbutton, input.submitbutton {
     padding-top: 8px;
     width: 90px; height: 42px;
     margin-left: 2px; margin-right: 2px;
-    font-size: 12pt;
+    font-size: 16px;
 }
 
 div.restoretabs.hidden, div.thing.hidden.catalog-thing {
@@ -713,7 +714,7 @@ div.filteroption .smallbutton {
     height: auto;
     width: 60px;
     display: inline-block;
-    font-size: 12pt;
+    font-size: 16px;
     background-color: #cccccc;
     color: black;
     border-left: solid 2px gray;
@@ -767,7 +768,7 @@ div.modalbox {
     border-top: 2px solid rgba(0, 0, 0, 1);
     background-color: rgba(255, 255, 246, 1);
     color: rgba(0, 0, 0, 1);
-    font-size: 12pt;
+    font-size: 16px;
     z-index: 99999;
 }
 
@@ -796,7 +797,7 @@ button.dialogbtn, button.cm_button {
     border-top: 2px solid #cccccc; 
     border-bottom: 2px solid black; 
     border-right: 2px solid black; 
-    font-size: 12pt;
+    font-size: 16px;
 }
 button.dialogbtn:hover, button.cm_button:hover {
     filter: invert(1);
@@ -835,7 +836,7 @@ input.editinp {
 /* don't need to display this anymore since use clock and panel click instead */
 /* but the div needs to be in the php file to make the js work */
 div.restoretabs {
-    font-size: 12pt;
+    font-size: 16px;
     color: rgba(255, 255, 255, 1);
     width: auto; height: 20px; margin-top: 1px;
     border: 0px; text-align: right;
@@ -860,7 +861,7 @@ div.sitebutton {
     background: #ffffff;     
     display: inline-block; 
     position: relative;
-    font-size: 14pt;
+    font-size: 19px;
     font-weight: bold;
 }
 
@@ -1044,14 +1045,14 @@ input[type="button"]#wholetile {
     display: block;
     margin-left: 0px;
     margin-top: 5px;
-    font-size: 11pt;
+    font-size: 15px;
 }
 
 .editSection_inline {
     display: inline-block;
     margin-left: 0px;
     margin-top: 5px;
-    font-size: 11pt;
+    font-size: 15px;
 }
 
 div.editSection_input label {
@@ -1059,7 +1060,7 @@ div.editSection_input label {
     text-align: left;
     margin-left: 2px;
     margin-right: 5px;
-    font-size: 11pt;
+    font-size: 15px;
     color: white;
 }
 
@@ -1068,7 +1069,7 @@ div.editSection_inline label {
     text-align: right; width: 55px;
     margin-left: 2px;
     margin-right: 2px;
-    font-size: 10pt;
+    font-size: 13px;
     color: white;
 }
 
@@ -1076,12 +1077,12 @@ div.editSection_inline input {
     display: inline-block;
     text-align: left; width: 40px;
     margin-left: 2px;
-    font-size: 10pt;
+    font-size: 13px;
     color: black;
 }
 
 .ddlDialog {
-    font-size: 11pt;
+    font-size: 15px;
     margin-top: 8px;
     margin-left: 2px;
 }
@@ -1127,7 +1128,7 @@ div.editInfo {
     margin-right: 2px;
     margin-bottom: 10px;
     margin-top: 18px;
-    font-size: 11pt;
+    font-size: 15px;
     color: white;
 }
 
@@ -1184,14 +1185,14 @@ div.editSection_input.autochk {
     display: inline-block;
 }
 .iconChecks, .dlgtext {
-    font-size: 11pt;
+    font-size: 15px;
     margin-right: 4px;
     margin-left: 10px;
     color: rgba(255, 255, 255, 1);
     display: inline-block;
 }
 .sizeText {
-    font-size: 11pt;
+    font-size: 15px;
     margin-left: 0px;
     margin-top: 12px;
     color: rgba(255, 255, 255, 1);
@@ -1281,7 +1282,7 @@ label.radioopts {
     cursor: pointer;
     margin-left: 0px;
     margin-right: 5px;
-    font-size: 12pt;
+    font-size: 16px;
     width: auto;
     text-align: left;
     display: inline-block;
@@ -1292,7 +1293,7 @@ label.radioopts:hover {
 div#opmode {
     position: absolute;
     left: 5%; bottom: 5%; width: 600px;
-    font-size: 18pt; text-align: center;
+    font-size: 24px; text-align: center;
     color: #cc3300;
     background-color: white;
     border: 3px;
@@ -1407,7 +1408,7 @@ div.thing.catalog-thing {
 /* added catalog-thing div.thingname to ensure catalog shows properly */
 div.thing.catalog-thing div.thingname {
     background-color: rgba(0, 50, 100,1);
-    font-size: 11pt;
+    font-size: 15px;
     text-align: center;
     color: #ffffff;
     border-bottom: 2px solid rgba(0,0,0,1);
@@ -1457,7 +1458,7 @@ div.thing.clock-thing.analog {
     background-color: white;
 }
 div.clock.time {
-    font-size: 24pt;
+    font-size: 32px;
     margin-top: 24px;
 }
 div.clock.tzone{
@@ -1714,7 +1715,9 @@ div.thing div.thingname.weather {
     padding-left: 4%; 
     padding-right: 4%;
 }
-div.overlay.temperature div.weather.temperature, div.overlay.feelsLike div.weather.feelsLike {
+div.overlay.temperature div.temperature, 
+div.overlay.feelsLike div.feelsLike,
+div.overlay.temperatureApparent div.temperatureApparent {
     display: inline-block;
     width: 118px;
     background-color: #006666;
@@ -1876,7 +1879,8 @@ table.cm_builtin td {
     vertical-align: middle;
 }
 #cm_subheader {
-    font-size: 20pt; color: #000000;
+    font-size: 26px; 
+    color: #000000;
 }
 
 /* hide user selected refresh rates */
@@ -1909,7 +1913,7 @@ div.panel div.overlay div.clicked {
 }
 
 div.bold {
-    font-size: 14pt;
+    font-size: 19px;
     font-weight: bold;
 }
 
@@ -2115,15 +2119,19 @@ div#hpmenu {
     cursor: pointer;
 }
 div.menubar {
-    font-size: 14pt;
+    font-size: 19px;
 }
 div.menuitem {
     display: block;
     background-color: #e5e5e0; color:rgb(22, 21, 21);
     margin-left: 10px; margin-right: 5px;
-    font-size: 12pt;
+    font-size: 16px;
     cursor: pointer;
 }
 div.menuitem:hover {
     color: #929273; background-color:rgb(10, 10, 10);
+}
+div.overlay.subname div.subname {
+    font-size: 10px;
+    font-style: italic;
 }
