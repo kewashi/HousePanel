@@ -1023,7 +1023,8 @@ input[type="button"]#wholetile {
     margin: 0px 5px 5px 5px;  /* top, right, bottom, left */
     float: left;
     width: 255px;
-    max-height: 510px;
+    margin-top: 5px;
+    max-height: 580px;
     overflow-x: hidden;
     background-color: rgba(170, 170, 170, 1);
 }
@@ -1111,8 +1112,8 @@ div.colorgroup.font {
     float: left;
     margin: 2px;
     margin-bottom: 5px;
-    max-height: 40px;
-    width: auto;
+    height: 42px;
+    width: 42px;
     object-fit: contain;
 }
 #iconList img.icon:hover {

@@ -15,6 +15,7 @@
  * This is a Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history
+ * 07/16/2023 - fix switches, others, and actuators for buttons to work properly
  * 07/09/2023 - replace weather with Tomorrow.io weather call
  * 07/06/2023 - fix numerical parameter so buttons work again
  * 06/24/2023 - fix music tiles to work with new logic for volume
@@ -2050,15 +2051,12 @@ def setOther(swid, cmd, swattr, subid, item=null ) {
     item  = item ? item : myothers.find{it.id == swid }
     def lightflags = ["switch","level","hue","saturation","colorTemperature","color"]
     def doorflags = ["door","contact"]
-    def buttonflags = ["pushed","held","doubleTapped","released"]
+    def buttonflags = ["pushed","held","doubleTapped","released","_push","_hold","_doubleTap","_release"]
     
     if ( item ) {
         logcaller(item.getDisplayName(), swid, cmd, swattr, subid, "debug")
 
-        def isgood = sendCommand(item, subid, cmd)
-        if ( isgood ) {
-            resp = getOther(swid, item)    
-        } else if ( lightflags.contains(subid) ) {
+        if ( lightflags.contains(subid) ) {
             resp = setGenericLight(myothers, swid, cmd, swattr, subid, item)
         } else if ( doorflags.contains(subid) ) {
             resp = setGenericDoor(myothers, swid, cmd, swattr, subid, item)
@@ -2067,7 +2065,10 @@ def setOther(swid, cmd, swattr, subid, item=null ) {
         } else if ( buttonflags.contains(subid) ) {
             resp = setButton(swid, cmd, swattr, subid, item)
         } else {
-            logger("no command was processed in setOther for swid= ${swid}, cmd= ${cmd}", "warn")
+            def isgood = sendCommand(item, subid, cmd)
+            if ( !isgood ) {
+                logger("no command was processed in setOther for swid= ${swid}, cmd= ${cmd}", "warn")
+            }
             resp = getOther(swid, item)
         }
     }
@@ -2080,15 +2081,12 @@ def setActuator(swid, cmd, swattr, subid, item=null ) {
     item  = item ? item : myactuators.find{it.id == swid }
     def lightflags = ["switch","level","hue","saturation","colorTemperature","color"]
     def doorflags = ["door","contact"]
-    def buttonflags = ["pushed","held","doubleTapped","released"]
+    def buttonflags = ["pushed","held","doubleTapped","released","_push","_hold","_doubleTap","_release"]
     
     if ( item ) {
         logcaller(item.getDisplayName(), swid, cmd, swattr, subid, "debug")
 
-        def isgood = sendCommand(item, subid, cmd)
-        if ( isgood ) {
-            resp = getActuator(swid, item)    
-        } else if ( lightflags.contains(subid) ) {
+        if ( lightflags.contains(subid) ) {
             resp = setGenericLight(myothers, swid, cmd, swattr, subid, item)
         } else if ( doorflags.contains(subid) ) {
             resp = setGenericDoor(myothers, swid, cmd, swattr, subid, item)
@@ -2097,7 +2095,10 @@ def setActuator(swid, cmd, swattr, subid, item=null ) {
         } else if ( buttonflags.contains(subid) ) {
             resp = setButton(swid, cmd, swattr, subid, item)
         } else {
-            logger("no command was processed in setActuator for swid= ${swid}, cmd= ${cmd}", "warn")
+            def isgood = sendCommand(item, subid, cmd)
+            if ( !isgood ) {
+                logger("no command was processed in setActuator for swid= ${swid}, cmd= ${cmd}", "warn")
+            }
             resp = getActuator(swid, item)
         }
     }
@@ -2237,13 +2238,6 @@ def setMode(swid, cmd, swattr, subid) {
     return resp
 }
 
-// def hsmStatusHandler(evt) {
-//     log.info "HSM state set to ${evt.value}" + (evt.value=="rule" ? $evt.descriptionText : "" )
-// }
-// def hsmAlertHandler(evt) {
-//     log.info "HSM alert: ${evt.value}"
-// }
-
 def setHSMState(swid, cmd, swattr, subid){
 
     logcaller("setHSMState", swid, cmd, swattr, subid)
@@ -2365,6 +2359,10 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
 
         // handle cases where switches have buttons
         // in such a case the button to be pressed must be in the cmd value
+        case "_push":
+        case "_hold":
+        case "_doubleTap":
+        case "_release":
         case "pushed":
         case "held":
         case "doubleTapped":

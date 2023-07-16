@@ -1,4 +1,5 @@
 const devhistory = `
+3.075   Fix non-button devices so buttons work and clean up editor look
 3.074   Tweak polling to include hub overall polling for weather and other reasons
 3.073   Add new weather feature using tomorrow.io - API and Zipcode required
 3.072   fix links to work even when parent is not on screen and other bugfixes
