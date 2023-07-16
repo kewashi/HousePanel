@@ -224,6 +224,13 @@ function getHubs() {
         var userid = $("#userid").val();
         var pname = cm_Globals.pname;
         var config = cm_Globals.options.config;
+        try {
+            var fast_timer = parseInt(config.fast_timer, 10) * 1000;
+            var slow_timer = parseInt(config.slow_timer, 10) * 1000;
+        } catch(e) {
+            fast_timer = 0;
+            slow_timer = 0;
+        }
 
         // read the hubs
         $.post(cm_Globals.returnURL, 
@@ -231,29 +238,22 @@ function getHubs() {
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     cm_Globals.hubs = presult;
-
-                    // if Sonos hub, then set up timer to refresh every 30 seconds
                     cm_Globals.hubs.forEach(hub => {
-
-                        // setup refresh timer for Sonos art if timer is there
-                        if ( hub.hubtype === "Sonos" ) {
-                            var fast_timer = config.fast_timer;
-                            fast_timer = parseInt(fast_timer, 10);
-                            fast_timer*= 1000;
-                            setupTimer("fast", fast_timer, hub);
-                        } else if ( hub.hubtype === "None" && hub.hubid === "-1" ) {
-                            var slow_timer = config.slow_timer;
-                            slow_timer = parseInt(slow_timer, 10);
-                            slow_timer*= 1000;
+                        // setup all special tiles not tied to hubs to refresh as user given slow rate
+                        if ( hub.hubtype === "None" && hub.hubid === "-1" ) {
                             setupTimer("slow", slow_timer, hub);
+                        // all other hubs refresh at their token refresh rate or the user given fast rate if quicker
+                        } else {
+                            // if there is a hubrefresh code that will be used to refresh accesstoken
+                            // otherwise the hub devices will just be retrieved from the hub
+                            // if set to zero we force a refresh at the user provided fast refresh rate
+                            var hubtimer = parseInt(hub.hubtimer, 10) * 1000;
+                            if ( hubtimer === 0 || (hubtimer > fast_timer && fast_timer !== 0) ) {
+                                hubtimer = fast_timer;
+                            }
+                            // alert("hub: " + hub.hubtype + " timer: " + hubtimer);
+                            setupTimer("hub", hubtimer, hub);
                         }
-                        
-                        // now set up timers for any hub if the timer is set
-                        // if there is a hubrefresh code that will be used to refresh accesstoken
-                        // otherwise the hub devices will just be retrieved from the hub
-                        var hubtimer = parseInt(hub.hubtimer, 10);
-                        hubtimer*= 1000;
-                        setupTimer("hub", hubtimer, hub);
                     });
 
                 } else {
@@ -266,7 +266,7 @@ function getHubs() {
             }, "json"
         );
     } catch(e) {
-        console.log("error - failure reading hubs from DB", e);
+        console.log("error - failure setting up hubs", e);
     }
 }
 
@@ -3433,7 +3433,7 @@ function setupTimer(timertype, timerval, hub) {
 
     // we now pass the unique hubId value instead of numerical hub
     // since the number can now change when new hubs are added and deleted
-    if ( !hub || timerval < 1000 ) {
+    if ( !hub || !timerval || timerval < 1000 ) {
         return;
     }
     var hubid = hub.hubid;
@@ -3464,12 +3464,8 @@ function setupTimer(timertype, timerval, hub) {
         setTimeout(function() {updarray.myMethod();}, that[1]);
     };
 
-    // wait before doing first one - or skip this hub if requested
-    if ( timerval && timerval >= 1000 ) {
-        // alert("timerval = " + timerval);
-        setTimeout(function() {updarray.myMethod();}, timerval);
-    }
-    
+    // wait before doing first one
+    setTimeout(function() {updarray.myMethod();}, timerval);
 }
 
 // setup clicking on the action portion of this thing

@@ -4228,8 +4228,8 @@ async function makeNewConfig(userid) {
     configs.push( await addConfigItem(userid, "rules", "true") );
     configs.push( await addConfigItem(userid, "timezone", "America/Los_Angeles") );
     configs.push( await addConfigItem(userid, "phototimer","0") );
-    configs.push( await addConfigItem(userid, "fast_timer","30") );           // timers for music and others requesting fast poll
-    configs.push( await addConfigItem(userid, "slow_timer","300") );          // timers for images, frames, customs, blanks, videos polling
+    configs.push( await addConfigItem(userid, "fast_timer","3600") );         // timers for polling all other tiles and hubs
+    configs.push( await addConfigItem(userid, "slow_timer","900") );          // timers for images, frames, customs, blanks, videos polling
     configs.push( await addConfigItem(userid, "fcastcity", "san-carlos") );   // addConfigItem(userid, "fcastcity") || "ann-arbor" );
     configs.push( await addConfigItem(userid, "fcastregion","San Carlos") );  // addConfigItem(userid, "fcastregion","Ann Arbor") );
     configs.push( await addConfigItem(userid, "fcastcode","37d51n122d26") );  // addConfigItem(userid, "fcastcode","42d28n83d74") );
@@ -10152,8 +10152,8 @@ function getOptionsPage(user, configoptions, hubs, req) {
 
     function renderOptionsPage(rooms, devices, sensors, panels) {
 
-        var fast_timer = getConfigItem(configoptions, "fast_timer") || "0";
-        var slow_timer = getConfigItem(configoptions, "slow_timer") || "0";
+        var fast_timer = getConfigItem(configoptions, "fast_timer") || "3600";
+        var slow_timer = getConfigItem(configoptions, "slow_timer") || "900";
         var $kioskoptions = getConfigItem(configoptions, "kiosk") || "false";
         var blackout = getConfigItem(configoptions, "blackout") || "false";
         var $ruleoptions = getConfigItem(configoptions, "rules") || "true";
@@ -10271,9 +10271,9 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc+= "<input class=\"optioninp\" id=\"photoid\" name=\"phototimer\" type=\"number\"  min='0' max='300' step='5' value=\"" + phototimer + "\" /></div>";
         $tc += "<div><label class=\"optioninp\">Timezone: </label>";
         $tc += "<input id=\"newtimezone\" class=\"optioninp\" name=\"timezone\" size=\"20\" type=\"text\" value=\"" + timezone + "\"/></div>"; 
-        $tc += "<div><label class=\"optioninp\" title=\"music art polling\">Fast polling timer: </label>";
+        $tc += "<div><label class=\"optioninp\" title=\"Polling for authenticated hubs\">Hub polling timer: </label>";
         $tc += "<input class=\"optioninp\" name=\"fast_timer\" size=\"20\" type=\"text\" value=\"" + fast_timer + "\"/></div>"; 
-        $tc += "<div><label class=\"optioninp\" title=\"Blanks, customs, frames, images polling\">Slow polling timer: </label>";
+        $tc += "<div><label class=\"optioninp\" title=\"Blanks, customs, frames, images polling\">Special polling timer: </label>";
         $tc += "<input class=\"optioninp\" name=\"slow_timer\" size=\"20\" type=\"text\" value=\"" + slow_timer + "\"/></div>"; 
         $tc += "</div>";
 
