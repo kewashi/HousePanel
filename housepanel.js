@@ -3148,7 +3148,6 @@ function updateLink(bid, pvalue) {
     }
 }
 
-
 function processKeyVal(targetid, aid, key, value) {
 
     // fix images to use width and height if custom items are in this tile
@@ -3181,21 +3180,40 @@ function processKeyVal(targetid, aid, key, value) {
     } else if ( key.startsWith("_") ) {
         value = key.substring(1);
 
-    // handle weather icons that were not converted
-    // updated to address new integer indexing method in ST
-    } else if ( (key==="weatherIcon" || key==="forecastIcon") && !isNaN(+value) ) {
-        var icondigit = parseInt(value,10);
-        var iconimg;
-        if ( Number.isNaN(icondigit) ) {
-            iconimg = value;
-        } else {
-            var iconstr = icondigit.toString();
-            if ( icondigit < 10 ) {
-                iconstr = "0" + iconstr;
+    // // handle weather icons that were not converted
+    } else if ( key==="weatherCode" && !isNaN(+value)  ) {
+        $.post(cm_Globals.returnURL, 
+            {api: "weathericon", userid: cm_Globals.options.userid, type: "tomorrowio", value: value},
+            function (presult, pstatus) {
+                if ( pstatus==="success" ) {
+                    console.log("weatherCode result: ", presult);
+                    $(targetid).html(presult);
+                }
             }
-            iconimg = "media/Weather/" + iconstr + ".png";
-        }
-        value = "<img src=\"" + iconimg + "\" alt=\"" + iconstr + "\" width=\"80\" height=\"80\">";
+        );
+        return isclock;
+
+    } else if ( (key==="weatherIcon" || key==="forecastIcon") && !isNaN(+value) ) {
+        $.post(cm_Globals.returnURL, 
+            {api: "weathericon", userid: cm_Globals.options.userid, type: "hubitat", value: value},
+            function (presult, pstatus) {
+                if ( pstatus==="success" ) {
+                    $(targetid).html(presult);
+                }
+            }
+        );
+        return isclock;
+    //     var iconimg;
+    //     if ( Number.isNaN(icondigit) ) {
+    //         iconimg = value;
+    //     } else {
+    //         var iconstr = icondigit.toString();
+    //         if ( icondigit < 10 ) {
+    //             iconstr = "0" + iconstr;
+    //         }
+    //         iconimg = "media/Weather/" + iconstr + ".png";
+    //     }
+    //     value = "<img src=\"" + iconimg + "\" alt=\"" + iconstr + "\" width=\"80\" height=\"80\">";
     } else if ( (key === "level" || key=== "onlevel" || key==="volume" || key==="groupVolume" || key==="position") && $(targetid).slider ) {
         $(targetid).slider("value", value);
         $(targetid).attr("value",value);

@@ -155,7 +155,7 @@ GLB.mainISYMap = {
     "actuator":    [{"GV0":"status_","BATLVL":"battery","ST":"switch","OL":"level"},   {"_query":"QUERY","_docmd":"DOCMD"}, "9.2" ],
 
     "music":       [ {"GV0": "status_", "ST": "status", "OL":"level", "SVOL":"mute"},  {"_previousTrack":"previousTrack","_pause":"pause","_play":"play","_stop":"stop","_nextTrack":"nextTrack",
-                                                                                        "_volumeDown":"volumeDown","_volumeUp":"volumeUp","_mute":"mute","_unmute":"unmute"}, "3.1" ]
+                                                                                        "_volumeDown":"volumeDown","_volumeUp":"volumeUp","_mute":"mute","_unmute":"unmute","level":"SETVOL"}, "3.1" ]
 
 };
 
@@ -5597,7 +5597,7 @@ function translateWeather(pvalue) {
         pvalue["weatherIcon"] = getWeatherIcon(pvalue.weatherIcon,"hubitat");
         pvalue["forecastIcon"] = getWeatherIcon(pvalue.forecastIcon,"hubitat");
     } else if ( pvalue.weatherCode ) {
-        pvalue["weatherIcon"] = getWeatherIcon(pvalue.weatherCode, "tomorrowio");
+        pvalue["weatherCode"] = getWeatherIcon(pvalue.weatherCode, "tomorrowio");
     } else if ( pvalue.realFeel ) {
         pvalue = translateAccuWeather(pvalue);
     }
@@ -11511,6 +11511,11 @@ function apiCall(user, body, protocol, req, res) {
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
+                break;
+
+            case "weathericon":
+                var num = parseInt(swval);
+                result = getWeatherIcon(num, swtype);
                 break;
 
             case "setorder":

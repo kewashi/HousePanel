@@ -1690,7 +1690,9 @@ iframe body {
 div.weather-thing div.overlay {
     display: inline;
 }
-div.overlay.weatherIcon div.weather, div.overlay.forecastIcon div.weather {
+div.overlay.weatherIcon div.weatherIcon, 
+div.overlay.forecastIcon div.forecastIcon,
+div.overlay.weatherCode div.weatherCode {
     background-position-y: 8px;
     width: 80px;
     height: 74px;

@@ -10,11 +10,12 @@
  *
  *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
- *  for the specific language governing permissions and limitations under the License.
+ *  for the specfific language governing permissions and limitations under the License.
  *
  * This is a Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history
+ * 07/22/2023 - fix music tiles to update properly by translating the object
  * 07/16/2023 - fix switches, others, and actuators for buttons to work properly
  * 07/09/2023 - replace weather with Tomorrow.io weather call
  * 07/06/2023 - fix numerical parameter so buttons work again
@@ -137,39 +138,29 @@ public static String handle() { return "HousePanel" }
     STATICALLY DEFINED VARIABLES
     inpired by Tonesto7 homebridge2 app
 ***********************************************/
-@Field static final String appVersionFLD  = '3.5.0'
+@Field static final String appVersionFLD  = '3.075'
 @Field static final String sNULL          = (String) null
 @Field static final String sBLANK         = ''
-@Field static final String sBULLET        = '\u2022'
 @Field static final String sLINEBR        = '<br>'
-@Field static final String sFALSE         = 'false'
-@Field static final String sTRUE          = 'true'
-@Field static final String sBOOL          = 'bool'
-@Field static final String sMEDIUM        = 'medium'
 @Field static final String sSMALL         = 'small'
 @Field static final String sCLR4D9        = '#2784D9'
 @Field static final String sCLRRED        = 'red'
 @Field static final String sCLRGRY        = 'gray'
 @Field static final String sCLRGRN        = 'green'
-@Field static final String sTTM           = 'Tap to modify...'
-@Field static final String sTTC           = 'Tap to configure...'
-@Field static final String sTTP           = 'Tap to proceed...'
-@Field static final String sTTV           = 'Tap to view...'
-@Field static final String sTTS           = 'Tap to select...'
 
 /**********************************************
     APP HELPER FUNCTIONS
     inpired by Tonesto7 homebridge2 app
 ***********************************************/
 static String getAppImg(String imgName) { return "https://kenw.com/wp-content/uploads/${imgName}" }
-static String sectH3TS(String t, String st, String i = sNULL, String c=sCLR4D9) { return "<h3 style='color:${c};font-weight: bold'>${i ? "<img src='${i}' width='48'> " : sBLANK} ${t?.replaceAll("\\n", '<br>')}</h3>${st ?: sBLANK}" }
+static String sectH3TS(String t, String st, String i = sNULL, String c=sCLR4D9) { return "<h3 style='color:${c};font-weight: bold'>${i ? "<img src='${i}' width='48'> " : sBLANK} ${t?.replaceAll("\\n", sLINEBR)}</h3>${st ?: sBLANK}" }
 static String sectHead(String str, String img = sNULL) { return str ? "<h3 style='margin-top:0;margin-bottom:0;'>" + spanImgStr(img) + span(str, sCLR4D9, sNULL, true) + '</h3>' + "<hr style='background-color:${sCLRGRY};font-style:italic;height:1px;border:0;margin-top:0;margin-bottom:0;'>" : sBLANK }
 
 // Root HTML Objects
 static String span(String str, String clr=sNULL, String sz=sNULL, Boolean bld=false, Boolean br=false) { return str ? "<span ${(clr || sz || bld) ? "style='${clr ? "color: ${clr};" : sBLANK}${sz ? "font-size: ${sz};" : sBLANK}${bld ? 'font-weight: bold;' : sBLANK}'" : sBLANK}>${str}</span>${br ? sLINEBR : sBLANK}" : sBLANK }
 static String div(String str, String clr=sNULL, String sz=sNULL, Boolean bld=false, Boolean br=false) { return str ? "<div ${(clr || sz || bld) ? "style='${clr ? "color: ${clr};" : sBLANK}${sz ? "font-size: ${sz};" : sBLANK}${bld ? 'font-weight: bold;' : sBLANK}'" : sBLANK}>${str}</div>${br ? sLINEBR : sBLANK}" : sBLANK }
 static String spanImgStr(String img=sNULL) { return img ? span("<img src='${(!img.startsWith('http')) ? getAppImg(img) : img}' width='42'> ") : sBLANK }
-static String strUnder(String str, Boolean showUnd=true) { return str ? (showUnd ? "<u>${str}</u>" : str) : sBLANK }
+static String divSmBld(String str, String clr=sNULL, String img=sNULL)     { return str ? div(spanImgStr(img) + span(str), clr, sSMALL, true)      : sBLANK }
 static String htmlLine(String color=sCLR4D9, Integer width = null) { return "<hr style='background-color:${color};height:1px;border:0;margin-top:0;margin-bottom:0;${width ? "width: ${width}px;" : sBLANK}'>" }
 static String lineBr(Boolean show=true) { return show ? sLINEBR : sBLANK }
 static String inputFooter(String str, String clr=sCLR4D9, Boolean noBr=false) { return str ? lineBr(!noBr) + divSmBld(str, clr) : sBLANK }
@@ -179,7 +170,6 @@ static String spanSm(String str, String clr=sNULL, String img=sNULL)       { ret
 static String spanSmBr(String str, String clr=sNULL, String img=sNULL)     { return str ? spanImgStr(img) + span(str, clr, sSMALL, false, true)    : sBLANK }
 static String spanSmBld(String str, String clr=sNULL, String img=sNULL)    { return str ? spanImgStr(img) + span(str, clr, sSMALL, true)           : sBLANK }
 static String spanSmBldBr(String str, String clr=sNULL, String img=sNULL)  { return str ? spanImgStr(img) + span(str, clr, sSMALL, true, true)     : sBLANK }
-static String divSmBld(String str, String clr=sNULL, String img=sNULL)     { return str ? div(spanImgStr(img) + span(str), clr, sSMALL, true)      : sBLANK }
 
 definition(
     name: "${handle()}",
@@ -265,7 +255,7 @@ def mainPage() {
             desc += myactuators ? spanSmBld("Actuator${myactuators.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${myactuators.size()})") : sBLANK
 
             desc += htmlLine(sCLR4D9, 150)
-            desc += inputFooter(sTTM)
+            desc += inputFooter('Tap to modify...')
 
             href 'deviceSelectPage', title: spanSmBld('Device Selection'), required: false, description: (desc ? spanSm(desc, sCLR4D9) : inputFooter('Tap to select devices...', sCLRGRY, true))
         }
@@ -651,7 +641,23 @@ def translateObjects(pvalue, musicmap) {
                 // skip if the mapping is a blank string
                 // overwrite existing fields unless the value is blank or NA or similar
                 if ( tkey!="" ) {
-                    if ( newvalue.containsKey(tkey) ){
+
+                    // fix up image art field
+                    if ( tkey == "trackImage" ) {
+                        if  (  (tval instanceof String) && tval.indexOf("http")>0 ) {
+                            def j1 = tval.indexOf(">http") + 1
+                            def j2 = tval.indexOf("<", j1+1)
+                            if ( j1==-1 || j2==-1) {
+                                tval = ""
+                            } else {
+                                tval = tval.substring(j1, j2)
+                                // must escape backslash twice because it is special in groovy
+                                tval = tval.replaceAll("\\\\","")
+                            }
+                        }
+                    }
+
+                    if ( newvalue.containsKey(tkey) ) {
                         if ( (tval!="NA" && tval!="" && tval!="undefined") || 
                              (newvalue[tkey]=="" || newvalue[tkey]=="NA" || newvlaue[tkey]=="undefined") ) {
                             newvalue[tkey] = tval
@@ -659,7 +665,7 @@ def translateObjects(pvalue, musicmap) {
                     } else {
                         newvalue.put(tkey,tval)
                     }
-                    newvalue.containsKey(tkey) ? newvalue[tkey] = tval : newvalue.put(tkey, tval)
+                    // newvalue.containsKey(tkey) ? newvalue[tkey] = tval : newvalue.put(tkey, tval)
                 }
             }
         }
@@ -3192,12 +3198,31 @@ def registerChangeHandler(devices) {
 }
 
 def changeHandler(evt) {
+
+    def musicmap = ["name": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
+                    "trackData": "", "metaData":"", "trackMetaData":"trackImage",
+                    "trackNumber":"trackNumber", "music":"", "trackUri":"", "uri":"", "transportUri":"", "enqueuedUri":"",
+                    "audioSource": "mediaSource", "station":"",
+                    "status": "status", "level":"level", "mute":"mute"]
+
+    def audiomap = ["name":"name", "title":"trackDescription", "artist": "currentArtist", "album": "currentAlbum",
+                   "albumArtUrl": "", "mediaSource": "", "deviceIcon":"deviceIcon", "alexaPlaylists":"",
+                   "phraseSpoken":"", "supportedMusic":"", "trackData":"", "trackImageHtml":"", "wakeWords":"", "alexaWakeWord":"",
+                   "My Likes":"", "deviceFamily":"", "lastUpdated":"", "deviceStatus":"", "onlineStatus":"", "btDeviceConnected":"",
+                   "wasLastSpokenToDevice":"", "doNotDisturb":"", "firmwareVer":"", "phraseSpoken":"", "lastAnnouncement":"",
+                   "lastVoiceActivity":"", "lastSpeakCmd":"", "wasLastSpokenToDevice":"", "followUpMode":"", "currentStation":"",
+                   "deviceSerial":"", "permissions":"", "doNotDisturb":"", "btDevicesPaired":"", "alarmVolume":"", "_togglePlayback":"",
+                   "_getDeviceActivity":"", "_noOp":"", "_replayText":"", "_speechTest":"", "_refresh":"refresh", "deviceType":"",
+                   "_doNotDisturbOff":"", "_doNotDisturbOn":"", "_getBluetoothDevices":"", "_restoreLastVolume":"", "_stopAllDevices":"",
+                   "_disconnectBluetooth":"", "_sendTestAnnouncement":"", "_sendTestAnnouncementAll":"", "_storeCurrentVolume":""]
+
     def src = evt?.source
     def deviceid = evt?.deviceId
     def deviceName = evt?.displayName
     def subid = evt?.name
     def value = evt?.value
     def skip = false
+    def jsonslurper = new JsonSlurper()
     
     def devtype = autoType(deviceid)
     logger("handling id = ${deviceid} devtype = ${devtype} name = ${deviceName} subid = ${subid} value = ${value}", "trace")
@@ -3276,15 +3301,25 @@ def changeHandler(evt) {
 
             // set it to change color based on attribute change
             logger("color update: ${deviceName} id ${deviceid} type ${devtype} changed to ${color} by changing ${subid} to ${value}, h100: ${h100}, h: ${h}, s: ${s}, v: ${v} ", "debug") 
-        // } else if ( (devtype=="music" || devtype=="audio") && (value instanceof Map) ) {
-        //     def newvalue = translateObjects(value,"")
-        //     logger("thing update: ${deviceName} id ${deviceid} type ${devtype} by changing ${subid} to ${value}", "debug")
+        } else if ( devtype=="music" && subid=="trackData" ) {
+            def newvalue = jsonslurper.parseText(value)
+            newvalue = translateObjects(newvalue, musicmap)
+            postHubRange(state.directIP, state.directPort, "update", deviceName, deviceid, subid, devtype, newvalue)
+            postHubRange(state.directIP2, state.directPort2, "update", deviceName, deviceid, subid, devtype, newvalue)
+            postHubRange(state.directIP3, state.directPort3, "update", deviceName, deviceid, subid, devtype, newvalue)
+            logger("thing update: ${deviceName} id ${deviceid} type ${devtype} by changing ${subid} to ${newvalue}", "debug")
+        } else if ( devtype=="audio" && subid=="trackData" ) {
+            def newvalue = jsonslurper.parseText(value)
+            newvalue = translateObjects(newvalue, audiomap)            
+            postHubRange(state.directIP, state.directPort, "update", deviceName, deviceid, subid, devtype, newvalue)
+            postHubRange(state.directIP2, state.directPort2, "update", deviceName, deviceid, subid, devtype, newvalue)
+            postHubRange(state.directIP3, state.directPort3, "update", deviceName, deviceid, subid, devtype, newvalue)
+            logger("thing update: ${deviceName} id ${deviceid} type ${devtype} by changing ${subid} to ${newvalue}", "debug")
         } else {
             // make the original attribute change
             postHubRange(state.directIP, state.directPort, "update", deviceName, deviceid, subid, devtype, value)
             postHubRange(state.directIP2, state.directPort2, "update", deviceName, deviceid, subid, devtype, value)
             postHubRange(state.directIP3, state.directPort3, "update", deviceName, deviceid, subid, devtype, value)
-
             logger("thing update: ${deviceName} id ${deviceid} type ${devtype} by changing ${subid} to ${value}", "debug")
         }
 
