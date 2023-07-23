@@ -11139,26 +11139,29 @@ function getIcons(userid, pname, skin, icondir, category) {
 }
 
 // get photos or return false if folder isn't there
-function getPhotos(attr) {
+function getPhotos(userid, pname) {
     
+    var userdir = "user" + userid.toString();
     try {
         var photos = {};
-        var activedir = path.join(__dirname, attr);
+        var activedir = path.join(userdir, pname, "photos");
         var photolist = fs.readdirSync(activedir);
     } catch (e) {
-        photos = false;
+        photos = "No photos available to show";
         photolist = false;
     }
 
     if ( photolist ) {
         var allowed = ["png","jpg","jpeg","gif","JPG","GIF","PNG","JPEG"];
-        photolist.forEach( function(filename, index) {
-            var froot = path.basename(filename);
+        var index = 0;
+        photolist.forEach( function(filename) {
+            // var froot = path.basename(filename);
             var ext = path.extname(filename).slice(1);
             if ( in_array(ext, allowed) ) {
-                photos[index] = froot;
+                photos[index] = path.join(activedir,filename);
+                index = index + 1;
             }
-        })
+        });
     }
     return photos;
 }
@@ -11572,7 +11575,7 @@ function apiCall(user, body, protocol, req, res) {
                 break;
 
             case "getphotos":
-                result = getPhotos(userid, "photos");
+                result = getPhotos(userid, pname);
                 break;
                 
             case "refreshpage":

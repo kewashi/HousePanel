@@ -1,4 +1,5 @@
 const devhistory = `
+3.077   Fix photo screensaver and blank screen to use actual mode if tile exists
 3.076   Minor bug fixes for music ISY tiles and other things
 3.075   Fix non-button devices so buttons work and clean up editor look
 3.074   Tweak polling to include hub overall polling for weather and other reasons

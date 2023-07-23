@@ -177,42 +177,54 @@ function getOptions() {
         var email = $("#emailid").val();
         var skin = $("#skinid").val();
         var config = $("#configsid").val();
-        var pname = $("#showversion span#infoname").html();
         config = JSON.parse(config);
-        cm_Globals.options = {userid: userid, email: email, skin: skin, config: config, rules: {}};
-        cm_Globals.pname = pname;
 
-        // disabled timer based refreshes since we no longer need this
-        // setFastSlow(config);
+        // get panel and mode from main screen if it is there
+        try {
+            var pname = $("#showversion span#infoname").html();
+            var modetarget = "div.overlay.themode > div.themode";
+            if ( $(modetarget) && typeof $(modetarget).html() !== "undefined" ) {
+                var themode = $(modetarget).html().trim();
+            } else {
+                themode = "Unknown";
+            }
+        } catch(e) {
+            pname = "default";
+            themode = "Unknown";
+            console.log(e);
+        }
+
+        cm_Globals.options = {userid: userid, email: email, skin: skin, config: config, pname: pname, mode: themode, rules: {}};
+        if ( cm_Globals.options.config.blackout ) {
+            var blackout = cm_Globals.options.config.blackout;
+            blackout = (blackout === "true") || (blackout === true) ? true : false;
+        } else {
+            blackout = false;
+        }
+        // console.log("Mode:", themode, " blackout: ", blackout);
+        // handle black screen
+        if ( (priorOpmode === "Sleep" || themode==="Night") && blackout ) {
+            priorOpmode = "Sleep";
+            execButton("blackout");
+        } else {
+            priorOpmode = "Operate";
+            setCookie("opmode", priorOpmode);
+        }
 
         // set the customization list
         $.post(cm_Globals.returnURL, 
             {useajax: "getoptions", userid: userid, pname: pname, id:"none", type:"none"},
             function (presult, pstatus) {
-                if (pstatus==="success" ) {
+                if ( pstatus==="success" ) {
                     cm_Globals.options["rules"] = presult;
-
-                    if ( cm_Globals.options.config.blackout ) {
-                        var blackout = cm_Globals.options.config.blackout;
-                        blackout = (blackout === "true") || (blackout === true) ? true : false;
-                    } else {
-                        blackout = false;
-                    }
-        
-                    // handle black screen
-                    if ( priorOpmode === "Sleep" && blackout ) {
-                        execButton("blackout");
-                    } else {
-                        priorOpmode = "Operate";
-                        setCookie("opmode", priorOpmode);
-                    }
                 } else {
-                    console.log("error - failure reading config options from database for user = " + userid);
+                    console.log("error - failure reading custom options and rules from database for user = " + userid);
                 }
             }, "json"
         );
     } catch(e) {
-        console.log("error - failure reading options from DB", e);
+        console.log("error - failure setting up options", e);
+        alert("Fatal Error - Cannot display HousePanel because something went wrong in setting up configuration options");
     }
 }
 
@@ -222,7 +234,7 @@ function getOptions() {
 function getHubs() {
     try {
         var userid = $("#userid").val();
-        var pname = cm_Globals.pname;
+        var pname = cm_Globals.options.pname;
         var config = cm_Globals.options.config;
         try {
             var fast_timer = parseInt(config.fast_timer, 10) * 1000;
@@ -849,10 +861,11 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                 }
 
                 // blank screen if night mode set
-                if ( (thetype==="mode" || thetype==="location" ) && 
-                     (blackout==="true" || blackout===true) && (priorOpmode === "Operate" || priorOpmode === "Sleep") ) {
+                if ( (typeof pvalue.themode !== "undefined")  && 
+                     blackout===true && (priorOpmode === "Operate" || priorOpmode === "Sleep") ) {
 
                     // console.log("mode: ", pvalue.themode, " priorMode: ", priorOpmode);
+                    cm_Globals.options.themode = pvalue.themode;
                     if ( pvalue.themode === "Night" ) {
                         execButton("blackout");
                         priorOpmode = "Sleep";
@@ -1149,7 +1162,7 @@ function setupColors() {
                 var thingid = $(tile).attr("thingid");
                 var tileid = $(tile).attr("tile");
                 var hint = $(tile).attr("hint");
-                var pname = $("#showversion span#infoname").html();
+                var pname = cm_Globals.options.pname;
 
                 var usertile =  $("#sb-"+aid+"-"+subid);
                 var command = "";
@@ -1214,7 +1227,7 @@ function setupSliders() {
         var thingid = $(tile).attr("thingid");
         var tileid = $(tile).attr("tile");
         var hint = $(tile).attr("hint");
-        var pname = $("#showversion span#infoname").html();
+        var pname = cm_Globals.options.pname;
         
         var usertile =  $("#sb-"+aid+"-"+subid);
         var command = "";
@@ -1369,7 +1382,7 @@ function setupPagemove() {
                 updateSortNumber(this, k.toString());
             });
             var userid = cm_Globals.options.userid;
-            var pname = $("#showversion span#infoname").html();
+            var pname = cm_Globals.options.pname;
             $.post(cm_Globals.returnURL, 
                 {useajax: "setorder", userid: userid, pname: pname, id: "none", type: "rooms", value: pages},
                 function (presult, pstatus) {
@@ -1407,7 +1420,7 @@ function setupSortable() {
         stop: function(evt, ui) {
             var panel = $(ui.item).attr("panel");
             var userid = cm_Globals.options.userid;
-            var pname = $("#showversion span#infoname").html();
+            var pname = cm_Globals.options.pname;
             var tilenums = [];
             var num = 0;
             $("div.thing[panel="+panel+"][style*='relative']").each(function(){
@@ -1543,7 +1556,7 @@ function setupDraggable() {
                 var hubid = $(thing).attr("hubid");
                 var hubindex = $(thing).attr("hubindex");
                 var userid = cm_Globals.options.userid;
-                var pname = $("#showversion span#infoname").html();
+                var pname = cm_Globals.options.pname;
                 var panelid = $("input[name='panelid']").val();
                 startPos.left = 0;
                 startPos.top  = 0;
@@ -1560,7 +1573,7 @@ function setupDraggable() {
                             var panel = $("#"+clickid).text();
                             // var lastthing = $("div.panel-"+panel+" div.thing").last();
                             var roomid = $("#panel-"+panel).attr("roomid");
-                            var pname = $("#showversion span#infoname").html();
+                            var pname = cm_Globals.options.pname;
                             pos = {position: "absolute", top: evt.pageY, left: evt.pageX, width: 300, height: "auto"};
                             var zmax = getMaxZindex(panel);
                             startPos["z-index"] = zmax;
@@ -1691,7 +1704,7 @@ function setupDraggable() {
                 var tile = $(thing).attr("tile");
                 var tilename = $(thing).find(".thingname").text();
                 var pos = {top: 100, left: 10};
-                var pname = $("#showversion span#infoname").html();
+                var pname = cm_Globals.options.pname;
 
                 createModal("modaldel","Remove: "+ tilename + " (thing # " + thingid + ") of type: "+thingtype+" from room "+panel+"? Are you sure?", "body" , true, pos, function(ui, content) {
                     var clk = $(ui).attr("name");
@@ -1768,7 +1781,7 @@ function rehomeTiles() {
         var thingtype = $(this).attr("type");
         var tile = $(this).attr("tile");
         var thingid = $(this).attr("thingid");
-        var pname = $("#showversion span#infoname").html();
+        var pname = cm_Globals.options.pname;
         // console.log(bid, thingtype, tile, thingid, pname, startPos);
         $.post(cm_Globals.returnURL, 
             {useajax: "setposition", userid: cm_Globals.options.userid, pname: pname, id: bid, type: thingtype, attr: startPos, tileid: tile, thingid: thingid},
@@ -2092,7 +2105,6 @@ function execButton(buttonid) {
         priorOpmode = "Sleep";
         setCookie("opmode", priorOpmode);
         $("div.maintable").after("<div id=\"blankme\"></div>");
-        var photos;
 
         // if timer is zero or less than 1 second just do a black screen
         if ( phototimer < 1000 ) {
@@ -2103,16 +2115,19 @@ function execButton(buttonid) {
         // if timer provided make call to get list of photos to cycle through
         // and if this fails fall back to the same simple black screen
         } else {
-            var pname = $("#showversion span#infoname").html();
+            var pname = cm_Globals.options.pname;
+
+            // alert("phototimer = " + phototimer + " pname = " + pname);
+
             $.post(cm_Globals.returnURL, 
                 {useajax: "getphotos", userid: cm_Globals.options.userid, pname: pname}, 
                 function(presult, pstatus) {
                     if ( presult && typeof presult == "object" ) {
-                        photos = presult;
+                        var photos = presult;
                         var pnum = 0;
                         $("#blankme").css( {"height":h+"px", "width":w+"px", 
                         "position":"absolute", "background-color":"black", "background-size":"contain",
-                        "background-image": "url('photos/" + photos[pnum] + "')",
+                        "background-image": "url('" + photos[pnum] + "')",
                         "left":"0px", "top":"0px", "z-index":"9999" } );
                         photohandle = setInterval(function() {
                             pnum++;
@@ -2121,7 +2136,7 @@ function execButton(buttonid) {
                             }
                             $("#blankme").css( {"height":h+"px", "width":w+"px", 
                             "position":"absolute", "background-color":"black", "background-size":"contain",
-                            "background-image": "url('photos/" + photos[pnum] + "')",
+                            "background-image": "url('" + photos[pnum] + "')",
                             "left":"0px", "top":"0px", "z-index":"9999" } );
                         }, phototimer);
                     
@@ -2510,7 +2525,7 @@ function setupButtons() {
             var hubname = hub.hubname;
             var hubindex = hub.id;
             var bodytag = "body";
-            var pname = $("#showversion span#infoname").html();
+            var pname = cm_Globals.options.pname;
             var pos = {position: "absolute", top: 100, left: 100, 
                        width: 600, height: 120, border: "4px solid"};
             var msg = "Remove hub: " + hubname + "<br>hubID: " + hubId + "? <br><br>Are you sure?";
@@ -2713,7 +2728,7 @@ function addEditLink() {
         var thingid = $(thing).attr("thingid");
         var hubid = $(thing).attr("hub");
         var userid = cm_Globals.options.userid;
-        var pname = $("#showversion span#infoname").html();
+        var pname = cm_Globals.options.pname;
 
         createModal("modaladd","Remove: "+ tilename + " of type: "+thingtype+" from room "+panel+"?<br>Are you sure?", "body" , true, pos, function(ui, content) {
             var clk = $(ui).attr("name");
@@ -2742,7 +2757,7 @@ function addEditLink() {
         var roomid = $("#panel-"+roomname).attr("roomid");
         var clickid = $(evt.target).parent().attr("aria-labelledby");
         var pos = {top: 100, left: 10};
-        var pname = $("#showversion span#infoname").html();
+        var pname = cm_Globals.options.pname;
         createModal("modaldel","Remove Room #" + roomnum + " with Name: " + roomname +" from HousePanel. Are you sure?", "body" , true, pos, function(ui, content) {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
@@ -2784,7 +2799,7 @@ function addEditLink() {
         // var clickid = $(evt.target).attr("aria-labelledby");
         var pos = {top: 100, left: 10};
         var panelid = $("input[name='panelid']").val();
-        var pname = $("#showversion span#infoname").html();
+        var pname = cm_Globals.options.pname;
         createModal("modaladd","Add New Room to HousePanel. Are you sure?", "body" , true, pos, function(ui, content) {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
@@ -3295,7 +3310,7 @@ function processKeyVal(targetid, aid, key, value) {
 }
 
 function refreshTile(tileid, aid, bid, thetype, hubid) {
-    var pname = $("#showversion span#infoname").html();
+    var pname = cm_Globals.options.pname;
     try {
         $.post(cm_Globals.returnURL, 
             {api: "doquery", userid: cm_Globals.options.userid, pname: pname, id: bid, tileid: tileid, type: thetype, hubid: hubid},
@@ -3409,7 +3424,7 @@ function clockUpdater(whichclock, forceget) {
     
         var userid = cm_Globals.options.userid;
         if ( !userid ) { userid = 1; }
-        var pname = $("#showversion span#infoname").html();
+        var pname = cm_Globals.options.pname;
         if ( !pname ) { pname = "default"; }
 
         // make a mini configoptions object for just clocks
@@ -3680,7 +3695,7 @@ function checkPassword(tile, thingname, pw, ro, thevalue, yesaction) {
     var tpos = $(tile).offset();
     var ttop = (tpos.top > 95) ? tpos.top - 90 : 5;
     var pos = {top: ttop, left: tpos.left};
-    var pname = $("#showversion span#infoname").html();
+    var pname = cm_Globals.options.pname;
     var htmlcontent;
     if ( pw==="" ) {
         htmlcontent = "<p>Operate action for: " + thingname + "</p><p>Are you sure?</p>";
@@ -3904,7 +3919,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true) {
     var thingid = $(tile).attr("thingid");
     var tileid = $(tile).attr("tile");
     var hubtype = $(tile).attr('hubtype') || "";
-    var pname = $("#showversion span#infoname").html();
+    var pname = cm_Globals.options.pname;
     var targetid;
     if ( !subid ) {
         return;
