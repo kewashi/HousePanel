@@ -4128,6 +4128,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true) {
         msg += "thingname = " + thingname + "<br>";
         msg += "type = " + thetype + "<br>";
         msg += "hubtype = " + hubtype + "<br>";
+        msg += "hubindex = " + linkhub + "<br>";
         msg += "tileid = " + tileid + "<br>";
         if ( hint && hint !== hubtype ) {
             msg += "hint = "+hint + "<br>";

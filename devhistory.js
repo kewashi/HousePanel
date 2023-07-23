@@ -1,4 +1,5 @@
 const devhistory = `
+3.078   Reinstate donation-ware feature and title cleanup
 3.077   Fix photo screensaver and blank screen to use actual mode if tile exists
 3.076   Minor bug fixes for music ISY tiles and other things
 3.075   Fix non-button devices so buttons work and clean up editor look
@@ -8,7 +9,7 @@ const devhistory = `
 3.071   bugfix isy mapping for Hubitat node server
 3.070   update isy mapping to include commands and other tweaks
 3.069   fix isy devices to be removed when hub is removed and other isy bugfixes
-3.068   enable user accessToken and end poitns to skip oAUTH flow for Hubitat hubs
+3.068   enable user accessToken and end points to skip oAUTH flow for Hubitat hubs
 3.067   bugfixes, clean up tile movement, hot keys for menus
 3.066   more options for borders, bigger menu, and set round corners as default
 3.065   enable linked items to take on attribute of original such as clocks

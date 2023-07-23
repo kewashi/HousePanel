@@ -4805,11 +4805,11 @@ function getAuthPage(user, configoptions, hubs, hostname, rmsg) {
 
         $tc +="<p>This is where you link a hub to " +
                 "HousePanel to gain access to your smart home devices. " +
-                "ISY, Hubitat, and Sonos hubs are supported. " +
+                "Hubitat and ISY hubs are supported. " +
                 "You can link any number and combination of hubs. " + 
-                "To authorize Hubitat and Sonos hubs you must have " +
+                "To authorize a Hubitat hub you can either provide an access token and hub endpoint " + 
+                "by looking at the logs when installing HousePanel.groovy, or you can provide " +
                 "Client ID and Client Secret values to start the OAUTH flow process. " +
-                "For Hubitat hubs you can skip OAUTH flow by providing useraccess and userendpt if they are known from a prior successful OAUTH flow. " +
                 "ISY hubs require you to enter your username and password in the fields shown below, " +
                 "and enter the IP of your hub in the Host API Url field " +
                 "using format https://xxx.xxx.xxx.xxx:8443" +
@@ -4817,10 +4817,9 @@ function getAuthPage(user, configoptions, hubs, hostname, rmsg) {
                 // "a hub's devices every so often. This is optional for most hubs but required for hubs that have a refresh token. " +
                 // "For such cases the Refresh timer field will be filled in automatically in the OAUTH flow process." +
                 "</p>";
-        $tc += "</div>";
 
         if ( GLB.dbinfo.donate===true ) {
-            $tc += '<br /><h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
+            $tc += '<br><h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
                 <br /><div><form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank"> \
                 <input type="hidden" name="cmd" value="_s-xclick"> \
                 <input type="hidden" name="hosted_button_id" value="XS7MHW7XPYJA4"> \
@@ -4828,6 +4827,7 @@ function getAuthPage(user, configoptions, hubs, hostname, rmsg) {
                 <img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1"> \
                 </form></div>';
         }
+        $tc += "</div>";
         
         var webSocketUrl = getSocketUrl(hostname);
         $tc += hidden("pagename", "auth");
@@ -9694,7 +9694,8 @@ function getInfoPage(user, configoptions, hubs, req) {
         $tc += getHeader(userid, null, skin, true);
         $tc += "<h3>" + GLB.APPNAME + " Information Display</h3>";
 
-        if ( usertype > 1 ) {
+        if ( GLB.dbinfo.donate===true ) {
+            $tc += "<div class=\"greeting\">";
             $tc += '<br /><h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
                 <br /><div><form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank"> \
                 <input type="hidden" name="cmd" value="_s-xclick"> \
@@ -9702,6 +9703,7 @@ function getInfoPage(user, configoptions, hubs, req) {
                 <input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!"> \
                 <img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1"> \
                 </form></div>';
+            $tc += "</div>";
         }
 
         var numhubs = 0;
@@ -10199,7 +10201,7 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc += hidden("configsid", JSON.stringify(configs), "configsid");
 
         $tc += "<h3>" + GLB.APPNAME + " Options</h3>";
-        $tc += "<h3>for user: " + uname + " | " + useremail + "</h3>";
+        $tc += "<h3>for user: " + uname + "  email: " + useremail + "</h3>";
         // $tc += "<h3>on panel: " + pname + "</h3>";
         
         // manage panels here - select existing, remove, or add
@@ -10210,8 +10212,17 @@ function getOptionsPage(user, configoptions, hubs, req) {
         //        " from the HousePanel system. All active users must have at least one panel, so if you only have one" +
         //        " you will not be able to remove it." +
         //        "</div>";
-        $tc += "<div class='greeting'>Select various options for your specific installation." +
-               "</div>";
+        if ( GLB.dbinfo.donate===true ) {
+            $tc += "<div class=\"greeting\">";
+            $tc += '<br /><h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
+                <br /><div><form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank"> \
+                <input type="hidden" name="cmd" value="_s-xclick"> \
+                <input type="hidden" name="hosted_button_id" value="XS7MHW7XPYJA4"> \
+                <input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!"> \
+                <img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1"> \
+                </form></div>';
+            $tc += "</div>";
+        }
 
         $tc += "<div class=\"filteroption\">";
 
@@ -10220,7 +10231,7 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc += "<input id=\"newUsername\" class=\"optioninp\" name=\"newUsername\" size=\"20\" type=\"text\" value=\"" + uname + "\"/></div>"; 
 
         // available panels to pick from
-        $tc += "<label class =\"optioninp\">Select from list or enter name below:</label>";
+        $tc += "<label class =\"optioninp\">Select panel from list or enter new panel name below:</label>";
             $tc += "<select class=\"optioninp\" id='userpanel' name='userpanel'>"; 
             panels.forEach(panel => {
                 const selected = (panel.pname === pname) ? " selected" : "";
@@ -12422,7 +12433,7 @@ GLB.dbinfo = {
     "service": "none"
 };
 GLB.dbinfo.hubs = { Hubitat: "Hubitat", ISY: "ISY" };
-GLB.dbinfo.donate = false;
+GLB.dbinfo.donate = true;
 GLB.dbinfo.enablerules = true;
 
 // read config file if one exists
