@@ -631,7 +631,7 @@ function getTypes() {
 
     // all sessions have these types
     var hubtypes = Object.keys(GLB.mainISYMap);
-    var blanktypes = ["blank", "blank", "custom", "frame", "image", "piston",
+    var blanktypes = ["blank", "custom", "frame", "image", "piston",
                       "video", "control", "variables", "clock"];
     var thingtypes = hubtypes.concat(blanktypes);
 
@@ -10999,7 +10999,7 @@ function processOptions(userid, panelid, optarray, res) {
 async function updSpecials(userid, hubindex, stype, newcount, specials) {
 
     const defwidth = {"video": 375, "frame": 375, "image": 375, "blank": 180, "custom": 180};
-    const defheight = {"video": 211, "frame": 211, "image": 211, "blank": 211, "custom": 211};
+    const defheight = {"video": 210, "frame": 210, "image": 210, "blank": 210, "custom": 210};
 
     // add special tiles based on type and user provided count
     // this replaces the old code that handled only video and frame tiles

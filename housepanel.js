@@ -3633,6 +3633,12 @@ function setupPage() {
         } else if ( subid === "_setMotion") {
             processClickWithList(that, thingname, ro, subid, ["active","inactive"]);
 
+        } else if ( subid === "thermostatMode" || subid==="_setThermostatMode") {
+            processClickWithList(that, thingname, ro, "_setThermostatMode", ["heat","cool","auto","off"]);
+
+        } else if ( subid === "thermostatFanMode" || subid==="_setThermostatFanMode") {
+            processClickWithList(that, thingname, ro, "_setThermostatFanMode", ["auto","on","circulate"]);
+
         } else if ( subid === "_setChirp") {
             processClickWithList(that, thingname, ro, subid, ["ding-dong","harp","navi","wind-chime","none"]);
        
@@ -3660,6 +3666,7 @@ function setupPage() {
                     (subid.startsWith("Int_") && !subid.endsWith("-up") && !subid.endsWith("-dn") )|| 
                     (subid.startsWith("State_") && !subid.endsWith("-up") && !subid.endsWith("-dn") ) ||
                     subid==="heatingSetpoint" || subid==="coolingSetpoint" || subid==="_docmd" ||
+                    subid==="_setHeatingSetpoint" || subid==="_setCoolingSetpoint" ||
                     subid==="ecoHeatPoint" || subid==="ecoCoolPoint" ||
                     (thetype==="variables" && subid!=="name" && !thevalue.startsWith("RULE::")) || 
                     subid==="hue" || subid==="saturation" ) {
@@ -3834,7 +3841,7 @@ function processClickWithList(tile, thingname, ro, subid, thelist, prefix = "") 
         // priorOpmode = "Operate";
         if ( clk==="okay" ) {
             thevalue = $("#picklist").val();
-            processClick(tile, thingname, ro, thevalue, "");
+            processClick(tile, thingname, ro, thevalue, "", subid);
         }
         closeModal("modalpick");
     },
@@ -3897,14 +3904,16 @@ function addOnoff(targetid, subid, thevalue) {
 // the aid value is now exactly equal to thingid -- both are the index key in the DB
 // for the main things table that holds the index keys for devices shown on pages
 // tileid below is the index in the devices table to the absolute device information
-function processClick(that, thingname, ro, thevalue, theattr = true) {
+function processClick(that, thingname, ro, thevalue, theattr = true, subid  = null) {
     var aid = $(that).attr("aid");
     if ( theattr===true ) {
         theattr = $(that).attr("class");
     } else if ( theattr===false ) {
         theattr = "";
     }
-    var subid = $(that).attr("subid");
+    if ( !subid ) {
+        subid = $(that).attr("subid");
+    }
     var realsubid = subid;
     var tile = '#t-'+aid;
     var thetype = $(tile).attr("type");
@@ -4027,8 +4036,8 @@ function processClick(that, thingname, ro, thevalue, theattr = true) {
     // to compensate for loss of inspection I added any custom field starting with "label" or "text" subid will inspect
     var ispassive = (ro || subid==="thingname" || subid==="custom" || subid==="temperature" || subid==="feelsLike" || subid==="battery" || //  (command==="TEXT" && subid!=="allon" && subid!=="alloff") ||
         subid==="presence" || subid==="motion" || subid==="contact" || subid==="status_" || subid==="status" || subid==="deviceType" || subid==="localExec" ||
-        subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" || subid==="name" || subid==="skin" || 
-        subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" || subid==="numberOfButtons" ||
+        subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" || subid==="name" || subid==="skin" || subid==="thermostatOperatingState" ||
+        subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" || subid==="numberOfButtons" || subid==="humidity" ||
         subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") || subid==="illuminance" ||
         (command==="TEXT" && subid.startsWith("label")) || (command==="TEXT" && subid.startsWith("text")) ||
         (thetype==="weather" && !subid.startsWith("_")) ||

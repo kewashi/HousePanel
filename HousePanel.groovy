@@ -15,6 +15,7 @@
  * This is a Hubitat app that works with the HousePanel smart dashboard platform
  * 
  * Revision history
+ * 07/23/2023 - bugfix for thermostat to work with popup menu for modes
  * 07/22/2023 - fix music tiles to update properly by translating the object
  * 07/16/2023 - fix switches, others, and actuators for buttons to work properly
  * 07/09/2023 - replace weather with Tomorrow.io weather call
@@ -1742,12 +1743,17 @@ def sendCommand(item, subid, cmd) {
 
     // skip if not supported or ignored but also try using the cmd
     def reserved = ignoredCommands()
-    if ( !item.hasCommand(subid) || reserved.contains(subid)) {
-        if ( cmd && item.hasCommand(cmd) && !reserved.contains(cmd) ) {
-            item."$cmd"()
-            return true
+    try {
+        if ( reserved.contains(subid) || !item.hasCommand(subid) ) {
+            if ( cmd && !reserved.contains(cmd) && item.hasCommand(cmd) ) {
+                item."$cmd"()
+                return true
+            }
+            return false
         }
-        return false
+    } catch(e) {
+        item."$cmd"()
+        return true
     }
 
     // first situation is a command with no parameters
@@ -1899,7 +1905,8 @@ def setShade(swid, cmd, swattr, subid) {
             newposition = curposition
             def del = (cmd.isNumber() && cmd > 0) ? cmd.toInteger() : 5
             if ( del > 10 ) { del = 10 }
-            newposition = (newposition >= 100 - del) ? 100 : newposition - ( newposition % del ) + del
+            newposition = (newposition >= 100 - del) ? 100 : newposition + del
+            logger("new position = ${newposition} del = ${del}", "debug")
             item.setPosition(newposition)
             if ( item.hasAttribute("level") ) {
                 item.setLevel(newposition)
@@ -1911,8 +1918,9 @@ def setShade(swid, cmd, swattr, subid) {
             newposition = curposition
             def del = (cmd.isNumber() && cmd > 0) ? cmd.toInteger() : 5
             if ( del > 10 ) { del = 10 }
-            del = (newposition % del) == 0 ? del : newposition % del
-            newposition = (newposition <= del) ? del : newposition - del
+            // del = (newposition % del) == 0 ? del : newposition % del
+            newposition = (newposition <= del) ? 0 : newposition - del
+            logger("new position = ${newposition} del = ${del}", "debug")
             item.setPosition(newposition)
             if ( item.hasAttribute("level") ) {
                 item.setLevel(newposition)
@@ -2845,7 +2853,11 @@ def setThermostat(swid, cmd, swattr, subid) {
             cmd = Math.min(90, cmd)
             cmd = Math.max(50, cmd)
         } catch(e) { 
-            cmd = item.currentValue("temperature")
+            if ( subid.endsWith("-up") || subid.endsWith("-dn") || subid=="heatingSetpoint" || subid=="coolingSetpoint" ) {
+                cmd = item.currentValue("temperature")
+            } else if ( !subid.startsWith("_") ) {
+                logger("Temperature is not passed into the cmd value for a thermostat non-command click. This is legacy HP behavior. subid=${subid}, cmd=${cmd}", "warn")
+            }
         }
 
         // case "heat-up":
@@ -2965,26 +2977,11 @@ def setThermostat(swid, cmd, swattr, subid) {
             resp = [thermostatFanMode: newsw]
             // resp['thermostatFanMode'] = newsw
         }
-
-        // these three just return the states but they should never be called
-        else if ( subid=="temperature" ) {
-            newsw = item.currentValue(subid)
-            resp = [temperature: newsw]
-        }
-          
-        else if ( subid=="state" ) {
-            newsw = item.currentValue(subid)
-            resp = [state: newsw]
-        }
-          
-        else if ( subid=="humidity" ) {
-            newsw = item.currentValue(subid)
-            resp = [humidity: newsw]
-        }
            
         // define actions for python end points
         // if no action is taken the full state is returned
         else {
+            logger("subid = ${subid} cmd = ${cmd}", "debug")
             sendCommand(item, subid, cmd)
             resp = getThermostat(swid, item)
         }

@@ -21,7 +21,6 @@ div.wrap {
 }
 body {
     width: 100%;
-    height: 100%;
     background-color: #ffffff;
     color: #000000;
     height: auto;
@@ -153,7 +152,7 @@ div.inlinebutton {
 #showdocs {
     margin-left: 10px; margin-top: 0px;
     padding-top: 3px;
-    width: 22px; height: 19px;
+    width: 22px; height: 20px;
     border-radius: 50%;
     background-color: rgba(140,140,140,0.5);
     border: 2px solid white;
@@ -901,7 +900,6 @@ div.editheader {
     width: 40%; /* Full width */
     height: 60%; /* Full height */
     overflow: auto; /* Enable scroll if needed */
-    background-color: rgb(0,0,0); /* Fallback color */
     background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
     color: #ffffee;
 }
@@ -1450,11 +1448,6 @@ div.thing.blank-thing:hover {
     -webkit-transition-duration: .2s;
 }
 
-/* clock styling */
-div.thing.clock-thing {
-    height: 150px;
-    width: 246px;
-}
 div.thing.clock-thing.analog {
     background-color: white;
 }
@@ -1698,7 +1691,7 @@ div.overlay.weatherCode div.weatherCode {
     height: 74px;
     padding-top: 6px;
     margin-left: 8px; margin-right: 8px;
-    color: rgba(0, 0, 0, 1);
+    color: rgb(150, 150, 150);
     background-size: 80px;
 }
 
@@ -1708,15 +1701,15 @@ div.weather.forecastToday, div.weather.forecastTonight, div.weather.forecastTomo
 
 /* weather styling */
 div.thing.weather-thing {
-    background-color: rgba(0,0,0,0.01);
+    background-color: rgba(81, 103, 250, 0.75);
     width: 240px;
     text-align: center;
     height: auto;
 }
 div.thing div.thingname.weather {
-    width: 92%;
-    padding-left: 4%; 
-    padding-right: 4%;
+    width: 96%;
+    padding-left: 2%; 
+    padding-right: 2%;
 }
 div.overlay.temperature div.temperature, 
 div.overlay.feelsLike div.feelsLike,
@@ -2047,8 +2040,8 @@ div.thing div.overlay div.arrow-dn {
 }
 div.thing div.overlay div.arrow-it {
     display: inline-block;
-    height: 32px; width: 36px;
-    margin-top: 5px;
+    height: 25px; width: 36px; border: none;
+    padding-left: 0px; padding-right: 0px;
 }
 div.thing div.overlay.enabled,
 div.thing div.overlay.deviceClass,

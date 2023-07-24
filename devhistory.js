@@ -1,5 +1,5 @@
 const devhistory = `
-3.078   Reinstate donation-ware feature and title cleanup
+3.078   Reinstate donation-ware feature, title cleanup, thermostat bugfix, code cleanup
 3.077   Fix photo screensaver and blank screen to use actual mode if tile exists
 3.076   Minor bug fixes for music ISY tiles and other things
 3.075   Fix non-button devices so buttons work and clean up editor look
