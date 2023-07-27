@@ -320,9 +320,12 @@ div#catalog {
     z-index: 500;
 }
 
-.ui-widget.ui-widget-content{
+.ui-widget.ui-widget-content {
     background-color: #333333;
-    border: none;
+    border: black solid 1px;
+}
+.ui-slider {
+    border: black solid 1px;
 }
 .ui-widget-content a {
     color: #cccccc;
@@ -1022,7 +1025,7 @@ input[type="button"]#wholetile {
     float: left;
     width: 255px;
     margin-top: 5px;
-    max-height: 580px;
+    max-height: 590px;
     overflow-x: hidden;
     background-color: rgba(170, 170, 170, 1);
 }
@@ -1225,6 +1228,9 @@ div.radiogroup label, div.radiogroup input {
     display: inline-block;
     margin-left: 2px; margin-right: 3px;
     margin-top: 10px;
+}
+div.radiogroup input {
+    color: black;
 }
 
 #colorpicker .minicolors-swatch {

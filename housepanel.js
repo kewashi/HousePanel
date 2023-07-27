@@ -845,6 +845,13 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                     pvalue["presence"] = "absent";
                 }
 
+                // handle operating state changes for thermostate
+                if ( pvalue["thermostatOperatingState"] && pvalue["temperature"] ) {
+                    var newstate = pvalue["thermostatOperatingState"];
+                } else {
+                    newstate = null;
+                }
+
                 // update all the tiles that match this type and id
                 var panelItems = $('div.panel div.thing[bid="'+bid+'"]');
                 try {
@@ -852,6 +859,15 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                         panelItems.each(function() {
                             var aid = $(this).attr("aid");
                             updateTile(aid, pvalue);
+
+                            // add class for heating mode for thermostats
+                            if ( newstate ) {
+                                var targettemp = $("#a-"+aid+"-temperature");
+                                $(targettemp).removeClass("cooling");
+                                $(targettemp).removeClass("heating");
+                                $(targettemp).removeClass("idle");
+                                $(targettemp).addClass(newstate);            
+                            }
                         });
                     }
                     // console.log(">>>> pvalue: ", pvalue, " bid: ", bid);

@@ -1062,19 +1062,30 @@ function initDialogBinds(str_type, thingindex) {
 function iconlist() {
     var dh = "";
 	dh += "<div id='editicon'>";
+
+    // icon selector
 	dh += "<div id='iconChoices'>";
 	dh += "<select name=\"iconSrc\" id=\"iconSrc\" class=\"ddlDialog\"></select>";
 	dh += "<input type='checkbox' id='noIcon'>";
 	dh += "<label class=\"iconChecks\" for=\"noIcon\">None</label>";
 	dh += "</div>";
-        var align = "";
-        align += "<div id='alignIcon' class='radiogroup'>";
-        align+= '<input id="iconleft" type="radio" name="alignicon" value="left"><label for="iconleft">Left</label>';
-        align+= '<input id="iconcenter" type="radio" name="alignicon" value="center" checked><label for="iconcenter">Center</label>';
-        align+= '<input id="iconright" type="radio" name="alignicon" value="right"><label for="iconright">Right</label>';
-        align += "</div>";
-        dh += align;
+
+    // icon placement
+    dh += "<div class='radiogroup'>";
+    dh += "<label for=\"iconleft\">Pos-x: </label><input size='6' type=\"number\" id=\"iconleft\" min='0' max='100' step='10' value=\"50\"/>";
+    dh += "<label for=\"icontop\" >Pos-y: </label><input size='6' type=\"number\" id=\"icontop\" min='0' max='100' step='10' value=\"50\"/>";
+    dh += "</div>";
+
+    // icon size
+    dh += "<div class='radiogroup'>";
+    dh += "<label for='bgSize'>Icon size: </label>";
+    dh += "<input size='8' type=\"number\" min='10' max='1600' step='10' id=\"bgSize\" value=\"80\"/>";
+    dh += "<input type='checkbox' id='autoBgSize'><label class=\"iconChecks\" for=\"autoBgSize\">Auto?</label>";
+    dh += "</div>";
+
+    // icon list placeholder
 	dh += "<div id='iconList'></div>";
+
 	dh += "</div>";
     return dh;
 }
@@ -1143,25 +1154,6 @@ function sizepicker(str_type, thingindex) {
 
     var subid = setsubid(str_type);
     var target = getCssRuleTarget(str_type, subid, thingindex);
-    var size = $(target).css("background-size");
-    // alert("old size: " + size);
-    size = parseInt(size);
-    if ( isNaN(size) ) { 
-        size = 80; 
-        if ( subid === "wholetile" ) { size = 150; }
-    }
-    
-    // icon size effects
-    dh += "<div class='sizeText'></div>";
-    dh += "<div class='editSection_input'>";
-    dh += "<label for='bgSize'>Background Size: </label>";
-    dh += "<input size='8' type=\"number\" min='10' max='2400' step='10' id=\"bgSize\" value=\"" + size + "\"/>";
-    dh += "</div>";
-    dh += "<div class='editSection_input'><input type='checkbox' id='autoBgSize'><label class=\"iconChecks\" for=\"autoBgSize\">Auto?</label></div>";
-
-    // overall tile size effect -- i dont' know why I had this set different?
-    // now I rmember - it is for whole tiles, so I renamed it
-    // var target2 = "div.thing."+str_type+"-thing";
     var targetwhole = getCssRuleTarget(str_type, subid, thingindex, "wholetile"); //  "div.thing."+str_type+"-thing";
     
     var th = $(target).css("height");
@@ -1198,6 +1190,9 @@ function sizepicker(str_type, thingindex) {
     dh += "<input size='8' type=\"number\" min='10' max='1600' step='10' id=\"tileWidth\" value=\"" + tw + "\"/>";
     dh += "</div>";
 
+    dh += "<div class='editSection_input autochk'><input type='checkbox' id='autoTileHeight'><label class=\"iconChecks\" for=\"autoTileHeight\">Auto H?</label></div>";
+    dh += "<div class='editSection_input autochk'><input type='checkbox' id='autoTileWidth'><label class=\"iconChecks\" for=\"autoTileWidth\">Auto W?</label></div>";
+
     dh += "<div class='editSection_input'>";
     var curFloat = $(targetwhole).css("float");
     // console.log(">>>> curFloat = ", curFloat, target, targetwhole);
@@ -1214,9 +1209,6 @@ function sizepicker(str_type, thingindex) {
     fe += "</select>";
     dh += fe;
     dh += "</div>";
-
-    dh += "<div class='editSection_input autochk'><input type='checkbox' id='autoTileHeight'><label class=\"iconChecks\" for=\"autoTileHeight\">Auto H?</label></div>";
-    dh += "<div class='editSection_input autochk'><input type='checkbox' id='autoTileWidth'><label class=\"iconChecks\" for=\"autoTileWidth\">Auto W?</label></div>";
 
     dh += "<div class='sizeText'><p>Item Size & Position:</p></div>";
     dh += "<div class='editSection_inline'>";
@@ -1298,6 +1290,8 @@ function sizepicker(str_type, thingindex) {
     dh += "<label for='afterText'>Text After:</label>";
     dh += "<input size='10' id=\"afterText\" value=\"\"/>";
     dh += "</div>";
+    // var resetbutton = "<br /><br /><button id='editReset' type='button'>Reset</button>";
+    // dh += resetbutton;
     
     return dh;
 }
@@ -1308,7 +1302,6 @@ function colorpicker(str_type, thingindex) {
     // this section is loaded later with a bunch of color pickers
     // including script to respond to picked color
     dh += "<div id='colorpicker'>";
-    // dh += "<button id='editReset' type='button'>Reset</button>";
     dh += "<div class='colorgroup'><label>Feature Selected:</label>";
     var firstsub = setsubid(str_type);
     var target1 = getCssRuleTarget(str_type, firstsub, thingindex);
@@ -1878,7 +1871,6 @@ function initColor(str_type, subid, thingindex) {
     // far left side of the screen
     // -----------------------------------------------------------------------
     var dh= "";
-    // dh += "<button id='editReset' type='button'>Reset</button>";
     dh += "<div class='colorgroup'><label>Feature Selected:</label>";
     dh += "<div id='subidTarget' class='dlgtext'>" + subid + "</div>";
     var subonoff = $('#onoffTarget').html();
@@ -2036,7 +2028,7 @@ function initColor(str_type, subid, thingindex) {
         var ishidden = "";
         ishidden += "<div class='editSection_input autochk'>";
         ishidden += "<input type='checkbox' id='isHidden' target='" + target + "'>";
-        ishidden += "<label class=\"iconChecks\" for=\"isHidden\">Hide Element?</label></div><br />";
+        ishidden += "<label class=\"iconChecks\" for=\"isHidden\">Hide Element?</label></div>";
 
         var inverted = "<div class='editSection_input autochk'><input type='checkbox' id='invertIcon'><label class=\"iconChecks\" for=\"invertIcon\">Invert Element?</label></div>";
         inverted += "<div class='editSection_input'><input type='checkbox' id='absPlace'><label class=\"iconChecks\" for=\"absPlace\">Absolute Loc?</label></div>";
@@ -2052,19 +2044,11 @@ function initColor(str_type, subid, thingindex) {
                           "Dashed Style": "border-style: dashed;",
                           "Dotted Style": "border-style: dotted;",
                           "Double Style": "border-style: double;",
-                          "1x Border": "border-width: 1px;",
+                          "1x Border": "border-width: 1px; border-style: solid;",
                           "2x Border": "border-width: 2px;",
                           "4x Border": "border-width: 4px;",
                           "6x Border": "border-width: 6px;",
                           "10x Border": "border-width: 10px;",
-                          "White Color": "border-color: white;", 
-                          "Black Color": "border-color: black;", 
-                          "Red Color": "border-color: red;", 
-                          "Green Color": "border-color: green;", 
-                          "Blue Color": "border-color: blue;", 
-                          "Purple Color": "border-color: purple;", 
-                          "Cyan Color": "border-color: cyan;", 
-                          "No Color" : "border-color: rgba(0,0,0,0.01);",
                           "White Shadow": "box-shadow: 5px 4px 15px white;",
                           "Black Shadow": "box-shadow: 5px 4px 15px black;",
                           "No Shadow": "box-shadow: none;",
@@ -2079,11 +2063,22 @@ function initColor(str_type, subid, thingindex) {
         }
         border += "</select>";
         border += "</div>";
-        
+
+        onstart = $(target).css("border-color");
+        if ( !onstart ) {
+            onstart = $(generic).css("border-color");
+            if ( !onstart ) { onstart = "rgba(0, 0, 0, 1)"; }
+        }
+        var brcolor = '<div class="colorgroup"> \
+                      <label for="borderColor">Border Color</label> \
+                      <input type="text" id="borderColor" caller="border" target="' + target + '" \
+                      class="colorset" value="' + onstart + '"> \
+                      </div>';
+
         var resetbutton = "<br /><br /><button id='editReset' type='button'>Reset</button>";
 
         // insert the color blocks
-        $("#colorpicker").html(dh + iconback + ceffect + iconfore + fe + align + ishidden + inverted + border + resetbutton);
+        $("#colorpicker").html(dh + iconback + ceffect + iconfore + brcolor + border + fe + align + ishidden + inverted + resetbutton);
 
         // turn on minicolor for each one
         $('#colorpicker .colorset').each( function() {
@@ -2174,7 +2169,14 @@ function initColor(str_type, subid, thingindex) {
         var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
         var borderstyle = $(this).val();
         if ( borderstyle!=="" ) {
-            addCSSRule(cssRuleTarget, borderstyle);
+            if ( subid==="level" || subid==="onlevel" || subid==="volume" || subid==="position" ) {
+                var sliderbox= cssRuleTarget + " .ui-slider";
+                var sliderbox2= sliderbox + " span.ui-slider-handle";
+                addCSSRule(sliderbox, borderstyle);
+                addCSSRule(sliderbox2, borderstyle);
+            } else {
+                addCSSRule(cssRuleTarget, borderstyle);
+            }
         }
         event.stopPropagation;
     });
@@ -2205,15 +2207,28 @@ function initColor(str_type, subid, thingindex) {
         event.stopPropagation;
     });
     
-    // icon alignment handling
-    $("#alignIcon").off('change', "input");
-    $("#alignIcon").on('change', "input", function (event) {
+    $("#iconleft").off('change');
+    $("#iconleft").on('change', function (event) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
         var subid = $("#subidTarget").html();
         var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
         var aligneffect = $(this).val();
-        var fontstr= "background-position-x: " + aligneffect;
+        var fontstr= "background-position-x: " + aligneffect + "%";
+        console.log("setting iconleft: ", fontstr);
+        addCSSRule(cssRuleTarget, fontstr);
+        event.stopPropagation;
+    });
+
+    $("#icontop").off('change');
+    $("#icontop").on('change', function (event) {
+        var str_type = $("#tileDialog").attr("str_type");
+        var thingindex = $("#tileDialog").attr("thingindex");
+        var subid = $("#subidTarget").html();
+        var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
+        var aligneffect = $(this).val();
+        var fontstr= "background-position-y: " + aligneffect + "%";
+        console.log("setting icontop: ", fontstr);
         addCSSRule(cssRuleTarget, fontstr);
         event.stopPropagation;
     });
@@ -2244,7 +2259,6 @@ function initColor(str_type, subid, thingindex) {
     $("#editReset").on('click', function (event) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
-        // alert("Reset type= "+str_type+" thingindex= "+thingindex);
         var subid = $("#subidTarget").html();
         resetCSSRules(str_type, subid, thingindex);
         event.stopPropagation;
@@ -2333,14 +2347,13 @@ function initColor(str_type, subid, thingindex) {
     
     // set the initial alignment
     initalign = $(target).css("background-position-x");
-    if ( initalign === "left") {
-        $("#iconleft").prop("checked", true);
-    } else if (initalign === "right") {
-        $("#iconright").prop("checked", true);
-    } else {
-        $("#iconcenter").prop("checked", true);
-    }
-    
+    initalign = transAlign(initalign);
+    $("#iconleft").val(initalign);
+
+    initalign = $(target).css("background-position-y");
+    initalign = transAlign(initalign);
+    $("#icontop").val(initalign);
+
     // set initial hidden status
     if ( subid==="wholetile" ) {
         $("#isHidden").prop("checked", false);
@@ -2361,6 +2374,23 @@ function initColor(str_type, subid, thingindex) {
         $("#isHidden").prop("checked", ishidden);
     }
     
+}
+
+function transAlign(initalign) {
+    var newalign = initalign;
+    if ( initalign==="left" ) {
+        newalign = 0;
+    } else if ( initalign==="center") {
+        newalign = 50;
+    } else if ( initalign==="right" ) {
+        newalign = 100;
+    } else {
+        var len = initalign.length;
+        newalign = parseInt(initalign.substring(0,len-1));
+        newalign = isNaN(newalign) ? 50 : newalign;
+    }
+    console.log("translated:", initalign," to:", newalign);
+    return newalign;
 }
 
 // returns an array of valid triggers for checking hidden status
@@ -2413,20 +2443,24 @@ function updateColor(strCaller, cssRuleTarget, str_type, subid, thingindex, strC
     if ( subid==="level" || subid==="onlevel" || subid==="volume" || subid==="position" ) {
         cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex); //  "div.overlay.level.v_" + thingindex;
         var sliderline = cssRuleTarget;
+        var sliderbox= sliderline + " .ui-slider";
+        var sliderbox2= sliderbox + " span.ui-slider-handle";
         if ( strCaller==="background" ) {
-            addCSSRule(sliderline, "background-color: " + strColor + ";");		
+            addCSSRule(sliderline, "background-color: " + strColor + ";");
+        } else if ( strCaller==="border" ) {
+            addCSSRule(sliderbox, "border-color: " + strColor + ";");
+            addCSSRule(sliderbox2, "border-color: " + strColor + ";");		
         } else {
-            var sliderbox= sliderline + " .ui-slider";
             addCSSRule(sliderbox, "background-color: " + strColor + ";");		
-            addCSSRule(sliderbox, "color: " + strColor + ";");
-            addCSSRule(sliderbox, "width: 100%;");
-            var sliderbox2= sliderbox + " span.ui-slider-handle";
+            // addCSSRule(sliderbox, "color: " + strColor + ";");
             addCSSRule(sliderbox2, "background-color: " + strColor + ";");		
-            addCSSRule(sliderbox2, "color: " + strColor + ";");		
+            // addCSSRule(sliderbox2, "color: " + strColor + ";");		
         }
 
     } else if ( strCaller==="background" ) {
         addCSSRule(cssRuleTarget, "background-color: " + strColor + ";");		
+    } else if ( strCaller==="border" ) {
+        addCSSRule(cssRuleTarget, "border-color: " + strColor + ";");		
     } else {
         if ( str_type==="page" && (subid==="tab" || subid==="tabon") ) {
             cssRuleTarget += " a.ui-tabs-anchor";
