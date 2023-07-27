@@ -90,8 +90,6 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
         );
 
     }
-    // console.log(">>> htmlcontent: ", htmlcontent);
-
     dialog_html += "<div id='subsection'></div>";
     dialog_html += "</div>";
     
@@ -156,7 +154,6 @@ $.fn.isAuto = function(dimension){
         this.parent().css({width: testWidth});
         var newWidth = this.css("width");
         this.parent().css({width: parentWidth});
-        // console.log(originalWidth, newWidth, parentWidth);
         if ( newWidth > originalWidth ) {
             return true;    
         } else{
@@ -183,8 +180,6 @@ function getOnOff(str_type, subid, val) {
     var onoff;
     var hubType = et_Globals.hubType;
 
-    // console.log(">>>> subid: ", subid);
-
     // handle the cases for custom tiles that could have any subid starting with valid names
     // get rid of flash since the state actually never gets set by the Hubitat hub
     if ( subid.startsWith("switch" ) ) {
@@ -195,9 +190,9 @@ function getOnOff(str_type, subid, val) {
         }
     } else if ( subid.startsWith("ecoMode") ) {
         onoff = ["ON","OFF"];
-    } else if ( (str_type==="momentary") && subid.startsWith("momentary" ) ) {
+    } else if ( subid.startsWith("momentary") ) {
         onoff = ["on","off"];
-    } else if ( str_type==="button" && subid.startsWith("button") ) {
+    } else if ( subid.startsWith("button") ) {
         onoff = ["pushed","held","released","doubleTapped"];
         // alert("subid = " + subid);
     } else if ( subid.startsWith("contact" ) || subid.startsWith("valve" ) ) {
@@ -219,7 +214,7 @@ function getOnOff(str_type, subid, val) {
     } else if ( subid.startsWith("pistonName" ) ) {
         onoff = ["firing","idle"];
     } else if ( subid.startsWith("thermostatFanMode" ) ) {
-        if ( hubType==="ISY" || str_type==="isy" ) {
+        if ( str_type==="isy" ) {
             onoff = ["Auto", "On", "Circulate"];
         } else {
             onoff = ["auto","on","followschedule","circulate"];
@@ -240,10 +235,10 @@ function getOnOff(str_type, subid, val) {
         onoff = ["present","absent","not_present"];
     } else if ( str_type==="hsm" && subid.startsWith("state") ) {
         onoff = ["armedAway", "armingAway", "armedHome", "armingHome", "armedNight", "armingNight", "disarmed", "allDisarmed"];
-    } else if ( str_type==="mode" && subid.startsWith("themode" ) ) {
+    } else if ( subid.startsWith("themode" ) ) {
         onoff = [];
         // get all the modes supported by this location
-        $("#t-"+et_Globals.aid).find("div.overlay > div.mode").each( function(index) {
+        $("div.mode-thing").find("div.overlay > div.mode").each( function(index) {
             var subid = $(this).attr("subid");
             if ( subid.startsWith("_") ) {
                 var locmode = $(this).html();
@@ -267,8 +262,6 @@ function getOnOff(str_type, subid, val) {
         }
     }
     onoff.push("");
-    // console.log(" >>>> onoff: ", onoff);
-    
     return onoff;
 }
 
@@ -322,7 +315,6 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
         } else {
             target = null;
         }
-        // console.log("page= ", thingindex," target= ", target);\
 
     } else if ( scope==="overlay" ) {
         target = getScope();
@@ -436,7 +428,6 @@ function toggleTile(target, str_type, subid, thingindex) {
         var linkid = swval.substring(ipos+2);
         var linkaid = $("div.thing[tile='"+linkid+"']").attr("aid");
         swval = $("#a-"+linkaid+"-"+subid).html();
-        // console.log(">>>> link click: ", linkid, str_type, subid, linkaid, swval);
     }
     
     // activate the icon click to use this
@@ -475,7 +466,9 @@ function setupIcons(category) {
         var img = $(this).attr("show") || $(this).attr("src");
         var subid = $("#subidTarget").html();
         var strIconTarget = getCssRuleTarget(str_type, subid, thingindex);
-        // console.log("Clicked on img= "+img+" Category= "+category+" strIconTarget= "+strIconTarget+" type= "+str_type+" subid= "+subid+" index= "+thingindex);
+        if ( DEBUGte ) {
+            console.log("Clicked on img= "+img+" Category= "+category+" strIconTarget= "+strIconTarget+" type= "+str_type+" subid= "+subid+" index= "+thingindex);
+        }
         iconSelected(category, strIconTarget, img, str_type, thingindex);
     });
 }
@@ -578,7 +571,6 @@ function initDialogBinds(str_type, thingindex) {
         var thingindex = $("#tileDialog").attr("thingindex");
         var newfloat = $("#floatOpts").val();
         var rule = "float: " + newfloat + ";";
-        // console.log(">>>> Float: ", newfloat, rule, str_type);
         if ( str_type!=="page" ) {
             addCSSRule(getCssRuleTarget(str_type, 'wholetile', thingindex), rule);
         }
@@ -686,7 +678,6 @@ function initDialogBinds(str_type, thingindex) {
                 target = target + " img.trackImage";
             }
             var rule = "width: " + newsize.toString() + "px;";
-            // console.log("target: ", target, " rule: ", rule);
             addCSSRule(target, rule);
 
         }
@@ -1038,7 +1029,6 @@ function initDialogBinds(str_type, thingindex) {
         if ( subid !== "wholetile" && subid !== "panel" && str_type!=="page" ) {
             var csstag = getCssRuleTarget(str_type, subid, thingindex) + "::" + before_after;
             addCSSRule(csstag, rule, false, before_after);
-            // console.log("mod_" + before_after + ": " + csstarget + " rule: " + rule);
         }
 
     }
@@ -1195,7 +1185,6 @@ function sizepicker(str_type, thingindex) {
 
     dh += "<div class='editSection_input'>";
     var curFloat = $(targetwhole).css("float");
-    // console.log(">>>> curFloat = ", curFloat, target, targetwhole);
     var floats = ["none", "left", "right"];
     var fe = "<label for='tileFloat'>Float: </label>";
     fe += "<select name=\"floatOpts\" id=\"floatOpts\" class=\"ddlDialog\">";
@@ -1543,11 +1532,8 @@ function updateNames(str_type, thingindex) {
                 if ( str_type==="page"  ) {
                     thingindex = newname;
                 }
-                // console.log(presult);
                 cm_Globals.edited = true;
                 $(target1).html(newname);
-            } else {
-                console.log("error - failed to update names. pstatus: ", pstatus," presult: ", presult);
             }
         }
     );
@@ -1610,8 +1596,6 @@ function saveCSSFile(str_type, thingindex, sheetContents, reload) {
         if ( DEBUGte ) {
             console.log( "n1: ", n1, " n2: ", n2, " nlen: ", nlen, " subcontent:");
         }
-        // console.log("\n----------------------------------------------------------\n", subcontent);
-        // console.log("\n----------------------------------------------------------\n");
         subcontent= encodeURI(subcontent);
 
         $.post(returnURL, 
@@ -2215,7 +2199,6 @@ function initColor(str_type, subid, thingindex) {
         var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
         var aligneffect = $(this).val();
         var fontstr= "background-position-x: " + aligneffect + "%";
-        console.log("setting iconleft: ", fontstr);
         addCSSRule(cssRuleTarget, fontstr);
         event.stopPropagation;
     });
@@ -2228,7 +2211,6 @@ function initColor(str_type, subid, thingindex) {
         var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
         var aligneffect = $(this).val();
         var fontstr= "background-position-y: " + aligneffect + "%";
-        console.log("setting icontop: ", fontstr);
         addCSSRule(cssRuleTarget, fontstr);
         event.stopPropagation;
     });
@@ -2389,7 +2371,6 @@ function transAlign(initalign) {
         newalign = parseInt(initalign.substring(0,len-1));
         newalign = isNaN(newalign) ? 50 : newalign;
     }
-    console.log("translated:", initalign," to:", newalign);
     return newalign;
 }
 
