@@ -10595,6 +10595,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
         tc += '<div id="showversion" class="showversion">';
         tc += '<span id="emailname">' + displayname + '</span> | <span id="infoname">' + pname + '</span><span> | V' + GLB.HPVERSION + '</span> | <span id="infoport"></span>';
         tc += '</div>';
+        tc += '<div id="quickedit">E</div>';
         // tc += '<div id="showopts"><a href="' +  GLB.returnURL + '/showoptions"><img width="24" height=24 src="media/editgear.png"/></a></div>';
         tc += '<div id="showdocs"><a href="https://www.housepanel.net" target="_blank">?</a></div>';
         // tc += "</div>";

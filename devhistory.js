@@ -1,4 +1,5 @@
 const devhistory = `
+3.080   Icon precision placement option and fast edit and operate button on front page
 3.079   Enable thermostat state to include CSS upon update
 3.078   Reinstate donation-ware feature, title cleanup, thermostat bugfix, code cleanup
 3.077   Fix photo screensaver and blank screen to use actual mode if tile exists

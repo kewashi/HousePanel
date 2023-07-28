@@ -2177,17 +2177,21 @@ function execButton(buttonid) {
             evt.stopPropagation();
         });
     } else if ( buttonid === "toggletabs" && priorOpmode==="Operate" ) {
+        $("#quickedit").html("T");
         toggleTabs();
     } else if ( buttonid === "rehome" && priorOpmode==="Operate" ) {
         rehomeTiles();
         window.location.href = cm_Globals.returnURL;
     } else if ( buttonid === "reorder" && priorOpmode==="Operate" ) {
+        $("#quickedit").html("P");
         setupSortable();
         setupPagemove();
         priorOpmode = "Reorder";
         setCookie("opmode", priorOpmode);
     } else if ( buttonid === "edit" && priorOpmode==="Operate") {
         // console.log("Edit button: ", buttonid, " opmode: ", priorOpmode);
+        $("#showversion").hide();
+        $("#quickedit").html("P");
         setupDraggable();
         addEditLink();
         priorOpmode = "Edit";
@@ -2199,12 +2203,15 @@ function execButton(buttonid) {
         //     // $("#mode_"+priorOpmode).prop("checked",true);
         //     return;
         if ( priorOpmode === "Reorder" ) {
+            $("#quickedit").html("R");
             cancelSortable();
             cancelPagemove();
             if ( cm_Globals.reordered ) {
                 window.location.href = cm_Globals.returnURL;
             }
         } else if ( priorOpmode === "Edit" ) {
+            $("#showversion").show();
+            $("#quickedit").html("E");
             cancelDraggable();
             delEditLink();
             if ( cm_Globals.edited ) {
@@ -2279,6 +2286,29 @@ function setupButtons() {
         //     evt.stopPropagation();
         //     execButton(opmode);
         // });
+        $("#quickedit").on("click", function(e) {
+            if ( priorOpmode === "Operate" ) {
+                var letter = $("#quickedit").html();
+                switch (letter) {
+                    case "T":
+                        execButton("toggletabs");
+                        break;
+                    case "R":
+                        execButton("reorder");
+                        break;
+                    case "E":
+                        execButton("edit");
+                        break;
+                    case "P":
+                        execButton("operate");
+                        break;
+                    default:
+                        execButton("operate");
+                }
+            } else {
+                execButton("operate");
+            }
+        });
         
         $("#showversion").on("click", function(e) {
             var username = $("#infoname").html();
