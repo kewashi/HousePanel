@@ -58,7 +58,8 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
     
     // tileEdit display on the far right side 
     dialog_html += "<div id='tileDisplay' class='tileDisplay'>";
-    dialog_html += "<div id='editInfo' class='editInfo'>Select or Change State</div>";
+    dialog_html += "<div id='subsection'></div>";
+    dialog_html += "<div id='editInfo' class='editInfo'>or Click Below</div>";
     
     // we either use the passed in content or make an Ajax call to get the content
     var jqxhr = null;
@@ -90,7 +91,6 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
         );
 
     }
-    dialog_html += "<div id='subsection'></div>";
     dialog_html += "</div>";
     
     // * DIALOG_END *
@@ -400,7 +400,7 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
     // make this work only for this page if that option is selected
     // the target will always start with "div." so we strip off the div
     if ( et_Globals.pagename && str_type!=="page" && scope==="thispage" || scope=="typepage" || scope==="allpage" ) {
-        target = "div." + et_Globals.pagename + target.substr(3);
+        target = "div." + et_Globals.pagename + target.substring(3);
     }
 
     // debug print of how we got the target
@@ -527,6 +527,16 @@ function initDialogBinds(str_type, thingindex) {
             $("#bgSize").prop("disabled", false);
         }
         updateSize(str_type, subid, thingindex);
+        event.stopPropagation;
+    });
+    
+    $("#bgRepeat").off('change');
+    $("#bgRepeat").on('change', function(event) {
+        var subid = $("#subidTarget").html();
+        var str_type = $("#tileDialog").attr("str_type");
+        var thingindex = $("#tileDialog").attr("thingindex");
+        var rule = "background-repeat: " + $("#bgRepeat").val() + ";";
+        addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         event.stopPropagation;
     });
 
@@ -1073,6 +1083,17 @@ function iconlist() {
     dh += "<input type='checkbox' id='autoBgSize'><label class=\"iconChecks\" for=\"autoBgSize\">Auto?</label>";
     dh += "</div>";
 
+    // icon repeat
+    dh += "<div class='radiogroup'>";
+    dh += "<label for='bgRepeat'>Icon Repeat: </label>";
+    dh += "<select name='repeatops' id=\"bgRepeat\" class='ddlDialog'>";
+    dh += "<option value=\"no-repeat\" selected>No Repeat</option>";
+    dh += "<option value=\"repeat-x\">Repeat X</option>";
+    dh += "<option value=\"repeat-y\">Repeat Y</option>";
+    dh += "<option value=\"repeat\">Repeat X & Y</option>";
+    dh += "</select>";
+    dh += "</div>";
+
     // icon list placeholder
 	dh += "<div id='iconList'></div>";
 
@@ -1186,7 +1207,7 @@ function sizepicker(str_type, thingindex) {
     dh += "<div class='editSection_input'>";
     var curFloat = $(targetwhole).css("float");
     var floats = ["none", "left", "right"];
-    var fe = "<label for='tileFloat'>Float: </label>";
+    var fe = "<label for='tileFloat'>Tile Float: </label>";
     fe += "<select name=\"floatOpts\" id=\"floatOpts\" class=\"ddlDialog\">";
     floats.forEach (function(key) {
         if ( curFloat && curFloat===key ) {
@@ -1742,6 +1763,12 @@ function initColor(str_type, subid, thingindex) {
         }
         $("#bgSize").val(iconsize);
     }
+
+    var bgRepeat = $(target).css(("background-repeat"));
+    if ( !bgRepeat ) {
+        bgRepeat = "no-repeat";
+    }
+    $("#bgRepeat").val(bgRepeat);
 
     // set the Overall Tile Size parameters
     var tilewidth = $(et_Globals.wholetarget).css("width");
@@ -2605,7 +2632,6 @@ function updateSize(str_type, subid, thingindex) {
             rule = iconsize.toString() + "px;";
         }
         addCSSRule(cssRuleTarget, "background-size: " + rule);
-        addCSSRule(cssRuleTarget, "background-repeat: no-repeat;");
     }
 }
 
