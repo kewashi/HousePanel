@@ -190,6 +190,11 @@ div.door.garage.opening, div.door.garage.closing {
     background-image: url('icons/garage-partial.png');
     background-size: 100px;
 }
+div.overlay.themode div.themode {
+    background-image: url('icons/security-green.png');
+    background-size: 50px;
+    height: 60px;
+}
 
 /* fill tile with valve image */
 div.overlay.valve div.valve.open {

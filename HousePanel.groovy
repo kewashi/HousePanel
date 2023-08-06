@@ -1,130 +1,20 @@
-/**
- *  HousePanel
+/*
+ * HousePanel
  *
- *  Copyright 2016 to 2020 by Kenneth Washington
+ * Copyright > 2016 to 2020 by Kenneth Washington
  *
- *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
- *  in compliance with the License. You may obtain a copy of the License at:
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at:
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
- *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
- *  for the specfific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
+ * for the specfific language governing permissions and limitations under the License.
  *
  * This is a Hubitat app that works with the HousePanel smart dashboard platform
- * 
- * Revision history
- * 07/23/2023 - bugfix for thermostat to work with popup menu for modes
- * 07/22/2023 - fix music tiles to update properly by translating the object
- * 07/16/2023 - fix switches, others, and actuators for buttons to work properly
- * 07/09/2023 - replace weather with Tomorrow.io weather call
- * 07/06/2023 - fix numerical parameter so buttons work again
- * 06/24/2023 - fix music tiles to work with new logic for volume
- * 06/17/2023 - merge prior edits into updated logic for commands
- * 05/31/2023 - major change to command logic to be more general
- * 05/29/2023 - move translate music to here to support HP and ISY Node Server
- * 05/25/2023 - major code cleanup, support command attributes, and fix buttons
- * 05/24/2023 - change port to include a range so we can support more callbacks
- * 05/22/2023 - tweak buttons to be compatible with ISY node server
- * 05/20/2023 - add CO and CO2 sensor support
- * 05/17/2023 - remove momentaries and fix attribute checks
- * 05/11/2023 - modify mode setting to work with isy app
- * 05/02/2023 - clean up dimmers and shades
- * 04/30/2023 - fix windowShade operation
- * 04/05/2023 - update ip reporting to support use of user provided access tokens
- * 04/04/2023 - fix other, contact, and doors to work with custom device handlers
- * 03/13/2023 - change postHub to always use http and tweak logging
- * 02/18/2023 - fix thermostat to support directly changing temperatures
- * 02/13/2023 - rewrote logic for handling colors including a nasty bugfix in hsv2rgb
- * 02/11/2023 - removed event here since we do it on node side and changed to status_
- * 01/08/2023 - added variable support
- * 01/02/2023 - changed UI inspired by Homebridge and removed ST groovy stuff
- * 09/10/2022 - misc cleanup and report skipped functions due to parameters
- * 08/27/2022 - added action for presence to handle arrive and depart calls
- * 08/27/2022 - fix getThing to read all known attributes and updated ignore fields
- * 06/25/2022 - replaced shade and door controls to work properly with icons
- * 06/13/2022 - fix shade bugs, clean up buttons, and support button commands
- * 06/05/2022 - fix long standing hue color problem
- * 06/03/2022 - add support to post directly to an external https website & cleanup
- * 05/30/2022 - add direct support for window shades beyond other hack on 12/27/21
- * 04/24/2022 - handle color changes from the new HP web service
- * 12/27/2021 - add position for shades
- * 10/24/2020 - clean up logger for tracking hub push changes
-              - remove routines since they are depracated and classic app is gone
- * 09/12/2020 - check for valid IP and port value entries for HP hub pushes
- * 07/20/2020 - add a status field for device items using getStatus() - thanks @phil_c
- * 07/18/2020 - include level for others and actuators so window shades work
-                also fix bug to include actuators in the event handler logic
- * 07/13/2020 - fix bug in setOther where an invalid attr was passed - thanks @phil_c
- * 07/10/2020 - fix button rule callback to send scalar instead of object
- *            - remove all manual log.info and log.debug and user logger everywhere
- * 06/16/2020 - fix mode and momentary buttons that I broke in a prior update
- * 06/12/2020 - add toggle as a command for all light types
- * 06/09/2020 - remove dynamic pages since they mess up OAUTH from HP side
- * 05/29/2020 - added button and actuator support, remove depracated Lights type
- * 05/17/2020 - overhaul the way we do push notices via registration
- * 05/10/2020 - tidy up switch reg, power reporting, and add patch for audio
- * 04/09/2020 - mode change fix from 03/29 update
- * 04/02/2020 - fix bug in mode and return only one now
- * 03/29/2020 - clean up mode and fix hub pushes to be more reliable
- * 02/02/2020 - added secondary hub push and include hub id in the push
- * 01/10/2020 - add mode chenge hub push and clean up code
- * 12/20/2019 - bug fixes and cleanup
- * 12/19/2019 - update to include new Sonos audioNotification capability
- * 08/25/2019 - bugfix water leak to prevent error if wet and dry not supported
- *              update switches to include name
- * 08/18/2019 - added water action for setting dry and wet
- * 07/29/2019 - change Hubitat HubId to the actual Hub UID instead of App Id
- * 07/03/2019 - added DeviceWatch-Enroll new ignore field and fixed comment above
- *              work on fixing color reporting for bulbs - still not quite right
- * 05/27/2019 - remove blanks and images from groovy
- * 05/14/2019 - add native music artist, album, art fields when present
- * 05/11/2019 - clean up and tweak music; longer delays in subscribes
- * 05/03/2019 - user option to specify format of event time fields
- * 05/01/2019 - add try/catch for most things to prevent errors and more cleanup
- * 04/30/2019 - clean up this groovy file
- * 04/22/2019 - clean up SHM and HSM to return similar display fields
- *              - mimic Night setting in SHM to match how HSM works
- * 04/21/2019 - deal with missing prefix and other null protections
- * 04/18/2019 - add direct mode change for SHM and HSM (HE bug in HSM)
- * 04/17/2019 - merge groovy files with detector for hub type
- * 04/09/2019 - add history fields
- * 03/15/2019 - fix names of mode, blank, and image, and add humidity to temperature
- * 03/14/2019 - exclude fields that are not interesting from general tiles
- * 03/02/2019 - added motion sensors to subscriptions and fix timing issue
- * 02/26/2019 - add hubId to name query
- * 02/15/2019 - change hubnum to use hubId so we can remove hubs without damage
- * 02/10/2019 - redo subscriptions for push to make more efficient by group
- * 02/07/2019 - tweak to ignore stuff that was blocking useful push updates
- * 02/03/2019 - switch thermostat and music tiles to use native key field names
- * 01/30/2019 - implement push notifications and logger
- * 01/27/2019 - first draft of direct push notifications via hub post
- * 01/19/2019 - added power and begin prepping for push notifications
- * 01/14/2019 - fix bonehead error with switches and locks not working right due to attr
- * 01/05/2019 - fix music controls to work again after separating icons out
- * 12/01/2018 - hub prefix option implemented for unique tiles with multiple hubs
- * 11/21/2018 - add routine to return location name
- * 11/19/2018 - thermostat tweaks to support new custom tile feature 
- * 11/18/2018 - fixed mode names to include size cues
- * 11/17/2018 - bug fixes and cleanup to match Hubitat update
- * 10/30/2018 - fix thermostat bug
- * 08/20/2018 - fix another bug in lock that caused render to fail upon toggle
- * 08/11/2018 - miscellaneous code cleanup
- * 07/24/2018 - fix bug in lock opening and closing with motion detection
- * 06/11/2018 - added mobile option to enable or disable pistons and fix debugs
- * 06/10/2018 - changed icons to amazon web services location for https
- * 04/18/2018 - Bugfix curtemp in Thermostat, thanks to @kembod for finding this
- * 04/08/2018 - Important bug fixes for thermostat and music tiles
- * 03/11/2018 - Added Smart Home Monitor from Chris Hoadley
- * 03/10/2018 - Major speedup by reading all things at once
- * 02/25/2018 - Update to support sliders and color hue picker
- * 01/04/2018 - Fix bulb bug that returned wrong name in the type
- * 12/29/2017 - Changed bulb to colorControl capability for Hue light support
- *              Added support for colorTemperature in switches and lights
- * 12/10/2017 - Added name to each thing query return
- *            - Remove old code block of getHistory code
- * 
+ * It also supports Hubitat NodeServer installations on the Universal Devices platform
+ * Removed history info to keep it now in the devhistory.js file for diaplay in app
  */
 
 import groovy.json.JsonOutput
@@ -737,19 +627,6 @@ def getAudio(swid, item=null) {
     def pvalue = translateObjects(resp, audiomap)
     logger("original audio tile: ${resp}","debug")
     logger("adjusted audio tile: ${pvalue}","debug")
-    // lets put it in the desired order
-    // def resp = [name: raw.name, "status_":raw["status_"], audioTrackData: raw.audioTrackData,
-    //     _rewind: raw._rewind, _previousTrack: raw._previousTrack,
-    //     _pause: raw._pause, _play: raw._play, _stop: raw._stop,
-    //     _nextTrack: raw._nextTrack, _fastForward: raw._fastForward,
-    //     playbackStatus: raw.playbackStatus,
-    //     _mute: raw._mute?:"mute", _unmute: raw._unmute?:"unmute", 
-    //     _muteGroup: raw._muteGroup, _unmuteGroup: raw._unmuteGroup, 
-    //     _volumeDown: raw._volumeDown, _volumeUp: raw._volumeUp,
-    //     _groupVolumeDown: raw._groupVolumeDown, _groupVolumeUp: raw._groupVolumeUp,
-    //     volume: raw.volume,
-    //     mute: raw.mute, groupRole: raw.groupRole]
-
     return pvalue
 }
 

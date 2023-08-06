@@ -808,7 +808,7 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
             } else if (bid==="setposition" ) {
                 var thingid = pvalue.thingid;
                 var thing = $("#t-"+thingid);
-                console.log("pushClient setposition: ", thingid, thetype, pvalue);
+                // console.log("pushClient setposition: ", thingid, thetype, pvalue);
                 if ( thing ) {
                     relocateTile(thing, thetype, pvalue);
                 }
@@ -1530,7 +1530,7 @@ function setupDraggable() {
                     delx = evt.pageX - startPos.left;
                     dely = evt.pageY - startPos.top;
                     startPos.priorStart = $(evt.target).css("position");
-                    startPos.position = "absolute";
+                    // startPos.position = "absolute";
                 }
             },
             stop: function(evt, ui) {
@@ -1668,13 +1668,13 @@ function setupDraggable() {
                     // also send the dragthing object to get panel name and tile pid index
                     if ( ! $("#catalog").hasClass("ui-droppable-hover") ) {
                         $.post(cm_Globals.returnURL, 
-                               {useajax: "setposition", userid: cm_Globals.options.userid, pname: pname, id: bid, type: thingtype, attr: startPos, tileid: tile, thingid: thingid},
-                               function (presult, pstatus) {
+                               {useajax: "setposition", userid: cm_Globals.options.userid, pname: pname, id: bid, type: thingtype, attr: startPos, tileid: tile, thingid: thingid}
+                               // function (presult, pstatus) {
                                 // check for an object returned which should be a promise object
                                 // if (pstatus==="success" && ( typeof presult==="object" || (typeof presult === "string" && !presult.startsWith("error"))) ) {
-                                    console.log("setposition: ", presult );
+                                //    console.log("setposition: ", presult );
                                 // }
-                            }
+                            // }
                         );
                     }
 
@@ -1743,6 +1743,9 @@ function setupDraggable() {
                     } else {
                         startPos.position = startPos.priorStart;
                         relocateTile(thing, thingtype, startPos);
+                        // if ( startPos.position==="relative" ) {
+                        //     window.location.href = cm_Globals.returnURL;
+                        // }
                     }
                     closeModal("modaldel");
                 });
@@ -1766,17 +1769,30 @@ function relocateTile(thing, thingtype, tileloc) {
     }
 
     try {
+        var zpos = "relative";
         if ( tileloc.position ) {
+            zpos = tileloc.position;
             $(thing).css("position", tileloc.position);
         }
+        var zleft = 0;
         if ( tileloc.left ) {
+            zleft = tileloc.left;
             $(thing).css("left", tileloc.left);
         }
+        var ztop = 0;
         if ( tileloc.top ) {
+            ztop = tileloc.top;
             $(thing).css("top",tileloc.top);
         }
+        var zidx = 1;
         if ( tileloc["z-index"] ) {
+            zidx = tileloc["z-index"];
             $(thing).css("z-index", tileloc["z-index"]);
+        }
+        // console.log("relocate: ", zpos, zleft, ztop, zidx);
+        if ( zpos === "relative" ) {
+            var stylestr = `position: ${zpos}; left: ${zleft}; top: ${ztop}; z-index: ${zidx}`;
+            $(thing).attr("style",stylestr);
         }
     } catch(e) { 
         console.log("error - Tile reposition error: ", e); 
@@ -2758,6 +2774,7 @@ function addEditLink() {
     });
     
     $("div.dellink").on("click",function(evt) {
+        var regheight = parseInt($("#dragregion").height() * 0.7);
         var thing = "#" + $(evt.target).attr("aid");
         var thingtype = $(thing).attr("type");
         var tile = $(thing).attr("tile");
@@ -2765,11 +2782,13 @@ function addEditLink() {
         var panel = $(thing).attr("panel");
         var tilename = $(thing).find(".thingname").text();
         var offset = $(thing).offset();
-        var thigh = $(thing).height();
+        var thigh = offset.top + parseInt($(thing).height());
         var twide = $(thing).width();
         var tleft = offset.left - 600 + twide;
         if ( tleft < 10 ) { tleft = 10; }
-        var pos = {top: offset.top + thigh, left: tleft, width: 600, height: 80};
+        console.log(regheight, thigh);
+        thigh = (thigh > regheight) ? regheight : thigh;
+        var pos = {top: thigh, left: tleft, width: 600, height: 80};
         var roomid = $("#panel-"+panel).attr("roomid");
         var thingid = $(thing).attr("thingid");
         var hubid = $(thing).attr("hub");

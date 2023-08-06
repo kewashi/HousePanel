@@ -11298,7 +11298,7 @@ function getHubObj(userid, hub) {
     return promise;
 }
 
-function apiCall(user, body, protocol, req, res) { 
+function apiCall(user, body, protocol, res) { 
 
     if ( DEBUG8 ) {
         console.log( (ddbg()), protocol + " api call, body: ", jsonshow(body) );
@@ -12623,7 +12623,7 @@ if ( app && applistening ) {
                         }
 
                         if ( isquery ) {
-                            var result = apiCall(user, queryobj, "GET", req, res);
+                            var result = apiCall(user, queryobj, "GET", res);
                             // if ( typeof result === "object" && result.then && typeof result.then === "function" ) {
                             if ( typeof result === "object" ) {
                                 try {
@@ -13061,7 +13061,7 @@ if ( app && applistening ) {
         // this means that user GET API calls can only be made from a device that has HP running on it
         // POST calls can be made from any platform as long as the userid and tileid values are known
         } else if ( req.path==="/" &&  typeof req.body['useajax']!=="undefined" || typeof req.body["api"]!=="undefined" ) {
-            var result = apiCall(null, req.body, "POST", req, res);
+            var result = apiCall(null, req.body, "POST", res);
 
             // if api call returns a promise then handle it and return the promise result
             // otherwise we have a direct result that we can return to the browser

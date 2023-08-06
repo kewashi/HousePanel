@@ -421,12 +421,16 @@ function loadRulePanel() {
     dh+= "</div>";
     
     var infotext = "The \"" + servicetype + "\" option enables you to " +
-        "add a rule to the tile being customized. A rule is a list of tile ID's to activate or de-activet. " +
-        "In the top of the right column, enter the desired text. The text should be a comma separate list " +
-        "of tile numbers=command, where command is either on, off, open, closed, etc. Any command supported is accepted. " +
-        "You must also either pick the field this will override OR give a new user-defined field name using the entry box on the left. " +
-        "Click the \"Add\" button and this field will be added to the list of \"Existing Fields\" " +
-        "shown on the left side of this dialog box. You can mix and match this with any other addition.";
+        "add a rule to the tile being customized. A rule can be either a list of commands to perform when clicked, each separated by a comma, " +
+        "or a conditional rule starting with the statement \"if xxx == yyy\" where xxx is the name of an existing field " +
+        "and yyy is the value to test it against. The if statement is followed by a comma and then a list of commands to be executed. " +
+        "For example, the rule: \"if switch == on, 101=switch=off, 102=switch=on\" will turn switch for device 101 off and device 102 on when this switch turns on. " +
+        "More complex rules are supported using logical \"and\" and \"or\" statements. For exmaple, this is a valid RULE: " +
+        "\"if switch==on and 167=switch==on, 28=switch=on, 12=switch=on=2\"  The extra \"2\" at the end of this rule is a delay factor of 2 seconds applied to switch #12. " + 
+        "Rules are written in the top upper right text field. Multiple commands can be entered by separating them with a comma as shown above. " +
+        "the tile number to use when writing rules is the number shown in blue circle in the upper left corner of the tile in edit mode. " +
+        "The number is followed by a field name, such as \"switch\" and that is followed by a command such as on or off, and then optionally a delay factor in seconds. " +
+        "You can mix and match rules with any other custom field, including other rules.";
     $("#cm_dynoInfo").html(infotext);
     
     return dh;

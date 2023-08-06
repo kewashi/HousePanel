@@ -1,4 +1,6 @@
 const devhistory = `
+3.083   Long overdue code cleanup in tile editor and tile customizer
+3.082   Code optimizations and update help info in customizer
 3.081   Icon repeat options added and moved selector to the top
 3.080   Icon precision placement option and fast edit and operate button on front page
 3.079   Enable thermostat state to include CSS upon update
