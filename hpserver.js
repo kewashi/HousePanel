@@ -3532,9 +3532,9 @@ function getDevices(hub) {
                         }
 
                         // this is where we change the device items
-                        console.log(">>>> ISY pre pvalue: ", pvalue);
+                        // console.log(">>>> ISY pre pvalue: ", pvalue);
                         pvalue = translateObjects(pvalue, 1);
-                        console.log(">>>> ISY post pvalue: ", pvalue);
+                        // console.log(">>>> ISY post pvalue: ", pvalue);
                         var pvalstr = encodeURI2(pvalue);
     
                         // set bare minimum info
@@ -4798,6 +4798,18 @@ function getAuthPage(user, configoptions, hubs, hostname, rmsg) {
         $tc += getHeader(userid, null, null, true);
         $tc += "<h2>" + GLB.APPNAME + " Hub Authorization</h2>";
 
+        if ( GLB.dbinfo.donate===true ) {
+            $tc += "<div class=\"donate\">";
+            $tc += '<h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
+                <br /><div><form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank"> \
+                <input type="hidden" name="cmd" value="_s-xclick"> \
+                <input type="hidden" name="hosted_button_id" value="XS7MHW7XPYJA4"> \
+                <input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!"> \
+                <img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1"> \
+                </form></div>';
+            $tc += "</div>";
+        }
+
         // provide welcome page with instructions for what to do
         // this will show only if the user hasn't set up HP
         // or if a reauth is requested or when converting old passwords
@@ -4817,16 +4829,6 @@ function getAuthPage(user, configoptions, hubs, hostname, rmsg) {
                 // "a hub's devices every so often. This is optional for most hubs but required for hubs that have a refresh token. " +
                 // "For such cases the Refresh timer field will be filled in automatically in the OAUTH flow process." +
                 "</p>";
-
-        if ( GLB.dbinfo.donate===true ) {
-            $tc += '<br><h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
-                <br /><div><form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank"> \
-                <input type="hidden" name="cmd" value="_s-xclick"> \
-                <input type="hidden" name="hosted_button_id" value="XS7MHW7XPYJA4"> \
-                <input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!"> \
-                <img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1"> \
-                </form></div>';
-        }
         $tc += "</div>";
         
         var webSocketUrl = getSocketUrl(hostname);
@@ -7848,7 +7850,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
             var promise = new Promise( function(resolve, reject) {
 
                 curl_call(host, header, nvpreq, false, "POST", function(err, res, body) {
-                    if ( DEBUG7 || DEBUGtmp ) {
+                    if ( DEBUG7 ) {
                         console.log( (ddbg()), "curl response: err: ", err, " body: ", body, " params: ", nvpreq );
                     }
                     if ( !err || err===200 ) {
@@ -8363,7 +8365,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                     var h = Math.round(parseInt(color.substring(4,i1)) * 100 / 360);
                     var s = parseInt(color.substring(i1+1,i2));
                     var v = parseInt(color.substring(i2+1,i3));
-                    console.log(">>>> hsv: ", h, s, v);
+                    // console.log(">>>> hsv: ", h, s, v);
 
                     // set hue based on color
                     cmd = "/nodes/" + swid + "/cmd/SET_HUE/" + h.toString();
@@ -8397,9 +8399,6 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                         // if a numerical value is passed then send it with the command
                         if ( is_number(swval) ) {
                             cmd = cmd + "/" + swval.toString();
-                        }
-                        if ( DEBUGtmp ) {
-                            console.log( (ddbg()),">>>> cmd: ", cmd);
                         }
                         curl_call(endpt + cmd, isyheader, false, false, "GET", getNodeResponse);
                         result = cmd;
@@ -9631,8 +9630,8 @@ function getInfoPage(user, configoptions, hubs, req) {
         $tc += "<h3>" + GLB.APPNAME + " Information Display</h3>";
 
         if ( GLB.dbinfo.donate===true ) {
-            $tc += "<div class=\"greeting\">";
-            $tc += '<br /><h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
+            $tc += "<div class=\"donate\">";
+            $tc += '<h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
                 <br /><div><form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank"> \
                 <input type="hidden" name="cmd" value="_s-xclick"> \
                 <input type="hidden" name="hosted_button_id" value="XS7MHW7XPYJA4"> \
@@ -10112,7 +10111,19 @@ function getOptionsPage(user, configoptions, hubs, req) {
         var $tc = "";
         $tc += getHeader(userid, null, null, true);
 
-        // this is the start of the options page that gets sent to processOptions
+        if ( GLB.dbinfo.donate===true ) {
+            $tc += "<div class=\"donate\">";
+            $tc += '<h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
+                <br /><div><form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank"> \
+                <input type="hidden" name="cmd" value="_s-xclick"> \
+                <input type="hidden" name="hosted_button_id" value="XS7MHW7XPYJA4"> \
+                <input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!"> \
+                <img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1"> \
+                </form></div>';
+            $tc += "</div>";
+        }
+
+        // this is the start of the options page
         $tc += "<button class=\"infobutton fixbottom\">Cancel and Return to HousePanel</button>";
         $tc += "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
 
@@ -10148,17 +10159,6 @@ function getOptionsPage(user, configoptions, hubs, req) {
         //        " from the HousePanel system. All active users must have at least one panel, so if you only have one" +
         //        " you will not be able to remove it." +
         //        "</div>";
-        if ( GLB.dbinfo.donate===true ) {
-            $tc += "<div class=\"greeting\">";
-            $tc += '<br /><h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
-                <br /><div><form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank"> \
-                <input type="hidden" name="cmd" value="_s-xclick"> \
-                <input type="hidden" name="hosted_button_id" value="XS7MHW7XPYJA4"> \
-                <input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!"> \
-                <img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1"> \
-                </form></div>';
-            $tc += "</div>";
-        }
 
         $tc += "<div class=\"filteroption\">";
 
@@ -10643,13 +10643,14 @@ function saveFilters(userid, useroptions, huboptpick) {
 }
 
 // process user options page
-function processOptions(userid, panelid, optarray, res) {
+function processOptions(userid, panelid, optarray) {
 
     // first get the configurations and things and then call routine to update them
     userid = parseInt(userid);
     panelid = parseInt(panelid);
     if ( DEBUG4 ) {
         console.log( (ddbg()), "userid: ", userid, " panelid: ", panelid);
+        console.log( (ddbg()), "optarray: ", jsonshow(optarray) );
     }
 
     // get the hub filters and process them first
@@ -10693,14 +10694,12 @@ function processOptions(userid, panelid, optarray, res) {
         return doProcessOptions(optarray, configoptions, hubzero, user, panel, things, rooms, specials);
     })
     .catch(reason => {
-        console.log( (ddbg()), "processOptions failed. ", reason);
+        console.log( (ddbg()), reason);
         return reason;
     });
 
     function doProcessOptions(optarray, configoptions, hubzero, user, panel, things, rooms, specials) {
         if (DEBUG4) {
-            console.log( (ddbg()), "Process Options - Before Processing, panelid: ", panelid);
-            console.log( (ddbg()), jsonshow(configoptions) );
             console.log( (ddbg()), jsonshow(hubzero) );
             console.log( (ddbg()), jsonshow(things) );
             console.log( (ddbg()), jsonshow(rooms) );
@@ -10866,6 +10865,8 @@ function processOptions(userid, panelid, optarray, res) {
         var d = new Date();
         var timesig = GLB.HPVERSION + " @ " + d.getTime();
         configoptions["time"] = timesig;
+
+        console.log(">>>> configs to write: ", configoptions);
         
         // save the configuration parameters in the main options array
         for ( var key in configoptions ) {  
@@ -11687,7 +11688,7 @@ function apiCall(user, body, protocol, res) {
 
             case "saveoptions":
                 if ( protocol==="POST" ) {
-                    result = processOptions(userid, panelid, body, res);
+                    result = processOptions(userid, panelid, body);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }

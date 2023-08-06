@@ -70,7 +70,7 @@ body {
     }    
 }
 
-div.greeting {
+div.greeting, div.donate {
     margin-top: 10px;
     margin-left: 10px;
     margin-bottom: 20px;
@@ -81,6 +81,11 @@ div.greeting {
     font-size: 16px;
     padding-left: 5px;
     padding-right: 5px;
+}
+
+div.donate {
+    width: 600px;
+    padding-top: 20px;
 }
 
 div.logingreeting {
