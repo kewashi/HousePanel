@@ -1,4 +1,4 @@
-HousePanel (HP) is a user-hosted (typically local) highly customizable open source web application dashboard for accessing and controlling a Hubitat or SmartThings equipped smart home from a Tablet, Computer, or even Smart Phone.
+HousePanel is a user-hosted (typically local) highly customizable open source web application dashboard for accessing and controlling a Hubitat or SmartThings equipped smart home from a Tablet, Computer, or even Smart Phone.
 
 HP is designed to give the user full control over the look and feel of their panel controller. It does require some effort to install and configure, but once set up, making fine tunings and adjustments are relatively simple. Most customizations can be done from within the built-in web-based user interface, which includes a full featured tile editor and a tile customizer for modifying content shown on any tile. Power users can also make major modifications by editing a CSS file using industry standard protocols.
 
