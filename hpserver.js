@@ -6002,7 +6002,7 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
         // cleans up the name of music tracks for proper html page display
         // no longer trim the name because that breaks album art
         function fixTrack(tval) {
-            if ( !tval || tval.trim()==="" ) {
+            if ( !tval || typeof tval!=="string" || tval.trim()==="" ) {
                 tval = "None"; 
             }
             return tval;
