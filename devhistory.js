@@ -1,4 +1,5 @@
 const devhistory = `
+3.085   Add ability to link images and other special tile fields properly
 3.084   Fix bug introduced in options when I added back in donations
 3.083   Long overdue code cleanup in tile editor and tile customizer
 3.082   Code optimizations and update help info in customizer

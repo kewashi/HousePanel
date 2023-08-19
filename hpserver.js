@@ -3532,9 +3532,7 @@ function getDevices(hub) {
                         }
 
                         // this is where we change the device items
-                        // console.log(">>>> ISY pre pvalue: ", pvalue);
                         pvalue = translateObjects(pvalue, 1);
-                        // console.log(">>>> ISY post pvalue: ", pvalue);
                         var pvalstr = encodeURI2(pvalue);
     
                         // set bare minimum info
@@ -4166,9 +4164,14 @@ function addNewUser(emailname, username, mobile, pword) {
             console.log( (ddbg()), "add user result: ", result, " user: ", newuser );
         }
         var userid = result.getAutoIncrementValue();
+        
+        // if the type of service is not specified or set to something other than twilio, email, and both
+        // we skip the user confirmation process by setting the usertype to userid and hpcode to blank
+        // otherwise we wait for the confirmation step to do these things
+        // but note that if email or txt is not used, forgot password will require logs to be viewed to get the code
         if ( GLB.dbinfo.service!=="twilio" && GLB.dbinfo.service!=="email" && GLB.dbinfo.service!=="both"  ) {
             var usertype = userid;
-            mydb.updateRow("users",{usertype: usertype}, "id = " + userid);
+            mydb.updateRow("users",{usertype: usertype, hpcode: ""}, "id = " + userid);
         } else {
             usertype = 0;
         }
@@ -5331,7 +5334,7 @@ function returnFile(userid, pname, thingvalue, thingtype, configoptions) {
     var grtypes;
     switch (thingtype) {
         case "image":
-            grtypes = [".jpg",".png",".gif"];
+            grtypes = [".jpg",".jpeg",".png",".gif"];
             break;
         case "video":
             grtypes = [".mp4",".ogg"];
@@ -5341,7 +5344,7 @@ function returnFile(userid, pname, thingvalue, thingtype, configoptions) {
             break;
         case "custom":
         case "blank":
-            grtypes = [".jpg",".png",".gif",".mp4",".ogg",".html",".htm"];
+            grtypes = [".jpg",".jpeg",".png",".gif",".mp4",".ogg",".html",".htm"];
             break;
         // for blanks never load a file
         // but we do set the name above
@@ -5436,6 +5439,7 @@ function returnFile(userid, pname, thingvalue, thingtype, configoptions) {
         switch ($fext) {
             // image files
             case "jpg":
+            case "jpeg":
             case "png":
             case "gif":
             case "img":
@@ -5942,7 +5946,9 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
                         var linktileval = decodeURI2(linkdev["devices_pvalue"]);
 
                         // put linked val through the customization
+                        // also include processing of special tiles that could be linked too
                         linktileval = getCustomTile(userid, configoptions, linktileval, linkbid);
+                        linktileval = returnFile(userid, pname, linktileval, linktype, configoptions);
 
                     } catch(e) {
                         linktileval = {};
@@ -8365,7 +8371,6 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                     var h = Math.round(parseInt(color.substring(4,i1)) * 100 / 360);
                     var s = parseInt(color.substring(i1+1,i2));
                     var v = parseInt(color.substring(i2+1,i3));
-                    // console.log(">>>> hsv: ", h, s, v);
 
                     // set hue based on color
                     cmd = "/nodes/" + swid + "/cmd/SET_HUE/" + h.toString();
@@ -9607,23 +9612,19 @@ function getInfoPage(user, configoptions, hubs, req) {
     var fields = "devices.id as devices_id, devices.userid as devices_userid, devices.deviceid as devices_deviceid, " +
     "devices.name as devices_name, devices.devicetype as devices_devicetype, devices.hint as devices_hint, " +
     "devices.refresh as devices_refresh, devices.pvalue as devices_pvalue, " +
-    "hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubhost as hubs_hubhost, hubs.hubname as hubs_hubname, " +
+    "hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubhost as hubs_hubhost, hubs.hubtype as hubs_hubtype, hubs.hubname as hubs_hubname, " +
     "hubs.clientid as hubs_clientid, hubs.clientsecret as hubs_clientsecret, hubs.hubaccess as hubs_hubaccess, hubs.hubrefresh as hubs_hubrefresh, " +
     "hubs.useraccess as hubs_useraccess, hubs.userendpt as hubs_userendpt, hubs.hubtimer as hubs_hubtimer";
-    var visual = mydb.getRows("devices", fields, "devices.userid = " + userid, joinstr, "hubs.id, devices.name")
-    .then(result => {
-        // var configoptions = result.configs;
-        // var hubs = result.hubs;
-        var devices = result;
+    
+    return mydb.getRows("devices", fields, "devices.userid = " + userid, joinstr, "hubs.id, devices.name")
+    .then(devices => {
         return getinfocontents(userid, pname, currentport, configoptions, hubs, devices);
     }).catch(reason => {
         console.log( (ddbg()), "getInfoPage - ", reason);
         return "something went wrong";
     });
 
-    return visual;
-
-    function getinfocontents(userid, pname, currentport, configoptions, hubs, sensors) {
+    function getinfocontents(userid, pname, currentport, configoptions, hubs, devices) {
         
         var $tc = "";
         $tc += getHeader(userid, null, skin, true);
@@ -9729,10 +9730,10 @@ function getInfoPage(user, configoptions, hubs, req) {
             "</th><th class=\"infonum\">Tile Num</th></tr></thead>";
 
         // don't need to sort here because we did so in the call to the main page
-        // var sensors = sortedSensors("hubnum", "name", "type");
-        for (var i in sensors) {
-            var thing = sensors[i];
-            var pvalue = decodeURI2(thing["devices_pvalue"]);
+        // var devices = sortedSensors("hubnum", "name", "type");
+        for (var i in devices) {
+            var device = devices[i];
+            var pvalue = decodeURI2(device["devices_pvalue"]);
             var value = "";
             var thingname = "";
             if ( is_object(pvalue) ) {
@@ -9755,22 +9756,22 @@ function getInfoPage(user, configoptions, hubs, req) {
                 value = pvalue;
                 if ( value === null ) { value = ""; }
             }
-            var hubid = thing["hubs_hubid"];
+            var hubid = device["hubs_hubid"];
             if ( hubid === -1 || hubid === "-1" ) {
                 var hubstr = "None<br><span class=\"typeopt\"> (" + hubid + ": None)</span>";
             } else {
-                var hubType = thing["hubs_hubtype"] || "None";
-                var hubName = thing["hubs_hubname"] || "None";
+                var hubType = device["hubs_hubtype"] || "None";
+                var hubName = device["hubs_hubname"] || "None";
                 hubstr = hubName + "<br><span class=\"typeopt\"> (" + hubid + ": " + hubType + ")</span>";
             }
             
-            $tc += "<tr><td class=\"thingname\">" + thing["devices_name"] +
+            $tc += "<tr><td class=\"thingname\">" + device["devices_name"] +
                 "</td><td class=\"thingname\">" + thingname +
                 "</td><td class=\"thingarr\">" + value +
-                "</td><td class=\"infoid\">" + thing["devices_deviceid"] +
-                "</td><td class=\"infotype\">" + thing["devices_devicetype"] +
+                "</td><td class=\"infoid\">" + device["devices_deviceid"] +
+                "</td><td class=\"infotype\">" + device["devices_devicetype"] +
                 "</td><td class=\"hubid\">" + hubstr + 
-                "</td><td class=\"infonum\">" + thing["devices_id"] + "</td></tr>";
+                "</td><td class=\"infonum\">" + device["devices_id"] + "</td></tr>";
         }
         $tc += "</table></div>";
 
@@ -9830,11 +9831,11 @@ function getInfoPage(user, configoptions, hubs, req) {
                 "</th><th class=\"thingarr\">Custom Value" +
                 "</th><th class=\"infonum\">Field</th></tr></thead>";
 
-            customList.forEach(function(thing) {
-                $tc += "<tr><td class=\"infotype\">" + thing[0] +
-                    "</td><td class=\"thingname\">" + thing[1] +
-                    "</td><td class=\"thingarr\">" + thing[2] +
-                    "</td><td class=\"infonum\">" + thing[3] + "</td></tr>";
+            customList.forEach(function(item) {
+                $tc += "<tr><td class=\"infotype\">" + item[0] +
+                    "</td><td class=\"thingname\">" + item[1] +
+                    "</td><td class=\"thingarr\">" + item[2] +
+                    "</td><td class=\"infonum\">" + item[3] + "</td></tr>";
             });
             $tc += "</table></div>";
         }
@@ -9964,12 +9965,12 @@ function getCatalog(userid, hubpick, hubs, useroptions, sensors) {
 
     for ( var i in sensors ) {
 
-        var thing = sensors[i];
-        var bid = thing["devices_deviceid"];
-        var thingtype = thing["devices_devicetype"];
-        var thingname = thing["devices_name"] || "";
-        var hubId = thing["hubs_hubid"];
-        var hubindex = thing["hubs_id"];
+        var device = sensors[i];
+        var bid = device["devices_deviceid"];
+        var thingtype = device["devices_devicetype"];
+        var thingname = device["devices_name"] || "";
+        var hubId = device["hubs_hubid"];
+        var hubindex = device["hubs_id"];
         var cat = "cat-" + i.toString();
 
         if ( thingname.length > 23 ) {
@@ -10018,57 +10019,34 @@ function getOptionsPage(user, configoptions, hubs, req) {
     var userid = user["users_id"];
     var useremail = user["users_email"];
     var uname = user["users_uname"];
-    var mobile = user["users_mobile"];
     var pname = user["panels_pname"];
-    var usertype = parseInt(user["users_usertype"]);
     var panelid = user["panels_id"];
     var skin = user["panels_skin"];
     var panelid = user["panels_id"];
-
     var hostname = req.headers.host;
     var pathname = req.path;
 
-    // get all the things in the various rooms as we do on the main page
-    var pr = mydb.getRows("rooms","*", "userid = "+userid+" AND panelid = "+panelid)
-    .then(rooms => {
-        return rooms;
-    })
-    .then(rooms => {
-        var joinstr = mydb.getJoinStr("devices","hubid","hubs","id");
-        var fields = "devices.id as devices_id, devices.userid as devices_userid, devices.deviceid as devices_deviceid, " +
+    var joinstr = mydb.getJoinStr("devices","hubid","hubs","id");
+    var fields1 = "devices.id as devices_id, devices.userid as devices_userid, devices.deviceid as devices_deviceid, " +
         "devices.name as devices_name, devices.devicetype as devices_devicetype, devices.hint as devices_hint, " +
         "devices.refresh as devices_refresh, devices.pvalue as devices_pvalue, " +
-        "hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubhost as hubs_hubhost, hubs.hubname as hubs_hubname, " +
+        "hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubhost as hubs_hubhost, hubs.hubtype as hubs_hubtype, hubs.hubname as hubs_hubname, " +
         "hubs.clientid as hubs_clientid, hubs.clientsecret as hubs_clientsecret, hubs.hubaccess as hubs_hubaccess, hubs.hubrefresh as hubs_hubrefresh, " +
         "hubs.useraccess as hubs_useraccess, hubs.userendpt as hubs_userendpt, hubs.hubtimer as hubs_hubtimer";
-        var pr = mydb.getRows("devices",fields,"devices.userid = "+userid, joinstr,"hubs.id")
-        .then(devices => {
-            return [rooms, devices];
-        });
-        return pr;
-    })
-    .then(resarray => {
-        var joinstr1 = mydb.getJoinStr("things","tileid","devices","id");
-        var joinstr2 = mydb.getJoinStr("things","roomid","rooms","id");
-        var fields = "things.id as things_id, things.userid as things_userid, things.roomid as things_roomid, " +
+    var joinstr1 = mydb.getJoinStr("things","tileid","devices","id");
+    var joinstr2 = mydb.getJoinStr("things","roomid","rooms","id");
+    var fields2 = "things.id as things_id, things.userid as things_userid, things.roomid as things_roomid, " +
         "things.tileid as things_tileid, things.customname as things_customname, devices.name as devices_name, " +
         "rooms.id as rooms_id, rooms.panelid as rooms_panelid, rooms.rname as rooms_rname, rooms.rorder as rooms_rorder";        
-        var pr = mydb.getRows("things", fields, 
-            "things.userid = "+userid+" AND rooms.panelid = " + panelid, [joinstr1, joinstr2], "devices.name")
-        .then(things => {
-            resarray.push(things);
-            return resarray;
-        });
-        return pr;
-    })
-    .then(resarray => {
-        var pr = mydb.getRows("panels","*", "userid = "+userid)
-        .then(panels => {
-            resarray.push(panels);
-            return resarray;
-        });
-        return pr;
-    })
+
+    // get all the things in the various rooms as we do on the main page
+    // converted this to use the all promise feature
+    return Promise.all([
+        mydb.getRows("rooms","*", "userid = "+userid+" AND panelid = "+panelid),
+        mydb.getRows("devices",fields1, "devices.userid = "+userid, joinstr,"hubs.id"),
+        mydb.getRows("things", fields2, "things.userid = "+userid+" AND rooms.panelid = " + panelid, [joinstr1, joinstr2], "devices.name"),
+        mydb.getRows("panels","*", "userid = "+userid)
+    ])
     .then(resarray => {
         var rooms = resarray[0];
         var devices = resarray[1];
@@ -10084,8 +10062,6 @@ function getOptionsPage(user, configoptions, hubs, req) {
         console.log( (ddbg()), "getOptionsPage - ", reason);
         return "something went wrong";
     });
-
-    return pr;
 
     function renderOptionsPage(rooms, devices, sensors, panels) {
 
@@ -10187,7 +10163,10 @@ function getOptionsPage(user, configoptions, hubs, req) {
             const selected = (skinval === skin) ? " selected" : "";
             $tc += "<option value='" + skinval + "'" + selected + ">" + askin  + "</option>";
         });
-        $tc += "</select></div>";
+        $tc += "</select>";
+        $tc += "<input id='newSkinName' class='optioninp' name='newSkinName' size=\"40\" type=\"text\" value=\"\"/></div>"; 
+        $tc += "<button id='cloneSkin' class='infobutton'>Clone Skin</button>";
+        $tc += "</div>";
 
         // panel passwords
         $tc += "<div class=\"filteroption\">";
@@ -10534,7 +10513,6 @@ function getMainPage(user, configoptions, hubs, req, res) {
         tc += '<div id="quickedit">E</div>';
         // tc += '<div id="showopts"><a href="' +  GLB.returnURL + '/showoptions"><img width="24" height=24 src="media/editgear.png"/></a></div>';
         tc += '<div id="showdocs"><a href="https://www.housepanel.net" target="_blank">?</a></div>';
-        // tc += "</div>";
 
         // end of the tabs
         tc += "</div>";
@@ -10852,8 +10830,8 @@ function processOptions(userid, panelid, optarray) {
             }
         }
         
-        console.log( (ddbg()), "updated panelid: ", panelid, " userid: ", userid,  " newName: ", newName, " newPassword: ", newPassword, 
-                               " newPanel: ", newPanel, " skin: ", newSkin, " useroptions: ", useroptions, " huboptpick: ", huboptpick);
+        // console.log( (ddbg()), "updated panelid: ", panelid, " userid: ", userid,  " newName: ", newName, " newPassword: ", newPassword, 
+        //                       " newPanel: ", newPanel, " skin: ", newSkin, " useroptions: ", useroptions, " huboptpick: ", huboptpick);
         
         // save the hub filter options
         saveFilters(userid, useroptions, huboptpick);
@@ -10865,8 +10843,6 @@ function processOptions(userid, panelid, optarray) {
         var d = new Date();
         var timesig = GLB.HPVERSION + " @ " + d.getTime();
         configoptions["time"] = timesig;
-
-        console.log(">>>> configs to write: ", configoptions);
         
         // save the configuration parameters in the main options array
         for ( var key in configoptions ) {  
@@ -11631,18 +11607,26 @@ function apiCall(user, body, protocol, res) {
                 break;
 
             // read and return devices tied to this user
+            // updated this to return device with customizations included
             case "getdevices":
                 if ( protocol==="POST" ) {
                     var conditions = "userid = "+userid;
-                    result = mydb.getRows("devices","*", conditions)
-                    .then(rows => {
-                        if ( DEBUG2 ) {
-                            console.log( (ddbg()), "getdevices: ", rows);
-                        }
+                    result = Promise.all([
+                        mydb.getRows("devices","*", conditions),
+                        mydb.getRows("configs","*", conditions)
+                    ])
+                    .then(results => {
+                        var rows = results[0];
+                        var configoptions = results[1];
+
                         var devices = {};
                         if ( rows ) {
                             rows.forEach(row => {
                                 row.pvalue = decodeURI2(row.pvalue);
+                                if ( configoptions && is_object(configoptions) ) {
+                                    row.pvalue = getCustomTile(userid, configoptions, row.pvalue, row.id);
+                                    row.pvalue = returnFile(userid, pname, row.pvalue, row.type, configoptions);
+                                }
                                 devices[row.id] = row;
                             });
                         }
