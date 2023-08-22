@@ -11,8 +11,8 @@ Quick install directions: log into your rPI or Linux server with SSH and enter:
 
 ```
 > cd ~
-> git clone https://github.com/kewashi/hpserver.git
-> cd hpserver
+> git clone https://github.com/kewashi/HousePanel.git
+> cd HousePanel
 > npm install
   
 ```
