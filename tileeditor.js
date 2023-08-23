@@ -407,6 +407,7 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
 function toggleTile(target, str_type, subid, thingindex) {
     var ostarget = target;
     var swval = $(target).html();
+    $('#onoffTarget').html("");
     if ( swval ) {
         swval = swval.replace(" ","_");
     }
@@ -414,7 +415,6 @@ function toggleTile(target, str_type, subid, thingindex) {
         ostarget = "#a-" + et_Globals.aid + "-thermostatOperatingState";
         swval = $(ostarget).html();
     }
-    $('#onoffTarget').html("");
 
     if ( swval && swval.startsWith("LINK::") ) {
         var ipos = swval.lastIndexOf("::");
@@ -436,7 +436,7 @@ function toggleTile(target, str_type, subid, thingindex) {
             if ( $(target).hasClass(oldsub.toLowerCase()) ) { 
                 $(target).removeClass(oldsub.toLowerCase()); 
             }
-            if ( oldsub.toLowerCase() === swval.toLowerCase() ) {
+            if ( thingindex && (oldsub.toLowerCase() === swval.toLowerCase()) ) {
                 newsub = i+1;
                 if ( newsub >= onoff.length ) { newsub= 0; }
                 $(target).addClass( onoff[newsub] ); 
@@ -488,8 +488,10 @@ function checkboxHandler(idselect, onaction, offaction, overlay, isreset) {
             }
             onaction.forEach(function(act) {
                 if (overlay) {
+                    // console.log(">>>> overlay: ", overlayTarget, act, isreset, subid);
                     addCSSRule(overlayTarget, act, isreset);
                 } else {
+                    // console.log(">>>> css: ", cssRuleTarget, act, isreset, subid);
                     addCSSRule(cssRuleTarget, act, isreset);
                 }
             });
@@ -499,8 +501,10 @@ function checkboxHandler(idselect, onaction, offaction, overlay, isreset) {
             }
             offaction.forEach(function(act) {
                 if (overlay) {
+                    // console.log(">>>> overlay: ", overlayTarget, act, isreset, subid);
                     addCSSRule(overlayTarget, act, isreset);
                 } else {
+                    // console.log(">>>> css: ", cssRuleTarget, act, isreset, subid);
                     addCSSRule(cssRuleTarget, act, isreset);
                 }
             });
@@ -526,8 +530,11 @@ function initOnceBinds(str_type, thingindex) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
         var subid = $(event.target).val();
-        $("#onoffTarget").html("");
+        // $("#onoffTarget").html("");
         
+        var target = getCssRuleTarget(str_type, subid, thingindex);
+        // console.log(">>>> event.target:", target, $(target).attr("id"));
+        toggleTile(target, str_type, subid, false);
         initColor(str_type, subid, thingindex);
         initDialogBinds(str_type, thingindex);
         event.stopPropagation();
@@ -535,13 +542,23 @@ function initOnceBinds(str_type, thingindex) {
 
     // set up triggers for edits to change based on what is clicked
     var trigger = "div"; // div." + str_type + ".p_"+thingindex;
+    // var trigger = "div." + str_type + ".p_"+thingindex;
     $("#te_wysiwyg").off('click', trigger);
     $("#te_wysiwyg").on('click', trigger, function(event) {
         // load up our silent tags
-        var subid = $(event.target).attr("subid");
-        var aid = $(event.target).attr("aid");
+        var target = event.target;
+        // console.log(">>>> target id: ", target, $(target).attr("id"));
+        if ( ! $(target).attr("id") ) {
+            target = $(target).parent();
+            if ( ! $(target).attr("id") ) {
+                return;
+            }
+        }
+        var subid = $(target).attr("subid");
+        var aid = $(target).attr("aid");
         var ustr_type = $("#t-"+aid).attr("type");
         var uthingindex = $("#t-"+aid).attr("tile");
+        // console.log(">>>> target:", target, $(target).attr("id"), " event class: ", $(target).attr("class")), subid, aid, ustr_type, uthingindex;
 
         if ( ustr_type && uthingindex ) {
             str_type = ustr_type;
@@ -555,9 +572,10 @@ function initOnceBinds(str_type, thingindex) {
         }
         
         // update everything to reflect current tile
-        toggleTile(event.target, str_type, subid, thingindex);
+        $("#subidselect").val(subid);
+        toggleTile(target, str_type, subid, thingindex);
         initColor(str_type, subid, thingindex);
-        loadSubSelect(str_type, subid, thingindex);
+        // loadSubSelect(str_type, subid, thingindex);
         initDialogBinds(str_type, thingindex);
         event.stopPropagation();
     });
@@ -571,7 +589,7 @@ function initDialogBinds(str_type, thingindex) {
     checkboxHandler("#absPlace",["position: absolute;","margin-left: 0px;","margin-top: 0px;","margin-right: 0px;","margin-bottom: 0px;","top: 0px;","left: 0px;","right: 0px;","bottom: 0px;"],
                                 ["position: relative;","margin-left: 0px;","margin-top: 0px;","margin-right: 0px;","margin-bottom: 0px;","top: 0px;","left: 0px;","right: 0px;","bottom: 0px;"], false, false);
     checkboxHandler("#inlineOpt",["display: inline-block;"], ["display: block;"], false, false);
-    checkboxHandler("#isHidden", ["display: none;"], ["display: block;"], true, false);
+    checkboxHandler("#isHidden", ["display: none;"], ["display: block;"], false, false);
 
     $("#borderType").off('change');
     $("#borderType").on('change', function (event) {
