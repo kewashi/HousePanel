@@ -1,4 +1,5 @@
 const devhistory = `
+3.1.1   Migrated to standard version number scheme and added HPM support
 3.086   Tile editor bugfix for head tile names
 3.085   Add ability to link images and other special tile fields properly
 3.084   Fix bug introduced in options when I added back in donations
