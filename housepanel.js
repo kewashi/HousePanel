@@ -1759,6 +1759,7 @@ function relocateTile(thing, thingtype, tileloc) {
     if ( tileloc.position && tileloc.position==="relative") {
         tileloc.left = 0;
         tileloc.top = 0;
+        var panel = $(thing).attr("panel");
         var zmax = 1;
         if ( thingtype === "bulb" ) {
             zmax = getMaxZindex(panel);
@@ -1805,7 +1806,7 @@ function rehomeTiles() {
     var panel = $("#"+pid).html();
     // console.log("panel: ", pid, panel);
 
-    $("div.thing[panel="+panel+"][style*='absolute']").each( function() {
+    $("div.thing[panel="+panel+"]").each( function() {
 
         var bid = $(this).attr("bid");
         var thingtype = $(this).attr("type");
@@ -2195,7 +2196,7 @@ function execButton(buttonid) {
         toggleTabs();
     } else if ( buttonid === "rehome" && priorOpmode==="Operate" ) {
         rehomeTiles();
-        window.location.href = cm_Globals.returnURL;
+        // window.location.href = cm_Globals.returnURL;
     } else if ( buttonid === "reorder" && priorOpmode==="Operate" ) {
         $("#quickedit").html("P");
         setupSortable();
