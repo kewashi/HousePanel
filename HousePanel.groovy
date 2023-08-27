@@ -2515,9 +2515,8 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
 
         // do this so that user created TEXT fields using the customizer will return the custom command
         if ( subid.startsWith("_") ) {
-            def value = subid.substring(1)
+            def value = cmd ?: subid.substring(1)
             resp.put(subid, value)
-
             postHubRange(state.directIP, state.directPort, "update", newname, swid, subid, devtype, value)
             postHubRange(state.directIP2, state.directPort2, "update", newname, swid, subid, devtype, value)
             postHubRange(state.directIP3, state.directPort3, "update", newname, swid, subid, devtype, value)

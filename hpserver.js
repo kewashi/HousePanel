@@ -7140,18 +7140,13 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
     ])
     .then(results => {
         var configs = results[0];
-        var lines;
+        var lines = null;
         if ( configs ) {
-            // gather only the rules tied to this trigger
             var rlines = decodeURI2(configs.configval);
             lines = [];
             rlines.forEach(aline => {
-                if ( aline[2] === trigger ) {
-                    lines.push(aline);
-                }
+                lines.push(aline);
             });
-        } else {
-            lines = null;
         }
         var dbhubs = results[1];
         var hubs = {};
