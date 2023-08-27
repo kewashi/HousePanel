@@ -1,4 +1,5 @@
 const devhistory = `
+3.1.3   Mode rule bugfixes and custom dialog bugfix for dialog within dialog
 3.1.2   Bugfix in rule to only run rule tied to the trigger
 3.1.1   Migrated to standard version number scheme and added HPM support
 3.086   Tile editor bugfix for head tile names

@@ -1,6 +1,6 @@
 {
-  "name": "hpserver",
-  "version": "4.001.0",
+  "name": "housepanel",
+  "version": "3.1.3",
   "description": "HousePanel Node Server",
   "main": "hpserver.js",
   "dependencies": {
@@ -28,7 +28,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/kewashi/hpserver.git"
+    "url": "https://github.com/kewashi/HousePanel.git"
   },
   "keywords": [
     "housepanel"
@@ -36,7 +36,7 @@
   "author": "Ken Washington @kewashi on forums",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/kewashi/hpserver/issues"
+    "url": "https://github.com/kewashi/HousePanel/issues"
   },
   "homepage": "https://housepanel.net",
   "nodemonConfig": {
@@ -44,14 +44,14 @@
       "media/*",
       "nbproject/*",
       "node_modules/*",
-      "photos/*",
-      "skin-housepanel/*",
-      "skin-modern/*",
+      "housepanel.cfg",
+      "*.save",
       "ssl/*",
+      "*.sh",
+      "*.db",
+      "*.log",
       "dev/*",
-      "user1/*",
-      "user2/*",
-      "grabicons.js"
+      "user*/*"
     ]
   }
 }

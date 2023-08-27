@@ -7446,14 +7446,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                         }
                     }
                 }
-
-                // execute the statements after if for the cases that pass the logic test above
-                // if ( isrule ) {
-                //     execRules(userid, rulecaller, deviceid, thetype, 1, testcommands, pvalue, hubs, devices);
-                // }
-
             }
-
         });
     }
 }
@@ -7627,7 +7620,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                         // should the same rule come along again we cancel this one first
                         // this way delay light on and off will stay on if trigger keeps happening
                         if ( DEBUG11 ) {
-                            console.log("final rule step: id=",  rswid, "type=", rswtype, "value=", rvalue, "attr=", rswattr, "subid=", rsubid, " hubid: ", hub.id, " deviceid: ", deviceid);
+                            console.log("final rule step: userid: ", userid, "hubid: ", hub.id, "id=",  rswid, "type=", rswtype, "value=", rvalue, "attr=", rswattr, "subid=", rsubid, "rhint=", rhint, "deviceid=", deviceid);
                         }
 
                         if ( delay && delay > 0 ) {
@@ -7859,6 +7852,9 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
             if ( subid && subid!=="none" ) { nvpreq["subid"] = subid; }
             var promise = new Promise( function(resolve, reject) {
 
+                if ( DEBUG1 ) {
+                    console.log((ddbg()), "callHub curl: ", jsonshow(nvpreq));
+                }
                 curl_call(host, header, nvpreq, false, "POST", function(err, res, body) {
                     if ( DEBUG7 ) {
                         console.log( (ddbg()), "curl response: err: ", err, " body: ", body, " params: ", nvpreq );
@@ -9210,7 +9206,6 @@ function doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, co
             console.log( (ddbg()), "callHub: ", userid, hubindex, swid, swtype, swval, swattr, subid, hint);
         }
         msg = callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, null, false);
-        // msg = "success - hub action executed on device id: " + swid + " device type: " + swtype;
     }
     return msg;
 

@@ -870,7 +870,6 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                             }
                         });
                     }
-                    // console.log(">>>> pvalue: ", pvalue, " bid: ", bid);
                     updateLink(bid, pvalue);
                 } catch (e) {
                     console.log("Error updating tile with bid: ", bid, " pvalue: ", pvalue, " error: ", e);
@@ -1104,7 +1103,6 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
             });
         }
 
-        // console.log(">>>> addok: ", addok," hook: ", modalhook);
         // body clicks turn off modals unless clicking on box itself
         // or if this is a popup window any click will close it
         $("body").off("click");
@@ -2303,6 +2301,7 @@ function setupButtons() {
         //     execButton(opmode);
         // });
         $("#quickedit").on("click", function(e) {
+            // console.log(">>>> priorOpmode: ", priorOpmode);
             if ( priorOpmode === "Operate" ) {
                 var letter = $("#quickedit").html();
                 switch (letter) {
