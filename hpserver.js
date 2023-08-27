@@ -14,7 +14,7 @@ const DEBUG7 = false;               // hub responses
 const DEBUG8 = false;               // API calls
 const DEBUG9 =  false;              // ISY webSocket success
 const DEBUG10 = false;              // sibling tag
-const DEBUG11 = false;              // rules
+const DEBUG11 = true;              // rules
 const DEBUG12 = false;              // hub push updates
 const DEBUG13 = false;              // URL callbacks
 const DEBUG14 = false;              // tile link details
@@ -7118,13 +7118,13 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
     var pvalue = clone(pvalueinput);
 
     // fix button triggers to ignore held if pressed given and vice versa
-    if ( trigger==="pushed" ) {
-        pvalue["held"] = "";
-        pvalue["released"] = "";
-    }
-    if ( trigger==="held" || trigger==="released" ) {
-        pvalue["pushed"] = "";
-    }
+    // if ( trigger==="pushed" ) {
+    //     pvalue["held"] = "";
+    //     pvalue["released"] = "";
+    // }
+    // if ( trigger==="held" || trigger==="released" ) {
+    //     pvalue["pushed"] = "";
+    // }
 
     // go through all things that could be links for this tile
     var configkey = "user_" + bid;
@@ -7140,9 +7140,18 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
     ])
     .then(results => {
         var configs = results[0];
-        var lines = null;
+        var lines;
         if ( configs ) {
-            lines = decodeURI2(configs.configval);
+            // gather only the rules tied to this trigger
+            var rlines = decodeURI2(configs.configval);
+            lines = [];
+            rlines.forEach(aline => {
+                if ( aline[2] === trigger ) {
+                    lines.push(aline);
+                }
+            });
+        } else {
+            lines = null;
         }
         var dbhubs = results[1];
         var hubs = {};
