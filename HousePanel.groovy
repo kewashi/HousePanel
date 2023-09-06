@@ -1629,8 +1629,8 @@ def sendCommand(item, subid, cmd) {
             return false
         }
     } catch(e) {
-        item."$cmd"()
-        return true
+        // item."$cmd"()
+        return false
     }
 
     // first situation is a command with no parameters
@@ -1673,7 +1673,7 @@ def setPiston(swid, cmd, swattr, subid) {
 
 def setSwitch(swid, cmd, swattr, subid) {
     logcaller("setSwitch", swid, cmd, swattr, subid)
-    def resp = setGenericLight(myswitches, swid, cmd, swattr, subid)
+    def resp = setGenericLight(myswitches, "switch", swid, cmd, swattr, subid)
     return resp
 }
 
@@ -1865,7 +1865,7 @@ def setMotion(swid, cmd, swattr, subid) {
 // replaced this code to treat bulbs as Hue lights with color controls
 def setBulb(swid, cmd, swattr, subid) {
     logcaller("setBulb", swid, cmd, swattr, subid)
-    def resp = setGenericLight(mybulbs, swid, cmd, swattr, subid)
+    def resp = setGenericLight(mybulbs, "bulb", swid, cmd, swattr, subid)
     return resp
 }
 
@@ -1948,7 +1948,7 @@ def setOther(swid, cmd, swattr, subid, item=null ) {
         logcaller(item.getDisplayName(), swid, cmd, swattr, subid, "debug")
 
         if ( lightflags.contains(subid) ) {
-            resp = setGenericLight(myothers, swid, cmd, swattr, subid, item)
+            resp = setGenericLight(myothers, "other", swid, cmd, swattr, subid, item)
         } else if ( doorflags.contains(subid) ) {
             resp = setGenericDoor(myothers, swid, cmd, swattr, subid, item)
         } else if ( subid=="windowShade" ) {
@@ -1978,17 +1978,24 @@ def setActuator(swid, cmd, swattr, subid, item=null ) {
         logcaller(item.getDisplayName(), swid, cmd, swattr, subid, "debug")
 
         if ( lightflags.contains(subid) ) {
-            resp = setGenericLight(myothers, swid, cmd, swattr, subid, item)
+            resp = setGenericLight(myothers, "actuator", swid, cmd, swattr, subid, item)
         } else if ( doorflags.contains(subid) ) {
             resp = setGenericDoor(myothers, swid, cmd, swattr, subid, item)
         } else if ( subid=="windowShade" ) {
             resp = setShade(swid, cmd, swattr, subid)
-        } else if ( buttonflags.contains(subid) ) {
+        // handle broadcom IR devices before buttons since that uses _push function
+        } else if ( item.hasCommand("learnIR") && item.hasCommand("learnRF") ) {
+            def succ = sendCommand(item, subid, cmd)
+            if ( !succ ) {
+                logger("invalid command in setActuator for Broadlink IR device. swid= ${swid}, subid= ${subid}, cmd= ${cmd}", "warn")
+            }
+            resp["acitivity"] = item.currentValue("activity")
+        } else if ( buttonflags.contains(subid) && !item.hasCommand("learnIR") ) {
             resp = setButton(swid, cmd, swattr, subid, item)
         } else {
             def isgood = sendCommand(item, subid, cmd)
             if ( !isgood ) {
-                logger("no command was processed in setActuator for swid= ${swid}, cmd= ${cmd}", "warn")
+                logger("invalid command in setActuator. swid= ${swid}, subid= ${subid}, cmd= ${cmd}", "warn")
             }
             resp = getActuator(swid, item)
         }
@@ -2185,7 +2192,7 @@ def setHSMState(swid, cmd, swattr, subid){
 
 def setDimmer(swid, cmd, swattr, subid) {
     logcaller("setDimmer", swid, cmd, swattr, subid)
-    def resp = setGenericLight(mydimmers, swid, cmd, swattr, subid)
+    def resp = setGenericLight(mydimmers, "switchLevel", swid, cmd, swattr, subid)
     return resp
 }
 
@@ -2195,7 +2202,7 @@ def setDimmer(swid, cmd, swattr, subid) {
 // of potential GUI options for processing dimmers and colors
 // up and down arrows, sliders, etc. 
 // and it has to handle API calls that could have all sorts of options
-def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
+def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
     def resp = [:]
     item  = item ? item : mythings.find{it.id == swid }
     def hue = false
@@ -2284,10 +2291,8 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
                     // item.setColor([hue: hue100, saturation: s, level: v])
                     logger("level command result: hue= ${hue100}, h= ${h} s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
                 }
-            } else {
-                item.on()
+                newonoff = "on"
             }
-            newonoff = "on"
             break
               
         case "level-dn":
@@ -2310,8 +2315,6 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
                     logger("level command result: hue= ${hue100}, h= ${h} s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
                 }
                 newonoff = "on"
-            } else {
-                newonoff = "off"
             }
             break
          
@@ -2509,6 +2512,16 @@ def setGenericLight(mythings, swid, cmd, swattr, subid, item= null) {
         if ( item.hasAttribute("colorTemperature") && temperature ) { resp.put("colorTemperature", temperature) }
         if ( item.hasAttribute("level") && newlevel ) { resp.put("level", newlevel) }
         if ( item.hasAttribute("position") && newlevel ) { resp.put("position", newlevel) }
+
+        // do this so that user created TEXT fields using the customizer will return the custom command
+        if ( subid.startsWith("_") ) {
+            def value = cmd ?: subid.substring(1)
+            resp.put(subid, value)
+            postHubRange(state.directIP, state.directPort, "update", newname, swid, subid, devtype, value)
+            postHubRange(state.directIP2, state.directPort2, "update", newname, swid, subid, devtype, value)
+            postHubRange(state.directIP3, state.directPort3, "update", newname, swid, subid, devtype, value)
+            logger("thing update: ${newname} id ${swid} type ${devtype} by changing ${subid} to ${value}", "info")
+        }
     }
     logger("generic light setter returned: ${resp}", "debug")
     return resp

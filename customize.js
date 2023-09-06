@@ -13,6 +13,7 @@ cm_Globals.id = null;
 cm_Globals.usertext = "";
 cm_Globals.reload = false;
 cm_Globals.tileid = null;
+cm_Globals.natives = [];
 // cm_Globals.thingidx = null;
 cm_Globals.defaultclick = "name";
 var ENABLERULES = true;
@@ -430,7 +431,7 @@ function loadRulePanel() {
         "Rules are written in the top upper right text field. Multiple commands can be entered by separating them with a comma as shown above. " +
         "the tile number to use when writing rules is the number shown in blue circle in the upper left corner of the tile in edit mode. " +
         "The number is followed by a field name, such as \"switch\" and that is followed by a command such as on or off, and then optionally a delay factor in seconds. " +
-        "You can mix and match rules with any other custom field, including other rules.";
+        "You can mix and match rules with any other custom field, including other rules. The User Field Name must not start with an underscore since that is reserved for native commands.";
     $("#cm_dynoInfo").html(infotext);
     
     return dh;
@@ -641,16 +642,16 @@ function initLinkSelect() {
 
         // check the builtin list for this subid
         var subids = [];
-        var natives = [];
+        cm_Globals.natives = [];
         $("#cm_builtinfields option").each(function() {
             var thissub = $(this).val();
             if ( !$(this).attr("command") ) {
-                natives.push( thissub );                
+                cm_Globals.natives.push( thissub );                
             }
             subids.push( thissub );
         });
 
-        if ( natives.includes(subid) ) {
+        if ( cm_Globals.natives.includes(subid) ) {
             $("#cm_delButton").addClass("disabled").prop("disabled",true);
         } else {
             $("#cm_delButton").removeClass("disabled").prop("disabled",false);
@@ -711,7 +712,34 @@ function initCustomActions() {
     $("#cm_addButton").off("click");
     $("#cm_addButton").on("click", function(event) {
         var subid = $("#cm_userfield").val();
-        applyCustomField("addcustom", subid);
+        if ( cm_Globals.natives.includes(subid) || subid.startsWith("_") ) {
+            var pos = {top: 375, left: 380, zindex: 9999, background: "red", color: "white", position: "absolute"};
+            var tilename = $("#cm_subheader").html();
+            var repname = $("#cm_addButton").html();
+            // below we use a modal that is inside a modal so we have to save the old op mode value and restore it
+            var oldsave = saveOpmode;
+            if ( repname === "Add" && subid.startsWith("_") ) {
+                // alert("You cannot add a field that begins with an underscore. That is reserved for existing commands");                
+                createModal("modalremove","You cannot add field: " + subid + " to tile: " + tilename + ".  Fields beginning with an underscore are reserved for existing commands", "table.cm_table", "Dismiss", pos), function() {
+                    closeModal("modalremove");
+                    saveOpmode = oldsave;
+                    priorOpmode = "Modal";
+                };
+            } else {
+                var fieldcommand = subid.startsWith("_") ? "command: " : "field: ";
+                createModal("modalremove","You are replacing an existing " + fieldcommand + subid + " in tile: " + tilename + ".  Are you sure?", "table.cm_table", true, pos, function(ui) {
+                    var clk = $(ui).attr("name");
+                    if ( clk==="okay" ) {
+                        applyCustomField("addcustom", subid);
+                    }
+                    closeModal("modalremove");
+                    saveOpmode = oldsave;
+                    priorOpmode = "Modal";
+                });
+            }
+        } else {
+            applyCustomField("addcustom", subid);
+        }
         event.stopPropagation;
     });
     
@@ -725,12 +753,15 @@ function initCustomActions() {
         var pos = {top: 375, left: 380, zindex: 9999, background: "red", color: "white", position: "absolute"};
         var subid = $("#cm_userfield").val();
         var tilename = $("#cm_subheader").html();
+        var oldsave = saveOpmode;
         createModal("modalremove","Remove item: " + subid + " from tile: " + tilename + "<br> Are you sure?", "table.cm_table", true, pos, function(ui) {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
                 applyCustomField("delcustom", subid);
             }
             closeModal("modalremove");
+            saveOpmode = oldsave;
+            priorOpmode = "Modal";
         });
         event.stopPropagation;
     });
@@ -833,11 +864,11 @@ function initExistingFields() {
 
     // check the builtin list for this subid
     var subids = [];
-    var natives = [];
+    cm_Globals.natives = [];
     $("#cm_builtinfields option").each(function() {
         var thissub = $(this).val();
         if ( !$(this).attr("command") ) {
-            natives.push( thissub );                
+            cm_Globals.natives.push( thissub );                
         }
         subids.push( thissub );
     });
@@ -852,7 +883,7 @@ function initExistingFields() {
         // var subids = Object.keys(value);
         
         // change button label to Add or Replace based on existing or not
-        if ( natives.includes(subid) ) {
+        if ( cm_Globals.natives.includes(subid) ) {
             $("#cm_delButton").addClass("disabled").prop("disabled",true);
         } else {
             $("#cm_delButton").removeClass("disabled").prop("disabled", false);
@@ -920,29 +951,14 @@ function handleBuiltin(subid) {
     var cmtype = $(item).attr("command");
     var iscustom = ( cmtype && cmtype.length );
     var linkval = $(item).attr("linkval");
-    // if ( !cmtype ) {
-    //     cmtype = "TEXT";
-    // }
-
-    // console.log(">>>> subid: ", subid,"tileid: ", tileid, "thing: ", thing, "value: ", value, " cmtype: ", cmtype, " linkval: ", linkval);
-
-    // var subids = Object.keys(value);
-    // if ( cm_Globals.rules ) {
-    //     cm_Globals.rules.forEach(rule => {
-    //         subids.push(rule[2]);
-    //         if ( rule[2] === subid ) {
-    //             cmtext = rule[1];
-    //         }
-    //     });
-    // }
 
     // check the builtin list for this subid
     var subids = [];
-    var natives = [];
+    cm_Globals.natives = [];
     $("#cm_builtinfields option").each(function() {
         var thissub = $(this).val();
         if ( !$(this).attr("command") ) {
-            natives.push( thissub );                
+            cm_Globals.natives.push( thissub );                
         }
         subids.push( thissub );
     });
@@ -952,34 +968,6 @@ function handleBuiltin(subid) {
     // put the field clicked on in the input box
     $("#cm_userfield").attr("value",subid);
     $("#cm_userfield").val(subid);
-
-    // check for an object
-    // if ( cmtype!=="LINK" ) {
-    //     var jsontval;
-    //     var ipos = 0;
-    //     if ( typeof(value[subid])==="undefined" ) {
-    //         ipos = subid.indexOf("_");
-    //         if ( ipos > 0 ) {
-    //             var subid1 = subid.substr(0, ipos);
-    //             var subid2 = subid.substr(ipos+1);
-    //             try {
-    //                 jsontval = value[subid1];
-    //             } catch ( err ) {
-    //                 jsontval = null;
-    //             }
-        
-    //             if ( typeof jsontval==="object" ) {
-    //                 cmtext = jsontval[subid2];
-    //             // } else {
-    //             //     cmtext = "unknown";
-    //             }
-    //         }
-    //     } else {
-    //         cmtext = value[subid];
-    //     }
-    //     linkval = cmtext;
-    // }
-    // console.log("subids: ", subids, " natives: ", natives, " value: ", value[subid], " linkval: ", linkval, " cmtext: ", cmtext);
 
     // update dyno panel
     if ( cmtype==="LINK" ) {
@@ -1033,7 +1021,7 @@ function handleBuiltin(subid) {
 
     // change button label to Add or Replace based on existing or not
     // console.log("subid = ",subid," subids = ", subids);
-    if ( natives.includes(subid) ) {
+    if ( cm_Globals.natives.includes(subid) ) {
         $("#cm_delButton").addClass("disabled").prop("disabled",true);
     } else {
         $("#cm_delButton").removeClass("disabled").prop("disabled", false);

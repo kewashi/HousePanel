@@ -1437,8 +1437,7 @@ div.thing.catalog-thing div.thingtype {
     color: rgba(0,0,0,1);
 }
 
-div.overlay.trackData, div.overlay.switch div.music.switch,
-div.music-thing div.overlay.volume {
+div.overlay.trackData, div.overlay.switch div.music.switch, div.music-thing div.overlay.volume {
     display: none;
 }
 
@@ -1489,12 +1488,13 @@ div.lock.codeChanged, div.lock.lockCodes, div.lock.scanCodes,
 div.lock.codeReport, div.lock.maxCodes, div.lock.maxCodeLength,
 div.lock.minCodeLength, div.lock.codeLength,
 div.thing div.thingname.blank, div.thing div.thingname.clock, div.thing div.thingname.video,
-div.thing div.thingname.image, div.thing div.thingname.routine, div.overlay.healthStatus,
-div.thing.frame-thing div.overlay.status,
+div.thing div.thingname.image, div.thing div.thingname.routine, 
+div.overlay.healthStatus div.healthStatus,
+div.thing.frame-thing div.overlay.status div.status,
 div.valve.switch, div.valve.contact, div.valve.stopWatering, div.valve.log,
 div.clock.tzone, div.thingname.mode, div.bulb.colorMode, div.light.colorMode,
 div.illuminance-thing div.overlay.temperature,
-div.overlay.occupancy
+div.overlay.occupancy div.occupancy
 {
     display: none;
 }
@@ -1645,17 +1645,19 @@ div.ovbLevel.L0{
 }
 
 /* disable commands in general */
-div.overlay._on, div.overlay._off, div.overlay._flash,
-div.overlay._wet, div.overlay._dry, 
-div.overlay._open, div.overlay._close, 
-div.overlay._onPhysical, div.overlay._offPhysical,
-div.overlay._startmotion, div.overlay._stopmotion, div.overlay._reset, div.overlay._poll {
+div.overlay._on div._on, div.overlay._off div._off, div.overlay._flash div._flash,
+div.overlay._wet div._wet, div.overlay._dry div._dry, 
+div.overlay._open div._open, div.overlay._close div._close,
+div.overlay._onPhysical div._onPhysical, div.overlay._offPhysical div._offPhysical,
+div.overlay._reset div._reset, div.overlay._poll div._poll {
     display: none;
 }
-div.custom-thing {
+
+/* div.custom-thing {
     height: auto;
     width: 120px;
-}
+} */
+
 div.custom-thing div.post, div.custom-thing div.text {
     overflow-wrap: break-word;
 }
@@ -1818,7 +1820,7 @@ div.thing.audio-thing div.audio.height {
     display: none;
 }
 
-div.overlay._refresh {
+div.overlay._refresh div._refresh {
     display: none;
 }
 

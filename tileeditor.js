@@ -261,11 +261,12 @@ function getOnOff(str_type, subid, val) {
 function getCssRuleTarget(str_type, subid, thingindex, userscope) {
 
     // get the scope to use
-    var scope;
-    if ( userscope ) { 
-        scope = userscope; 
-    } else {
-        scope = $("#scopeEffect").val();
+    var scope = $("#scopeEffect").val();
+    var overlay = false;
+    if ( userscope==="overlay") {
+        overlay = true;
+    } else if (userscope && userscope!=="overlay") {
+        scope = userscope;
     }
 
     function getScope() {
@@ -309,7 +310,7 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
             target = null;
         }
 
-    } else if ( scope==="overlay" ) {
+    } else if ( overlay ) {
         target = getScope();
         
         // handle music controls special case
@@ -320,7 +321,9 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
         } else {
             target+= " div.overlay." + subid;
         }
-        target+= '.v_'+thingindex;
+        if ( scope==="thistile" || scope==="thispage" ) { 
+            target+= '.v_'+thingindex;
+        }
 
     } else if ( subid==="head" ) {
         target = getScope();
@@ -476,9 +479,8 @@ function checkboxHandler(idselect, onaction, offaction, overlay, isreset) {
         var thingindex = $("#tileDialog").attr("thingindex");
         var subid = $("#subidTarget").html();
         var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
-        var overlayTarget = cssRuleTarget;
+        var overlayTarget;
         if ( overlay ) {
-            // var overlayTarget = getCssRuleTarget("wholetile", subid, thingindex);
             overlayTarget = getCssRuleTarget(str_type, subid, thingindex, "overlay");
         }
         // var overlayTarget = "div.overlay." + subid + ".v_" + thingindex;
@@ -487,26 +489,24 @@ function checkboxHandler(idselect, onaction, offaction, overlay, isreset) {
                 onaction = onaction();
             }
             onaction.forEach(function(act) {
-                if (overlay) {
+                if (overlay && overlayTarget) {
                     // console.log(">>>> overlay: ", overlayTarget, act, isreset, subid);
                     addCSSRule(overlayTarget, act, isreset);
-                } else {
-                    // console.log(">>>> css: ", cssRuleTarget, act, isreset, subid);
-                    addCSSRule(cssRuleTarget, act, isreset);
                 }
+                // console.log(">>>> css: ", cssRuleTarget, act, isreset, subid);
+                addCSSRule(cssRuleTarget, act, isreset);
             });
         } else {
             if ( typeof offaction === "function" ) {
                 offaction = offaction();
             }
             offaction.forEach(function(act) {
-                if (overlay) {
+                if (overlay && overlayTarget) {
                     // console.log(">>>> overlay: ", overlayTarget, act, isreset, subid);
                     addCSSRule(overlayTarget, act, isreset);
-                } else {
-                    // console.log(">>>> css: ", cssRuleTarget, act, isreset, subid);
-                    addCSSRule(cssRuleTarget, act, isreset);
                 }
+                // console.log(">>>> css: ", cssRuleTarget, act, isreset, subid);
+                addCSSRule(cssRuleTarget, act, isreset);
             });
         }
     });
@@ -585,11 +585,13 @@ function initOnceBinds(str_type, thingindex) {
 function initDialogBinds(str_type, thingindex) {
 
     // set up all the check boxes
+
+    // function checkboxHandler(idselect, onaction, offaction, overlay, isreset) {
     checkboxHandler("#invertIcon",["filter: invert(1);"],["filter: invert(0);"], false, false);
     checkboxHandler("#absPlace",["position: absolute;","margin-left: 0px;","margin-top: 0px;","margin-right: 0px;","margin-bottom: 0px;","top: 0px;","left: 0px;","right: 0px;","bottom: 0px;"],
                                 ["position: relative;","margin-left: 0px;","margin-top: 0px;","margin-right: 0px;","margin-bottom: 0px;","top: 0px;","left: 0px;","right: 0px;","bottom: 0px;"], false, false);
-    checkboxHandler("#inlineOpt",["display: inline-block;"], ["display: block;"], false, false);
-    checkboxHandler("#isHidden", ["display: none;"], ["display: block;"], false, false);
+    checkboxHandler("#inlineOpt",["display: inline-block;"], ["display: block;"], true, false);
+    checkboxHandler("#isHidden", ["display: none;"], ["display: block;"], true, false);
 
     $("#borderType").off('change');
     $("#borderType").on('change', function (event) {
@@ -2315,9 +2317,11 @@ function initColor(str_type, subid, thingindex) {
         $("#isHidden").prop("disabled", false);
         $("#isHidden").css("background-color","white");
         var ishdefault = getCssRuleTarget(str_type, subid, thingindex, "overlay");
+        var ishdefault2 = getCssRuleTarget(str_type, subid, thingindex);
         var ish = getish(str_type, thingindex, subid);
         // var ishidden = false;
         var ishidden = ($(ishdefault).css("display")==="none");
+        ishidden = ishidden || ($(ishdefault2).css("display")==="none");
         for ( var i = 0; i< ish.length; i++) {
             if (  $(ish[i]) && $(ish[i]).css("display")==="none" ) {
                 ishidden= true;
