@@ -1,5 +1,5 @@
 const devhistory = `
-3.1.7   Text translation with user provided data in config file for key subs
+3.1.7   Text translation with user provided data in config file and edit arrows
 3.1.6   Visual tile resizing on main screen, click tab shift, code cleanup
 3.1.5   Bugfix for time custom formats to display properly
 3.1.4   Fix editor hiding bug - quite obscure but it bit me anyway

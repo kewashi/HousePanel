@@ -350,13 +350,13 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
             target+= '.v_'+thingindex;
         }
 
-        // for everything other than levels, set the subid target
-        // levels use the overlay layer only
-        // set the subid which is blank if it matches the tile type
-        // edit... changed to only use the subid since that is all we need
-        //         this enables custom tile editing to work properly
-        //         since the str_type can be any linked item for those
-        if ( subid!=="level" && subid!=="volume" && subid!=="onlevel" && subid!=="position" ) {
+        // check for items with arrows around them or sliders so we just use overlap group for those
+        var skipdiv = $(target + " div."+subid+".p_"+thingindex);
+        var skiparrow = ( skipdiv && (skipdiv.hasClass("arrow-it") || skipdiv.hasClass("ui-slider")) );
+
+        // add the specific target inside overlay for things without arrows and non sliders
+        // if ( subid!=="level" && subid!=="volume" && subid!=="onlevel" && subid!=="position" ) {
+        if ( !skiparrow ) {
             target+= " div." + subid;
             if ( scope==="thistile" || scope==="thispage" ) {
                 target+= '.p_'+thingindex;
@@ -366,12 +366,11 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
         // get the on/off state
         // set the target to determine on/off status
         // we always use the very specific target to this tile
-        if ( subid==="name" || subid==="track" || subid==="weekday" || subid.startsWith("music-") ||
+        if ( skiparrow || subid==="name" || subid==="track" || subid==="weekday" || subid.startsWith("music-") ||
              subid==="color" || subid==="level" || subid==="volume" || subid==="onlevel" || subid==="position" ||
              subid==="cool" || subid==="heat" || subid==="stream" ) {
             on = "";
         } else {
-            // var onofftarget = "div.overlay." + subid + '.v_' + thingindex + " div."+str_type + subidtag + '.p_'+thingindex;
             var on = $("#onoffTarget").html();
             if ( on && !$.isNumeric(on) && (on.indexOf(" ") === -1) ) {
                 on = "."+on;
@@ -379,8 +378,6 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
                 on = "";
             }
         }
-
-        // if ( on==="." ) { on= ""; }
         target = target + on;
     }
 
@@ -515,16 +512,14 @@ function initOnceBinds(str_type, thingindex) {
         initDialogBinds(str_type, thingindex);
         event.stopPropagation();
     });
-    
+
+    // act on triggers from picking an item from the list
     $("#subidselect").off('change');
     $("#subidselect").on('change', function(event) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
         var subid = $(event.target).val();
-        // $("#onoffTarget").html("");
-        
         var target = getCssRuleTarget(str_type, subid, thingindex);
-        // console.log(">>>> event.target:", target, $(target).attr("id"));
         toggleTile(target, str_type, subid, false);
         initColor(str_type, subid, thingindex);
         initDialogBinds(str_type, thingindex);
@@ -536,12 +531,11 @@ function initOnceBinds(str_type, thingindex) {
     // var trigger = "div." + str_type + ".p_"+thingindex;
     $("#te_wysiwyg").off('click', trigger);
     $("#te_wysiwyg").on('click', trigger, function(event) {
-        // load up our silent tags
         var target = event.target;
-        // console.log(">>>> target id: ", target, $(target).attr("id"));
-        if ( ! $(target).attr("id") ) {
+        // only allow picking of things with an "aid" element - changed from "id" to pick up arrows
+        if ( ! $(target).attr("aid") ) {
             target = $(target).parent();
-            if ( ! $(target).attr("id") ) {
+            if ( ! $(target).attr("aid") ) {
                 return;
             }
         }
@@ -566,7 +560,6 @@ function initOnceBinds(str_type, thingindex) {
         $("#subidselect").val(subid);
         toggleTile(target, str_type, subid, thingindex);
         initColor(str_type, subid, thingindex);
-        // loadSubSelect(str_type, subid, thingindex);
         initDialogBinds(str_type, thingindex);
         event.stopPropagation();
     });
@@ -1556,6 +1549,15 @@ function loadSubSelect(str_type, firstsub, thingindex) {
             subid = words[1];
             if ( !subid ) return;
 
+            if ( $(this).children().length === 3 ) {
+                var subdown = $(this).children().eq(0).attr("subid");
+                var subup = $(this).children().eq(2).attr("subid");
+                // console.log(">>>> three items: ", subdown, subup );
+            } else {
+                subdown = false;
+                subup = false;
+            }
+               
             // handle music controls
             if ( subid==="music-controls" ) {
                 var that = $(this);
@@ -1568,11 +1570,18 @@ function loadSubSelect(str_type, firstsub, thingindex) {
                     subcontent += ">" + musicsub + "</option>";;
                 });
             } else {
+                if ( subdown ) {
+                    subcontent += "<option value='" + subdown + "'>" + subdown + "</option>";
+                }
                 subcontent += "<option value='" + subid + "'";
                 if ( subid === firstsub ) {
                     subcontent += " selected";
                 }
                 subcontent += ">" + subid + "</option>";;
+                if ( subup ) {
+                    subcontent += "<option value='" + subup + "'>" + subup + "</option>";
+                }
+
             }
         });
     

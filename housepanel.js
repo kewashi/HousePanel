@@ -35,7 +35,8 @@ var pagename = "main";
 // end-users are welcome to use this but it is intended for development only
 // use the timers options to turn off polling
 cm_Globals.disablepub = false;
-cm_Globals.logwebsocket = true;
+cm_Globals.logwebsocket = false;
+cm_Globals.enableclickedit = false;
 
 Number.prototype.pad = function(size) {
     var s = String(this);
@@ -402,13 +403,15 @@ $(document).ready(function() {
         });
 
         // enable clicking anywhere to invoke or cancel edit mode
-        $("div.ui-tabs-panel").on("click", function(evt) {
-            if ( priorOpmode==="Operate" ) {
-                execButton("edit");
-            } else if ( priorOpmode ==="Edit" || priorOpmode === "Reorder" ) {
-                execButton("operate");
-            }
-        });
+        if ( cm_Globals.enableclickedit ) {
+            $("div.ui-tabs-panel").on("click", function(evt) {
+                if ( priorOpmode==="Operate" ) {
+                    execButton("edit");
+                } else if ( priorOpmode ==="Edit" || priorOpmode === "Reorder" ) {
+                    execButton("operate");
+                }
+            });
+        }
 
         // prior and next tab clicks
         $("div.nextTab").on("click", function(evt) {
@@ -807,7 +810,9 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                 blackout = false;
             }
 
-            // console.log("pushClient: ", presult);
+            if ( cm_Globals.logwebsocket ) {
+                console.log(">>>> webSocket pushed: ", presult);
+            }
 
             // reload page if signalled from server
             if ( bid==="reload" ) {
