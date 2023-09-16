@@ -6170,7 +6170,7 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
 
             if (sibling) { $tc += sibling; }
             if ( tkey === "level" || tkey==="onlevel" || tkey==="colorTemperature" || tkey==="volume" || tkey==="position" ) {
-                $tc += aidi + pn + ttype + " subid=\"" + tkey+"\" value=\""+tval+"\" title=\""+tkey+"\" class=\"" + thingtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\"></div>";
+                $tc += aidi + pn + ttype + " subid=\"" + tkey+"\" value=\""+tval+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\"></div>";
             } else if ( typeof tkey==="string" && typeof tval==="string" && tkey.substring(0,8)==="_number_" && tval.substring(0,7)==="number_" ) {
                 var numval = tkey.substring(8);
                 $tc += aidi + pn + ttype + " subid=\"" + tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\">" + numval + "</div>";
@@ -6178,6 +6178,12 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
                 if ( typeof tval==="string" && tval.substring(0,6)==="RULE::" && subtype!=="rule" ) {
                     tkeyshow += " rule";
                 }
+
+                // handle global text substitutions
+                if ( array_key_exists(tval, GLB.dbinfo.subs) ) {
+                    tval = GLB.dbinfo.subs[tval];
+                }
+
                 $tc += aidi + pn + ttype + "  subid=\""+tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + extra + "\" id=\"" + aitkey + "\">" + tval + "</div>";
             }
             $tc += "</div>";
@@ -8807,7 +8813,7 @@ function queryHub(device, pname) {
                 console.log( (ddbg()), "error requesting hub node query: ", err);
                 reject(err);
             } else {
-                if ( typeof body==="object" ) {
+                if ( typeof body==="object" || !body ) {
                     pvalue = body;
                 } else if ( typeof body==="string" ) {
                     try {
@@ -12368,6 +12374,9 @@ GLB.dbinfo = {
 GLB.dbinfo.hubs = { Hubitat: "Hubitat", ISY: "ISY" };
 GLB.dbinfo.donate = true;
 GLB.dbinfo.enablerules = true;
+
+// this object will be used to replace anything with a user choice
+GLB.dbinfo.subs = {};
 
 // read config file if one exists
 try {
