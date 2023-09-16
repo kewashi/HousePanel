@@ -7,12 +7,11 @@
  * (c) Ken Washington 2017 - 2023
  * 
  */
-var et_Globals = {};
-var savedSheet;
-var priorIcon = "none";
-var defaultOverlay = "block";
-var tileCount = 0;
 var DEBUGte = false;
+var et_Globals = {};
+et_Globals.savedSheet = "";
+et_Globals.priorIcon = "none";
+et_Globals.tileCount = 0;
 
 function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thingclass, hubid, hubindex, hubType, customname, htmlcontent) {  
     var returnURL = cm_Globals.returnURL;
@@ -29,14 +28,6 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
         et_Globals.wholetarget = getCssRuleTarget(str_type, "name", thingindex, "thistile");
     } else {
         et_Globals.wholetarget = getCssRuleTarget(str_type, "wholetile", thingindex, "thitile");
-    }
-
-    // save the sheet upon entry for cancel handling
-    var customCSSfile = document.getElementById('customtiles');
-    if ( customCSSfile ) {
-        savedSheet = customCSSfile.sheet;
-    } else {
-        saveCSSFile(str_type, thingindex, "", false);
     }
 
     var dialog_html = "<div id='tileDialog' class='tileDialog' str_type='" + str_type + "' thingindex='" + thingindex +"' >";
@@ -67,7 +58,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
     var jqxhr = null;
     if ( str_type==="page" ) {
         jqxhr = $.post(returnURL, 
-            {useajax: "pagetile", userid: et_Globals.userid, thingid: et_Globals.thingid, id: hubid, type: 'page', tileid: thingindex, value: thingindex, attr: customname},
+            {useajax: "pagetile", userid: userid, thingid: thingid, id: hubid, type: 'page', tileid: thingindex, value: thingindex, attr: customname},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;
@@ -84,7 +75,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
         htmlcontent = "<div class=\"" + thingclass + "\" id='te_wysiwyg'>" + htmlcontent + "</div>";
 
         jqxhr = $.post(returnURL, 
-            {useajax: "wysiwyg", userid: et_Globals.userid, thingid: et_Globals.thingid, id: bid, type: str_type, tile: thingindex, value: "", attr: ""},
+            {useajax: "wysiwyg", userid: userid, thingid: thingid, id: bid, type: str_type, tile: thingindex, value: "", attr: ""},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;
@@ -108,11 +99,11 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
                 $("body").off("keypress");
                 var clk = $(ui).attr("name");
                 if ( clk==="okay" ) {
-                    saveTileEdit(str_type, thingindex);
+                    saveTileEdit(userid, str_type, thingindex);
                 } else if ( clk==="cancel" ) {
-                    cancelTileEdit(str_type, thingindex);
+                    cancelTileEdit();
                 }
-                tileCount = 0;
+                et_Globals.tileCount = 0;
                 closeModal("modaledit");
             },
             // function invoked upon starting the dialog
@@ -134,13 +125,13 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
         jqxhr.done(function() {
             dodisplay();
             $("#editInfo").after(htmlcontent);
-            tileCount++;
+            et_Globals.tileCount++;
             setupClicks(str_type, thingindex);
         });
     } else {
         dodisplay();
         $("#editInfo").after(htmlcontent);
-        tileCount++;
+        et_Globals.tileCount++;
         setupClicks(str_type, thingindex);
     }
     
@@ -733,11 +724,11 @@ function initDialogBinds(str_type, thingindex) {
         var strEffect = getBgEffect();
         
         if( $("#noIcon").is(':checked') ){
-            priorIcon = $(cssRuleTarget).css("background-image");
+            et_Globals.priorIcon = $(cssRuleTarget).css("background-image");
             addCSSRule(cssRuleTarget, "background-image: none" + strEffect + ";");
         } else {
-            if ( priorIcon!=="none" ) {
-                addCSSRule(cssRuleTarget, "background-image: " + priorIcon + strEffect + ";");
+            if ( et_Globals.priorIcon!=="none" ) {
+                addCSSRule(cssRuleTarget, "background-image: " + et_Globals.priorIcon + strEffect + ";");
             }
         }
     });
@@ -745,7 +736,7 @@ function initDialogBinds(str_type, thingindex) {
     // new button to process the name change
     $("#processName").off("click");
     $("#processName").on("click", function (event) {
-        updateNames(str_type, thingindex);
+        updateNames(et_Globals.userid, et_Globals.thingid, str_type, thingindex);
         event.stopPropagation;
     });
 
@@ -1652,7 +1643,7 @@ function setsubid(str_type) {
     return subid;
 }
 
-function updateNames(str_type, thingindex) {
+function updateNames(userid, thingid, str_type, thingindex) {
 
     var newname = $("#editName").val();
     var oldname;
@@ -1668,7 +1659,7 @@ function updateNames(str_type, thingindex) {
 
     var returnURL = cm_Globals.returnURL;
     $.post(returnURL, 
-        {useajax: "updatenames", userid: et_Globals.userid, thingid: et_Globals.thingid, id: 0, type: str_type, value: newname, tile: thingindex},
+        {useajax: "updatenames", userid: userid, thingid: thingid, id: 0, type: str_type, value: newname, tile: thingindex},
         function (presult, pstatus) {
             if (pstatus==="success" && presult.startsWith("success") ) {
                 if ( str_type==="page"  ) {
@@ -1682,7 +1673,7 @@ function updateNames(str_type, thingindex) {
 
 }
 
-function saveTileEdit(str_type, thingindex) {
+function saveTileEdit(userid, str_type, thingindex) {
 
     // get all custom CSS text
     var sheet = document.getElementById('customtiles').sheet;
@@ -1692,10 +1683,10 @@ function saveTileEdit(str_type, thingindex) {
         sheetContents += c[j].cssText;
     };
 
-    saveCSSFile(str_type, thingindex, sheetContents, true);
+    saveCSSFile(userid, str_type, thingindex, sheetContents, true);
 }
 
-function saveCSSFile(str_type, thingindex, sheetContents, reload) {
+function saveCSSFile(userid, str_type, thingindex, sheetContents, reload) {
 
     var returnURL = cm_Globals.returnURL;
     var newname = "";
@@ -1741,7 +1732,7 @@ function saveCSSFile(str_type, thingindex, sheetContents, reload) {
         subcontent= encodeURI(subcontent);
 
         $.post(returnURL, 
-            {useajax: "savetileedit", userid: et_Globals.userid, thingid: et_Globals.thingid, skin: skin, id: n1, n1: n1, n2: n2, nlen: sheetContents.length, 
+            {useajax: "savetileedit", userid: userid, skin: skin, id: n1, n1: n1, n2: n2, nlen: sheetContents.length, 
                                       type: str_type, value: subcontent, attr: newname, tile: thingindex, pname: pname},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
@@ -1761,9 +1752,7 @@ function saveCSSFile(str_type, thingindex, sheetContents, reload) {
                     if ( done ) {
                         if ( cm_Globals.edited && reload ) {
                             return;
-                            // window.location.href = cm_Globals.returnURL;
                         } else if ( !reload ) {
-                            // savedSheet = document.getElementById('customtiles').sheet;
                             alert("A new custom CSS file was generated for panel = [" + pname + "] This will be automatically updated as you make edits. You must relaunch editor again.");
                             window.location.href = cm_Globals.returnURL;
                         }
@@ -1777,8 +1766,8 @@ function saveCSSFile(str_type, thingindex, sheetContents, reload) {
 
 }
 
-function cancelTileEdit(str_type, thingindex) {
-    document.getElementById('customtiles').sheet = savedSheet;
+function cancelTileEdit() {
+    document.getElementById('customtiles').sheet = et_Globals.savedSheet;
 }
 
 function resetInverted(selector) {
@@ -1811,8 +1800,8 @@ function initColor(str_type, subid, thingindex) {
         var tgname = getCssRuleTarget(str_type, "name", thingindex, "thistile");
         var name =  $(tgname).html();
         $("#editName").val(name);
-            if ( tileCount > 1 ) {
-            newtitle+= " (editing " + tileCount + " items)";
+            if ( et_Globals.tileCount > 1 ) {
+            newtitle+= " (editing " + et_Globals.tileCount + " items)";
         }
     }
     $("#editheader").html(newtitle);
@@ -1831,7 +1820,7 @@ function initColor(str_type, subid, thingindex) {
     if ( DEBUGte ) {
         console.log ("initcolor: str_type= " + str_type + " subid= " + subid + " thingindex= " + thingindex + " target= " + target);
     }
-    priorIcon = $(target).css("background-image");
+    et_Globals.priorIcon = $(target).css("background-image");
     
     // set the active value
     var onoffval = $("#onoffTarget").html();
@@ -2630,8 +2619,8 @@ function updateSize(str_type, subid, thingindex) {
 // and simplified function to no longer assume arrays passed since this is never done
 function addCSSRule(selector, rules, resetFlag, beforetag){
     // alert("Adding selector: " + selector + " rule: " + rules);
-   
-    if ( ! typeof selector==="string" || ! typeof rules==="string") {
+
+     if ( ! typeof selector==="string" || ! typeof rules==="string") {
         return;
     }
 
@@ -2639,17 +2628,19 @@ function addCSSRule(selector, rules, resetFlag, beforetag){
     var sheet = document.getElementById('customtiles').sheet; // returns an Array-like StyleSheetList
     cm_Globals.edited = true;
 
-    //Searching of the selector matching cssRules
+    // Searching of the selector matching cssRules
     var index = -1;
     for(var i=sheet.cssRules.length-1; i >=0; i--) {
         var current_style = sheet.cssRules[i];
         if( current_style.selectorText === selector && current_style.style.item(0)!=="content" ) {
             //Append the new rules to the current content of the cssRule;
-            if( !resetFlag ){
-                rules=current_style.style.cssText + " " + rules;			
+            if ( !resetFlag ) {
+                rules=current_style.style.cssText + " " + rules;
+                sheet.deleteRule(i);
+                index = i;
+            } else {
+                index = i+1;
             }
-            sheet.deleteRule(i);
-            index = i;
         } else if ( beforetag && ( (current_style.selectorText + "::" + beforetag) === selector) && current_style.style.item(0)==="content"  ) {
             sheet.deleteRule(i);
             index = i;
@@ -2670,48 +2661,60 @@ function addCSSRule(selector, rules, resetFlag, beforetag){
 
 function resetCSSRules(str_type, subid, thingindex){
 
-        // cm_Globals.reload = true;
         cm_Globals.edited = true;
         var ruletypes = ['wholetile','head','name'];
-        ruletypes.forEach( function(rule, idx, arr) {
+        ruletypes.forEach( function(rule) {
             var subtarget = getCssRuleTarget(str_type, rule, thingindex);
             if ( subtarget ) {
-                removeCSSRule(subtarget, thingindex, null);
+                removeCSSRule(subtarget, thingindex, null, null);
             }
         });
 
         // remove main target
         var target1 = getCssRuleTarget(str_type, subid, thingindex);
-        removeCSSRule(target1, thingindex, null);
+        removeCSSRule(target1, thingindex, null, null);
         
         // remove all the subs
         var val = $(target1).html();
         var onoff = getOnOff(str_type, subid, val);
         if ( onoff && onoff.length > 0 ) {
-            onoff.forEach( function(rule, idx) {
+            onoff.forEach( function(rule) {
                 if ( rule ) {
                     var subtarget = target1 + "." + rule; // getCssRuleTarget(str_type, rule, thingindex);
-                    removeCSSRule(subtarget, thingindex, null);
+                    removeCSSRule(subtarget, thingindex, null, null);
                 }
             });
         }
 }
 
-function removeCSSRule(strMatchSelector, thingindex, target){
-    var scope = $("#scopeEffect").val();
-    var sheet = document.getElementById('customtiles').sheet; // returns an Array-like StyleSheetList
-    if ( DEBUGte ) {
-        console.log("Remove rule: " + strMatchSelector );
+function removeCSSRule(strMatchSelector, thingindex, target, scope){
+    if ( !scope ) {
+        scope = $("#scopeEffect").val();
     }
+    var numdel = 0;
+    var sheet = document.getElementById('customtiles').sheet; // returns an Array-like StyleSheetList
     for (var i=sheet.cssRules.length; i--;) {
         var current_style = sheet.cssRules[i];
-        if ( scope==="alltile" || scope==="allpage" || ( thingindex && current_style.selectorText.indexOf("_"+thingindex) !== -1 ) || 
-             (current_style.selectorText === strMatchSelector &&
-               ( !target || current_style.style.cssText.indexOf(target) !== -1 ) ) ) {
-            sheet.deleteRule (i);
+        var rule = current_style.style.cssText;
+        var newrule = "";
+        if ( (scope==="alltile" || scope==="allpage" || ( thingindex && current_style.selectorText.indexOf("_"+thingindex) !== -1 )) && 
+             (current_style.selectorText === strMatchSelector) &&
+             (!target || rule.indexOf(target) !== -1) ) 
+        {
+            sheet.deleteRule(i);
+            numdel++;
+            if ( target ) {
+                var k1 = rule.indexOf(target);
+                var k2 = rule.indexOf(";", k1);
+                newrule = rule.substring(0, k1) + rule.substring(k2+1);
+                // sheet.addRule(strMatchSelector, newrule, i);
+                sheet.insertRule(strMatchSelector + "{" + newrule + "}", i);	  
+            }
+            cm_Globals.edited = true;
             if ( DEBUGte ) {
-                console.log("Removing rule: " + current_style.selectorText);
+                console.log(">>>> target: ", target, "oldrule: ", rule, " newrule: ", newrule);
             }
         }
-    }  
+    }
+    return numdel;
 }

@@ -5193,6 +5193,9 @@ function getNewPage(userid, pname, skin, configoptions, cnt, roomid, roomname, k
     // this will be the actual room order number not the DB roomid value - the DB roomid value is only used internally
     $tc += "<div id=\"panel-" + roomname + "\" roomid=\"" + roomid + "\" title=\"" + roomname + "\" class=\"panel panel-" + kroom + " panel-" + roomname + "\">";
 
+    // place holders for tab navigators that show up on hover
+    $tc += "<div class='prevTab'> </div><div class='nextTab'> </div>";
+
     // the things list can be integers or arrays depending on drag/drop
     // var idxkeys = Object.keys(GLB.options["index"]);
     // var idxvals = Object.values(GLB.options["index"]);
@@ -5295,7 +5298,7 @@ function processName(thingname, thingtype) {
 // returns proper html to display an image, video, frame, or custom
 // if some other type is requested it returns a div of requested size and skips search
 // searches in main folder and media subfolder for file name
-function returnFile(userid, pname, thingvalue, thingtype, configoptions) {
+function getFileName(userid, pname, thingvalue, thingtype, configoptions) {
 
     // do nothing if this isn't a special tile
     if ( !configoptions ) {
@@ -5396,6 +5399,10 @@ function returnFile(userid, pname, thingvalue, thingtype, configoptions) {
                     $vn = skin + "/media/" + fn;
                     $fext = getext(fn);
                 }
+                if ( $vn==="" && fs.existsSync(skin + "/icons/"+ fn)) {
+                    $vn = skin + "/icons/" + fn;
+                    $fext = getext(fn);
+                }
             }
         }
 
@@ -5417,6 +5424,10 @@ function returnFile(userid, pname, thingvalue, thingtype, configoptions) {
                         var skin = skins[i];
                         if ( $vn==="" && fs.existsSync(skin + "/media/" + fn + $ext) ) {
                             $vn = skin + "/media/" + fn + $ext;
+                            $fext = $ext;
+                        }
+                        if ( $vn==="" && fs.existsSync(skin + "/icons/" + fn + $ext) ) {
+                            $vn = skin + "/icons/" + fn + $ext;
                             $fext = $ext;
                         }
                     }
@@ -5706,7 +5717,7 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     // add in customizations here
     if ( configoptions && is_object(configoptions) ) {
         thesensor.value = getCustomTile(userid, configoptions, thesensor.value, bid);
-        thesensor.value = returnFile(userid, pname, thesensor.value, thingtype, configoptions);
+        thesensor.value = getFileName(userid, pname, thesensor.value, thingtype, configoptions);
     }
     thesensor.value = setValOrder(thesensor.value);
 
@@ -5948,7 +5959,7 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
                         // put linked val through the customization
                         // also include processing of special tiles that could be linked too
                         linktileval = getCustomTile(userid, configoptions, linktileval, linkbid);
-                        linktileval = returnFile(userid, pname, linktileval, linktype, configoptions);
+                        linktileval = getFileName(userid, pname, linktileval, linktype, configoptions);
 
                     } catch(e) {
                         linktileval = {};
@@ -6452,7 +6463,7 @@ function getCustomTile(userid, configoptions, custom_val, bid) {
         }
         
         if ( DEBUG14 ) {
-            console.log((ddbg()), "companion: ", companion, " customized tile: ", custom_val);
+            console.log((ddbg()), " customized tile: ", custom_val);
         }
         return custom_val;
     }
@@ -8695,7 +8706,7 @@ function queryHub(device, pname) {
                 } else {
                     pvalue = decodeURI2(device.pvalue);
                     // pvalue = getCustomTile(userid, configoptions, pvalue, swid);
-                    pvalue = returnFile(userid, pname, pvalue, swtype, configoptions);
+                    pvalue = getFileName(userid, pname, pvalue, swtype, configoptions);
                 }
                 resolve(pvalue);
 
@@ -11624,7 +11635,7 @@ function apiCall(user, body, protocol, res) {
                                 row.pvalue = decodeURI2(row.pvalue);
                                 if ( configoptions && is_object(configoptions) ) {
                                     row.pvalue = getCustomTile(userid, configoptions, row.pvalue, row.id);
-                                    row.pvalue = returnFile(userid, pname, row.pvalue, row.type, configoptions);
+                                    row.pvalue = getFileName(userid, pname, row.pvalue, row.type, configoptions);
                                 }
                                 devices[row.id] = row;
                             });
@@ -12011,9 +12022,10 @@ function apiCall(user, body, protocol, res) {
                 var device = {pvalue: clock};
                 mydb.updateRow("devices", device, "userid = " + userid + " AND deviceid = '"+swid+"'");
                 
-                // handle rules based on time and including user fields status
-                var userresult = getCustomTile(userid, swattr, result, swid);
-                processRules(userid, thingid, swid, "clock", "time", userresult, "callHub" );
+                // handle rules and time format user fields
+                var result = getCustomTile(userid, swattr, result, swid);
+                // console.log(">>>> clock: ", result);
+                processRules(userid, thingid, swid, "clock", "time", result, "callHub" );
 
                 // remove any LINKS
                 // for (var key in result) {

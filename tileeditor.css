@@ -917,38 +917,48 @@ div.editheader {
 .modalshow {
     display: block;
 }
-div.modalbox div.editlink, div.modalbox div.dellink, div.modalbox div.cmzlink {
+div.modalbox div.editlink, div.modalbox div.dellink, div.modalbox div.sizelink, #te_wysiwyg div.sizelink,
+div.modalbox div.cmzlink, div.modalbox div.draglink, div.modalbox div.rstlink {
     display: none;
 }
 
 div.editlink, div.cmzlink, div.dellink, div.sortnum, div.tilenum,
-div.editpage, div.delpage, div.addpage {
+div.editpage, div.delpage, div.addpage, div.rstlink, div.sizelink {
     border: 1px solid white; 
     border-radius: 50%;
-    width: 18px; height: 18px;
+    width: 24px; height: 24px;
     color: rgba(255, 255, 255, 1);
     position: absolute; 
     z-index: 51; 
-    top: 5px;
     cursor: pointer;
 }
 div.editpage, div.editlink {
     border: none;
     background-image: url("media/editgear.png");
     background-size: 32px;
+    top: 5px;
     left: 0px;
 }
-div.delpage, div.dellink {
+div.editpage, div.delpage {
+    width: 18px; height: 18px;
+    background-size: 18px;
+    background-color: none;
+}
+div.dellink {
     background-color: rgba(255, 0, 0, 1);
+    top: 5px;
     right: 0px;
 }
-
+div.delpage {
+    background-color: rgba(255, 0, 0, 1);
+    top: 5px;
+    right: 0px;
+}
 div.cmzlink {
     background-color: rgba(0, 0, 192, 1);
 }
 div.editlink, div.dellink, div.cmzlink {
     top: 12px;
-    width: 24px; height: 24px;
 }
 div.editlink {
     width: 32px; height: 32px;
@@ -958,6 +968,49 @@ div.cmzlink {
     width: 34px;
     height: 23px;
     padding-top: 5px;
+}
+div.rstlink {
+    background-color: rgb(0, 0, 0);
+    padding-top: 5px; height: 19px;
+    color: white;
+    top: 50px;
+    right: 0px;
+}
+div.sizelink {
+    bottom: -12px;
+    width: 24px;
+    height: 24px;
+    right: -12px;
+    background-image: url("media/resize.png");
+    filter: invert(1);
+    background-size: 18px;
+    background-color: white;
+}
+div.ui-resizeable-se {
+    background-image: url("media/resize.png");
+    filter: invert(1);
+    background-size: 32px;
+}
+div.prevTab, div.nextTab {
+    position: absolute; 
+    top: 40%; width: 60px; height: 60px;
+    background-image: none;
+    background-size: 50px; background-color: none;
+    z-index: 999;
+}
+div.prevTab {
+    left: 1px;
+}
+div.nextTab {
+    right: 1px;
+}
+div.nextTab:hover {
+    background-image: url("media/rightarrow.png");
+    z-index: 99;
+}
+div.prevTab:hover {
+    background-image: url("media/leftarrow.png");
+    z-index: 99;
 }
 div.addpage {
     font-size: 14px;

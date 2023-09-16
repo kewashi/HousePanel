@@ -1,4 +1,6 @@
 const devhistory = `
+3.1.6   Visual tile resizing on main screen, click tab shift, code cleanup
+3.1.5   Bugfix for time custom formats to display properly
 3.1.4   Fix editor hiding bug - quite obscure but it bit me anyway
 3.1.3   Mode rule bugfixes and custom dialog bugfix for dialog within dialog
 3.1.2   Bugfix in rule to only run rule tied to the trigger
