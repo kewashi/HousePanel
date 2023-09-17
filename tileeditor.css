@@ -993,9 +993,9 @@ div.ui-resizeable-se {
 }
 div.prevTab, div.nextTab {
     position: absolute; 
-    top: 40%; width: 60px; height: 60px;
+    top: 10%; width: 80px; height: 80px;
     background-image: none;
-    background-size: 50px; background-color: none;
+    background-size: 80px; background-color: none;
     z-index: 999;
 }
 div.prevTab {
@@ -1006,11 +1006,11 @@ div.nextTab {
 }
 div.nextTab:hover {
     background-image: url("media/rightarrow.png");
-    z-index: 99;
+    z-index: 999;
 }
 div.prevTab:hover {
     background-image: url("media/leftarrow.png");
-    z-index: 99;
+    z-index: 999;
 }
 div.addpage {
     font-size: 14px;

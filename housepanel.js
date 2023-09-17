@@ -4166,7 +4166,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
     // if they are not leaving them as an active hub call does no harm - it just returns false but you loose inspections
     // to compensate for loss of inspection I added any custom field starting with "label" or "text" subid will inspect
     var ispassive = (ro || subid==="thingname" || subid==="custom" || subid==="temperature" || subid==="feelsLike" || subid==="battery" || //  (command==="TEXT" && subid!=="allon" && subid!=="alloff") ||
-        subid==="presence" || subid==="motion" || subid==="contact" || subid==="status_" || subid==="status" || subid==="deviceType" || subid==="localExec" ||
+        subid==="presence" || subid.startsWith("motion") || subid.startsWith("contact") || subid==="status_" || subid==="status" || subid==="deviceType" || subid==="localExec" ||
         subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" || subid==="name" || subid==="skin" || subid==="thermostatOperatingState" ||
         subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" || subid==="numberOfButtons" || subid==="humidity" ||
         subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") || subid==="illuminance" ||
