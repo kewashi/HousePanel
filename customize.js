@@ -237,8 +237,8 @@ function customTypePanel() {
         dh+= "<table class='cm_builtin'><tbody><tr>";
         dh+= "<td><select size='6' class='cm_builtinfields' id='cm_builtinfields' name='cm_builtinfields'>"; 
         dh+= "</select></td>";
-        dh+= "<td><button class='arrow' id='cm_upfield'><img src='media/uparrow.jpg' width='30'></button><br>";
-        dh+= "<button class='arrow' id='cm_dnfield'><img src='media/dnarrow.jpg' width='30'></button></td>";
+        dh+= "<td><button class='arrow' id='cm_upfield'><img src='media/uparrow.png' width='30'></button><br>";
+        dh+= "<button class='arrow' id='cm_dnfield'><img src='media/dnarrow.png' width='30'></button></td>";
         dh+= "</tr></table>";
         
         dh+= "<br><br><strong>OR...</strong><br><br>";

@@ -1840,7 +1840,7 @@ function initColor(str_type, subid, thingindex) {
         
     // set the first onoff state
     var onoff = getOnOff(str_type, subid, onoffval);
-    $("#onoffTarger").html(onoff[0]);
+    // $("#onoffTarget").html(onoff[0]);
     
     $.each(onoff, function() {
         if ( this && $(icontarget).hasClass(this) ) {

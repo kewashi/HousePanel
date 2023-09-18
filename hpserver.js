@@ -6039,6 +6039,11 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
             tval = tkey.substring(1)
         }
 
+        // handle global text substitutions
+        if ( array_key_exists(tval, GLB.dbinfo.subs) ) {
+            tval = GLB.dbinfo.subs[tval];
+        }
+
         if ( typeof subtype === "undefined" ) {
             subtype = "";
         } else if ( typeof subtype === "string" && subtype.substring(0,1)!==" " ) {
@@ -6177,11 +6182,6 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
             } else {
                 if ( typeof tval==="string" && tval.substring(0,6)==="RULE::" && subtype!=="rule" ) {
                     tkeyshow += " rule";
-                }
-
-                // handle global text substitutions
-                if ( array_key_exists(tval, GLB.dbinfo.subs) ) {
-                    tval = GLB.dbinfo.subs[tval];
                 }
 
                 $tc += aidi + pn + ttype + "  subid=\""+tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + extra + "\" id=\"" + aitkey + "\">" + tval + "</div>";
@@ -6603,6 +6603,11 @@ function processHubMessage(userid, hubmsg, newST) {
     }
     var value = hubmsg['change_value'];
 
+    // handle global text substitutions
+    if ( !is_array(value) && array_key_exists(value, GLB.dbinfo.subs) ) {
+        value = GLB.dbinfo.subs[value];
+    }
+
     // update all devices from our list belonging to this user
     // the root device values are updated in the DB which causes all instances to update when pushClient is called below
     // all links are handled by code in the js updateTile function
@@ -6752,10 +6757,6 @@ function processIsyMessage(userid, jsondata) {
                     // devicetype, value, obj.id, obj.value, obj.formatted, obj.uom, obj.prec, subid, setuom
                     pvalue = translateIsy(devtype, pvalue, isyid, newval, "", uom, prec, subid, false);
                     pvalue = updateTimeStamp(subid, pvalue);
-                    pushClient(userid, bid, devtype, subid, pvalue);
-                    pvalue.subid = subid;
-                    processRules(userid, device.id, bid, devtype, subid, pvalue, "processMsg");
-                    delete pvalue.subid;
                     
                     // update the DB
                     var pvalstr = encodeURI2(pvalue);
@@ -6768,6 +6769,19 @@ function processIsyMessage(userid, jsondata) {
                     .catch( reason => {
                         console.log( (ddbg()), reason);
                     });
+
+                    // handle global text substitutions
+                    for (var skey in pvalue) {
+                        var value = pvalue[skey];
+                        if ( array_key_exists(value, GLB.dbinfo.subs) ) {
+                            pvalue[skey] = GLB.dbinfo.subs[value];
+                        }
+                    }
+
+                    pushClient(userid, bid, devtype, subid, pvalue);
+                    pvalue.subid = subid;
+                    processRules(userid, device.id, bid, devtype, subid, pvalue, "processMsg");
+                    delete pvalue.subid;
                 });
 
 
@@ -6820,13 +6834,7 @@ function processIsyMessage(userid, jsondata) {
                             prec = varobj["prec"][0];
                         }
                         pvalue = translateIsy("variables", pvalue, subid, newval, "", 0, prec, subid, false)
-                        // pvalue[subid] = newval.toString();
-
                         pvalue = updateTimeStamp(subid, pvalue);
-                        pushClient(userid, bid, devtype, subid, pvalue);
-                        pvalue.subid = subid;
-                        processRules(userid, device.id, bid, devtype, subid, pvalue, "processMsg");
-                        delete pvalue.subid;
 
                         // update the DB
                         var pvalstr = encodeURI2(pvalue);
@@ -6838,7 +6846,20 @@ function processIsyMessage(userid, jsondata) {
                         })
                         .catch( reason => {
                             console.log( (ddbg()), reason);
-                        });            
+                        });
+
+                        // handle global text substitutions
+                        for (var skey in pvalue) {
+                            var value = pvalue[skey];
+                            if ( array_key_exists(value, GLB.dbinfo.subs) ) {
+                                pvalue[skey] = GLB.dbinfo.subs[value];
+                            }
+                        }
+
+                        pushClient(userid, bid, devtype, subid, pvalue);
+                        pvalue.subid = subid;
+                        processRules(userid, device.id, bid, devtype, subid, pvalue, "processMsg");
+                        delete pvalue.subid;
                     }
                 } catch (e) {
                     console.log( (ddbg()), "warning - var // processIsyMessage: ", e, device);
@@ -6907,10 +6928,6 @@ function processIsyMessage(userid, jsondata) {
                     }
 
                     pvalue = updateTimeStamp(subid, pvalue);
-                    pushClient(userid, bid, devtype, "lastRunTime", pvalue);
-                    pvalue.subid = subid;
-                    processRules(userid, device.id, bid, devtype, subid, pvalue, "processMsg");
-                    delete pvalue.subid;
 
                     // update the DB
                     var pvalstr = encodeURI2(pvalue);
@@ -6923,6 +6940,19 @@ function processIsyMessage(userid, jsondata) {
                     .catch( reason => {
                         console.log( (ddbg()), reason);
                     });            
+
+                    // handle global text substitutions
+                    for (var skey in pvalue) {
+                        var value = pvalue[skey];
+                        if ( array_key_exists(value, GLB.dbinfo.subs) ) {
+                            pvalue[skey] = GLB.dbinfo.subs[value];
+                        }
+                    }
+                    
+                    pushClient(userid, bid, devtype, "lastRunTime", pvalue);
+                    pvalue.subid = subid;
+                    processRules(userid, device.id, bid, devtype, subid, pvalue, "processMsg");
+                    delete pvalue.subid;
                 
                 } catch(e) {
                     console.log( (ddbg()), "warning - program // processIsyMessage: ", e, device);
@@ -7054,13 +7084,20 @@ function processSonosMessage(userid, hub, req) {
         .catch( reason => {
             console.log( (ddbg()), reason);
         });
-        pushClient(device.userid, device.deviceid, device.devicetype, trigger, pvalue);
+
+        // handle global text substitutions
+        for (var skey in pvalue) {
+            var value = pvalue[skey];
+            if ( array_key_exists(value, GLB.dbinfo.subs) ) {
+                pvalue[skey] = GLB.dbinfo.subs[value];
+            }
+        }
 
         // push new values to all clients and execute rules
+        pushClient(device.userid, device.deviceid, device.devicetype, trigger, pvalue);
         pvalue.subid = trigger;
         processRules(device.userid, device.id, device.deviceid, device.devicetype, trigger, pvalue, "processMsg");
         delete pvalue.subid;
-
     }
 
 }
@@ -8635,9 +8672,6 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                     for (var skey in pvalue) {
                         newpvalue[skey] = pvalue[skey];
                     }
-                    pushClient(userid, swid, swtype, subid, newpvalue);
-                    ndev++;
-    
                     var pvalstr = encodeURI2(newpvalue);
                     mydb.updateRow("devices", {pvalue: pvalstr}, "userid = "+userid+" AND id = "+device.id)
                     .then( res => {
@@ -8647,7 +8681,10 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                     })
                     .catch( reason => {
                         console.log( (ddbg()), reason);
-                    });        
+                    });
+
+                    pushClient(userid, swid, swtype, subid, newpvalue);
+                    ndev++;    
                 });
             }).catch(reason => { console.log( (ddbg()), reason ); } );
         } else {
