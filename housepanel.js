@@ -3991,43 +3991,55 @@ function processClickWithList(tile, thingname, ro, subid, thelist, prefix = "") 
     });
 }
 
-function stripOnoff(thevalue) {
-    var newvalue = thevalue.toLowerCase();
-    if ( newvalue==="on" || newvalue==="off" ) {
-        return " ";
-    } else if ( newvalue.endsWith("on") ) {
-        thevalue = thevalue.substring(0, thevalue.length-2);
-    } else if ( newvalue.endsWith("off") ) {
-        thevalue = thevalue.substring(0, thevalue.length-3);
-    }
-    if ( thevalue.substr(-1)!==" " && thevalue.substr(-1)!=="_" && thevalue.substr(-1)!=="-" && thevalue.substr(-1)!=="|" ) {
-        thevalue+= " ";
-    }
-    return thevalue;
-}
+// function stripOnoff(thevalue) {
+//     var newvalue = thevalue.toLowerCase();
+//     if ( newvalue==="on" || newvalue==="off" ) {
+//         return " ";
+//     } else if ( newvalue.endsWith("on") ) {
+//         thevalue = thevalue.substring(0, thevalue.length-2);
+//     } else if ( newvalue.endsWith("off") ) {
+//         thevalue = thevalue.substring(0, thevalue.length-3);
+//     }
+//     if ( thevalue.substr(-1)!==" " && thevalue.substr(-1)!=="_" && thevalue.substr(-1)!=="-" && thevalue.substr(-1)!=="|" ) {
+//         thevalue+= " ";
+//     }
+//     return thevalue;
+// }
 
 function addOnoff(targetid, subid, thevalue) {
-    thevalue = stripOnoff(thevalue);
-    if ( $(targetid).hasClass("on") ) {
-        $(targetid).removeClass("on");
-        $(targetid).addClass("off");
-        $(targetid).html(thevalue+"On");
-        thevalue = "off";
-    } else if ( $(targetid).hasClass("off") )  {
-        $(targetid).removeClass("off");
-        $(targetid).addClass("on");
-        $(targetid).html(thevalue+"Off");
+    // thevalue = stripOnoff(thevalue);
+    // if ( $(targetid).hasClass("on") ) {
+    //     $(targetid).removeClass("on");
+    //     $(targetid).addClass("off");
+    //     $(targetid).html(thevalue+"On");
+    //     thevalue = "off";
+    // } else if ( $(targetid).hasClass("off") )  {
+    //     $(targetid).removeClass("off");
+    //     $(targetid).addClass("on");
+    //     $(targetid).html(thevalue+"Off");
+    //     thevalue = "on";
+    // } else {
+    //     if ( subid==="allon") {
+    //         $(targetid).addClass("on");
+    //         $(targetid).html(thevalue+"Off");
+    //         thevalue = "on";
+    //     } else if (subid==="alloff" ) {
+    //         $(targetid).addClass("off");
+    //         $(targetid).html(thevalue+"On");
+    //         thevalue = "off";
+    //     }
+    // }
+
+    // var thevalue;
+    if ( subid==="allon") {
         thevalue = "on";
+    } else if (subid==="alloff" ) {
+        thevalue = "off";
     } else {
-        if ( subid==="allon") {
-            $(targetid).addClass("on");
-            $(targetid).html(thevalue+"Off");
-            thevalue = "on";
-        } else if (subid==="alloff" ) {
-            $(targetid).addClass("off");
-            $(targetid).html(thevalue+"On");
-            thevalue = "off";
-        }
+        thevalue = "toggle";
+    }
+    if ( !$(targetid).hasClass(thevalue) ) {
+        $(targetid).addClass(thevalue);
     }
     return thevalue;
 }
@@ -4170,7 +4182,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" || subid==="name" || subid==="skin" || subid==="thermostatOperatingState" ||
         subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" || subid==="numberOfButtons" || subid==="humidity" ||
         subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") || subid==="illuminance" ||
-        (command==="TEXT" && subid.startsWith("label")) || (command==="TEXT" && subid.startsWith("text")) ||
+        (subid.startsWith("label")) || (subid.startsWith("text")) ||
         (thetype==="weather" && !subid.startsWith("_")) ||
         (thetype==="ford" && !subid.startsWith("_"))
     );
@@ -4223,9 +4235,10 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         "json");
 
     // process user provided allon or alloff fields that turn all lights and switches on or off
-    } else if ( command==="TEXT" && (subid==="allon" || subid==="alloff") ) {
+    } else if ( subid==="allon" || subid==="alloff" ) {
         var panel = $(tile).attr("panel");
         thevalue = addOnoff(targetid, subid, thevalue);
+        console.log(">>>> allon or alloff clicked: ", subid, panel, thevalue);
         $('div[panel="' + panel + '"] div.overlay.switch div').each(function() {
             var aid = $(this).attr("aid");
             var tile = '#t-'+aid;
@@ -4236,29 +4249,12 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
             var thingid = $(tile).attr("thingid");
             var tileid = $(tile).attr("tile");
             var roomid = $("#panel-"+panel).attr("roomid");
-            // var command = "";
-            // var linkval = "";
-            var val = thevalue;
 
             // force use of command mode by setting attr to blank
-            theattr = "";  // $(this).attr("class");
-
-            // for ISY only process if uom_switch is 100 which means a light
-            // and fix use of on/off to DON/DOF
-            var uomid = "#a-" + aid + "-uom_switch";
-            if ( thetype==="isy" ) {
-                if ( $(uomid) && $(uomid).html() !== "100" ) {
-                    val = false;
-                } else if ( val==="on" ) {
-                    val = "DON";
-                }
-                else if ( val==="off" ) {
-                    val = "DOF";
-                }
-            }
-            if ( val ) {
+            theattr = "";
+            if ( thevalue ) {
                 $.post(cm_Globals.returnURL, 
-                    {useajax: ajaxcall, userid: userid, pname: pname, id: bid, thingid: thingid, tileid: tileid, type: thetype, value: val, roomid: roomid, hint: hint,
+                    {useajax: ajaxcall, userid: userid, pname: pname, id: bid, thingid: thingid, tileid: tileid, type: thetype, value: thevalue, roomid: roomid, hint: hint,
                      attr: theattr, subid: "switch", hubid: hubid, hubindex: linkhub, command: command, linkval: linkval} );
             }
         });
@@ -4311,15 +4307,6 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         if ( subid.startsWith("switch") && (thevalue==="on" || thevalue==="off")  ) {
             thevalue = thevalue==="on" ? "off" : "on";
         }
-
-        // we grab the value in the input field to pass to the click routines
-        // else if ( thetype==="button" && (subid==="_push" || subid==="_hold" || subid=="_doubleTap" || subid==="_release") ) {
-        //     var butmap = {"_push": "pushed", "_hold":"held", "_doubleTap": "doubleTapped", "_release": "released"};
-        //     var findval = butmap[subid];
-        //     thevalue = $(that).parent().parent().find("div[subid='" + findval + "'] > input").val();
-        //     if ( !thevalue ) { thevalue = "1"; }
-        //     // return;
-        // }
 
         // remove isy type check since it could be a link
         else if ( subid.startsWith("switch") && (thevalue==="DON" || thevalue==="DOF" )  ) {
