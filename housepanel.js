@@ -2328,7 +2328,6 @@ function setupButtons() {
         //     execButton(opmode);
         // });
         $("#quickedit").on("click", function(e) {
-            // console.log(">>>> priorOpmode: ", priorOpmode);
             if ( priorOpmode === "Operate" ) {
                 var letter = $("#quickedit").html();
                 switch (letter) {
@@ -4183,7 +4182,6 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" || subid==="numberOfButtons" || subid==="humidity" ||
         subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") || subid==="illuminance" ||
         (subid.startsWith("label")) || (subid.startsWith("text")) ||
-        (thetype==="weather" && !subid.startsWith("_")) ||
         (thetype==="ford" && !subid.startsWith("_"))
     );
     // console.log("linkval = ", linkval," command = ", command, " subid: ", subid, " realsubid: ", realsubid, " passive: ", ispassive);
@@ -4238,7 +4236,6 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
     } else if ( subid==="allon" || subid==="alloff" ) {
         var panel = $(tile).attr("panel");
         thevalue = addOnoff(targetid, subid, thevalue);
-        console.log(">>>> allon or alloff clicked: ", subid, panel, thevalue);
         $('div[panel="' + panel + '"] div.overlay.switch div').each(function() {
             var aid = $(this).attr("aid");
             var tile = '#t-'+aid;

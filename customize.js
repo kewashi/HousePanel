@@ -525,19 +525,18 @@ function loadLinkItem(linkid, allowuser, sortval, sortup) {
     
     // now load the custom fields
     if ( lines && allowuser ) {
-        // first sort and make sure we get rid of dups
-        // sortExistingFields(sortval, sortup);
-
         // get the custom rules for this tile if any exist
+        var itemorder = 0;
         lines.forEach(function(val) {
             var subid = val[2];
             var command = val[0];
             var linkval = val[1];
+            itemorder++;
             // if ( val[0] == "LINK" ) {
             //     var linkid = val[1];
             //     var linkthing = cm_Globals.devices[linkid];  //  cm_Globals.allthings[idx];
             // }
-            results+= "<option command='"+command+"' linkval='"+linkval+"' value='" + subid + "'>" + subid + "<span class='reddot'> *</span></option>";
+            results+= "<option command='"+command+"' linkval='"+linkval+"' value='" + subid + "' order='"+itemorder+"'>" + subid + "<span class='reddot'> *</span></option>";
             subids.push(subid);
         });
     }
@@ -794,67 +793,6 @@ function loadExistingFields(tileid, sortval, sortup) {
     showPreview();
 }
 
-function sortExistingFields(item, up) {
-    
-    // go through all the subs, eliminate dups, change order
-    var lines = cm_Globals.rules;
-
-    if ( !lines ) {
-        return;
-    }
-    var newoptions = [];
-
-    // first eliminate dups and list everything in order
-    var lastindex = 0;
-    lines.forEach(function(val) {
-        var existing = false;
-        $.each(newoptions, function(newi, newv) {
-            if ( newv[2] === val[2] ) {
-                existing = true;
-                return false;
-            }
-        });
-       
-        if ( !existing ) {
-            lastindex++;
-            val[3] = lastindex;
-            newoptions.push(val);
-        }
-    });
-
-    // now set order
-    if ( item && up ) {
-        var k;
-        var lenm1 = newoptions.length - 1;
-        $.each(newoptions, function(index, val) {
-            if ( item && val[2]===item ) {
-                if ( up==="up" && index>0 ) {
-                    k = newoptions[index-1][3];
-                    newoptions[index-1][3] = val[3];
-                    newoptions[index][3] = k;
-                } else if ( up==="down" && index<lenm1 ) {
-                    k = newoptions[index+1][3];
-                    newoptions[index+1][3] = val[3];
-                    newoptions[index][3] = k;
-                }
-                return false;
-            }
-        });
-    }
-    
-    // sort the items into proper order
-    newoptions.sort( function(a,b) {
-        var ia = parseInt(a[3],10);
-        var ib = parseInt(b[3],10);
-        return ( ia - ib );
-    });
-    
-    if ( up ) {
-        // this is where the new order of custom tiles is set up
-        cm_Globals.rules = newoptions.slice(0);
-    }
-}
-
 function initExistingFields() {
     // var idx = cm_Globals.thingidx;
     
@@ -877,10 +815,6 @@ function initExistingFields() {
     $("#cm_userfield").on('input', function(event) {
         var tileid = cm_Globals.tileid;
         var subid = $("#cm_userfield").val();
-
-        // var thing = cm_Globals.devices[tileid]
-        // var value = thing.pvalue;
-        // var subids = Object.keys(value);
         
         // change button label to Add or Replace based on existing or not
         if ( cm_Globals.natives.includes(subid) ) {
@@ -904,9 +838,37 @@ function initExistingFields() {
             return;
         }
         var tileid = cm_Globals.tileid;
-        var sortval = $("#cm_userfield").val();
-        loadExistingFields(tileid, sortval, "up");
-        initExistingFields();
+        var thing = cm_Globals.devices[tileid]
+        var bid = thing.deviceid;
+        var subid = $("#cm_userfield").val();
+        var item = $("#cm_builtinfields option[value='"+subid+"']");
+        var itemnum = parseInt($(item).attr("order"));
+        if ( itemnum > 1 ) {
+            var previtem = item.prev();
+            previtem.attr("order", itemnum);
+            item.attr("order", itemnum - 1)
+            item.detach()
+            previtem.before(item);
+
+            // update the master rule variable
+            var save = cm_Globals.rules[itemnum-2];
+            cm_Globals.rules[itemnum-2] = cm_Globals.rules[itemnum-1]
+            cm_Globals.rules[itemnum-1] = save;
+
+            // send rules to server
+            var rules = encodeURI(JSON.stringify(cm_Globals.rules));
+            $.post(cm_Globals.returnURL, 
+                {useajax: "updcustom", userid: cm_Globals.options.userid, id: bid, 
+                 rules: rules, tileid: tileid, subid: subid},
+                function (presult, pstatus) {
+                    if (pstatus==="success") {
+                        cm_Globals.reload = true;
+                    } else {
+                        console.log("Error updating custom fields: ", pstatus, presult);
+                    }
+                }, "json"
+            );
+        }
         cm_Globals.reload = true;
         event.stopPropagation();
     });
@@ -918,9 +880,40 @@ function initExistingFields() {
             return;
         }
         var tileid = cm_Globals.tileid;
-        var sortval = $("#cm_userfield").val();
-        loadExistingFields(tileid, sortval, "down");
-        initExistingFields();
+        var thing = cm_Globals.devices[tileid]
+        var bid = thing.deviceid;
+        var ncount = $("#cm_builtinfields option[order]").length
+        var subid = $("#cm_userfield").val();
+        var item = $("#cm_builtinfields option[value='"+subid+"']");
+        var itemnum = parseInt($(item).attr("order"));
+        if ( itemnum < ncount ) {
+            var nextitem = item.next();
+            nextitem.attr("order", itemnum);
+            item.attr("order", itemnum + 1)
+            item.detach()
+            nextitem.after(item);
+
+            // update the master rule variable
+            var save = cm_Globals.rules[itemnum];
+            cm_Globals.rules[itemnum] = cm_Globals.rules[itemnum-1]
+            cm_Globals.rules[itemnum-1] = save;
+
+            // send rules to server
+            var rules = encodeURI(JSON.stringify(cm_Globals.rules));
+            $.post(cm_Globals.returnURL, 
+                {useajax: "updcustom", userid: cm_Globals.options.userid, id: bid, 
+                 rules: rules, tileid: tileid, subid: subid},
+                function (presult, pstatus) {
+                    if (pstatus==="success") {
+                        cm_Globals.reload = true;
+                    } else {
+                        console.log("Error updating custom fields: ", pstatus, presult);
+                    }
+                }, "json"
+            );
+        }
+
+
         cm_Globals.reload = true;
         event.stopPropagation();
     });
@@ -1084,7 +1077,7 @@ function applyCustomField(action, subid) {
                     break;
                 }
             }
-            if ( !existing && action==="addcustom" ) {
+            if ( !existing ) {
                 cm_Globals.rules.push(therule);
                 existing = true;
             }
@@ -1103,11 +1096,8 @@ function applyCustomField(action, subid) {
                 i++;
             }
         }
-    } else {
-        existing = false;
     }
-    // console.log(">>>> rules after update: ", subid, cm_Globals.rules);
-    
+
     // check for valid entries
     // skip URL check to enable Android stuff
     if ( !existing ) {
@@ -1126,18 +1116,17 @@ function applyCustomField(action, subid) {
 
     // don't update if we are adding
     // if we are deleting then remove all rules since they are messed up
+    var rules = "";
     if ( errors.length ) {
         var errstr = errors.join("\n  ");
         alert("Invalid entries:\n" + errstr);
         if ( action==="addcustom" ) { 
             return; 
-        } else {
-            cm_Globals.rules = "";
         }
+    } else {
+        rules = encodeURI(JSON.stringify(cm_Globals.rules));
     }
 
-    // send rules to server
-    var rules = encodeURI(JSON.stringify(cm_Globals.rules));
     $.post(cm_Globals.returnURL, 
         {useajax: action, userid: cm_Globals.options.userid, id: bid, value: customtype, 
             rules: rules, tileid: tileid, subid: subid},

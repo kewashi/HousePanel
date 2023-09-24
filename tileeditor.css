@@ -993,9 +993,9 @@ div.ui-resizeable-se {
 }
 div.prevTab, div.nextTab {
     position: absolute; 
-    top: 10%; width: 80px; height: 80px;
+    top: 2px; width: 60px; height: 60px;
     background-image: none;
-    background-size: 80px; background-color: none;
+    background-size: 60px; background-color: none;
     z-index: 999;
 }
 div.prevTab {

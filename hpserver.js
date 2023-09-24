@@ -6477,39 +6477,33 @@ function getCustomTile(userid, configoptions, custom_val, bid) {
 
 // this little gem makes sure items are in the proper order
 function setValOrder(val) {
-    const order = {"name": 1, "subname": 2, "battery": 2, "color": 3, "switch": 7, "momentary": 7, "presence": 7, "presence_type": 8,
-                   "contact": 9, "door": 8, "garage":8, "motion": 9, "themode": 10,  
+    const order = { "_": 190, "_number_":70, 
+                   "name": 1, "subname": 2, "battery": 2, "color": 3, "switch": 6, "momentary": 7, "presence": 7, "presence_type": 8,
+                   "contact": 9, "door": 8, "garage":8, "motion": 9, "themode": 10,
                    "make": 11, "modelName":12, "modelYear": 13, "vehiclecolor": 14, "nickName": 15,
-                   "coolingSetpoint": 11, "heatingSetpoint": 12,
-                   "thermostatMode": 21, "thermostatFanMode": 22, 
-                   "thermostatSetpoint": 31, "thermostatOperatingState": 32, "humidity": 33, "thermostat": 34,
-                   "mileage": 21, "longitude": 22, "latitude": 23, "distanceToEmpty": 24, 
-                   "fuelLevel_value": 31,
-                   "trackDescription": 11, "trackImage": 12, "currentAlbum": 13, 
-                   "mediaSource": 14, "currentArtist": 15, "playbackStatus": 16, 
+                   "temperature": 41, "feelsLike":42, "temperatureApparent":42, "weatherCode":43, "weatherIcon":44, "forecastIcon":45,
+                   "coolingSetpoint": 51, "heatingSetpoint": 52, "thermostatMode": 53, "thermostatFanMode": 54, 
+                   "thermostat": 55, "thermostatSetpoint": 56, "thermostatOperatingState": 57, "humidity": 58,
+                   "mileage": 21, "longitude": 22, "latitude": 23, "distanceToEmpty": 24, "fuelLevel_value": 25,
+                   "trackDescription": 11, "trackImage": 12, "currentAlbum": 13, "mediaSource": 14, "currentArtist": 15, "playbackStatus": 16, 
                    "_mute": 17, "_muteGroup": 17, "_unmute": 18, "_unmuteGroup": 18, "_volumeDown": 19, "_volumeUp": 20, 
                    "_previousTrack": 21, "_pause": 22, "_play": 23, "_stop": 24, "_nextTrack": 25,
                    "_number_0":60, "_number_1":61, "_number_2":62, "_number_3":63, "_number_4":64, 
-                   "_number_5":65, "_number_6":66, "_number_7":67, "_number_8":68, "_number_9":69, 
-                   "onlevel": 150, "level": 151, "volume": 152, "colorTemperature": 153, "hue": 141, "saturation": 142, "position": 152,
+                   "_number_5":65, "_number_6":66, "_number_7":67, "_number_8":68, "_number_9":69,
+                   "onlevel": 150, "level": 151, "volume": 152, "colorTemperature": 153, "hue": 141, "saturation": 142, "position": 153,
                    "allon": 41, "alloff": 42, "count": 148, "duration": 149, "deltaT": 149,
-                   "temperature": 7, "feelsLike":8, "temperatureApparent":8, "weatherCode":22, "weatherIcon":20, "forecastIcon":21 };
+                   "user_":191, "event_":200,
+                };
 
     function getComp(vala) {
-        var comp;
-        if ( array_key_exists(vala, order) ) {
-            comp = order[vala];
-        } else if ( vala.startsWith("_number_") ) {
-            comp = 60;
-        } else if ( vala.startsWith("_") ) {
-            comp = 140;
-        } else if ( vala.startsWith("user_") ) {
-            comp = 140;
-        } else if ( vala.startsWith("event_") ) {
-            comp = 200;
-        } else {
-            comp = 100;
-        }
+
+        var comp = 100;
+        Object.keys(order).forEach(function(val) {
+            if ( vala.startsWith(val) ) {
+                comp = order[val];
+            }
+        });
+
         return comp;
     }
 
@@ -6517,13 +6511,9 @@ function setValOrder(val) {
     // but sort all others based on type of subid
     var keys = Object.keys(val).sort( function(vala, valb) {
 
-        var compa = array_key_exists("user_"+vala, val) ? 70 : getComp(vala);
-        var compb = array_key_exists("user_"+valb, val) ? 70 : getComp(valb);
-        if ( compa===30 && compb===30 ) {
-            return vala - valb;
-        } else {
-            return compa - compb;
-        }
+        var compa = array_key_exists("user_"+vala, val) ? 199 : getComp(vala);
+        var compb = array_key_exists("user_"+valb, val) ? 199 : getComp(valb);
+        return compa - compb;
     });
 
     var newval = {};
@@ -11828,6 +11818,7 @@ function apiCall(user, body, protocol, res) {
 
             case "addcustom":
             case "delcustom":
+            case "updcustom":
                 if ( protocol==="POST" ) {
                     if ( body.rules ) {
                         var rules = JSON.parse(decodeURI(body.rules));

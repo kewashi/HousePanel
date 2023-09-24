@@ -1,4 +1,5 @@
 const devhistory = `
+3.1.9   Fixed reordering of linked items
 3.1.8   Cleanup icons and updated static trigger to include linked doors and motions
 3.1.7   Text translation with user provided data in config file and edit arrows
 3.1.6   Visual tile resizing on main screen, click tab shift, code cleanup
