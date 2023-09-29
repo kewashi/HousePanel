@@ -4513,7 +4513,7 @@ function forgotPassword(emailname, mobilefield) {
     return mydb.getRow("users","*","email = '"+emailname+"'")
     .then(row => {
         if ( !row ) { 
-            return "error - user with email mobile = " + userfield + " and mobile = " + mobilefield + " does not exist"; 
+            return "error - user with email = " + emailname + " and mobile = " + mobilefield + " does not exist"; 
         }
 
         // update the mobile number if one is given
@@ -4537,7 +4537,8 @@ function forgotPassword(emailname, mobilefield) {
             row.mobile = mobile;
             row.hpcode = thecode;
             var msg = "HousePanel Security Code: " + thecode;
-            console.log( (ddbg()), msg, " row: " + row );
+            console.log( (ddbg()), msg);
+            console.log( (ddbg()), "User info: ", jsonshow(row));
             if ( (GLB.dbinfo.service==="twilio" || GLB.dbinfo.service==="both") ) {
                 sendText(mobile, msg);
             }
