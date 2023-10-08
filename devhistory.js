@@ -1,4 +1,5 @@
 const devhistory = `
+3.2.1   Fix tile editor bug where init would change visual state on main panel
 3.2.0   Upgraded jQuery and added native touch and swipe support
 3.1.9   Fixed reordering of linked items
 3.1.8   Cleanup icons and updated static trigger to include linked doors and motions

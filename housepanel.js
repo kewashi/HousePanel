@@ -36,7 +36,7 @@ var pagename = "main";
 // use the timers options to turn off polling
 cm_Globals.disablepub = false;
 cm_Globals.logwebsocket = false;
-cm_Globals.enableclickedit = true;
+cm_Globals.enableclickedit = false;
 
 Number.prototype.pad = function(size) {
     var s = String(this);
@@ -384,7 +384,7 @@ $(document).ready(function() {
             }
         });
 
-        $("div#hpmenu").on("singletap", function(evt) {
+        $("div#hpmenu").on("tap", function(evt) {
             var pos = {top: 40, left: 10};
             evt.stopPropagation();
 
@@ -415,13 +415,18 @@ $(document).ready(function() {
             }
         });
 
-        // enable clicking anywhere to invoke or cancel edit mode
+        // enable double clicking anywhere to invoke or cancel edit mode
         if ( cm_Globals.enableclickedit ) {
-            $("div.ui-tabs-panel").on("doubletap", function(evt) {
-                if ( priorOpmode==="Operate" ) {
-                    execButton("edit");
-                } else if ( priorOpmode ==="Edit" || priorOpmode === "Reorder" ) {
-                    execButton("operate");
+            $("div.ui-tabs-panel div.panel").off("doubletap");
+            $("div.ui-tabs-panel div.panel").on("doubletap", function(evt) {
+                if ( $(this).hasClass("panel") ) {
+                    if ( priorOpmode==="Operate" ) {
+                        evt.stopPropagation();
+                        execButton("edit");
+                    } else if ( priorOpmode ==="Edit" || priorOpmode === "Reorder" ) {
+                        evt.stopPropagation();
+                        execButton("operate");
+                    }
                 }
             });
         }
@@ -453,8 +458,9 @@ $(document).ready(function() {
         //     nextTab();
         //     evt.stopPropagation();
         // });
-        $("#dragregion").on("swiperight", function(evt) {
-            if ( priorOpmode==="Operate" ) {
+        $("#dragregion").on("swiperight", function(evt, touchdata) {
+            if ( priorOpmode==="Operate" && $(touchdata.startEvnt.target).hasClass("panel") ) {
+                console.log(">>> touchdata: ", touchdata);
                 nextTab();
             }
             evt.stopPropagation();
@@ -463,8 +469,9 @@ $(document).ready(function() {
         //     prevTab();
         //     evt.stopPropagation();
         // });
-        $("#dragregion").on("swipeleft", function(evt) {
-            if ( priorOpmode==="Operate" ) {
+        $("#dragregion").on("swipeleft", function(evt, touchdata ) {
+            if ( priorOpmode==="Operate" && $(touchdata.startEvnt.target).hasClass("panel") ) {
+                console.log(">>> touchdata: ", touchdata);
                 prevTab();
             }
             evt.stopPropagation();
@@ -1186,7 +1193,7 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
     } else {
 
         if ( modalid==="menubox" ) {
-            $("#"+modalid + " .menuitem").on("singletap", function(evt) {
+            $("#"+modalid + " .menuitem").on("tap", function(evt) {
                 closeModal(modalid);
                 if ( responsefunction ) {
                     responsefunction(this, modaldata);
@@ -1196,8 +1203,8 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
 
         // body clicks turn off modals unless clicking on box itself
         // or if this is a popup window any click will close it
-        $("body").off("tap");
-        $("body").on("tap",function(evt) {
+        $("body").off("singletap");
+        $("body").on("singletap",function(evt) {
             if ( (evt.target.id === modalid && modalid!=="modalpopup" )  ) {
                 // console.log("modal opt 1");
                 evt.stopPropagation();
@@ -1207,7 +1214,7 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
                 if ( responsefunction ) {
                     responsefunction(evt.target, modaldata);
                 }
-                $("body").off("tap");
+                $("body").off("singletap");
             }
         });
     }
@@ -1668,22 +1675,17 @@ function setupDraggable() {
                 var thingtype = $(thing).attr("type");0
                 $(thing).css("z-index", startPos["z-index"] );
 
-                // revert back to relative if we dragged outside panel to left or top
-                if ( startPos.left < 0 || startPos.top < 0 ) {
-                    startPos.left = 0;
+                // revert back to relative if we dragged outside panel to top
+                // remove this because we now have a reset button and we might want to place stuff on the edges
+                if ( startPos.top < 0 ) {
                     startPos.top = 0;
-                    startPos.position = "relative";
-
-                    if (thingtype==="bulb") {
-                        var zmax = getMaxZindex(panel) + 1;
-                        startPos["z-index"] = zmax;    
-                    }
-                } else {
-                    var zmax = getMaxZindex(panel);
-                    startPos["z-index"] = zmax;
-                    startPos.position = "absolute";
                 }
-
+                if ( startPos.left < 0 ) {
+                    startPos.left = 0;
+                }
+                var zmax = getMaxZindex(panel);
+                startPos["z-index"] = zmax;
+                startPos.position = "absolute";
                 $(thing).css(startPos);
                 cm_Globals.edited = true;
                 
@@ -2244,8 +2246,8 @@ function execButton(buttonid) {
         }
 
         // clicking anywhere will restore the window to normal
-        $("#blankme").off("tap");
-        $("#blankme").on("tap", function(evt) {
+        $("#blankme").off("singletap");
+        $("#blankme").on("singletap", function(evt) {
             if ( photohandle ) {
                 clearInterval(photohandle);
             }
@@ -2789,8 +2791,9 @@ function addEditLink() {
     var editdiv = "<div id=\"addpage\" class=\"addpage\" roomnum=\"new\">Add New Page</div>";
     $("#roomtabs").append(editdiv);
 
-    $("div.editlink").off("singletap");
-    $("div.editlink").on("singletap",function(evt) {
+    $("div.editlink").off("click");
+    $("div.editlink").on("click",function(evt) {
+        evt.stopPropagation();
         var taid = $(evt.target).attr("aid");
         var thing = "#" + taid;
         var aid = taid.substring(2);
@@ -2816,11 +2819,11 @@ function addEditLink() {
         // cm_Globals.edited = true;
 
         editTile(userid, thingid, pagename, str_type, tile, aid, bid, thingclass, hubid, hubindex, hubType, customname, strhtml);
-        evt.stopPropagation();
     });
     
     $("div.cmzlink").off("click");
     $("div.cmzlink").on("click",function(evt) {
+        evt.stopPropagation();
         var taid = $(evt.target).attr("aid");
         var thing = "#" + taid;
         var aid = taid.substring(2);
@@ -2840,11 +2843,11 @@ function addEditLink() {
             var hubid = $(thing).attr("hub");
             customizeTile(userid, tile, aid, bid, str_type, hubid);
         }
-        evt.stopPropagation();
     });
     
     $("div.dellink").off("click");
     $("div.dellink").on("click",function(evt) {
+        evt.stopPropagation();
         var regheight = parseInt($("#dragregion").height() * 0.7);
         var thing = "#" + $(evt.target).attr("aid");
         var thingtype = $(thing).attr("type");
@@ -2857,7 +2860,6 @@ function addEditLink() {
         var twide = $(thing).width();
         var tleft = offset.left - 600 + twide;
         if ( tleft < 10 ) { tleft = 10; }
-        console.log(regheight, thigh);
         thigh = (thigh > regheight) ? regheight : thigh;
         var pos = {top: thigh, left: tleft, width: 600, height: 80};
         var roomid = $("#panel-"+panel).attr("roomid");
@@ -2865,7 +2867,6 @@ function addEditLink() {
         var hubid = $(thing).attr("hub");
         var userid = cm_Globals.options.userid;
         var pname = cm_Globals.options.pname;
-        evt.stopPropagation();
 
         createModal("modaladd","Remove: "+ tilename + " of type: "+thingtype+" from room "+panel+"?<br>Are you sure?", "body" , true, pos, function(ui, content) {
             var clk = $(ui).attr("name");
@@ -2887,13 +2888,14 @@ function addEditLink() {
         
     });
 
-    $("div.rstlink").off("tap");
-    $("div.rstlink").on("tap",function(evt) {
+    $("div.rstlink").off("click");
+    $("div.rstlink").on("click",function(evt) {
         var taid = $(evt.target).attr("aid");
         var thing = "#" + taid;
         var str_type = $(thing).attr("type");
         var tile = $(thing).attr("tile");
         var thingid = $(thing).attr("thingid");
+        var panel = $(thing).attr("panel");
 
         evt.stopPropagation();
 
@@ -2906,6 +2908,11 @@ function addEditLink() {
 
         // reset the position of just this tile to be relative and save the reset widths
         var startPos = {top: 0, left: 0, "z-index": 1, position: "relative"};
+        if (str_type==="bulb") {
+            var zmax = getMaxZindex(panel) + 1;
+            startPos["z-index"] = zmax;    
+        }
+
         $.post(cm_Globals.returnURL, 
             {useajax: "setposition", userid: cm_Globals.options.userid, type: str_type, attr: startPos, tileid: tile, thingid: thingid},
             function (presult, pstatus) {
@@ -2917,8 +2924,8 @@ function addEditLink() {
         );
     });
 
-    $("#roomtabs div.delpage").off("tap");
-    $("#roomtabs div.delpage").on("tap",function(evt) {
+    $("#roomtabs div.delpage").off("click");
+    $("#roomtabs div.delpage").on("click",function(evt) {
         var roomnum = $(evt.target).attr("roomnum");
         var roomname = $(evt.target).attr("roomname");
         var roomid = $("#panel-"+roomname).attr("roomid");
@@ -2952,8 +2959,8 @@ function addEditLink() {
         
     });
     
-    $("#roomtabs div.editpage").off("tap");
-    $("#roomtabs div.editpage").on("tap",function(evt) {
+    $("#roomtabs div.editpage").off("click");
+    $("#roomtabs div.editpage").on("click",function(evt) {
         var roomnum = $(evt.target).attr("roomnum");
         var roomname = $(evt.target).attr("roomname");
         var roomid = $("#panel-"+roomname).attr("roomid");
@@ -2961,8 +2968,8 @@ function addEditLink() {
         editTile(cm_Globals.options.userid, roomid, roomname, "page", roomname, 0, 0, "", "-1", 0, "None", roomname);
     });
    
-    $("#addpage").off("tap");
-    $("#addpage").on("tap",function(evt) {
+    $("#addpage").off("click");
+    $("#addpage").on("click",function(evt) {
         // var clickid = $(evt.target).attr("aria-labelledby");
         var pos = {top: 100, left: 10};
         var panelid = $("input[name='panelid']").val();
@@ -3675,11 +3682,13 @@ function setupTimer(timertype, timerval, hub) {
 // this used to be done by page but now it is done by sensor type
 function setupPage() {
 
-    $("div.panel div.thing[tile]").on("doubletap", function(evt) {
+    $("div.thing div.overlay.name").off("doubletap");
+    $("div.thing div.overlay.name").on("doubletap", function(evt) {
+    // $("div.panel div.thing[tile]").on("doubletap", function(evt) {
         evt.stopPropagation();
 
         if ( priorOpmode=="Operate" ) {
-            var thing = this;
+            var thing = $(this).parent();
             var aid = $(thing).attr("aid");
             var str_type = $(thing).attr("type");
             var tile = $(thing).attr("tile");
@@ -3709,8 +3718,8 @@ function setupPage() {
         evt.stopPropagation();
     });
 
-    $("div.overlay > div").off("singletap");
-    $("div.overlay > div").on("singletap", function(evt) {
+    $("div.thing div.overlay > div").off("singletap");
+    $("div.thing div.overlay > div").on("singletap", function(evt) {
 
         var that = this;
         var aid = $(this).attr("aid");

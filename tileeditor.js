@@ -395,7 +395,7 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
     return target;
 }
 
-function toggleTile(target, str_type, subid, thingindex) {
+function toggleTile(target, str_type, subid, setvalue) {
     var ostarget = target;
     var swval = $(target).html();
     $('#onoffTarget').html("");
@@ -427,7 +427,7 @@ function toggleTile(target, str_type, subid, thingindex) {
             if ( $(target).hasClass(oldsub.toLowerCase()) ) { 
                 $(target).removeClass(oldsub.toLowerCase()); 
             }
-            if ( thingindex && (oldsub.toLowerCase() === swval.toLowerCase()) ) {
+            if ( setvalue && (oldsub.toLowerCase() === swval.toLowerCase()) ) {
                 newsub = i+1;
                 if ( newsub >= onoff.length ) { newsub= 0; }
                 $(target).addClass( onoff[newsub] ); 
@@ -520,7 +520,8 @@ function initOnceBinds(str_type, thingindex) {
         var thingindex = $("#tileDialog").attr("thingindex");
         var subid = $(event.target).val();
         var target = getCssRuleTarget(str_type, subid, thingindex);
-        toggleTile(target, str_type, subid, false);
+        var targetid = "#x_a-"+$(target).attr("aid")+"-"+subid;
+        toggleTile(targetid, str_type, subid, false);
         initColor(str_type, subid, thingindex);
         initDialogBinds(str_type, thingindex);
         event.stopPropagation();
@@ -541,6 +542,7 @@ function initOnceBinds(str_type, thingindex) {
         }
         var subid = $(target).attr("subid");
         var aid = $(target).attr("aid");
+        var targetid = "#"+$(target).attr("id");
         var ustr_type = $("#t-"+aid).attr("type");
         var uthingindex = $("#t-"+aid).attr("tile");
         // console.log(">>>> target:", target, $(target).attr("id"), " event class: ", $(target).attr("class")), subid, aid, ustr_type, uthingindex;
@@ -558,7 +560,7 @@ function initOnceBinds(str_type, thingindex) {
         
         // update everything to reflect current tile
         $("#subidselect").val(subid);
-        toggleTile(target, str_type, subid, thingindex);
+        toggleTile(targetid, str_type, subid, true);
         initColor(str_type, subid, thingindex);
         initDialogBinds(str_type, thingindex);
         event.stopPropagation();
@@ -1504,9 +1506,10 @@ function setupClicks(str_type, thingindex) {
     var firstsub = setsubid(str_type);
     $("#subidTarget").html(firstsub);
     var target = getCssRuleTarget(str_type, firstsub, thingindex);
+    var targetid = "#x_a-"+$(target).attr("aid")+"-"+firstsub;
 
     // do an initial toggle so edits can start right away
-    toggleTile( $(target), str_type, firstsub, thingindex);
+    toggleTile( targetid, str_type, firstsub, false);
     initColor(str_type, firstsub, thingindex);
     loadSubSelect(str_type, firstsub, thingindex);
     getIcons(str_type, thingindex);	
@@ -2720,9 +2723,6 @@ function removeCSSRule(strMatchSelector, thingindex, target, scope){
                 sheet.insertRule(strMatchSelector + "{" + newrule + "}", i);	  
             }
             cm_Globals.edited = true;
-            if ( DEBUGte ) {
-                console.log(">>>> target: ", target, "oldrule: ", rule, " newrule: ", newrule);
-            }
         }
     }
     return numdel;

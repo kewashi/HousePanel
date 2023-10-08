@@ -365,12 +365,12 @@ function getHeader(userid, pname, skin, skip) {
     // $tc += '<script src="jquery-1.12.4.min.js"></script>';
     $tc += '<script src="jquery-3.7.1.min.js"></script>';
     $tc += '<script src="jquery-ui.min.js"></script>';
-    $tc += '<script src="jquery-ui.theme.min.js"></script>';
+    $tc += '<link rel="stylesheet" type="text/css" href="jquery-ui.theme.css">';
     // $tc += '<script src="jquery-migrate-3.4.0.js"></script>';
 
     // include hack from touchpunch.furf.com to enable touch punch through for tablets
     // $tc += '<script src="jquery.ui.touch-punch.min.js"></script>';
-    $tc += '<script type="text/javascript" src="jquery.mobile-events.min.js"></script>';
+    $tc += '<script type="text/javascript" src="jquery.mobile-events.js"></script>';
     if ( !skip ) {
         // minicolors library
         $tc += '<script src="jquery.minicolors.min.js"></script>';
