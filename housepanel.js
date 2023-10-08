@@ -36,12 +36,25 @@ var pagename = "main";
 // use the timers options to turn off polling
 cm_Globals.disablepub = false;
 cm_Globals.logwebsocket = false;
-cm_Globals.enableclickedit = false;
+cm_Globals.enableclickedit = true;
 
 Number.prototype.pad = function(size) {
     var s = String(this);
     while (s.length < (size || 2)) {s = "0" + s;}
     return s;
+}
+
+function isNumeric(str) {
+    var resp;
+    try {
+        if ( typeof str === "object") {
+            str = str.toString();
+        }
+        resp = (typeof str === "number") || !isNaN(parseFloat(str));
+    } catch (e) {
+        resp = false;
+    }
+    return resp;
 }
 
 function setCookie(name, value, options={path: "/", expires: 365, SameSite: "lax" } ) {
@@ -371,7 +384,7 @@ $(document).ready(function() {
             }
         });
 
-        $("div#hpmenu").on("click", function(evt) {
+        $("div#hpmenu").on("singletap", function(evt) {
             var pos = {top: 40, left: 10};
             evt.stopPropagation();
 
@@ -404,7 +417,7 @@ $(document).ready(function() {
 
         // enable clicking anywhere to invoke or cancel edit mode
         if ( cm_Globals.enableclickedit ) {
-            $("div.ui-tabs-panel").on("click", function(evt) {
+            $("div.ui-tabs-panel").on("doubletap", function(evt) {
                 if ( priorOpmode==="Operate" ) {
                     execButton("edit");
                 } else if ( priorOpmode ==="Edit" || priorOpmode === "Reorder" ) {
@@ -414,7 +427,7 @@ $(document).ready(function() {
         }
 
         // prior and next tab clicks
-        $("div.nextTab").on("click", function(evt) {
+        function nextTab() {
             var curTab = $("#roomtabs > li.ui-tabs-active");
             curTab = curTab.next().attr("aria-labelledby");
             if ( !curTab ) {
@@ -422,11 +435,10 @@ $(document).ready(function() {
                 curTab = allTabs.first().attr("aria-labelledby")
             }
             try {
-                $("#"+curTab).click();
+                $("#"+curTab).trigger("click");
             } catch (f) { }
-            evt.stopPropagation();
-        });
-        $("div.prevTab").on("click", function(evt) {
+        }
+        function prevTab() {
             var curTab = $("#roomtabs > li.ui-tabs-active");
             curTab = curTab.prev().attr("aria-labelledby");
             if ( !curTab ) {
@@ -434,8 +446,27 @@ $(document).ready(function() {
                 curTab = allTabs.last().attr("aria-labelledby");
             }
             try {
-                $("#"+curTab).click();
+                $("#"+curTab).trigger("click");
             } catch (f) { }
+        }
+        // $("div.nextTab").on("click", function(evt) {
+        //     nextTab();
+        //     evt.stopPropagation();
+        // });
+        $("#dragregion").on("swiperight", function(evt) {
+            if ( priorOpmode==="Operate" ) {
+                nextTab();
+            }
+            evt.stopPropagation();
+        });
+        // $("div.prevTab").on("click", function(evt) {
+        //     prevTab();
+        //     evt.stopPropagation();
+        // });
+        $("#dragregion").on("swipeleft", function(evt) {
+            if ( priorOpmode==="Operate" ) {
+                prevTab();
+            }
             evt.stopPropagation();
         });
 
@@ -443,12 +474,12 @@ $(document).ready(function() {
         var defaultTab = getCookie( 'defaultTab' );
         if ( defaultTab && tabcount > 1 ) {
             try {
-                $("#"+defaultTab).click();
+                $("#"+defaultTab).trigger("click");
             } catch (e) {
                 defaultTab = $("#roomtabs > li.ui-tabs-tab").first().attr("aria-labelledby");
                 setCookie('defaultTab', defaultTab);
                 try {
-                    $("#"+defaultTab).click();
+                    $("#"+defaultTab).trigger("click");
                 } catch (f) { }
             }
         }
@@ -498,8 +529,8 @@ $(document).ready(function() {
             }
         });
 
-        $("#moreinfo").off("click");
-        $("#moreinfo").on("click",function(evt) {
+        $("#moreinfo").off("tap");
+        $("#moreinfo").on("tap",function(evt) {
             evt.stopPropagation();
             if ( $("#loginmore").hasClass("hidden") ) {
                 $("#loginmore").removeClass("hidden");
@@ -510,26 +541,26 @@ $(document).ready(function() {
             }
         });
 
-        $("#newuser").off("click");
-        $("#newuser").on("click",function(evt) {
+        $("#newuser").off("tap");
+        $("#newuser").on("tap",function(evt) {
             $("#loginform").addClass("hidden");
             $("#newuserform").removeClass("hidden");
         });
 
-        $("#olduser").off("click");
-        $("#olduser").on("click",function(evt) {
+        $("#olduser").off("tap");
+        $("#olduser").on("tap",function(evt) {
             evt.stopPropagation();
             $("#newuserform").addClass("hidden");
             $("#loginform").removeClass("hidden");
         });
 
-        $("#revertolduser").off("click");
-        $("#revertolduser").on("click",function(evt) {
+        $("#revertolduser").off("tap");
+        $("#revertolduser").on("tap",function(evt) {
             window.location.href = cm_Globals.returnURL + "/logout";
         });
 
-        $("#forgotpw").off("click");
-        $("#forgotpw").on("click",function(evt) {
+        $("#forgotpw").off("tap");
+        $("#forgotpw").on("tap",function(evt) {
             evt.stopPropagation();
             execForgotPassword();
         });
@@ -939,7 +970,7 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                         execButton("blackout");
                         priorOpmode = "Sleep";
                     } else if ( $("#blankme") ) {
-                        $("#blankme").off("click");
+                        $("#blankme").off("tap");
                         $("#blankme").remove(); 
                         priorOpmode = "Operate";
                     }
@@ -1107,6 +1138,12 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
             }
             styleinfo += "\"";
         }
+    } else {
+        pos = {width: 800, height: "auto"};
+        styleinfo = " style=\"position: " + postype + ";";
+        styleinfo += " width: 800px;";
+        styleinfo += " height: auto;";
+        styleinfo += "\"";
     }
     
     modalcontent = "<div id='" + modalid +"' class='modalbox'" + styleinfo + ">" + modalcontent;
@@ -1115,8 +1152,8 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
     }
     modalcontent = modalcontent + "</div>";
 
-    modalhook.prepend(modalcontent);
-    // modalhook.append(modalcontent);
+    // modalhook.prepend(modalcontent);
+    $("#dragregion").append(modalcontent);
     
     // call post setup function if provided
     if ( loadfunction ) {
@@ -1136,7 +1173,7 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
             }
         });
 
-        $("#"+modalid).on("click",".dialogbtn", function(evt) {
+        $("#"+modalid).on("tap",".dialogbtn", function(evt) {
             // if a handler is provided it must make the call to closeModal otherwise the default response does that and only that
             if ( responsefunction ) {
                 responsefunction(this, modaldata);
@@ -1149,7 +1186,7 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
     } else {
 
         if ( modalid==="menubox" ) {
-            $("#"+modalid + " .menuitem").on("click", function(evt) {
+            $("#"+modalid + " .menuitem").on("singletap", function(evt) {
                 closeModal(modalid);
                 if ( responsefunction ) {
                     responsefunction(this, modaldata);
@@ -1159,8 +1196,8 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
 
         // body clicks turn off modals unless clicking on box itself
         // or if this is a popup window any click will close it
-        $("body").off("click");
-        $("body").on("click",function(evt) {
+        $("body").off("tap");
+        $("body").on("tap",function(evt) {
             if ( (evt.target.id === modalid && modalid!=="modalpopup" )  ) {
                 // console.log("modal opt 1");
                 evt.stopPropagation();
@@ -1170,7 +1207,7 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
                 if ( responsefunction ) {
                     responsefunction(evt.target, modaldata);
                 }
-                $("body").off("click");
+                $("body").off("tap");
             }
         });
     }
@@ -1731,12 +1768,12 @@ function setupDraggable() {
                         startPos["z-index"] = zmax;
                         // if we drop it anywhere other than near last tile, make it relative
                         // otherwise make it absolute and drop it where we pointed
-                        var lastThing = $("div.thing[panel="+panel+"][style*='relative']").last();
-                        var lastTop = parseInt( $(lastThing).position().top );
-                        var lastLeft = parseInt( $(lastThing).position().left );
-                        var thingTop = evt.pageY;
-                        var thingLeft = evt.pageX;
-                        console.log("Y, X, LastY, LastX, id: ", thingTop, thingLeft, lastTop, lastLeft, $(lastThing).attr("bid") );
+                        // var lastThing = $("div.thing[panel="+panel+"][style*='relative']").last();
+                        // var lastTop = parseInt( $(lastThing).position().top );
+                        // var lastLeft = parseInt( $(lastThing).position().left );
+                        // var thingTop = evt.pageY;
+                        // var thingLeft = evt.pageX;
+                        // console.log("Y, X, LastY, LastX, id: ", thingTop, thingLeft, lastTop, lastLeft, $(lastThing).attr("bid") );
                         // if ( (Math.abs( thingTop - lastTop) > 150) || (Math.abs(thingLeft - lastLeft) > 150) ) {
                         //     startPos.top = thingTop;
                         //     startPos.left = thingLeft;
@@ -2207,8 +2244,8 @@ function execButton(buttonid) {
         }
 
         // clicking anywhere will restore the window to normal
-        $("#blankme").off("click");
-        $("#blankme").on("click", function(evt) {
+        $("#blankme").off("tap");
+        $("#blankme").on("tap", function(evt) {
             if ( photohandle ) {
                 clearInterval(photohandle);
             }
@@ -2218,7 +2255,6 @@ function execButton(buttonid) {
             evt.stopPropagation();
         });
     } else if ( buttonid === "toggletabs" && priorOpmode==="Operate" ) {
-        $("#quickedit").html("T");
         toggleTabs();
     } else if ( buttonid === "rehome" && priorOpmode==="Operate" ) {
         rehomeTiles();
@@ -2327,7 +2363,7 @@ function setupButtons() {
         //     evt.stopPropagation();
         //     execButton(opmode);
         // });
-        $("#quickedit").on("click", function(e) {
+        $("#quickedit").on("tap", function(e) {
             if ( priorOpmode === "Operate" ) {
                 var letter = $("#quickedit").html();
                 switch (letter) {
@@ -2351,7 +2387,7 @@ function setupButtons() {
             }
         });
         
-        $("#showversion").on("click", function(e) {
+        $("#showversion").on("tap", function(e) {
             var username = $("#infoname").html();
             var emailname = $("#emailname").html();
             var pos = {top: 40, left: 820};
@@ -2376,7 +2412,7 @@ function setupButtons() {
             $("#panelname").val(panelname);
             // $("#delPanel").html("Delete Panel");
         });
-        $("#delPanel").on("click", function(evt) {
+        $("#delPanel").on("tap", function(evt) {
             const pname = $("#panelname").val();
             createModal("modalhub","Delete Panel: " + pname + " Are you sure?", "body" , true, pos, function(ui) {
                 var clk = $(ui).attr("name");
@@ -2389,7 +2425,7 @@ function setupButtons() {
                 }
             });
         });
-        $("#usePanel").on("click", function(evt) {
+        $("#usePanel").on("tap", function(evt) {
             const pname = $("#panelname").val();
             createModal("modalhub","Activate and switch to Panel: " + pname + " Are you sure?", "body" , true, pos, function(ui) {
                 var clk = $(ui).attr("name");
@@ -2402,7 +2438,7 @@ function setupButtons() {
                 }
             });
         });
-        $("#delUser").on("click", function(evt) {
+        $("#delUser").on("tap", function(evt) {
             const uname = $("#unameid").val();
             const emailname = $("#emailid").val();
             const userid = cm_Globals.options.userid;
@@ -2529,7 +2565,7 @@ function setupButtons() {
         
         // handle auth submissions
         // add on one time info from user
-        $("input.hubauth").click(function(evt) {
+        $("input.hubauth").on("click",function(evt) {
             try {
                 var formData = formToObject("hubform");
             } catch(err) {
@@ -2603,7 +2639,7 @@ function setupButtons() {
         });
         
         // this feature works but not on the last hub
-        $("input.hubdel").click(function(evt) {
+        $("input.hubdel").on("click", function(evt) {
             var hubId = $("input[name='hubid']").val();
             if ( !hubId || hubId==="-1" ) return;
             var hub = findHub(hubId, "hubid");
@@ -2726,15 +2762,19 @@ function setupAuthHub(hubId) {
 }
 
 function addEditLink() {
-    
+
     // add links to edit and delete this tile
     $("div.panel > div.thing").each(function() {
         var editdiv = "<div class=\"editlink\" aid=" + $(this).attr("id") + "> </div>";
         var cmzdiv = "<div class=\"cmzlink\" aid=" + $(this).attr("id") + ">" + $(this).attr("tile")  + "</div>";
         var deldiv = "<div class=\"dellink\" aid=" + $(this).attr("id") + "> </div>";
-        var resetdiv = "<div class=\"rstlink\" aid=" + $(this).attr("id") + ">R</div>";
+        // var resetdiv = "<div class=\"rstlink\" aid=" + $(this).attr("id") + ">R</div>";
         var sizediv = "<div class=\"sizelink ui-resizable-handle ui-resizable-se\"> </div>";
-        $(this).append(cmzdiv).append(editdiv).append(deldiv).append(resetdiv).append(sizediv);
+        $(this).append(cmzdiv).append(editdiv).append(deldiv).append(sizediv);
+    });
+    $("div.panel > div.thing[style*='absolute']").each(function() {
+        var resetdiv = "<div class=\"rstlink\" aid=" + $(this).attr("id") + ">R</div>";
+        $(this).append(resetdiv);
     });
     
     // add links to edit page tabs
@@ -2749,8 +2789,8 @@ function addEditLink() {
     var editdiv = "<div id=\"addpage\" class=\"addpage\" roomnum=\"new\">Add New Page</div>";
     $("#roomtabs").append(editdiv);
 
-    $("div.editlink").off("click");
-    $("div.editlink").on("click",function(evt) {
+    $("div.editlink").off("singletap");
+    $("div.editlink").on("singletap",function(evt) {
         var taid = $(evt.target).attr("aid");
         var thing = "#" + taid;
         var aid = taid.substring(2);
@@ -2847,8 +2887,8 @@ function addEditLink() {
         
     });
 
-    $("div.rstlink").off("click");
-    $("div.rstlink").on("click",function(evt) {
+    $("div.rstlink").off("tap");
+    $("div.rstlink").on("tap",function(evt) {
         var taid = $(evt.target).attr("aid");
         var thing = "#" + taid;
         var str_type = $(thing).attr("type");
@@ -2877,8 +2917,8 @@ function addEditLink() {
         );
     });
 
-    $("#roomtabs div.delpage").off("click");
-    $("#roomtabs div.delpage").on("click",function(evt) {
+    $("#roomtabs div.delpage").off("tap");
+    $("#roomtabs div.delpage").on("tap",function(evt) {
         var roomnum = $(evt.target).attr("roomnum");
         var roomname = $(evt.target).attr("roomname");
         var roomid = $("#panel-"+roomname).attr("roomid");
@@ -2912,8 +2952,8 @@ function addEditLink() {
         
     });
     
-    $("#roomtabs div.editpage").off("click");
-    $("#roomtabs div.editpage").on("click",function(evt) {
+    $("#roomtabs div.editpage").off("tap");
+    $("#roomtabs div.editpage").on("tap",function(evt) {
         var roomnum = $(evt.target).attr("roomnum");
         var roomname = $(evt.target).attr("roomname");
         var roomid = $("#panel-"+roomname).attr("roomid");
@@ -2921,8 +2961,8 @@ function addEditLink() {
         editTile(cm_Globals.options.userid, roomid, roomname, "page", roomname, 0, 0, "", "-1", 0, "None", roomname);
     });
    
-    $("#addpage").off("click");
-    $("#addpage").on("click",function(evt) {
+    $("#addpage").off("tap");
+    $("#addpage").on("tap",function(evt) {
         // var clickid = $(evt.target).attr("aria-labelledby");
         var pos = {top: 100, left: 10};
         var panelid = $("input[name='panelid']").val();
@@ -3050,10 +3090,10 @@ function setupFilters() {
     $('input[name="useroptions[]"]').each(updateClick);
     
     // upon click update the right rows
-    $('input[name="useroptions[]"]').click(updateClick);
+    $('input[name="useroptions[]"]').on("click", updateClick);
 
     // hub specific filter
-    $('input[name="huboptpick"]').click(function() {
+    $('input[name="huboptpick"]').on("click", function() {
         // get the id of the hub type we just picked
         pickedhub = $(this).val();
         cm_Globals.hubId = pickedhub;
@@ -3063,7 +3103,7 @@ function setupFilters() {
         $('input[name="useroptions[]"]').each(updateClick);
     });
 
-    $("div#thingfilters").click(function() {
+    $("div#thingfilters").on("click", function() {
         var filter = $("#filterup");
         if ( filter.hasClass("hidden") ) {
             $(filter).removeClass("hidden");
@@ -3076,7 +3116,7 @@ function setupFilters() {
         }
     });
     
-    $("#allid").click(function() {
+    $("#allid").on("click", function() {
         $('input[name="useroptions[]"]').each(function() {
             $(this).prop("checked",true);
             $(this).attr("checked",true);
@@ -3086,7 +3126,7 @@ function setupFilters() {
         $('input[name="useroptions[]"]').each(updateClick);
     });
     
-    $("#noneid").click(function() {
+    $("#noneid").on("click", function() {
         $('input[name="useroptions[]"]').each(function() {
             $(this).prop("checked",false);
             $(this).attr("checked",false);
@@ -3418,8 +3458,8 @@ function processKeyVal(targetid, aid, key, value) {
             key!=="name" && key!=="trackImage" && key!=="temperature" &&
             key!=="trackDescription" && key!=="mediaSource" &&
             key!=="currentArtist" && key!=="currentAlbum" &&
-            $.isNumeric(extra)===false && 
-            $.isNumeric(oldvalue)===false &&
+            isNumeric(extra)===false && 
+            isNumeric(oldvalue)===false &&
             $(targetid).hasClass(oldvalue) ) 
         {
             if ( key !== oldvalue ) {
@@ -3457,7 +3497,7 @@ function refreshTile(tileid, aid, bid, thetype, hubid) {
 
 // refresh tiles on this page when switching to it
 function setupTabclick() {
-    $("a.ui-tabs-anchor").click(function() {
+    $("a.ui-tabs-anchor").on("click",function() {
         // save this tab for default next time
         var defaultTab = $(this).attr("id");
         if ( defaultTab ) {
@@ -3470,7 +3510,7 @@ function getFormattedTime(fmttime, tz) {
     var old = new Date();
     var utc = old.getTime() + (old.getTimezoneOffset() * 60000);
     var d = new Date(utc - (60000*tz));        
-    // d = new Date();
+    // var d = new Date();
 
     var hour24 = d.getHours();
     var hour = hour24;
@@ -3635,16 +3675,42 @@ function setupTimer(timertype, timerval, hub) {
 // this used to be done by page but now it is done by sensor type
 function setupPage() {
 
-    $("div.thing div.thingname").off("click");
-    $("div.thing div.thingname").on("click", function(evt) {
+    $("div.panel div.thing[tile]").on("doubletap", function(evt) {
+        evt.stopPropagation();
+
+        if ( priorOpmode=="Operate" ) {
+            var thing = this;
+            var aid = $(thing).attr("aid");
+            var str_type = $(thing).attr("type");
+            var tile = $(thing).attr("tile");
+            var strhtml = $(thing).html();
+            var thingclass = $(thing).attr("class");
+            var pagename = $(thing).attr("panel")
+            var bid = $(thing).attr("bid");
+            var hubid = $(thing).attr("hub");
+            var hubindex = $(thing).attr("hubindex");
+            var hubType = $(thing).attr("hubtype");
+            var thingid = $(thing).attr("thingid");
+            var userid = cm_Globals.options.userid;
+            try {
+                var customname = $("#a-"+aid+"-name").html();
+            } catch(e) {
+                customname = $("#s-"+aid).html();
+            }
+            strhtml = strhtml.replace(/ id="/g, " id=\"x_");
+            editTile(userid, thingid, pagename, str_type, tile, aid, bid, thingclass, hubid, hubindex, hubType, customname, strhtml);
+        }
+    });
+
+    $("div.thing div.thingname").off("tap");
+    $("div.thing div.thingname").on("tap", function(evt) {
         var thevalue = $(this).html()
-        console.log("value: ", thevalue);
         processClick(this, thevalue, true, thevalue);
         evt.stopPropagation();
     });
 
-    $("div.overlay > div").off("click.tileactions");
-    $("div.overlay > div").on("click.tileactions", function(evt) {
+    $("div.overlay > div").off("singletap");
+    $("div.overlay > div").on("singletap", function(evt) {
 
         var that = this;
         var aid = $(this).attr("aid");
@@ -3658,14 +3724,9 @@ function setupPage() {
         }
         
         // avoid doing click if the target was the title bar
-        // also skip sliders tied to subid === level or colorTemperature
+        // also skip sliders using class method to get all of them
         if ( ( typeof aid==="undefined" ) || 
-             ( subid==="level" ) || 
-             ( subid==="onlevel" ) || 
-             ( subid==="volume" ) || 
-             ( subid==="groupVolume" ) || 
-             ( subid==="colorTemperature" ) ||
-             ( subid==="position" ) || 
+             ( $(this).hasClass("ui-slider") ) ||
              ( id && id.startsWith("s-") ) ) {
             return;
         }
@@ -3748,7 +3809,7 @@ function setupPage() {
         } else if ( subid==="_push" || subid==="_hold" || subid==="_doubleTap" || subid==="_release" ) {
                     // subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" ) {
             var numbtnid = '#a-'+aid+'-numberOfButtons';
-            if ( $(numbtnid) && $.isNumeric($(numbtnid).html()) ) {
+            if ( $(numbtnid) && isNumeric($(numbtnid).html()) ) {
                 var numButtons = parseInt($(numbtnid).html());
                 var thelist = [];
                 for (var i = 1; i <= numButtons; i++) {
@@ -3756,7 +3817,7 @@ function setupPage() {
                 }                
                 processClickWithList(that, thingname, ro, subid, thelist, "Button #");
             } else {
-                processClickWithValue(that, thingname, ro, subid, 1, 1);
+                processClickWithValue(that, thingname, ro, subid, "", 1);
             }
 
         // various known special cases where we select from a list
@@ -3783,7 +3844,7 @@ function setupPage() {
        
         // handle commands that have parameters required
         // this is signalled by the value set otherwise the command value is the command string name
-        } else if ( subid.startsWith("_") && $.isNumeric(thevalue) ) {
+        } else if ( subid.startsWith("_") && isNumeric(thevalue) ) {
             var numParams = parseInt(thevalue);
             if ( isNaN(numParams) ) { numParams = 0; }
             processClickWithValue(that, thingname, ro, subid, "", numParams);
@@ -3878,10 +3939,10 @@ function checkPassword(tile, thingname, pw, ro, thevalue, yesaction) {
         $("#userpw").off("keydown");
         $("#userpw").on("keydown",function(e) {
             if ( e.which===13  ){
-                $("#modalokay").click();
+                $("#modalokay").trigger("click");
             }
             if ( e.which===27  ){
-                $("#modalcancel").click();
+                $("#modalcancel").trigger("click");
             }
         });
     });
@@ -3942,11 +4003,11 @@ function processClickWithValue(tile, thingname, ro, subid, thevalue, numParams) 
         $("#newsubidValue").on("keydown",function(e) {
             if ( e.which===13  ){
                 // priorOpmode = "Operate";
-                $("#modalokay").click();
+                $("#modalokay").trigger("click");
             }
             if ( e.which===27  ){
                 // priorOpmode = "Operate";
-                $("#modalcancel").click();
+                $("#modalcancel").trigger("click");
             }
         });
     });
@@ -3981,10 +4042,10 @@ function processClickWithList(tile, thingname, ro, subid, thelist, prefix = "") 
         $("#picklist").off("keydown");
         $("#picklist").on("keydown",function(e) {
             if ( e.which===13  ){
-                $("#modalokay").click();
+                $("#modalokay").trigger("click");
             }
             if ( e.which===27  ){
-                $("#modalcancel").click();
+                $("#modalcancel").trigger("click");
             }
         });
     });

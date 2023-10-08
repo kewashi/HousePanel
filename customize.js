@@ -627,8 +627,8 @@ function loadLinkItem(linkid, allowuser, sortval, sortup) {
 }
 
 function initLinkSelect() {
-    $("#cm_linkfields option").off('click');
-    $("#cm_linkfields option").on('click', function(event) {
+    $("#cm_linkfields option").off('tap');
+    $("#cm_linkfields option").on('tap', function(event) {
         var subid = $(this).val();
         $("#cm_userfield").attr("value",subid);
         $("#cm_userfield").prop("value",subid);
@@ -708,8 +708,8 @@ function initCustomActions() {
         event.stopPropagation;
     });
     
-    $("#cm_addButton").off("click");
-    $("#cm_addButton").on("click", function(event) {
+    $("#cm_addButton").off("tap");
+    $("#cm_addButton").on("tap", function(event) {
         var subid = $("#cm_userfield").val();
         if ( cm_Globals.natives.includes(subid) || subid.startsWith("_") ) {
             var pos = {top: 375, left: 380, zindex: 9999, background: "red", color: "white", position: "absolute"};
@@ -742,8 +742,8 @@ function initCustomActions() {
         event.stopPropagation;
     });
     
-    $("#cm_delButton").off("click");
-    $("#cm_delButton").on("click", function(event) {
+    $("#cm_delButton").off("tap");
+    $("#cm_delButton").on("tap", function(event) {
         
         if ( $(this).hasClass("disabled") ) {
             event.stopPropagation;

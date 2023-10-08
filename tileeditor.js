@@ -372,7 +372,7 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
             on = "";
         } else {
             var on = $("#onoffTarget").html();
-            if ( on && !$.isNumeric(on) && (on.indexOf(" ") === -1) ) {
+            if ( on && !isNumeric(on) && (on.indexOf(" ") === -1) ) {
                 on = "."+on;
             } else {
                 on = "";
@@ -1833,7 +1833,7 @@ function initColor(str_type, subid, thingindex) {
     
     // set the active value
     var onoffval = $("#onoffTarget").html();
-    if ( onoffval && !$.isNumeric(onoffval) && (onoffval.indexOf(" ") === -1) ) {
+    if ( onoffval && !isNumeric(onoffval) && (onoffval.indexOf(" ") === -1) ) {
         $(icontarget).addClass(onoffval);
         $(icontarget).html(onoffval);
     }
@@ -2086,7 +2086,7 @@ function initColor(str_type, subid, thingindex) {
         } else {
             fontdef = "sans";
         }
-        if ( fweight==="bold" || ( $.isNumeric(fweight) && fweight > 500)  ) {
+        if ( fweight==="bold" || ( isNumeric(fweight) && fweight > 500)  ) {
             fontdef+= "b";
         }
         if ( fstyle!=="normal") {

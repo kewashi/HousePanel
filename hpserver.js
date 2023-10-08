@@ -362,12 +362,15 @@ function getHeader(userid, pname, skin, skip) {
     
     // load jQuery and themes
     $tc += '<link rel="stylesheet" type="text/css" href="jquery-ui.css">';
-    $tc += '<script src="jquery-1.12.4.min.js"></script>';
+    // $tc += '<script src="jquery-1.12.4.min.js"></script>';
+    $tc += '<script src="jquery-3.7.1.min.js"></script>';
     $tc += '<script src="jquery-ui.min.js"></script>';
+    $tc += '<script src="jquery-ui.theme.min.js"></script>';
+    // $tc += '<script src="jquery-migrate-3.4.0.js"></script>';
 
     // include hack from touchpunch.furf.com to enable touch punch through for tablets
-    $tc += '<script src="jquery.ui.touch-punch.min.js"></script>';
-    
+    // $tc += '<script src="jquery.ui.touch-punch.min.js"></script>';
+    $tc += '<script type="text/javascript" src="jquery.mobile-events.min.js"></script>';
     if ( !skip ) {
         // minicolors library
         $tc += '<script src="jquery.minicolors.min.js"></script>';
@@ -5195,7 +5198,7 @@ function getNewPage(userid, pname, skin, configoptions, cnt, roomid, roomname, k
     $tc += "<div id=\"panel-" + roomname + "\" roomid=\"" + roomid + "\" title=\"" + roomname + "\" class=\"panel panel-" + kroom + " panel-" + roomname + "\">";
 
     // place holders for tab navigators that show up on hover
-    $tc += "<div class='prevTab'> </div><div class='nextTab'> </div>";
+    // $tc += "<div class='prevTab'> </div><div class='nextTab'> </div>";
 
     // the things list can be integers or arrays depending on drag/drop
     // var idxkeys = Object.keys(GLB.options["index"]);
