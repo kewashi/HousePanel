@@ -25,7 +25,7 @@ body {
     color: #000000;
     height: auto;
 }
-#dragregion, #dragregion div.panel {
+#dragregion, #dragregion #tabs div.panel {
     position:relative;
     width: 100%;
 }
@@ -35,7 +35,7 @@ body {
     background-color: #333333;
 }
 @media (orientation: landscape) {
-    #dragregion, #dragregion div.panel {
+    #dragregion, #dragregion #tabs div.panel {
         min-height: 650px;
         width: 1200px;
     }
@@ -54,7 +54,7 @@ body {
     }
 }
 @media (orientation: portrait) {
-    #dragregion, #dragregion div.panel {
+    #dragregion, #dragregion #tabs div.panel {
         min-height: 1200px;
         width: 650px;
     }
