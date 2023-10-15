@@ -511,14 +511,16 @@ $(document).ready(function() {
         var unamere = /^\D\S{2,}$/;      // start with a letter and be three long at least
         // $("#uname").val("default");
         $("#emailid").focus();
-        $("#loginform").on("keydown", function(evt) {
-            if ( evt.which===27  ){
+        $("div.loginline input").on("keydown", function(evt) {
+            if ( evt.which===27  ) {
                 $("#emailid").val("");
                 $("#mobileid").val("");
-                $("#pname").val("");
+                $("#pname").val("default");
                 $("#pword").val("");
                 $("#panelpword").val("");
                 $("#emailid").focus();
+            } else if ( evt.which===13 ) {
+                $("#dologin").trigger("click");
             }
         });
 
@@ -581,23 +583,9 @@ $(document).ready(function() {
         });
 
         $("#pname").on("keydown",function(evt) {
-            evt.stopPropagation();
             if ( evt.which===13 ){
+                evt.stopPropagation();
                 $("#pnumber").focus();
-            }
-        });
-
-        $("#pnumber").on("keydown",function(evt) {
-            evt.stopPropagation();
-            if ( evt.which===13 ){
-                $("#panelpword").focus();
-            }
-        });
-
-        $("#panelpword").on("keydown",function(evt) {
-            evt.stopPropagation();
-            if ( evt.which===13 ){
-                execButton("dologin");
             }
         });
     }
@@ -1077,6 +1065,7 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
     priorOpmode = "Modal";
     modalWindows[modalid] = 1;
     modalStatus = modalStatus + 1;
+    var isbody = false;
     // console.log("saveOpmode: ", saveOpmode, " modalid: ", modalid, " cnt: ", modalStatus);
     
     var modaldata = modalcontent;
@@ -1088,13 +1077,19 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
         postype = "relative";
     } else if ( modaltag && (typeof modaltag === "string") && typeof ($(modaltag)) === "object"  ) {
         modalhook = $(modaltag);
-        if ( modaltag==="body" || modaltag==="document" || modaltag==="window" ) {
+        if ( modaltag==="body" || modaltag==="document" || modaltag==="window"  ) {
+            isbody = true;
             postype = "absolute";
         } else {
             postype = "relative";
         }
     } else {
-        modalhook = $("body");
+        if ( $("#dragregion") ) {
+            modalhook = $("#dragregion");
+        } else {
+            modalhook = $("body");
+            isbody = true;
+        }
         postype = "absolute";
     }
     
@@ -1159,8 +1154,11 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
     }
     modalcontent = modalcontent + "</div>";
 
-    // modalhook.prepend(modalcontent);
-    $("#dragregion").append(modalcontent);
+    if ( isbody ) {
+        modalhook.prepend(modalcontent);
+    } else {
+        modalhook.append(modalcontent);
+    }
     
     // call post setup function if provided
     if ( loadfunction ) {
@@ -2157,31 +2155,29 @@ function execButton(buttonid) {
         if ( !checkLogin() ) { return; }
 
         var genobj = formToObject("loginform");
-        // console.log(genobj);
+        // console.log(">>>> login form: ", genobj);
 
         dynoPost("dologin", genobj, function(presult, pstatus) {
             if ( pstatus === "success" && presult && typeof presult === "object" ) {
                 // console.log("login successful for user: ",  presult["users_email"], " and panel: ", presult["panels_pname"]);
-                var pstyle = "position: absolute; border: 6px black solid; background-color: blue; color: white; font-weight: bold; font-size: 24px; left: 560px; top: 220px; width: 600px; height: 220px; padding-top: 20px;";
+                var pstyle = "position: absolute; border: 6px black solid; background-color: blue; color: white; font-weight: bold; font-size: 24px; left: 330px; top: 75px; width: 600px; height: 220px; padding-top: 20px;";
                 var pos = {style: pstyle};
-                createModal("loginfo","User Email: " + presult["users_email"] + "<br>Username: " + presult["users_uname"] + "<br>Logged into panel: " + presult["panels_pname"] + "<br>With skin: " + presult["panels_skin"] + "<br><br>Proceed? ", 
-                    "body", true, pos, function(ui) {
-                        var clk = $(ui).attr("name");
-                        if ( clk==="okay" ) {
-                            window.location.href = cm_Globals.returnURL;
-                        }
-                        closeModal("loginfo");
-                    });
-                // window.location.href = cm_Globals.returnURL;
+
+                createModal("loginfo","User Email: " + presult["users_email"] + "<br>Username: " + presult["users_uname"] + "<br>Logged into panel: " + presult["panels_pname"] + "<br>With skin: " + presult["panels_skin"] + "<br><br>Page loading in 3 seconds... ",
+                            "body", false, pos);
+                setTimeout(function() {
+                    closeModal("loginfo");
+                    window.location.href = cm_Globals.returnURL;
+                },3000);
             } else {
                 // console.log("not logged in. ", presult);
-                var pstyle = "position: absolute; border: 6px black solid; background-color: red; color: white; font-weight: bold; font-size: 24px; left: 560px; top: 220px; width: 600px; height: 180px; padding-top: 50px;";
+                var pstyle = "position: absolute; border: 6px black solid; background-color: red; color: white; font-weight: bold; font-size: 24px; left: 330px; top: 75px; width: 600px; height: 180px; padding-top: 50px;";
                 var pos = {style: pstyle};
-                createModal("loginfo","Either the User and Password pair are invalid, or the requested Panel and Password pair are invalid. <br><br>Please try again.", "body", false, pos);
+                createModal("loginfo","Either the User and Password pair are invalid, or the requested Panel and Password pair are invalid. <br><br>Please try again.",
+                            "body", false, pos);
                 setTimeout(function() {
                     closeModal("loginfo");
                 },2000);
-                // window.location.href = cm_Globals.returnURL;
             }
         });
 
