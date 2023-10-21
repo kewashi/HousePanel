@@ -1670,6 +1670,7 @@ function setupDraggable() {
                 var tile = $(thing).attr("tile");
                 var thingid = $(thing).attr("thingid");
                 var bid = $(thing).attr("bid");
+                var id = $(thing).attr("id");
                 var thingtype = $(thing).attr("type");0
                 $(thing).css("z-index", startPos["z-index"] );
 
@@ -1686,7 +1687,10 @@ function setupDraggable() {
                 startPos.position = "absolute";
                 $(thing).css(startPos);
                 cm_Globals.edited = true;
-                
+
+                delEditLink();
+                addEditLink();
+                        
                 // now post back to housepanel to save the position
                 // also send the dragthing object to get panel name and tile pid index
                 $.post(cm_Globals.returnURL, 
@@ -1799,6 +1803,7 @@ function setupDraggable() {
                                             setupPage();
                                             setupSliders();
                                             setupColors();
+                                            delEditLink();
                                             addEditLink();
                                         } else {
                                             console.log("error attempting to add a tile. pstatus: ", pstatus, " presult: ", presult);
@@ -2915,6 +2920,9 @@ function addEditLink() {
                 if ( pstatus === "success" ) {
                     console.log(presult);
                     saveTileEdit(cm_Globals.options.userid, str_type, tile);
+         
+                    delEditLink();
+                    addEditLink();                                
                 }
             }
         );
