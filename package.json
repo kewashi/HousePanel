@@ -5,7 +5,7 @@
   "main": "hpserver.js",
   "dependencies": {
     "@mysql/xdevapi": "8.0.22",
-    "axios": "^0.21.1",
+    "axios": "^1.6.0",
     "binascii": "^0.0.2",
     "body-parser": "^1.18.3",
     "cookie-parser": "^1.4.5",
