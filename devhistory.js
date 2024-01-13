@@ -1,4 +1,5 @@
 const devhistory = `
+3.2.3   Clean up hint for ISY, tweak for tile inspect clicks, and new groovy icons
 3.2.2   Login screen bugfix
 3.2.1   Fix tile editor bug where init would change visual state on main panel
 3.2.0   Upgraded jQuery and added native touch and swipe support

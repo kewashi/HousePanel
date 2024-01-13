@@ -4341,22 +4341,27 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
             msg += "hint = "+hint + "<br>";
         }
         msg += "<hr>";
-        $('div.overlay > div[aid="'+aid+'"]').each(function() {
-            var inspectsubid = $(this).attr("subid");
-            var strval = $(this).html();
-            if ( strval ) {
-                if ( inspectsubid==="battery" ) {
-                    var batdiv = $(this).children().attr("style").substring(7);
-                    msg += inspectsubid + " = " + batdiv + "<br>";
-                } else if ( strval.indexOf("img src") !== -1 ) {
-                    msg += inspectsubid + " =  (image)<br>";
-                } else if ( inspectsubid==="level" || inspectsubid==="onlevel" || inspectsubid==="colorTemperature" || inspectsubid==="volume" || inspectsubid==="groupVolume" || inspectsubid==="position" ) {
-                    msg += inspectsubid + " = " + $(this).attr("value") + "<br>";
-                    // msg += inspectsubid + " = " + $(this).children().attr("style").substring(6) + "<br>";
-                } else if ( strval.length > 40 ) {
-                    msg += inspectsubid + " ... <br>";
-                } else {
-                    msg += inspectsubid + " = " + $(this).html() + "<br>";
+        // $('div.overlay > div[aid="'+aid+'"]').each(function() {
+        $('div #t-'+aid+' > div.overlay > div').each(function() {
+            if ( $(this).hasClass("minicolors") ) {
+                msg += "color = " + $(this).children("div.color").attr("value") + "<br>";
+            } else {
+                var inspectsubid = $(this).attr("subid");
+                var strval = $(this).html();
+                if ( strval && inspectsubid ) {
+                    if ( inspectsubid==="battery" ) {
+                        msg += inspectsubid + " = " + $(this).children().attr("style").substring(7);
+                    } else if ( strval.indexOf("<img") !== -1 ) {
+                        msg += inspectsubid + " =  (Image)";
+                    } else if ( $(this).hasClass("ui-slider") ) { // || inspectsubid==="level" || inspectsubid==="onlevel" || inspectsubid==="colorTemperature" || inspectsubid==="volume" || inspectsubid==="groupVolume" || inspectsubid==="position" ) {
+                        msg += inspectsubid + " = " + $(this).attr("value");
+                        // msg += inspectsubid + " = " + $(this).children().attr("style").substring(6) + "<br>";
+                    } else if ( strval.length < 25 ) {
+                        msg += inspectsubid + " = " + strval;
+                    } else {
+                        msg += inspectsubid + " = ...";
+                    }
+                    msg += "<br>";
                 }
             }
         });

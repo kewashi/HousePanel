@@ -3502,8 +3502,9 @@ function getDevices(hub) {
                             thetype = "isy";
                         }
 
-                        // now fix up the hint so we can style using it
-                        hint = hint.replace( /\./g, "_" );
+                        // now fix up the hint so we can style using it - no longer need to do this because we now use hints to create real types
+                        // in fact, the real hint is also now captured as an element of pvalue so we don't even display this
+                        // hint = hint.replace( /\./g, "_" );
     
                         var name = node["name"][0] || "Unnamed Node";
                         var pvalue = {"name": name};
@@ -6698,6 +6699,9 @@ function processIsyXMLMessage(userid, isymsg) {
 }
 
 function processIsyMessage(userid, jsondata) {
+    // skip this for local testing
+    // return;
+
     var newval;
     var pvalue;
     if ( jsondata ) {

@@ -43,7 +43,7 @@ public static String handle() { return "HousePanel" }
     APP HELPER FUNCTIONS
     inpired by Tonesto7 homebridge2 app
 ***********************************************/
-static String getAppImg(String imgName) { return "https://kenw.com/wp-content/uploads/${imgName}" }
+static String getAppImg(String imgName) { return "https://housepanel.net/wp-content/uploads/${imgName}" }
 static String sectH3TS(String t, String st, String i = sNULL, String c=sCLR4D9) { return "<h3 style='color:${c};font-weight: bold'>${i ? "<img src='${i}' width='48'> " : sBLANK} ${t?.replaceAll("\\n", sLINEBR)}</h3>${st ?: sBLANK}" }
 static String sectHead(String str, String img = sNULL) { return str ? "<h3 style='margin-top:0;margin-bottom:0;'>" + spanImgStr(img) + span(str, sCLR4D9, sNULL, true) + '</h3>' + "<hr style='background-color:${sCLRGRY};font-style:italic;height:1px;border:0;margin-top:0;margin-bottom:0;'>" : sBLANK }
 
@@ -239,14 +239,14 @@ def deviceSelectPage() {
                 input "mylocks", "capability.lock", hideWhenEmpty: true, multiple: true, required: false, title: "Locks"
                 input "myshades", "capability.windowShade", hideWhenEmpty: true, multiple: true, required: false, title: "Window Shades"
         }
-        section (sectHead("Thermostats and Climate")) {
+        section (sectHead("Thermostats and Climate","thermometer.png")) {
                 input "mythermostats", "capability.thermostat", hideWhenEmpty: true, multiple: true, required: false, title: "Thermostats"
                 input "mytemperatures", "capability.temperatureMeasurement", hideWhenEmpty: true, multiple: true, required: false, title: "Temperature Measures"
                 input "myilluminances", "capability.illuminanceMeasurement", hideWhenEmpty: true, multiple: true, required: false, title: "Illuminance Measurements"
                 // input "myweathers", "device.smartweatherStationTile", hideWhenEmpty: true, multiple: true, required: false, title: "Weather tile"
                 // input "myaccuweathers", "device.accuweatherDevice", hideWhenEmpty: true, multiple: true, required: false, title: "AccuWeather tile"
         }
-        section (sectHead("Water, Sprinklers and Detectors")) {
+        section (sectHead("Water, Sprinklers and Detectors","sprinkler-on.png")) {
                 input "mywaters", "capability.waterSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Water Sensors"
                 input "myvalves", "capability.valve", hideWhenEmpty: true, multiple: true, required: false, title: "Sprinklers"
                 input "mysmokes", "capability.smokeDetector", hideWhenEmpty: true, multiple: true, required: false, title: "Smoke Detectors"
@@ -258,7 +258,7 @@ def deviceSelectPage() {
                 input "mymusics", "capability.musicPlayer", hideWhenEmpty: true, multiple: true, required: false, title: "Music Players"
                 input "myaudios", "capability.audioNotification", hideWhenEmpty: true, multiple: true, required: false, title: "Audio Devices"
         }
-        section (sectHead("Other Sensors and Actuators")) {
+        section (sectHead("Other Sensors and Actuators","switchon.png")) {
                 paragraph "Any thing can be added as an Other sensor or actuator. Other sensors and actuators bring in ALL fields and commands supported by the device."
                 input "myothers", "capability.sensor", multiple: true, required: false, title: "Which Other Sensors"
                 input "myactuators", "capability.actuator", multiple: true, required: false, title: "Which Other Actuators"
