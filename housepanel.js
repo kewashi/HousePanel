@@ -1294,7 +1294,7 @@ function setupColors() {
                 }
                 if ( typeof linkval === "string" && 
                      (linkval.startsWith("GET::") || linkval.startsWith("POST::") || 
-                      linkval.startsWith("PUT::") || linkval.startsWith("LINK::") || 
+                      linkval.startsWith("PUT::") || linkval.startsWith("LINK::") || linkval.startsWith("LIST::") ||
                       linkval.startsWith("RULE::") || linkval.startsWith("URL::")) )
                 {
                     var jcolon = linkval.indexOf("::");
@@ -3725,6 +3725,7 @@ function setupPage() {
     $("div.thing div.overlay > div").off("singletap");
     $("div.thing div.overlay > div").on("singletap", function(evt) {
 
+        var userid = cm_Globals.options.userid;
         var that = this;
         var aid = $(this).attr("aid");
         var subid = $(this).attr("subid");
@@ -3830,7 +3831,7 @@ function setupPage() {
                 }                
                 processClickWithList(that, thingname, ro, subid, thelist, "Button #");
             } else {
-                processClickWithValue(that, thingname, ro, subid, "", 1);
+                processClickWithValue(that, thingname, ro, subid,  thetype, "", 1);
             }
 
         // various known special cases where we select from a list
@@ -3860,10 +3861,10 @@ function setupPage() {
         } else if ( subid.startsWith("_") && isNumeric(thevalue) ) {
             var numParams = parseInt(thevalue);
             if ( isNaN(numParams) ) { numParams = 0; }
-            processClickWithValue(that, thingname, ro, subid, "", numParams);
+            processClickWithValue(that, thingname, ro, subid, thetype, "", numParams);
 
-        } else if ( pn > 0 ) {
-            processClickWithValue(that, thingname, ro, subid, "", pn);
+        } else if ( !thevalue.startsWith("LIST::") && (pn > 0) ) {
+            processClickWithValue(that, thingname, ro, subid, thetype, "", pn);
 
         // items that require one parameter
         } else if ( subid==="color" || 
@@ -3872,9 +3873,10 @@ function setupPage() {
                     subid==="heatingSetpoint" || subid==="coolingSetpoint" || subid==="_docmd" ||
                     subid==="_setHeatingSetpoint" || subid==="_setCoolingSetpoint" ||
                     subid==="ecoHeatPoint" || subid==="ecoCoolPoint" ||
-                    (thetype==="variables" && subid!=="name" && !thevalue.startsWith("RULE::")) || 
+                    (thetype==="variables" && subid!=="name" && !thevalue.startsWith("RULE::") && !thevalue.startsWith("LIST::")) || 
                     subid==="hue" || subid==="saturation" ) {
-            processClickWithValue(that, thingname, ro, subid, thevalue, 1);
+            processClickWithValue(that, thingname, ro, subid, thetype, thevalue, 1);
+            
         } else {
 
             if ( doconfirm && !ro ) {
@@ -3961,14 +3963,16 @@ function checkPassword(tile, thingname, pw, ro, thevalue, yesaction) {
     });
 }
 
-function processClickWithValue(tile, thingname, ro, subid, thevalue, numParams) {
+function processClickWithValue(that, thingname, ro, subid, thetype, thevalue, numParams) {
 
     if ( numParams <= 0 ) {
-        processClick(tile, thingname, ro, thevalue, "");
+        processClick(that, thingname, ro, thevalue, "");
         return;
     }
 
-    var tpos = $(tile).offset();
+    var userid = cm_Globals.options.userid;
+    var oldvalue = thevalue;
+    var tpos = $(that).offset();
     var ttop = (tpos.top > 125) ? tpos.top - 120 : 5;
     var pos = {top: ttop, left: tpos.left};
     var htmlcontent;
@@ -3994,7 +3998,6 @@ function processClickWithValue(tile, thingname, ro, subid, thevalue, numParams) 
     createModal("modalexec", htmlcontent, "body", true, pos, 
     function(ui) {
         var clk = $(ui).attr("name");
-        // priorOpmode = "Operate";
         if ( clk==="okay" ) {
             thevalue = "";
             for (var i = 1; i <= numParams; i++) {
@@ -4004,7 +4007,25 @@ function processClickWithValue(tile, thingname, ro, subid, thevalue, numParams) 
                     thevalue = thevalue + "|";
                 }
             }
-            processClick(tile, thingname, ro, thevalue, "");
+            processClick(that, thingname, ro, thevalue, "");
+
+            // do a manual rule and list op if a repeat variable is provided
+            if ( thetype==="variables" && oldvalue===thevalue)  {
+                var aid = $(that).attr("aid");
+                var tile = '#t-'+aid;
+                var tileid = $(tile).attr("tile");
+                var bid = $(tile).attr("bid");
+                var hubid = $(tile).attr("hub");
+                var hubindex = $(tile).attr("hubindex");
+                $.post(cm_Globals.returnURL, 
+                    {useajax: "dorules", userid: userid, id: bid, thingid: aid, type: thetype, value: thevalue,
+                     subid: subid, hubid: hubid, hubindex: hubindex, tileid: tileid},
+                     function (presult, pstatus) {
+                        if ( pstatus === "success" ) {
+                            console.log(presult);
+                        }
+                     });
+            }
         }
         closeModal("modalexec");
     },
@@ -4211,7 +4232,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
 
     if ( typeof linkval === "string" && 
          (linkval.startsWith("GET::") || linkval.startsWith("POST::") || linkval.startsWith("TEXT::") ||
-          linkval.startsWith("PUT::") || 
+          linkval.startsWith("PUT::") || linkval.startsWith("LIST::") ||
           linkval.startsWith("RULE::") || linkval.startsWith("URL::")) )
     {
         var jcolon = linkval.indexOf("::");
@@ -4250,15 +4271,19 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
     // no longer treat TEXT custom fields as passive since they could be relabeling of action fields which is fine
     // if they are not leaving them as an active hub call does no harm - it just returns false but you loose inspections
     // to compensate for loss of inspection I added any custom field starting with "label" or "text" subid will inspect
-    var ispassive = (ro || subid==="thingname" || subid==="custom" || subid==="temperature" || subid==="feelsLike" || subid==="battery" || //  (command==="TEXT" && subid!=="allon" && subid!=="alloff") ||
-        subid==="presence" || subid.startsWith("motion") || subid.startsWith("contact") || subid==="status_" || subid==="status" || subid==="deviceType" || subid==="localExec" ||
-        subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" || subid==="name" || subid==="skin" || subid==="thermostatOperatingState" ||
-        subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" || subid==="numberOfButtons" || subid==="humidity" ||
-        subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") || subid==="illuminance" ||
-        (subid.startsWith("label")) || (subid.startsWith("text")) ||
-        (thetype==="ford" && !subid.startsWith("_"))
-    );
-    // console.log("linkval = ", linkval," command = ", command, " subid: ", subid, " realsubid: ", realsubid, " passive: ", ispassive);
+    var ispassive = ro;
+    if ( command==="" || command==="LINK" ) {
+        ispassive = (ispassive || subid==="thingname" || subid==="custom" || subid==="temperature" || subid==="feelsLike" || subid==="battery" || 
+            subid==="presence" || subid.startsWith("motion") || subid.startsWith("contact") || subid==="status_" || subid==="status" || subid==="deviceType" || subid==="localExec" ||
+            subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" || subid==="name" || subid==="skin" || subid==="thermostatOperatingState" ||
+            subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" || subid==="numberOfButtons" || subid==="humidity" ||
+            subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") || subid==="illuminance" ||
+            (subid.startsWith("label")) || (subid.startsWith("text")) ||
+            (thetype==="ford" && !subid.startsWith("_")) ||
+            (thetype==="sonos" && !subid.startsWith("_"))
+        );
+    }
+    console.log("linkval = ", linkval," command = ", command, " subid: ", subid, " realsubid: ", realsubid, " passive: ", ispassive);
 
     // turn momentary and piston items on or off temporarily
     // but only for the subid items that expect it
@@ -4432,6 +4457,41 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
                 if (pstatus==="success") {
                     if ( presult && typeof presult === "object" ) {
                         console.log("Success: ", presult);
+
+                        // display a table or graph is this is a LIST command
+                        if ( command==="LIST" ) {
+                            var dispTable = `<h3>List for tile #${tileid} <br />Attribute: ${linktype}</h3>`;
+                            dispTable+= "<table class='listtable'><tr class='head'><td>Time</td><td>Value</td></tr>";
+                            var ltotal = 0.0;
+                            presult.forEach(obj => {
+                                if ( !isNaN(parseFloat(obj.lvalue)) ) {
+                                    ltotal+= parseFloat(obj.lvalue);
+                                }
+                                dispTable+= `<tr class='content'><td>${obj.ltime}</td><td>${obj.lvalue}</td></tr>`;
+                            });
+                            if ( ltotal > 0.0 ) {
+                                dispTable+= `<tr class='foot'><td>Sum of Values</td><td>${ltotal}</td></tr>`;
+                            }
+                            dispTable+= "</table>";
+                            if ( Object.keys(presult).length > 0 ) {
+                                dispTable+= "<div class='modalbuttons'><button id='resetList' class='cm_button'>Reset</button></div>";
+                            }
+                            var pos = {top: 80, left: 200, border: "4px solid black", background: "white"};
+                            createModal("listview", dispTable, "body", "Close", pos, null, function() {
+                                $("#listview").draggable();
+                            });
+
+                            // handle the reset button
+                            $("#resetList").on("tap", function(evt) {
+                                $.post(cm_Globals.returnURL, 
+                                    {useajax: "resetlist", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: thevalue, hint: hint,
+                                     attr: theattr, subid: realsubid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval},
+                                     function (presult, pstatus) {
+                                        console.log(presult);
+                                     });
+                                closeModal("listview");
+                            });
+                         }
                     } else {
                         console.log(presult);
                     }

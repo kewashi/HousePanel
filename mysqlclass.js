@@ -11,6 +11,7 @@ exports.sqlDatabase = class sqlDatabase {
         this.insertId = 0;
         this.impacted = 0;
         this.recentResults;
+        this.recentAdd;
         this.recentRequest = "";
         this.error;
         this.dbtype = (dbtype==="mysql" || dbtype==="sqlite") ? dbtype : "sqlite";
@@ -48,6 +49,10 @@ exports.sqlDatabase = class sqlDatabase {
 
     getImpacted() {
         return this.impacted;
+    }
+
+    getAdd() {
+        return this.recentAdd;
     }
 
     getResults() {
@@ -100,6 +105,7 @@ exports.sqlDatabase = class sqlDatabase {
         this.insertID = 0;
         var keystring = "";
         var valstring = "";
+        this.recentAdd = values;
         for (var fieldkey in values) {
             var fieldvalue = values[fieldkey];
             fieldkey= "`" + fieldkey.toString() + "`";

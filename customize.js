@@ -28,7 +28,7 @@ function getDefaultSubids() {
     // var pvalue = device.pvalue;
      // var n = idx.indexOf("|");
 
-     loadExistingFields(tileid, false, false);
+     loadExistingFields(tileid);
      $("#cm_customtype option[value='TEXT']").prop('selected',true);
      
      var pc = loadTextPanel();
@@ -226,6 +226,7 @@ function customTypePanel() {
         if ( ENABLERULES ) {
             dh+= "<option value='RULE'>RULE</option>";
         }
+        dh+= "<option value='LIST'>LIST</option>";
     dh+= "</select>";
     dh+= "</div></div>";
 
@@ -293,13 +294,7 @@ function sortedSensors(unsorted, one, two, three) {
     return sensors;
 }
 
-function loadLinkPanel(tileid, curval) {
-    
-    // section for LINK types - Drop down list, ID display, Field list, and a test button
-    var dh = "";
-    dh+= "<div class='cm_group'><div><label for='cm_link'>Linked Tile: </label></div>";
-    // read all the tiles from the options file using API call
-    dh+= "<select id='cm_link' name='cm_link'>"; 
+function getExistingFields(tileid, curval) {
 
     // go through all the things and make options list
     // and avoid linking to ourselves
@@ -324,8 +319,17 @@ function loadLinkPanel(tileid, curval) {
             results+= "<option value='" + id + "'" + selected + ">" + thingname + " (" + thingtype + " #"+id+")</option>";
         }
     }
+    return results;
+}
+
+function loadLinkPanel(curval) {
     
-    dh+= results ;
+    // section for LINK types - Drop down list, ID display, Field list, and a test button
+    var dh = "";
+    dh+= "<div class='cm_group'><div><label for='cm_link'>Linked Tile: </label></div>";
+    // read all the tiles from the options file using API call
+    dh+= "<select id='cm_link' name='cm_link'>";    
+    dh+= getExistingFields(cm_Globals.tileid, curval);
     dh+="</select></div>";
 
     // list of available fields to select for the linked tile
@@ -406,6 +410,53 @@ function loadTextPanel() {
     return dh;
 }
 
+function loadListPanel(linkval) {
+    var servicetype = "LIST";
+    var dh = "";
+    dh+= "<div id='cm_dynoText'>";
+    dh+= "<div class='cm_group'><div><label for='cm_list'>Field to Capture: </label></div>";
+    dh+= "<select id='cm_list' name='cm_list'>";    
+    var n = linkval.indexOf("::");
+    var defitem = linkval.substring(0,n);
+    var nreset = linkval.substring(n+2);
+    var results = loadLinkItem(cm_Globals.tileid, false, defitem);
+    dh+= results.fields;
+    dh+="</select></div>";
+
+    dh+= "<div class='cm_group'><div><label for='cm_reset'>Reset how often: </label></div>";
+    var resetopts = {"h":"Hourly","d":"Daily","w":"Weekly","m":"Monthly","y":"Yearly","md":"Mode Day","me":"Mode Evening","mn":"Mode Night","ma":"Mode Away","x":"Never"};
+    dh+= "<select id='cm_reset' name='cm_reset'>";
+    for (var i in resetopts) {
+        var v = resetopts[i];
+        if ( i === nreset ) {
+            dh+= `<option value='${i}' selected>${v}</option>`;
+        } else {
+            dh+= `<option value='${i}'>${v}</option>`;
+        }
+    }
+    dh+="</select></div>";
+    dh+= "</div>";
+    
+    // preview panel
+    dh += "<div class='cm_group'>";
+        dh+= "<div><label for='cm_preview'>Preview:</label></div>";
+        dh+= "<div class='cm_preview' id='cm_preview'></div>";
+    dh+= "</div>";
+    
+    var infotext = "The \"" + servicetype + "\" option enables you to " +
+        "capture a time sequenced list of changes that happen to the selected field. " +
+        "This captured list becomes available for displaying in a table or a graphical plot. " +
+        "You must provide a new user-defined field name using the entry box on the left to associate with the list. " +
+        "Be aware that the data captured for list fields is stored locally and can be quite large for fields that change often, " +
+        "so be selective about which fields you use to capture lists. This feature was primarily designed for intended use with " +
+        "user provided and user altered variables, but also works well with tracking weather and other numerical data. " +
+        "Click the \"Add\" button and this field will be added to the list of \"Existing Fields\" " +
+        "shown on the left side of this dialog box. You can mix and match this with any other addition.";
+    $("#cm_dynoInfo").html(infotext);
+    
+    return dh;
+}
+
 function loadRulePanel() {
     var servicetype = "RULE";
     var content = cm_Globals.usertext;
@@ -464,7 +515,7 @@ function loadUrlPanel() {
 }
 
 // returns an options list and subid list of available fields of a given tile
-function loadLinkItem(linkid, allowuser, sortval, sortup) {
+function loadLinkItem(linkid, allowuser, defvalue) {
     try {
         var thing = cm_Globals.devices[linkid];
         var thevalue = thing.pvalue;
@@ -517,7 +568,11 @@ function loadLinkItem(linkid, allowuser, sortval, sortup) {
 
             } else {  // } if ( !subids.includes(tkey) ) {
                 // If an alias name exists, then use it instead of the key
-                results+= "<option command='' linkval='"+tval+"' value='" + tkey + "'>" + tkey + "</option>";
+                if ( tkey === defvalue ) {
+                    results+= "<option command='' linkval='"+tval+"' value='" + tkey + "' selected>" + tkey + "</option>";
+                } else {
+                    results+= "<option command='' linkval='"+tval+"' value='" + tkey + "'>" + tkey + "</option>";
+                }
                 subids.push(tkey);
             }
         }
@@ -541,13 +596,13 @@ function loadLinkItem(linkid, allowuser, sortval, sortup) {
         });
     }
 
-    if ( subids.length ) {
-        var firstitem = subids[0];
+    if ( subids.length > 1 ) {
+        var firstitem = subids[1];
+    } else if ( subids.length > 0 ) {
+        firstitem = subids[0];
     } else {
         firstitem = null;
     }
-    
-    // console.log("loadLinkItem - linkid: ", linkid, " thevlaue: ", thevalue, " allowuser: ", allowuser," subids: ", subids, " fields: ", results);
     return {fields: results, subids: subids, firstitem: firstitem};
 }
  
@@ -580,7 +635,7 @@ function loadLinkItem(linkid, allowuser, sortval, sortup) {
     $("#cm_linkbid").html(bid + " => Tile #" + linkid);
     
     // read the existing fields of the linked tile, excluded user items
-    var results = loadLinkItem(linkid, false, false, false);
+    var results = loadLinkItem(linkid, false, subid);
     if ( results ) {
         $("#cm_linkfields").html(results.fields);
         
@@ -613,7 +668,7 @@ function loadLinkItem(linkid, allowuser, sortval, sortup) {
         // var options = cm_Globals.options;
         // var linkid = options.index[cm_Globals.currentid];
         $("#cm_linkbid").html(bid + " => Tile #" + linkid);
-        var results = loadLinkItem(linkid, false, false, false);
+        var results = loadLinkItem(linkid, false, null);
         if ( results ) {
             $("#cm_linkfields").html(results.fields);
             initLinkSelect(results.subids);
@@ -676,14 +731,13 @@ function initCustomActions() {
     
     $("#cm_customtype").off('change');
     $("#cm_customtype").on('change', function (event) {
-        var tileid = cm_Globals.tileid;
         var customType = $(this).val();
         var content;
         
         
         // load the dynamic panel with the right content
         if ( customType === "LINK" ) {
-            content = loadLinkPanel(tileid, cm_Globals.currentid);
+            content = loadLinkPanel(cm_Globals.currentid);
             $("#cm_dynoContent").html(content);
             initLinkActions(null, null);
         } else if ( customType ==="URL" ) {
@@ -696,6 +750,11 @@ function initCustomActions() {
             initExistingFields();
         } else if ( ENABLERULES && customType ==="RULE" ) {
             content = loadRulePanel();
+            $("#cm_dynoContent").html(content);
+            initExistingFields();
+        } else if ( customType ==="LIST" ) {
+            var curval = $("#cm_userfield").val() + "::d";
+            content = loadListPanel(curval);
             $("#cm_dynoContent").html(content);
             initExistingFields();
         } else {
@@ -770,10 +829,9 @@ function initCustomActions() {
     });
 }
  
-function loadExistingFields(tileid, sortval, sortup) {
+function loadExistingFields(tileid) {
     // show the existing fields
-    var results = loadLinkItem(tileid, true, sortval, sortup);
-    // console.log("loadExistingFields results: ", results);
+    var results = loadLinkItem(tileid, true, subid);
     if ( results ) {
 
         $("#cm_builtinfields").html(results.fields);
@@ -859,7 +917,7 @@ function initExistingFields() {
             var rules = encodeURI(JSON.stringify(cm_Globals.rules));
             $.post(cm_Globals.returnURL, 
                 {useajax: "updcustom", userid: cm_Globals.options.userid, id: bid, 
-                 rules: rules, tileid: tileid, subid: subid},
+                 rules: rules, tileid: tileid, subid: subid, value: null, attr: null},
                 function (presult, pstatus) {
                     if (pstatus==="success") {
                         cm_Globals.reload = true;
@@ -902,7 +960,7 @@ function initExistingFields() {
             var rules = encodeURI(JSON.stringify(cm_Globals.rules));
             $.post(cm_Globals.returnURL, 
                 {useajax: "updcustom", userid: cm_Globals.options.userid, id: bid, 
-                 rules: rules, tileid: tileid, subid: subid},
+                 rules: rules, tileid: tileid, subid: subid, value: null, attr: null},
                 function (presult, pstatus) {
                     if (pstatus==="success") {
                         cm_Globals.reload = true;
@@ -968,8 +1026,7 @@ function handleBuiltin(subid) {
         $("#cm_customtype").prop("value", "LINK");
         $("#cm_customtype option[value='LINK']").prop('selected',true);
         // cm_Globals.currentid = linkval;
-        var content = loadLinkPanel(tileid, linkval);
-        // var content = loadLinkPanel(linkval);
+        var content = loadLinkPanel(linkval);
         $("#cm_dynoContent").html(content);
         initLinkActions(linkval, subid);
     } else {
@@ -991,6 +1048,9 @@ function handleBuiltin(subid) {
             $("#cm_dynoContent").html(content);
         } else if ( cmtype==="RULE") {
             content = loadRulePanel();
+            $("#cm_dynoContent").html(content);
+        } else if ( cmtype==="LIST") {
+            content = loadListPanel(linkval);
             $("#cm_dynoContent").html(content);
         } else {
             content = loadTextPanel();
@@ -1045,7 +1105,7 @@ function applyCustomField(action, subid) {
 
     // var value = thing.pvalue;
     var customtype = $("#cm_customtype").val();
-    var content;
+    var content = null;
     var errors = [];
 
     var existing = false;
@@ -1060,6 +1120,10 @@ function applyCustomField(action, subid) {
                 errors.push("Tile being linked to does not exist");
                 content = null;
             }
+        } else if ( customtype==="LIST" ) {
+            content = $("#cm_list").val();
+            var resettype = $("#cm_reset").val();
+            content = content + "::" + resettype;
         } else {
             content = $("#cm_text").val();
         }
@@ -1128,15 +1192,16 @@ function applyCustomField(action, subid) {
     }
 
     $.post(cm_Globals.returnURL, 
-        {useajax: action, userid: cm_Globals.options.userid, id: bid, value: customtype, 
+        {useajax: action, userid: cm_Globals.options.userid, id: bid, value: customtype, attr: content,
             rules: rules, tileid: tileid, subid: subid},
         function (presult, pstatus) {
             if (pstatus==="success") {
                 cm_Globals.reload = true;
+                console.log("success: presult: ", presult);
                 
                 // update the visual boxes on screen
                 if ( action==="addcustom" ) {
-                    loadExistingFields(tileid, subid, false);
+                    loadExistingFields(tileid);
                     handleBuiltin(subid);
                 } else {
                     getDefaultSubids();
@@ -1165,6 +1230,8 @@ function showPreview() {
             var ruleval = command + "::";
             if ( command === "LINK" ) {
                 ruleval = ruleval + rulesubid + "::" + rule[1];
+            } else if ( command === "LIST" ) {
+                ruleval = ruleval + rule[1];
             } else if ( command === "TEXT" ) {
                 ruleval = rule[1];
             } else {

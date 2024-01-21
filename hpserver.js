@@ -14,7 +14,7 @@ const DEBUG7 = false;               // hub responses
 const DEBUG8 = false;               // API calls
 const DEBUG9 =  false;              // ISY webSocket success
 const DEBUG10 = false;              // sibling tag
-const DEBUG11 = false;              // rules
+const DEBUG11 = false;              // rules and lists
 const DEBUG12 = false;              // hub push updates
 const DEBUG13 = false;              // URL callbacks
 const DEBUG14 = false;              // tile link details
@@ -5164,7 +5164,8 @@ function array_key_exists(key, arr) {
 
 function ddbg() {
     var d = new Date();
-    var dstr = "{" + d.toLocaleDateString() + " " + d.toLocaleTimeString() + "} => ";
+    // var dstr = "{" + d.toLocaleDateString() + " " + d.toLocaleTimeString() + "} => ";
+    var dstr = "(" + d.toLocaleString() + ") ==> ";
     return "V" + GLB.HPVERSION +" " + dstr;
 }
 
@@ -5904,7 +5905,7 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
             // this special element is not displayed and sits inside the overlay
             // we only process the non helpers and look for helpers in same list
 
-            if ( alldevices && (typeof tval === "string") && (tval.startsWith("LINK::") || tval.startsWith("TEXT::")) ) {
+            if ( alldevices && (typeof tval === "string") && tval.startsWith("LINK::") ) {
                 $tc += putLinkElement(bid, hint, tval, kindex, cnt, j, thingtype, tval, tkey, userSubtype, twidth, theight);
             } else {
                 $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, userSubtype, null, null, twidth, theight);
@@ -6439,6 +6440,9 @@ function getCustomTile(userid, configoptions, custom_val, bid) {
                     custom_val[subid]= "LINK::" + subid + "::" + content;
                             
                
+                } else if ( calltype==="LIST" ) {
+                    custom_val[subid]= "LIST::" + content;
+               
                 } else if ( calltype==="RULE" ) {
                     // custom_val[companion] = "::" + calltype + "::" + content;
                     custom_val[subid] = "RULE::" + subid;
@@ -6578,6 +6582,7 @@ function updateTimeStamp(subid, pvalue) {
 }
 
 function processHubMessage(userid, hubmsg, newST) {
+    const modemap = {"Day":"md", "Evening":"me", "Night":"md", "Away":"ma"};
     // loop through all devices tied to this message for any hub
     // push info to all things that match
     // we don't know the thing types so we have to check all things
@@ -6668,6 +6673,12 @@ function processHubMessage(userid, hubmsg, newST) {
             .catch( reason => {
                 console.log( (ddbg()), reason);
             });
+
+            // if we request resetting upon a mode change, do it here, even if there are no rules set for the mode tile
+            if ( subid==="themode" && modemap.hasOwnProperty(value) ) {
+                var nreset = modemap[value];
+                resetList(userid, nreset);
+            }
 
             pushClient(userid, hubmsgid, swtype, subid, pvalue);
             pvalue.subid = subid;
@@ -7155,9 +7166,6 @@ function getTimeStr(ifvalue, str, thedate) {
         timestr+= " PM";
     }
 
-    if ( DEBUG11 ) {
-        console.log( (ddbg()), "getTimeStr: ", ifvalue, str, amloc, pmloc, timestr );
-    }
     return timestr;
 }
 
@@ -7168,15 +7176,6 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
     }
 
     var pvalue = clone(pvalueinput);
-
-    // fix button triggers to ignore held if pressed given and vice versa
-    // if ( trigger==="pushed" ) {
-    //     pvalue["held"] = "";
-    //     pvalue["released"] = "";
-    // }
-    // if ( trigger==="held" || trigger==="released" ) {
-    //     pvalue["pushed"] = "";
-    // }
 
     // go through all things that could be links for this tile
     var configkey = "user_" + bid;
@@ -7200,25 +7199,76 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                 lines.push(aline);
             });
         }
-        var dbhubs = results[1];
-        var hubs = {};
-        for ( var ahub in dbhubs ) {
-            var id = dbhubs[ahub].id;
-            hubs[id] = dbhubs[ahub];
-        }
-        var dbdevices = results[2];
-        var devices = {};
-        for ( var adev in dbdevices ) {
-            var id = dbdevices[adev].id;
-            devices[id] = dbdevices[adev]
-        }
         if ( lines ) {
+            var dbhubs = results[1];
+            var hubs = {};
+            for ( var ahub in dbhubs ) {
+                var id = dbhubs[ahub].id;
+                hubs[id] = dbhubs[ahub];
+            }
+            var dbdevices = results[2];
+            var devices = {};
+            for ( var adev in dbdevices ) {
+                var id = dbdevices[adev].id;
+                devices[id] = dbdevices[adev]
+            }
+            invokeLists(deviceid, lines, pvalueinput);
             invokeRules(deviceid, lines, hubs, devices);
         }
     })
     .catch(reason => {
         console.log( (ddbg()), "processRules - ", reason);
     });
+
+    // this populates all lists being tracked with new information upon changes
+    function invokeLists(tileid, items, pvalue) {
+        if ( DEBUG11 ) {
+            console.log( (ddbg()),`InvokeLists tileid: ${tileid}, items: `, items, " pvalue: ", pvalue);
+        }
+        items.forEach( function(item) {
+            if (item[0]==="LIST") {
+                var targetitem = item[1];
+                var lsubid = item[2];
+                var ncolon = targetitem.indexOf("::");
+                if ( ncolon !== -1 ) {
+                    var attr = targetitem.substring(0,ncolon);
+                    var nreset = targetitem.substring(ncolon+2);
+                } else {
+                    attr = targetitem;
+                    nreset = "x";
+                }
+
+                var lsubid = item[2];
+                // var lpvalue = decodeURI2(devices[tileid].pvalue);
+                if ( attr===trigger && pvalue[attr] !== null ) {                
+                    var d = new Date();
+                    var today = d.toLocaleString();
+                    var newval = pvalue[attr].toString();
+                    var newobj = {userid: userid, deviceid: bid, subid: lsubid, ltime: today, lvalue: newval }
+
+                    // now get the last item in the list to see if this is a duplicate
+                    // var lastadd = null;
+                    var lastadd = mydb.getAdd();
+                    if ( lastadd && lastadd.ltime && lastadd.userid === userid && lastadd.deviceid === bid && lastadd.subid === lsubid && 
+                                    lastadd.ltime === today && lastadd.lvalue === newval ) {
+                        if ( DEBUG11 ) {
+                            console.log( (ddbg()), "LIST update skipped due to duplicate: ", lastadd, newobj);
+                        }
+                    } else {
+                        mydb.addRow("lists", newobj)
+                        .then( ()=> {
+                            if ( DEBUG11 ) {
+                                console.log( (ddbg()), "LIST updated: ", newobj);
+                            }
+                        })
+                        .catch(reason => {
+                            console.log( (ddbg()), reason);
+                        });
+                    }
+                }
+            }
+        })
+    }
 
     function invokeRules(tileid, items, hubs, devices) {
         // rule structure
@@ -8690,7 +8740,8 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
             if ( typeof resolve === "function" ) {
                 resolve(pvalue);
             }
-            // push new values to all clients and execute rules
+
+            // push new values to all clients
             pushClient(userid, swid, swtype, subid, pvalue);
             return pvalue;
         }
@@ -8855,6 +8906,7 @@ function queryHub(device, pname) {
                         pvalue = JSON.parse(body);
                     } catch (e) {
                         console.log( (ddbg()), "parse error: body: ", body, "\n error: ", e);
+                        reject(e);
                     }
                 } else {
                     reject("Invalid object in getQueryResponse.");
@@ -8870,7 +8922,7 @@ function queryHub(device, pname) {
                     }
                     resolve(pvalue);
                 } else {
-                    reject("nothing returned in device query");
+                    reject("");
                 }
             }
         }
@@ -8882,14 +8934,15 @@ function queryHub(device, pname) {
             } else {
                 xml2js(body, function(xmlerr, result) {
                     try {
-                        if ( ! is_object(result) || !result.nodeInfo ) { throw "invalid result returned for Node query"; }
-                        var nodeid = result.nodeInfo.node[0]["address"];
-                        if ( nodeid ) {
-                            var props = result.nodeInfo.properties[0].property;
-                            var pvalue = setIsyFields(nodeid, device, props);
-                            resolve(pvalue);
-                        } else {
-                            throw "nodeid invalid while trying to read node from ISY in getNodeQueryResponse";
+                        if ( is_object(result) && is_object(result.nodeInfo) && result.nodeInfo.node ) {
+                            var nodeid = result.nodeInfo.node[0]["address"];
+                            if ( nodeid ) {
+                                var props = result.nodeInfo.properties[0].property;
+                                var pvalue = setIsyFields(nodeid, device, props);
+                                resolve(pvalue);
+                            } else {
+                                throw "nodeid invalid while trying to read node from ISY in getNodeQueryResponse";
+                            }
                         }
                     } catch(e) { 
                         console.log( (ddbg()), e);
@@ -9194,6 +9247,16 @@ function doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, co
             msg = callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, null, false);
             // msg = "success - link action executed on device id: " + swid + " device type: " + swtype;
         
+        } else if ( command==="LIST" ) {
+            // console.log( (ddbg()), "LINK not yet implemented... swid: ", swid, "swtype: ", swtype, "swval: ", swval, "swattr: ", swattr, "subid: ", subid);
+            msg = mydb.getRows("lists","ltime, lvalue",`userid = ${userid} AND deviceid = '${swid}' AND subid = '${subid}'`)
+            .then(results => {
+                return results;
+            })
+            .catch(reason => {
+                console.log( (ddbg()), reason);
+                return "error - something went wrong with LIST command";
+            });
         } else if ( command==="RULE" ) {
             if ( !GLB.dbinfo.enablerules ) {
                 msg = "error - rules are disabled.";
@@ -9329,14 +9392,19 @@ function doQuery(userid, tileid, pname) {
                         console.log( (ddbg()), "doQuery updated device: ", pvalue, " pvalstr: ", pvaluestr, " swid:", swid, 
                                                 " swtype:", swtype, " result: ", result);
                     }
-                    // this is now done on the js side so GET queries don't impact the GUI
-                    // pushClient(userid, swid, swtype, firstsubid, pvalue);
+                })
+                .catch(reason => {
+                    if ( reason ) {
+                        console.log( (ddbg()), reason);
+                    }
                 });
             }
             return pvalue;
         })
         .catch(reason => {
-            console.log( (ddbg()), reason);
+            if ( reason ) {
+                console.log( (ddbg()), reason);
+            }
         });
         
     }).catch(reason => {
@@ -11160,47 +11228,93 @@ function pw_verify(pword, hash, algo) {
     return (pw_hash(pword, algo) === hash);
 }
 
-function updCustom(userid, swid, rules) {
+// TODO - code up the reset timing
+function updCustom(api, userid, swid, swattr, subid, swval, rules) {
+    
     // var reserved = ["index","rooms","things","config","control","time","useroptions"];
     var configkey = "user_" + swid;
     var goodrules = [];
 
     // handle encryption and check for valid customization
+    // fixed bug below that didn't use the new goodrules array
     if ( rules && is_array(rules) && rules.length ) {
         for (var i = 0; i < rules.length; i++) {
             var rule = rules[i];
             if ( is_array(rule) && rule.length>2 && rule[0] && rule[2] ) {
                 var customval = rule[1].toString();
-                var subid = rule[2];
+                var r2 = rule[2];
                 var rtype = rule[0];
-                if ( rtype==="TEXT" && subid==="password" && customval.length < 60 ) {
+                if ( rtype==="TEXT" && r2==="password" && customval.length < 60 ) {
                     customval = pw_hash(customval);
                 }
-                goodrules.push( [rtype, customval, subid] );
+                goodrules.push( [rtype, customval, r2] );
             }
         }
     }
 
+    var result;
     if ( goodrules.length > 0 ) {
-        var rulejson = JSON.stringify(rules);
+        var rulejson = JSON.stringify(goodrules);
         var rulerow = {userid: userid, configkey: configkey, configval: rulejson};
-        return mydb.updateRow("configs", rulerow, "userid = "+userid+" AND configkey = '"+configkey+"'")
-        .then(result => {
-            return "updated " + goodrules.length + " customizations for field: " + swid + " and user " + userid;
+        result = mydb.updateRow("configs", rulerow, "userid = "+userid+" AND configkey = '"+configkey+"'")
+        .then(res => {
+            var str = "Updated " + goodrules.length + " customizations for field: " + swid + " and user " + userid;
+            console.log((ddbg()), str);
+
+            if ( swval === "LIST" ) {
+                Promise.all([
+                    mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${swid}' AND subid = '${subid}'`),
+                    mydb.getRow("devices","name, pvalue", `userid = ${userid} AND deviceid = '${swid}'`)
+                ])
+                .then(res2 => {
+                    var numListDel = res2[0].getAffectedItemsCount();
+                    if ( numListDel > 0 ) {
+                        console.log((ddbg()), "Removed " + numListDel + " items from old LIST for subid = " + subid);
+                    }
+                    if ( swattr ) {
+                        // check to see if we have a reset value
+                        var nreset = swattr.indexOf("::");
+                        if ( nreset != -1 ) {
+                            swattr = swattr.substring(0,nreset);
+;                       }
+                        var device = res2[1];
+                        var pvalue = decodeURI2(device.pvalue);
+                        var d = new Date();
+                        var today = d.toLocaleString();
+                        var newList = {userid: userid, deviceid: swid, subid: subid, ltime: today, lvalue: pvalue[swattr]};
+                        mydb.addRow("lists", newList)
+                        .then(() => {
+                            console.log((ddbg()), "Added first item for field: " + swattr + " into subid: " + subid + " of a new list: (" + today + ", " + pvalue[swattr] + ")");
+                        });
+                    }
+                });
+            }    
+            return str;
         })
         .catch( reason => {
             console.log( (ddbg()), reason);
         });
+
     } else {
-        return mydb.deleteRow("configs", "userid = "+userid+" AND configkey='"+configkey+"'")
-        .then(result => {
-            return "removed customizations for field: " + swid + " and user: " + userid;
+        result = mydb.deleteRow("configs", "userid = "+userid+" AND configkey='"+configkey+"'")
+        .then(res => {
+            var str = "Removed all customizations for field: " + swid + " and user: " + userid;
+            console.log((ddbg()), str);
+            if ( swval==="LIST" ) {
+                mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${swid}' AND subid = '${subid}'`)
+                .then(res2 => {
+                    var numListDel = res2.getAffectedItemsCount();
+                    console.log( (ddbg()), `Deleted ${numListDel} LIST rows for deviceid=${swid} and subid=${subid}`);
+                });
+            }
+            return str;
         })
         .catch( reason => {
             console.log( (ddbg()), reason);
         });
     }
 
+    return result;
 }
 
 function findHub(hubid, hubs) {
@@ -11833,7 +11947,76 @@ function apiCall(user, body, protocol, res) {
                     } else {
                         rules = null;
                     }
-                    result = updCustom(userid, swid, rules);
+                    result = updCustom(api, userid, swid, swattr, subid, swval, rules);
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
+
+            // this api call invokes the rules manually
+            // it is only used for duplicate variable entries for now
+            case "dorules":
+                result = mydb.getRow("devices","*", `userid = ${userid} AND deviceid = '${swid}'`)
+                .then(device => {
+                    var pvalue = decodeURI2(device.pvalue);
+                    pvalue.subid = subid;
+                    processRules(userid, device.id, swid, swtype, subid, pvalue, "callHub");
+                    delete pvalue.subid;
+                    return pvalue;
+                })
+                .catch(reason => {
+                    console.log( (ddbg()), reason );
+                    return "Something went wrong with dorules.";
+                });
+                break;
+
+            case "resetlist":
+                if ( protocol==="POST" ) {
+
+                    result = Promise.all([
+                        mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${swid}' AND subid = '${subid}'`),
+                        mydb.getRow("devices","name, pvalue", `userid = ${userid} AND deviceid = '${swid}'`)
+                    ])
+                    .then(res2 => {
+                        var numListDel = res2[0].getAffectedItemsCount();
+                        if ( DEBUG11 && numListDel > 0 ) {
+                            console.log((ddbg()), "Removed " + numListDel + " items from LIST for subid = " + subid);
+                        }
+                        // check to see if we have a reset value
+                        if ( linkval ) {
+                            var nreset = linkval.indexOf("::");
+                            if ( nreset != -1 ) {
+                                var attr = linkval.substring(0,nreset);
+    ;                       } else {
+                                attr = linkval;
+                            }
+                            var device = res2[1];
+                            var pvalue = decodeURI2(device.pvalue);
+                            var d = new Date();
+                            var today = d.toLocaleString();
+                            var newList = {userid: userid, deviceid: swid, subid: subid, ltime: today, lvalue: pvalue[attr]};
+                            mydb.addRow("lists", newList)
+                            .then(() => {
+                                if ( DEBUG11 ) {
+                                    console.log((ddbg()), "Added first item after reset for field: " + attr + " into subid: " + subid + " of a new list: (" + today + ", " + pvalue[attr] + ")");
+                                }
+                            });
+                        }
+                        return `Deleted ${numListDel} LIST rows for deviceid=${swid} and subid=${subid}`;
+                    })
+                    .catch(reason => {
+                        console.log( (ddbg()), reason );
+                        return `Something went wrong with resetting list for deviceid=${swid} and subid=${subid}`;
+                    });
+                    // result = mydb.deleteRow("lists",`userid = ${userid} AND deviceid='${swid}' AND subid='${subid}'`)
+                    // .then(res2 => {
+                    //     var numListDel = res2.getAffectedItemsCount();
+                    //     return `Deleted ${numListDel} LIST rows for deviceid=${swid} and subid=${subid}`;
+                    // })
+                    // .catch(reason => {
+                    //     console.log( (ddbg()), reason );
+                    //     return "Something went wrong with resetting list: " + subid;
+                    // });
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -12064,6 +12247,30 @@ function apiCall(user, body, protocol, res) {
                 var device = {pvalue: clock};
                 mydb.updateRow("devices", device, "userid = " + userid + " AND deviceid = '"+swid+"'");
                 
+                // this is where we do things that happen on the hour, day, week, month, or year
+                // note that everything is 0 based except for getDate() which is 1 ... 31
+                if ( swid === "clockdigital" ) {
+                    var d = new Date();
+                    var minute = d.getMinutes();
+                    // trigger the hourly if the minute is anywhere in the first 2 minutes of the hour
+                    // this could cause some events to be zeroed out but it ensures we don't miss an hour
+                    var hour = d.getHours();
+                    var day = d.getDate();
+                    var dayofweek = d.getDay();
+                    var month = d.getMonth();
+                    if ( month === 0 && day === 1 && hour === 0 && minute <= 2 ) {
+                        resetList(userid, "y");
+                    } else if ( day === 1 && hour === 0 && minute <= 2 ) {
+                        resetList(userid, "m");
+                    } else if ( dayofweek === 0 && hour === 0 && minute <= 2 ) {
+                        resetList(userid, "w");
+                    } else if ( hour === 0 && minute <= 2 ) {
+                        resetList(userid, "d");
+                    } else if ( minute <=2 ) {
+                        resetList(userid, "h");
+                    }
+                }
+
                 // handle rules and time format user fields
                 var result = getCustomTile(userid, swattr, result, swid);
                 // console.log(">>>> clock: ", result);
@@ -12097,6 +12304,43 @@ function apiCall(user, body, protocol, res) {
                 break;
         }
         return result;
+}
+
+// do reset on LIST based on timing type
+function resetList(userid, timing) {
+    mydb.getRows("configs","*",`configkey LIKE 'user_%' AND configval LIKE '%["LIST",%'`)
+    .then(rows => {
+        if ( rows ) {
+            rows.forEach(row => {
+                var configkey = row.configkey;
+                var deviceid = configkey.substring(5);
+                var thelists = decodeURI2(row.configval);
+                thelists.forEach(alist => {
+                    if ( alist[0] === "LIST" ) {
+                        var targetitem = alist[1];
+                        var subid = alist[2];
+                        var n = targetitem.indexOf("::");  //  test::h
+                        if ( n != -1 ) {
+                            var targettype = targetitem.substring(n+2);
+                            if ( timing === targettype ) {
+                                mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${deviceid}' AND subid = '${subid}'`)
+                                .then( res2=> {
+                                    var numListDel = res2[0].getAffectedItemsCount();
+                                    console.log( (ddbg()), `Deleted ${numListDel} rows for LIST associated with deviceid=${deviceid} and subid=${subid} based on criteria=${timing}`);
+                                })
+                                .catch(reason => {
+                                    console.log( (ddbg()), reason );
+                                });
+                            }
+                        }
+                    }
+                });
+            });
+        }
+    })
+    .catch(reason => {
+        console.log( (ddbg()), reason );
+    })
 }
 
 // setup socket between server and all user browsers
@@ -12380,7 +12624,17 @@ function buildDatabaseTable(tableindex) {
             usertype INTEGER NOT NULL,
             defhub TEXT NULL,
             hpcode TEXT NULL
+          )`,
+          
+          `CREATE TABLE lists (
+            id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+            userid INTEGER NOT NULL,
+            deviceid TEXT NULL,
+            subid TEXT NULL,
+            ltime TEXT NULL,
+            lvalue TEXT NULL
           )`
+
     ];
     mydb.query(tableData[tableindex])
     .then(results => {
@@ -12505,7 +12759,7 @@ if ( app && applistening ) {
     var mydb = new sqlclass.sqlDatabase(GLB.dbinfo.dbhost, GLB.dbinfo.dbname, GLB.dbinfo.dbuid, GLB.dbinfo.dbpassword, GLB.dbinfo.dbtype);
     
     // build the tables if they are not there
-    var tables = ["configs", "devices","hubs", "panels", "rooms", "things", "users"];
+    var tables = ["configs", "devices","hubs", "panels", "rooms", "things", "users", "lists"];
     Promise.allSettled([
        mydb.getRow(tables[0],"id"),
        mydb.getRow(tables[1],"id"),
@@ -12513,13 +12767,13 @@ if ( app && applistening ) {
        mydb.getRow(tables[3],"id"),
        mydb.getRow(tables[4],"id"),
        mydb.getRow(tables[5],"id"),
-       mydb.getRow(tables[6],"id")
+       mydb.getRow(tables[6],"id"),
+       mydb.getRow(tables[7],"id")
     ])
     .then(results => {
         var i = 0;
         results.forEach(function (result) {
             if ( result.status === "rejected" ) {
-                console.log(tables[i]," = ", result.reason);
                 console.log("Table ", tables[i], " does not exist. Building it...");
                 buildDatabaseTable(i);
             }
@@ -12532,7 +12786,6 @@ if ( app && applistening ) {
             console.log( (ddbg()), "Fixing up the database, building all missing tables for HousePanel...");
         }, 3000);
     });
-
     
     // set up sockets
     setupBrowserSocket();
@@ -12891,7 +13144,7 @@ if ( app && applistening ) {
                         processHubMessage(hub.userid, req.body, false);
                     }
                 }).catch(reason => {
-                    console.log( (ddbg()), "msgtype=update error: ", reason);
+                    console.log( (ddbg()), "Hubitat hub msg event error: ", reason);
                 });
             }
             res.send("Hub msg received and processed");

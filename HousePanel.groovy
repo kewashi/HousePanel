@@ -535,7 +535,7 @@ def translateObjects(pvalue, musicmap) {
 
                     // fix up image art field
                     if ( tkey == "trackImage" ) {
-                        if  (  (tval instanceof String) && tval.indexOf("http")>0 ) {
+                        if  (  (tval && tval instanceof String) && tval.indexOf("http")>0 ) {
                             def j1 = tval.indexOf(">http") + 1
                             def j2 = tval.indexOf("<", j1+1)
                             if ( j1==-1 || j2==-1) {
@@ -593,18 +593,20 @@ def getMusic(swid, item=null) {
     String ktval = ""
     if ( pvalue.containsKey("trackMetaData") ) {
         jtval = pvalue["trackMetaData"]
-        def j1 = jtval.indexOf("https")
-        if  ( j1 > 0 ) {
-            def j2 = jtval.indexOf("<", j1+1)
-            if ( j2 != -1) {
-                jtval = jtval.substring(j1, j2)
-                ktval = jtval.replaceAll("\\\\/","/")
-            } else {
-                ktval = ""
+        if ( jtval && jtval instanceof String ) {
+            def j1 = jtval.indexOf("https")
+            if  ( j1 > 0 ) {
+                def j2 = jtval.indexOf("<", j1+1)
+                if ( j2 != -1) {
+                    jtval = jtval.substring(j1, j2)
+                    ktval = jtval.replaceAll("\\\\/","/")
+                } else {
+                    ktval = ""
+                }
+                pvalue.containsKey("trackImage") ? pvalue["trackImage"] = ktval : pvalue.put("trackImage",ktval)
             }
-            pvalue.containsKey("trackImage") ? pvalue["trackImage"] = ktval : pvalue.put("trackImage",ktval)
+            pvalue.remove("trackMetaData")
         }
-        pvalue.remove("trackMetaData")
     }        
     logger("image added to tile: ${pvalue}, jtval: ${jtval}, j1: ${j1}, j2: ${j2}","debug")
     return pvalue
