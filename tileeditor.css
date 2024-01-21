@@ -477,17 +477,17 @@ table.showid td, table.showid th {
 div.thead {
     position: fixed;
 }
-div.scrollvtable {
+div.scrollvtable, div.listtable {
     overflow-y: auto;
 }
 @media only screen and (orientation: landscape) {
-    div.scrollvtable {
+    div.scrollvtable, div.listtable {
         /*max-height: 400px;*/
         overflow-y: hidden;
     }
 }
 @media only screen and (orientation: portrait) {
-    div.scrollvtable {
+    div.scrollvtable, div.listtable {
         /*max-height: 800px;*/
         overflow-y: hidden;
     }
@@ -504,6 +504,10 @@ div.scrollvtable {
     div.scrollvtable.fshort {
         overflow-y: scroll;
         max-height: 225px;
+    }
+    div.listtable {
+        overflow-y: scroll;
+        max-height: 400px;
     }
 }
 div.scrollhtable {

@@ -460,7 +460,7 @@ $(document).ready(function() {
         // });
         $("#dragregion").on("swiperight", function(evt, touchdata) {
             if ( priorOpmode==="Operate" && $(touchdata.startEvnt.target).hasClass("panel") ) {
-                console.log(">>> touchdata: ", touchdata);
+                // console.log(">>> touchdata: ", touchdata);
                 nextTab();
             }
             evt.stopPropagation();
@@ -471,7 +471,7 @@ $(document).ready(function() {
         // });
         $("#dragregion").on("swipeleft", function(evt, touchdata ) {
             if ( priorOpmode==="Operate" && $(touchdata.startEvnt.target).hasClass("panel") ) {
-                console.log(">>> touchdata: ", touchdata);
+                // console.log(">>> touchdata: ", touchdata);
                 prevTab();
             }
             evt.stopPropagation();
@@ -843,11 +843,6 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
             // reload page if signalled from server
             if ( bid==="reload" ) {
 
-                // skip reload if we are asleep
-                // if ( priorOpmode !== "Operate" ) {
-                //     return;
-                // }
-
                 // only reload this page if the trigger is this page name, blank, or all
                 if ( !thetype || thetype==="all" || thetype===pagename ) {
 
@@ -1115,6 +1110,14 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
                 }
                 styleinfo += " height: " + hstr;
             }
+            if ( pos["max-height"] ) {
+                if ( typeof pos["max-height"] === "string" ) {
+                    var hstr = pos["max-height"] + ";";
+                } else {
+                    hstr = pos["max-height"].toString() + "px;";
+                }
+                styleinfo += " max-height: " + hstr;
+            }
             if ( pos.width ) {
                 if ( typeof pos.width === "string" ) {
                     var wstr = pos.width + ";";
@@ -1122,6 +1125,14 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
                     wstr = pos.width.toString() + "px;";
                 }
                 styleinfo += " width: " + wstr;
+            }
+            if ( pos["max-width"] ) {
+                if ( typeof pos["max-width"] === "string" ) {
+                    var hstr = pos["max-width"] + ";";
+                } else {
+                    hstr = pos["max-width"].toString() + "px;";
+                }
+                styleinfo += " max-width: " + hstr;
             }
             if ( pos.border ) {
                 styleinfo += " border: " + pos.border + ";";
@@ -2256,6 +2267,7 @@ function execButton(buttonid) {
             priorOpmode = "Operate";
             setCookie("opmode",priorOpmode);
             evt.stopPropagation();
+            window.location.href = cm_Globals.returnURL;
         });
     } else if ( buttonid === "toggletabs" && priorOpmode==="Operate" ) {
         toggleTabs();
@@ -2299,7 +2311,6 @@ function execButton(buttonid) {
                 window.location.href = cm_Globals.returnURL;
             }
         } else {
-            // console.log("Operate command has no effect in mode: ", priorOpmode);
             return;
         }
         priorOpmode = "Operate";
@@ -2321,14 +2332,14 @@ function execButton(buttonid) {
                 closeModal("modalpopup");
                 createModal("modalpopup", presult, "body", false, {style: rstyle});
                 setTimeout(function() {
-                    window.location.href = cm_Globals.returnURL;
+                    reload(); // window.location.href = cm_Globals.returnURL;
                 },4000);
             },2000);
         });
     
     // remaining menu buttons
     } else if ( (buttonid==="showid" || buttonid==="userauth" || buttonid==="showoptions") && priorOpmode==="Operate" ) {
-        window.location.href = cm_Globals.returnURL + "/" + buttonid;
+        reload(buttonid); // window.location.href = cm_Globals.returnURL + "/" + buttonid;
 
     // default is to call main node app with the id as a path
     } else {
@@ -2354,6 +2365,13 @@ function checkInpval(field, val, regexp) {
         errs = "field: " + field + "= " + val + " is not a valid entry";
     }
     return errs;
+}
+
+function reload(where = "") {
+    if ( where && !where.startsWith("/") ) {
+        where = "/" + where;
+    }
+    window.location.href = cm_Globals.returnURL + where;
 }
 
 function setupButtons() {
@@ -3655,7 +3673,7 @@ function setupTimer(timertype, timerval, hub) {
     updarray.myMethod = function() {
 
         var that = this;
-        if ( priorOpmode === "Operate" ) {
+        if ( priorOpmode === "Operate" || priorOpmode === "Sleep" ) {
             try {
                 // just do the post and nothing else since the post call pushClient to refresh the tiles
                 var tType = that[0];
@@ -3674,7 +3692,6 @@ function setupTimer(timertype, timerval, hub) {
         }
 
         // repeat the method above indefinitely
-        // console.log("timer: ", that[0], that[1], that[2], priorOpmode);
         setTimeout(function() {updarray.myMethod();}, that[1]);
     };
 
@@ -3764,7 +3781,8 @@ function setupPage() {
         // if we are not in operate mode only do this if click is on operate
         // also skip links to web calls that have the control type
         if ( subid!=="name" && thetype==="control" && (priorOpmode==="Operate" || subid==="operate") && 
-             !thevalue.startsWith("URL::") && !thevalue.startsWith("POST::") && !thevalue.startsWith("GET::") && !thevalue.startsWith("PUT::") && !thevalue.startsWith("RULE::") ) {
+             !thevalue.startsWith("URL::") && !thevalue.startsWith("POST::") && !thevalue.startsWith("GET::") && 
+             !thevalue.startsWith("PUT::") && !thevalue.startsWith("RULE::") && !thevalue.startsWith("LIST::") ) {
             evt.stopPropagation();
             if ( doconfirm ) {
                 var pos = {top: 100, left: 100};
@@ -3863,7 +3881,7 @@ function setupPage() {
             if ( isNaN(numParams) ) { numParams = 0; }
             processClickWithValue(that, thingname, ro, subid, thetype, "", numParams);
 
-        } else if ( !thevalue.startsWith("LIST::") && (pn > 0) ) {
+        } else if ( pn > 0 ) {
             processClickWithValue(that, thingname, ro, subid, thetype, "", pn);
 
         // items that require one parameter
@@ -4031,16 +4049,13 @@ function processClickWithValue(that, thingname, ro, subid, thetype, thevalue, nu
     },
     // after box loads set focus to field
     function(hook, content) {
-        // priorOpmode = "Modal";
         $("#newsubidValue").focus();
         $("#newsubidValue").off("keydown");
         $("#newsubidValue").on("keydown",function(e) {
             if ( e.which===13  ){
-                // priorOpmode = "Operate";
                 $("#modalokay").trigger("click");
             }
             if ( e.which===27  ){
-                // priorOpmode = "Operate";
                 $("#modalcancel").trigger("click");
             }
         });
@@ -4063,7 +4078,6 @@ function processClickWithList(tile, thingname, ro, subid, thelist, prefix = "") 
     createModal("modalpick", htmlcontent, "body", true, pos, 
     function(ui) {
         var clk = $(ui).attr("name");
-        // priorOpmode = "Operate";
         if ( clk==="okay" ) {
             thevalue = $("#picklist").val();
             processClick(tile, thingname, ro, thevalue, "", subid);
@@ -4238,9 +4252,6 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         var jcolon = linkval.indexOf("::");
         command = linkval.substring(0, jcolon);
         linkval = linkval.substring(jcolon+2);
-    } else {
-        // command = "";
-        linkval = thevalue;
     }
     
     if ( command === "URL" ) {
@@ -4460,23 +4471,44 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
 
                         // display a table or graph is this is a LIST command
                         if ( command==="LIST" ) {
-                            var dispTable = `<h3>List for tile #${tileid} <br />Attribute: ${linktype}</h3>`;
-                            dispTable+= "<table class='listtable'><tr class='head'><td>Time</td><td>Value</td></tr>";
+                            var attrname = linkval.substring(0, linkval.length - 3);
+                            var dispTable = `<h3>List for tile #${tileid} <br />Attribute: ${attrname}</h3>`;
+                            dispTable+= "<div class='listtable'><table class='listtable'><tr class='head'><td>Time</td><td>Value</td></tr>";
                             var ltotal = 0.0;
+                            var ncount = 0;
+                            var nstate = 0;
+                            var statetotal = 0;
+                            var statetype = "on";
                             presult.forEach(obj => {
                                 if ( !isNaN(parseFloat(obj.lvalue)) ) {
                                     ltotal+= parseFloat(obj.lvalue);
+                                    ncount++;
+                                } else if ( obj.lvalue==="on" || obj.lvalue==="off" || obj.lvalue==="open" || obj.lvalue==="closed" ) {
+                                    nstate++;
+                                    if ( obj.lvalue==="on" || obj.lvalue==="open" ) {
+                                        statetotal++;
+                                        statetype = obj.lvalue;
+                                    }
                                 }
                                 dispTable+= `<tr class='content'><td>${obj.ltime}</td><td>${obj.lvalue}</td></tr>`;
                             });
-                            if ( ltotal > 0.0 ) {
-                                dispTable+= `<tr class='foot'><td>Sum of Values</td><td>${ltotal}</td></tr>`;
+                            if ( nstate > 0 ) {
+                                var onpercent = Math.round( (statetotal / nstate) * 1000.0 ) / 10.0;
+                                dispTable+= `<tr class='foot'><td>Percent ${statetype}:</td><td>${onpercent}%</td></tr>`;
                             }
-                            dispTable+= "</table>";
+                            if ( ncount > 1 ) {
+                                if ( linktype === "variables" ) {
+                                    dispTable+= `<tr class='foot'><td>Sum of Values</td><td>${ltotal}</td></tr>`;
+                                }
+                                var avg = Math.round( (ltotal / ncount) * 100.0 ) / 100.0;
+                                dispTable+= `<tr class='foot'><td>Avg of Values</td><td>${avg}</td></tr>`;
+                            }
+                            dispTable+= "</table></div>";
                             if ( Object.keys(presult).length > 0 ) {
-                                dispTable+= "<div class='modalbuttons'><button id='resetList' class='cm_button'>Reset</button></div>";
+                                dispTable+= "<br><div class='modalbuttons'><button id='resetList' class='cm_button'>Reset</button></div>";
                             }
-                            var pos = {top: 80, left: 200, border: "4px solid black", background: "white"};
+                            dispTable+= "<br>";
+                            var pos = {top: 80, left: 200, "max-width": 400, "max-height": 600, border: "4px solid black", background: "white"};
                             createModal("listview", dispTable, "body", "Close", pos, null, function() {
                                 $("#listview").draggable();
                             });
