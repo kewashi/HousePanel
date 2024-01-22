@@ -380,7 +380,7 @@ function getHeader(userid, pname, skin, skip) {
     }
 
     // chart capability loaded here
-    // $tc += '<script type="text/javascript" src="node_modules/chart.js/dist/chart.umd.js"></script>';
+    $tc += '<script type="text/javascript" src="node_modules/chart.js/dist/chart.umd.js"></script>';
     $tc += '<script type="text/javascript" src="node_modules/chart.js/dist/chart.js"></script>';
     
     // load main script file
