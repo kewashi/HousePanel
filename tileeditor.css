@@ -519,6 +519,28 @@ div.optionstable {
     color: #000000;
     width: 100%;
 }
+div.listtable {
+    margin-top: 3px;
+    margin-bottom: 5px;
+    float: left;
+    width: auto;
+    max-height: 400px;
+    padding: 5px;
+    border: 2px solid black;
+}
+div.canvasplot {
+    float: left;
+    margin-left: 20px;
+    margin-top: 3px;
+    padding: 5px;
+    margin-bottom: 5px;
+    width: 600px; height: 400px;
+    border: 2px solid black;
+}
+div.listbuttons {
+    margin-top: 5px; margin-bottom: 5px;
+    width: auto;
+}
 table.roomoptions, table.headoptions {
     margin: 0px;    background-color: #ffffff;    color: #000000;
     font-size: 15px;    width: 100%;

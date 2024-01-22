@@ -5,6 +5,7 @@
  * (c) Ken Washington 2017 - 2020
  * 
  */
+// import Chart from 'chart.js/auto';
 
 // globals array used everywhere now
 var cm_Globals = {};
@@ -4471,8 +4472,18 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
 
                         // display a table or graph is this is a LIST command
                         if ( command==="LIST" ) {
-                            var attrname = linkval.substring(0, linkval.length - 3);
-                            var dispTable = `<h3>List for tile #${tileid} <br />Attribute: ${attrname}</h3>`;
+                            var n = linkval.indexOf("::");
+                            if ( n!== -1 ) {
+                                var attrname = linkval.substring(0, n);
+                            } else {
+                                attrname = linkval;
+                            }
+
+                            var dispTable = "";
+                            var timedata = [];
+                            var valuedata = [];
+
+                            dispTable+= `<h3>List for Tile #${tileid} Attribute: ${attrname}</h3>`;
                             dispTable+= "<div class='listtable'><table class='listtable'><tr class='head'><td>Time</td><td>Value</td></tr>";
                             var ltotal = 0.0;
                             var ncount = 0;
@@ -4480,16 +4491,25 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
                             var statetotal = 0;
                             var statetype = "on";
                             presult.forEach(obj => {
+                                timedata.push(obj.ltime);
                                 if ( !isNaN(parseFloat(obj.lvalue)) ) {
                                     ltotal+= parseFloat(obj.lvalue);
+                                    valuedata.push(obj.lvalue);
                                     ncount++;
-                                } else if ( obj.lvalue==="on" || obj.lvalue==="off" || obj.lvalue==="open" || obj.lvalue==="closed" ) {
+                                } else if ( obj.lvalue==="on" || obj.lvalue==="off" || obj.lvalue==="active" || 
+                                            obj.lvalue==="inactive" || obj.lvalue==="open" || obj.lvalue==="closed" ) {
                                     nstate++;
-                                    if ( obj.lvalue==="on" || obj.lvalue==="open" ) {
+                                    if ( obj.lvalue==="on" || obj.lvalue==="open" || obj.lvalue==="active") {
                                         statetotal++;
                                         statetype = obj.lvalue;
+                                        valuedata.push(1);
+                                    } else {
+                                        valuedata.push(0);
                                     }
+                                } else {
+                                    valuedata.push(0);
                                 }
+
                                 dispTable+= `<tr class='content'><td>${obj.ltime}</td><td>${obj.lvalue}</td></tr>`;
                             });
                             if ( nstate > 0 ) {
@@ -4504,14 +4524,36 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
                                 dispTable+= `<tr class='foot'><td>Avg of Values</td><td>${avg}</td></tr>`;
                             }
                             dispTable+= "</table></div>";
+
+                            dispTable+= `<div class="canvasplot"><canvas id="theplot"><canvas></div>`;
+                            
                             if ( Object.keys(presult).length > 0 ) {
-                                dispTable+= "<br><div class='modalbuttons'><button id='resetList' class='cm_button'>Reset</button></div>";
+                                dispTable+= "<div class = 'listbuttons'>";
+                                dispTable+= "<button id='resetList' class='cm_button'>Reset</button>";
+                                dispTable+= "</div>";
                             }
-                            dispTable+= "<br>";
-                            var pos = {top: 80, left: 200, "max-width": 400, "max-height": 600, border: "4px solid black", background: "white"};
+                            // dispTable+= "<br>";
+                            var pos = {top: 80, left: 200, "max-width": 1200, "max-height": 600, border: "4px solid black", background: "white"};
                             createModal("listview", dispTable, "body", "Close", pos, null, function() {
                                 $("#listview").draggable();
                             });
+
+                            // show a bar graph of the data
+                            (async function() {
+                                var plotobj = {
+                                    type: 'bar',
+                                    data: {
+                                        labels: timedata,
+                                        datasets: [
+                                            {
+                                                label: `${attrname} over time`,
+                                                data: valuedata
+                                            }
+                                        ]
+                                    }
+                                }
+                                new Chart(document.getElementById('theplot'), plotobj);
+                            })();
 
                             // handle the reset button
                             $("#resetList").on("tap", function(evt) {
@@ -4521,6 +4563,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
                                      function (presult, pstatus) {
                                         console.log(presult);
                                      });
+                                $("#resetList").off("tap");
                                 closeModal("listview");
                             });
                          }

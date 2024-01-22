@@ -46,8 +46,6 @@ const express = require('express');
 const xml2js = require('xml2js').parseString;
 const crypto = require('crypto');
 const UTIL = require('util');
-// const mqtt = require('mqtt');
-// const os = require('os');
 const cookieParser = require('cookie-parser');
 const request = require('request');
 const url = require('url');
@@ -380,6 +378,10 @@ function getHeader(userid, pname, skin, skip) {
         $tc += '<!--[if IE]><script type="text/javascript" src="excanvas.js"></script><![endif]-->';
         $tc += '<script type="text/javascript" src="coolclock.js"></script>';
     }
+
+    // chart capability loaded here
+    // $tc += '<script type="text/javascript" src="node_modules/chart.js/dist/chart.umd.js"></script>';
+    $tc += '<script type="text/javascript" src="node_modules/chart.js/dist/chart.js"></script>';
     
     // load main script file
     var customhash = "js001_" + GLB.HPVERSION;

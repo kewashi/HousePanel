@@ -1,4 +1,5 @@
 const devhistory = `
+3.2.5   Added graph capability to historical data lists
 3.2.4   New custom feature to collect lists of historical values in a table
 3.2.3   Clean up hint for ISY, tweak for tile inspect clicks, and new groovy icons
 3.2.2   Login screen bugfix

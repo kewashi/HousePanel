@@ -29,7 +29,7 @@ public static String handle() { return "HousePanel" }
     STATICALLY DEFINED VARIABLES
     inpired by Tonesto7 homebridge2 app
 ***********************************************/
-@Field static final String appVersionFLD  = '3.075'
+@Field static final String appVersionFLD  = '3.2.5'
 @Field static final String sNULL          = (String) null
 @Field static final String sBLANK         = ''
 @Field static final String sLINEBR        = '<br>'

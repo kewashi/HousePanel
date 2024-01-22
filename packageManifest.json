@@ -2,10 +2,10 @@
     "packageName": "HousePanel",
 	"minimumHEVersion": "2.1.9",
 	"author": "Ken Washington",
-	"version": "3.2.4",
-	"dateReleased": "2024-01-21",
+	"version": "3.2.5",
+	"dateReleased": "2024-01-22",
 	"licenseFile": "",
-	"releaseNotes": "V3.2.4 includes a new LIST customize feature that captures histories of any field on any tile. See https://housepanel.net for full documentation.",
+	"releaseNotes": "V3.2.5 includes a new LIST customize feature with tables and graphs of histories of any field on any tile. To use the new features you also need to update the Node.js modules. See https://housepanel.net for documentation.",
 	"apps" : [
 		{
 			"id" : "56776347-587d-4e5d-8a1a-bbd02238f63f",
