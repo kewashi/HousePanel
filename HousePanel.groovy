@@ -29,7 +29,7 @@ public static String handle() { return "HousePanel" }
     STATICALLY DEFINED VARIABLES
     inpired by Tonesto7 homebridge2 app
 ***********************************************/
-@Field static final String appVersionFLD  = '3.075'
+@Field static final String appVersionFLD  = '3.2.5'
 @Field static final String sNULL          = (String) null
 @Field static final String sBLANK         = ''
 @Field static final String sLINEBR        = '<br>'
@@ -43,7 +43,7 @@ public static String handle() { return "HousePanel" }
     APP HELPER FUNCTIONS
     inpired by Tonesto7 homebridge2 app
 ***********************************************/
-static String getAppImg(String imgName) { return "https://kenw.com/wp-content/uploads/${imgName}" }
+static String getAppImg(String imgName) { return "https://housepanel.net/wp-content/uploads/${imgName}" }
 static String sectH3TS(String t, String st, String i = sNULL, String c=sCLR4D9) { return "<h3 style='color:${c};font-weight: bold'>${i ? "<img src='${i}' width='48'> " : sBLANK} ${t?.replaceAll("\\n", sLINEBR)}</h3>${st ?: sBLANK}" }
 static String sectHead(String str, String img = sNULL) { return str ? "<h3 style='margin-top:0;margin-bottom:0;'>" + spanImgStr(img) + span(str, sCLR4D9, sNULL, true) + '</h3>' + "<hr style='background-color:${sCLRGRY};font-style:italic;height:1px;border:0;margin-top:0;margin-bottom:0;'>" : sBLANK }
 
@@ -239,14 +239,14 @@ def deviceSelectPage() {
                 input "mylocks", "capability.lock", hideWhenEmpty: true, multiple: true, required: false, title: "Locks"
                 input "myshades", "capability.windowShade", hideWhenEmpty: true, multiple: true, required: false, title: "Window Shades"
         }
-        section (sectHead("Thermostats and Climate")) {
+        section (sectHead("Thermostats and Climate","thermometer.png")) {
                 input "mythermostats", "capability.thermostat", hideWhenEmpty: true, multiple: true, required: false, title: "Thermostats"
                 input "mytemperatures", "capability.temperatureMeasurement", hideWhenEmpty: true, multiple: true, required: false, title: "Temperature Measures"
                 input "myilluminances", "capability.illuminanceMeasurement", hideWhenEmpty: true, multiple: true, required: false, title: "Illuminance Measurements"
                 // input "myweathers", "device.smartweatherStationTile", hideWhenEmpty: true, multiple: true, required: false, title: "Weather tile"
                 // input "myaccuweathers", "device.accuweatherDevice", hideWhenEmpty: true, multiple: true, required: false, title: "AccuWeather tile"
         }
-        section (sectHead("Water, Sprinklers and Detectors")) {
+        section (sectHead("Water, Sprinklers and Detectors","sprinkler-on.png")) {
                 input "mywaters", "capability.waterSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Water Sensors"
                 input "myvalves", "capability.valve", hideWhenEmpty: true, multiple: true, required: false, title: "Sprinklers"
                 input "mysmokes", "capability.smokeDetector", hideWhenEmpty: true, multiple: true, required: false, title: "Smoke Detectors"
@@ -258,7 +258,7 @@ def deviceSelectPage() {
                 input "mymusics", "capability.musicPlayer", hideWhenEmpty: true, multiple: true, required: false, title: "Music Players"
                 input "myaudios", "capability.audioNotification", hideWhenEmpty: true, multiple: true, required: false, title: "Audio Devices"
         }
-        section (sectHead("Other Sensors and Actuators")) {
+        section (sectHead("Other Sensors and Actuators","switchon.png")) {
                 paragraph "Any thing can be added as an Other sensor or actuator. Other sensors and actuators bring in ALL fields and commands supported by the device."
                 input "myothers", "capability.sensor", multiple: true, required: false, title: "Which Other Sensors"
                 input "myactuators", "capability.actuator", multiple: true, required: false, title: "Which Other Actuators"
@@ -535,7 +535,7 @@ def translateObjects(pvalue, musicmap) {
 
                     // fix up image art field
                     if ( tkey == "trackImage" ) {
-                        if  (  (tval instanceof String) && tval.indexOf("http")>0 ) {
+                        if  (  (tval && tval instanceof String) && tval.indexOf("http")>0 ) {
                             def j1 = tval.indexOf(">http") + 1
                             def j2 = tval.indexOf("<", j1+1)
                             if ( j1==-1 || j2==-1) {
@@ -593,18 +593,20 @@ def getMusic(swid, item=null) {
     String ktval = ""
     if ( pvalue.containsKey("trackMetaData") ) {
         jtval = pvalue["trackMetaData"]
-        def j1 = jtval.indexOf("https")
-        if  ( j1 > 0 ) {
-            def j2 = jtval.indexOf("<", j1+1)
-            if ( j2 != -1) {
-                jtval = jtval.substring(j1, j2)
-                ktval = jtval.replaceAll("\\\\/","/")
-            } else {
-                ktval = ""
+        if ( jtval && jtval instanceof String ) {
+            def j1 = jtval.indexOf("https")
+            if  ( j1 > 0 ) {
+                def j2 = jtval.indexOf("<", j1+1)
+                if ( j2 != -1) {
+                    jtval = jtval.substring(j1, j2)
+                    ktval = jtval.replaceAll("\\\\/","/")
+                } else {
+                    ktval = ""
+                }
+                pvalue.containsKey("trackImage") ? pvalue["trackImage"] = ktval : pvalue.put("trackImage",ktval)
             }
-            pvalue.containsKey("trackImage") ? pvalue["trackImage"] = ktval : pvalue.put("trackImage",ktval)
+            pvalue.remove("trackMetaData")
         }
-        pvalue.remove("trackMetaData")
     }        
     logger("image added to tile: ${pvalue}, jtval: ${jtval}, j1: ${j1}, j2: ${j2}","debug")
     return pvalue

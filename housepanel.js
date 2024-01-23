@@ -5,6 +5,7 @@
  * (c) Ken Washington 2017 - 2020
  * 
  */
+// import Chart from 'chart.js/auto';
 
 // globals array used everywhere now
 var cm_Globals = {};
@@ -460,7 +461,7 @@ $(document).ready(function() {
         // });
         $("#dragregion").on("swiperight", function(evt, touchdata) {
             if ( priorOpmode==="Operate" && $(touchdata.startEvnt.target).hasClass("panel") ) {
-                console.log(">>> touchdata: ", touchdata);
+                // console.log(">>> touchdata: ", touchdata);
                 nextTab();
             }
             evt.stopPropagation();
@@ -471,7 +472,7 @@ $(document).ready(function() {
         // });
         $("#dragregion").on("swipeleft", function(evt, touchdata ) {
             if ( priorOpmode==="Operate" && $(touchdata.startEvnt.target).hasClass("panel") ) {
-                console.log(">>> touchdata: ", touchdata);
+                // console.log(">>> touchdata: ", touchdata);
                 prevTab();
             }
             evt.stopPropagation();
@@ -843,11 +844,6 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
             // reload page if signalled from server
             if ( bid==="reload" ) {
 
-                // skip reload if we are asleep
-                // if ( priorOpmode !== "Operate" ) {
-                //     return;
-                // }
-
                 // only reload this page if the trigger is this page name, blank, or all
                 if ( !thetype || thetype==="all" || thetype===pagename ) {
 
@@ -1115,6 +1111,14 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
                 }
                 styleinfo += " height: " + hstr;
             }
+            if ( pos["max-height"] ) {
+                if ( typeof pos["max-height"] === "string" ) {
+                    var hstr = pos["max-height"] + ";";
+                } else {
+                    hstr = pos["max-height"].toString() + "px;";
+                }
+                styleinfo += " max-height: " + hstr;
+            }
             if ( pos.width ) {
                 if ( typeof pos.width === "string" ) {
                     var wstr = pos.width + ";";
@@ -1122,6 +1126,14 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
                     wstr = pos.width.toString() + "px;";
                 }
                 styleinfo += " width: " + wstr;
+            }
+            if ( pos["max-width"] ) {
+                if ( typeof pos["max-width"] === "string" ) {
+                    var hstr = pos["max-width"] + ";";
+                } else {
+                    hstr = pos["max-width"].toString() + "px;";
+                }
+                styleinfo += " max-width: " + hstr;
             }
             if ( pos.border ) {
                 styleinfo += " border: " + pos.border + ";";
@@ -1294,7 +1306,7 @@ function setupColors() {
                 }
                 if ( typeof linkval === "string" && 
                      (linkval.startsWith("GET::") || linkval.startsWith("POST::") || 
-                      linkval.startsWith("PUT::") || linkval.startsWith("LINK::") || 
+                      linkval.startsWith("PUT::") || linkval.startsWith("LINK::") || linkval.startsWith("LIST::") ||
                       linkval.startsWith("RULE::") || linkval.startsWith("URL::")) )
                 {
                     var jcolon = linkval.indexOf("::");
@@ -2256,6 +2268,7 @@ function execButton(buttonid) {
             priorOpmode = "Operate";
             setCookie("opmode",priorOpmode);
             evt.stopPropagation();
+            window.location.href = cm_Globals.returnURL;
         });
     } else if ( buttonid === "toggletabs" && priorOpmode==="Operate" ) {
         toggleTabs();
@@ -2299,7 +2312,6 @@ function execButton(buttonid) {
                 window.location.href = cm_Globals.returnURL;
             }
         } else {
-            // console.log("Operate command has no effect in mode: ", priorOpmode);
             return;
         }
         priorOpmode = "Operate";
@@ -2321,14 +2333,14 @@ function execButton(buttonid) {
                 closeModal("modalpopup");
                 createModal("modalpopup", presult, "body", false, {style: rstyle});
                 setTimeout(function() {
-                    window.location.href = cm_Globals.returnURL;
+                    reload(); // window.location.href = cm_Globals.returnURL;
                 },4000);
             },2000);
         });
     
     // remaining menu buttons
     } else if ( (buttonid==="showid" || buttonid==="userauth" || buttonid==="showoptions") && priorOpmode==="Operate" ) {
-        window.location.href = cm_Globals.returnURL + "/" + buttonid;
+        reload(buttonid); // window.location.href = cm_Globals.returnURL + "/" + buttonid;
 
     // default is to call main node app with the id as a path
     } else {
@@ -2354,6 +2366,13 @@ function checkInpval(field, val, regexp) {
         errs = "field: " + field + "= " + val + " is not a valid entry";
     }
     return errs;
+}
+
+function reload(where = "") {
+    if ( where && !where.startsWith("/") ) {
+        where = "/" + where;
+    }
+    window.location.href = cm_Globals.returnURL + where;
 }
 
 function setupButtons() {
@@ -3655,7 +3674,7 @@ function setupTimer(timertype, timerval, hub) {
     updarray.myMethod = function() {
 
         var that = this;
-        if ( priorOpmode === "Operate" ) {
+        if ( priorOpmode === "Operate" || priorOpmode === "Sleep" ) {
             try {
                 // just do the post and nothing else since the post call pushClient to refresh the tiles
                 var tType = that[0];
@@ -3674,7 +3693,6 @@ function setupTimer(timertype, timerval, hub) {
         }
 
         // repeat the method above indefinitely
-        // console.log("timer: ", that[0], that[1], that[2], priorOpmode);
         setTimeout(function() {updarray.myMethod();}, that[1]);
     };
 
@@ -3725,6 +3743,7 @@ function setupPage() {
     $("div.thing div.overlay > div").off("singletap");
     $("div.thing div.overlay > div").on("singletap", function(evt) {
 
+        var userid = cm_Globals.options.userid;
         var that = this;
         var aid = $(this).attr("aid");
         var subid = $(this).attr("subid");
@@ -3763,7 +3782,8 @@ function setupPage() {
         // if we are not in operate mode only do this if click is on operate
         // also skip links to web calls that have the control type
         if ( subid!=="name" && thetype==="control" && (priorOpmode==="Operate" || subid==="operate") && 
-             !thevalue.startsWith("URL::") && !thevalue.startsWith("POST::") && !thevalue.startsWith("GET::") && !thevalue.startsWith("PUT::") && !thevalue.startsWith("RULE::") ) {
+             !thevalue.startsWith("URL::") && !thevalue.startsWith("POST::") && !thevalue.startsWith("GET::") && 
+             !thevalue.startsWith("PUT::") && !thevalue.startsWith("RULE::") && !thevalue.startsWith("LIST::") ) {
             evt.stopPropagation();
             if ( doconfirm ) {
                 var pos = {top: 100, left: 100};
@@ -3830,7 +3850,7 @@ function setupPage() {
                 }                
                 processClickWithList(that, thingname, ro, subid, thelist, "Button #");
             } else {
-                processClickWithValue(that, thingname, ro, subid, "", 1);
+                processClickWithValue(that, thingname, ro, subid,  thetype, "", 1);
             }
 
         // various known special cases where we select from a list
@@ -3860,10 +3880,10 @@ function setupPage() {
         } else if ( subid.startsWith("_") && isNumeric(thevalue) ) {
             var numParams = parseInt(thevalue);
             if ( isNaN(numParams) ) { numParams = 0; }
-            processClickWithValue(that, thingname, ro, subid, "", numParams);
+            processClickWithValue(that, thingname, ro, subid, thetype, "", numParams);
 
         } else if ( pn > 0 ) {
-            processClickWithValue(that, thingname, ro, subid, "", pn);
+            processClickWithValue(that, thingname, ro, subid, thetype, "", pn);
 
         // items that require one parameter
         } else if ( subid==="color" || 
@@ -3872,9 +3892,10 @@ function setupPage() {
                     subid==="heatingSetpoint" || subid==="coolingSetpoint" || subid==="_docmd" ||
                     subid==="_setHeatingSetpoint" || subid==="_setCoolingSetpoint" ||
                     subid==="ecoHeatPoint" || subid==="ecoCoolPoint" ||
-                    (thetype==="variables" && subid!=="name" && !thevalue.startsWith("RULE::")) || 
+                    (thetype==="variables" && subid!=="name" && !thevalue.startsWith("RULE::") && !thevalue.startsWith("LIST::")) || 
                     subid==="hue" || subid==="saturation" ) {
-            processClickWithValue(that, thingname, ro, subid, thevalue, 1);
+            processClickWithValue(that, thingname, ro, subid, thetype, thevalue, 1);
+            
         } else {
 
             if ( doconfirm && !ro ) {
@@ -3961,14 +3982,16 @@ function checkPassword(tile, thingname, pw, ro, thevalue, yesaction) {
     });
 }
 
-function processClickWithValue(tile, thingname, ro, subid, thevalue, numParams) {
+function processClickWithValue(that, thingname, ro, subid, thetype, thevalue, numParams) {
 
     if ( numParams <= 0 ) {
-        processClick(tile, thingname, ro, thevalue, "");
+        processClick(that, thingname, ro, thevalue, "");
         return;
     }
 
-    var tpos = $(tile).offset();
+    var userid = cm_Globals.options.userid;
+    var oldvalue = thevalue;
+    var tpos = $(that).offset();
     var ttop = (tpos.top > 125) ? tpos.top - 120 : 5;
     var pos = {top: ttop, left: tpos.left};
     var htmlcontent;
@@ -3994,7 +4017,6 @@ function processClickWithValue(tile, thingname, ro, subid, thevalue, numParams) 
     createModal("modalexec", htmlcontent, "body", true, pos, 
     function(ui) {
         var clk = $(ui).attr("name");
-        // priorOpmode = "Operate";
         if ( clk==="okay" ) {
             thevalue = "";
             for (var i = 1; i <= numParams; i++) {
@@ -4004,22 +4026,37 @@ function processClickWithValue(tile, thingname, ro, subid, thevalue, numParams) 
                     thevalue = thevalue + "|";
                 }
             }
-            processClick(tile, thingname, ro, thevalue, "");
+            processClick(that, thingname, ro, thevalue, "");
+
+            // do a manual rule and list op if a repeat variable is provided
+            if ( thetype==="variables" && oldvalue===thevalue)  {
+                var aid = $(that).attr("aid");
+                var tile = '#t-'+aid;
+                var tileid = $(tile).attr("tile");
+                var bid = $(tile).attr("bid");
+                var hubid = $(tile).attr("hub");
+                var hubindex = $(tile).attr("hubindex");
+                $.post(cm_Globals.returnURL, 
+                    {useajax: "dorules", userid: userid, id: bid, thingid: aid, type: thetype, value: thevalue,
+                     subid: subid, hubid: hubid, hubindex: hubindex, tileid: tileid},
+                     function (presult, pstatus) {
+                        if ( pstatus === "success" ) {
+                            console.log(presult);
+                        }
+                     });
+            }
         }
         closeModal("modalexec");
     },
     // after box loads set focus to field
     function(hook, content) {
-        // priorOpmode = "Modal";
         $("#newsubidValue").focus();
         $("#newsubidValue").off("keydown");
         $("#newsubidValue").on("keydown",function(e) {
             if ( e.which===13  ){
-                // priorOpmode = "Operate";
                 $("#modalokay").trigger("click");
             }
             if ( e.which===27  ){
-                // priorOpmode = "Operate";
                 $("#modalcancel").trigger("click");
             }
         });
@@ -4042,7 +4079,6 @@ function processClickWithList(tile, thingname, ro, subid, thelist, prefix = "") 
     createModal("modalpick", htmlcontent, "body", true, pos, 
     function(ui) {
         var clk = $(ui).attr("name");
-        // priorOpmode = "Operate";
         if ( clk==="okay" ) {
             thevalue = $("#picklist").val();
             processClick(tile, thingname, ro, thevalue, "", subid);
@@ -4211,15 +4247,12 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
 
     if ( typeof linkval === "string" && 
          (linkval.startsWith("GET::") || linkval.startsWith("POST::") || linkval.startsWith("TEXT::") ||
-          linkval.startsWith("PUT::") || 
+          linkval.startsWith("PUT::") || linkval.startsWith("LIST::") ||
           linkval.startsWith("RULE::") || linkval.startsWith("URL::")) )
     {
         var jcolon = linkval.indexOf("::");
         command = linkval.substring(0, jcolon);
         linkval = linkval.substring(jcolon+2);
-    } else {
-        // command = "";
-        linkval = thevalue;
     }
     
     if ( command === "URL" ) {
@@ -4250,15 +4283,19 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
     // no longer treat TEXT custom fields as passive since they could be relabeling of action fields which is fine
     // if they are not leaving them as an active hub call does no harm - it just returns false but you loose inspections
     // to compensate for loss of inspection I added any custom field starting with "label" or "text" subid will inspect
-    var ispassive = (ro || subid==="thingname" || subid==="custom" || subid==="temperature" || subid==="feelsLike" || subid==="battery" || //  (command==="TEXT" && subid!=="allon" && subid!=="alloff") ||
-        subid==="presence" || subid.startsWith("motion") || subid.startsWith("contact") || subid==="status_" || subid==="status" || subid==="deviceType" || subid==="localExec" ||
-        subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" || subid==="name" || subid==="skin" || subid==="thermostatOperatingState" ||
-        subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" || subid==="numberOfButtons" || subid==="humidity" ||
-        subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") || subid==="illuminance" ||
-        (subid.startsWith("label")) || (subid.startsWith("text")) ||
-        (thetype==="ford" && !subid.startsWith("_"))
-    );
-    // console.log("linkval = ", linkval," command = ", command, " subid: ", subid, " realsubid: ", realsubid, " passive: ", ispassive);
+    var ispassive = ro;
+    if ( command==="" || command==="LINK" ) {
+        ispassive = (ispassive || subid==="thingname" || subid==="custom" || subid==="temperature" || subid==="feelsLike" || subid==="battery" || 
+            subid==="presence" || subid.startsWith("motion") || subid.startsWith("contact") || subid==="status_" || subid==="status" || subid==="deviceType" || subid==="localExec" ||
+            subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" || subid==="name" || subid==="skin" || subid==="thermostatOperatingState" ||
+            subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" || subid==="numberOfButtons" || subid==="humidity" ||
+            subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") || subid==="illuminance" ||
+            (subid.startsWith("label")) || (subid.startsWith("text")) ||
+            (thetype==="ford" && !subid.startsWith("_")) ||
+            (thetype==="sonos" && !subid.startsWith("_"))
+        );
+    }
+    console.log("linkval = ", linkval," command = ", command, " subid: ", subid, " realsubid: ", realsubid, " passive: ", ispassive);
 
     // turn momentary and piston items on or off temporarily
     // but only for the subid items that expect it
@@ -4341,22 +4378,27 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
             msg += "hint = "+hint + "<br>";
         }
         msg += "<hr>";
-        $('div.overlay > div[aid="'+aid+'"]').each(function() {
-            var inspectsubid = $(this).attr("subid");
-            var strval = $(this).html();
-            if ( strval ) {
-                if ( inspectsubid==="battery" ) {
-                    var batdiv = $(this).children().attr("style").substring(7);
-                    msg += inspectsubid + " = " + batdiv + "<br>";
-                } else if ( strval.indexOf("img src") !== -1 ) {
-                    msg += inspectsubid + " =  (image)<br>";
-                } else if ( inspectsubid==="level" || inspectsubid==="onlevel" || inspectsubid==="colorTemperature" || inspectsubid==="volume" || inspectsubid==="groupVolume" || inspectsubid==="position" ) {
-                    msg += inspectsubid + " = " + $(this).attr("value") + "<br>";
-                    // msg += inspectsubid + " = " + $(this).children().attr("style").substring(6) + "<br>";
-                } else if ( strval.length > 40 ) {
-                    msg += inspectsubid + " ... <br>";
-                } else {
-                    msg += inspectsubid + " = " + $(this).html() + "<br>";
+        // $('div.overlay > div[aid="'+aid+'"]').each(function() {
+        $('div #t-'+aid+' > div.overlay > div').each(function() {
+            if ( $(this).hasClass("minicolors") ) {
+                msg += "color = " + $(this).children("div.color").attr("value") + "<br>";
+            } else {
+                var inspectsubid = $(this).attr("subid");
+                var strval = $(this).html();
+                if ( strval && inspectsubid ) {
+                    if ( inspectsubid==="battery" ) {
+                        msg += inspectsubid + " = " + $(this).children().attr("style").substring(7);
+                    } else if ( strval.indexOf("<img") !== -1 ) {
+                        msg += inspectsubid + " =  (Image)";
+                    } else if ( $(this).hasClass("ui-slider") ) { // || inspectsubid==="level" || inspectsubid==="onlevel" || inspectsubid==="colorTemperature" || inspectsubid==="volume" || inspectsubid==="groupVolume" || inspectsubid==="position" ) {
+                        msg += inspectsubid + " = " + $(this).attr("value");
+                        // msg += inspectsubid + " = " + $(this).children().attr("style").substring(6) + "<br>";
+                    } else if ( strval.length < 25 ) {
+                        msg += inspectsubid + " = " + strval;
+                    } else {
+                        msg += inspectsubid + " = ...";
+                    }
+                    msg += "<br>";
                 }
             }
         });
@@ -4427,6 +4469,104 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
                 if (pstatus==="success") {
                     if ( presult && typeof presult === "object" ) {
                         console.log("Success: ", presult);
+
+                        // display a table or graph is this is a LIST command
+                        if ( command==="LIST" ) {
+                            var n = linkval.indexOf("::");
+                            if ( n!== -1 ) {
+                                var attrname = linkval.substring(0, n);
+                            } else {
+                                attrname = linkval;
+                            }
+
+                            var dispTable = "";
+                            var timedata = [];
+                            var valuedata = [];
+
+                            dispTable+= `<h3>List for Tile #${tileid} Attribute: ${attrname}</h3>`;
+                            dispTable+= "<div class='listtable'><table class='listtable'><tr class='head'><td>Time</td><td>Value</td></tr>";
+                            var ltotal = 0.0;
+                            var ncount = 0;
+                            var nstate = 0;
+                            var statetotal = 0;
+                            var statetype = "on";
+                            presult.forEach(obj => {
+                                timedata.push(obj.ltime);
+                                if ( !isNaN(parseFloat(obj.lvalue)) ) {
+                                    ltotal+= parseFloat(obj.lvalue);
+                                    valuedata.push(obj.lvalue);
+                                    ncount++;
+                                } else if ( obj.lvalue==="on" || obj.lvalue==="off" || obj.lvalue==="active" || 
+                                            obj.lvalue==="inactive" || obj.lvalue==="open" || obj.lvalue==="closed" ) {
+                                    nstate++;
+                                    if ( obj.lvalue==="on" || obj.lvalue==="open" || obj.lvalue==="active") {
+                                        statetotal++;
+                                        statetype = obj.lvalue;
+                                        valuedata.push(1);
+                                    } else {
+                                        valuedata.push(0);
+                                    }
+                                } else {
+                                    valuedata.push(0);
+                                }
+
+                                dispTable+= `<tr class='content'><td>${obj.ltime}</td><td>${obj.lvalue}</td></tr>`;
+                            });
+                            if ( nstate > 0 ) {
+                                var onpercent = Math.round( (statetotal / nstate) * 1000.0 ) / 10.0;
+                                dispTable+= `<tr class='foot'><td>Percent ${statetype}:</td><td>${onpercent}%</td></tr>`;
+                            }
+                            if ( ncount > 1 ) {
+                                if ( linktype === "variables" ) {
+                                    dispTable+= `<tr class='foot'><td>Sum of Values</td><td>${ltotal}</td></tr>`;
+                                }
+                                var avg = Math.round( (ltotal / ncount) * 100.0 ) / 100.0;
+                                dispTable+= `<tr class='foot'><td>Avg of Values</td><td>${avg}</td></tr>`;
+                            }
+                            dispTable+= "</table></div>";
+
+                            dispTable+= `<div class="canvasplot"><canvas id="theplot"><canvas></div>`;
+                            
+                            if ( Object.keys(presult).length > 0 ) {
+                                dispTable+= "<div class = 'listbuttons'>";
+                                dispTable+= "<button id='resetList' class='cm_button'>Reset</button>";
+                                dispTable+= "</div>";
+                            }
+                            // dispTable+= "<br>";
+                            var pos = {top: 80, left: 200, "max-width": 1200, "max-height": 600, border: "4px solid black", background: "white"};
+                            createModal("listview", dispTable, "body", "Close", pos, null, function() {
+                                $("#listview").draggable();
+                            });
+
+                            // show a bar graph of the data
+                            (async function() {
+                                var plotobj = {
+                                    type: 'bar',
+                                    data: {
+                                        labels: timedata,
+                                        datasets: [
+                                            {
+                                                label: `${attrname} over time`,
+                                                data: valuedata
+                                            }
+                                        ]
+                                    }
+                                }
+                                new Chart(document.getElementById('theplot'), plotobj);
+                            })();
+
+                            // handle the reset button
+                            $("#resetList").on("tap", function(evt) {
+                                $.post(cm_Globals.returnURL, 
+                                    {useajax: "resetlist", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: thevalue, hint: hint,
+                                     attr: theattr, subid: realsubid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval},
+                                     function (presult, pstatus) {
+                                        console.log(presult);
+                                     });
+                                $("#resetList").off("tap");
+                                closeModal("listview");
+                            });
+                         }
                     } else {
                         console.log(presult);
                     }
