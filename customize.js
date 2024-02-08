@@ -18,25 +18,6 @@ cm_Globals.natives = [];
 cm_Globals.defaultclick = "name";
 var ENABLERULES = true;
 
-function getDefaultSubids() {
-    var tileid = cm_Globals.tileid;
-    // var options = cm_Globals.options;
-    // var indexoptions = options.index;
-    // var keys = Object.keys(indexoptions);
-    // var idx = cm_Globals.thingidx;
-    // var device = devices[tileid];
-    // var pvalue = device.pvalue;
-     // var n = idx.indexOf("|");
-
-     loadExistingFields(tileid);
-     $("#cm_customtype option[value='TEXT']").prop('selected',true);
-     
-     var pc = loadTextPanel();
-     $("#cm_dynoContent").html(pc);
-
-     initExistingFields();
-}
-
 // tile custom popup box
 function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {  
 
@@ -56,11 +37,7 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
 
     // this is the tileid value in the things list which is the base device.id value
     cm_Globals.tileid = tileid;
-    // cm_Globals.thingidx = str_type + "|" + bid;
-    // cm_Globals.thingidx = tileid;
 
-    // reuse the thingidx variable but set it to the thingid value in our database
-    // which points to the specific thing in the visual display
     // note that "aid" is the same as "thingid" so we don't pass it in here
     var customname;
     try {
@@ -182,10 +159,7 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
                 } else {
                     try {
                         getDefaultSubids();
-                        var tileid = cm_Globals.tileid;
-                        // var allthings = cm_Globals.allthings;
-                        // var thing = allthings[idx];
-                        var thing = cm_Globals.devices[tileid];
+                        var thing = cm_Globals.devices[cm_Globals.tileid];
                         $("#cm_subheader").html(thing.name);
                         initCustomActions();
                         handleBuiltin(cm_Globals.defaultclick);
@@ -294,12 +268,24 @@ function sortedSensors(unsorted, one, two, three) {
     return sensors;
 }
 
+function getDefaultSubids() {
+    loadExistingFields(cm_Globals.tileid);
+    $("#cm_customtype option[value='TEXT']").prop('selected',true);
+    
+    var pc = loadTextPanel();
+    $("#cm_dynoContent").html(pc);
+
+    initExistingFields();
+}
+
 function getExistingFields(tileid, curval) {
 
     // go through all the things and make options list
     // and avoid linking to ourselves
     var results = "";
     var selected = "";
+    curval = curval.toString();
+    // console.log("in getExistingFields, tileid = ", tileid, " curval = ", curval);
 
     // create a sorted list here
     // var sensors = sortedSensors("name", "type", "hubnum");
@@ -307,11 +293,11 @@ function getExistingFields(tileid, curval) {
 
     for ( var i in sortdevices ) {
         var sensor = sortdevices[i];
-        var id = sensor["id"];
-        if ( id !== tileid ) {
+        var id = sensor["id"].toString();
+        if ( tileid==null || id !== tileid ) {
             var thingname = sensor["name"];
             var thingtype = sensor["devicetype"];
-            if ( id === curval ) {  // cm_Globals.currentid ) {
+            if ( id === curval ) {
                 selected = " selected";
             } else {
                 selected = "";
@@ -323,7 +309,12 @@ function getExistingFields(tileid, curval) {
 }
 
 function loadLinkPanel(curval) {
-    
+
+    // console.log(">>>> curval in loadLinkPanel: ", curval, cm_Globals.tileid);
+    if ( curval === cm_Globals.tileid ) {
+        curval = 1;
+    }
+
     // section for LINK types - Drop down list, ID display, Field list, and a test button
     var dh = "";
     dh+= "<div class='cm_group'><div><label for='cm_link'>Linked Tile: </label></div>";
@@ -410,22 +401,35 @@ function loadTextPanel() {
     return dh;
 }
 
-function loadListPanel(linkval) {
+function loadListPanel(loadedval) {
     var servicetype = "LIST";
     var dh = "";
-    dh+= "<div id='cm_dynoText'>";
-    dh+= "<div class='cm_group'><div><label for='cm_list'>Field to Capture: </label></div>";
-    dh+= "<select id='cm_list' name='cm_list'>";    
-    var n = linkval.indexOf("::");
-    var defitem = linkval.substring(0,n);
-    var nreset = linkval.substring(n+2);
-    var results = loadLinkItem(cm_Globals.tileid, false, defitem);
-    dh+= results.fields;
+    loadedval = loadedval.toString();
+
+    var arr = parseContent(servicetype, loadedval, null);
+    var linkid = arr[0];
+    var curval = arr[1];
+    var nreset = arr[2];
+
+    console.log(`in loadListPanel, loadedval: ${loadedval}, linkid: ${linkid}, curval: ${curval}, nreset: ${nreset}`);
+
+    dh+= "<div class='cm_group'><div><label for='cm_link'>Linked Tile: </label></div>";
+
+    // pass null as the tile to skip since we want all of them
+    // in fact the default tile will be this tile for most cases
+    dh+= "<select id='cm_link' name='cm_link'>";    
+    dh+= getExistingFields( null, linkid);
+    dh+="</select></div>";
+
+    // list of available fields to select for the linked tile
+    dh+= "<div class='cm_group'>Selected ID: <div id='cm_linkbid'></div>";
+    dh+= "<div>Available Fields:</div>";
+    dh+= "<select size='6' id='cm_linkfields' name='cm_linkfields'>"; 
     dh+="</select></div>";
 
     dh+= "<div class='cm_group'><div><label for='cm_reset'>Reset how often: </label></div>";
-    var resetopts = {"h":"Hourly","d":"Daily","w":"Weekly","m":"Monthly","y":"Yearly","md":"Mode Day","me":"Mode Evening","mn":"Mode Night","ma":"Mode Away","x":"Never"};
     dh+= "<select id='cm_reset' name='cm_reset'>";
+    const resetopts = {"h":"Hourly","d":"Daily","w":"Weekly","m":"Monthly","y":"Yearly","md":"Mode Day","me":"Mode Evening","mn":"Mode Night","ma":"Mode Away","x":"Never"};
     for (var i in resetopts) {
         var v = resetopts[i];
         if ( i === nreset ) {
@@ -567,7 +571,6 @@ function loadLinkItem(linkid, allowuser, defvalue) {
                 }
 
             } else {  // } if ( !subids.includes(tkey) ) {
-                // If an alias name exists, then use it instead of the key
                 if ( tkey === defvalue ) {
                     results+= "<option command='' linkval='"+tval+"' value='" + tkey + "' selected>" + tkey + "</option>";
                 } else {
@@ -587,10 +590,6 @@ function loadLinkItem(linkid, allowuser, defvalue) {
             var command = val[0];
             var linkval = val[1];
             itemorder++;
-            // if ( val[0] == "LINK" ) {
-            //     var linkid = val[1];
-            //     var linkthing = cm_Globals.devices[linkid];  //  cm_Globals.allthings[idx];
-            // }
             results+= "<option command='"+command+"' linkval='"+linkval+"' value='" + subid + "' order='"+itemorder+"'>" + subid + "<span class='reddot'> *</span></option>";
             subids.push(subid);
         });
@@ -605,53 +604,135 @@ function loadLinkItem(linkid, allowuser, defvalue) {
     }
     return {fields: results, subids: subids, firstitem: firstitem};
 }
- 
- function initLinkActions(linkid, subid) {
-    // get our fields and load them into link list box
-    // and select the first item
 
-    // var options = cm_Globals.options;
-    
-    // if the link isn't there then reset to digital clock default
-    if ( !linkid ) {
-        linkid = cm_Globals.currentid;
-    } else {
-        cm_Globals.currentid = linkid;
-    }
+function parseContent(customType, content, subid) {
+    var linkid;
+    var linkval;
+    var nreset;
+    if ( customType==="LINK") {
+        var n = content===null ? -1 : content.indexOf("::");
+        if ( n=== -1 ) {
+            // linkid = content==null ? cm_Globals.currentid : content;
+            linkid = content===null ? 1 : content;
+            var pvalue = cm_Globals.devices[linkid].pvalue;
 
-    // var n = linkidx.indexOf("|");
-    // var bid = linkidx.substring(n+1);
-    // linkid = options.index[linkidx];
-    var device = cm_Globals.devices[linkid];
-    if ( !device ) { return; }
-
-    var bid = device.deviceid;
-    // var values = device.pvalue;
-    
-    // set the drop down list to the linked item
-    $("#cm_link").prop("value", linkid);
-    $("#cm_link option[value='" + linkid + "']").prop('selected',true);
-                
-    $("#cm_linkbid").html(bid + " => Tile #" + linkid);
-    
-    // read the existing fields of the linked tile, excluded user items
-    var results = loadLinkItem(linkid, false, subid);
-    if ( results ) {
-        $("#cm_linkfields").html(results.fields);
-        
-        // highlight the selected item. if nothing preselected use first item
-        if ( !subid && results.firstitem ) {
-            subid = results.firstitem;
+            // set a default subid field based on legacy subid or popular real subids to target
+            var i = 0;
+            for (var key in pvalue) {
+                if ( !subid && (i===1 || key==="switch" || key==="contact" || key==="door" || key==="motion" || key==="presence") ) {
+                    linkval = key;
+                } else if ( subid===key || (subid && subid.startsWith(key)) ) {
+                    linkval = key;
+                }
+                i++;
+            }
+        } else {
+            linkid = content.substring(0, n);
+            linkval = content.substring(n+2);
         }
-        if ( subid ) {
-            $("#cm_linkfields option[value='" + subid + "']").prop('selected',true);
+    } else {
+        var n = content===null ? -1 : content.indexOf("::");
+        if ( n===-1 ) {
+            linkid = content===null ? cm_Globals.currentid : content;
+            var pvalue = cm_Globals.devices[linkid].pvalue;
+            // set a default subid field based on popular real subids to target
+            var i = 0;
+            for (var key in pvalue) {
+                if ( !subid && (i===1 || key==="switch" || key==="contact" || key==="door" || key==="motion" || key==="presence" || key==="time" ) ) {
+                    linkval = key;
+                } else if ( subid===key || (subid && subid.startsWith(key)) ) {
+                    linkval = key;
+                }
+                i++;
+            }
+            nreset = "d";
+        } else {
+            var part1 = content.substring(0, n);
+            var part2 = content.substring(n+2);
+            var m = part2.indexOf("::");
+            if ( m=== -1 ) {
+                linkid = cm_Globals.tileid;
+                linkval = part1;
+                nreset = part2;
+            } else {
+                linkid = part1;
+                linkval = part2.substring(0, m);
+                nreset = part2.substring(m+2);
+            }
+        }
+    }
+    cm_Globals.currentid = linkid;
+
+    console.log(`parseContent, linkid: ${linkid}, linkval: ${linkval}, nreset: ${nreset}`);
+
+    return [linkid, linkval, nreset];
+}
+
+ function initLinkActions(customType, content, subid) {
+    // get our fields and load them into link list box
+    // and select the "subid" or first item
+    // in the future all linked and list values will have :: in it
+    // but we must handle the case before this was true
+    // old LINK --> {LINK, targetid, subid[nn]} with targetsubid = subid, and subid = subidnn where nn is optional to make unique
+    // new LINK --> {LINK, targetid::targetsubid, subid}
+    // old LIST --> {LIST, targetsubid::reset, subid} with the limitation of targetid always being current tile
+    // new LIST --> {LIST, targetid::targetsubid::reset, user_subid}
+
+    function doInit(customType, content, subid) {
+
+        var arr = parseContent(customType, content, subid);
+        var linkid = arr[0];
+        var targetsubid = arr[1];
+        var nreset = arr[2];
+        var device = cm_Globals.devices[linkid];
+
+        if ( !device ) {
+            console.log(">>>> No device returned for the linked tile: #", linkid);
+            return;
+        }
+        var bid = device.deviceid;
+        
+        // set the drop down list to the linked item
+        $("#cm_link").prop("value", linkid);
+        $("#cm_link option[value='" + linkid + "']").prop('selected',true).click();
+        $("#cm_linkbid").html(bid + " => Tile #" + linkid);
+        // console.log(">>>> doInit: ", linkid, targetsubid, nreset);
+
+        // load the type of reset for list types
+        if ( customType==="LIST" ) {
+            $("#cm_reset").prop("value", nreset);
+            $(`#cm_reset option[value='${nreset}']`).prop('selected', true);    
+        }
+
+        // read the existing fields of the linked tile, excluded user items
+        results = loadLinkItem(linkid, false, targetsubid);
+
+        if ( results ) {
+            $("#cm_linkfields").html(results.fields);
+            
+            // highlight the selected item. if nothing preselected use first item
+            if ( !targetsubid ) {
+                targetsubid = results.firstitem;
+            }
+            if ( !subid ) {
+                if ( customType==="LIST" ) {
+                    subid = "list_"+targetsubid;
+                } else {
+                    subid = targetsubid;
+                }
+            }
+            initLinkSelect();
+
+            $("#cm_linkfields option[value='" + targetsubid + "']").prop('selected',true).click();
 
             // put this in the user field on the left for editing
-            // $("#cm_userfield").prop("value", subid);
             $("#cm_userfield").attr("value", subid);
+            $("#cm_userfield").prop("value",subid);
             $("#cm_userfield").val(subid);
+
+        } else {
+            console.log(`>>>> something went wrong loading ${customType} list. linkid = ${linkid} `);
         }
-        initLinkSelect(results.subids);
     }
     
     // activate clicking on item by getting the id of the item selected
@@ -660,40 +741,20 @@ function loadLinkItem(linkid, allowuser, defvalue) {
     $("#cm_link").off('change');
     $("#cm_link").on('change', function(event) {
         var linkid = $(this).val();
-        var device = cm_Globals.devices[linkid];
-        var bid = device.deviceid;
         cm_Globals.currentid = linkid;
-        // var n = linkidx.indexOf("|");
-        // var bid = linkidx.substring(n+1);
-        // var options = cm_Globals.options;
-        // var linkid = options.index[cm_Globals.currentid];
-        $("#cm_linkbid").html(bid + " => Tile #" + linkid);
-        var results = loadLinkItem(linkid, false, null);
-        if ( results ) {
-            $("#cm_linkfields").html(results.fields);
-            initLinkSelect(results.subids);
-            if ( results.firstitem ) {
-                $("#cm_linkfields option[value='" + results.firstitem + "']").prop('selected',true).click();
-            }
-        }
+        var localType = $("#cm_cutomtype").val();
+        doInit(localType, null, null);
         event.stopPropagation();
     });
- 
+
+    doInit(customType, content, subid);
 }
 
 function initLinkSelect() {
     $("#cm_linkfields option").off('tap');
     $("#cm_linkfields option").on('tap', function(event) {
         var subid = $(this).val();
-        $("#cm_userfield").attr("value",subid);
-        $("#cm_userfield").prop("value",subid);
-        $("#cm_userfield").val(subid);
         
-        // var tileid = cm_Globals.tileid;
-        // var thing = cm_Globals.devices[tileid];
-        // var value = thing.pvalue;
-        // var subids = Object.keys(value);
-
         // check the builtin list for this subid
         var subids = [];
         cm_Globals.natives = [];
@@ -704,6 +765,23 @@ function initLinkSelect() {
             }
             subids.push( thissub );
         });
+
+        // make a unique subid to use as the new field name
+        var customType = $("#cm_customtype").val();
+        if (customType==="LIST") {
+            subid = "list_"+subid;
+        }
+        var basesub = subid;
+        var icnt = 1;
+        while ( subids.includes(subid) ) {
+            icnt++;
+            subid = basesub + icnt.toString();
+        }
+
+        // now store our updated subid
+        $("#cm_userfield").attr("value",subid);
+        $("#cm_userfield").prop("value",subid);
+        $("#cm_userfield").val(subid);
 
         if ( cm_Globals.natives.includes(subid) ) {
             $("#cm_delButton").addClass("disabled").prop("disabled",true);
@@ -739,7 +817,7 @@ function initCustomActions() {
         if ( customType === "LINK" ) {
             content = loadLinkPanel(cm_Globals.currentid);
             $("#cm_dynoContent").html(content);
-            initLinkActions(null, null);
+            initLinkActions(customType, null, null);
         } else if ( customType ==="URL" ) {
             content = loadUrlPanel();
             $("#cm_dynoContent").html(content);
@@ -753,10 +831,10 @@ function initCustomActions() {
             $("#cm_dynoContent").html(content);
             initExistingFields();
         } else if ( customType ==="LIST" ) {
-            var curval = $("#cm_userfield").val() + "::d";
-            content = loadListPanel(curval);
+            // var linkid = $("#cm_userfield").val() + "::d";
+            content = loadListPanel(cm_Globals.currentid);
             $("#cm_dynoContent").html(content);
-            initExistingFields();
+            initLinkActions(customType, null, null);
         } else {
             content = loadTextPanel();
             $("#cm_dynoContent").html(content);
@@ -852,7 +930,6 @@ function loadExistingFields(tileid) {
 }
 
 function initExistingFields() {
-    // var idx = cm_Globals.thingidx;
     
     // re-enable the user and build in fields
     $("#cm_userfield").prop("readonly",false).removeClass("readonly");
@@ -871,7 +948,6 @@ function initExistingFields() {
 
     $("#cm_userfield").off('input');
     $("#cm_userfield").on('input', function(event) {
-        var tileid = cm_Globals.tileid;
         var subid = $("#cm_userfield").val();
         
         // change button label to Add or Replace based on existing or not
@@ -996,7 +1072,6 @@ function handleBuiltin(subid) {
     var tileid = cm_Globals.tileid;
     var thing = cm_Globals.devices[tileid]
     var value = thing.pvalue;
-    var cmtext = value[subid];
 
     var item = $("#cm_builtinfields option[value='"+subid+"']");
     var cmtype = $(item).attr("command");
@@ -1020,42 +1095,35 @@ function handleBuiltin(subid) {
     $("#cm_userfield").attr("value",subid);
     $("#cm_userfield").val(subid);
 
+    if ( !cmtype ) {
+        cmtype = "TEXT";
+    }
+    $("#cm_customtype").prop("value", cmtype);
+    $("#cm_customtype option[value='" + cmtype + "']").prop('selected',true)
+    var content;
+
     // update dyno panel
     if ( cmtype==="LINK" ) {
-        // var oldval = $("#cm_customtype").val();
-        $("#cm_customtype").prop("value", "LINK");
-        $("#cm_customtype option[value='LINK']").prop('selected',true);
-        // cm_Globals.currentid = linkval;
-        var content = loadLinkPanel(linkval);
+        content = loadLinkPanel(linkval);
         $("#cm_dynoContent").html(content);
-        initLinkActions(linkval, subid);
+        initLinkActions(cmtype, linkval, subid);
+    } else if ( cmtype==="LIST" ) {
+        content = loadListPanel(linkval);
+        $("#cm_dynoContent").html(content);
+        initLinkActions(cmtype, linkval, subid);
     } else {
-        cmtext = linkval;
-        if ( !cmtype ) {
-            cmtype = "TEXT";
-        }
-        $("#cm_customtype").prop("value", cmtype);
-        $("#cm_customtype option[value='" + cmtype + "']").prop('selected',true)
-        $("#cm_text").val(cmtext);
-        cm_Globals.usertext = cmtext;
-
-        var content;
+        $("#cm_text").val(linkval);
+        cm_Globals.usertext = linkval;
         if (cmtype==="POST" || cmtype==="GET" || cmtype==="PUT") {
             content = loadServicePanel(cmtype);
-            $("#cm_dynoContent").html(content);
         } else if ( cmtype==="URL") {
             content = loadUrlPanel();
-            $("#cm_dynoContent").html(content);
         } else if ( cmtype==="RULE") {
             content = loadRulePanel();
-            $("#cm_dynoContent").html(content);
-        } else if ( cmtype==="LIST") {
-            content = loadListPanel(linkval);
-            $("#cm_dynoContent").html(content);
         } else {
             content = loadTextPanel();
-            $("#cm_dynoContent").html(content);
         }
+        $("#cm_dynoContent").html(content);
         initExistingFields();
     }
     showPreview();
@@ -1092,9 +1160,11 @@ function handleBuiltin(subid) {
 // function uses server to save the custom info
 // for this call value and attr mean something different than usual
 function applyCustomField(action, subid) {
+
     var tileid = cm_Globals.tileid;
     var thing = cm_Globals.devices[tileid]
     var bid = thing.deviceid;
+    var nreset = "d";
 
     if ( cm_Globals.rules ) {
         var oldrules = cm_Globals.rules.slice(0);
@@ -1113,17 +1183,22 @@ function applyCustomField(action, subid) {
 
         // var options = cm_Globals.options;
         if ( customtype==="LINK" ) {
-            var olditem = cm_Globals.devices[cm_Globals.currentid];
-            if ( olditem ) {
-                content = olditem.id;
+            var linkid = $("#cm_link").val();
+            var targetsubid = $("#cm_linkfields").val();
+            if ( linkid && targetsubid ) {
+                content = linkid + "::" + targetsubid;
             } else {
-                errors.push("Tile being linked to does not exist");
-                content = null;
+                errors.push("Tile being linked does not exist or an invalide target field was given");
             }
         } else if ( customtype==="LIST" ) {
-            content = $("#cm_list").val();
-            var resettype = $("#cm_reset").val();
-            content = content + "::" + resettype;
+            linkid = $("#cm_link").val();
+            targetsubid = $("#cm_linkfields").val();
+            nreset = $("#cm_reset").val();
+            if ( linkid && targetsubid ) {
+                content = linkid + "::" + targetsubid + "::" + nreset;
+            } else {
+                errors.push("Tile being linked does not exist or an invalide target field was given");
+            }
         } else {
             content = $("#cm_text").val();
         }
@@ -1184,9 +1259,7 @@ function applyCustomField(action, subid) {
     if ( errors.length ) {
         var errstr = errors.join("\n  ");
         alert("Invalid entries:\n" + errstr);
-        if ( action==="addcustom" ) { 
-            return; 
-        }
+        return; 
     } else {
         rules = encodeURI(JSON.stringify(cm_Globals.rules));
     }

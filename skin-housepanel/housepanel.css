@@ -835,7 +835,7 @@ div.event_1 {
 }
 
 /* changed to use name instead of thingname */
-div.thing div.thingname {
+div.thing div.thingname, div.overlay.hint {
     display: none;
 }
 

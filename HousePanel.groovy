@@ -3183,7 +3183,8 @@ def changeHandler(evt) {
             }
 
             // for colors we have to set all parameters at the same time to avoid race conditions
-            def colorarray = [h100, s, v, color]
+            // def colorarray = [h100, s, v, color]
+            Map colorarray = [hue: h100, saturation: s, level: v, color: color];
             postHubRange(state.directIP, state.directPort, "update", deviceName, deviceid, "color", devtype, colorarray)
             postHubRange(state.directIP2, state.directPort2, "update", deviceName, deviceid, "color", devtype, colorarray)
             postHubRange(state.directIP3, state.directPort3, "update", deviceName, deviceid, "color", devtype, colorarray)
@@ -3265,7 +3266,7 @@ def variableHandler(evt) {
 }
 
 def postHub(ip, port, msgtype, name, id, subid, type, value) {
-    def abody = [
+    Map abody = [
                 msgtype: msgtype,
                 hubid: state.hubid,
                 change_name: name,
