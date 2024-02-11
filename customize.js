@@ -341,8 +341,8 @@ function loadLinkPanel(curval) {
         "of this tile to link into the customized tile using the \"Available Fields\" list above on the right. Once you are happy with " +
         "your selection, click the \"Add\" button and this field will be added to the list of \"Existing Fields\" " +
         "shown on the left side of this dialog box. You can mix and match this with any other addition. " +
-        "You can add text or numbers to the end of the field name to make the link subid unique, or you can " +
-        "leave it as-is. If the field name exists in the list on the left it will be replaced. " +
+        "You can create your own unique field name by adding text or numbers to the end of the field name, or you can " +
+        "leave it as-is to accept the generated default. If the field name exists in the list on the left it will be replaced. " +
         "The existing fields list will be disabled when this type is selected. Change the type to move to " +
         "a different existing field or to change the type of this field away from a LINK.";
     $("#cm_dynoInfo").html(infotext);
@@ -448,12 +448,15 @@ function loadListPanel(loadedval) {
     dh+= "</div>";
     
     var infotext = "The \"" + servicetype + "\" option enables you to " +
-        "capture a time sequenced list of changes that happen to the selected field. " +
-        "This captured list becomes available for displaying in a table or a graphical plot. " +
-        "You must provide a new user-defined field name using the entry box on the left to associate with the list. " +
+        "capture a time sequenced list of changes that happen to any field of any tile. " +
+        "The default is the selected tile, but it can be changed to gather a list from another tile. " +
+        "This captured list becomes available for displaying in a table with a bar graph. " +
+        "You must provide a new user-defined field name using the entry box on the left to associate with the list, " +
+        "or accept the generated default, which will be list_ prepended to the field name. " +
         "Be aware that the data captured for list fields is stored locally and can be quite large for fields that change often, " +
-        "so be selective about which fields you use to capture lists. This feature was primarily designed for intended use with " +
+        "so be selective about which fields you use to capture lists. This feature was primarily designed for use with " +
         "user provided and user altered variables, but also works well with tracking weather and other numerical data. " +
+        "State devices like switches and contacts will be graphed as 1 for the active state and 0 for the inactive state. " +
         "Click the \"Add\" button and this field will be added to the list of \"Existing Fields\" " +
         "shown on the left side of this dialog box. You can mix and match this with any other addition.";
     $("#cm_dynoInfo").html(infotext);

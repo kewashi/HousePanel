@@ -383,7 +383,7 @@ function getHeader(userid, pname, skin, skip) {
 
     // chart capability loaded here
     $tc += '<script type="text/javascript" src="node_modules/chart.js/dist/chart.umd.js"></script>';
-    $tc += '<script type="text/javascript" src="node_modules/chart.js/dist/chart.js"></script>';
+    // $tc += '<script type="text/javascript" src="node_modules/chart.js/dist/chart.js"></script>';
     
     // load main script file
     var customhash = "js001_" + GLB.HPVERSION;
@@ -2044,15 +2044,16 @@ function getDevices(hub) {
 
                             // check if this is our last one and return array of devices
                             if ( devicecnt >= numdevices ) {
-                                resolve(mydevices);
                                 removeDeadNodes(userid, hubindex, currentDevices)
                                 .then(results => {
-                                    if ( DEBUG2 ) {
-                                        console.log( (ddbg()), results);
+                                    if ( results[0] || results[1] ) {
+                                        console.log( (ddbg()), "removed dead nodes: ", results);
                                     }
+                                    resolve(mydevices);
                                 })
                                 .catch(reason => {
                                     console.log( (ddbg()), reason );
+                                    resolve(mydevices);
                                 });
                             }                    
                         })
@@ -2888,52 +2889,76 @@ function getDevices(hub) {
 
         } // end of new ST 
         
-        // remove tiles and devices that are no longer on the hub
+        // rewrote this to first remove devices and then remove tiles that are stranded
+        // this version uses db queries which is much faster than what was here before
         function removeDeadNodes(userid, hubindex, currentDevices) {
-            var result = removeDeadTiles(userid, hubindex, currentDevices)
-            .then( numtiles => {
-                var indev = "(" + currentDevices.join(",") + ")";
-                return mydb.deleteRow("devices","userid = "+userid+" AND hubid = "+hubindex+" AND deviceid NOT IN " + indev)
-                .then( results => {
-                    var numdevices = results.getAffectedItemsCount();
-                    return "Removed " + numdevices + " devices and " + numtiles + " tiles";
+
+            // first, remove all devices that are tied to the queried hub but not returned by the query
+            var indev = "(" + currentDevices.join(",") + ")";
+            return mydb.deleteRow("devices","userid = "+userid+" AND hubid = "+hubindex+" AND deviceid NOT IN " + indev)
+            .then( results => {
+                var numdeldevices = results.getAffectedItemsCount();
+
+                // now get all defices for this user to use to check for stranded tiles
+                mydb.getRows("devices","id",`userid=${userid}`)
+                .then(rows => {
+                    var currentIds = [];
+                    rows.forEach(row => {
+                        currentIds.push(row.id);
+                    });
+                    var idstr = "(" + currentIds.join(",") + ")";
+
+                    // use query to remove all tiles that do not have a corresponding device in the DB
+                    // this will remove it from all rooms and panels
+                    return mydb.deleteRow("things",`userid=${userid} AND tileid NOT IN ${idstr}`)
+                    .then(res => {
+                        numdeltiles = res.getAffectedItemsCount();
+                        return [numdeldevices, numdeltiles];
+                        // return "Removed " + numdeldevices + " devices and " + numdeltiles + " tiles";
+                    })
+                    .catch(reason => {
+                        console.log( (ddbg()), reason );
+                        return [numdeldevices, 0];
+                        // return "Removed " + numdeldevices + " devices and unknown number of tiles due to an error";
+                    });
                 })
                 .catch(reason => {
-                    console.log( (ddbg()), reason, "\nsqlstr: ", mydb.getRequest() );
-                    return "Removed " + 0 + " devices and " + numtiles + " tiles";
+                    console.log( (ddbg()), reason );
+                    return [0, 0];
+                    // return "Removed unknown number of devices and tiles due to an error";
                 });
-            })
-            .catch(reason => {
-                console.log( (ddbg()), reason, "\nsqlstr: ", mydb.getRequest() );
-                return "No devices and no tiles removed";
-            });
-            return result;
-        }
-
-        // remove dead tiles
-        function removeDeadTiles(userid, hubindex, currentDevices) {
-
-            // go through all tiles and remove those that don't have devices
-            var joinstr = mydb.getJoinStr("things","tileid","devices","id");
-            return mydb.getRows("things","things.id as things_id, devices.deviceid as devices_deviceid, devices.hubid as devices_hubid",
-                                "things.userid = "+userid+" AND devices.hubid = "+hubindex,joinstr)
-            .then(things => {
-                if ( !things ) return 0;
-                var numremoved = 0;
-                things.forEach(thing => {
-                    var devstr = "'"+thing["devices_deviceid"]+"'";
-                    if ( !currentDevices.includes(devstr) ) {
-                        numremoved++
-                        mydb.deleteRow("things","id = " + thing["things_id"]);
-                    }
-                });
-                return numremoved;
             })
             .catch(reason => {
                 console.log( (ddbg()), reason );
-                return 0;
+                return [0, 0];
+                // return "No devices and no tiles removed";
             });
         }
+
+        // remove dead tiles
+        // function removeDeadTiles(userid, hubindex, currentDevices) {
+
+        //     // go through all tiles and remove those that don't have devices
+        //     var joinstr = mydb.getJoinStr("things","tileid","devices","id");
+        //     return mydb.getRows("things","things.id as things_id, devices.deviceid as devices_deviceid, devices.hubid as devices_hubid",
+        //                         "things.userid = "+userid+" AND devices.hubid = "+hubindex,joinstr)
+        //     .then(things => {
+        //         if ( !things ) return 0;
+        //         var numremoved = 0;
+        //         things.forEach(thing => {
+        //             var devstr = "'"+thing["devices_deviceid"]+"'";
+        //             if ( !currentDevices.includes(devstr) ) {
+        //                 numremoved++
+        //                 mydb.deleteRow("things","id = " + thing["things_id"]);
+        //             }
+        //         });
+        //         return numremoved;
+        //     })
+        //     .catch(reason => {
+        //         console.log( (ddbg()), reason );
+        //         return 0;
+        //     });
+        // }
 
         function getFordVehicles() {
 
@@ -3642,7 +3667,7 @@ function getDevices(hub) {
             }
         }
 
-    // end of the promise function to return to caller
+    // end of the getDevices promise function to return to caller
     });
     return promise;
 
@@ -3819,21 +3844,6 @@ function setIsyFields(nodeid, device, props) {
         }
     }
     return value;
-}
-
-// returns the maximum index from the options
-function getMaxIndex() {
-    var optindex = GLB.options.index;
-    var maxindex = 0;
-    if ( typeof optindex==="object" ) {
-        for ( var key in optindex ) {
-            var value = parseInt(optindex[key]);
-            if ( !isNaN(value) ) {
-                maxindex = ( value > maxindex ) ? value : maxindex;
-            }
-        }
-    }
-    return maxindex;
 }
 
 function getSpecials(configoptions) {
@@ -9663,12 +9673,12 @@ function delThing(userid, bid, thingtype, panel, tileid, thingid) {
     .then(result => {
         var msg;
         if ( result ) {
-            msg = "removed tile #" + tileid + " deviceid: " + bid + " of type: " + thingtype + " from page: " + panel;
+            msg = "removed tile #" + tileid + " deviceid: " + bid + " of type: " + thingtype + " from room: " + panel;
             if ( DEBUG6 ) {
                 console.log( (ddbg()), msg);
             }
         } else {
-            msg = "error - could not remove tile #" + tileid + " deviceid: " + bid + " of type: " + thingtype + " from page: " + panel;
+            msg = "error - could not remove tile #" + tileid + " deviceid: " + bid + " of type: " + thingtype + " from room: " + panel;
             console.log( (ddbg()), msg);
         }
         return msg;
@@ -9679,22 +9689,30 @@ function delThing(userid, bid, thingtype, panel, tileid, thingid) {
     });
 }
 
-function delPage(userid, roomid, panel) {
+function delPage(userid, roomid, roomname, panel) {
 
-    return mydb.deleteRow("rooms","userid = "+userid+" AND id="+roomid)
+    return Promise.all([
+        mydb.deleteRow("rooms","userid = "+userid+" AND id="+roomid),
+        mydb.deleteRow("things","userid = "+userid+" AND roomid="+roomid)
+    ])
     .then(result => {
         var msg;
-        if ( result ) {
-            msg = "removed room #" + roomid + " of name: " + panel;
+        var numdelrooms = result[0].getAffectedItemsCount();
+        if ( numdelrooms ) {
+            msg = "removed room: " + roomname + " (" + roomid + ") from panel: " + panel;
+            var numdeltiles = result[1].getAffectedItemsCount();
+            if ( numdeltiles ) {
+                msg+= " and removed " + numdeltiles + " tiles that were in that room.";
+            }
         } else {
-            msg = "error - could not remove room #" + roomid + " of name: " + panel;
-            console.log( (ddbg()), "delPage - ", msg);
+            msg = "error - failed to remove room: " + roomname + " (" + roomid + ") from panel: " + pamel;
+            console.log( (ddbg()), "delPage - ", msg );
         }
         return msg;
     })
     .catch(reason => {
         console.log( (ddbg()), "delPage - ", reason);
-        return reason;
+        return "error - something went wrong trying to remove a";
     });
 }
 
@@ -11753,7 +11771,8 @@ function apiCall(user, body, protocol, res) {
 
             case "pagedelete":
                 if ( protocol==="POST" ) {
-                    result = delPage(userid, roomid, swval);
+                    var roomname = swval;
+                    result = delPage(userid, roomid, roomname, pname);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -12517,10 +12536,10 @@ function setupBrowserSocket() {
                         }
                         console.log( (ddbg()), str, "from host:", clientUrl, "port:", clientPort);
 
-                        if ( clientUrl === "::1" ) {
-                            EMULATEHUB = true;
-                            console.log( (ddbg()), "Local testing mode enabled. ISY hubs ignored...");
-                        }
+                        // if ( clientUrl === "::1" ) {
+                        //     EMULATEHUB = true;
+                        //     console.log( (ddbg()), "Local testing mode enabled. ISY hubs ignored...");
+                        // }
                     });
                 }
             });
