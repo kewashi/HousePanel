@@ -7223,22 +7223,22 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, doli
             // invokeLists(deviceid, lines, pvalueinput);
             invokeRules(deviceid, lines, hubs, devices);
         }
-        return devices;
+        // return devices;
     })
-    .then(devices => {
-        if ( dolists ) {
-            mydb.getRows("configs","*","userid = "+userid+" AND configkey LIKE 'user_%' AND NOT configkey = 'useroptions'")
-            .then(configs => {
-                // must invoke separately and use all the configurations per query above
-                if ( configs ) {
-                    invokeLists(deviceid, configs, pvalueinput, devices);
-                }
-            })
-            .catch(reason => {
-                console.log( (ddbg()), "invokeLists error: ", reason);
-            });
-        }
-    })
+    // .then(devices => {
+    //     if ( dolists ) {
+    //         mydb.getRows("configs","*","userid = "+userid+" AND configkey LIKE 'user_%' AND NOT configkey = 'useroptions'")
+    //         .then(configs => {
+    //             // must invoke separately and use all the configurations per query above
+    //             if ( configs ) {
+    //                 invokeLists(deviceid, configs, pvalueinput, devices);
+    //             }
+    //         })
+    //         .catch(reason => {
+    //             console.log( (ddbg()), "invokeLists error: ", reason);
+    //         });
+    //     }
+    // })
     .catch(reason => {
         console.log( (ddbg()), "processLists error: ", reason);
     });
@@ -7280,13 +7280,13 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, doli
                         var lastadd = mydb.getAdd();
                         if ( lastadd && lastadd.ltime && lastadd.userid === userid && lastadd.deviceid === sourcebid && lastadd.subid === lsubid && 
                                         lastadd.ltime === today && lastadd.lvalue === newval ) {
-                            if ( DEBUG11 ) {
+                            if ( DEBUG11 || DEBUGtmp ) {
                                 console.log( (ddbg()), "LIST update skipped due to duplicate: ", lastadd, newobj);
                             }
                         } else {
                             mydb.addRow("lists", newobj)
                             .then( ()=> {
-                                if ( DEBUG11 ) {
+                                if ( DEBUG11 || DEUBGtmp ) {
                                     console.log( (ddbg()), "LIST updated: ", newobj);
                                 }
                             })
