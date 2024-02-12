@@ -7207,38 +7207,37 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, doli
                 lines.push(aline);
             });
         }
+        var dbdevices = results[2];
+        var devices = {};
+        dbdevices.forEach(device => {
+            var id = device.id;
+            devices[id] = device;
+        });
         if ( lines && lines.length ) {
             var dbhubs = results[1];
             var hubs = {};
-            for ( var ahub in dbhubs ) {
-                var id = dbhubs[ahub].id;
-                hubs[id] = dbhubs[ahub];
-            }
-            var dbdevices = results[2];
-            var devices = {};
-            for ( var adev in dbdevices ) {
-                var id = dbdevices[adev].id;
-                devices[id] = dbdevices[adev];
-            }
+            dbhubs.forEach(hub => {
+                var id = hub.id;
+                hubs[id] = hub;
+            });
             // invokeLists(deviceid, lines, pvalueinput);
             invokeRules(deviceid, lines, hubs, devices);
         }
-        // return devices;
+        return devices;
     })
-    // .then(devices => {
-    //     if ( dolists ) {
-    //         mydb.getRows("configs","*","userid = "+userid+" AND configkey LIKE 'user_%' AND NOT configkey = 'useroptions'")
-    //         .then(configs => {
-    //             // must invoke separately and use all the configurations per query above
-    //             if ( configs ) {
-    //                 invokeLists(deviceid, configs, pvalueinput, devices);
-    //             }
-    //         })
-    //         .catch(reason => {
-    //             console.log( (ddbg()), "invokeLists error: ", reason);
-    //         });
-    //     }
-    // })
+    .then(devices => {
+        if ( dolists ) {
+            // mydb.getRows("configs","*","userid = "+userid+" AND configkey LIKE 'user_%' AND NOT configkey = 'useroptions'")
+            mydb.getRows("configs","*","userid = "+userid+" AND configtype = 1")
+            .then(configs => {
+                // must invoke separately and use all the configurations per query above
+                invokeLists(deviceid, configs, pvalueinput, devices);
+            })
+            .catch(reason => {
+                console.log( (ddbg()), "invokeLists error: ", reason);
+            });
+        }
+    })
     .catch(reason => {
         console.log( (ddbg()), "processLists error: ", reason);
     });
@@ -7246,7 +7245,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, doli
     // this populates all lists being tracked with new information upon changes
     function invokeLists(tileid, configs, pvalue, devices) {
         if ( DEBUG11 ) {
-            console.log( (ddbg()),`InvokeLists tileid: ${tileid}, items: `, items, " pvalue: ", pvalue);
+            console.log( (ddbg()),`InvokeLists tileid: ${tileid} pvalue: `, pvalue);
         }
 
         // loop through all the configs and capture the invoking device so we know which one to attribute
@@ -7268,6 +7267,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, doli
                     var linkid = arr[0];
                     var targetsubid = arr[1];
          
+                    console.log("linkid: ", linkid, "devices: ", devices);
                     if ( linkid===tileid && targetsubid===trigger && devices[linkid] ) {                
                         var lpvalue = decodeURI2(devices[linkid].pvalue);
                         var d = new Date();
@@ -7286,7 +7286,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, doli
                         } else {
                             mydb.addRow("lists", newobj)
                             .then( ()=> {
-                                if ( DEBUG11 || DEUBGtmp ) {
+                                if ( DEBUG11 || DEBUGtmp ) {
                                     console.log( (ddbg()), "LIST updated: ", newobj);
                                 }
                             })
