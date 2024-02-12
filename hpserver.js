@@ -7267,7 +7267,6 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, doli
                     var linkid = arr[0];
                     var targetsubid = arr[1];
          
-                    console.log("linkid: ", linkid, "devices: ", devices);
                     if ( linkid===tileid && targetsubid===trigger && devices[linkid] ) {                
                         var lpvalue = decodeURI2(devices[linkid].pvalue);
                         var d = new Date();
