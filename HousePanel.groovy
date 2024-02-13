@@ -3183,11 +3183,13 @@ def changeHandler(evt) {
             }
 
             // for colors we have to set all parameters at the same time to avoid race conditions
+            // changed this to use an object and send the actual trigger flag so that LIST now works
+            // and the object logic using a Map is now generic and not specific to color arrays
             // def colorarray = [h100, s, v, color]
             Map colorarray = [hue: h100, saturation: s, level: v, color: color];
-            postHubRange(state.directIP, state.directPort, "update", deviceName, deviceid, "color", devtype, colorarray)
-            postHubRange(state.directIP2, state.directPort2, "update", deviceName, deviceid, "color", devtype, colorarray)
-            postHubRange(state.directIP3, state.directPort3, "update", deviceName, deviceid, "color", devtype, colorarray)
+            postHubRange(state.directIP, state.directPort, "update", deviceName, deviceid, subid, devtype, colorarray)
+            postHubRange(state.directIP2, state.directPort2, "update", deviceName, deviceid, subid, devtype, colorarray)
+            postHubRange(state.directIP3, state.directPort3, "update", deviceName, deviceid, subid, devtype, colorarray)
 
             // set it to change color based on attribute change
             logger("color update: ${deviceName} id ${deviceid} type ${devtype} changed to ${color} by changing ${subid} to ${value}, h100: ${h100}, h: ${h}, s: ${s}, v: ${v} ", "debug") 

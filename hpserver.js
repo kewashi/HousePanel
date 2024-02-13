@@ -6636,6 +6636,8 @@ function processHubMessage(userid, hubmsg, newST) {
             }
 
             // handle special case where groovy pushes an array for color changes
+            // this branch should no longer ever be used because I changed color to send a Map object that is handled below
+            // I left this here for legacy support purposes which should still work but LIST and RULE attributes tied to hue, saturation, and level for bulbs will all fail
             if ( subid==="color" && is_array(value) && value.length > 3 && value[0] ) {
                 pvalue["hue"] = value[0];
                 pvalue["saturation"] = value[1];
@@ -7252,6 +7254,17 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, doli
         for (var i in configs) {
             var config = configs[i];
             var sourcebid = config.configkey.substring(5); // "user_xxx"
+            var sourcetile = tileid;
+
+            // this little bit of code is only needed to deal with legacy LIST items
+            // that nobody should have except me. Otherwise we could just set sourcetile = 0 becasue it won't be used
+            // to confirm this, take a look into the code of parseCustomizeContent where user params are set
+            for (var devid in devices ) {
+                if ( devices[devid].deviceid === sourcebid ) {
+                    sourcetile = parseInt(devid);
+                    break;
+                }
+            }
             var rlines = decodeURI2(config.configval);
             var items = [];
             if ( is_array(rlines) ) {
@@ -7263,15 +7276,18 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, doli
             items.forEach( function(item) {
                 if (item[0]==="LIST") {
                     var lsubid = item[2];
-                    var arr = parseCustomizeContent(tileid, item[1]);
+                    var arr = parseCustomizeContent(sourcetile, item[1]);
                     var linkid = arr[0];
                     var targetsubid = arr[1];
          
-                    if ( linkid===tileid && targetsubid===trigger && devices[linkid] ) {                
-                        var lpvalue = decodeURI2(devices[linkid].pvalue);
+                    // if ( linkid===tileid && targetsubid===trigger && devices[linkid] ) {                
+                        // var lpvalue = decodeURI2(devices[linkid].pvalue);
+                    if ( linkid===tileid && targetsubid===trigger && pvalue[targetsubid] ) {                
+                        // var lpvalue = pvalue;
                         var d = new Date();
                         var today = d.toLocaleString();
-                        var newval = lpvalue[targetsubid].toString();
+                        // var newval = lpvalue[targetsubid].toString();
+                        var newval = pvalue[targetsubid];
                         var newobj = {userid: userid, deviceid: sourcebid, subid: lsubid, ltime: today, lvalue: newval }
 
                         // now get the last item in the list to see if this is a duplicate
@@ -7279,13 +7295,13 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, doli
                         var lastadd = mydb.getAdd();
                         if ( lastadd && lastadd.ltime && lastadd.userid === userid && lastadd.deviceid === sourcebid && lastadd.subid === lsubid && 
                                         lastadd.ltime === today && lastadd.lvalue === newval ) {
-                            if ( DEBUG11 || DEBUGtmp ) {
+                            if ( DEBUG11 ) {
                                 console.log( (ddbg()), "LIST update skipped due to duplicate: ", lastadd, newobj);
                             }
                         } else {
                             mydb.addRow("lists", newobj)
                             .then( ()=> {
-                                if ( DEBUG11 || DEBUGtmp ) {
+                                if ( DEBUG11 ) {
                                     console.log( (ddbg()), "LIST updated: ", newobj);
                                 }
                             })
@@ -11371,6 +11387,7 @@ function updCustom(api, userid, tileid, swid, swattr, subid, swval, rules) {
             console.log((ddbg()), str);
 
             // now handle the list request by clearing out old values if there and adding first value based on now
+            // this will always use the new format for "content" so the tileid parameter should be zero
             if ( swval === "LIST" ) {
 
                 var arr = parseCustomizeContent(tileid, content);
@@ -12405,7 +12422,7 @@ function apiCall(user, body, protocol, res) {
 
 // do reset on LIST based on timing type
 function resetList(userid, timing) {
-    mydb.getRows("configs","*",`configkey LIKE 'user%' AND configval LIKE '%["LIST",%'`)
+    mydb.getRows("configs","*",`userid=${userid} AND configtype=1 AND configval LIKE '%["LIST",%'`)
     .then(rows => {
         if ( rows ) {
             rows.forEach(row => {
@@ -12421,7 +12438,7 @@ function resetList(userid, timing) {
                         if ( timing === targettype ) {
                             mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${deviceid}' AND subid = '${subid}'`)
                             .then( res2=> {
-                                var numListDel = res2[0].getAffectedItemsCount();
+                                var numListDel = res2.getAffectedItemsCount();
                                 console.log( (ddbg()), `Deleted ${numListDel} rows for LIST associated with deviceid=${deviceid} and subid=${subid} based on criteria=${timing}`);
                             })
                             .catch(reason => {
