@@ -2046,7 +2046,7 @@ function getDevices(hub) {
                             if ( devicecnt >= numdevices ) {
                                 removeDeadNodes(userid, hubindex, currentDevices)
                                 .then(results => {
-                                    if ( results[0] || results[1] ) {
+                                    if ( results && (results[0] || results[1]) ) {
                                         console.log( (ddbg()), "removed dead nodes: ", results);
                                     }
                                     resolve(mydevices);
@@ -2900,7 +2900,7 @@ function getDevices(hub) {
                 var numdeldevices = results.getAffectedItemsCount();
 
                 // now get all defices for this user to use to check for stranded tiles
-                mydb.getRows("devices","id",`userid=${userid}`)
+                return mydb.getRows("devices","id",`userid=${userid}`)
                 .then(rows => {
                     var currentIds = [];
                     rows.forEach(row => {
@@ -2912,7 +2912,7 @@ function getDevices(hub) {
                     // this will remove it from all rooms and panels
                     return mydb.deleteRow("things",`userid=${userid} AND tileid NOT IN ${idstr}`)
                     .then(res => {
-                        numdeltiles = res.getAffectedItemsCount();
+                        var numdeltiles = res.getAffectedItemsCount();
                         return [numdeldevices, numdeltiles];
                         // return "Removed " + numdeldevices + " devices and " + numdeltiles + " tiles";
                     })
@@ -7230,7 +7230,7 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, doli
     .then(devices => {
         if ( dolists ) {
             // mydb.getRows("configs","*","userid = "+userid+" AND configkey LIKE 'user_%' AND NOT configkey = 'useroptions'")
-            mydb.getRows("configs","*","userid = "+userid+" AND configtype = 1")
+            mydb.getRows("configs","*","userid = "+userid+" AND configtype = 1 AND configval LIKE '%LIST%'")
             .then(configs => {
                 // must invoke separately and use all the configurations per query above
                 invokeLists(deviceid, configs, pvalueinput, devices);

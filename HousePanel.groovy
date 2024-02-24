@@ -1096,7 +1096,7 @@ def getMotions(resp) {
     try {
         mymotions?.each {
             def multivalue = getMotion(it.id, it)
-            def motiontype = it.hasAttribute("presence_type") ? "aqaramotion" : "motion"
+            def motiontype = it.hasAttribute("presence_type") || it.hasAttribute("roomActivity") ? "aqaramotion" : "motion"
             resp << [name: it.displayName, id: it.id, value: multivalue, type: motiontype]
         }
     } catch (e) {}
@@ -1315,8 +1315,8 @@ def autoType(swid) {
     else if ( mypresences?.find{it.id.toInteger() == swid } ) { swtype= "presence" }
     else if ( myweathers?.find{it.id.toInteger() == swid } ) { swtype= "weather" }
     // else if ( myaccuweathers?.find{it.id.toInteger() == swid } ) { swtype= "weather" }
-    else if ( mymotions?.find{it.id.toInteger() == swid && it.hasAttribute("presence_type") } ) { swtype = "aqaramotion" }
-    else if ( mymotions?.find{it.id.toInteger() == swid && !it.hasAttribute("presence_type") } ) { swtype = "motion" }
+    else if ( mymotions?.find{it.id.toInteger() == swid && (it.hasAttribute("presence_type") || it.hasAttribute("roomActivity")) } ) { swtype = "aqaramotion" }
+    else if ( mymotions?.find{it.id.toInteger() == swid && !it.hasAttribute("presence_type") && !it.hasAttribute("roomActivity") } ) { swtype = "motion" }
     else if ( mydoors?.find{it.id.toInteger() == swid } ) { swtype= "door" }
     else if ( mygarages?.find{it.id.toInteger() == swid } ) { swtype= "garage" }
     else if ( mycontacts?.find{it.id.toInteger() == swid } ) { swtype= "contact" }
