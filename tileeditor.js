@@ -187,7 +187,7 @@ function getOnOff(str_type, subid, val) {
     } else if ( subid.startsWith("roomState") ) {
         onoff = ["occupied", "unoccupied"];
     } else if ( subid.startsWith("roomActivity") ) {
-        onoff = ["towards", "away", "enter", "enter {left}", "enter (right)", "leave", "leave (left)", "leave (right)"];
+        onoff = ["towards", "away", "enter", "enter (left)", "enter (right)", "leave", "leave (left)", "leave (right)"];
     } else if ( subid.startsWith("water") ) {
         onoff = ["dry","wet"];
     } else if ( subid.startsWith("smoke") ) {
