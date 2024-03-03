@@ -176,7 +176,6 @@ function getOnOff(str_type, subid, val) {
         onoff = ["on","off"];
     } else if ( subid.startsWith("button") ) {
         onoff = ["pushed","held","released","doubleTapped"];
-        // alert("subid = " + subid);
     } else if ( subid.startsWith("contact" ) || subid.startsWith("valve" ) ) {
         onoff = ["open","closed"];
     } else if ( subid.startsWith("door" ) ) {
@@ -185,6 +184,10 @@ function getOnOff(str_type, subid, val) {
         onoff = ["locked","unlocked","unknown"];
     } else if ( subid.startsWith("motion") ) {
         onoff = ["active","inactive"];
+    } else if ( subid.startsWith("roomState") ) {
+        onoff = ["occupied", "unoccupied"];
+    } else if ( subid.startsWith("roomActivity") ) {
+        onoff = ["towards", "away", "enter", "enter {left}", "enter (right)", "leave", "leave (left)", "leave (right)"];
     } else if ( subid.startsWith("water") ) {
         onoff = ["dry","wet"];
     } else if ( subid.startsWith("smoke") ) {
@@ -196,7 +199,7 @@ function getOnOff(str_type, subid, val) {
     } else if ( subid.startsWith("pistonName" ) ) {
         onoff = ["firing","idle"];
     } else if ( subid.startsWith("thermostatFanMode" ) ) {
-        if ( str_type==="isy" ) {
+        if ( str_type==="isy" || str_type==="isysub" ) {
             onoff = ["Auto", "On", "Circulate"];
         } else {
             onoff = ["auto","on","followschedule","circulate"];

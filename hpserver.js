@@ -10713,10 +10713,18 @@ function getMainPage(user, configoptions, hubs, req, res) {
  
         // include doc button and panel name
         var displayname = uname ? uname : useremail;
-        tc += '<div id="showversion" class="showversion">';
-        tc += '<span id="emailname">' + displayname + '</span> | <span id="infoname">' + pname + '</span><span> | V' + GLB.HPVERSION + '</span> | <span id="infoport"></span>';
+        if ( kioskmode ) {
+            tc += '<div id="showversion" class="hidden">';
+        } else {
+            tc += '<div id="showversion" class="showversion">';
+        }
+        tc += '<span id="emailname" class="infoname">' + displayname + '</span> | <span id="infoname" class="infoname">' + pname + '</span><span class="infoname"> | V' + GLB.HPVERSION + '</span> | <span id="infoport" class="infoname"></span>';
         tc += '</div>';
-        tc += '<div id="quickedit">E</div>';
+        if ( kioskmode ) {
+            tc += '<div id="quickedit" class="hidden">E</div>';
+        } else {
+            tc += '<div id="quickedit" class="quickedit">E</div>';
+        }
         // tc += '<div id="showopts"><a href="' +  GLB.returnURL + '/showoptions"><img width="24" height=24 src="media/editgear.png"/></a></div>';
         tc += '<div id="showdocs"><a href="https://www.housepanel.net" target="_blank">?</a></div>';
 

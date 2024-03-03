@@ -49,7 +49,7 @@ body {
     .showversion {
         display: block;
     }
-    #showdocs, #quickedit {
+    #showdocs, .infoname, .quickedit {
         display: inline-block;
     }
 }
@@ -65,7 +65,7 @@ body {
         width: 100%;
         padding-right: 0px;
     }
-    .showversion, #showdocs, #quickedit {
+    .showversion, #showdocs, .infoname, .quickedit {
         display: none;
     }    
 }
@@ -173,6 +173,9 @@ div.showversion {
 }
 #quickedit {
     right: 35px;
+}
+#infoname {
+    padding-right: 5px;
 }
 #showdocs a {
     text-decoration: none;
