@@ -4,6 +4,8 @@
 process.title = 'hpserver';
 
 // debug options
+var EMULATEHUB = false;             // this emulates hub pushes and skips ISY sockets for local testing
+
 const DEBUG1 = false;               // basic debug info - file loading, hub loading
 const DEBUG2 = false;               // authorization flow and ISY programs
 const DEBUG3 = false;               // passwords
@@ -120,7 +122,8 @@ GLB.mainISYMap = {
     "contact":     [{"GV0": "status_", "BATLVL": "battery", "ST": "contact"},          {"_query":"QUERY","_open":"OPEN","_close":"CLOSE"}, "7.1" ],
     "motion":      [{"GV0": "status_", "BATLVL": "battery", "ST": "motion"},           {"_query":"QUERY"}, "7.2.0" ],
     "aqaramotion": [{"GV0": "status_", "BATLVL": "battery", "ST": "motion",
-                     "GV1": "presence", "GV2":"presence_type"},                        {"_query":"QUERY", "_setMotion":"setMotion"}, "7.2.1" ],
+                     "GV1": "presence", "GV2":"presence_type", 
+                     "GV3":"roomState", "GV4":"roomActivity"},                         {"_query":"QUERY", "_setMotion":"setMotion", "_resetState":"resetState"}, "7.2.1" ],
     "presence":    [{"GV0": "status_", "BATLVL": "battery", "ST": "presence"},         {"_query":"QUERY","_arrived":"ARRIVE","_departed":"DEPART"}, "7.3" ],
     "cosensor":    [{"GV0": "status_", "BATLVL": "battery", "ST": "carbonMonoxide"},   {"_query":"QUERY","_clear":"CLEAR","_detected":"DETECTED","_test":"TEST"}, "7.4" ],
     "co2sensor":   [{"GV0": "status_", "BATLVL": "battery", "CO2LVL":"carbonDioxide"}, {"_query":"QUERY"}, "7.5" ],
@@ -176,7 +179,9 @@ GLB.indexMap = {
     "motion":       {"ST":  {1:"inactive", 2:"active", 3:"unknown"} },
     "aqaramotion":  {"ST":  {1:"inactive", 2:"active", 3:"unknown"},
                      "GV1": {1:"present", 2:"absent", 3:"unknown"},
-                     "GV2": {1:"enter", 2:"leave", 3:"approach", 4:"away", 5:"left_enter", 6:"left_leave", 7:"right_enter", 8:"right_leave", 9:"unknown"} },
+                     "GV2": {1:"enter", 2:"leave", 3:"approach", 4:"away", 5:"left_enter", 6:"left_leave", 7:"right_enter", 8:"right_leave", 9:"unknown"},
+                     "GV3": {1:"occupied", 2:"unoccupied", 3:"unknown"},
+                     "GV4": {1:"enter", 2:"leave", 3:"towards", 4:"away", 5:"enter (left)", 6:"leave (left)", 7:"enter (right)", 8:"leave (right)", 9:"unknown"} },
     "presence":     {"ST":  {1:"present", 2:"absent", 3:"unknown"} },
     "door":         {"ST":  {1:"open", 2:"closed", 3:"opening", 4:"closing", 5:"unknown"} },
     "garage":       {"ST":  {1:"open", 2:"closed", 3:"opening", 4:"closing", 5:"unknown"} },
@@ -381,7 +386,7 @@ function getHeader(userid, pname, skin, skip) {
 
     // chart capability loaded here
     $tc += '<script type="text/javascript" src="node_modules/chart.js/dist/chart.umd.js"></script>';
-    $tc += '<script type="text/javascript" src="node_modules/chart.js/dist/chart.js"></script>';
+    // $tc += '<script type="text/javascript" src="node_modules/chart.js/dist/chart.js"></script>';
     
     // load main script file
     var customhash = "js001_" + GLB.HPVERSION;
@@ -1853,7 +1858,11 @@ function getDevices(hub) {
 
         // retrieve all things from ISY
         } else if ( hubType==="ISY" ) {
-            getIsyDevices(hub);
+            if ( EMULATEHUB===true ) {
+                resolve("Emulating ISY hub for local testing");
+            } else {
+                getIsyDevices(hub);
+            }
 
         // retrieve all things from Ford of Lincoln
         } else if ( hubType==="Ford" || hubType==="Lincoln" ) {
@@ -2038,15 +2047,16 @@ function getDevices(hub) {
 
                             // check if this is our last one and return array of devices
                             if ( devicecnt >= numdevices ) {
-                                resolve(mydevices);
                                 removeDeadNodes(userid, hubindex, currentDevices)
                                 .then(results => {
-                                    if ( DEBUG2 ) {
-                                        console.log( (ddbg()), results);
+                                    if ( results && (results[0] || results[1]) ) {
+                                        console.log( (ddbg()), "removed dead nodes: ", results);
                                     }
+                                    resolve(mydevices);
                                 })
                                 .catch(reason => {
                                     console.log( (ddbg()), reason );
+                                    resolve(mydevices);
                                 });
                             }                    
                         })
@@ -2882,52 +2892,76 @@ function getDevices(hub) {
 
         } // end of new ST 
         
-        // remove tiles and devices that are no longer on the hub
+        // rewrote this to first remove devices and then remove tiles that are stranded
+        // this version uses db queries which is much faster than what was here before
         function removeDeadNodes(userid, hubindex, currentDevices) {
-            var result = removeDeadTiles(userid, hubindex, currentDevices)
-            .then( numtiles => {
-                var indev = "(" + currentDevices.join(",") + ")";
-                return mydb.deleteRow("devices","userid = "+userid+" AND hubid = "+hubindex+" AND deviceid NOT IN " + indev)
-                .then( results => {
-                    var numdevices = results.getAffectedItemsCount();
-                    return "Removed " + numdevices + " devices and " + numtiles + " tiles";
+
+            // first, remove all devices that are tied to the queried hub but not returned by the query
+            var indev = "(" + currentDevices.join(",") + ")";
+            return mydb.deleteRow("devices","userid = "+userid+" AND hubid = "+hubindex+" AND deviceid NOT IN " + indev)
+            .then( results => {
+                var numdeldevices = results.getAffectedItemsCount();
+
+                // now get all defices for this user to use to check for stranded tiles
+                return mydb.getRows("devices","id",`userid=${userid}`)
+                .then(rows => {
+                    var currentIds = [];
+                    rows.forEach(row => {
+                        currentIds.push(row.id);
+                    });
+                    var idstr = "(" + currentIds.join(",") + ")";
+
+                    // use query to remove all tiles that do not have a corresponding device in the DB
+                    // this will remove it from all rooms and panels
+                    return mydb.deleteRow("things",`userid=${userid} AND tileid NOT IN ${idstr}`)
+                    .then(res => {
+                        var numdeltiles = res.getAffectedItemsCount();
+                        return [numdeldevices, numdeltiles];
+                        // return "Removed " + numdeldevices + " devices and " + numdeltiles + " tiles";
+                    })
+                    .catch(reason => {
+                        console.log( (ddbg()), reason );
+                        return [numdeldevices, 0];
+                        // return "Removed " + numdeldevices + " devices and unknown number of tiles due to an error";
+                    });
                 })
                 .catch(reason => {
-                    console.log( (ddbg()), reason, "\nsqlstr: ", mydb.getRequest() );
-                    return "Removed " + 0 + " devices and " + numtiles + " tiles";
+                    console.log( (ddbg()), reason );
+                    return [0, 0];
+                    // return "Removed unknown number of devices and tiles due to an error";
                 });
-            })
-            .catch(reason => {
-                console.log( (ddbg()), reason, "\nsqlstr: ", mydb.getRequest() );
-                return "No devices and no tiles removed";
-            });
-            return result;
-        }
-
-        // remove dead tiles
-        function removeDeadTiles(userid, hubindex, currentDevices) {
-
-            // go through all tiles and remove those that don't have devices
-            var joinstr = mydb.getJoinStr("things","tileid","devices","id");
-            return mydb.getRows("things","things.id as things_id, devices.deviceid as devices_deviceid, devices.hubid as devices_hubid",
-                                "things.userid = "+userid+" AND devices.hubid = "+hubindex,joinstr)
-            .then(things => {
-                if ( !things ) return 0;
-                var numremoved = 0;
-                things.forEach(thing => {
-                    var devstr = "'"+thing["devices_deviceid"]+"'";
-                    if ( !currentDevices.includes(devstr) ) {
-                        numremoved++
-                        mydb.deleteRow("things","id = " + thing["things_id"]);
-                    }
-                });
-                return numremoved;
             })
             .catch(reason => {
                 console.log( (ddbg()), reason );
-                return 0;
+                return [0, 0];
+                // return "No devices and no tiles removed";
             });
         }
+
+        // remove dead tiles
+        // function removeDeadTiles(userid, hubindex, currentDevices) {
+
+        //     // go through all tiles and remove those that don't have devices
+        //     var joinstr = mydb.getJoinStr("things","tileid","devices","id");
+        //     return mydb.getRows("things","things.id as things_id, devices.deviceid as devices_deviceid, devices.hubid as devices_hubid",
+        //                         "things.userid = "+userid+" AND devices.hubid = "+hubindex,joinstr)
+        //     .then(things => {
+        //         if ( !things ) return 0;
+        //         var numremoved = 0;
+        //         things.forEach(thing => {
+        //             var devstr = "'"+thing["devices_deviceid"]+"'";
+        //             if ( !currentDevices.includes(devstr) ) {
+        //                 numremoved++
+        //                 mydb.deleteRow("things","id = " + thing["things_id"]);
+        //             }
+        //         });
+        //         return numremoved;
+        //     })
+        //     .catch(reason => {
+        //         console.log( (ddbg()), reason );
+        //         return 0;
+        //     });
+        // }
 
         function getFordVehicles() {
 
@@ -3636,7 +3670,7 @@ function getDevices(hub) {
             }
         }
 
-    // end of the promise function to return to caller
+    // end of the getDevices promise function to return to caller
     });
     return promise;
 
@@ -3813,21 +3847,6 @@ function setIsyFields(nodeid, device, props) {
         }
     }
     return value;
-}
-
-// returns the maximum index from the options
-function getMaxIndex() {
-    var optindex = GLB.options.index;
-    var maxindex = 0;
-    if ( typeof optindex==="object" ) {
-        for ( var key in optindex ) {
-            var value = parseInt(optindex[key]);
-            if ( !isNaN(value) ) {
-                maxindex = ( value > maxindex ) ? value : maxindex;
-            }
-        }
-    }
-    return maxindex;
 }
 
 function getSpecials(configoptions) {
@@ -4235,7 +4254,7 @@ async function makeNewConfig(userid) {
     configs.push( await addConfigItem(userid, "kiosk", "false") );
     configs.push( await addConfigItem(userid, "blackout", "false") );
     configs.push( await addConfigItem(userid, "rules", "true") );
-    configs.push( await addConfigItem(userid, "timezone", "America/Los_Angeles") );
+    configs.push( await addConfigItem(userid, "timezone", "480") );           // changed this from place name to time offset from GMT
     configs.push( await addConfigItem(userid, "phototimer","0") );
     configs.push( await addConfigItem(userid, "fast_timer","3600") );         // timers for polling all other tiles and hubs
     configs.push( await addConfigItem(userid, "slow_timer","900") );          // timers for images, frames, customs, blanks, videos polling
@@ -5089,27 +5108,6 @@ function array_search(needle, arr, pos) {
     return key;
 }
 
-function tile_search(tileid, tiles) {
-    var thetile = false;
-    tileid = parseInt(tileid);
-    var found = false;
-    if ( !isNaN(tileid) ) {
-        tiles.forEach(function(tile) {
-            var checktile = parseInt(tile[0]);
-            if ( !isNaN(checktile) && checktile === tileid ) {
-                thetile = tile;
-                // if already found then this is a dup so set position to zero
-                if (found) {
-                    thetile[1] = 0;
-                    thetile[2] = 0;
-                }
-                found = true;
-            }
-        });
-    }
-    return thetile;
-}
-
 // checks if a needle is in an object or an array
 function in_array(needle, arr) {
     if ( !is_object(arr) ) {
@@ -5126,7 +5124,7 @@ function in_array(needle, arr) {
 }
 
 function is_array(obj) {
-    if ( typeof obj === "object" ) {
+    if ( obj!==null && typeof obj === "object" ) {
         return Array.isArray(obj);
     } else {
         return false;
@@ -5899,8 +5897,8 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
             }
         } else { 
             
-            // new logic for links - they all now follow the format LINK::code::content
-            // we no longer print the hidden companion since the link details are in the DB now
+            // new logic for links - they all now follow the format LINK::content
+            // where content is linkid::realsubid (see customize.js for details)
             // and companion tags are only printed within LINK elements on the browser now
             // print a hidden field for user web calls and links
             // this is what enables customization of any tile to happen
@@ -5928,88 +5926,85 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
         var subid = tkey;
         var realsubid = subid;
         var linkid = 0;
-
         var ipos = helperval.indexOf("::");
         var command = helperval.substr(0, ipos);
         var linkval = helperval.substr(ipos+2);
         var sibling;
 
-        if ( command === "TEXT" ) {
-            helperval = linkval;
-            sibling= "<div id=\"sb-"+cnt+"-"+subid+"\""+" aid=\""+cnt+"\" linkid=\""+linkid+"\" linktype=\""+linktype+"\" linkhub=\""+linkhub+"\" linkval=\""+helperval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
-            tval = linkval;
+        var jpos = linkval.indexOf("::");
+        if ( command === "LINK" && jpos !== -1) {
 
-        } else if ( command === "LINK" ) {
+            // we now pass the linkid and the realsubid here so it is easy to get the realsubid
+            // for this to work we changed the way LINK tiles are presented on screen
+            // note that this will now always show the subid after the linkid
+            // for new links this will be the realsubid for legacy links it will be the subid used in the link
+            // realsubid = linkval.substr(0, jpos)
+            // var linkid = linkval.substr(jpos+2);
+            var linkid = linkval.substring(0, jpos);
+            realsubid = linkval.substring(jpos+2);
 
-
-            // get info for links but skip if the link had an error
-            // links use format - LINK::subid::tileid
-            // if ( linkval && command==="LINK" ) {
-            var jpos = linkval.indexOf("::");
-            if ( jpos !== -1 ) {
-
-                realsubid = linkval.substr(0, jpos)
-                var linkid = linkval.substr(jpos+2);
+            // get the device for this linked tile
+            var linkdev = alldevices[linkid];
+            if ( linkdev && realsubid ) {
                 
-                // get the device for this linked tile
-                var linkdev = alldevices[linkid];
-                if ( linkdev ) {
-                    
-                    // replace the place holder value with the linked value
-                    try {
-                        linktype = linkdev["devices_devicetype"];
-                        linkid = linkdev["devices_id"];
-                        linkbid = linkdev["devices_deviceid"];
-                        linkhub = linkdev["hubs_id"];
-                        hint = linkdev["devices_hint"];
-                        var linktileval = decodeURI2(linkdev["devices_pvalue"]);
+                // replace the place holder value with the linked value
+                try {
+                    linktype = linkdev["devices_devicetype"];
+                    linkid = linkdev["devices_id"];
+                    linkbid = linkdev["devices_deviceid"];
+                    linkhub = linkdev["hubs_id"];
+                    hint = linkdev["devices_hint"];
+                    var linktileval = decodeURI2(linkdev["devices_pvalue"]);
 
-                        // put linked val through the customization
-                        // also include processing of special tiles that could be linked too
-                        linktileval = getCustomTile(userid, configoptions, linktileval, linkbid);
-                        linktileval = getFileName(userid, pname, linktileval, linktype, configoptions);
+                    // put linked val through the customization
+                    // also include processing of special tiles that could be linked too
+                    // the customtile call here can only be a time or a date field
+                    // because we don't present custom fields when links are defined in the customizer
+                    // so this call is only here to properly format times and dates that are linked
+                    linktileval = getCustomTile(userid, configoptions, linktileval, linkbid);
+                    linktileval = getFileName(userid, pname, linktileval, linktype, configoptions);
 
-                    } catch(e) {
-                        linktileval = {};
-                    }
-                    
-                    // now look for the real value in this device
-                    // use the link value - if subid isn't there look for subid's that form the beginning of our link subid
-                    var goodlink = false;
-                    if ( array_key_exists(realsubid, linktileval) ) {
-                        tval = linktileval[realsubid];
-                        goodlink = true;
-                    } else {
-                        for (var ltkey in linktileval) {
-                            if ( realsubid.startsWith(ltkey) ) {
-                                realsubid = ltkey;
-                                tval = linktileval[ltkey];
-                                goodlink = true;
-                                break;
-                            }
+                } catch(e) {
+                    linktileval = {};
+                }
+                
+                // now look for the real value in this device
+                // use the link value - if subid isn't there look for subid's that form the beginning of our link subid
+                // this will only kick in if the configs DB is in the legacy format because new links will have the realsubid captured
+                var goodlink = false;
+                if ( array_key_exists(realsubid, linktileval) ) {
+                    tval = linktileval[realsubid];
+                    goodlink = true;
+                } else {
+                    for (var ltkey in linktileval) {
+                        if ( realsubid.startsWith(ltkey) ) {
+                            realsubid = ltkey;
+                            tval = linktileval[ltkey];
+                            goodlink = true;
+                            break;
                         }
                     }
-
-                    // handle case where link not found - set error condition
-                    if ( !goodlink ) {
-                        helperval = "LINK::"+realsubid+"::"+linkid+"::error";
-                        tval = "LINK::error";
-                    }
-
-                    // look for width and height and replace if there
-                    if ( linktileval["width"] && twidth ) {
-                        twidth = linktileval["width"];
-                    }
-                    if ( linktileval["height"] && theight ) {
-                        theight = linktileval["height"];
-                    }
-
-                } else {
-                    helperval = "LINK::error";
                 }
 
-                sibling= "<div id=\"sb-"+cnt+"-"+subid+"\""+" aid=\""+cnt+"\" linkid=\""+linkid+"\" hint=\""+hint+"\" linktype=\""+linktype+"\" linkhub=\""+linkhub+"\" linkval=\""+helperval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
+                // handle case where link not found - set error condition
+                if ( !goodlink ) {
+                    helperval = "LINK::error";
+                    tval = "LINK::error";
+                }
+
+                // look for width and height and replace if there
+                if ( linktileval["width"] && twidth ) {
+                    twidth = linktileval["width"];
+                }
+                if ( linktileval["height"] && theight ) {
+                    theight = linktileval["height"];
+                }
+
+            } else {
+                helperval = "LINK::error";
+                tval = "LINK::error";
             }
+            sibling= "<div id=\"sb-"+cnt+"-"+subid+"\""+" aid=\""+cnt+"\" linkid=\""+linkid+"\" hint=\""+hint+"\" linktype=\""+linktype+"\" linkhub=\""+linkhub+"\" linkval=\""+helperval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
         }
 
         // use the original type here so we have it for later
@@ -6327,8 +6322,6 @@ function getFormattedTime(fmttime, old, tzone) {
             timestr+= " AM";
         }
     }
-
-    // var retobj = {fmt_time: fmttime, time: timestr, timezone: timezone};
     return timestr;
 }
 
@@ -6349,7 +6342,9 @@ function getClock(clockid) {
     // TODO - enable user timezone settings in options
     var fmttime = "h:I:S A";
     var timezone = d.getTimezoneOffset();
-    var timeofday = getFormattedTime(fmttime, d, 0);
+
+    // could use 0 here for timezone since it is always the current timezone until I implement user settings in the options
+    var timeofday = getFormattedTime(fmttime, d, timezone);
 
     var dclock = {"name": clockname, "skin": clockskin, "weekday": weekday,
         "date": dateofmonth, "time": timeofday, "tzone": timezone,
@@ -6427,7 +6422,6 @@ function getCustomTile(userid, configoptions, custom_val, bid) {
                 // var companion = "user_"+subid;
 
                 // process web calls made in custom tiles
-                // this adds a new field for the URL or LINK information
                 // in a tag called user_subid where subid is the requested field
                 // web call results and linked values are stored in the subid field
                 if ( content && (calltype==="PUT" || calltype==="GET" || calltype==="POST" || calltype==="URL") )
@@ -6439,11 +6433,21 @@ function getCustomTile(userid, configoptions, custom_val, bid) {
                     // code for enabling mix and match subid's into custom tiles
                     // since DB reads are fast, we can just store the tileid now
                     // custom_val[companion] = "::" + calltype + "::" + content;
-                    custom_val[subid]= "LINK::" + subid + "::" + content;
+                    // ----
+                    // converted this to just use content which now has linkid::realsubid
+                    // if the :: is missing from content it is a legacy configs file so add subid as a close guess
+                    // and the back compat code later will take care of reducing it down to the realsubid
+                    var j = content.indexOf("::");
+                    if ( j=== -1 ) {
+                        custom_val[subid]= "LINK::" + content + "::" + subid;
+                    } else {
+                        custom_val[subid]= "LINK::" + content;
+                    }
                             
                
                 } else if ( calltype==="LIST" ) {
-                    custom_val[subid]= "LIST::" + content;
+                    // custom_val[subid]= "LIST::" + content;
+                    custom_val[subid]= "LIST::" + subid;
                
                 } else if ( calltype==="RULE" ) {
                     // custom_val[companion] = "::" + calltype + "::" + content;
@@ -6584,7 +6588,7 @@ function updateTimeStamp(subid, pvalue) {
 }
 
 function processHubMessage(userid, hubmsg, newST) {
-    const modemap = {"Day":"md", "Evening":"me", "Night":"md", "Away":"ma"};
+    var modemap = {"Day":"md", "Evening":"me", "Night":"md", "Away":"ma"};
     // loop through all devices tied to this message for any hub
     // push info to all things that match
     // we don't know the thing types so we have to check all things
@@ -6635,16 +6639,17 @@ function processHubMessage(userid, hubmsg, newST) {
             }
 
             // handle special case where groovy pushes an array for color changes
-            if ( subid==="color" && is_array(value) ) {
+            // this branch should no longer ever be used because I changed color to send a Map object that is handled below
+            // I left this here for legacy support purposes which should still work but LIST and RULE attributes tied to hue, saturation, and level for bulbs will all fail
+            if ( subid==="color" && is_array(value) && value.length > 3 && value[0] ) {
                 pvalue["hue"] = value[0];
                 pvalue["saturation"] = value[1];
                 pvalue["level"] = value[2];
                 pvalue["color"] = value[3];
-            // } else if ( subid==="object" && is_object(value) ) {
-            //     for (var key in value) {
-            //         pvalue[key] = value[key];
-            //     }
-            //     subid = Object.keys(value)[0];
+            } else if ( is_object(value) ) {
+                for (var key in value) {
+                    pvalue[key] = value[key];
+                }
             } else {
                 pvalue[subid] = value;
             }
@@ -6677,14 +6682,17 @@ function processHubMessage(userid, hubmsg, newST) {
             });
 
             // if we request resetting upon a mode change, do it here, even if there are no rules set for the mode tile
-            if ( subid==="themode" && modemap.hasOwnProperty(value) ) {
-                var nreset = modemap[value];
-                resetList(userid, nreset);
+            if ( subid==="themode" ) { 
+                var newmode = pvalue["themode"];
+                if ( modemap.hasOwnProperty(newmode) ) {
+                    var nreset = modemap[newmode];
+                    resetList(userid, nreset);
+                }
             }
 
             pushClient(userid, hubmsgid, swtype, subid, pvalue);
             pvalue.subid = subid;
-            processRules(userid, device.id, hubmsgid, swtype, subid, pvalue, "processMsg");
+            processRules(userid, device.id, hubmsgid, swtype, subid, pvalue, true, "processMsg");
             delete pvalue.subid;
 
         });
@@ -6711,12 +6719,15 @@ function processIsyXMLMessage(userid, isymsg) {
     });
 }
 
-function processIsyMessage(userid, jsondata) {
-    // skip this for local testing
-    // return;
-
+function processIsyMessage(userid, jsondata) {    
     var newval;
     var pvalue;
+    
+    // skip this whole routine for local testing
+    if ( EMULATEHUB ) {
+        return;
+    }
+
     if ( jsondata ) {
         var control = jsondata.control;
         var action = jsondata.action;
@@ -6791,7 +6802,7 @@ function processIsyMessage(userid, jsondata) {
 
                     pushClient(userid, bid, devtype, subid, pvalue);
                     pvalue.subid = subid;
-                    processRules(userid, device.id, bid, devtype, subid, pvalue, "processMsg");
+                    processRules(userid, device.id, bid, devtype, subid, pvalue, true, "processMsg");
                     delete pvalue.subid;
                 });
 
@@ -6869,7 +6880,7 @@ function processIsyMessage(userid, jsondata) {
 
                         pushClient(userid, bid, devtype, subid, pvalue);
                         pvalue.subid = subid;
-                        processRules(userid, device.id, bid, devtype, subid, pvalue, "processMsg");
+                        processRules(userid, device.id, bid, devtype, subid, pvalue, true, "processMsg");
                         delete pvalue.subid;
                     }
                 } catch (e) {
@@ -6962,7 +6973,7 @@ function processIsyMessage(userid, jsondata) {
                     
                     pushClient(userid, bid, devtype, "lastRunTime", pvalue);
                     pvalue.subid = subid;
-                    processRules(userid, device.id, bid, devtype, subid, pvalue, "processMsg");
+                    processRules(userid, device.id, bid, devtype, subid, pvalue, true, "processMsg");
                     delete pvalue.subid;
                 
                 } catch(e) {
@@ -7107,7 +7118,7 @@ function processSonosMessage(userid, hub, req) {
         // push new values to all clients and execute rules
         pushClient(device.userid, device.deviceid, device.devicetype, trigger, pvalue);
         pvalue.subid = trigger;
-        processRules(device.userid, device.id, device.deviceid, device.devicetype, trigger, pvalue, "processMsg");
+        processRules(device.userid, device.id, device.deviceid, device.devicetype, trigger, pvalue, true, "processMsg");
         delete pvalue.subid;
     }
 
@@ -7171,7 +7182,7 @@ function getTimeStr(ifvalue, str, thedate) {
     return timestr;
 }
 
-function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rulecaller) {
+function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, dolists, rulecaller) {
 
     if ( !GLB.dbinfo.enablerules || (typeof pvalueinput !== "object") ) {
         return;
@@ -7192,84 +7203,119 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
         mydb.getRows("devices", "*", "userid = "+userid)
     ])
     .then(results => {
-        var configs = results[0];
+        var config = results[0];
         var lines = null;
-        if ( configs ) {
-            var rlines = decodeURI2(configs.configval);
+        if ( config ) {
+            var rlines = decodeURI2(config.configval);
             lines = [];
             rlines.forEach(aline => {
                 lines.push(aline);
             });
         }
-        if ( lines ) {
+        var dbdevices = results[2];
+        var devices = {};
+        dbdevices.forEach(device => {
+            var id = device.id;
+            devices[id] = device;
+        });
+        if ( lines && lines.length ) {
             var dbhubs = results[1];
             var hubs = {};
-            for ( var ahub in dbhubs ) {
-                var id = dbhubs[ahub].id;
-                hubs[id] = dbhubs[ahub];
-            }
-            var dbdevices = results[2];
-            var devices = {};
-            for ( var adev in dbdevices ) {
-                var id = dbdevices[adev].id;
-                devices[id] = dbdevices[adev]
-            }
-            invokeLists(deviceid, lines, pvalueinput);
+            dbhubs.forEach(hub => {
+                var id = hub.id;
+                hubs[id] = hub;
+            });
+            // invokeLists(deviceid, lines, pvalueinput);
             invokeRules(deviceid, lines, hubs, devices);
+        }
+        return devices;
+    })
+    .then(devices => {
+        if ( dolists ) {
+            // mydb.getRows("configs","*","userid = "+userid+" AND configkey LIKE 'user_%' AND NOT configkey = 'useroptions'")
+            mydb.getRows("configs","*","userid = "+userid+" AND configtype = 1 AND configval LIKE '%LIST%'")
+            .then(configs => {
+                // must invoke separately and use all the configurations per query above
+                invokeLists(deviceid, configs, pvalueinput, devices);
+            })
+            .catch(reason => {
+                console.log( (ddbg()), "invokeLists error: ", reason);
+            });
         }
     })
     .catch(reason => {
-        console.log( (ddbg()), "processRules - ", reason);
+        console.log( (ddbg()), "processLists error: ", reason);
     });
 
     // this populates all lists being tracked with new information upon changes
-    function invokeLists(tileid, items, pvalue) {
+    function invokeLists(tileid, configs, pvalue, devices) {
         if ( DEBUG11 ) {
-            console.log( (ddbg()),`InvokeLists tileid: ${tileid}, items: `, items, " pvalue: ", pvalue);
+            console.log( (ddbg()),`InvokeLists tileid: ${tileid} pvalue: `, pvalue);
         }
-        items.forEach( function(item) {
-            if (item[0]==="LIST") {
-                var targetitem = item[1];
-                var lsubid = item[2];
-                var ncolon = targetitem.indexOf("::");
-                if ( ncolon !== -1 ) {
-                    var attr = targetitem.substring(0,ncolon);
-                    var nreset = targetitem.substring(ncolon+2);
-                } else {
-                    attr = targetitem;
-                    nreset = "x";
-                }
 
-                var lsubid = item[2];
-                // var lpvalue = decodeURI2(devices[tileid].pvalue);
-                if ( attr===trigger && pvalue[attr] !== null ) {                
-                    var d = new Date();
-                    var today = d.toLocaleString();
-                    var newval = pvalue[attr].toString();
-                    var newobj = {userid: userid, deviceid: bid, subid: lsubid, ltime: today, lvalue: newval }
+        // loop through all the configs and capture the invoking device so we know which one to attribute
+        for (var i in configs) {
+            var config = configs[i];
+            var sourcebid = config.configkey.substring(5); // "user_xxx"
+            var sourcetile = tileid;
 
-                    // now get the last item in the list to see if this is a duplicate
-                    // var lastadd = null;
-                    var lastadd = mydb.getAdd();
-                    if ( lastadd && lastadd.ltime && lastadd.userid === userid && lastadd.deviceid === bid && lastadd.subid === lsubid && 
-                                    lastadd.ltime === today && lastadd.lvalue === newval ) {
-                        if ( DEBUG11 ) {
-                            console.log( (ddbg()), "LIST update skipped due to duplicate: ", lastadd, newobj);
-                        }
-                    } else {
-                        mydb.addRow("lists", newobj)
-                        .then( ()=> {
-                            if ( DEBUG11 ) {
-                                console.log( (ddbg()), "LIST updated: ", newobj);
-                            }
-                        })
-                        .catch(reason => {
-                            console.log( (ddbg()), reason);
-                        });
-                    }
+            // this little bit of code is only needed to deal with legacy LIST items
+            // that nobody should have except me. Otherwise we could just set sourcetile = 0 becasue it won't be used
+            // to confirm this, take a look into the code of parseCustomizeContent where user params are set
+            for (var devid in devices ) {
+                if ( devices[devid].deviceid === sourcebid ) {
+                    sourcetile = parseInt(devid);
+                    break;
                 }
             }
-        })
+            var rlines = decodeURI2(config.configval);
+            var items = [];
+            if ( is_array(rlines) ) {
+                rlines.forEach(aline => {
+                    items.push(aline);
+                });
+            }
+
+            items.forEach( function(item) {
+                if (item[0]==="LIST") {
+                    var lsubid = item[2];
+                    var arr = parseCustomizeContent(sourcetile, item[1]);
+                    var linkid = arr[0];
+                    var targetsubid = arr[1];
+         
+                    // if ( linkid===tileid && targetsubid===trigger && devices[linkid] ) {                
+                        // var lpvalue = decodeURI2(devices[linkid].pvalue);
+                    if ( linkid===tileid && targetsubid===trigger && pvalue[targetsubid] ) {                
+                        // var lpvalue = pvalue;
+                        var d = new Date();
+                        var today = d.toLocaleString();
+                        // var newval = lpvalue[targetsubid].toString();
+                        var newval = pvalue[targetsubid];
+                        var newobj = {userid: userid, deviceid: sourcebid, subid: lsubid, ltime: today, lvalue: newval }
+
+                        // now get the last item in the list to see if this is a duplicate
+                        // var lastadd = null;
+                        var lastadd = mydb.getAdd();
+                        if ( lastadd && lastadd.ltime && lastadd.userid === userid && lastadd.deviceid === sourcebid && lastadd.subid === lsubid && 
+                                        lastadd.ltime === today && lastadd.lvalue === newval ) {
+                            if ( DEBUG11 ) {
+                                console.log( (ddbg()), "LIST update skipped due to duplicate: ", lastadd, newobj);
+                            }
+                        } else {
+                            mydb.addRow("lists", newobj)
+                            .then( ()=> {
+                                if ( DEBUG11 ) {
+                                    console.log( (ddbg()), "LIST updated: ", newobj);
+                                }
+                            })
+                            .catch(reason => {
+                                console.log( (ddbg()), reason);
+                            });
+                        }
+                    }
+                }
+            });
+        }
     }
 
     function invokeRules(tileid, items, hubs, devices) {
@@ -7673,10 +7719,9 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                                 console.log( (ddbg()), "trigger other custom from rule. sib val: ", webstr, " command: ", command);
                             }
 
-                            // take action if it is in a rule
+                            // take action for web calls within rules. this should be rare as it is undocumented
                             if ( command==="GET" || command==="POST" ) {
-
-                                doAction(userid, hubindex, thingid, rswid, rswtype, rvalue, rswattr, rsubid, rhint, command, linkv);
+                                doAction(userid, hubindex, rtileid, rswid, rswtype, rvalue, rswattr, rsubid, rhint, command, linkv);
                                 
                                 // neuter the hub call so we don't do both and invoke action function
                                 hub = null;
@@ -7730,14 +7775,14 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, rule
                         if ( delay && delay > 0 ) {
                             setTimeout( function() {
                                 try {
-                                    callHub(userid, hub.id, rswid, rswtype, rvalue, rswattr, rsubid, rhint, true);
+                                    callHub(userid, hub.id, rtileid, rswid, rswtype, rvalue, rswattr, rsubid, rhint, true);
                                 } catch (e) {
                                     console.log( (ddbg()), "error calling hub from rule for userid: ", userid, " hub.id, rswid,rswtype,rvalue,rsattr,rsubid,rhint: ", hub.id, rswid, rswtype, rvalue, rswattr, rsubid, rhint, " error: ", e);
                                 }
                             }, delay);
                         } else {
                             try {
-                                callHub(userid, hub.id, rswid, rswtype, rvalue, rswattr, rsubid, rhint, true);
+                                callHub(userid, hub.id, rtileid, rswid, rswtype, rvalue, rswattr, rsubid, rhint, true);
                             } catch (e) {
                                 console.log( (ddbg()), "error calling hub from rule for userid: ", userid, " hub.id, rswid,rswtype,rvalue,rsattr,rsubid,rhint: ", hub.id, rswid, rswtype, rvalue, rswattr, rsubid, rhint, " error: ", e);
                             }
@@ -7783,7 +7828,6 @@ function pushClient(userid, swid, swtype, subid, body) {
             clients[userid][i].sendUTF(JSON.stringify(entry));
         }
     }
-
 }
 
 function queryNewST(hub, deviceid, swtype) {
@@ -7870,11 +7914,12 @@ function queryNewST(hub, deviceid, swtype) {
 
 }
 
-function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inrule) {
+function callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, hint, inrule) {
 
     // used to grab responses for ISY hubs
     var isyresp = {};
     var hubtype;
+    var host;
 
     // first get the hub from the DB
     return mydb.getRow("hubs","*","userid = "+userid+" AND id = " + hubindex)
@@ -7887,7 +7932,6 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
         var endpt = hub.hubendpt;
         var user_endpt = hub.userendpt;
         var result = "success";
-        // var hubid = hub.hubid;
 
         var valint = parseInt(swval);
         if ( isNaN(valint) ) {
@@ -7915,7 +7959,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                 .then( () => {
                     var body = {};
                     body[subid] = newval;
-                    getHubResponse(body, hub.hubtype);
+                    getHubResponse(body, hub);
                     return pvalue;
                 })
                 .catch(reason => {
@@ -7931,7 +7975,6 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
         // this function calls the Groovy hub api
         // if a user accesstoken is provided then we use it without a bearer token
         if ( hub.hubtype==="Hubitat" ) {
-            var host;
             var header;
             var nvpreq;
             if ( user_token && user_endpt ) {
@@ -7970,7 +8013,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                         }
 
                         // send info back to hub for quick feedback
-                        getHubResponse(body, hub.hubtype, resolve, reject);
+                        getHubResponse(body, hub, resolve, reject);
                     }
                 });
             });
@@ -8028,13 +8071,13 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
 
                     var modename = subid.substr(1);
                     var modeId = presult[modename];
-                    var host = endpt + "/v1/locations/" + swid + "/modes/current";
+                    host = endpt + "/v1/locations/" + swid + "/modes/current";
                     var modeval = {"modeId": modeId};
                     _curl(host, header, modeval, "PUT")
                     .then( () => {
                         // set the mode and handle resposne
                         presult.themode = modename;
-                        getHubResponse(presult, hub.hubtype);
+                        getHubResponse(presult, hub);
                     });
                     return "success";
 
@@ -8148,7 +8191,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                             subid==="trackImage" || subid==="mediaSource" ) {
                     return queryNewST(hub, swid, swtype).then(presult => {
                         if ( presult && typeof presult === "object" ) {
-                            getHubResponse(presult, hub.hubtype);
+                            getHubResponse(presult, hub);
                         }
                         return presult;
                     });
@@ -8179,7 +8222,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                 } else if ( subid === "_refresh" ) {
                     return queryNewST(hub, swid, swtype).then(pquery => {
                         if ( pquery && typeof pquery === "object" ) {
-                            getHubResponse(pquery, hub.hubtype);
+                            getHubResponse(pquery, hub);
                         }
                         if ( DEBUG20 ) {
                             console.log((ddbg()), "Refresh tile: ", swid," of type: " , swtype, " result: ", pquery);
@@ -8210,7 +8253,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
 
 
                 if ( nvpreq ) {
-                    var host = endpt + "/devices/" + swid + "/commands";
+                    host = endpt + "/devices/" + swid + "/commands";
                     if ( DEBUG20 ) {
                         console.log( (ddbg()), "Calling New ST callHub with: ", jsonshow(nvpreq) );
                     }
@@ -8224,7 +8267,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                         if ( err === 401 && inrule!=="refresh" ) {
                             console.log((ddbg()), "Obtaining refresh token for user: ", userid);
                             refreshSTToken(userid, hub, false, function () {
-                                callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, "refresh");
+                                callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, hint, "refresh");
                             });
                             return;
                         }
@@ -8232,13 +8275,13 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                         // push results immediately to give user a responsive feel
                         if ( presult && typeof presult === "object" ) {
                             presult[subid] = swval;
-                            getHubResponse(presult, hub.hubtype);
+                            getHubResponse(presult, hub);
                         }
                     });
                     result = "success";
                 } else {
                     presult[subid] = swval;
-                    getHubResponse(presult, hub.hubtype);
+                    getHubResponse(presult, hub);
                     result = "success";
                     console.log( (ddbg()),"Unrecognized command for user: ", userid, " hub: ", hubindex, " deviceid: ", swid, " subid: ", subid, " type: ", swtype, " value: ", swval, " attr: ", swattr, " inrule: ", inrule);
                 }
@@ -8260,40 +8303,40 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                 case "_stop":
                     var cmd = subid.substr(1);
                     cmd = cmd === "stop" ? "pause" : cmd;
-                    var host = endpt + "/v1/groups/" + hint + "/playback/" + cmd;
+                    host = endpt + "/v1/groups/" + hint + "/playback/" + cmd;
                     _curl(host, header, "", "POST")
                     .then( () => {
                         var stat = cmd==="play" ? "playing" : "paused";
                         var pvalue = {playbackStatus: stat};
-                        getHubResponse(pvalue, hub.hubtype);
+                        getHubResponse(pvalue, hub);
                     });
                 break;
 
                 case "_previousTrack":
-                    var host = endpt + "/v1/groups/" + hint + "/playback/skipToPreviousTrack";
+                    host = endpt + "/v1/groups/" + hint + "/playback/skipToPreviousTrack";
                     _curl(host, header, "", "POST")
                     .then( () => {
-                        updateSonosMeta(endpt, header, hint);
+                        updateSonosMeta(hub, endpt, header, hint);
                     });
                 break;
 
                 case "_nextTrack":
-                    var host = endpt + "/v1/groups/" + hint + "/playback/skipToNextTrack";
+                    host = endpt + "/v1/groups/" + hint + "/playback/skipToNextTrack";
                     _curl(host, header, "", "POST")
                     .then( () => {
-                        updateSonosMeta(endpt, header, hint);
+                        updateSonosMeta(hub, endpt, header, hint);
                     });
                 break;
 
                 case "_volumeUp":
                     var param = {volumeDelta: 5};
-                    var host = endpt + "/v1/players/" + swid + "/playerVolume/relative";
+                    host = endpt + "/v1/players/" + swid + "/playerVolume/relative";
                     _curl(host, header, param, "POST");
                 break;
 
                 case "_volumeDown":
                     var param = {volumeDelta: -5};
-                    var host = endpt + "/v1/players/" + swid + "/playerVolume/relative";
+                    host = endpt + "/v1/players/" + swid + "/playerVolume/relative";
                     _curl(host, header, param, "POST");
                 break;
 
@@ -8303,7 +8346,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                         valint = 50;
                     }
                     var param = {volume: valint};
-                    var host = endpt + "/v1/groups/" + hint + "/groupVolume";
+                    host = endpt + "/v1/groups/" + hint + "/groupVolume";
                     _curl(host, header, param, "POST");
                 break;
 
@@ -8313,7 +8356,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                         valint = 50;
                     }
                     var param = {volume: valint};
-                    var host = endpt + "/v1/players/" + swid + "/playerVolume";
+                    host = endpt + "/v1/players/" + swid + "/playerVolume";
                     _curl(host, header, param, "POST");
                 break;
                     
@@ -8321,7 +8364,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                 case "_unmute":
                     var mybool = (subid === "_mute");
                     var param = {muted: mybool};
-                    var host = endpt + "/v1/players/" + swid + "/playerVolume";
+                    host = endpt + "/v1/players/" + swid + "/playerVolume";
                     _curl(host, header, param, "POST");
                 break;
 
@@ -8330,7 +8373,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                 case "trackImage":
                 case "mediaSource":
                 case "trackDescription":
-                    updateSonosMeta(endpt, header, hint);
+                    updateSonosMeta(hub, endpt, header, hint);
                 break;
             }
 
@@ -8339,7 +8382,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
         } else if ( hub.hubtype==="Ford" || hub.hubtype==="Lincoln" ) {
 
             // all API calls have the same header structure
-            var host = endpt + "/" + swid; 
+            host = endpt + "/" + swid; 
             var header = {"Authorization": "Bearer " + access_token,
                 "Content-Type": "application/json",
                 "api-version": FORDAPIVERSION,
@@ -8351,7 +8394,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                 case "_info":
                     // set completion status to blank
                     curl_call(host, header, false, false, "GET", function(err, res, body) {
-                        getHubResponse(body, hub.hubtype);
+                        getHubResponse(body, hub);
                         pushClient(userid, swid, swtype, subid, {commandStatus: ""});
                     });
                     break;
@@ -8367,7 +8410,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                     // set completion status to running
                     host = host + "/" + subid.substr(1);
                     curl_call(host, header, false, false, "POST", function(err, res, body) {
-                        getHubResponse(body, hub.hubtype);
+                        getHubResponse(body, hub);
                         pushClient(userid, swid, swtype, subid, {commandStatus: "RUNNING"});
                     });
                     break;
@@ -8525,7 +8568,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
         return result;
     })
     .catch(reason => {
-        console.log( (ddbg()), "callHub ISY - failed to get hubs: ", reason);
+        console.error( (ddbg()), "callHub - failed to get hubs: ", reason);
         return null;
     });
 
@@ -8533,7 +8576,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
     // supporting sub-functions are below
     // ----------------------------------------------------------------------------
 
-    function updateSonosMeta(endpt, header, hint) {
+    function updateSonosMeta(hub, endpt, header, hint) {
         var namehost = endpt + "/v1/groups/" + hint + "/playbackMetadata";
         var pvalue = {};
         _curl(namehost, header, "", "GET")
@@ -8578,7 +8621,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                     }
                 }
             }
-            getHubResponse(pvalue, "Sonos");
+            getHubResponse(pvalue, hub);
         })
         .catch(err => {
             console.log((ddbg()), "Error updating Sonos meta info for user: ", userid, " err: ", err);
@@ -8623,15 +8666,19 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
         fs.writeFileSync("thumbnail.png", base64);
     }
 
-    function getHubResponse(body, hubtype, resolve, reject) {
+    function getHubResponse(body, hub, resolve, reject) {
         // update all clients - this is actually not needed if your server is accessible to websocket updates
         // It is left here because my dev machine sometimes doesn't get websocket pushes
         // you can comment this if your server gets pushes reliably
         // leaving it here causes no harm other than processing the visual update twice
+        var hubtype = hub.hubtype;
+        var hubid = hub.hubid;
         var pvalue;
         try {
             if ( typeof body==="object" ) {
                 pvalue = body;
+            } else if ( typeof body==="string" && body.startsWith("No response") ) {
+                throw "Hub offline"
             } else if ( typeof body==="string" ) {
                 pvalue = JSON.parse(body);
             } else {
@@ -8639,7 +8686,7 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
             }
             if ( !pvalue ) throw "Nothing returned";
         } catch (e) {
-            console.error( (ddbg()), "failed converting hub call return to JSON object. body: ", body, " error: ", e);
+            console.error( (ddbg()), "hub call error: ", e, " returned body: ", body);
             if ( typeof reject === "function" ) {
                 reject(e);
             }
@@ -8743,8 +8790,31 @@ function callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, inr
                 resolve(pvalue);
             }
 
-            // push new values to all clients
-            pushClient(userid, swid, swtype, subid, pvalue);
+            // push new values to all clients to get an immediate onscreen response
+            // pushClient(userid, swid, swtype, subid, pvalue);
+            if ( DEBUG1 ) {
+                console.log( (ddbg()),"Hub call result: swid:", swid," swtype:", swtype," subid:", subid," pvalue:", pvalue);
+            }
+
+            // emulate hub pushing results if testing locally
+            // this uses the object variant of the function to change multiple things at once
+            // otherwise just push results to screen for fast visual response
+            if ( EMULATEHUB ) {
+                var devname = pvalue.name || "";
+                var msg = {
+                    msgtype: "update", 
+                    hubid: hubid,
+                    change_name: devname,
+                    change_device: swid,
+                    change_attribute: subid,
+                    change_type: swtype,
+                    change_value: pvalue
+                };    
+                processHubMessage(userid, msg, true);
+            } else {
+                pushClient(userid, swid, swtype, subid, pvalue);
+            }
+
             return pvalue;
         }
      
@@ -8897,6 +8967,13 @@ function queryHub(device, pname) {
         
         function getQueryResponse(err, res, body) {
             var pvalue;
+
+            // handle offline case
+            if ( typeof body === "string" && body.startsWith("No response") ) {
+                console.log( (ddbg()), "Hub offline...");
+                reject("");
+            }
+
             if ( err ) {
                 console.log( (ddbg()), "error requesting hub node query: ", err);
                 reject(err);
@@ -9193,7 +9270,7 @@ function translateObjects(pvalue, levels) {
     }
 }
 
-function doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, command, linkval) {
+function doAction(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, hint, command, linkval) {
 
     var msg = "success";
     if ( DEBUG7 ) {
@@ -9228,7 +9305,7 @@ function doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, co
                     if ( pvalue ) {
                         pushClient(userid, swid, swtype, subid, pvalue);
                         pvalue.subid = subid;
-                        processRules(userid, device.id, swid, swtype, subid, pvalue, "callHub");
+                        processRules(userid, device.id, swid, swtype, subid, pvalue, true, "callHub");
                         delete pvalue.subid;
                         msg = pvalue;
                     } else {
@@ -9246,7 +9323,7 @@ function doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, co
 
         } else if ( command==="LINK" ) {
             // processLink(linkval);
-            msg = callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, null, false);
+            msg = callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, hint, null, false);
             // msg = "success - link action executed on device id: " + swid + " device type: " + swtype;
         
         } else if ( command==="LIST" ) {
@@ -9320,9 +9397,10 @@ function doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, co
 
     } else {
         if ( DEBUG1 ) {
-            console.log( (ddbg()), "callHub: ", userid, hubindex, swid, swtype, swval, swattr, subid, hint);
+            console.log( (ddbg()), `callHub: userid: ${userid}, hubindex: ${hubindex}, tileid: ${tileid}`, 
+                                   `swid: ${swid}, swtype: ${swtype}, swval: ${swval}, swattr: ${swattr}, subid: ${subid}`);
         }
-        msg = callHub(userid, hubindex, swid, swtype, swval, swattr, subid, hint, null, false);
+        msg = callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, hint, null, false);
     }
     return msg;
 
@@ -9613,12 +9691,12 @@ function delThing(userid, bid, thingtype, panel, tileid, thingid) {
     .then(result => {
         var msg;
         if ( result ) {
-            msg = "removed tile #" + tileid + " deviceid: " + bid + " of type: " + thingtype + " from page: " + panel;
+            msg = "removed tile #" + tileid + " deviceid: " + bid + " of type: " + thingtype + " from room: " + panel;
             if ( DEBUG6 ) {
                 console.log( (ddbg()), msg);
             }
         } else {
-            msg = "error - could not remove tile #" + tileid + " deviceid: " + bid + " of type: " + thingtype + " from page: " + panel;
+            msg = "error - could not remove tile #" + tileid + " deviceid: " + bid + " of type: " + thingtype + " from room: " + panel;
             console.log( (ddbg()), msg);
         }
         return msg;
@@ -9629,22 +9707,30 @@ function delThing(userid, bid, thingtype, panel, tileid, thingid) {
     });
 }
 
-function delPage(userid, roomid, panel) {
+function delPage(userid, roomid, roomname, panel) {
 
-    return mydb.deleteRow("rooms","userid = "+userid+" AND id="+roomid)
+    return Promise.all([
+        mydb.deleteRow("rooms","userid = "+userid+" AND id="+roomid),
+        mydb.deleteRow("things","userid = "+userid+" AND roomid="+roomid)
+    ])
     .then(result => {
         var msg;
-        if ( result ) {
-            msg = "removed room #" + roomid + " of name: " + panel;
+        var numdelrooms = result[0].getAffectedItemsCount();
+        if ( numdelrooms ) {
+            msg = "removed room: " + roomname + " (" + roomid + ") from panel: " + panel;
+            var numdeltiles = result[1].getAffectedItemsCount();
+            if ( numdeltiles ) {
+                msg+= " and removed " + numdeltiles + " tiles that were in that room.";
+            }
         } else {
-            msg = "error - could not remove room #" + roomid + " of name: " + panel;
-            console.log( (ddbg()), "delPage - ", msg);
+            msg = "error - failed to remove room: " + roomname + " (" + roomid + ") from panel: " + pamel;
+            console.log( (ddbg()), "delPage - ", msg );
         }
         return msg;
     })
     .catch(reason => {
         console.log( (ddbg()), "delPage - ", reason);
-        return reason;
+        return "error - something went wrong trying to remove a";
     });
 }
 
@@ -10191,7 +10277,9 @@ function getOptionsPage(user, configoptions, hubs, req) {
         var $kioskoptions = getConfigItem(configoptions, "kiosk") || "false";
         var blackout = getConfigItem(configoptions, "blackout") || "false";
         var $ruleoptions = getConfigItem(configoptions, "rules") || "true";
-        var timezone = getConfigItem(configoptions, "timezone") || "America/Detroit";
+        var timezone = getConfigItem(configoptions, "timezone") || "480";
+        timezone = parseInt(timezone);
+        if ( isNaN(timezone) ) { timezone = 480; }
         var phototimer = parseInt(getConfigItem(configoptions, "phototimer"));
         if ( isNaN(phototimer) ) { phototimer = 0; }
         var fcastcity = getConfigItem(configoptions, "fcastcity") || "san-carlos";
@@ -10316,8 +10404,8 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc+= "<input class=\"optionchk\" id=\"clrblackid\" type=\"checkbox\" name=\"blackout\"  value=\"" + blackout + "\"" + $kstr + "/></div>";
         $tc+= "<div><label for=\"photoid\" class=\"optioninp\">Photo timer (sec): </label>";
         $tc+= "<input class=\"optioninp\" id=\"photoid\" name=\"phototimer\" type=\"number\"  min='0' max='300' step='5' value=\"" + phototimer + "\" /></div>";
-        $tc += "<div><label class=\"optioninp\">Timezone: </label>";
-        $tc += "<input id=\"newtimezone\" class=\"optioninp\" name=\"timezone\" size=\"20\" type=\"text\" value=\"" + timezone + "\"/></div>"; 
+        $tc += "<div><label for=\"newtimezone\" class=\"optioninp\">Timezone: </label>";
+        $tc += "<input id=\"newtimezone\" class=\"optioninp\" name=\"timezone\" size=\"20\" type=\"number\" min='-660' max='840', step='60' value=\"" + timezone + "\"/></div>"; 
         $tc += "<div><label class=\"optioninp\" title=\"Polling for authenticated hubs\">Hub polling timer: </label>";
         $tc += "<input class=\"optioninp\" name=\"fast_timer\" size=\"20\" type=\"text\" value=\"" + fast_timer + "\"/></div>"; 
         $tc += "<div><label class=\"optioninp\" title=\"Blanks, customs, frames, images polling\">Special polling timer: </label>";
@@ -10628,10 +10716,18 @@ function getMainPage(user, configoptions, hubs, req, res) {
  
         // include doc button and panel name
         var displayname = uname ? uname : useremail;
-        tc += '<div id="showversion" class="showversion">';
-        tc += '<span id="emailname">' + displayname + '</span> | <span id="infoname">' + pname + '</span><span> | V' + GLB.HPVERSION + '</span> | <span id="infoport"></span>';
+        if ( kioskmode ) {
+            tc += '<div id="showversion" class="hidden">';
+        } else {
+            tc += '<div id="showversion" class="showversion">';
+        }
+        tc += '<span id="emailname" class="infoname">' + displayname + '</span> | <span id="infoname" class="infoname">' + pname + '</span><span class="infoname"> | V' + GLB.HPVERSION + '</span> | <span id="infoport" class="infoname"></span>';
         tc += '</div>';
-        tc += '<div id="quickedit">E</div>';
+        if ( kioskmode ) {
+            tc += '<div id="quickedit" class="hidden">E</div>';
+        } else {
+            tc += '<div id="quickedit" class="quickedit">E</div>';
+        }
         // tc += '<div id="showopts"><a href="' +  GLB.returnURL + '/showoptions"><img width="24" height=24 src="media/editgear.png"/></a></div>';
         tc += '<div id="showdocs"><a href="https://www.housepanel.net" target="_blank">?</a></div>';
 
@@ -11230,12 +11326,50 @@ function pw_verify(pword, hash, algo) {
     return (pw_hash(pword, algo) === hash);
 }
 
-// TODO - code up the reset timing
-function updCustom(api, userid, swid, swattr, subid, swval, rules) {
+// parse the three components
+function parseCustomizeContent(tileid, swattr) {
+    var linkid;
+    var targetsubid;
+    var nreset;
+    var n = swattr.indexOf("::");
+    if ( n=== -1 ) {
+        linkid = parseInt(tileid);
+        targetsubid = swattr;
+        nreset = "d";
+    } else {
+        var part1 = swattr.substring(0,n);
+        var part2 = swattr.substring(n+2);
+        var m = part2.indexOf("::");
+        if ( m=== -1 ) {
+            linkid = parseInt(tileid);
+            targetsubid = part1;
+            nreset = part2;
+        } else {
+            linkid = parseInt(part1);
+            targetsubid = part2.substring(0, m);
+            nreset = part2.substring(m+2);
+        }
+    }
+
+    // failsafes include point to clock, name, and day since they will always be there
+    if ( !linkid || isNaN(linkid) ) {
+        linkid = 1;
+    }
+    if ( !targetsubid ) {
+        targetsubid = "name";
+    }
+    if ( !nreset ) {
+        nreset = "d";
+    }
+    return [linkid, targetsubid, nreset];
+}
+
+function updCustom(api, userid, tileid, swid, swattr, subid, swval, rules) {
     
     // var reserved = ["index","rooms","things","config","control","time","useroptions"];
     var configkey = "user_" + swid;
     var goodrules = [];
+    var content = swattr;
 
     // handle encryption and check for valid customization
     // fixed bug below that didn't use the new goodrules array
@@ -11263,32 +11397,36 @@ function updCustom(api, userid, swid, swattr, subid, swval, rules) {
             var str = "Updated " + goodrules.length + " customizations for field: " + swid + " and user " + userid;
             console.log((ddbg()), str);
 
+            // now handle the list request by clearing out old values if there and adding first value based on now
+            // this will always use the new format for "content" so the tileid parameter should be zero
             if ( swval === "LIST" ) {
+
+                var arr = parseCustomizeContent(tileid, content);
+                var linkid = arr[0];
+                var targetsubid = arr[1];
+
                 Promise.all([
                     mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${swid}' AND subid = '${subid}'`),
-                    mydb.getRow("devices","name, pvalue", `userid = ${userid} AND deviceid = '${swid}'`)
+                    mydb.getRow("devices","name, pvalue", `userid = ${userid} AND id = ${linkid}`)
                 ])
                 .then(res2 => {
                     var numListDel = res2[0].getAffectedItemsCount();
                     if ( numListDel > 0 ) {
                         console.log((ddbg()), "Removed " + numListDel + " items from old LIST for subid = " + subid);
                     }
-                    if ( swattr ) {
-                        // check to see if we have a reset value
-                        var nreset = swattr.indexOf("::");
-                        if ( nreset != -1 ) {
-                            swattr = swattr.substring(0,nreset);
-;                       }
                         var device = res2[1];
                         var pvalue = decodeURI2(device.pvalue);
+                        var theval = pvalue[targetsubid];
                         var d = new Date();
                         var today = d.toLocaleString();
-                        var newList = {userid: userid, deviceid: swid, subid: subid, ltime: today, lvalue: pvalue[swattr]};
+                        var newList = {userid: userid, deviceid: swid, subid: subid, ltime: today, lvalue: theval};
                         mydb.addRow("lists", newList)
                         .then(() => {
-                            console.log((ddbg()), "Added first item for field: " + swattr + " into subid: " + subid + " of a new list: (" + today + ", " + pvalue[swattr] + ")");
+                            console.log((ddbg()), `Added first item for field: ${targetsubid} from Tile #${linkid} into field: ${subid} of a new list: (${today},${theval})`);
+                        })
+                        .catch(reason => {
+                            console.log( (ddbg()), reason) ;
                         });
-                    }
                 });
             }    
             return str;
@@ -11300,13 +11438,16 @@ function updCustom(api, userid, swid, swattr, subid, swval, rules) {
     } else {
         result = mydb.deleteRow("configs", "userid = "+userid+" AND configkey='"+configkey+"'")
         .then(res => {
-            var str = "Removed all customizations for field: " + swid + " and user: " + userid;
+            var str = "Removed customizations Tile ID: " + swid + " and user: " + userid;
             console.log((ddbg()), str);
             if ( swval==="LIST" ) {
                 mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${swid}' AND subid = '${subid}'`)
                 .then(res2 => {
                     var numListDel = res2.getAffectedItemsCount();
                     console.log( (ddbg()), `Deleted ${numListDel} LIST rows for deviceid=${swid} and subid=${subid}`);
+                })
+                .catch(reason => {
+                    console.log( (ddbg()), reason) ;
                 });
             }
             return str;
@@ -11358,6 +11499,11 @@ function getHubObj(userid, hub) {
             if ( hubType==="ISY" || hubType==="Hubitat" ) {
                 result = {action: "things", hubType: hubType, hubName: hubName, numdevices: 0};
 
+                if (EMULATEHUB===true && hubType==="ISY") {
+                    resolve(result);
+                    return;
+                }
+
                 // now read the hub and fill in the right info
                 getHubInfo(hub)
                 .then(mydevices => {
@@ -11368,7 +11514,7 @@ function getHubObj(userid, hub) {
                     }
 
                     // reactivate websocket here if we reauthorized an ISY hub
-                    if ( hubType==="ISY" ) {
+                    if ( hubType==="ISY" && EMULATEHUB!==true ) {
                         setupISYSocket();
                     }
 
@@ -11532,7 +11678,7 @@ function apiCall(user, body, protocol, res) {
                             if ( DEBUG8 ) {
                                 console.log( (ddbg()), "doaction multicall: hubindex: ", hubindex, " swval: ", swval, " swattr: ", swattr, " subid: ", subid, " tilrid= ", athing);
                             }
-                            doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, command, linkval);
+                            doAction(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, hint, command, linkval);
                         })
                     });
                     result = "called doAction " + tilearray.length + " times in a multihub action";
@@ -11548,10 +11694,10 @@ function apiCall(user, body, protocol, res) {
                             swid = device.deviceid;
                             swtype = device.devicetype;
                             if ( !subid ) { subid = "switch"; }
-                            return doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, command, linkval);
+                            return doAction(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, hint, command, linkval);
                         });
                     } else {
-                        result = doAction(userid, hubindex, swid, swtype, swval, swattr, subid, hint, command, linkval);
+                        result = doAction(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, hint, command, linkval);
                     }
                     // result = "call doAction for tile ID: " + swid;
                 }
@@ -11652,7 +11798,8 @@ function apiCall(user, body, protocol, res) {
 
             case "pagedelete":
                 if ( protocol==="POST" ) {
-                    result = delPage(userid, roomid, swval);
+                    var roomname = swval;
+                    result = delPage(userid, roomid, roomname, pname);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -11720,20 +11867,23 @@ function apiCall(user, body, protocol, res) {
             
             // this returns all user customizations
             case "getoptions":
-                result = mydb.getRows("configs","*","userid = "+userid+" AND configkey LIKE 'user_%'")
+                result = mydb.getRows("configs","*","userid = "+userid+" AND configkey LIKE 'user%' and NOT configkey='useroptions'")
                 .then(rows => {
                     var rulelist = {};
+                    var configlist = {};
                     if ( rows ) {
                         rows.forEach(row => {
-                            if ( row.configkey !== "useroptions" ) {
+                            if ( row.configkey.startsWith("user_") ) {
                                 rulelist[row.configkey] = JSON.parse(row.configval);
+                            } else {
+                                configlist[row.configkey] = row.configval;
                             }
                         });
                     }
                     if ( DEBUG11 ) {
-                        console.log( (ddbg()),"rules list for user: ", userid," list: ", jsonshow(rulelist) );
+                        console.log( (ddbg()),"rules list for user: ", userid," rulelist: ", jsonshow(rulelist), "configlist: ", jsonshow(configlist) );
                     }
-                    return rulelist;
+                    return [rulelist, configlist];
                 }).catch(reason => {
                     console.log( (ddbg()), "apiCall - getoptiopns: ", reason);
                     return null;
@@ -11771,6 +11921,23 @@ function apiCall(user, body, protocol, res) {
                 .catch(reason => {
                     return "error - no hubs found for user " + userid;
                 })
+                break;
+
+            // returns the mode from the first mode tile found
+            case "getmode":
+                result = mydb.getRow("devices","*",`userid=${userid} AND deviceid like '%mode' and name = 'Mode'`)
+                .then(row => {
+                    if (row) {
+                        var pvalue = decodeURI2(row.pvalue);
+                        return pvalue["themode"];
+                    } else {
+                        return "Unknown";
+                    }
+                })
+                .catch(reason => {
+                    console.log( (ddbg()), reason );
+                    return "Unknown";
+                });
                 break;
 
             // read and return devices tied to this user
@@ -11949,7 +12116,7 @@ function apiCall(user, body, protocol, res) {
                     } else {
                         rules = null;
                     }
-                    result = updCustom(api, userid, swid, swattr, subid, swval, rules);
+                    result = updCustom(api, userid, tileid, swid, swattr, subid, swval, rules);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -11962,7 +12129,7 @@ function apiCall(user, body, protocol, res) {
                 .then(device => {
                     var pvalue = decodeURI2(device.pvalue);
                     pvalue.subid = subid;
-                    processRules(userid, device.id, swid, swtype, subid, pvalue, "callHub");
+                    processRules(userid, device.id, swid, swtype, subid, pvalue, false, "callHub");
                     delete pvalue.subid;
                     return pvalue;
                 })
@@ -11972,53 +12139,18 @@ function apiCall(user, body, protocol, res) {
                 });
                 break;
 
+            // this clears the list without adding the current value
+            // that must be done manually or through a smart home action
             case "resetlist":
                 if ( protocol==="POST" ) {
-
-                    result = Promise.all([
-                        mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${swid}' AND subid = '${subid}'`),
-                        mydb.getRow("devices","name, pvalue", `userid = ${userid} AND deviceid = '${swid}'`)
-                    ])
-                    .then(res2 => {
-                        var numListDel = res2[0].getAffectedItemsCount();
-                        if ( DEBUG11 && numListDel > 0 ) {
-                            console.log((ddbg()), "Removed " + numListDel + " items from LIST for subid = " + subid);
-                        }
-                        // check to see if we have a reset value
-                        if ( linkval ) {
-                            var nreset = linkval.indexOf("::");
-                            if ( nreset != -1 ) {
-                                var attr = linkval.substring(0,nreset);
-    ;                       } else {
-                                attr = linkval;
-                            }
-                            var device = res2[1];
-                            var pvalue = decodeURI2(device.pvalue);
-                            var d = new Date();
-                            var today = d.toLocaleString();
-                            var newList = {userid: userid, deviceid: swid, subid: subid, ltime: today, lvalue: pvalue[attr]};
-                            mydb.addRow("lists", newList)
-                            .then(() => {
-                                if ( DEBUG11 ) {
-                                    console.log((ddbg()), "Added first item after reset for field: " + attr + " into subid: " + subid + " of a new list: (" + today + ", " + pvalue[attr] + ")");
-                                }
-                            });
-                        }
+                    result = mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${swid}' AND subid = '${subid}'`)
+                    .then(res => {
+                        var numListDel = res.getAffectedItemsCount();
                         return `Deleted ${numListDel} LIST rows for deviceid=${swid} and subid=${subid}`;
                     })
                     .catch(reason => {
-                        console.log( (ddbg()), reason );
-                        return `Something went wrong with resetting list for deviceid=${swid} and subid=${subid}`;
+                        console.log( (ddbg()), reason);
                     });
-                    // result = mydb.deleteRow("lists",`userid = ${userid} AND deviceid='${swid}' AND subid='${subid}'`)
-                    // .then(res2 => {
-                    //     var numListDel = res2.getAffectedItemsCount();
-                    //     return `Deleted ${numListDel} LIST rows for deviceid=${swid} and subid=${subid}`;
-                    // })
-                    // .catch(reason => {
-                    //     console.log( (ddbg()), reason );
-                    //     return "Something went wrong with resetting list: " + subid;
-                    // });
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -12047,7 +12179,7 @@ function apiCall(user, body, protocol, res) {
                 })
                 .catch(reason => {
                     console.log( (ddbg()), reason);
-                })
+                });
                 break;
 
             // this isn't used, but it is here to return the next port available to connect
@@ -12248,7 +12380,11 @@ function apiCall(user, body, protocol, res) {
                 var clock = encodeURI2(result);
                 var device = {pvalue: clock};
                 mydb.updateRow("devices", device, "userid = " + userid + " AND deviceid = '"+swid+"'");
-                
+
+                // handle rules and time format user fields
+                var result = getCustomTile(userid, swattr, result, swid);
+                processRules(userid, tileid, swid, "clock", "time", result, false, "callHub" );
+
                 // this is where we do things that happen on the hour, day, week, month, or year
                 // note that everything is 0 based except for getDate() which is 1 ... 31
                 if ( swid === "clockdigital" ) {
@@ -12272,19 +12408,6 @@ function apiCall(user, body, protocol, res) {
                         resetList(userid, "h");
                     }
                 }
-
-                // handle rules and time format user fields
-                var result = getCustomTile(userid, swattr, result, swid);
-                // console.log(">>>> clock: ", result);
-                processRules(userid, thingid, swid, "clock", "time", result, "callHub" );
-
-                // remove any LINKS
-                // for (var key in result) {
-                //     if ( result[key] && typeof result[key]==="string" && 
-                //          (result[key].startsWith("LINK::") || result[key].startsWith("RULE::")) ) {
-                //         delete result[key];
-                //     }
-                // }
                 break;
 
             case "cancelauth":
@@ -12310,7 +12433,7 @@ function apiCall(user, body, protocol, res) {
 
 // do reset on LIST based on timing type
 function resetList(userid, timing) {
-    mydb.getRows("configs","*",`configkey LIKE 'user_%' AND configval LIKE '%["LIST",%'`)
+    mydb.getRows("configs","*",`userid=${userid} AND configtype=1 AND configval LIKE '%["LIST",%'`)
     .then(rows => {
         if ( rows ) {
             rows.forEach(row => {
@@ -12319,21 +12442,19 @@ function resetList(userid, timing) {
                 var thelists = decodeURI2(row.configval);
                 thelists.forEach(alist => {
                     if ( alist[0] === "LIST" ) {
-                        var targetitem = alist[1];
+                        var content = alist[1];
                         var subid = alist[2];
-                        var n = targetitem.indexOf("::");  //  test::h
-                        if ( n != -1 ) {
-                            var targettype = targetitem.substring(n+2);
-                            if ( timing === targettype ) {
-                                mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${deviceid}' AND subid = '${subid}'`)
-                                .then( res2=> {
-                                    var numListDel = res2[0].getAffectedItemsCount();
-                                    console.log( (ddbg()), `Deleted ${numListDel} rows for LIST associated with deviceid=${deviceid} and subid=${subid} based on criteria=${timing}`);
-                                })
-                                .catch(reason => {
-                                    console.log( (ddbg()), reason );
-                                });
-                            }
+                        var arr = parseCustomizeContent(0, content);
+                        var targettype = arr[2];
+                        if ( timing === targettype ) {
+                            mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${deviceid}' AND subid = '${subid}'`)
+                            .then( res2=> {
+                                var numListDel = res2.getAffectedItemsCount();
+                                console.log( (ddbg()), `Deleted ${numListDel} rows for LIST associated with deviceid=${deviceid} and subid=${subid} based on criteria=${timing}`);
+                            })
+                            .catch(reason => {
+                                console.log( (ddbg()), reason );
+                            });
                         }
                     }
                 });
@@ -12434,12 +12555,18 @@ function setupBrowserSocket() {
                         var clientUrl = client.socket.remoteAddress;
                         var clientPort = client.socket.server["_connectionKey"];
                         var str = "User #"+userid;
+                        var istr = (i+1).toString();
                         if ( i===index ) {
-                            str += " New Connection #"+i;
+                            str += " New Connection #"+istr;
                         } else {
-                            str += " Old Connection #"+i;
+                            str += " Old Connection #"+istr;
                         }
                         console.log( (ddbg()), str, "from host:", clientUrl, "port:", clientPort);
+
+                        // if ( clientUrl === "::1" ) {
+                        //     EMULATEHUB = true;
+                        //     console.log( (ddbg()), "Local testing mode enabled. ISY hubs ignored...");
+                        // }
                     });
                 }
             });
@@ -12557,7 +12684,8 @@ function buildDatabaseTable(tableindex) {
             id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
             userid INTEGER NOT NULL,
             configkey TEXT NULL,
-            configval TEXT NULL
+            configval TEXT NULL,
+            configtype INTEGER DEFAULT 1
           )`,
           
           `CREATE TABLE devices (
@@ -12761,37 +12889,100 @@ if ( app && applistening ) {
     var mydb = new sqlclass.sqlDatabase(GLB.dbinfo.dbhost, GLB.dbinfo.dbname, GLB.dbinfo.dbuid, GLB.dbinfo.dbpassword, GLB.dbinfo.dbtype);
     
     // build the tables if they are not there
-    var tables = ["configs", "devices","hubs", "panels", "rooms", "things", "users", "lists"];
-    Promise.allSettled([
-       mydb.getRow(tables[0],"id"),
-       mydb.getRow(tables[1],"id"),
-       mydb.getRow(tables[2],"id"),
-       mydb.getRow(tables[3],"id"),
-       mydb.getRow(tables[4],"id"),
-       mydb.getRow(tables[5],"id"),
-       mydb.getRow(tables[6],"id"),
-       mydb.getRow(tables[7],"id")
-    ])
-    .then(results => {
-        var i = 0;
-        results.forEach(function (result) {
-            if ( result.status === "rejected" ) {
-                console.log("Table ", tables[i], " does not exist. Building it...");
+    // rewrote this using pragma which is better and faster than what I did previously
+    const tables = ["configs", "devices","hubs", "panels", "rooms", "things", "users", "lists"];
+    var addedtables = 0;
+
+    // select name from pragma_table_list where schema = 'main' and  not name like 'sqlite%'
+    mydb.getRows("pragma_table_list","name","schema = 'main' AND NOT name LIKE 'sqlite%'")
+    .then(rows => {
+        var dbtables = [];
+        rows.forEach(row => {
+            dbtables.push(row.name);
+        });
+            
+        for (var i in tables) {
+            if ( dbtables.includes(tables[i]) ) {
+                // console.log( (ddbg()), "Table", tables[i], " successfully found");
+
+                // check configs for updating schema to include new configtype column
+                if ( tables[i] === "configs" ) {
+                    mydb.getRows("pragma_table_info('configs')")
+                    .then(rows => {
+                        var ctcol = false;
+                        rows.forEach(row => {
+                            ctcol = ctcol || (row.name === "configtype"); 
+                        });
+                        // console.log( (ddbg()), "configtype column exist: ", ctcol);
+                        // update if missing configtype
+                        if ( !ctcol ) {
+                            addedtables++;
+                            const qstr1 = "ALTER TABLE configs ADD COLUMN configtype INTEGER DEFAULT 1";
+                            const qstr2 = "update configs set configtype = 0 where configkey = 'useroptions' OR configkey not like 'user%'";
+                            mydb.query(qstr1)
+                            .then(res => {
+                                console.log( (ddbg()), "Added configtype column to configs table. res:", res);
+                                mydb.query(qstr2)
+                                .then(res => {
+                                    console.log( (ddbg()), "Updated types for configtype column to configs table. res:", res);
+                                })
+                            })
+                            .catch(reason => {
+                                console.log( (ddbg()), reason);
+                            })
+                        }
+                    });
+                }
+            } else {
+                console.log( (ddbg()), "Table", tables[i], " not found. Building it now");
+                addedtables++;
                 buildDatabaseTable(i);
             }
-            i++;
-        });
+        }
     })
     .catch(reason => {
-        // pause here to give engine some time to do its thing
-        setTimeout(function() {
-            console.log( (ddbg()), "Fixing up the database, building all missing tables for HousePanel...");
-        }, 3000);
+        console.log( (ddbg()), reason);
+        exit(1);
     });
+
+    if ( addedtables > 0 ) {
+        setTimeout(function() {
+            console.log( (ddbg()), "Fixing up the database after building or modifying ", addedtables, " tables...");
+        }, addedtables * 2000);
+    }
+
+    // Promise.allSettled([
+    //    mydb.getRow(tables[0],"id"),
+    //    mydb.getRow(tables[1],"id"),
+    //    mydb.getRow(tables[2],"id"),
+    //    mydb.getRow(tables[3],"id"),
+    //    mydb.getRow(tables[4],"id"),
+    //    mydb.getRow(tables[5],"id"),
+    //    mydb.getRow(tables[6],"id"),
+    //    mydb.getRow(tables[7],"id")
+    // ])
+    // .then(results => {
+    //     var i = 0;
+    //     results.forEach(function (result) {
+    //         if ( result.status === "rejected" ) {
+    //             console.log("Table ", tables[i], " does not exist. Building it...");
+    //             buildDatabaseTable(i);
+    //         }
+    //         i++;
+    //     });
+    // })
+    // .catch(reason => {
+    //     // pause here to give engine some time to do its thing
+    //     setTimeout(function() {
+    //         console.log( (ddbg()), "Fixing up the database, building all missing tables for HousePanel...");
+    //     }, 3000);
+    // });
     
     // set up sockets
     setupBrowserSocket();
-    setupISYSocket();
+    if ( EMULATEHUB!==true ) {
+        setupISYSocket();
+    }
 
     // handler functions for HousePanel
     // this is where we render the baseline web page for the dashboard
@@ -12945,7 +13136,6 @@ if ( app && applistening ) {
 
                         // this is what makes the main page
                         } else {
-                            // setupISYSocket();
                             getMainPage(user, configoptions, hubs, req, res);
                         }
 

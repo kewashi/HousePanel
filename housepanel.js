@@ -191,54 +191,55 @@ function getOptions() {
         var userid = $("#userid").val();
         var email = $("#emailid").val();
         var skin = $("#skinid").val();
-        var config = $("#configsid").val();
-        config = JSON.parse(config);
-
+        // var config = $("#configsid").val();
+        // config = JSON.parse(config);
+        
         // get panel and mode from main screen if it is there
         try {
             var pname = $("#showversion span#infoname").html();
-            var modetarget = "div.overlay.themode > div.themode";
-            if ( $(modetarget) && typeof $(modetarget).html() !== "undefined" ) {
-                var themode = $(modetarget).html().trim();
-            } else {
-                themode = "Unknown";
-            }
         } catch(e) {
             pname = "default";
-            themode = "Unknown";
-            console.log(e);
         }
+        cm_Globals.options = {userid: userid, email: email, skin: skin, pname: pname, mode: "Unknown", config: {}, rules: {}};
 
-        cm_Globals.options = {userid: userid, email: email, skin: skin, config: config, pname: pname, mode: themode, rules: {}};
-        if ( cm_Globals.options.config.blackout ) {
-            var blackout = cm_Globals.options.config.blackout;
-            blackout = (blackout === "true") || (blackout === true) ? true : false;
-        } else {
-            blackout = false;
-        }
-        // console.log("Mode:", themode, " blackout: ", blackout);
-        // handle black screen
-        if ( (priorOpmode === "Sleep" || themode==="Night") && blackout ) {
-            priorOpmode = "Sleep";
-            execButton("blackout");
-        } else {
-            priorOpmode = "Operate";
-            setCookie("opmode", priorOpmode);
-        }
-
-        // set the customization list
+        // set the customization lists
         $.post(cm_Globals.returnURL, 
             {useajax: "getoptions", userid: userid, pname: pname, id:"none", type:"none"},
             function (presult, pstatus) {
                 if ( pstatus==="success" ) {
-                    cm_Globals.options["rules"] = presult;
+                    cm_Globals.options["rules"] = presult[0];
+                    cm_Globals.options["config"] = presult[1];
                 } else {
-                    console.log("error - failure reading custom options and rules from database for user = " + userid);
+                    throw "error - failure reading custom options and rules from database for user = " + userid;
                 }
+
+                var blackout = cm_Globals.options.config.blackout;
+                blackout = (blackout === "true") || (blackout === true) ? true : false;
+        
+                // get the mode
+                $.post(cm_Globals.returnURL, 
+                    {useajax: "getmode", userid: userid},
+                    function (presult, pstatus) {
+                        if ( pstatus==="success" ) {
+                            var themode = presult;
+                            cm_Globals.options["mode"] = themode;
+        
+                            // handle black screen
+                            if ( (priorOpmode === "Sleep" || themode==="Night") && blackout ) {
+                                priorOpmode = "Sleep";
+                                execButton("blackout");
+                            } else {
+                                priorOpmode = "Operate";
+                                setCookie("opmode", priorOpmode);
+                            }
+                        }
+                    }
+                );
             }, "json"
         );
+
     } catch(e) {
-        console.log("error - failure setting up options", e);
+        console.log(e);
         alert("Fatal Error - Cannot display HousePanel because something went wrong in setting up configuration options");
     }
 }
@@ -838,7 +839,7 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
             }
 
             if ( cm_Globals.logwebsocket ) {
-                console.log(">>>> webSocket pushed: ", presult);
+                console.log("webSocket pushed: ", presult);
             }
 
             // reload page if signalled from server
@@ -1316,7 +1317,6 @@ function setupColors() {
                     command = "";
                     linkval = "";
                 }
-                // console.log("setupColors doaction: id: ", linkbid, " type: ", linktype, " value: ", hslstr, " hex: ", hexval, " hubid: ", linkhub);
                 console.log("setupColors: userid= ", userid, " thingid= ", thingid, " tileid= ", tileid, " hint= ", hint,
                 " command= ", command, " bid= ", bid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", hubid, " linkhub= ", linkhub,
                 " type= ", thetype, " linktype= ", linktype, " subid= ", subid, " value= ", hslstr, 
@@ -1804,7 +1804,7 @@ function setupDraggable() {
                                 // the ajax call must return a valid "div" block for the dragged new thing
                                 $.post(cm_Globals.returnURL, 
                                     {useajax: "addthing", userid: userid, pname: pname, id: bid, type: thingtype, value: panel, panelid: panelid, 
-                                                            attr: startPos, hubid: hubid, hubindex: hubindex, roomid: roomid, pname: pname},
+                                                            attr: startPos, hubid: hubid, hubindex: hubindex, roomid: roomid, pname: pname, tileid: 0},
                                     function (presult, pstatus) {
                                         if (pstatus==="success" && !presult.startsWith("error") ) {
                                             console.log( "Added " + thingname + " of type " + thingtype + " and bid= " + bid + " to room " + panel, " pos: ", startPos);
@@ -2172,7 +2172,6 @@ function execButton(buttonid) {
         if ( !checkLogin() ) { return; }
 
         var genobj = formToObject("loginform");
-        // console.log(">>>> login form: ", genobj);
 
         dynoPost("dologin", genobj, function(presult, pstatus) {
             if ( pstatus === "success" && presult && typeof presult === "object" ) {
@@ -2887,13 +2886,14 @@ function addEditLink() {
         var hubid = $(thing).attr("hub");
         var userid = cm_Globals.options.userid;
         var pname = cm_Globals.options.pname;
+        var panelid = $("input[name='panelid']").val();
 
         createModal("modaladd","Remove: "+ tilename + " of type: "+thingtype+" from room "+panel+"?<br>Are you sure?", "body" , true, pos, function(ui, content) {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
                 $.post(cm_Globals.returnURL, 
                     {useajax: "delthing", userid: userid, id: bid, type: thingtype, value: panel, 
-                                          attr: "", hubid: hubid, tileid: tile, thingid: thingid, roomid: roomid, pname: pname},
+                                          attr: "", hubid: hubid, tileid: tile, thingid: thingid, roomid: roomid, pname: pname, panelid: panelid},
                     function (presult, pstatus) {
                         // check for an object returned which should be a promise object
                         if (pstatus==="success" && ( typeof presult==="object" || (typeof presult === "string" && !presult.startsWith("error"))) ) {
@@ -2952,10 +2952,11 @@ function addEditLink() {
         var roomnum = $(evt.target).attr("roomnum");
         var roomname = $(evt.target).attr("roomname");
         var roomid = $("#panel-"+roomname).attr("roomid");
+        var panelid = $("input[name='panelid']").val();
         var clickid = $(evt.target).parent().attr("aria-labelledby");
         var pos = {top: 100, left: 10};
         var pname = cm_Globals.options.pname;
-        createModal("modaldel","Remove Room #" + roomnum + " with Name: " + roomname +" from HousePanel. Are you sure?", "body" , true, pos, function(ui, content) {
+        createModal("modaldel","Remove Room #" + roomnum + " with Name: " + roomname +" from HousePanel panel: " + pname + ". Are you sure?", "body" , true, pos, function(ui, content) {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
                 
@@ -2968,11 +2969,15 @@ function addEditLink() {
 
                 // remove it from the system
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "pagedelete", userid: cm_Globals.options.userid, id: roomnum, type: "none", value: roomname, roomid: roomid, attr: "none", pname: pname},
+                    {useajax: "pagedelete", userid: cm_Globals.options.userid, id: roomnum, type: "none", value: roomname, roomid: roomid, attr: "none", panelid: panelid, pname: pname},
                     function (presult, pstatus) {
-                        if (pstatus==="success" && (typeof presult !== "string" || !presult.startsWith("error")) ) {
-                            // remove it visually
-                            $("li[roomnum="+roomnum+"]").remove();
+                        if (pstatus==="success" && typeof presult === "string" ) {
+                            console.log(presult);
+                            if ( !presult.startsWith("error") ) {
+                                // remove it visually and click on new default tab
+                                $("li[roomnum="+roomnum+"]").remove();
+                                $("#"+defaultTab).trigger("click");
+                            }
                         }
                     }
                 );
@@ -4116,30 +4121,6 @@ function processClickWithList(tile, thingname, ro, subid, thelist, prefix = "") 
 // }
 
 function addOnoff(targetid, subid, thevalue) {
-    // thevalue = stripOnoff(thevalue);
-    // if ( $(targetid).hasClass("on") ) {
-    //     $(targetid).removeClass("on");
-    //     $(targetid).addClass("off");
-    //     $(targetid).html(thevalue+"On");
-    //     thevalue = "off";
-    // } else if ( $(targetid).hasClass("off") )  {
-    //     $(targetid).removeClass("off");
-    //     $(targetid).addClass("on");
-    //     $(targetid).html(thevalue+"Off");
-    //     thevalue = "on";
-    // } else {
-    //     if ( subid==="allon") {
-    //         $(targetid).addClass("on");
-    //         $(targetid).html(thevalue+"Off");
-    //         thevalue = "on";
-    //     } else if (subid==="alloff" ) {
-    //         $(targetid).addClass("off");
-    //         $(targetid).html(thevalue+"On");
-    //         thevalue = "off";
-    //     }
-    // }
-
-    // var thevalue;
     if ( subid==="allon") {
         thevalue = "on";
     } else if (subid==="alloff" ) {
@@ -4373,7 +4354,10 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         msg += "type = " + thetype + "<br>";
         msg += "hubtype = " + hubtype + "<br>";
         msg += "hubindex = " + linkhub + "<br>";
-        msg += "tileid = " + tileid + "<br>";
+        msg += "hubid = " + hubid + "<br>";
+        msg += "screen id = " + aid + "<br>";
+        msg += "sql id = " + tileid + "<br>";
+        msg += "device id = " + bid + "<br>";
         if ( hint && hint !== hubtype ) {
             msg += "hint = "+hint + "<br>";
         }
@@ -4402,10 +4386,8 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
                 }
             }
         });
-        // console.log("Inspecting passive tile subid: ", subid, " type: ", thetype, " aid: ", aid, " msg: ", msg);
         var offset = $(that).offset();
         var pos = {top: offset.top, left: offset.left, width: "auto", height: "auto", zindex: 998};
-        // console.log(msg);
         createModal("modalpopup", msg, "body", false, pos);
 
     } else {
@@ -4449,7 +4431,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
 
         console.log("userid= ", userid, " thingid= ", thingid, " tileid= ", tileid, " hint= ", hint,
                     " command= ", command, " bid= ", bid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", hubid, " linkhub= ", linkhub,
-                    " type= ", thetype, " linktype= ", linktype, " subid= ", subid, " value= ", thevalue, 
+                    " type= ", thetype, " linktype= ", linktype, " subid= ", subid, " realsubid= ", realsubid, " value= ", thevalue, 
                     " linkval= ", linkval, " attr=", theattr);
 
         // create a visual cue that we clicked on this item
@@ -4556,10 +4538,11 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
                             })();
 
                             // handle the reset button
+                            // note that we pass the original subid not the realsubid even though they are the same here for now
                             $("#resetList").on("tap", function(evt) {
                                 $.post(cm_Globals.returnURL, 
                                     {useajax: "resetlist", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: thevalue, hint: hint,
-                                     attr: theattr, subid: realsubid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval},
+                                     attr: theattr, subid: subid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval},
                                      function (presult, pstatus) {
                                         console.log(presult);
                                      });

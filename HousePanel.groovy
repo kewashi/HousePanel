@@ -1096,7 +1096,7 @@ def getMotions(resp) {
     try {
         mymotions?.each {
             def multivalue = getMotion(it.id, it)
-            def motiontype = it.hasAttribute("presence_type") ? "aqaramotion" : "motion"
+            def motiontype = it.hasAttribute("presence_type") || it.hasAttribute("roomActivity") ? "aqaramotion" : "motion"
             resp << [name: it.displayName, id: it.id, value: multivalue, type: motiontype]
         }
     } catch (e) {}
@@ -1315,8 +1315,8 @@ def autoType(swid) {
     else if ( mypresences?.find{it.id.toInteger() == swid } ) { swtype= "presence" }
     else if ( myweathers?.find{it.id.toInteger() == swid } ) { swtype= "weather" }
     // else if ( myaccuweathers?.find{it.id.toInteger() == swid } ) { swtype= "weather" }
-    else if ( mymotions?.find{it.id.toInteger() == swid && it.hasAttribute("presence_type") } ) { swtype = "aqaramotion" }
-    else if ( mymotions?.find{it.id.toInteger() == swid && !it.hasAttribute("presence_type") } ) { swtype = "motion" }
+    else if ( mymotions?.find{it.id.toInteger() == swid && (it.hasAttribute("presence_type") || it.hasAttribute("roomActivity")) } ) { swtype = "aqaramotion" }
+    else if ( mymotions?.find{it.id.toInteger() == swid && !it.hasAttribute("presence_type") && !it.hasAttribute("roomActivity") } ) { swtype = "motion" }
     else if ( mydoors?.find{it.id.toInteger() == swid } ) { swtype= "door" }
     else if ( mygarages?.find{it.id.toInteger() == swid } ) { swtype= "garage" }
     else if ( mycontacts?.find{it.id.toInteger() == swid } ) { swtype= "contact" }
@@ -3183,10 +3183,13 @@ def changeHandler(evt) {
             }
 
             // for colors we have to set all parameters at the same time to avoid race conditions
-            def colorarray = [h100, s, v, color]
-            postHubRange(state.directIP, state.directPort, "update", deviceName, deviceid, "color", devtype, colorarray)
-            postHubRange(state.directIP2, state.directPort2, "update", deviceName, deviceid, "color", devtype, colorarray)
-            postHubRange(state.directIP3, state.directPort3, "update", deviceName, deviceid, "color", devtype, colorarray)
+            // changed this to use an object and send the actual trigger flag so that LIST now works
+            // and the object logic using a Map is now generic and not specific to color arrays
+            // def colorarray = [h100, s, v, color]
+            Map colorarray = [hue: h100, saturation: s, level: v, color: color];
+            postHubRange(state.directIP, state.directPort, "update", deviceName, deviceid, subid, devtype, colorarray)
+            postHubRange(state.directIP2, state.directPort2, "update", deviceName, deviceid, subid, devtype, colorarray)
+            postHubRange(state.directIP3, state.directPort3, "update", deviceName, deviceid, subid, devtype, colorarray)
 
             // set it to change color based on attribute change
             logger("color update: ${deviceName} id ${deviceid} type ${devtype} changed to ${color} by changing ${subid} to ${value}, h100: ${h100}, h: ${h}, s: ${s}, v: ${v} ", "debug") 
@@ -3265,7 +3268,7 @@ def variableHandler(evt) {
 }
 
 def postHub(ip, port, msgtype, name, id, subid, type, value) {
-    def abody = [
+    Map abody = [
                 msgtype: msgtype,
                 hubid: state.hubid,
                 change_name: name,
