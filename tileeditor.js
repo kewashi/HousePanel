@@ -4,7 +4,7 @@
  * rewritten by Ken Washington @kewashi on the forum
  * 
  * Designed for use only with HousePanel
- * (c) Ken Washington 2017 - 2023
+ * (c) Ken Washington 2017 - 2024
  * 
  */
 var DEBUGte = false;
@@ -12,6 +12,7 @@ var et_Globals = {};
 et_Globals.savedSheet = "";
 et_Globals.priorIcon = "none";
 et_Globals.tileCount = 0;
+et_Globals.clipboard = [];
 
 function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thingclass, hubid, hubindex, hubType, customname, htmlcontent) {  
     var returnURL = cm_Globals.returnURL;
@@ -41,7 +42,9 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
     }
 
     // option on the left side
-    dialog_html += colorpicker(str_type, thingindex);
+    dialog_html += "<div id='colorpicker'>";
+    dialog_html += itempicker("", "");
+    dialog_html += "</div>";
 
     // the middle section
     dialog_html += editSection(str_type, thingindex);
@@ -107,7 +110,22 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
                 closeModal("modaledit");
             },
             // function invoked upon starting the dialog
-            function(hook, content) {
+            function() {
+
+                // load the clipboard
+                $.post(cm_Globals.returnURL,
+                    {api: "clipboard", userid: userid, type: str_type, tile: thingindex, value: "", attr: "load"},
+                    function (presult, pstatus) {
+                        if (pstatus==="success" ) {
+                            // console.log(">>>> presult type: ", typeof presult, " presult: ", presult);
+                            et_Globals.clipboard = presult;
+                            $("#clipboard").val(et_Globals.clipboard.length + " items");
+                        } else {
+                            et_Globals.clipboard = [];
+                        }
+                    },"json"
+                );
+                
                 $("body").on("keydown",function(e) {
                     if ( e.which===13  ){
                         $("#modalokay").click();
@@ -139,23 +157,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
 
 $.fn.isAuto = function(dimension){
     // will detect auto widths including percentage changes
-    if (dimension == 'width'){
-        var originalWidth = this.css("width");
-        if ( originalWidth === "auto") {
-            return true;    
-        } else{
-            return false;
-        }
-    } else if (dimension == 'height'){
-        var originalHeight = this.css("height");
-        if ( originalHeight === "auto") {
-                return true;    
-        } else{
-            return false;
-        }
-    } else {
-        return false;
-    }
+    return ( (dimension==="width" || dimension==="height") && this.css(dimension) === "auto" );
 };
 
 function getOnOff(str_type, subid, val) {
@@ -401,6 +403,7 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
 function toggleTile(target, str_type, subid, setvalue) {
     var ostarget = target;
     var swval = $(target).html();
+    // console.log(">>>> target: ", target, " swval: ", swval);
     $('#onoffTarget').html("");
     if ( swval ) {
         swval = swval.replace(" ","_");
@@ -410,26 +413,32 @@ function toggleTile(target, str_type, subid, setvalue) {
         swval = $(ostarget).html();
     }
 
-    if ( swval && swval.startsWith("LINK::") ) {
+    if ( typeof swval==="string" && swval.startsWith("LINK::") ) {
         var ipos = swval.lastIndexOf("::");
         var linkid = swval.substring(ipos+2);
         var linkaid = $("div.thing[tile='"+linkid+"']").attr("aid");
         swval = $("#a-"+linkaid+"-"+subid).html();
     }
+
+    if ( typeof swval === "undefined" ) {
+        swval = "";
+    }
     
     // activate the icon click to use this
     var onoff = getOnOff(str_type, subid, swval);
     var newsub = 0;
+    // console.log(">>>> swval: ", swval, " onoff: ", onoff);
     if ( onoff && onoff.length > 1 ) {
         for ( var i=0; i < onoff.length; i++ ) {
             var oldsub = onoff[i];
             
-            if ( $(target).hasClass(oldsub) ) { 
+            if ( oldsub && $(target).hasClass(oldsub) ) { 
                 $(target).removeClass(oldsub); 
             }
-            if ( $(target).hasClass(oldsub.toLowerCase()) ) { 
+            if ( oldsub && $(target).hasClass(oldsub.toLowerCase()) ) { 
                 $(target).removeClass(oldsub.toLowerCase()); 
             }
+        
             if ( setvalue && (oldsub.toLowerCase() === swval.toLowerCase()) ) {
                 newsub = i+1;
                 if ( newsub >= onoff.length ) { newsub= 0; }
@@ -704,12 +713,58 @@ function initDialogBinds(str_type, thingindex) {
         event.stopPropagation;
     });
     
+    // resets the entire tile now like it was designed to do
     $("#editReset").off('click');
     $("#editReset").on('click', function (event) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
-        var subid = $("#subidTarget").html();
-        resetCSSRules(str_type, subid, thingindex);
+        // var subid = $("#subidTarget").html();
+        resetCSSRules(str_type, thingindex);
+        event.stopPropagation;
+    });
+    
+    $("#clipboard").prop("disabled", true);
+    $("#clipboard").css("background-color","gray");
+    $("#editCopy").off('click');
+    $("#editCopy").on('click', function (event) {
+        var str_type = $("#tileDialog").attr("str_type");
+        var thingindex = $("#tileDialog").attr("thingindex");
+        var rules = copyCSSRule(str_type, thingindex);
+        event.stopPropagation;
+
+        // show what was copied
+        var pstyle = "position: absolute; border: 6px black solid; background-color: white; color: black; font-size: 14px; left: 330px; top: 75px; width: 600px; height: auto; padding: 10px;";
+        var pos = {style: pstyle};
+        var msg = "<strong>Clipboard update request:</strong>" + " (" + rules.length + " items)<br /><hr>";
+        if ( rules.length === 0 ) {
+            msg += "No custom formatting detected.";
+            msg+= "<br>By selecting Okay, you will clear the clipboard, which currently has " + et_Globals.clipboard.length + " items.";
+        } else {
+            rules.forEach(function(rule) {
+                msg += "<strong>"+rule.target + "</strong><br>{ " + rule.rule + " }<br>";
+            });
+        }
+        msg += "<hr><br>";
+            
+        createModal("popupinfo", msg, "body", true, pos, function(ui, content) {
+            var clk = $(ui).attr("name");
+            if ( clk==="okay" ) {
+                et_Globals.clipboard = rules;
+                saveClipboard(et_Globals.userid, str_type, thingindex, rules);
+            } else {
+                console.log(">>>> clipboard update aborted");
+            }   
+            closeModal("popupinfo");
+        });
+    });
+    
+    $("#editPaste").off('click');
+    $("#editPaste").on('click', function (event) {
+        var str_type = $("#tileDialog").attr("str_type");
+        var thingindex = $("#tileDialog").attr("thingindex");
+        var rules = pasteCSSRule(et_Globals.clipboard, str_type, thingindex);
+        console.log(">>>> rules pasted: ", rules);
+        // popupMessage("Pasted " + rules.length + " customized formats from the clipboard", 1500);
         event.stopPropagation;
     });
 
@@ -1006,7 +1061,7 @@ function initDialogBinds(str_type, thingindex) {
                 var newsize = parseInt( $("#editWidth").val() );
                 $("#editWidth").prop("disabled", false);
                 $("#editWidth").css("background-color","white");
-                if ( newsize === 0 ) {
+                if ( isNaN(newsize) || newsize === 0 ) {
                     if ( subid==="temperature" || subid==="feelsLike" ) {
                         rule = "width: 50px;";
                     } else if ( str_type==="page" && subid==="panel") {
@@ -1338,20 +1393,9 @@ function iconlist() {
     return dh;
 }
 
-// function editSection(str_type, thingindex) {
-    // var dh = "";
-        // dh += "<div id='editSection'>";
-        // dh += "<div class='colorgroup'><label id=\"labelName\"></label><input name=\"editName\" id=\"editName\" class=\"ddlDialog\" value=\"" + "" +"\"></div>";
-        // dh += "<div class='colorgroup'><button id='processName' type='button'>Save Name</button></div>";
-        // dh += getScope(str_type, true);
-        // dh += sizepicker(str_type, thingindex);
-        // dh += "</div>";
-    // return dh;
-// }
-
 function getScope(str_type, ftime) {
     var dh = "";
-    dh += "<div class='colorgroup'><label>Effect Scope:</label>";
+    dh += "<div class='colorgroup'><div class='sizeText'>Effect Scope</div>";
     dh += "<select name=\"scopeEffect\" id=\"scopeEffect\" class=\"ddlDialog\">";
     if ( str_type==="page" ) {
         dh += "<option value=\"thistile\" selected>This page</option>";
@@ -1385,7 +1429,7 @@ function editSection(str_type, thingindex) {
     
     dh += "<div id='editSection'>";
 
-    dh += "<div class='colorgroup'><label id=\"labelName\"></label><input name=\"editName\" id=\"editName\" class=\"ddlDialog\" value=\"" + "" +"\"></div>";
+    dh += "<div class='colorgroup'><div class='sizeText' id=\"labelName\"></div><input name=\"editName\" id=\"editName\" class=\"ddlDialog\" value=\"" + "" +"\"></div>";
     dh += "<div class='colorgroup'><button id='processName' type='button'>Save Name</button></div>";
     dh += getScope(str_type, true);
 
@@ -1416,21 +1460,26 @@ function editSection(str_type, thingindex) {
         w = parseInt(w);
     }
     
-    dh += "<div class='sizeText'>Overall Tile Size</div>";
+    dh += "<div class='sectionbreak'></div>";
+    dh += "<div class='editSection_input sizeText'>Overall Tile Size</div>";
+
     dh += "<div class='editSection_inline'>";
+    dh += "<label class=\"iconChecks\" for=\"autoTileHeight\">Auto H?</label><input class='autochk' type='checkbox' id='autoTileHeight'>";
     dh += "<label for='tileHeight'>Tile H: </label>";
     dh += "<input size='8' type=\"number\" min='10' max='1600' step='10' id=\"tileHeight\" value=\"" + th + "\"/>";
+    dh += "</div>";
+
+    dh += "<div class='editSection_inline'>";
+    dh += "<label class=\"iconChecks\" for=\"autoTileWidth\">Auto W?</label><input class='autochk' type='checkbox' id='autoTileWidth'>";
     dh += "<label for='tileWidth'>Tile W: </label>";
     dh += "<input size='8' type=\"number\" min='10' max='1600' step='10' id=\"tileWidth\" value=\"" + tw + "\"/>";
     dh += "</div>";
 
-    dh += "<div class='editSection_input autochk'><input type='checkbox' id='autoTileHeight'><label class=\"iconChecks\" for=\"autoTileHeight\">Auto H?</label></div>";
-    dh += "<div class='editSection_input autochk'><input type='checkbox' id='autoTileWidth'><label class=\"iconChecks\" for=\"autoTileWidth\">Auto W?</label></div>";
 
     dh += "<div class='editSection_input'>";
     var curFloat = $(targetwhole).css("float");
     var floats = ["none", "left", "right"];
-    var fe = "<label for='tileFloat'>Tile Float: </label>";
+    var fe = "<label for='floatOpts'>Tile Float: </label>";
     fe += "<select name=\"floatOpts\" id=\"floatOpts\" class=\"ddlDialog\">";
     floats.forEach (function(key) {
         if ( curFloat && curFloat===key ) {
@@ -1443,15 +1492,20 @@ function editSection(str_type, thingindex) {
     dh += fe;
     dh += "</div>";
 
-    dh += "<div class='sizeText'><p>Item Size & Position:</p></div>";
+    dh += "<div class='sectionbreak'></div>";
+    dh += "<div class='editSection_input sizeText'>Item Size & Position</div>";
+
     dh += "<div class='editSection_inline'>";
+    dh += "<label class=\"iconChecks\" for=\"autoHeight\">Auto H?</label><input class='autochk' type='checkbox' id='autoHeight'>";
     dh += "<label for='editHeight'>Item H: </label>";
-    dh += "<input size='4' type=\"number\" min='5' max='1600' step='5' id=\"editHeight\" value=\"" + h + "\"/>";
-    dh += "<label for='editWidth'>Item W: </label>";
-    dh += "<input size='4' type=\"number\" min='5' max='1600' step='5' id=\"editWidth\" value=\"" + w + "\"/>";
+    dh += "<input size='4' type=\"number\" min='5' max='1600' step='5' id=\"editHeight\" />";
     dh += "</div>";
-    dh += "<div class='editSection_input autochk'><input type='checkbox' id='autoHeight'><label class=\"iconChecks\" for=\"autoHeight\">Auto H?</label></div>";
-    dh += "<div class='editSection_input autochk'><input type='checkbox' id='autoWidth'><label class=\"iconChecks\" for=\"autoWidth\">Auto W?</label></div>";
+    
+    dh += "<div class='editSection_inline'>";
+    dh += "<label class=\"iconChecks\" for=\"autoWidth\">Auto W?</label><input class='autochk' type='checkbox' id='autoWidth'>";
+    dh += "<label for='editWidth'>Item W: </label>";
+    dh += "<input size='4' type=\"number\" min='5' max='1600' step='5' id=\"editWidth\" />";
+    dh += "</div>";
 
     // font size (returns px not pt)
     dh += "<div class='editSection_inline'>";
@@ -1478,30 +1532,35 @@ function editSection(str_type, thingindex) {
     dh += "<label for='rightPadding'>Right Padding:</label>";
     dh += "<input size='2' type=\"number\" min='0' max='1600' step='5' id=\"rightPadding\" value=\"\"/>";
     dh += "</div>";
+
+    dh += "<div class='sectionbreak'></div>";
+    dh += "<div class='editSection_input sizeText'>Item Labels</div>";
     dh += "<div class='editSection_input'>";
-    dh += "<label for='beforeText'>Text Before:</label>";
-    dh += "<input size='10' id=\"beforeText\" value=\"\"/>";
+    dh += "<label for='beforeText' class=\"fixw\">Text Before:</label>";
+    dh += "<input size='12' id=\"beforeText\" value=\"\"/>";
     dh += "</div>";
     dh += "<div class='editSection_input'>";
-    dh += "<label for='afterText'>Text After:</label>";
-    dh += "<input size='10' id=\"afterText\" value=\"\"/>";
+    dh += "<label for='afterText' class=\"fixw\">Text After:</label>";
+    dh += "<input size='12' id=\"afterText\" value=\"\"/>";
     dh += "</div>";
-    // var resetbutton = "<br /><br /><button id='editReset' type='button'>Reset</button>";
-    // dh += resetbutton;
+
+    dh += "<div class='editSection_input'>";
+    dh += "<label for='clipboard' class=\"fixw\">Clipboard:</label>";
+    dh += "<input size='12' id=\"clipboard\" readonly value=\"\"/>";
+    dh += "</div>";
 
     dh += "</div>";
     
     return dh;
 }
 
-function colorpicker(str_type, thingindex) {
+function itempicker(subid, onoff) {
     var dh = "";
-    dh += "<div id='colorpicker'>";
     dh += "<div class='colorgroup'>";
-    dh += "<label>Feature Selected:</label>";
-    dh += "<div id='subidTarget' class='dlgtext'></div>";
-    dh += "<div id='onoffTarget' class='dlgtext'></div>";
-    dh+= "</div></div>";
+    dh += "<div class='editSection_input sizeText'>Feature Selected</div>";
+    dh += "<div id='subidTarget' class='dlgtext'>" + subid + "</div>";
+    dh += "<div id='onoffTarget' class='dlgtext'>" + onoff + "</div>";
+    dh+= "</div>";
     return dh;
 }
 
@@ -1515,7 +1574,7 @@ function setupClicks(str_type, thingindex) {
     toggleTile( targetid, str_type, firstsub, false);
     initColor(str_type, firstsub, thingindex);
     loadSubSelect(str_type, firstsub, thingindex);
-    getIcons(str_type, thingindex);	
+    getIcons(str_type, thingindex);
     initDialogBinds(str_type, thingindex);
     initOnceBinds(str_type, thingindex);
     
@@ -1808,10 +1867,10 @@ function initColor(str_type, subid, thingindex) {
     var newtitle;
     if ( str_type==="page" ) {
         newtitle = "Editing Page#" + et_Globals.hubid + " Name: " + thingindex;
-        $("#labelName").html("Page Name:");
+        $("#labelName").html("Page Name");
     } else {
         newtitle = "Editing Tile #" + thingindex + " of Type: " + str_type;
-        $("#labelName").html("Tile Name:");
+        $("#labelName").html("Tile Name");
         var tgname = getCssRuleTarget(str_type, "name", thingindex, "thistile");
         var name =  $(tgname).html();
         $("#editName").val(name);
@@ -1986,11 +2045,8 @@ function initColor(str_type, subid, thingindex) {
     // far left side of the screen
     // -----------------------------------------------------------------------
     var dh= "";
-    dh += "<div class='colorgroup'><label>Feature Selected:</label>";
-    dh += "<div id='subidTarget' class='dlgtext'>" + subid + "</div>";
     var subonoff = $('#onoffTarget').html();
-    dh += "<div id='onoffTarget' class='dlgtext'>" + subonoff + "</div>";
-    dh += "</div>";
+    dh += itempicker(subid, subonoff);
 
     onstart = $(target).css("background-color");
     if ( !onstart || onstart==="rgba(0, 0, 0, 0)" ) {
@@ -2009,7 +2065,7 @@ function initColor(str_type, subid, thingindex) {
                   </div>';
     
     if ( str_type==="page" && subid==="head" ) {
-        var ceffect = "<div class='colorgroup'><label>Note: Header field for pages cannot be styled. Only the name can be changed. To style the name, select a Tab item.</label>";
+        var ceffect = "<div class='colorgroup'>Note: Header field for pages cannot be styled. Only the name can be changed. To style the name, select a Tab item.</div>";
         $("#colorpicker").html(dh + ceffect);
     } else {
 
@@ -2028,7 +2084,7 @@ function initColor(str_type, subid, thingindex) {
         }
 
         var ceffect = "";
-        ceffect += "<div class='colorgroup'><label>Background Effect:</label>";
+        ceffect += "<div class='colorgroup'><label for='editEffect'>Background Effect</label>";
         ceffect += "<select name=\"editEffect\" id=\"editEffect\" class=\"ddlDialog\">";
 
         var effects = [ ["none", "No Effect"],
@@ -2100,7 +2156,7 @@ function initColor(str_type, subid, thingindex) {
         }
 
         var fe = "";
-        fe += "<div class='colorgroup font'><label>Font Type:</label>";
+        fe += "<div class='colorgroup font'><label for='fontEffect'>Font Type</label>";
         fe += "<select name=\"fontEffect\" id=\"fontEffect\" class=\"ddlDialog\">";
 
         var fonts = {sans:"Sans", sansb:"Sans Bold", sansi:"Sans Italic", sansbi:"Sans Bold+Italic",
@@ -2121,7 +2177,7 @@ function initColor(str_type, subid, thingindex) {
         var f = $(target).css("font-size");
         f = parseInt(f);
 
-        fe += "<div class='colorgroup font'><label>Font Size (px):</label>";
+        fe += "<div class='colorgroup font'><label for='editFont'>Font Size (px)</label>";
         fe += "<select name=\"fontEffect\" id=\"editFont\" class=\"ddlDialog\">";
         var sizes = [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,24,28,32,36,40,44,48,52,60,80,100,120,160,200];
         sizes.forEach( function(sz, index, arr) {
@@ -2134,22 +2190,19 @@ function initColor(str_type, subid, thingindex) {
         fe += "</div>";
 
         var align = "";
-        align += "<div id='alignEffect' class='colorgroup'><label>Text Alignment:</label><div class='editSection_input'>";
+        align += "<div id='alignEffect' class='colorgroup'><div class='sizeText'>Text Alignment</div><div class='editSection_input'>";
         align+= '<input id="alignleft" type="radio" name="align" value="left"><label for="alignleft">Left</label>';
         align+= '<input id="aligncenter" type="radio" name="align" value="center" checked><label for="aligncenter">Center</label>';
         align+= '<input id="alignright" type="radio" name="align" value="right"><label for="alignright">Right</label>';
         align += "</div></div>";
 
-        var ishidden = "";
-        ishidden += "<div class='editSection_input autochk'>";
-        ishidden += "<input type='checkbox' id='isHidden'>";
-        ishidden += "<label class=\"iconChecks\" for=\"isHidden\">Hide Element?</label></div>";
+        var ishidden = "<div class='editSection_input'><input type='checkbox' id='isHidden'><label class=\"iconChecks\" for=\"isHidden\">Hide Element?</label></div>";
 
-        var inverted = "<div class='editSection_input autochk'><input type='checkbox' id='invertIcon'><label class=\"iconChecks\" for=\"invertIcon\">Invert Element?</label></div>";
+        var inverted = "<div class='editSection_input'><input type='checkbox' id='invertIcon'><label class=\"iconChecks\" for=\"invertIcon\">Invert Element?</label></div>";
         inverted += "<div class='editSection_input'><input type='checkbox' id='absPlace'><label class=\"iconChecks\" for=\"absPlace\">Absolute Loc?</label></div>";
         inverted += "<div class='editSection_input'><input type='checkbox' id='inlineOpt'><label class=\"iconChecks\" for=\"inlineOpt\">Inline?</label></div>";
 
-        var border = "<div class='editSection_input'><label>Border Type:</label>";
+        var border = "<div class='editSection_input'><label for='borderType'>Border Type</label>";
         border += "<select name=\"borderType\" id=\"borderType\" class=\"ddlDialog\">";
         var borderopts = {"Select Option":"",
                           "None": "border: none; border-radius: 0%; box-shadow: none;",
@@ -2190,7 +2243,12 @@ function initColor(str_type, subid, thingindex) {
                       class="colorset" value="' + onstart + '"> \
                       </div>';
 
-        var resetbutton = "<br /><br /><button id='editReset' type='button'>Reset</button>";
+        var resetbutton = "<div class='sectionbreak'></div>" + 
+                          "<div class='editSection_inline'>" +
+                              "<button id='editReset'>Reset</button>" + 
+                              "<button id='editCopy'>Copy</button>" +
+                              "<button id='editPaste'>Paste</button>" +
+                          "</div>";
 
         // insert the color blocks
         $("#colorpicker").html(dh + iconback + ceffect + iconfore + brcolor + border + fe + align + ishidden + inverted + resetbutton);
@@ -2362,6 +2420,9 @@ function initColor(str_type, subid, thingindex) {
     } else {
         $("#noIcon").prop("checked", false);
     }
+
+    // show what's on the clipboard
+    $("#clipboard").val(et_Globals.clipboard.length + " items");
 
     // ****************
     // icon settings
@@ -2674,59 +2735,241 @@ function addCSSRule(selector, rules, resetFlag, beforetag){
     } catch (e) {}
 }
 
-function resetCSSRules(str_type, subid, thingindex){
+function resetCSSRules(str_type, thingindex){
 
-        cm_Globals.edited = true;
-        var ruletypes = ['wholetile','head','name'];
-        ruletypes.forEach( function(rule) {
-            var subtarget = getCssRuleTarget(str_type, rule, thingindex);
+    var numdel = 0;
+    if ( str_type === "page" ) {
+        var subids = [ "name", "panel", "tab", "tabon" ];
+        subids.forEach( function(subid) {
+            var subtarget = getCssRuleTarget(str_type, subid, thingindex);
             if ( subtarget ) {
-                removeCSSRule(subtarget, thingindex, null, null);
+                numdel+= removeCSSRule(str_type, subtarget, thingindex, null);
             }
         });
 
-        // remove main target
-        var target1 = getCssRuleTarget(str_type, subid, thingindex);
-        removeCSSRule(target1, thingindex, null, null);
+    } else {
+        var subids = ['wholetile','head'];
+        subids.forEach( function(subid) {
+            var subtarget = getCssRuleTarget(str_type, subid, thingindex);
+            if ( subtarget ) {
+                numdel+= removeCSSRule(str_type, subtarget, thingindex, null);
+            }
+        });
+
+        $(`div.overlay.v_${thingindex} div.p_${thingindex}`).each(function() {
+            var subid = $(this).attr("subid");
+
+            // remove main target
+            var target1 = getCssRuleTarget(str_type, subid, thingindex);
+            numdel+= removeCSSRule(str_type, target1, thingindex, null);
         
-        // remove all the subs
-        var val = $(target1).html();
-        var onoff = getOnOff(str_type, subid, val);
-        if ( onoff && onoff.length > 0 ) {
-            onoff.forEach( function(rule) {
-                if ( rule ) {
-                    var subtarget = target1 + "." + rule; // getCssRuleTarget(str_type, rule, thingindex);
-                    removeCSSRule(subtarget, thingindex, null, null);
-                }
-            });
-        }
+            // remove all the subs
+            var val = $(target1).html();
+            var onoff = getOnOff(str_type, subid, val);
+            if ( onoff && onoff.length > 0 ) {
+                onoff.forEach( function(ison) {
+                    if ( ison ) {
+                        var subtarget = target1 + "." + ison;
+                        numdel+= removeCSSRule(str_type, subtarget, thingindex, null);
+                    }
+                });
+            }
+        });
+    }
+
+    console.log(">>>> removed ", numdel, " parameters from CSS file");
 }
 
-function removeCSSRule(strMatchSelector, thingindex, target, scope){
+function removeCSSRule(str_type, strMatchSelector, thingindex, scope=null){
     if ( !scope ) {
         scope = $("#scopeEffect").val();
     }
+
     var numdel = 0;
     var sheet = document.getElementById('customtiles').sheet; // returns an Array-like StyleSheetList
     for (var i=sheet.cssRules.length; i--;) {
         var current_style = sheet.cssRules[i];
-        var rule = current_style.style.cssText;
-        var newrule = "";
-        if ( (scope==="alltile" || scope==="allpage" || ( thingindex && current_style.selectorText.indexOf("_"+thingindex) !== -1 )) && 
-             (current_style.selectorText === strMatchSelector) &&
-             (!target || rule.indexOf(target) !== -1) ) 
+        // var rule = current_style.style.cssText;
+        // var newrule = "";
+        if ( (  scope==="alltile" || scope==="allpage" || 
+                ( str_type!=="page" && current_style.selectorText.indexOf("_"+thingindex) !== -1 ) ||
+                ( str_type==="page" && current_style.selectorText.indexOf(`panel-${thingindex}`) !== -1 ) ||
+                ( str_type==="page" && current_style.selectorText.indexOf(`tab-${thingindex}`) !== -1 )
+             ) && 
+             (current_style.selectorText === strMatchSelector) ) 
         {
             sheet.deleteRule(i);
             numdel++;
-            if ( target ) {
-                var k1 = rule.indexOf(target);
-                var k2 = rule.indexOf(";", k1);
-                newrule = rule.substring(0, k1) + rule.substring(k2+1);
-                // sheet.addRule(strMatchSelector, newrule, i);
-                sheet.insertRule(strMatchSelector + "{" + newrule + "}", i);	  
-            }
+
+            // the commented code was an attempt to remove just one part of the formatting but we don't do that
+            // if ( target ) {
+            //     var k1 = rule.indexOf(target);
+            //     var k2 = rule.indexOf(";", k1);
+
+            //     // write remaining rules if there are any
+            //     if ( k1 > 0 || (k2+1) < rule.length ) {
+            //         newrule = rule.substring(0, k1) + rule.substring(k2+1);
+            //         sheet.insertRule(strMatchSelector + "{" + newrule + "}", i);
+            //     } 
+            // }
             cm_Globals.edited = true;
         }
     }
     return numdel;
+}
+
+function saveClipboard(userid, str_type, thingindex, rules) {
+    var returnURL = cm_Globals.returnURL;
+    $.post(returnURL,
+        {api: "clipboard", userid: userid, type: str_type, tile: thingindex, value: rules, attr: "save"},
+        function (presult, pstatus) {
+            if (pstatus==="success" ) {
+                console.log(`>>>> clipboard updated with ${rules.length} items: `, rules);
+                $("#clipboard").val(rules.length + " items");
+                et_Globals.clipboard = rules;
+            } else {
+                console.log(">>>> clipboard was not updated because there was a problem saving it for future use: ", pstatus);
+            }
+        }
+    );
+
+}
+
+function copyCSSRule(str_type, thingindex, fixsubid){
+    var scope = $("#scopeEffect").val();
+    var sheet = document.getElementById('customtiles').sheet; // returns an Array-like StyleSheetList
+
+    // loop through all the subid's
+    var targets = [];
+    var subidmap = {};
+
+    if ( fixsubid && fixsubid!=="wholetile" ) {
+        var target = getCssRuleTarget(str_type, fixsubid, thingindex);
+        subidmap[target] = fixsubid;
+    } else {
+        if ( str_type==="page" ) {
+            var subidtypes = [ "name", "panel", "tab","tabon" ];
+            subidtypes.forEach( function(subid) {
+                var target = getCssRuleTarget(str_type, subid, thingindex);
+                subidmap[target] = subid;
+            });    
+        } else {
+            var subidtypes = ['wholetile','head'];
+            subidtypes.forEach( function(subid) {
+                var target = getCssRuleTarget(str_type, subid, thingindex, scope);
+                subidmap[target] = subid;
+            });
+
+            $(`#te_wysiwyg > div.overlay.v_${thingindex} div.p_${thingindex}`).each(function() {
+                var subid = $(this).attr("subid");
+                var target = getCssRuleTarget(str_type, subid, thingindex, scope);
+                if ( typeof subidmap[target] === "undefined" ) {
+                    subidmap[target] = subid;
+                }
+
+                // get all the subs
+                var val = $(target).html();
+                var onoff = getOnOff(str_type, subid, val);
+                if ( onoff && onoff.length > 0 ) {
+                    onoff.forEach( function(rule) {
+                        if ( rule ) {
+                            var subtarget = target + "." + rule;
+                            if ( typeof subidmap[subtarget]==="undefined" ) {
+                                subidmap[subtarget] = subid;
+                            }
+                        }
+                    });
+                }
+            });
+        }
+    }
+    
+    var targets = Object.keys(subidmap);
+
+    var myrules = [];
+    for (var i=sheet.cssRules.length; i--;) {
+        var current_style = sheet.cssRules[i];
+        var rule = current_style.style.cssText;
+        // if ( ( current_style.selectorText.indexOf("_"+thingindex) !== -1 ) && 
+        //      (targets.includes(current_style.selectorText) )  ) 
+        if ( targets.includes(current_style.selectorText) ) {
+            var target = current_style.selectorText;
+            var subid = subidmap[target];
+            myrules.push({type: str_type, index: thingindex, subid: subid, target: target, rule: rule});
+        }
+    }
+    return myrules;
+}
+
+function pasteCSSRule(rules, str_type, thingindex, fixsubid){
+
+    // gather all the subid names in the paste target tile
+    // or if we are pointing at a specific subid, only paste into that
+    var subids = [];
+    if ( fixsubid && fixsubid!=="wholetile" ) {
+        subids.push(fixsubid);
+    } else {
+        if ( str_type==="page" ) {
+            var subidtypes = ['tab','tabon','panel','name'];
+            subidtypes.forEach( function(subid) {
+                subids.push(subid);
+            });
+        } else {
+            var subidtypes = ['wholetile','head','name'];
+            subidtypes.forEach( function(subid) {
+                subids.push(subid);
+            });    
+            $(`div.overlay.v_${thingindex} div.p_${thingindex}`).each(function() {
+                var subid = $(this).attr("subid");
+                if ( !subids.includes(subid) ) {
+                    subids.push(subid);
+                }
+            });
+        }
+    }
+
+    // loop through rules and set the targets when the type and subid match
+    var myrules = [];
+    rules.forEach( function(rule) {
+        var rtype = rule.type;
+        var rindex = rule.index;
+        var target = rule.target;
+        var subid = rule.subid;
+
+        // only if this tile supports the subid associated with the copied rule do we proceed
+        if ( subids.includes(subid) ) {
+
+
+            // replace the index and tile type in the selector
+            // this allows pasting to happen across different types of tiles
+            // need to do replacement twice since the index could be there twice
+            // and I didn't know how to use regex and /g when variables are involved
+            if ( str_type==="page" ) {
+                if ( subid==="panel" ) {
+                    target = target.replace(`div.panel.panel-${rindex}`,`div.panel.panel-${thingindex}`);
+                    target = target.replace(`div.panel.panel-${rindex}`,`div.panel.panel-${thingindex}`);
+                } else if ( subid==="tab" || subid==="tabon" ) {
+                    target = target.replace(`.tab-${rindex}`,`.tab-${thingindex}`);
+                    target = target.replace(`.tab-${rindex}`,`.tab-${thingindex}`);
+                }
+            } else {
+                target = target.replace(`div.thing.${rtype}-thing`,`div.thing.${str_type}-thing`);
+                target = target.replace(`div.thing.${rtype}-thing`,`div.thing.${str_type}-thing`);
+                target = target.replace(`p_${rindex}`,`p_${thingindex}`);
+                target = target.replace(`p_${rindex}`,`p_${thingindex}`);
+                if ( subid==="head" ) {
+                    target = target.replace(`t_${rindex}`,`t_${thingindex}`);
+                } else {
+                    target = target.replace(`v_${rindex}`,`v_${thingindex}`);
+                    target = target.replace(`v_${rindex}`,`v_${thingindex}`);
+                }
+            }
+
+            var pasterule = {type: str_type, index: thingindex, subid: subid, target: target, rule: rule.rule};
+            myrules.push(pasterule);
+            addCSSRule(target, rule.rule, "thistile");
+        }
+    });
+
+    return myrules;
 }

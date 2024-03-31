@@ -24,6 +24,7 @@ cm_Globals.hubs =  {};
 var modalStatus = 0;
 var modalWindows = {};
 var priorOpmode = "Operate";
+var saveOpmode = [];
 var pagename = "main";
 
 // set a global socket variable to manage two-way handshake
@@ -334,7 +335,6 @@ $(document).ready(function() {
         var tabcount = $("#roomtabs > li.ui-tabs-tab").length;
 
         $(document).on("keydown",function(e) {
-            // console.log("priorOpmode: ", priorOpmode, " modalid: ", modalid, " cnt: ", modalWindows[modalid]);
             if ( priorOpmode === "Modal" ) {
                 return;
             }
@@ -1058,10 +1058,10 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
     if ( typeof modalWindows[modalid]!=="undefined" && modalWindows[modalid]>0 ) { 
         return false; 
     }
-    saveOpmode = priorOpmode;
+    saveOpmode.push(priorOpmode);
     priorOpmode = "Modal";
     modalWindows[modalid] = 1;
-    modalStatus = modalStatus + 1;
+    modalStatus = saveOpmode.length; // modalStatus + 1;
     var isbody = false;
     // console.log("saveOpmode: ", saveOpmode, " modalid: ", modalid, " cnt: ", modalStatus);
     
@@ -1175,7 +1175,7 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
     
     // call post setup function if provided
     if ( loadfunction ) {
-        loadfunction(modalhook, modaldata);
+        loadfunction();
     }
 
     // invoke response to click
@@ -1238,12 +1238,32 @@ function closeModal(modalid) {
         $("#"+modalid).remove();
     } catch(e) {}
 
-    modalWindows[modalid] = 0;
-    modalStatus = modalStatus - 1;
-    if ( modalStatus < 0 ) { modalStatus = 0; }
+    // modalWindows[modalid] = 0;
+    delete modalWindows[modalid];
+    // modalStatus = modalStatus - 1;
+    // if ( modalStatus < 0 ) { modalStatus = 0; }
 
-    priorOpmode = saveOpmode;
-    // console.log("priorOpmode = " + priorOpmode, " modalid: ", modalid, " modalStatus: ", modalStatus);
+    if ( saveOpmode.length ) {
+        priorOpmode = saveOpmode.pop();
+    } else {
+        priorOpmode = "Operate";
+    }
+    modalStatus = saveOpmode.length;
+    // console.log("priorOpmode = " + priorOpmode, "saveOpmode = ", saveOpmode, " modalid: ", modalid, " modalStatus: ", modalStatus);
+}
+
+function popupMessage(message, timer=0, pos = null) {
+    if ( pos===null ) {
+        var pstyle = "position: absolute; border: 6px black solid; background-color: blue; color: white; font-weight: bold; font-size: 18px; left: 330px; top: 75px; width: 600px; height: auto; padding: 30px;";
+        pos = {style: pstyle};
+    }
+    createModal("popupmessage", message, "body", false, pos, null, function() {
+        if ( timer > 0 ) {
+            setTimeout(function() {
+                closeModal("popupmessage");
+            }, timer);
+        }
+    });
 }
 
 function setupColors() {
@@ -3971,7 +3991,7 @@ function checkPassword(tile, thingname, pw, ro, thevalue, yesaction) {
         closeModal("modalexec");
     },
     // after box loads set focus to pw field
-    function(hook, content) {
+    function() {
         $("#userpw").focus();
         
         // set up return key to process and escape to cancel
@@ -4054,7 +4074,7 @@ function processClickWithValue(that, thingname, ro, subid, thetype, thevalue, nu
         closeModal("modalexec");
     },
     // after box loads set focus to field
-    function(hook, content) {
+    function() {
         $("#newsubidValue").focus();
         $("#newsubidValue").off("keydown");
         $("#newsubidValue").on("keydown",function(e) {
@@ -4091,7 +4111,7 @@ function processClickWithList(tile, thingname, ro, subid, thelist, prefix = "") 
         closeModal("modalpick");
     },
     // after box loads set focus to field
-    function(hook, content) {
+    function() {
         $("#picklist").focus();
         $("#picklist").off("keydown");
         $("#picklist").on("keydown",function(e) {
@@ -4377,7 +4397,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
                     } else if ( $(this).hasClass("ui-slider") ) { // || inspectsubid==="level" || inspectsubid==="onlevel" || inspectsubid==="colorTemperature" || inspectsubid==="volume" || inspectsubid==="groupVolume" || inspectsubid==="position" ) {
                         msg += inspectsubid + " = " + $(this).attr("value");
                         // msg += inspectsubid + " = " + $(this).children().attr("style").substring(6) + "<br>";
-                    } else if ( strval.length < 25 ) {
+                    } else if ( strval.length < 25 || inspectsubid.startsWith("event_") ) {
                         msg += inspectsubid + " = " + strval;
                     } else {
                         msg += inspectsubid + " = ...";

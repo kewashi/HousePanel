@@ -150,7 +150,7 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
                 }
             },
             // function invoked upon starting the dialog
-            function(hook, content) {
+            function() {
                 // grab the global list of all things and options
                 if ( !cm_Globals.devices ) {
                     console.log("error - you have no devices to use in the Tile Customoizer ...");

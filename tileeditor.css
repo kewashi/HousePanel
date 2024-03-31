@@ -1135,6 +1135,15 @@ div.editSection_input label {
     color: white;
 }
 
+div.editSection_input label.fixw {
+    display: inline-block;
+    text-align: left; width: 90px;
+    margin-left: 2px;
+    margin-right: 5px;
+    font-size: 15px;
+    color: white;
+}
+
 div.editSection_inline label {
     display: inline-block;
     text-align: right; width: 55px;
@@ -1207,11 +1216,15 @@ div.editSection_input input {
     margin-right: 5px;
 }
 
-div.editSection_input.autochk {
+div.editSection_inline input.autochk {
     display: inline-block;
-    margin-right: 5px;
+    margin-left: 5px; margin-right: 2px; width: auto;
 }
 
+div.sectionbreak {
+    margin-top: 5px; margin-bottom: 2px;
+    border-bottom: 1px solid white;
+}
 #noHead-label {
   display: block;
   text-align: left;
@@ -1263,11 +1276,8 @@ div.editSection_input.autochk {
     display: inline-block;
 }
 .sizeText {
-    font-size: 15px;
-    margin-left: 0px;
-    margin-top: 12px;
-    color: rgba(255, 255, 255, 1);
-    display: block;
+    font-size: 16px;
+    color: rgb(152, 199, 249);
 }
 #invertIcon, #noIcon {
     vertical-align: middle;
@@ -1338,11 +1348,11 @@ div.radiogroup input {
     display: inline-block;
     margin-right: 5px;
 }*/
-#editReset {
+#editReset, #editCopy, #editPaste {
     display: inline-block;
     padding-left: 10px;
     padding-right: 10px;
-    margin-right: 10px;
+    margin-right: 5px;
     font-weight: bold;
     font-size: 16px;
 }

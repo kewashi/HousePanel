@@ -572,6 +572,8 @@ function findDevice(bid, swtype, devices) {
     return null;
 }
 
+// updated this function to work with array of configs or a single config
+// if a single config is sent the tag should match the configkey of that object
 function getConfigItem(configoptions, tag) {
     // skip everything if configs are not defined or bogus tag given
     if ( !configoptions || !tag ) {
@@ -579,15 +581,29 @@ function getConfigItem(configoptions, tag) {
     }
 
     var result = null;
-    configoptions.forEach(function(opt) {
-        if ( opt.configkey === tag ) {
-            result = opt.configval;
+    if ( is_array(configoptions) ) {
+        try {
+            configoptions.forEach(function(opt) {
+                if ( opt.configkey === tag ) {
+                    result = opt.configval;
+                }
+            });
+        } catch(e) {
+            result = null;
         }
-    });
+    } else {
+        try {
+            if ( tag === configoptions.configkey ) {
+                result = configoptions.configval;
+            }
+        } catch(e) {
+            result = null;
+        }
+    }
 
     // try converting to object
     if ( (result && typeof result === "string") && 
-         (tag==="useroptions" || tag==="specialtiles" || tag.startsWith("user_") || tag.startsWith("[") || tag.startsWith("{")) ) {
+         (tag==="useroptions" || tag==="specialtiles" || tag.startsWith("user_") || tag==="clipboard" || result.startsWith("[") || result.startsWith("{")) ) {
         var original = result;
         try {
             result = JSON.parse(result);
@@ -6579,7 +6595,7 @@ function updateTimeStamp(subid, pvalue) {
     if ( pvalue["event_1"] ) { pvalue["event_2"] = pvalue["event_1"]; }
     if ( typeof pvalue[subid] === "number" ) {
         pvalue["event_1"] = timestr + " " + subid + " " + pvalue[subid].toString();
-    } else if ( typeof pvalue[subid] === "string" && pvalue[subid].length < 15 ) {
+    } else if ( typeof pvalue[subid] === "string" && pvalue[subid].length < 20 ) {
         pvalue["event_1"] = timestr + " " + subid + " " + pvalue[subid];
     } else {
         pvalue["event_1"] = timestr;
@@ -9594,9 +9610,6 @@ function setPosition(userid, swtype, thingid, swattr) {
 function addThing(userid, pname, bid, thingtype, panel, hubid, hubindex, roomid, pos) {
 
     // first get the max order number of the tiles in this room
-    // var querystr = "SELECT Max(torder) FROM things WHERE roomid = " + roomid;
-    // var promiseResult = mydb.query(querystr)
-
     var promiseResult = mydb.getRows("configs", "*", "userid = "+userid)
     .then(configoptions => {
 
@@ -12012,6 +12025,34 @@ function apiCall(user, body, protocol, res) {
                 }
                 break;
 
+            case "clipboard":
+                if ( protocol==="POST" ) {
+                    if ( swattr==="load" ) {
+                        result = mydb.getRow("configs","*",`userid=${userid} AND configkey='clipboard'`)
+                        .then(row => {
+                            if ( row ) {
+                                var configval = getConfigItem(row, "clipboard");
+                                console.log(">>>> clipboard parsed: ", configval);
+                                return configval;
+                            } else {
+                                return [];
+                            }
+                        })
+                        .catch(reason => {
+                            console.log( (ddbg()), reason );
+                            return [];
+                        });
+                    } else {
+                        result = swval;
+                        var rulejson = JSON.stringify(swval);
+                        var rulerow = {userid: userid, configkey: "clipboard", configval: rulejson, configtype: 0};
+                        mydb.updateRow("configs", rulerow, `userid=${userid} and configkey='clipboard'`);
+                    }
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
+
             case "savetileedit":
                 if ( protocol==="POST" ) {
                     var n1 = parseInt(body["n1"]);
@@ -12779,10 +12820,13 @@ function buildDatabaseTable(tableindex) {
 // beginning of main routine
 // ***************************************************
 
+// get the home directory of the app
+GLB.homedir = __dirname;
+
 // default behavior is no new user validation
 GLB.dbinfo = {
     "dbhost": "localhost",
-    "dbname": "housepanel",
+    "dbname": GLB.homedir+"/housepanel.db",
     "dbuid": "housepanel",
     "dbpassword": "housepanel",
     "dbtype": "sqlite",
@@ -12800,7 +12844,8 @@ GLB.dbinfo.subs = {};
 
 // read config file if one exists
 try {
-    var newinfo = JSON.parse(fs.readFileSync("housepanel.cfg","utf8"));
+    var configname = GLB.homedir + "/housepanel.cfg";
+    var newinfo = JSON.parse(fs.readFileSync(configname,"utf8"));
     for (var key in newinfo) {
         GLB.dbinfo[key] = newinfo[key];
     }
@@ -12948,35 +12993,8 @@ if ( app && applistening ) {
     if ( addedtables > 0 ) {
         setTimeout(function() {
             console.log( (ddbg()), "Fixing up the database after building or modifying ", addedtables, " tables...");
-        }, addedtables * 2000);
+        }, addedtables * 5000);
     }
-
-    // Promise.allSettled([
-    //    mydb.getRow(tables[0],"id"),
-    //    mydb.getRow(tables[1],"id"),
-    //    mydb.getRow(tables[2],"id"),
-    //    mydb.getRow(tables[3],"id"),
-    //    mydb.getRow(tables[4],"id"),
-    //    mydb.getRow(tables[5],"id"),
-    //    mydb.getRow(tables[6],"id"),
-    //    mydb.getRow(tables[7],"id")
-    // ])
-    // .then(results => {
-    //     var i = 0;
-    //     results.forEach(function (result) {
-    //         if ( result.status === "rejected" ) {
-    //             console.log("Table ", tables[i], " does not exist. Building it...");
-    //             buildDatabaseTable(i);
-    //         }
-    //         i++;
-    //     });
-    // })
-    // .catch(reason => {
-    //     // pause here to give engine some time to do its thing
-    //     setTimeout(function() {
-    //         console.log( (ddbg()), "Fixing up the database, building all missing tables for HousePanel...");
-    //     }, 3000);
-    // });
     
     // set up sockets
     setupBrowserSocket();

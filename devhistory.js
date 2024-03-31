@@ -1,4 +1,5 @@
 const devhistory = `
+3.2.11  Implemented copy/paste in Tile Editor and several Tile Editor bug fixes
 3.2.10  Added ISY aqara presence support for alternative driver and bug fixes
 3.2.9   Added check for alternative aqara motion driver by Jonathan Bradshaw
 3.2.8   Debug and fix LINK feature and misc code cleanup
