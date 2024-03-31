@@ -12032,7 +12032,7 @@ function apiCall(user, body, protocol, res) {
                         .then(row => {
                             if ( row ) {
                                 var configval = getConfigItem(row, "clipboard");
-                                console.log(">>>> clipboard parsed: ", configval);
+                                // console.log(">>>> clipboard parsed: ", configval);
                                 return configval;
                             } else {
                                 return [];
