@@ -835,17 +835,8 @@ div.event_1 {
 }
 
 /* changed to use name instead of thingname */
-div.thing div.thingname, div.overlay.hint {
+div.thing div.thingname, div.thing div.overlay.hint {
     display: none;
-}
-
-div.thing div.overlay.name {
-    font-size: 15px;
-    text-align: center;
-    color: rgba(250, 250, 250, 1);
-    width: 100%;
-    height: 30px;
-    cursor: default;
 }
 
 /* set piston images for ISY run and runThen items */

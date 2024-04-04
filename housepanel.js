@@ -1917,7 +1917,9 @@ function rehomeTiles() {
         $.post(cm_Globals.returnURL, 
             {useajax: "setposition", userid: cm_Globals.options.userid, pname: pname, id: bid, type: thingtype, attr: startPos, tileid: tile, thingid: thingid},
             function (presult, pstatus) {
-                console.log(presult);
+                if ( pstatus!=="success" ) {
+                    console.log("status: ", pstatus, " result: ", presult);
+                }
             }
         );
 
@@ -3013,7 +3015,7 @@ function addEditLink() {
         var roomname = $(evt.target).attr("roomname");
         var roomid = $("#panel-"+roomname).attr("roomid");
         // console.log("editing room: ", roomid, roomnum, roomname);
-        editTile(cm_Globals.options.userid, roomid, roomname, "page", roomname, 0, 0, "", "-1", 0, "None", roomname);
+        editTile(cm_Globals.options.userid, roomid, roomname, "page", roomname, roomnum, 0, "", "-1", 0, "None", roomname);
     });
    
     $("#addpage").off("click");

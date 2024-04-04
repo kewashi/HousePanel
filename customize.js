@@ -132,7 +132,7 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
         // end of dialog
         dh += "</div>";
 
-        var pos = {top: 150, left: 250, zindex: 999};
+        var pos = {top: 50, left: 50, zindex: 999};
         // console.log(dh);
         createModal("modalcustom", dh, "body", "Done", pos, 
             // function invoked upon leaving the dialog
@@ -842,34 +842,6 @@ function initCustomActions() {
     $("#cm_customtype").on('change', function (event) {
         var customType = $(this).val();
         loadRightPanel(customType, null, null);        
-        // load the dynamic panel with the right content
-        // if ( customType === "LINK" ) {
-        //     content = loadLinkPanel(cm_Globals.currentid);
-        //     $("#cm_dynoContent").html(content);
-        //     initLinkActions(customType, null, null);
-        // } else if ( customType ==="URL" ) {
-        //     content = loadUrlPanel();
-        //     $("#cm_dynoContent").html(content);
-        //     initExistingFields();
-        // } else if ( customType === "POST" || customType === "GET" || customType === "PUT" ) {
-        //     content = loadServicePanel(customType);
-        //     $("#cm_dynoContent").html(content);
-        //     initExistingFields();
-        // } else if ( ENABLERULES && customType ==="RULE" ) {
-        //     content = loadRulePanel();
-        //     $("#cm_dynoContent").html(content);
-        //     initExistingFields();
-        // } else if ( customType ==="LIST" ) {
-        //     // var linkid = $("#cm_userfield").val() + "::d";
-        //     content = loadListPanel(cm_Globals.currentid);
-        //     $("#cm_dynoContent").html(content);
-        //     initLinkActions(customType, null, null);
-        // } else {
-        //     content = loadTextPanel();
-        //     $("#cm_dynoContent").html(content);
-        //     initExistingFields();
-        // }
-        
         showPreview();
         event.stopPropagation;
     });
@@ -1360,8 +1332,7 @@ function showPreview() {
          value: thingvalue, attr: swattr},
         function (presult, pstatus) {
             if (pstatus==="success" ) {
-                $("#cm_preview").html(presult);
-
+                $("#cm_preview").html(presult);       
                 // activate click on items
                 $("#te_wysiwyg").off('click');
                 $("#te_wysiwyg").on('click', function(event) {

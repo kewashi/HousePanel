@@ -5729,6 +5729,11 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
     var $tc = "";
     var thingtype = thesensor["type"];
     var bid = thesensor["id"];
+    if ( wysiwyg ) {
+        var wwx = "x_";
+    } else {
+        wwx = "";
+    }
 
     // set custom name provided by tile editor
     // this is overruled by any name provided in the tile customizer
@@ -5741,7 +5746,10 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
         thesensor.value = getCustomTile(userid, configoptions, thesensor.value, bid);
         thesensor.value = getFileName(userid, pname, thesensor.value, thingtype, configoptions);
     }
-    thesensor.value = setValOrder(thesensor.value);
+    
+    if ( !wysiwyg || wysiwyg!=="pe_wysiwyg" ) {
+        thesensor.value = setValOrder(thesensor.value);
+    }
 
     var thingvalue = thesensor.value;
         
@@ -5822,7 +5830,7 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
 
 
     // same thingname field for each tile with the original name
-    $tc += "<div aid=\""+cnt+"\" type=\""+thingtype+"\" subid=\"thingname\" title=\""+thingname+"\" class=\"thingname "+thingtype+" t_"+kindex+"\" id=\"s-"+cnt+"\">";
+    $tc += `<div aid="${cnt}" type="${thingtype}" subid="thingname" title="${thingname}" class="thingname ${thingtype} t_${kindex}" id="${wwx}s-${cnt}">`;
     $tc += thingname;
     $tc += "</div>";
 
@@ -6020,7 +6028,7 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
                 helperval = "LINK::error";
                 tval = "LINK::error";
             }
-            sibling= "<div id=\"sb-"+cnt+"-"+subid+"\""+" aid=\""+cnt+"\" linkid=\""+linkid+"\" hint=\""+hint+"\" linktype=\""+linktype+"\" linkhub=\""+linkhub+"\" linkval=\""+helperval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
+            sibling= "<div id=\"" + wwx + "sb-"+cnt+"-"+subid+"\""+" aid=\""+cnt+"\" linkid=\""+linkid+"\" hint=\""+hint+"\" linktype=\""+linktype+"\" linkhub=\""+linkhub+"\" linkval=\""+helperval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
         }
 
         // use the original type here so we have it for later
@@ -6096,7 +6104,7 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
             $tc += "<div class=\"overlay " + tkey + " " + subtype + " v_" + kindex + "\">";
             if (sibling) { $tc += sibling; }
             $tc += aidi + " subid=\"" + tkey + "-dn\" title=\"" + tkey + " down\" class=\"" + thingtype + " arrow-dn " + tkey + "-dn " + pkindex + "\"></div>";
-            $tc += aidi + pn + " subid=\"" + tkey + "\" title=\"" + thingtype + " " + tkey + "\" class=\"" + thingtype + " arrow-it " + tkeyshow + pkindex + "\"" + " id=\"" + aitkey + "\">" + tval + "</div>";
+            $tc += aidi + pn + " subid=\"" + tkey + "\" title=\"" + thingtype + " " + tkey + "\" class=\"" + thingtype + " arrow-it " + tkeyshow + pkindex + "\"" + " id=\"" + wwx + aitkey + "\">" + tval + "</div>";
             $tc += aidi + " subid=\"" + tkey + "-up\" title=\"" + tkey + " up\" class=\"" + thingtype + " arrow-up " + tkey + "-up " + pkindex + "\"></div>";
             $tc += "</div>";
 
@@ -6104,8 +6112,8 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
         } else if ( thingtype==="clock" && tkey==="skin" && tval && tval!=="digital" ) {
             $tc += "<div class=\"overlay "+tkey+" v_"+kindex+"\">";
             if (sibling) { $tc += sibling; }
-            $tc += aidi + pn + ttype + "\"  subid=\""+tkey+"\" title=\"Analog Clock\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\""+aitkey+"\">" +
-                "<canvas id=\"clock_"+i+"\" class=\""+tval+"\"></canvas></div>";
+            $tc += aidi + pn + ttype + "\"  subid=\""+tkey+"\" title=\"Analog Clock\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + wwx +aitkey+"\">" +
+                "<canvas id=\"" + wwx + "clock_"+i+"\" class=\""+tval+"\"></canvas></div>";
             $tc += "</div>";
         } else {
             // add state of thing as a class if it isn't a number and is a single word
@@ -6194,16 +6202,16 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
 
             if (sibling) { $tc += sibling; }
             if ( tkey === "level" || tkey==="onlevel" || tkey==="colorTemperature" || tkey==="volume" || tkey==="position" ) {
-                $tc += aidi + pn + ttype + " subid=\"" + tkey+"\" value=\""+tval+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\"></div>";
+                $tc += aidi + pn + ttype + " subid=\"" + tkey+"\" value=\""+tval+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + wwx + aitkey + "\"></div>";
             } else if ( typeof tkey==="string" && typeof tval==="string" && tkey.substring(0,8)==="_number_" && tval.substring(0,7)==="number_" ) {
                 var numval = tkey.substring(8);
-                $tc += aidi + pn + ttype + " subid=\"" + tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + aitkey + "\">" + numval + "</div>";
+                $tc += aidi + pn + ttype + " subid=\"" + tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + wwx + aitkey + "\">" + numval + "</div>";
             } else {
                 if ( typeof tval==="string" && tval.substring(0,6)==="RULE::" && subtype!=="rule" ) {
                     tkeyshow += " rule";
                 }
 
-                $tc += aidi + pn + ttype + "  subid=\""+tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + extra + "\" id=\"" + aitkey + "\">" + tval + "</div>";
+                $tc += aidi + pn + ttype + "  subid=\""+tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + extra + "\" id=\"" + wwx + aitkey + "\">" + tval + "</div>";
             }
             $tc += "</div>";
         }
@@ -11289,6 +11297,7 @@ function getIcons(userid, pname, skin, icondir, category) {
         });
     } else {
         $tc = false;
+        console.log( (ddbg()), "Invalid directory: ", activedir, " in getIcons");
     }
     return $tc;
 }
@@ -11730,11 +11739,37 @@ function apiCall(user, body, protocol, res) {
             // we get the real tile from the GUI all the time now
             case "pagetile":
                 if ( protocol==="POST" ) {
+                    var tc = "";
+                    var roomnum = swid;
+                    var roomname = swval;
+
+                    // a fake tile for pages that includes tabs
+                    tc += "<div id=\"pe_wysiwyg\" class=\"thing page-thing\" type=\"page\">";
+                    tc += "<div id='x_tabs'>";
+
+                    // tabs to use to do styling on the edit page
+                    tc += '<ul id="x_roomtabs">';
+                    tc += `<li id="x_tab" roomnum="${roomnum}" class="tab-${roomname}"><a href="#tabStyle">${roomname}</a></li>`;
+                    tc += `<li id="x_tabon" roomnum="${roomnum}" class="tab-${roomname}"><a href="#tabonStyle">${roomname}</a></li>`;
+                    tc += "</ul>";
+
+                    // some simple content to show when the tabs are clicked on
+                    tc += `<div id="tabStyle">`;
+                    tc += `<div class="tabStyle">Styling for unselected Tab ${roomname}</div>`;
+                    tc += "</div>";
+
+                    tc += `<div id="tabonStyle">`;
+                    tc += `<div class="tabonStyle">Styling for selected Tab ${roomname}</div>`;
+                    tc += "</div>";
+
+                    tc += "</div>";
+                    tc += "</div>";
                     // make the fake tile for the room for editing purposes
-                    var faketile = {"panel": "panel", "name": swval, "tab": "Tab Inactive", "tabon": "Tab Selected"};
-                    var thesensor = { "id": "r_" + swid, "name": swval, thingid: 0, roomid: roomid, hubtype: "None",
-                                      "hubnum": "-1", "hubindex": 0, "type": "page", "value": faketile};
-                    result = makeThing(userid, pname, null, 0, tileid, thesensor, "wysiwyg", 0, 0, 500, "", "te_wysiwyg", null);
+                    // var faketile = {"panel": "panel", "tab": "Tab", "tabon": "Tab Selected", "name": "Name", "nameon":"Name Selected"};
+                    // var thesensor = { "id": "r_" + swid, "name": swval, thingid: 0, roomid: roomid, hubtype: "None",
+                    //                   "hubnum": "-1", "hubindex": 0, "type": "page", "value": faketile};
+                    // result = makeThing(userid, pname, null, 0, tileid, thesensor, "wysiwyg", 0, 0, 500, "", "pe_wysiwyg", null);
+                    result = tc;
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -12032,7 +12067,6 @@ function apiCall(user, body, protocol, res) {
                         .then(row => {
                             if ( row ) {
                                 var configval = getConfigItem(row, "clipboard");
-                                // console.log(">>>> clipboard parsed: ", configval);
                                 return configval;
                             } else {
                                 return [];

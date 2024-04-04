@@ -16,7 +16,7 @@ et_Globals.clipboard = [];
 
 function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thingclass, hubid, hubindex, hubType, customname, htmlcontent) {  
     var returnURL = cm_Globals.returnURL;
-    et_Globals.aid = aid;
+    et_Globals.aid = aid;  // roomnum for pages
     et_Globals.id = bid;
     et_Globals.hubid = hubid;
     et_Globals.hubindex = hubindex;
@@ -26,14 +26,14 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
     et_Globals.thingid = thingid;
 
     if ( str_type==="page" ) {
-        et_Globals.wholetarget = getCssRuleTarget(str_type, "name", thingindex, "thistile");
+        et_Globals.wholetarget = getCssRuleTarget(str_type, "panel", thingindex, "thistile");
     } else {
         et_Globals.wholetarget = getCssRuleTarget(str_type, "wholetile", thingindex, "thitile");
     }
 
     var dialog_html = "<div id='tileDialog' class='tileDialog' str_type='" + str_type + "' thingindex='" + thingindex +"' >";
     if ( str_type==="page" ) {
-        dialog_html += "<div class='editheader' id='editheader'>Editing Page#" + et_Globals.hubid + 
+        dialog_html += "<div class='editheader' id='editheader'>Editing Page#" + et_Globals.aid + 
                    " Name: " + thingindex + "</div>";
         
     } else {
@@ -60,8 +60,9 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
     // we either use the passed in content or make an Ajax call to get the content
     var jqxhr = null;
     if ( str_type==="page" ) {
+        var roomnum = et_Globals.aid;
         jqxhr = $.post(returnURL, 
-            {useajax: "pagetile", userid: userid, thingid: thingid, id: hubid, type: 'page', tileid: thingindex, value: thingindex, attr: customname},
+            {useajax: "pagetile", userid: userid, thingid: thingid, id: roomnum, type: 'page', value: thingindex, attr: customname},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;
@@ -94,12 +95,12 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
     
     // create a function to display the tile
     var dodisplay = function() {
-        var pos = {top: 100, left: 200, zindex: 998};
+        var pos = {top: 20, left: 20, zindex: 998};
         createModal("modaledit", dialog_html, "body", true, pos, 
             // function invoked upon leaving the dialog
             function(ui, content) {
-                $("body").off("keydown");
-                $("body").off("keypress");
+                $("document").off("keydown");
+                // $("body").off("keypress");
                 var clk = $(ui).attr("name");
                 if ( clk==="okay" ) {
                     saveTileEdit(userid, str_type, thingindex);
@@ -117,7 +118,6 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
                     {api: "clipboard", userid: userid, type: str_type, tile: thingindex, value: "", attr: "load"},
                     function (presult, pstatus) {
                         if (pstatus==="success" ) {
-                            // console.log(">>>> presult type: ", typeof presult, " presult: ", presult);
                             et_Globals.clipboard = presult;
                             $("#clipboard").val(et_Globals.clipboard.length + " items");
                         } else {
@@ -125,16 +125,31 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
                         }
                     },"json"
                 );
-                
-                $("body").on("keydown",function(e) {
+
+                if ( str_type==="page" ) {
+                    setTimeout( function() {
+                        var id = $("#x_tabon").attr("aria-labelledby");
+                        $("#"+id).trigger("click");
+                    }, 500);
+                }
+
+                $(document).on("keydown",function(e) {
+                    // console.log(e.which, typeof e.which);
                     if ( e.which===13  ){
-                        $("#modalokay").click();
+                        saveTileEdit(et_Globals.userid, str_type, thingindex);
+                        et_Globals.tileCount = 0;
+                        closeModal("modaledit");
+                        // $("#modalokay").trigger("click");
                     }
                     if ( e.which===27  ){
-                        $("#modalcancel").click();
+                        cancelTileEdit();
+                        et_Globals.tileCount = 0;
+                        closeModal("modaledit");
+                        // $("#modalcancel").trigger("click");
                     }
                 });
                 $("#modaledit").draggable();
+                
             }
         );
     };
@@ -144,6 +159,9 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
             dodisplay();
             $("#editInfo").after(htmlcontent);
             et_Globals.tileCount++;
+            if ( str_type==="page" ) {
+                $("#x_tabs").tabs();
+            }
             setupClicks(str_type, thingindex);
         });
     } else {
@@ -284,23 +302,38 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
     if ( str_type==="page" ) {
         
         if ( subid==="tab" ) {
-            target = "li.ui-tabs-tab.ui-state-default";
-            if ( scope==="thistile" ) { target+= '.tab-'+thingindex; }
-            // target+= ",.tab-" +thingindex + ">a.ui-tabs-anchor";
+            // target = "li.ui-tabs-tab.ui-state-default";
+            if ( scope==="thistile" ) { 
+                target = `.ui-tabs .ui-tabs-nav li.tab-${thingindex}.ui-tabs-tab`;
+            } else {
+                target = ".ui-tabs .ui-tabs-nav li.ui-tabs-tab";                
+            }
 
         } else if ( subid==="tabon" ) {
-            target = "li.ui-tabs-tab.ui-state-default.ui-tabs-active";
-            if ( scope==="thistile" ) { target+= '.tab-'+thingindex; }
-            // target+= ",.tab-" +thingindex + ">a.ui-tabs-anchor";
+            // target = "li.ui-tabs-tab.ui-state-default.ui-tabs-active";
+            if ( scope==="thistile" ) { 
+                target = `.ui-tabs .ui-tabs-nav li.tab-${thingindex}.ui-tabs-tab.ui-tabs-active.ui-state-active`;
+            } else {
+                target = ".ui-tabs .ui-tabs-nav li.ui-tabs-tab.ui-tabs-active.ui-state-active";
+            }
 
         } else if ( subid==="panel" ) {
             target = "#dragregion div.panel";
             if ( scope==="thistile" ) { target+= '.panel-'+ thingindex; }
-
+        
         } else if ( subid==="name" ) {
-            target = "li.ui-tabs-tab.ui-state-default";
-            if ( scope==="thistile" ) { target+= '.tab-'+thingindex; }
-            target = target + " a.ui-tabs-anchor";
+            if ( scope==="thistile" ) { 
+                target = `.ui-tabs .ui-tabs-nav li.tab-${thingindex}.ui-tabs-tab a.ui-tabs-anchor`;
+            } else {
+                target = ".ui-tabs .ui-tabs-nav li.ui-tabs-tab a.ui-tabs-anchor";
+            }
+        
+        } else if ( subid==="nameon" ) {
+            if ( scope==="thistile" ) { 
+                target = `.ui-tabs .ui-tabs-nav li.tab-${thingindex}.ui-tabs-tab.ui-tabs-active a.ui-tabs-anchor`;
+            } else {
+                target = ".ui-tabs .ui-tabs-nav li.ui-tabs-tab.ui-tabs-active a.ui-tabs-anchor";
+            }
 
         } else {
             target = null;
@@ -403,7 +436,6 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
 function toggleTile(target, str_type, subid, setvalue) {
     var ostarget = target;
     var swval = $(target).html();
-    // console.log(">>>> target: ", target, " swval: ", swval);
     $('#onoffTarget').html("");
     if ( swval ) {
         swval = swval.replace(" ","_");
@@ -427,7 +459,6 @@ function toggleTile(target, str_type, subid, setvalue) {
     // activate the icon click to use this
     var onoff = getOnOff(str_type, subid, swval);
     var newsub = 0;
-    // console.log(">>>> swval: ", swval, " onoff: ", onoff);
     if ( onoff && onoff.length > 1 ) {
         for ( var i=0; i < onoff.length; i++ ) {
             var oldsub = onoff[i];
@@ -490,10 +521,8 @@ function checkboxHandler(idselect, onaction, offaction, overlay, isreset) {
             }
             onaction.forEach(function(act) {
                 if (overlay && overlayTarget) {
-                    // console.log(">>>> overlay: ", overlayTarget, act, isreset, subid);
                     addCSSRule(overlayTarget, act, isreset);
                 }
-                // console.log(">>>> css: ", cssRuleTarget, act, isreset, subid);
                 addCSSRule(cssRuleTarget, act, isreset);
             });
         } else {
@@ -502,10 +531,8 @@ function checkboxHandler(idselect, onaction, offaction, overlay, isreset) {
             }
             offaction.forEach(function(act) {
                 if (overlay && overlayTarget) {
-                    // console.log(">>>> overlay: ", overlayTarget, act, isreset, subid);
                     addCSSRule(overlayTarget, act, isreset);
                 }
-                // console.log(">>>> css: ", cssRuleTarget, act, isreset, subid);
                 addCSSRule(cssRuleTarget, act, isreset);
             });
         }
@@ -531,9 +558,12 @@ function initOnceBinds(str_type, thingindex) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
         var subid = $(event.target).val();
-        var target = getCssRuleTarget(str_type, subid, thingindex);
-        var targetid = "#x_a-"+$(target).attr("aid")+"-"+subid;
-        toggleTile(targetid, str_type, subid, false);
+
+        if ( str_type!=="page" ) {
+            var target = getCssRuleTarget(str_type, subid, thingindex);
+            var targetid = "#x_a-"+$(target).attr("aid")+"-"+subid;
+            toggleTile(targetid, str_type, subid, false);
+        }
         initColor(str_type, subid, thingindex);
         initDialogBinds(str_type, thingindex);
         event.stopPropagation();
@@ -542,8 +572,8 @@ function initOnceBinds(str_type, thingindex) {
     // set up triggers for edits to change based on what is clicked
     var trigger = "div"; // div." + str_type + ".p_"+thingindex;
     // var trigger = "div." + str_type + ".p_"+thingindex;
-    $("#te_wysiwyg").off('click', trigger);
-    $("#te_wysiwyg").on('click', trigger, function(event) {
+    $(`#tileDisplay div.thing.${str_type}-thing`).off('click', trigger);
+    $(`#tileDisplay div.thing.${str_type}-thing`).on('click', trigger, function(event) {
         var target = event.target;
         // only allow picking of things with an "aid" element - changed from "id" to pick up arrows
         if ( ! $(target).attr("aid") ) {
@@ -557,7 +587,6 @@ function initOnceBinds(str_type, thingindex) {
         var targetid = "#"+$(target).attr("id");
         var ustr_type = $("#t-"+aid).attr("type");
         var uthingindex = $("#t-"+aid).attr("tile");
-        // console.log(">>>> target:", target, $(target).attr("id"), " event class: ", $(target).attr("class")), subid, aid, ustr_type, uthingindex;
 
         if ( ustr_type && uthingindex ) {
             str_type = ustr_type;
@@ -718,9 +747,19 @@ function initDialogBinds(str_type, thingindex) {
     $("#editReset").on('click', function (event) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
-        // var subid = $("#subidTarget").html();
-        resetCSSRules(str_type, thingindex);
-        event.stopPropagation;
+        var subid = $("#subidTarget").html();
+        var pos = {top: event.pageY - 50, left: event.pageX + 50};
+        var scopemap = scopeMap(str_type);
+        var scope = $("#scopeEffect").val();
+        var msg = (subid==="wholetile" || subid==="panel") ? `Reset everything on ${scopemap[scope]}?` : `Reset only ${subid} elements on ${scopemap[scope]}?`;
+        createModal("picksubid", msg, "body", true, pos, function(ui, content) {
+            var clk = $(ui).attr("name");
+            closeModal("picksubid");
+            if ( clk==="okay" ) {
+                event.stopPropagation();
+                resetCSSRules(str_type, thingindex, subid);
+            }
+        });
     });
     
     $("#clipboard").prop("disabled", true);
@@ -751,8 +790,6 @@ function initDialogBinds(str_type, thingindex) {
             if ( clk==="okay" ) {
                 et_Globals.clipboard = rules;
                 saveClipboard(et_Globals.userid, str_type, thingindex, rules);
-            } else {
-                console.log(">>>> clipboard update aborted");
             }   
             closeModal("popupinfo");
         });
@@ -763,8 +800,9 @@ function initDialogBinds(str_type, thingindex) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
         var rules = pasteCSSRule(et_Globals.clipboard, str_type, thingindex);
-        console.log(">>>> rules pasted: ", rules);
-        // popupMessage("Pasted " + rules.length + " customized formats from the clipboard", 1500);
+        if ( DEBUGte ) {
+            console.log("rules pasted: ", rules);
+        }
         event.stopPropagation;
     });
 
@@ -860,9 +898,6 @@ function initDialogBinds(str_type, thingindex) {
             addCSSRule(getCssRuleTarget(str_type, 'panel', thingindex), rule);
         } else {
             addCSSRule(getCssRuleTarget(str_type, 'wholetile', thingindex), rule);
-            // if ( str_type==="switchlevel" || str_type==="bulb" ) {
-            //     addCSSRule("div.overlay.level.v_"+thingindex+" .ui-slider", rule);
-            // }
         }
         event.stopPropagation;
     });
@@ -935,15 +970,7 @@ function initDialogBinds(str_type, thingindex) {
             addCSSRule(getCssRuleTarget(str_type, 'panel', thingindex), rule);
         } else {
             addCSSRule(getCssRuleTarget(str_type, 'wholetile', thingindex), rule);
-            // if ( str_type==="switchlevel" || str_type==="bulb" ) {
-            //     addCSSRule("div.overlay.level.v_"+thingindex+" .ui-slider", rule);
-            // }
         }
-        
-        // if ( str_type === "thermostat" ) {
-        //     addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.heatingSetpoint", midrule);
-        //     addCSSRule( "div.thermostat-thing.p_"+thingindex+" div.coolingSetpoint", midrule);
-        // }
         event.stopPropagation;
     });
 
@@ -1020,7 +1047,6 @@ function initDialogBinds(str_type, thingindex) {
             }
         }
         if ( subid !== "wholetile" ) {
-            console.log("auto rule: ", rule);
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         }
         event.stopPropagation;
@@ -1076,7 +1102,7 @@ function initDialogBinds(str_type, thingindex) {
                     // rule = "width: " + newsize + " display: inline-block;";
                     rule = "width: " + newsize;
                 }
-                if ( str_type==="page" && subid!=="panel" ) {
+                if ( str_type==="page" && (subid==="tab" || subid==="tabon") ) {
                     addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
                     addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
                 } else {
@@ -1091,7 +1117,7 @@ function initDialogBinds(str_type, thingindex) {
         event.stopPropagation;
     });
 
-    // set padding for selected item
+    // set margin top for selected item
     $("#topMargin").off('change');
     $("#topMargin").on('change', function(event) {
         var subid = $("#subidTarget").html();
@@ -1104,16 +1130,12 @@ function initDialogBinds(str_type, thingindex) {
             newsize = newsize.toString() + "px;";
         }
         var rule;
-        if ( subid === "panel" ) {
+        if ( str_type==="page" && subid === "panel" ) {
             rule = "background-position-y: " + newsize;
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
-        } else if ( str_type==="page" ) {
-            rule = "margin-top: " + newsize;
-            addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
-            addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
         } else {
             var ischecked = $("#absPlace").prop("checked");
-            if ( ischecked && subid!=="wholetile" ) {
+            if ( ischecked && subid!=="wholetile" && str_type!=="page" ) {
                 rule = "top: " + newsize;
             } else {
                 rule = "margin-top: " + newsize;
@@ -1123,7 +1145,7 @@ function initDialogBinds(str_type, thingindex) {
         event.stopPropagation;
     });
 
-    // set padding for selected item
+    // set margin bottom for selected item
     $("#botMargin").off('change');
     $("#botMargin").on('change', function(event) {
         var subid = $("#subidTarget").html();
@@ -1136,17 +1158,13 @@ function initDialogBinds(str_type, thingindex) {
             newsize = newsize.toString() + "px;";
         }
         var rule;
-        if ( subid === "panel" ) {
+        if ( str_type==="page" && subid === "panel" ) {
             if ( newsize !== "0px;" ) newsize = "-" + newsize;
             rule = "background-position-y: " + newsize;
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
-        } else if ( str_type==="page" ) {
-            rule = "margin-bottom: " + newsize;
-            addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
-            addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
         } else {
             var ischecked = $("#absPlace").prop("checked");
-            if ( ischecked && subid!=="wholetile" ) {
+            if ( ischecked && subid!=="wholetile" && str_type!=="page" ) {
                 rule = "bottom: " + newsize;
             } else {
                 rule = "margin-bottom: " + newsize;
@@ -1156,7 +1174,7 @@ function initDialogBinds(str_type, thingindex) {
         event.stopPropagation;
     });
 
-    // set padding for selected item
+    // set top padding for selected item
     $("#topPadding").off('change');
     $("#topPadding").on('change', function(event) {
         var subid = $("#subidTarget").html();
@@ -1168,19 +1186,12 @@ function initDialogBinds(str_type, thingindex) {
         } else {
             newsize = newsize.toString() + "px;";
         }
-        var rule;
-        if ( str_type==="page" ) {
-            rule = "padding-top: " + newsize;
-            addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
-            addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
-        } else {
-            rule = "padding-top: " + newsize;
-            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
-        }
+        var rule = "padding-top: " + newsize;
+        addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         event.stopPropagation;
     });
 
-    // set padding for selected item
+    // set bottom padding for selected item
     $("#botPadding").off('change');
     $("#botPadding").on('change', function(event) {
         var subid = $("#subidTarget").html();
@@ -1192,19 +1203,12 @@ function initDialogBinds(str_type, thingindex) {
         } else {
             newsize = newsize.toString() + "px;";
         }
-        var rule;
-        if ( str_type==="page" ) {
-            rule = "padding-bottom: " + newsize;
-            addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
-            addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
-        } else {
-            rule = "padding-bottom: " + newsize;
-            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
-        }
+        var rule = "padding-bottom: " + newsize;
+        addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         event.stopPropagation;
     });
 
-    // set margin for selected item
+    // set left margin for selected item
     $("#leftMargin").off('change');
     $("#leftMargin").on('change', function(event) {
         var subid = $("#subidTarget").html();
@@ -1217,16 +1221,12 @@ function initDialogBinds(str_type, thingindex) {
             newsize = newsize.toString() + "px;";
         }
         var rule;
-        if ( subid === "panel" ) {
+        if ( str_type==="page" && subid === "panel" ) {
             rule = "background-position-x: " + newsize;
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
-        } else if ( str_type==="page" ) {
-            rule = "margin-left: " + newsize;
-            addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
-            addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
         } else {
             var ischecked = $("#absPlace").prop("checked");
-            if ( ischecked && subid!=="wholetile" ) {
+            if ( ischecked && subid!=="wholetile" && str_type!=="page" ) {
                 rule = "left: " + newsize;
             } else {
                 rule = "margin-left: " + newsize;
@@ -1236,7 +1236,7 @@ function initDialogBinds(str_type, thingindex) {
         event.stopPropagation;
     });
 
-    // set margin for selected item
+    // set right margin for selected item
     $("#rightMargin").off('change');
     $("#rightMargin").on('change', function(event) {
         var subid = $("#subidTarget").html();
@@ -1249,17 +1249,13 @@ function initDialogBinds(str_type, thingindex) {
             newsize = newsize.toString() + "px;";
         }
         var rule;
-        if ( subid === "panel" ) {
+        if ( str_type==="page" && subid === "panel" ) {
             if ( newsize !== "0px;" ) newsize = "-" + newsize;
             rule = "background-position-x: " + newsize;
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
-        } else if ( str_type==="page" ) {
-            rule = "margin-right: " + newsize;
-            addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
-            addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
         } else {
             var ischecked = $("#absPlace").prop("checked");
-            if ( ischecked && subid!=="wholetile" ) {
+            if ( ischecked && subid!=="wholetile" && str_type!=="page" ) {
                 rule = "right: " + newsize;
             } else {
                 rule = "margin-right: " + newsize;
@@ -1269,7 +1265,7 @@ function initDialogBinds(str_type, thingindex) {
         event.stopPropagation;
     });
 
-    // set padding for selected item
+    // set left padding for selected item
     $("#leftPadding").off('change');
     $("#leftPadding").on('change', function(event) {
         var subid = $("#subidTarget").html();
@@ -1281,19 +1277,12 @@ function initDialogBinds(str_type, thingindex) {
         } else {
             newsize = newsize.toString() + "px;";
         }
-        var rule;
-        if ( str_type==="page" ) {
-            rule = "padding-left: " + newsize;
-            addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
-            addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
-        } else {
-            rule = "padding-left: " + newsize;
-            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
-        }
+        var rule = "padding-left: " + newsize;
+        addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         event.stopPropagation;
     });
 
-    // set padding for selected item
+    // set right padding for selected item
     $("#rightPadding").off('change');
     $("#rightPadding").on('change', function(event) {
         var subid = $("#subidTarget").html();
@@ -1305,15 +1294,8 @@ function initDialogBinds(str_type, thingindex) {
         } else {
             newsize = newsize.toString() + "px;";
         }
-        var rule;
-        if ( str_type==="page" ) {
-            rule = "padding-right: " + newsize;
-            addCSSRule(getCssRuleTarget(str_type, "tab", thingindex), rule);
-            addCSSRule(getCssRuleTarget(str_type, "tabon", thingindex), rule);
-        } else {
-            rule = "padding-right: " + newsize;
-            addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
-        }
+        var rule = "padding-right: " + newsize;
+        addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         event.stopPropagation;
     });
 
@@ -1328,7 +1310,7 @@ function initDialogBinds(str_type, thingindex) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
         var rule = "content: " + txt + ";";
-        if ( subid !== "wholetile" && subid !== "panel" && str_type!=="page" ) {
+        if ( subid !== "wholetile" && (subid !== "panel" || str_type!=="page") ) {
             var csstag = getCssRuleTarget(str_type, subid, thingindex) + "::" + before_after;
             addCSSRule(csstag, rule, false, before_after);
         }
@@ -1393,30 +1375,61 @@ function iconlist() {
     return dh;
 }
 
-function getScope(str_type, ftime) {
+function scopeMap(str_type) {
+    if ( str_type==="page" ) {
+        var str = {
+            "thistile": "This page",
+            "thispage": "This page",
+            "typetile": "This page",
+            "typepage": "This page",
+            "alltile": "All pages",
+            "allpage": "All pages"
+        };
+    } else {
+        str = {
+            "thistile": `This ${str_type} tile, All pages`,
+            "thispage": `This ${str_type} tile, This page`,
+            "typetile": `All ${str_type} tiles, All pages`,
+            "typepage": `All ${str_type} tiles, This page`,
+            "alltile": `All tiles, All pages`,
+            "allpage": `All tiles, This page`
+        };
+    }
+    return str;
+}
+
+function scopeSection(str_type) {
     var dh = "";
     dh += "<div class='colorgroup'><div class='sizeText'>Effect Scope</div>";
     dh += "<select name=\"scopeEffect\" id=\"scopeEffect\" class=\"ddlDialog\">";
-    if ( str_type==="page" ) {
-        dh += "<option value=\"thistile\" selected>This page</option>";
-        dh += "<option value=\"alltile\">All pages</option>";
-    } else {
-        if ( et_Globals.pagename==="floorplan" ) {
-            var seltile = "";
-            var selpage = " selected";
+    var scopemap = scopeMap(str_type);
+    for (scope in scopemap) {
+        if ( (scope==="thistile" && et_Globals.pagename!=="floorplan") || (scope==="thispage" && et_Globals.pagename==="floorplan") || (scope==="thistile" && str_type==="page") ) {
+            dh += `<option value="${scope}" selected>${scopemap[scope]}</option>`;
         } else {
-            seltile = " selected";
-            selpage = "";
+            dh += `<option value="${scope}">${scopemap[scope]}</option>`;
         }
-        dh += "<option value=\"thistile\"" + seltile + ">This tile, All pages</option>";       // old mode 0
-        dh += "<option value=\"thispage\"" + selpage + ">This tile, This page</option>";       // old mode 0 w/ floorplan
-        dh += "<option value=\"typetile\">All " + str_type + " tiles, All pages</option>";     // old mode 1
-        dh += "<option value=\"typepage\">All " + str_type + " tiles, This page</option>";     // new mode
-        dh += "<option value=\"alltile\">All tiles, All pages</option>";                       // old mode 2
-        dh += "<option value=\"allpage\">All tiles This page</option>";                        // new mode
     }
-    dh += "</select>";
-    dh += "</div>";
+
+    // if ( str_type==="page" ) {
+    //     dh += "<option value=\"thistile\" selected>This page</option>";
+    //     dh += "<option value=\"alltile\">All pages</option>";
+    // } else {
+    //     if ( et_Globals.pagename==="floorplan" ) {
+    //         var seltile = "";
+    //         var selpage = " selected";
+    //     } else {
+    //         seltile = " selected";
+    //         selpage = "";
+    //     }
+    //     dh += "<option value=\"thistile\"" + seltile + ">" + mapScope("thistile", str_type) + "</option>";       // old mode 0
+    //     dh += "<option value=\"thispage\"" + selpage + ">This tile, This page</option>";       // old mode 0 w/ floorplan
+    //     dh += "<option value=\"typetile\">All " + str_type + " tiles, All pages</option>";     // old mode 1
+    //     dh += "<option value=\"typepage\">All " + str_type + " tiles, This page</option>";     // new mode
+    //     dh += "<option value=\"alltile\">All tiles, All pages</option>";                       // old mode 2
+    //     dh += "<option value=\"allpage\">All tiles, This page</option>";                        // new mode
+    // }
+    dh += "</select></div>";
     return dh;
 }
 
@@ -1431,7 +1444,7 @@ function editSection(str_type, thingindex) {
 
     dh += "<div class='colorgroup'><div class='sizeText' id=\"labelName\"></div><input name=\"editName\" id=\"editName\" class=\"ddlDialog\" value=\"" + "" +"\"></div>";
     dh += "<div class='colorgroup'><button id='processName' type='button'>Save Name</button></div>";
-    dh += getScope(str_type, true);
+    dh += scopeSection(str_type);
 
 
     var th = $(target).css("height");
@@ -1567,11 +1580,14 @@ function itempicker(subid, onoff) {
 function setupClicks(str_type, thingindex) {
     var firstsub = setsubid(str_type);
     $("#subidTarget").html(firstsub);
-    var target = getCssRuleTarget(str_type, firstsub, thingindex);
-    var targetid = "#x_a-"+$(target).attr("aid")+"-"+firstsub;
 
     // do an initial toggle so edits can start right away
-    toggleTile( targetid, str_type, firstsub, false);
+    if ( str_type!=="page") {
+        var target = getCssRuleTarget(str_type, firstsub, thingindex);
+        var targetid = "#x_a-"+$(target).attr("aid")+"-"+firstsub;
+        toggleTile( targetid, str_type, firstsub, false);
+    }
+
     initColor(str_type, firstsub, thingindex);
     loadSubSelect(str_type, firstsub, thingindex);
     getIcons(str_type, thingindex);
@@ -1586,10 +1602,13 @@ function loadSubSelect(str_type, firstsub, thingindex) {
     var subcontent = "";
     
     if ( str_type==="page" ) {
-        subcontent += "<option value='head' selected>Page Name</option>";
-        subcontent += "<option value='panel'>Panel</option>";
-        subcontent += "<option value='tab'>Tab Inactive</option>";
-        subcontent += "<option value='tabon'>Tab Active</option>";
+        subcontent += "<div class='editInfo'>Select Feature:</div>";
+        subcontent += "<select id='subidselect' name='subselect'>";
+        subcontent += "<option value='panel' selected>Panel</option>";
+        subcontent += "<option value='tab'>Tab</option>";
+        subcontent += "<option value='tabon'>Tab Selected</option>";
+        subcontent += "<option value='name'>Name</option>";
+        subcontent += "<option value='nameon'>Name Selected</option>";
     } else {
         // subcontent += "<div class='editInfo'><button class='cm_button' id='cm_activateCustomize'>Customize</button></div>";
         subcontent += "<div class='editInfo'>Select Feature:</div>";
@@ -1617,7 +1636,6 @@ function loadSubSelect(str_type, firstsub, thingindex) {
             if ( $(this).children().length === 3 ) {
                 var subdown = $(this).children().eq(0).attr("subid");
                 var subup = $(this).children().eq(2).attr("subid");
-                // console.log(">>>> three items: ", subdown, subup );
             } else {
                 subdown = false;
                 subup = false;
@@ -1856,6 +1874,16 @@ function resetInverted(selector) {
     }
 }
 
+function getResetButton() {
+    var resetbutton = "<div class='sectionbreak'></div>" + 
+    "<div id='resetButtonGroup' class='editSection_inline'>" +
+        "<button id='editReset'>Reset</button>" + 
+        "<button id='editCopy'>Copy</button>" +
+        "<button id='editPaste'>Paste</button>" +
+    "</div>";
+    return resetbutton;
+}
+
 // add all the color selectors
 function initColor(str_type, subid, thingindex) {
   
@@ -1866,7 +1894,7 @@ function initColor(str_type, subid, thingindex) {
 
     var newtitle;
     if ( str_type==="page" ) {
-        newtitle = "Editing Page#" + et_Globals.hubid + " Name: " + thingindex;
+        newtitle = "Editing Page#" + et_Globals.aid + " Name: " + thingindex;
         $("#labelName").html("Page Name");
     } else {
         newtitle = "Editing Tile #" + thingindex + " of Type: " + str_type;
@@ -1884,15 +1912,30 @@ function initColor(str_type, subid, thingindex) {
     // TODO - generalize this
     var scope = $("#scopeEffect").val();
     var target = getCssRuleTarget(str_type, subid, thingindex, scope);
-    if ( scope==="thistile" ) {
-        var generic = target;
+
+    // use the wysiwyg tile if we are styling tabs
+    // if ( str_type==="page" ) {
+    //     target = `div.wysiwyg.thing.page-thing.p_${thingindex}`;
+    //     if ( subid!=="panel" ) {
+    //         target += ` div.overlay.${subid}.v_${thingindex} div.${subid}.p_${thingindex}`;
+    //     }
+    // }
+
+    var generic;
+    if ( str_type==="page" ) {
+        generic = `div.wysiwyg.thing.page-thing.p_${thingindex}`;
+        if ( subid!=="panel" ) {
+            generic += ` div.overlay.${subid}.v_${thingindex} div.${subid}.p_${thingindex}`;
+        }
+    } else if ( scope==="thistile" ) {
+        generic = target;
     } else {
         generic = getCssRuleTarget(str_type, subid, thingindex, "thistile");
     }
     var icontarget = "#tileDisplay " + target;
 
     if ( DEBUGte ) {
-        console.log ("initcolor: str_type= " + str_type + " subid= " + subid + " thingindex= " + thingindex + " target= " + target);
+        console.log ("initcolor: str_type= " + str_type + " subid= " + subid + " thingindex= " + thingindex + " target= " + target + " generic= " + generic);
     }
     et_Globals.priorIcon = $(target).css("background-image");
     
@@ -1915,7 +1958,6 @@ function initColor(str_type, subid, thingindex) {
    
     // set the background size
     var iconsize = $(target).css("background-size");
-    // if ( str_type==="page" ) { alert("iconsize= " + iconsize); }
     
     if ( iconsize==="auto" || iconsize==="cover" ) {
         $("#autoBgSize").prop("checked", true);
@@ -2064,9 +2106,10 @@ function initColor(str_type, subid, thingindex) {
                   class="colorset" value="' + onstart + '"> \
                   </div>';
     
-    if ( str_type==="page" && subid==="head" ) {
-        var ceffect = "<div class='colorgroup'>Note: Header field for pages cannot be styled. Only the name can be changed. To style the name, select a Tab item.</div>";
-        $("#colorpicker").html(dh + ceffect);
+    if ( str_type==="page" && subid==="panel" ) {
+        var ceffect = "<div class='colorgroup'><div class='infomsg'>Note: panels for pages cannot be styled. Only the names can be changed and the tab styled. To style the tab use tab or name fields.</div></div>";
+        var resetbutton = getResetButton();
+        $("#colorpicker").html(dh + ceffect + resetbutton);
     } else {
 
         // background effect
@@ -2243,19 +2286,10 @@ function initColor(str_type, subid, thingindex) {
                       class="colorset" value="' + onstart + '"> \
                       </div>';
 
-        var resetbutton = "<div class='sectionbreak'></div>" + 
-                          "<div class='editSection_inline'>" +
-                              "<button id='editReset'>Reset</button>" + 
-                              "<button id='editCopy'>Copy</button>" +
-                              "<button id='editPaste'>Paste</button>" +
-                          "</div>";
+        var resetbutton = getResetButton();
 
         // insert the color blocks
         $("#colorpicker").html(dh + iconback + ceffect + iconfore + brcolor + border + fe + align + ishidden + inverted + resetbutton);
-
-        // *********************
-        // text margins
-        // *********************
 
         // turn on minicolor for each one
         $('#colorpicker .colorset').each( function() {
@@ -2264,6 +2298,18 @@ function initColor(str_type, subid, thingindex) {
             var startColor = $(this).val();
             var startTarget = $(this).attr("target");
             var subid = $("#subidTarget").html();
+            var str_type = $("#tileDialog").attr("str_type");
+            var thingindex = $("#tileDialog").attr("thingindex");
+
+            // also update the wysiwyg tile for pages
+            var target2 = "";
+            if ( str_type==="page" ) {
+                target2 = `div.wysiwyg.thing.page-thing.p_${thingindex}`;
+                if ( subid!=="panel" ) {
+                    target2 += ` div.overlay.${subid}.v_${thingindex} div.${subid}.p_${thingindex}`;
+                }
+            }
+        
             $(this).minicolors({
                 control: "hue",
                 position: "bottom left",
@@ -2272,9 +2318,7 @@ function initColor(str_type, subid, thingindex) {
                 opacity: true,
                 format: 'rgb',
                 change: function(strColor) {
-                    var str_type = $("#tileDialog").attr("str_type");
-                    var thingindex = $("#tileDialog").attr("thingindex");
-                    updateColor(strCaller, startTarget, str_type, subid, thingindex, strColor);
+                    updateColor(strCaller, startTarget, str_type, subid, thingindex, strColor, target2);
                 }
             });
         });
@@ -2307,6 +2351,8 @@ function initColor(str_type, subid, thingindex) {
     }
     if ( !mtop || isNaN(mtop) ) { mtop = 0; }
     if ( !mleft || isNaN(mleft) ) { mleft = 0; }
+    if ( !mbot || isNaN(mbot) ) { mbot = 0; }
+    if ( !mright || isNaN(mright) ) { mright = 0; }
     $("#topMargin").val(mtop);
     $("#leftMargin").val(mleft);
     $("#botMargin").val(mbot);
@@ -2317,11 +2363,13 @@ function initColor(str_type, subid, thingindex) {
     // *********************
 
     var ptop = parseInt($(target).css("padding-top"));
-    var pbot = parseInt($(target).css("padding-bottom"));
     var pleft = parseInt($(target).css("padding-left"));
+    var pbot = parseInt($(target).css("padding-bottom"));
     var pright = parseInt($(target).css("padding-right"));
     if ( !ptop || isNaN(ptop) ) { ptop = 0; }
     if ( !pleft || isNaN(pleft) ) { pleft = 0; }
+    if ( !pbot || isNaN(pbot) ) { pbot = 0; }
+    if ( !pright || isNaN(pright) ) { pright = 0; }
     $("#topPadding").val(ptop);
     $("#leftPadding").val(pleft);
     $("#botPadding").val(pbot);
@@ -2380,14 +2428,17 @@ function initColor(str_type, subid, thingindex) {
         $("#isHidden").css("background-color","white");
         var ishdefault = getCssRuleTarget(str_type, subid, thingindex, "overlay");
         var ishdefault2 = getCssRuleTarget(str_type, subid, thingindex);
-        var ish = getish(str_type, thingindex, subid);
-        // var ishidden = false;
         var ishidden = ($(ishdefault).css("display")==="none");
         ishidden = ishidden || ($(ishdefault2).css("display")==="none");
-        for ( var i = 0; i< ish.length; i++) {
-            if (  $(ish[i]) && $(ish[i]).css("display")==="none" ) {
-                ishidden= true;
-            }
+
+        // check all the other variations of this subid if we are still not sure if hidden
+        if ( !ishidden ) {
+            var ish = getish(str_type, thingindex, subid);
+            ish.forEach(function(ishdefault3) {
+                if (  $(ishdefault3) && $(ishdefault3).css("display")==="none" ) {
+                    ishidden= true;
+                }
+            });
         }
         $("#isHidden").prop("checked", ishidden);
     }
@@ -2477,12 +2528,12 @@ function getish(str_type, thingindex, subid) {
         ish[3] = divstr + "thing." + str_type + "-thing div.thingname." + str_type + ".t_" + thingindex;
     } else {
 
-        ish[0]  = divstr + "overlay." + subid;
-        ish[1]  = divstr + "overlay." + subid  + " div." + subid;
-        ish[2]  = divstr + "overlay." + subid  + " div." + subid + ".p_"+thingindex;
-        ish[3]  = divstr + "overlay." + subid + ".v_"+thingindex;
-        ish[4]  = divstr + "overlay." + subid + ".v_"+thingindex  + " div." + subid;
-        ish[5]  = divstr + "overlay." + subid + ".v_"+thingindex  + " div." + subid + ".p_"+thingindex;
+        ish[0]  = "div.overlay." + subid;
+        ish[1]  = "div.overlay." + subid  + " div." + subid;
+        ish[2]  = "div.overlay." + subid  + " div." + subid + ".p_"+thingindex;
+        ish[3]  = "div.overlay." + subid + ".v_"+thingindex;
+        ish[4]  = "div.overlay." + subid + ".v_"+thingindex  + " div." + subid;
+        ish[5]  = "div.overlay." + subid + ".v_"+thingindex  + " div." + subid + ".p_"+thingindex;
 
         ish[6]  = divstr + "thing div.overlay." + subid;
         ish[7]  = divstr + "thing div.overlay." + subid  + " div." + subid;
@@ -2502,10 +2553,10 @@ function getish(str_type, thingindex, subid) {
 }
     
 // main routine that sets the color of items
-function updateColor(strCaller, cssRuleTarget, str_type, subid, thingindex, strColor) {
+function updateColor(strCaller, cssRuleTarget, str_type, subid, thingindex, strColor, target2) {
     
     if ( subid==="level" || subid==="onlevel" || subid==="volume" || subid==="position" ) {
-        cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex); //  "div.overlay.level.v_" + thingindex;
+        cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
         var sliderline = cssRuleTarget;
         var sliderbox= sliderline + " .ui-slider";
         var sliderbox2= sliderbox + " span.ui-slider-handle";
@@ -2516,26 +2567,38 @@ function updateColor(strCaller, cssRuleTarget, str_type, subid, thingindex, strC
             addCSSRule(sliderbox2, "border-color: " + strColor + ";");		
         } else {
             addCSSRule(sliderbox, "background-color: " + strColor + ";");		
-            // addCSSRule(sliderbox, "color: " + strColor + ";");
             addCSSRule(sliderbox2, "background-color: " + strColor + ";");		
-            // addCSSRule(sliderbox2, "color: " + strColor + ";");		
         }
 
     } else if ( strCaller==="background" ) {
-        addCSSRule(cssRuleTarget, "background-color: " + strColor + ";");		
-    } else if ( strCaller==="border" ) {
-        addCSSRule(cssRuleTarget, "border-color: " + strColor + ";");		
-    } else {
-        if ( str_type==="page" && (subid==="tab" || subid==="tabon") ) {
-            cssRuleTarget += " a.ui-tabs-anchor";
+        addCSSRule(cssRuleTarget, "background-color: " + strColor + ";");
+        if ( target2 ) {
+            addCSSRule(target2, "background-color: " + strColor + ";");
         }
+    } else if ( strCaller==="border" ) {
+        addCSSRule(cssRuleTarget, "border-color: " + strColor + ";");
+        if ( target2 ) {
+            addCSSRule(target2, "border-color: " + strColor + ";");
+        }
+    } else {
+        // if ( str_type==="page" && (subid==="tab" || subid==="tabon") ) {
+        //     cssRuleTarget += " a.ui-tabs-anchor";
+        // }
         addCSSRule(cssRuleTarget, "color: " + strColor + ";");	
+        if ( target2 ) {
+            addCSSRule(target2, "color: " + strColor + ";");
+        }
     }
 }
 
 // the old ST icons are now stored locally and obtained from an internal list for efficiency
 function getIconCategories(iCategory) {
     var specialCat = ["Main_Icons","Main_Media","User_Icons","User_Media"];
+    var specialCat = ["Main_Icons","Main_Media","User_Icons","User_Media"];
+    // var specialCat = ["Main_Icons","Main_Media","Main_Photos","Modern_Icons","Modern_Media","Modern_Photos","User_Icons","User_Media","User_Photos"];
+    // var arrCat = [];
+    
+    var specialCat = ["Main_Icons","Main_Media","User_Icons","User_Media"];    
     // var specialCat = ["Main_Icons","Main_Media","Main_Photos","Modern_Icons","Modern_Media","Modern_Photos","User_Icons","User_Media","User_Photos"];
     // var arrCat = [];
     
@@ -2573,51 +2636,22 @@ function getIcons() {
         localPath = iCategory.substr(5).toLowerCase();
     } else if ( iCategory.startsWith("User_") ) {
         localPath = iCategory.substr(5).toLowerCase();
-        // localPath = "../../" + skindir + "/" + iCategory.substr(5).toLowerCase();
-    } else if ( iCategory.startsWith("Modern_") ) {
-        localPath = iCategory.substr(7).toLowerCase();
-    // } else {
-    //     localPath = iCategory;
-    //     // localPath = "../../media/" + iCategory;
-    }
-    // alert("path = "+localPath);
-
-    if ( localPath ) {
-        $.post(returnURL, 
-            {useajax: "geticons", id: 0, userid: et_Globals.userid, thingid: et_Globals.thingid, type: "none", value: localPath, attr: iCategory, skin: skindir, pname: pname},
-            function (presult, pstatus) {
-                if (pstatus==="success" && presult ) {
-                    $('#iconList').html(presult);
-                    setupIcons(iCategory);
-                } else {
-                    $('#iconList').html("<div class='error'>No icons available for: " + iCategory + "</div>");
-                }
-            }
-        );
     } else {
-        var icons = '';
-        $.ajax({
-            url: 'iconlist.txt',
-            type:'GET',
-            success: function (data) {
-                var arrIcons = data.toString().replace(/[\t\n]+/g,'').split(',');
-                $.each(arrIcons, function(index, val) {
-                    var iconCategory = val.substr(0, val.indexOf('|'));
-                    iconCategory = $.trim(iconCategory).replace(/\s/g, '_');	
-                    if (iconCategory === iCategory) {
-                        var iconPath = val.substr(1 + val.indexOf('|'));
-                        var k1 = iconPath.lastIndexOf("/");
-                        var k2 = iconPath.lastIndexOf(".png");
-                        var froot = iconPath.substring(k1+1, k2);
-                        icons+='<div class="iconcat"><img class="icon" src="' + iconPath + '" title="' + froot + '"></div>';
-                    }
-                });			
-                $('#iconList').html(icons);
-                setupIcons(iCategory);
-            }
-        });
-        
+        localPath = iCategory;
     }
+
+    // removed the old method of reading icons from iconlist.txt since the files are no longer there
+    $.post(returnURL, 
+        {useajax: "geticons", id: 0, userid: et_Globals.userid, thingid: et_Globals.thingid, type: "none", value: localPath, attr: iCategory, skin: skindir, pname: pname},
+        function (presult, pstatus) {
+            if (pstatus==="success" && presult ) {
+                $('#iconList').html(presult);
+                setupIcons(iCategory);
+            } else {
+                $('#iconList').html("<div class='error'>No icons available for: " + iCategory + "</div>");
+            }
+        }
+    );
 }
 
 function getBgEffect(effect) {
@@ -2735,49 +2769,76 @@ function addCSSRule(selector, rules, resetFlag, beforetag){
     } catch (e) {}
 }
 
-function resetCSSRules(str_type, thingindex){
+function resetCSSRules(str_type, thingindex, onesubid){
 
     var numdel = 0;
     if ( str_type === "page" ) {
-        var subids = [ "name", "panel", "tab", "tabon" ];
+        var subids = [ "panel", "tab", "tabon", "name", "nameon" ];
         subids.forEach( function(subid) {
-            var subtarget = getCssRuleTarget(str_type, subid, thingindex);
-            if ( subtarget ) {
-                numdel+= removeCSSRule(str_type, subtarget, thingindex, null);
+            if ( onesubid==="panel" || subid===onesubid ) {
+                var subtarget = getCssRuleTarget(str_type, subid, thingindex);
+                if ( subtarget ) {
+                    numdel+= removeCSSRule(str_type, subtarget, thingindex);
+                }
             }
         });
 
     } else {
         var subids = ['wholetile','head'];
         subids.forEach( function(subid) {
-            var subtarget = getCssRuleTarget(str_type, subid, thingindex);
-            if ( subtarget ) {
-                numdel+= removeCSSRule(str_type, subtarget, thingindex, null);
+            if ( onesubid==="wholetile" || subid===onesubid ) {
+                var subtarget = getCssRuleTarget(str_type, subid, thingindex);
+                if ( subtarget ) {
+                    numdel+= removeCSSRule(str_type, subtarget, thingindex);
+                }
             }
         });
 
-        $(`div.overlay.v_${thingindex} div.p_${thingindex}`).each(function() {
+        $(`#te_wysiwyg > div.overlay.v_${thingindex} div.p_${thingindex}`).each(function() {
             var subid = $(this).attr("subid");
 
-            // remove main target
-            var target1 = getCssRuleTarget(str_type, subid, thingindex);
-            numdel+= removeCSSRule(str_type, target1, thingindex, null);
-        
-            // remove all the subs
-            var val = $(target1).html();
-            var onoff = getOnOff(str_type, subid, val);
-            if ( onoff && onoff.length > 0 ) {
-                onoff.forEach( function(ison) {
-                    if ( ison ) {
-                        var subtarget = target1 + "." + ison;
-                        numdel+= removeCSSRule(str_type, subtarget, thingindex, null);
-                    }
+            if ( onesubid==="wholetile" || subid===onesubid ) {
+                // remove main target
+                var target1 = getCssRuleTarget(str_type, subid, thingindex);
+                numdel+= removeCSSRule(str_type, target1, thingindex);
+
+                // handle removal of slider formatting
+                if ( subid==="level" || subid==="onlevel" || subid==="volume" || subid==="position" ) {
+                    var sliderbox = target1 + " .ui-slider";
+                    numdel+= removeCSSRule(str_type, sliderbox, thingindex);
+                    var sliderbox2= sliderbox + " span.ui-slider-handle";
+                    numdel+= removeCSSRule(str_type, sliderbox2, thingindex);
+                }
+            
+                // remove all the subs
+                var val = $(target1).html();
+                var onoff = getOnOff(str_type, subid, val);
+                if ( onoff && onoff.length > 0 ) {
+                    onoff.forEach( function(ison) {
+                        if ( ison ) {
+                            var subtarget = target1 + "." + ison;
+                            numdel+= removeCSSRule(str_type, subtarget, thingindex);
+                        }
+                    });
+                }
+
+                // also remove just pure instances of overlay
+                var target2 = getCssRuleTarget(str_type, subid, thingindex, "overlay");
+                numdel+= removeCSSRule(str_type, target2, thingindex);
+
+                // now get all the other potential variations of this subid and remove them too if there
+                var ish = getish(str_type, thingindex, subid);
+                ish.forEach( function(target3) {
+                    removeCSSRule(str_type, target3, thingindex);
+
                 });
             }
         });
-    }
 
-    console.log(">>>> removed ", numdel, " parameters from CSS file");
+    }
+    if ( DEBUGte ) {
+        console.log("removed ", numdel, " parameters from CSS file");
+    }
 }
 
 function removeCSSRule(str_type, strMatchSelector, thingindex, scope=null){
@@ -2789,29 +2850,33 @@ function removeCSSRule(str_type, strMatchSelector, thingindex, scope=null){
     var sheet = document.getElementById('customtiles').sheet; // returns an Array-like StyleSheetList
     for (var i=sheet.cssRules.length; i--;) {
         var current_style = sheet.cssRules[i];
-        // var rule = current_style.style.cssText;
-        // var newrule = "";
-        if ( (  scope==="alltile" || scope==="allpage" || 
-                ( str_type!=="page" && current_style.selectorText.indexOf("_"+thingindex) !== -1 ) ||
-                ( str_type==="page" && current_style.selectorText.indexOf(`panel-${thingindex}`) !== -1 ) ||
-                ( str_type==="page" && current_style.selectorText.indexOf(`tab-${thingindex}`) !== -1 )
-             ) && 
-             (current_style.selectorText === strMatchSelector) ) 
+
+
+        // str = {
+        //     "thistile": `This ${str_type} tile, All pages`,
+        //     "thispage": `This ${str_type} tile, This page`,
+        //     "typetile": `All ${str_type} tiles, All pages`,
+        //     "typepage": `All ${str_type} tiles, This page`,
+        //     "alltile": `All tiles, All pages`,
+        //     "allpage": `All tiles, This page`
+        // };
+
+
+        // remove if a scope of alltile was picked or if rule is in this tile's category
+        // or if we pick the wholetile scope in which case we remove everything done to this tile
+        if  (   (   ( scope==="alltile" || scope==="allpage" || scope==="typetile" || scope==="typepage" || scope==="everything" ||
+                      ( str_type!=="page" && current_style.selectorText.indexOf("_"+thingindex) !== -1 ) ||
+                      ( str_type==="page" && current_style.selectorText.indexOf(`panel-${thingindex}`) !== -1 ) ||
+                      ( str_type==="page" && current_style.selectorText.indexOf(`tab-${thingindex}`) !== -1 )
+                    ) && (current_style.selectorText === strMatchSelector) 
+                ) ||
+                ( scope==="everything" && str_type!=="page" && current_style.selectorText.indexOf("_"+thingindex) !== -1 ) ||
+                ( scope==="everything" && str_type==="page" && current_style.selectorText.indexOf("panel-"+thingindex) !== -1 ) ||
+                ( scope==="everything" && str_type==="page" && current_style.selectorText.indexOf("tab-"+thingindex) !== -1 )
+            ) 
         {
             sheet.deleteRule(i);
             numdel++;
-
-            // the commented code was an attempt to remove just one part of the formatting but we don't do that
-            // if ( target ) {
-            //     var k1 = rule.indexOf(target);
-            //     var k2 = rule.indexOf(";", k1);
-
-            //     // write remaining rules if there are any
-            //     if ( k1 > 0 || (k2+1) < rule.length ) {
-            //         newrule = rule.substring(0, k1) + rule.substring(k2+1);
-            //         sheet.insertRule(strMatchSelector + "{" + newrule + "}", i);
-            //     } 
-            // }
             cm_Globals.edited = true;
         }
     }
@@ -2827,8 +2892,6 @@ function saveClipboard(userid, str_type, thingindex, rules) {
                 console.log(`>>>> clipboard updated with ${rules.length} items: `, rules);
                 $("#clipboard").val(rules.length + " items");
                 et_Globals.clipboard = rules;
-            } else {
-                console.log(">>>> clipboard was not updated because there was a problem saving it for future use: ", pstatus);
             }
         }
     );
@@ -2848,7 +2911,7 @@ function copyCSSRule(str_type, thingindex, fixsubid){
         subidmap[target] = fixsubid;
     } else {
         if ( str_type==="page" ) {
-            var subidtypes = [ "name", "panel", "tab","tabon" ];
+            var subidtypes = [ "panel", "tab", "tabon", "name", "nameon" ];
             subidtypes.forEach( function(subid) {
                 var target = getCssRuleTarget(str_type, subid, thingindex);
                 subidmap[target] = subid;
@@ -2867,18 +2930,31 @@ function copyCSSRule(str_type, thingindex, fixsubid){
                     subidmap[target] = subid;
                 }
 
+                // handle removal of slider formatting
+                if ( subid==="level" || subid==="onlevel" || subid==="volume" || subid==="position" ) {
+                    var sliderbox = target + " .ui-slider";
+                    if ( typeof subidmap[sliderbox] === "undefined" ) {
+                        subidmap[sliderbox] = subid;
+                    }
+                    var sliderbox2= sliderbox + " span.ui-slider-handle";
+                    if ( typeof subidmap[sliderbox2] === "undefined" ) {
+                        subidmap[sliderbox2] = subid;
+                    }
+                
                 // get all the subs
-                var val = $(target).html();
-                var onoff = getOnOff(str_type, subid, val);
-                if ( onoff && onoff.length > 0 ) {
-                    onoff.forEach( function(rule) {
-                        if ( rule ) {
-                            var subtarget = target + "." + rule;
-                            if ( typeof subidmap[subtarget]==="undefined" ) {
-                                subidmap[subtarget] = subid;
+                } else {
+                    var val = $(target).html();
+                    var onoff = getOnOff(str_type, subid, val);
+                    if ( onoff && onoff.length > 0 ) {
+                        onoff.forEach( function(rule) {
+                            if ( rule ) {
+                                var subtarget = target + "." + rule;
+                                if ( typeof subidmap[subtarget]==="undefined" ) {
+                                    subidmap[subtarget] = subid;
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
                 }
             });
         }
@@ -2947,8 +3023,7 @@ function pasteCSSRule(rules, str_type, thingindex, fixsubid){
             if ( str_type==="page" ) {
                 if ( subid==="panel" ) {
                     target = target.replace(`div.panel.panel-${rindex}`,`div.panel.panel-${thingindex}`);
-                    target = target.replace(`div.panel.panel-${rindex}`,`div.panel.panel-${thingindex}`);
-                } else if ( subid==="tab" || subid==="tabon" ) {
+                } else {
                     target = target.replace(`.tab-${rindex}`,`.tab-${thingindex}`);
                     target = target.replace(`.tab-${rindex}`,`.tab-${thingindex}`);
                 }

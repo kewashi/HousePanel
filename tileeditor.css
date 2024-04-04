@@ -341,36 +341,73 @@ div#catalog {
 .ui-widget-content a {
     color: #cccccc;
 }
-.ui-tabs .ui-tabs-nav .ui-tabs-anchor{
-	text-decoration: none;
-	padding: .5em 1.2em;
+#x_tabs .ui-widget-content div {
+    color: white;
+    background-color: black;
 }
-div.ui-tabs-panel, ui-widget-content {
-    background: #333333;
-}
-ul.ui-tabs-nav {
-    background-color: #666666;
-    color: #000000;
-    font-size: 16px;
+.ui-tabs .ui-tabs-nav {
     border: none;
 }
-.ui-tabs .ui-tabs-nav li {
+a.ui-tabs-anchor {
+    text-decoration: none;
+}
+/* .ui-tabs .ui-tabs-nav li.ui-tabs-tab {
+    background-color: black;
+    border-color: white;
+} */
+
+/* tab inactive  */
+.ui-tabs .ui-tabs-nav li.ui-tabs-tab {
     cursor: pointer;
-    min-width: 70px;
+    background-color: white;
+    color: rgb(50, 50, 50);
+    min-width: 45px;
+    width: auto;
 }
-.ui-tabs .ui-tabs-nav li a.ui-tabs-anchor:hover {
-    background-color: rgb(50, 50, 50);
-    color: white;
-    font-weight: normal;
-}
+
+/* tabs selected  */
 .ui-tabs .ui-tabs-nav li.ui-tabs-active {
-    background-color: rgb(50, 50, 50);
+    cursor: text;
+    background-color: rgba(50, 50, 50, 1);
+    border-color: white;
     color: white;
-    font-weight: normal;
+    min-width: 45px;
+    width: auto;
 }
-.ui-tabs {
-    padding: 0;
+
+/* text on inactive tab  */
+.ui-tabs .ui-tabs-nav li.ui-tabs-tab a.ui-tabs-anchor {
+    cursor: pointer;
+    background-color: rgba(255, 255, 255, 0.01);
+    color: rgba(50, 50, 50, 1);
+    width: auto;
 }
+
+/* text on selected tab  */
+.ui-tabs .ui-tabs-nav li.ui-tabs-active a.ui-tabs-anchor {
+    cursor: default;
+    background-color: rgba(50, 50, 50, 0.01);
+    color: rgba(255, 255, 255, 1);
+    width: auto;
+}
+
+/* hover over inactive tab */
+.ui-tabs .ui-tabs-nav li.ui-tabs-tab a.ui-tabs-anchor:hover {
+    background-color: rgba(50, 50, 50, 1);
+    color: rgba(255, 255, 255, 1);
+}
+
+/* hover over active tab */
+.ui-tabs .ui-tabs-nav li.ui-tabs-active a.ui-tabs-anchor:hover {
+    filter: invert(0);
+}
+
+#x_tabs li.ui-tabs-tab.ui-state-default, div.tabStyle, div.tabonStyle {
+    display: block;
+    margin-top: 10px;
+    margin-bottom: 5px;
+}
+
 .error, .error_description {
     background-color: #ff0000;  color: #ffffff;
 }
@@ -1291,7 +1328,7 @@ div.colorgroup {
     margin-top: 10px;
 }
 
-div.colorgroup label {
+div.colorgroup label, div.colorgroup div.infomsg {
     color: white;
     width: auto;
     display: block;
@@ -1396,7 +1433,7 @@ div.thing div.overlay.color div.color {
     position: absolute;
     width: auto;
     display: block;
-    margin-left: 2x; margin-top: 30px;
+    margin-top: 30px;
     z-index: 9999;
 }
 
@@ -1632,7 +1669,7 @@ div.thing div.overlay.colorTemperature {
     display: none;
     color: rgba(255, 255, 255, 1);
 } */
-div.page-thing div.overlay.name {
+div.page-thing, div.page-thing div.overlay.name {
     position: relative;
     display: block;
     color: rgba(255, 255, 255, 1);
@@ -2235,4 +2272,8 @@ div.menuitem:hover {
 div.overlay.subname div.subname {
     font-size: 10px;
     font-style: italic;
+}
+#cm_preview div.overlay.color div.bulb.color {
+    position: absolute;
+    left: 90px;
 }
