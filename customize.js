@@ -16,7 +16,6 @@ cm_Globals.tileid = null;
 cm_Globals.natives = [];
 // cm_Globals.thingidx = null;
 cm_Globals.defaultclick = "name";
-var ENABLERULES = true;
 
 // tile custom popup box
 function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {  
@@ -108,14 +107,6 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
 
         // start of dialog
         var dh = "<div id='customizeDialog' class='tileDialog'>";
-
-        // get the rules const
-        try {
-            ENABLERULES = $("input[name='enablerules']").val() === "true";
-        } catch(e) {
-            ENABLERULES = true;
-        }
-
         dh += "<div class='editheader' id='cm_header'>Customizing Tile #" + tileid + "</div>";
         dh+= "<table class ='cm_table'>";
         dh+= "<tr>";
@@ -197,9 +188,7 @@ function customTypePanel() {
         // dh+= "<option value='PUT'>PUT</option>";
         dh+= "<option value='URL'>URL</option>";
         dh+= "<option value='LINK'>LINK</option>";
-        if ( ENABLERULES ) {
-            dh+= "<option value='RULE'>RULE</option>";
-        }
+        dh+= "<option value='RULE'>RULE</option>";
         dh+= "<option value='LIST'>LIST</option>";
     dh+= "</select>";
     dh+= "</div></div>";
@@ -817,7 +806,7 @@ function loadRightPanel(customType, acontent, subid) {
         content = loadServicePanel(customType);
         $("#cm_dynoContent").html(content);
         initExistingFields();
-    } else if ( ENABLERULES && customType ==="RULE" ) {
+    } else if ( customType ==="RULE" ) {
         content = loadRulePanel();
         $("#cm_dynoContent").html(content);
         initExistingFields();

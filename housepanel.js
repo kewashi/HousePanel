@@ -192,6 +192,8 @@ function getOptions() {
         var userid = $("#userid").val();
         var email = $("#emailid").val();
         var skin = $("#skinid").val();
+        var hpcode = $("#hpcode").val();
+        console.log(">>>> hpcode: ", hpcode);
         // var config = $("#configsid").val();
         // config = JSON.parse(config);
         
@@ -201,11 +203,11 @@ function getOptions() {
         } catch(e) {
             pname = "default";
         }
-        cm_Globals.options = {userid: userid, email: email, skin: skin, pname: pname, mode: "Unknown", config: {}, rules: {}};
+        cm_Globals.options = {userid: userid, email: email, skin: skin, pname: pname, mode: "Unknown", hpcode: hpcode, config: {}, rules: {}};
 
         // set the customization lists
         $.post(cm_Globals.returnURL, 
-            {useajax: "getoptions", userid: userid, pname: pname, id:"none", type:"none"},
+            {useajax: "getoptions", userid: userid, pname: pname, id:"none", type:"none", hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if ( pstatus==="success" ) {
                     cm_Globals.options["rules"] = presult[0];
@@ -219,7 +221,7 @@ function getOptions() {
         
                 // get the mode
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "getmode", userid: userid},
+                    {useajax: "getmode", userid: userid, hpcode: cm_Globals.options.hpcode},
                     function (presult, pstatus) {
                         if ( pstatus==="success" ) {
                             var themode = presult;
@@ -263,7 +265,7 @@ function getHubs() {
 
         // read the hubs
         $.post(cm_Globals.returnURL, 
-            {useajax: "gethubs", userid: userid, pname: pname, id:"none", type:"none"},
+            {useajax: "gethubs", userid: userid, pname: pname, id:"none", type:"none", hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     cm_Globals.hubs = presult;
@@ -287,7 +289,7 @@ function getHubs() {
 
                 } else {
                     cm_Globals.hubs = {};
-                    console.log("error - failure reading hubs from database for user = " + userid);
+                    console.error("error - failure reading hubs from database for user = " + userid);
                 }
 
                 setupButtons();
@@ -295,7 +297,7 @@ function getHubs() {
             }, "json"
         );
     } catch(e) {
-        console.log("error - failure setting up hubs", e);
+        console.error("error - failure setting up hubs", e);
     }
 }
 
@@ -590,7 +592,12 @@ $(document).ready(function() {
                 $("#pnumber").focus();
             }
         });
+
+        cm_Globals.apiSecret = $("input[name='apiSecret']").val();
+    }  else {
+        cm_Globals.apiSecret = "";
     }
+    console.log(">>>> API Secret: ", cm_Globals.apiSecret);
 
     // load things and options
     if ( pagename==="main" || pagename==="auth" || pagename==="options" ) {
@@ -741,7 +748,8 @@ function returnMainPage() {
         var hubtimer = $("input[name='hubtimer']").val();
         var hubindex = $("input[name='hubindex']").val();
         $.post(cm_Globals.returnURL, 
-                {useajax: "setdefhub", userid: cm_Globals.options.userid, hubid: defhub, value: defhub, id: hubindex, attr: hubtimer}
+                {useajax: "setdefhub", userid: cm_Globals.options.userid, hubid: defhub, value: defhub, 
+                 id: hubindex, attr: hubtimer, hpcode: cm_Globals.options.hpcode}
         );
     }
     window.location.href = cm_Globals.returnURL;
@@ -780,7 +788,7 @@ function initWebsocket() {
             setupWebsocket(userid, port, webSocketUrl);
         }
     } catch(err) {
-        console.log( "error - could not initialize websocket. err: ", err);
+        console.error( "error - could not initialize websocket. err: ", err);
     }
 }
 
@@ -793,7 +801,7 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
         // console.log("Creating webSocket for: ", webSocketUrl);
         wsSocket = new WebSocket(webSocketUrl, "housepanel");
     } catch(err) {
-        console.log("Error attempting to create webSocket for: ", webSocketUrl," error: ", err);
+        console.error("Error attempting to create webSocket for: ", webSocketUrl," error: ", err);
         return;
     }
     
@@ -949,7 +957,7 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                     }
                     updateLink(bid, pvalue);
                 } catch (e) {
-                    console.log("Error updating tile with bid: ", bid, " pvalue: ", pvalue, " error: ", e);
+                    console.error("error updating tile with bid: ", bid, " pvalue: ", pvalue, " error: ", e);
                 }
 
                 // blank screen if night mode set
@@ -971,7 +979,7 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
             }
 
         } catch (err) {
-            console.log("Error interpreting webSocket message. err: ", err);
+            console.error("error interpreting webSocket message. err: ", err);
             return;
         };
     }
@@ -1344,7 +1352,8 @@ function setupColors() {
 
                 $.post(cm_Globals.returnURL, 
                        {useajax: "doaction", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: hslstr, hint: hint,
-                        subid: realsubid, attr: hexval, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval} );
+                        subid: realsubid, attr: hexval, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval,
+                        hpcode: cm_Globals.options.hpcode} );
             }
         });
     });
@@ -1407,7 +1416,7 @@ function setupSliders() {
         console.log("Slider action: command= ", command, " bid= ", bid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", linkhub, " type= ", linktype, " subid= ", realsubid, " hint= ", hint, " value= ", thevalue, " linkval= ", linkval);
         $.post(cm_Globals.returnURL, 
             {useajax: "doaction", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: thevalue, attr: subid, hint: hint,
-            subid: realsubid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval});
+            subid: realsubid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode});
     }
 
     
@@ -1530,7 +1539,7 @@ function setupPagemove() {
             var userid = cm_Globals.options.userid;
             var pname = cm_Globals.options.pname;
             $.post(cm_Globals.returnURL, 
-                {useajax: "setorder", userid: userid, pname: pname, id: "none", type: "rooms", value: pages},
+                {useajax: "setorder", userid: userid, pname: pname, id: "none", type: "rooms", value: pages, hpcode: cm_Globals.options.hpcode},
                 function (presult, pstatus) {
                     if (pstatus==="success" ) {
                         cm_Globals.reordered = true;
@@ -1595,7 +1604,7 @@ function setupSortable() {
                 });
 
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "setorder", userid: userid, pname: pname, id: "none", type: "things", value: tilenums},
+                    {useajax: "setorder", userid: userid, pname: pname, id: "none", type: "things", value: tilenums, hpcode: cm_Globals.options.hpcode},
                     function (presult, pstatus) {
                         if (pstatus==="success" ) {
                             cm_Globals.reordered = true;
@@ -1727,7 +1736,7 @@ function setupDraggable() {
                 // also send the dragthing object to get panel name and tile pid index
                 $.post(cm_Globals.returnURL, 
                     {useajax: "setposition", userid: cm_Globals.options.userid, pname: cm_Globals.options.pname, 
-                     id: bid, type: thingtype, attr: startPos, tileid: tile, thingid: thingid},
+                     id: bid, type: thingtype, attr: startPos, tileid: tile, thingid: thingid, hpcode: cm_Globals.options.hpcode},
                     function (presult, pstatus) {
                         if (pstatus==="success") {
                             console.log("setposition: ", presult, "id",bid,"type",thingtype, "attr",startPos, "tile",tile,"thingid",thingid);
@@ -1824,7 +1833,7 @@ function setupDraggable() {
                                 // the ajax call must return a valid "div" block for the dragged new thing
                                 $.post(cm_Globals.returnURL, 
                                     {useajax: "addthing", userid: userid, pname: pname, id: bid, type: thingtype, value: panel, panelid: panelid, 
-                                                            attr: startPos, hubid: hubid, hubindex: hubindex, roomid: roomid, pname: pname, tileid: 0},
+                                     attr: startPos, hubid: hubid, hubindex: hubindex, roomid: roomid, pname: pname, tileid: 0, hpcode: cm_Globals.options.hpcode},
                                     function (presult, pstatus) {
                                         if (pstatus==="success" && !presult.startsWith("error") ) {
                                             console.log( "Added " + thingname + " of type " + thingtype + " and bid= " + bid + " to room " + panel, " pos: ", startPos);
@@ -1838,7 +1847,7 @@ function setupDraggable() {
                                             delEditLink();
                                             addEditLink();
                                         } else {
-                                            console.log("error attempting to add a tile. pstatus: ", pstatus, " presult: ", presult);
+                                            console.error("error attempting to add a tile. pstatus: ", pstatus, " presult: ", presult);
                                         }
                                     } 
                                 );
@@ -1893,7 +1902,7 @@ function relocateTile(thing, thingtype, tileloc) {
             $(thing).attr("style",stylestr);
         }
     } catch(e) { 
-        console.log("error - Tile reposition error: ", e); 
+        console.error("error - Tile reposition error: ", e); 
     }
 
 }
@@ -1915,7 +1924,8 @@ function rehomeTiles() {
 
         // console.log(bid, thingtype, tile, thingid, pname, startPos);
         $.post(cm_Globals.returnURL, 
-            {useajax: "setposition", userid: cm_Globals.options.userid, pname: pname, id: bid, type: thingtype, attr: startPos, tileid: tile, thingid: thingid},
+            {useajax: "setposition", userid: cm_Globals.options.userid, pname: pname, id: bid, type: thingtype, 
+             attr: startPos, tileid: tile, thingid: thingid, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if ( pstatus!=="success" ) {
                     console.log("status: ", pstatus, " result: ", presult);
@@ -1947,11 +1957,12 @@ function dynoPost(ajaxcall, body, callback) {
     if ( body && typeof body === "object" ) { 
         body["api"] = ajaxcall;
         body.pname = pname;
+        body.hpcode = cm_Globals.options.hpcode;
         if ( body.reload ) {
             isreload = true;
         }
     } else {
-        body = {api: ajaxcall, userid: cm_Globals.options.userid, pname: pname};
+        body = {api: ajaxcall, userid: cm_Globals.options.userid, pname: pname, hpcode: cm_Globals.options.hpcode};
     }
 
     if ( callback && typeof callback==="function" ) {
@@ -1983,7 +1994,7 @@ function execForgotPassword() {
     } else {
         // alert("email: " + emailname + " mobile: " + mobile);
         $.post(cm_Globals.returnURL, 
-            {useajax: "forgotpw", email: emailname, mobile: mobile}, 
+            {api: "forgotpw", email: emailname, mobile: mobile, apiSecret: cm_Globals.apiSecret},
             function(presult, pstatus) {
                 if ( pstatus==="success" && presult && typeof presult === "object" && presult.id ) {
                     var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 100px; padding-top: 50px; text-align: center;";
@@ -2024,7 +2035,7 @@ function execCreateUser() {
         alert("Passwords do not match. Try again.");
     } else {
         $.post(cm_Globals.returnURL, 
-            {useajax: "createuser", email: emailname, uname: username, mobile: mobile, pword: newpw}, 
+            {useajax: "createuser", email: emailname, uname: username, mobile: mobile, pword: newpw, hpcode: "createuser"}, 
             function(presult, pstatus) {
                 if ( pstatus==="success" && presult && typeof presult === "object" && presult.id ) {
                     var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
@@ -2083,8 +2094,9 @@ function execValidatePassword() {
                 if ( pstatus==="success" && presult && typeof presult === "object" ) {
                     var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
                     var pos = {style: pstyle};
-                    // console.log("validatepassword = ", presult);
-                    createModal("loginfo","User and panel passwords updated successfully.<br>Please log in with the new credentials.<br>email = " + emailname+ "<br><br>", "body", "Done", pos, function(ui) {
+                    console.log("updatepassword details = ", presult);
+                    var msg = `User ${presult.email} and panel ${presult.pname} passwords updated successfully.<br>Please log in with the new credentials.<br>API calls will use hpcode=${presult.hpcode}`;
+                    createModal("loginfo", msg, "body", "Done", pos, function(ui) {
                         window.location.href = cm_Globals.returnURL;
                     });
                     // setTimeout(function() {
@@ -2145,11 +2157,8 @@ function execButton(buttonid) {
     // console.log("buttonid: ", buttonid, " priorOpmode: ", priorOpmode, " modalStatus: ", modalStatus, " edited? ", cm_Globals.edited);
     if ( buttonid==="optSave") {
 
-        // var fobj = formToObject("filteroptions");
         var oobj = formToObject("optionspage");
 
-        // try {
-            // dynoPost("filteroptions", fobj, function(presult, pstatus) {
         dynoPost("saveoptions", oobj, function(presult, pstatus) {
             if ( pstatus!=="success" ) {
                 // console.log(pstatus, " result: ", presult, " optionsobj: ", oobj);
@@ -2164,12 +2173,6 @@ function execButton(buttonid) {
                 }
             }
         });
-        //     });
-        // } catch (e) {
-        //     console.log("Options page failed to save properly", e);
-        //     alert("Options page failed to save properly");
-        //     window.location.href = cm_Globals.returnURL;
-        // }
 
     } else if ( buttonid==="optCancel" ) {
         // do nothing but reload the main page
@@ -2250,7 +2253,7 @@ function execButton(buttonid) {
             // alert("phototimer = " + phototimer + " pname = " + pname);
 
             $.post(cm_Globals.returnURL, 
-                {useajax: "getphotos", userid: cm_Globals.options.userid, pname: pname}, 
+                {useajax: "getphotos", userid: cm_Globals.options.userid, pname: pname, hpcode: cm_Globals.options.hpcode}, 
                 function(presult, pstatus) {
                     if ( presult && typeof presult == "object" ) {
                         var photos = presult;
@@ -2463,7 +2466,7 @@ function setupButtons() {
                 if ( clk==="okay" ) {
                     alert("Removing panel: " + pname);
                     $.post(cm_Globals.returnURL, 
-                        {useajax: "delpanel", userid: cm_Globals.options.userid, pname: pname}
+                        {useajax: "delpanel", userid: cm_Globals.options.userid, pname: pname, hpcode: cm_Globals.options.hpcode}
                     );
                 }
             });
@@ -2476,7 +2479,7 @@ function setupButtons() {
                 if ( clk==="okay" ) {
                     alert("Using panel: " + pname);
                     $.post(cm_Globals.returnURL, 
-                        {useajax: "usepanel", userid: cm_Globals.options.userid, pname: pname}
+                        {useajax: "usepanel", userid: cm_Globals.options.userid, pname: pname, hpcode: cm_Globals.options.hpcode}
                     );
                 }
             });
@@ -2491,7 +2494,7 @@ function setupButtons() {
                 if ( clk==="okay" ) {
                     alert("Removing user: " + uname + " | " + emailname);
                     $.post(cm_Globals.returnURL, 
-                        {useajax: "deluser", userid: cm_Globals.options.userid, uname: uname, email: emailname}
+                        {useajax: "deluser", userid: cm_Globals.options.userid, uname: uname, email: emailname, hpcode: cm_Globals.options.hpcode}
                     );
                 }
             });
@@ -2626,6 +2629,7 @@ function setupButtons() {
             formData["api"] = "hubauth";
             formData.hubtype = $("select[name='hubtype']").val();
             formData.hubhost = $("input[name='hubhost']").val();
+            formData.hpcode = cm_Globals.options.hpcode;
             $.post(cm_Globals.returnURL, formData,  function(presult, pstatus) {
                 // console.log("hubauth: ", presult);
                 // alert("wait... presult.action = " + presult.action);
@@ -2674,7 +2678,7 @@ function setupButtons() {
                         $("#newthingcount").html(presult);
                     } else {
                         $("#newthingcount").html("Something went wrong with hub auth request");
-                        console.log("hub auth error: ", presult);
+                        console.error("hub auth error: ", presult);
                     }
                 }
             });
@@ -2701,7 +2705,7 @@ function setupButtons() {
                 if ( clk==="okay" ) {
                     // remove it from the system
                     $.post(cm_Globals.returnURL, 
-                        {useajax: "hubdelete", userid: cm_Globals.options.userid, pname: pname, hubid: hubId, id: hubindex},
+                        {useajax: "hubdelete", userid: cm_Globals.options.userid, pname: pname, hubid: hubId, id: hubindex, hpcode: cm_Globals.options.hpcode},
                         function (presult, pstatus) {
                             if (pstatus==="success" && typeof presult === "string") {
                                 $("#newthingcount").html(presult);
@@ -2842,7 +2846,7 @@ function addEditLink() {
         var tile = $(thing).attr("tile");
         var strhtml = $(thing).html();
         var thingclass = $(thing).attr("class");
-        var pagename = $(thing).attr("panel")
+        var panel = $(thing).attr("panel")
         var bid = $(thing).attr("bid");
         var hubid = $(thing).attr("hub");
         var hubindex = $(thing).attr("hubindex");
@@ -2859,7 +2863,7 @@ function addEditLink() {
         strhtml = strhtml.replace(/ id="/g, " id=\"x_");
         // cm_Globals.edited = true;
 
-        editTile(userid, thingid, pagename, str_type, tile, aid, bid, thingclass, hubid, hubindex, hubType, customname, strhtml);
+        editTile(userid, thingid, panel, str_type, tile, aid, bid, thingclass, hubid, hubindex, hubType, customname, strhtml);
     });
     
     $("div.cmzlink").off("click");
@@ -2915,7 +2919,8 @@ function addEditLink() {
             if ( clk==="okay" ) {
                 $.post(cm_Globals.returnURL, 
                     {useajax: "delthing", userid: userid, id: bid, type: thingtype, value: panel, 
-                                          attr: "", hubid: hubid, tileid: tile, thingid: thingid, roomid: roomid, pname: pname, panelid: panelid},
+                                          attr: "", hubid: hubid, tileid: tile, thingid: thingid, roomid: roomid, 
+                                          pname: pname, panelid: panelid, hpcode: cm_Globals.options.hpcode},
                     function (presult, pstatus) {
                         // check for an object returned which should be a promise object
                         if (pstatus==="success" && ( typeof presult==="object" || (typeof presult === "string" && !presult.startsWith("error"))) ) {
@@ -2956,7 +2961,8 @@ function addEditLink() {
         }
 
         $.post(cm_Globals.returnURL, 
-            {useajax: "setposition", userid: cm_Globals.options.userid, type: str_type, attr: startPos, tileid: tile, thingid: thingid},
+            {useajax: "setposition", userid: cm_Globals.options.userid, type: str_type, attr: startPos, 
+                                     tileid: tile, thingid: thingid, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if ( pstatus === "success" ) {
                     console.log(presult);
@@ -2991,15 +2997,15 @@ function addEditLink() {
 
                 // remove it from the system
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "pagedelete", userid: cm_Globals.options.userid, id: roomnum, type: "none", value: roomname, roomid: roomid, attr: "none", panelid: panelid, pname: pname},
+                    {useajax: "pagedelete", userid: cm_Globals.options.userid, id: roomnum, type: "none", hpcode: cm_Globals.options.hpcode,
+                                            value: roomname, roomid: roomid, attr: "none", panelid: panelid, pname: pname},
                     function (presult, pstatus) {
-                        if (pstatus==="success" && typeof presult === "string" ) {
+                        if (pstatus==="success" && typeof presult === "string" && !presult.startsWith("error") ) {
                             console.log(presult);
-                            if ( !presult.startsWith("error") ) {
-                                // remove it visually and click on new default tab
-                                $("li[roomnum="+roomnum+"]").remove();
-                                $("#"+defaultTab).trigger("click");
-                            }
+                            $("li[roomnum="+roomnum+"]").remove();
+                            $("#"+defaultTab).trigger("click");
+                        } else {
+                            console.error(presult);
                         }
                     }
                 );
@@ -3028,7 +3034,7 @@ function addEditLink() {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "pageadd", userid: cm_Globals.options.userid, id: "none", panelid: panelid, pname: pname},
+                    {useajax: "pageadd", userid: cm_Globals.options.userid, id: "none", panelid: panelid, pname: pname, hpcode: cm_Globals.options.hpcode},
                     function (presult, pstatus) {
                         if (pstatus==="success" && typeof presult === "object" ) {
                             // console.log("Added room: ", presult);
@@ -3384,7 +3390,7 @@ function updateLink(bid, pvalue) {
                 CoolClock.findAndCreateClocks();
             }
         } catch (e) {
-            console.log("Error updating linked tile with bid: ", bid, " pvalue: ", pvalue, " error: ", e);
+            console.error("error updating linked tile with bid: ", bid, " pvalue: ", pvalue, " error: ", e);
         }
     }
 }
@@ -3424,7 +3430,7 @@ function processKeyVal(targetid, aid, key, value) {
     // // handle weather icons that were not converted
     } else if ( key==="weatherCode" && !isNaN(+value)  ) {
         $.post(cm_Globals.returnURL, 
-            {api: "weathericon", userid: cm_Globals.options.userid, type: "tomorrowio", value: value},
+            {api: "weathericon", userid: cm_Globals.options.userid, type: "tomorrowio", value: value, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if ( pstatus==="success" ) {
                     console.log("weatherCode result: ", presult);
@@ -3436,7 +3442,7 @@ function processKeyVal(targetid, aid, key, value) {
 
     } else if ( (key==="weatherIcon" || key==="forecastIcon") && !isNaN(+value) ) {
         $.post(cm_Globals.returnURL, 
-            {api: "weathericon", userid: cm_Globals.options.userid, type: "hubitat", value: value},
+            {api: "weathericon", userid: cm_Globals.options.userid, type: "hubitat", value: value, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if ( pstatus==="success" ) {
                     $(targetid).html(presult);
@@ -3539,7 +3545,8 @@ function refreshTile(tileid, aid, bid, thetype, hubid) {
     var pname = cm_Globals.options.pname;
     try {
         $.post(cm_Globals.returnURL, 
-            {api: "doquery", userid: cm_Globals.options.userid, pname: pname, id: bid, tileid: tileid, type: thetype, hubid: hubid},
+            {api: "doquery", userid: cm_Globals.options.userid, pname: pname, id: bid, tileid: tileid, 
+                             type: thetype, hubid: hubid, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if ( pstatus==="success" && presult && typeof presult==="object" ) {
                     updateTile(aid, presult);
@@ -3661,7 +3668,8 @@ function clockUpdater(whichclock, forceget) {
         clockoptions.push(opt2);
 
         $.post(cm_Globals.returnURL, 
-            {useajax: "getclock", userid: userid, pname: pname, id: whichclock, thingid: thingid, tileid: tileid, type: "clock", attr: clockoptions},
+            {useajax: "getclock", userid: userid, pname: pname, id: whichclock, thingid: thingid, tileid: tileid, 
+                                  type: "clock", attr: clockoptions, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if ( pstatus==="success" && presult && typeof presult==="object" ) {
                     cm_Globals[whichclock] = presult;
@@ -3743,7 +3751,7 @@ function setupPage() {
             var tile = $(thing).attr("tile");
             var strhtml = $(thing).html();
             var thingclass = $(thing).attr("class");
-            var pagename = $(thing).attr("panel")
+            var panel = $(thing).attr("panel")
             var bid = $(thing).attr("bid");
             var hubid = $(thing).attr("hub");
             var hubindex = $(thing).attr("hubindex");
@@ -3756,7 +3764,7 @@ function setupPage() {
                 customname = $("#s-"+aid).html();
             }
             strhtml = strhtml.replace(/ id="/g, " id=\"x_");
-            editTile(userid, thingid, pagename, str_type, tile, aid, bid, thingclass, hubid, hubindex, hubType, customname, strhtml);
+            editTile(userid, thingid, panel, str_type, tile, aid, bid, thingclass, hubid, hubindex, hubType, customname, strhtml);
         }
     });
 
@@ -3975,7 +3983,8 @@ function checkPassword(tile, thingname, pw, ro, thevalue, yesaction) {
             } else {
                 userpw = $("#userpw").val();
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "pwhash", userid: cm_Globals.options.userid, pname: pname, id: "none", type: "verify", value: userpw, attr: pw},
+                    {useajax: "pwhash", userid: cm_Globals.options.userid, pname: pname, id: "none", 
+                                        type: "verify", value: userpw, attr: pw, hpcode: cm_Globals.options.hpcode},
                     function (presult, pstatus) {
                         if ( pstatus==="success" && presult==="success" ) {
                             // console.log("Protected tile [" + thingname + "] access granted.");
@@ -4065,7 +4074,7 @@ function processClickWithValue(that, thingname, ro, subid, thetype, thevalue, nu
                 var hubindex = $(tile).attr("hubindex");
                 $.post(cm_Globals.returnURL, 
                     {useajax: "dorules", userid: userid, id: bid, thingid: aid, type: thetype, value: thevalue,
-                     subid: subid, hubid: hubid, hubindex: hubindex, tileid: tileid},
+                     subid: subid, hubid: hubid, hubindex: hubindex, tileid: tileid, hpcode: cm_Globals.options.hpcode},
                      function (presult, pstatus) {
                         if ( pstatus === "success" ) {
                             console.log(presult);
@@ -4325,7 +4334,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
 
         $.post(cm_Globals.returnURL, 
             {useajax: ajaxcall, userid: userid, pname: pname, thingid: thingid, tileid: tileid, id: linkbid, type: linktype, value: thevalue, hint: hint,
-                attr: subid, subid: realsubid, hubid: hubid, hubindex: linkhub, command: command, linkval: linkval},
+                attr: subid, subid: realsubid, hubid: hubid, hubindex: linkhub, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode},
             function(presult, pstatus) {
                 if (pstatus==="success") {
                     // console.log( ajaxcall + ": POST returned:", presult );
@@ -4366,7 +4375,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
             if ( thevalue ) {
                 $.post(cm_Globals.returnURL, 
                     {useajax: ajaxcall, userid: userid, pname: pname, id: bid, thingid: thingid, tileid: tileid, type: thetype, value: thevalue, roomid: roomid, hint: hint,
-                     attr: theattr, subid: "switch", hubid: hubid, hubindex: linkhub, command: command, linkval: linkval} );
+                     attr: theattr, subid: "switch", hubid: hubid, hubindex: linkhub, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode} );
             }
         });
 
@@ -4468,7 +4477,8 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
 
         $.post(cm_Globals.returnURL, 
             {useajax: ajaxcall, userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: thevalue, hint: hint,
-                attr: theattr, subid: realsubid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval},
+                                attr: theattr, subid: realsubid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, 
+                                linkval: linkval, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if (pstatus==="success") {
                     if ( presult && typeof presult === "object" ) {
@@ -4563,8 +4573,9 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
                             // note that we pass the original subid not the realsubid even though they are the same here for now
                             $("#resetList").on("tap", function(evt) {
                                 $.post(cm_Globals.returnURL, 
-                                    {useajax: "resetlist", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: thevalue, hint: hint,
-                                     attr: theattr, subid: subid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval},
+                                    {useajax: "resetlist", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, 
+                                                           value: thevalue, hint: hint, attr: theattr, subid: subid, hubid: hubid, hubindex: linkhub, 
+                                                           tileid: tileid, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode},
                                      function (presult, pstatus) {
                                         console.log(presult);
                                      });
