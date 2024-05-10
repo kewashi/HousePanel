@@ -67,9 +67,12 @@ GLB.APPNAME = 'HousePanel V' + GLB.HPVERSION;
 
 // set a secret that changes every day - API calls must match this value
 // it will fail if the call happens on exactly the border of a day but that should be extremely rare rare
-var d = new Date();
-var dstr = d.getMonth() + d.getDay();
+var d = new Date().toString();
+var k = d.indexOf(" ",14);
+var dstr = d.substring(0, k);
 GLB.apiSecret = getNewCode(dstr);
+// console.log(">>>> apiSecret = ", GLB.apiSecret, " dstr = ", dstr, " d= ", d);
+
 GLB.warnonce = {};
 
 GLB.defaultrooms = {
@@ -3885,7 +3888,7 @@ function getSpecials(configoptions) {
     return obj;
 }
 
-// this sends control over to processLogin upon return
+// this sends control over to doLogin upon return
 function getLoginPage(req, userid, pname, emailname, mobile, hostname) {
     var tc = "";
     if ( !pname ) pname = "default";
@@ -4064,7 +4067,6 @@ function createUser(body) {
 
     return checkUser(emailname)
     .then( () => {
-        // disable usertype confirmation if email or txt is not activated
         return addNewUser(emailname, username, mobile, pword);
     })
     .then( newuser => {
@@ -4077,7 +4079,6 @@ function createUser(body) {
 
         // the first promise below is to just return newuser since we don't need to get it from the db again
         return Promise.all( [
-                // mydb.getRow("users","*","id = "+userid),
                 new Promise( function (resolve, reject) { resolve(newuser); }),
                 makeNewConfig(userid),
                 makeNewRooms(userid, pname),
@@ -4094,10 +4095,11 @@ function createUser(body) {
         var defhub = results[3];
 
         if ( DEBUG15 ) {
+            console.log( (ddbg()), "new user: ", newuser);
             console.log( (ddbg()), "new configs: ", configs);
+            console.log( (ddbg()), "new panel: ", panel);
             console.log( (ddbg()), "new rooms: ", rooms);
             console.log( (ddbg()), "new default hub: ", defhub);
-            console.log( (ddbg()), "new panel: ", panel);
         }
 
         // if new user object isn't valid then we have a problem
@@ -4165,6 +4167,7 @@ function createUser(body) {
     })
     .catch(reason => {
         console.log( (ddbg()), reason );
+        return reason;
     });
 }
 
@@ -4200,6 +4203,7 @@ function getNewCode(seed="") {
     var len = logincode.length;
     var mid = len / 2;
     var thecode = logincode.substring(0,1) + logincode.substring(mid,mid+1) + logincode.substring(len-4);
+    // console.log("seed = ", seed, " thecode=", thecode);
     return thecode;
 }
 
@@ -4304,12 +4308,12 @@ async function makeNewConfig(userid) {
     configs.push( await addConfigItem(userid, "phototimer","0") );
     configs.push( await addConfigItem(userid, "fast_timer","3600") );         // timers for polling all other tiles and hubs
     configs.push( await addConfigItem(userid, "slow_timer","900") );          // timers for images, frames, customs, blanks, videos polling
-    configs.push( await addConfigItem(userid, "fcastcity", "san-carlos") );   // addConfigItem(userid, "fcastcity") || "ann-arbor" );
-    configs.push( await addConfigItem(userid, "fcastregion","San Carlos") );  // addConfigItem(userid, "fcastregion","Ann Arbor") );
-    configs.push( await addConfigItem(userid, "fcastcode","37d51n122d26") );  // addConfigItem(userid, "fcastcode","42d28n83d74") );
-    configs.push( await addConfigItem(userid, "accucity","san-carlos") );     // addConfigItem(userid, "accucity","ann-arbor-mi") );
-    configs.push( await addConfigItem(userid, "accuregion","us") );           // addConfigItem(userid, "accuregion","us") );
-    configs.push( await addConfigItem(userid, "accucode", "337226") );        // addConfigItem(userid, "accucode", "329380") );
+    configs.push( await addConfigItem(userid, "fcastcity", "san-carlos") );   // (userid, "fcastcity") || "ann-arbor" );
+    configs.push( await addConfigItem(userid, "fcastregion","San Carlos") );  // (userid, "fcastregion","Ann Arbor") );
+    configs.push( await addConfigItem(userid, "fcastcode","37d51n122d26") );  // (userid, "fcastcode","42d28n83d74") );
+    configs.push( await addConfigItem(userid, "accucity","san-carlos") );     // (userid, "accucity","ann-arbor-mi") );
+    configs.push( await addConfigItem(userid, "accuregion","us") );           // (userid, "accuregion","us") );
+    configs.push( await addConfigItem(userid, "accucode", "337226") );        // (userid, "accucode", "329380") );
     configs.push( await addConfigItem(userid, "hubpick", "all") );
     configs.push( await addConfigItem(userid, "useroptions", useroptions) );
     configs.push( await addConfigItem(userid, "specialtiles", specials) );
@@ -4321,15 +4325,19 @@ async function makeNewConfig(userid) {
 
 function addConfigItem(userid, key, value) {
     var promise = new Promise(function(resolve, reject) {
-        if ( typeof value === "string" ) {
-            var updval = {userid, userid, configkey: key, configval: value};
+        if ( typeof value !== "object" ) {
+            var updval = {userid, userid, configkey: key, configval: value, configtype: 0};
         } else {
             updval = {userid, userid, configkey: key, configval: JSON.stringify(value)};
         }
-        mydb.addRow("configs", updval)
+        // mydb.addRow("configs", updval)
+        mydb.updateRow("configs", updval, `userid = ${userid} AND configkey = '${key}'`)
         .then(result => {
             updval.id = result.getAutoIncrementValue();
             resolve(updval);
+        })
+        .catch(reason => {
+            reject(reason);
         });
     });
     return promise;
@@ -4472,7 +4480,7 @@ function validateUserPage(user, thecode) {
     tc+= hidden("email", user.email);
     tc+= hidden("uname", user.uname);
     tc+= hidden("mobile", user.mobile);
-    tc+= hidden("hpcode", user.hpcode);
+    tc+= hidden("hpcode", user.hpcode, "hpcode");
     tc+= hidden("apiSecret", GLB.apiSecret);
 
     tc+= "<div class='logingreeting'>";
@@ -4515,7 +4523,7 @@ function validatePasswordPage(user, thecode) {
     tc+= hidden("email", user.email);
     tc+= hidden("uname", user.uname);
     tc+= hidden("mobile", user.mobile);
-    tc+= hidden("hpcode", user.hpcode);
+    tc+= hidden("hpcode", user.hpcode, "hpcode");
     tc+= hidden("apiSecret", GLB.apiSecret);
 
     tc+= "<div class='logingreeting'>";
@@ -4528,7 +4536,7 @@ function validatePasswordPage(user, thecode) {
     
     tc+= "<div class='loginline'>";
     tc+= "<label for=\"newhpcode\" class=\"startupinp\">Security Code: </label><br>";
-    tc+= "<input id=\"newhpcode\" name=\"newhpcode\" size=\"40\" type=\"text\" value=\"" + thecode + "\"/>"; 
+    tc+= "<input id=\"newhpcode\" name=\"newhpcode\" size=\"40\" type=\"text\" value=\"\"/>"; 
     tc+= "</div>";
 
     tc+= "<div class='loginline'>";
@@ -4634,7 +4642,7 @@ function forgotPassword(body) {
         })
         .catch( reason => {
             console.log( (ddbg()), reason);
-            return null;
+            return "error - problem occurred when requesting password reset. Check logs.";
         });
     });
 }
@@ -4661,7 +4669,7 @@ function validateUser(body) {
             var upduser = {email: emailname, mobile: mobile, hpcode: permcode, usertype: userid};
             return mydb.updateRow("users", upduser, "id = " + userid)
             .then( row => {
-                msg = "Account " + emailname + " validated. For security purposes, all API calls will use this hpcode=" + permcode;
+                var msg = "Account " + emailname + " validated. For security purposes, all API calls will use hpcode=" + permcode;
                 console.log( (ddbg()), msg);
                 if ( (GLB.dbinfo.service==="twilio" || GLB.dbinfo.service==="both") ) {
                     sendText(mobile, msg);
@@ -4705,7 +4713,7 @@ function updatePassword(body) {
 
     // check hpcode to see if it matches
     // and then update the designated user
-    var retobj = mydb.getRow("users","*","id = " + userid + " AND hpcode = '" + hpcode + "'")
+    return mydb.getRow("users","*","id = " + userid + " AND hpcode = '" + hpcode + "'")
     .then(row => {
         if ( row ) {
             var permcode = getNewCode(emailname);
@@ -4717,7 +4725,7 @@ function updatePassword(body) {
                     return mydb.updateRow("panels", updpanel, "userid = " + userid + " AND pname = '"+pname+"'")
                     .then( row => {
                         if ( row ) {
-                            msg = "Password for account " + emailname + " updated. For security purposes, all API calls will use hpcode=" + permcode;
+                            var msg = "Password for account " + emailname + " updated. For security purposes, all API calls will use hpcode=" + permcode;
                             console.log( (ddbg()), msg);
                             if ( (GLB.dbinfo.service==="twilio" || GLB.dbinfo.service==="both") ) {
                                 sendText(mobile, msg);
@@ -4750,12 +4758,9 @@ function updatePassword(body) {
         console.log( (ddbg()), reason );
         return "error - problem with DB in password reset for user = " + userid;
     });
-
-    // console.log("retobj in updatepassord: ", retobj);
-    return retobj;
 }
 
-function processLogin(body, res) {
+function doLogin(body, res) {
 
     // check the user name and password based on login form data
     var uname = encodeURI(body["emailid"].trim());
@@ -4800,7 +4805,8 @@ function processLogin(body, res) {
     var fields = "users.id as users_id, users.email as users_email, users.uname as users_uname, users.mobile as users_mobile, users.password as users_password, " +
                  "users.usertype as users_usertype, users.defhub as users_defhub, users.hpcode as users_hpcode, " + 
                  "panels.id as panels_id, panels.userid as panels_userid, panels.pname as panels_pname, panels.password as panels_password, panels.skin as panels_skin";
-    var results = mydb.getRow("panels", fields, conditions, joinstr)
+    
+    return mydb.getRow("panels", fields, conditions, joinstr)
     .then(therow => {
         if ( therow ) {
             // make sure we get the actual email and panel names to store in our cookies
@@ -4845,10 +4851,9 @@ function processLogin(body, res) {
         }
         return therow;
     }).catch(reason => {
-        console.log( (ddbg()), "processLogin - ", reason);
-        return "error - something went wrong when logging in";
+        console.log( (ddbg()), reason);
+        return reason;
     });
-    return results;
 }
 
 function getAuthPage(user, configoptions, hubs, hostname, rmsg) {
@@ -4933,6 +4938,8 @@ function getAuthPage(user, configoptions, hubs, hostname, rmsg) {
         $tc += hidden("userid", userid, "userid");
         $tc += hidden("emailid", useremail, "emailid");
         $tc += hidden("skinid", skin, "skinid");
+        $tc += hidden("hpcode", hpcode, "hpcode");
+        $tc += hidden("apiSecret", GLB.apiSecret);
         var configs = {};
         for (var i in configoptions) {
             var key = configoptions[i].configkey;
@@ -5073,7 +5080,7 @@ function getAuthPage(user, configoptions, hubs, hostname, rmsg) {
         $tc += hidden("pname", pname);
         $tc += hidden("skin", skin);
         $tc += hidden("hubindex", hubindex);
-        $tc += hidden("hpcode", hpcode);
+        $tc += hidden("hpcode", hpcode, "hpcode");
 
         // for new hubs give user option to pick the hub type
         // existing hubs cannot change type
@@ -9885,6 +9892,7 @@ function getInfoPage(user, configoptions, hubs, req) {
     var usertype = parseInt(user["users_usertype"]);
     var pname = user["panels_pname"];
     var skin = user["panels_skin"];
+    var hpcode = user["users_hpcode"];
     var joinstr = mydb.getJoinStr("devices","hubid","hubs","id");
     var fields = "devices.id as devices_id, devices.userid as devices_userid, devices.deviceid as devices_deviceid, " +
     "devices.name as devices_name, devices.devicetype as devices_devicetype, devices.hint as devices_hint, " +
@@ -9930,6 +9938,8 @@ function getInfoPage(user, configoptions, hubs, req) {
         $tc += hidden("returnURL", GLB.returnURL);
         $tc += hidden("pathname", pathname);
         $tc += hidden("pagename", "info");
+        $tc += hidden("hpcode", hpcode, "hpcode");
+        $tc += hidden("apiSecret", GLB.apiSecret);
         var configs = {};
         for (var i in configoptions) {
             var key = configoptions[i].configkey;
@@ -10137,6 +10147,7 @@ function hubFilters(userid, hubpick, hubs, useroptions, pagename, ncols, isform)
         $tc += hidden("userid", userid);
         $tc += hidden("pagename", pagename);
         $tc += hidden("returnURL", GLB.returnURL);
+        $tc += hidden("apiSecret", GLB.apiSecret);
     }
 
     // // if more than one hub then let user pick which one to show
@@ -10394,6 +10405,7 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc += hidden("panelid", panelid, "panelid");
         $tc += hidden("pname", pname, "pname");
         $tc += hidden("hpcode", hpcode, "hpcode");
+        $tc += hidden("apiSecret", GLB.apiSecret);
 
         var configs = {};
         for (var i in configoptions) {
@@ -10827,6 +10839,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
         tc += hidden("skinid", skin, "skinid");
         tc += hidden("emailid", useremail, "emailid");
         tc += hidden("hpcode", hpcode, "hpcode");
+        tc += hidden("apiSecret", GLB.apiSecret);
 
         // write the configurations without the rules
         // var configs = {};
@@ -10914,7 +10927,7 @@ function processOptions(userid, panelid, optarray) {
         mydb.getRow("users","*","id = "+userid),
         mydb.getRow("panels","*","id = "+panelid),
         mydb.getRows("rooms","*","userid = "+userid+" AND panelid="+panelid),
-        mydb.getRows("configs","*","userid = "+userid+" AND configkey NOT LIKE 'user_%'"),
+        mydb.getRows("configs","*","userid = "+userid+" AND configtype=0"),
         mydb.getRows("devices","*","userid = "+userid+" AND hint='special'"),
         mydb.getRows("things", fields, "things.userid = "+userid+" AND rooms.panelid = "+panelid, joinstr)
     ])
@@ -11647,7 +11660,7 @@ function apiCall(user, body, protocol, res) {
     if ( DEBUG8 ) {
         console.log( (ddbg()), protocol + " api call, body: ", jsonshow(body) );
     }
-    var api = body['useajax'] || body['api'] || "";
+    var api = body['api'] || body['useajax'] || "";
     var swid = body["id"] || "none";
     var swtype = body["type"] || "none";
     var swval = body["value"] || "";
@@ -11659,44 +11672,30 @@ function apiCall(user, body, protocol, res) {
     var hubid = body["hubid"] || "auto";
     var thingid = body["thingid"] || 0;
     var roomid = body["roomid"] || 0;
-    var hubindex = body.hubindex || 0;
-    var hint = body.hint || "";
-    var userid = null;
-
-    // for POST we get vital info from GUI
-    // if user is making an API call these must be provided
-    if ( protocol==="POST" && typeof body === "object" ) {
-        userid = body.userid;
-        var usertype = body.usertype || userid;
-        var panelid = body.panelid;
-        if ( !panelid ) panelid = 1;
-        var pname = body.pname;
-        var useremail = body.email;
-        var uname = body.uname;
-        var skin = body.skin;
-        try {
-            if ( body.rule ) {
-                var rules = JSON.parse(decodeURI(body.rules));
-            } else {
-                rules = null;
-            }
-        } catch(e) {
-            rules = null;
-        }
-    }
-    
+    var hubindex = body["hubindex"] || 0;
+    var hint = body["hint"] || "";
+   
+    // new logic now gets this info from DB so user doesn't need to pass it in a post api call
+    // but they do need to have the special hpcode value or you wouldn't get this far
+    // the else branch should never be reached
     if ( user && typeof user === "object" ) {
-        userid = user["users_id"];
-        usertype = user["users_usertype"];
-        panelid = user["panels_id"];
-        pname = user["panels_pname"];
-        useremail = user["users_email"];
-        uname = user["users_uname"];
-        skin = user["panels_skin"];
+        var userid = user["users_id"];
+        var useremail = user["users_email"];
+        var uname = user["users_uname"];
+        var panelid = user["panels_id"];
+        var pname = user["panels_pname"];
+        var skin = user["panels_skin"];
+    } else {
+        userid = body["userid"];
+        panelid = body["panelid"] || 1;
+        pname = body["pname"] || "default";
+        useremail = body["email"];
+        uname = body["uname"];
+        skin = body["skin"] || "skin_housepanel";
     }
 
     // console.log((ddbg()),"apiCall - userid: ", userid, " api: ", api);
-    if ( !userid && api!=="forgotpw" && api!=="createuser") {
+    if ( !userid ) {
         console.log( (ddbg()), "*** error *** user not authorized for API call. api: ", api, " body: ", body);
         return "error - HousePanel is not authorized for this user to make an API call";
     }
@@ -11756,12 +11755,11 @@ function apiCall(user, body, protocol, res) {
                 
             case "doquery":
             case "query":
-                if ( !pname ) { pname = "default"; }
                 result = doQuery(userid, tileid, pname);
                 break;
 
             case "status":
-                result = {version: GLB.HPVERSION, userid: userid, usertype: usertype, email: useremail, uname: uname, panel: pname, skin: skin};
+                result = {version: GLB.HPVERSION, userid: userid, email: useremail, uname: uname, panel: pname, skin: skin};
                 break;
 
             // changed to only handle page fake tile requests
@@ -11806,7 +11804,6 @@ function apiCall(user, body, protocol, res) {
 
             case "wysiwyg":
                 if ( protocol==="POST" ) {
-                    // var result = mydb.getRows("configs", "*", "userid = "+userid)
                     var result = Promise.all([
                         mydb.getRows("configs", "*", "userid = "+userid),
                         mydb.getRow("devices", "*", "userid = "+userid + " AND id = " + tileid)
@@ -11942,14 +11939,21 @@ function apiCall(user, body, protocol, res) {
                 
                 break;
             
-            // this returns all user customizations
+            // this returns all user customizations and the current mode
+            // this is an efficiency thing to prevent two calls to the server
             case "getoptions":
-                result = mydb.getRows("configs","*","userid = "+userid)
-                .then(rows => {
+                result = Promise.all([
+                    mydb.getRows("configs","*","userid = "+userid),
+                    mydb.getRow("devices","*",`userid=${userid} AND deviceid like '%mode' and name = 'Mode'`)
+                ])
+                .then(results => {
+                    var configs = results[0];
+                    var moderow = results[1];
                     var rulelist = {};
                     var configlist = {};
-                    if ( rows ) {
-                        rows.forEach(row => {
+                    var themode = "Unknown";
+                    if ( configs ) {
+                        configs.forEach(row => {
                             if ( row.configkey.startsWith("user_") ) {
                                 rulelist[row.configkey] = JSON.parse(row.configval);
                             } else {
@@ -11957,10 +11961,15 @@ function apiCall(user, body, protocol, res) {
                             }
                         });
                     }
-                    if ( DEBUG11 ) {
-                        console.log( (ddbg()),"rules list for user: ", userid," rulelist: ", jsonshow(rulelist), "configlist: ", jsonshow(configlist) );
+                    if (moderow) {
+                        var pvalue = decodeURI2(moderow.pvalue);
+                        themode = pvalue["themode"];
                     }
-                    return [rulelist, configlist];
+
+                    if ( DEBUG11 ) {
+                        console.log( (ddbg()),"rules list for user: ", userid," rulelist: ", jsonshow(rulelist), "configlist: ", jsonshow(configlist), " mode: ", themode );
+                    }
+                    return [rulelist, configlist, themode];
                 }).catch(reason => {
                     console.log( (ddbg()), "apiCall - getoptiopns: ", reason);
                     return null;
@@ -12021,7 +12030,7 @@ function apiCall(user, body, protocol, res) {
             case "getdevice":
                 result = Promise.all([
                     mydb.getRow("devices","*", "userid = "+userid + " AND deviceid = '" + swid + "'"),
-                    mydb.getRows("configs","*", "userid = " + userid)
+                    mydb.getRows("configs","*", "userid = " + userid + " AND configtype=1")
                 ])
                 .then(results => {
                     var row = results[0];
@@ -12048,7 +12057,7 @@ function apiCall(user, body, protocol, res) {
                     var conditions = "userid = "+userid;
                     result = Promise.all([
                         mydb.getRows("devices","*", conditions),
-                        mydb.getRows("configs","*", conditions)
+                        mydb.getRows("configs","*", conditions + " AND configtype=1")
                     ])
                     .then(results => {
                         var rows = results[0];
@@ -12180,47 +12189,7 @@ function apiCall(user, body, protocol, res) {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
                 break;
-            
-            // case "dologin":
-            //     if ( protocol==="POST" ) {
-            //         result = processLogin(body, res);
-            //     } else {
-            //         result = "error - api call [" + api + "] is not supported";
-            //     }
-            //     break;
-
-            // case "createuser":
-            //     if ( protocol==="POST" ) {
-            //         result = createUser(body);
-            //     } else {
-            //         result = "error - api call [" + api + "] is not supported";
-            //     }
-            //     break;
-
-            // case "validateuser":
-            //     if ( protocol==="POST" ) {
-            //         result = validateUser(body);
-            //     } else {
-            //         result = "error - api call [" + api + "] is not supported";
-            //     }
-            //     break;
-
-            // case "updatepassword":
-            //     if ( protocol==="POST" ) {
-            //         result = updatePassword(body);
-            //     } else {
-            //         result = "error - api call [" + api + "] is not supported";
-            //     }
-            //     break;
-
-            // case "forgotpw":
-            //     if ( protocol==="POST" ) {
-            //         result = forgotPassword(body.email, body.mobile);
-            //     } else {
-            //         result = "error - api call [" + api + "] is not supported";
-            //     }
-            //     break;
-    
+                
             case "pwhash":
                 if ( swtype==="hash" ) {
                     result = pw_hash(swval);
@@ -13128,7 +13097,7 @@ if ( app && applistening ) {
                         } else {
                             delCookie(res, "uname");
                             delCookie(res, "pname");
-                            result = validatePasswordPage(row, thecode);
+                            result = validatePasswordPage(row, "");
                         }
                     } else {
                         result = getLoginPage(req, 0, "", "", "", hostname);
@@ -13169,9 +13138,6 @@ if ( app && applistening ) {
 
                 var user = results;
                 var userid = user["users_id"];
-                var usertype = user["users_usertype"];
-                
-                // mydb.getRows("configs", "*", "userid = "+userid)
                 Promise.all( [
                     mydb.getRows("configs", "*", "userid = "+userid),
                     mydb.getRows("hubs", "*", "userid = "+userid)
@@ -13210,17 +13176,15 @@ if ( app && applistening ) {
                         // display the main page if user is in our database
                         // don't check password here because it is checked at login
                         // and the cookie is set which means all is okay
-                        if ( DEBUG3 ) {
-                            console.log( (ddbg()), "login accepted. user: ", user);
-                        }
 
+                        // if a GET API call is being made do it here
                         if ( isquery ) {
                             var result = apiCall(user, queryobj, "GET", res);
                             // if ( typeof result === "object" && result.then && typeof result.then === "function" ) {
                             if ( typeof result === "object" ) {
                                 try {
                                     result.then(obj => {
-                                        res.json(obj);
+                                        res.send(obj);
                                         res.end();
                                     });
                                 } catch(e) {
@@ -13230,11 +13194,8 @@ if ( app && applistening ) {
                             } else if ( typeof result === "string" ) {
                                 res.send(result);
                                 res.end;
-                            } else if ( result && typeof result === "object") {
-                                res.json(result);
-                                res.end();
                             } else {
-                                var reason = "Invalid GET request";
+                                var reason = "Invalid API call or API returned an unrecognized data type";
                                 res.send(reason);
                                 res.end();
                             };
@@ -13348,7 +13309,9 @@ if ( app && applistening ) {
                         });
                         s.on('error', function () {
                             res.set('Content-Type', 'text/plain');
-                            res.status(404).end(req + ' Not found');
+                            res.send(req.path + " is an invalid HousePanel API call");
+                            res.end();
+                            // res.status(404).end(req + ' Not found');
                         });
                     }
 
@@ -13382,7 +13345,7 @@ if ( app && applistening ) {
 
         // get user name
         var hubid;
-        var api = req.body["useajax"] || req.body["api"] || "";
+        var api = req.body["api"] || req.body["useajax"] || "";
         const logincalls = ["forgotpw", "createuser", "validateuser", "updatepassword", "dologin" ];
 
         // handle initialize events from Hubitat here
@@ -13653,12 +13616,15 @@ if ( app && applistening ) {
         // note that dologin and forgotpw use the same form tagged to id = loginform
         // th 
         } else if ( req.path==="/" && logincalls.includes(api) && req.body["apiSecret"]===GLB.apiSecret ) {
-            switch(req.body["api"]) {
+            var result = null;
+            switch (api) {
                 case "dologin":
-                    result = processLogin(req.body, res);
+                    result = doLogin(req.body, res);
                     break;
                 case "forgotpw":
+                    console.log("body: ", req.body);
                     result = forgotPassword(req.body);
+                    console.log("result: ", result);
                     break;
                 case "createuser":
                     result = createUser(req.body);
@@ -13667,51 +13633,93 @@ if ( app && applistening ) {
                     result = validateUser(req.body);
                     break;
                 case "updatepassword":
+                    console.log("body: ", req.body);
                     result = updatePassword(req.body);
+                    console.log("result: ", result);
                     break;
             }
-            res.send(result);
-            res.end();
+            try{
+                if ( result && typeof result === "object" && result.then && typeof result.then === "function" ) {
+                    result.then(obj => {
+                        if ( DEBUG1 ) {
+                            console.log( (ddbg()), "login function promise returned: ", req.body["api"], " = ", obj );
+                        }
+                        res.send(obj);
+                        res.end();
+                    });
+                } else if ( typeof result === "string" ) {
+                    if ( DEBUG1 ) {
+                        console.log( (ddbg()), "login function string returned: ", api, " = ", result );
+                    }
+                    res.send(result);
+                    res.end;
+                } else if ( typeof result === "object") {
+                    if ( DEBUG1 ) {
+                        console.log( (ddbg()), "login function object returned: ", api, " = ", result );
+                    }
+                    res.json(result);
+                    res.end();
+                } else {
+                    console.log( (ddbg()), "Invalid login request: ", result);
+                    res.send("Invalid HousePanel login-related request - check logs");
+                    res.end();
+                };
+            } catch(e) {
+                console.error("Error processing reset password: ", e);
+                res.send("Fatal error in password reset");
+                res.end();
+            }
             
         // handle all api calls upon the server from js client and external api calls here
         // note - if user calls this externally then the userid and tileid values must be provided
         // most users won't know these values but they are shown on the showid page or when in edit mode
         // GET calls from a browser are easier because the cookie will be set
         // this means that user GET API calls can only be made from a device that has HP running on it
-        // POST calls can be made from any platform as long as the userid and tileid values are known
-        } else if ( req.path==="/" && req.body["userid"] && (typeof req.body['useajax']!=="undefined" || typeof req.body["api"]!=="undefined") ) {
+        // POST calls can be made from any platform as long as hpcode, the userid and tileid values are known
+        } else if ( req.path==="/" && req.body["userid"] && api ) {
 
             // perform security check to prevent random POST calls
             // we do this by checking for valid user and hpcode matching what we have in the DB for this user
+            // the advantage of this is we can get the user object for making api calls much easier
+            // assuming the caller knows the userid and hpcode values
             var userid = req.body["userid"];
             if ( isNaN(parseInt(userid)) ) {
                 userid = -1;
             }
             var hpcode = req.body["hpcode"] || "";
-            mydb.getRow("users","*", `id = ${userid} AND hpcode = '${hpcode}'`)
+            var joinstr = mydb.getJoinStr("panels", "userid", "users", "usertype");
+            var fields = "users.id as users_id, users.email as users_email, users.uname as users_uname, users.mobile as users_mobile, users.password as users_password, " +
+                         "users.usertype as users_usertype, users.defhub as users_defhub, users.hpcode as users_hpcode, " + 
+                         "panels.id as panels_id, panels.userid as panels_userid, panels.pname as panels_pname, panels.password as panels_password, panels.skin as panels_skin";
+            var conditions = `users.id = ${userid} AND users.hpcode = '${hpcode}'`;
+            // mydb.getRow("users","*", `id = ${userid} AND hpcode = '${hpcode}'`)
+            mydb.getRow("panels", fields, conditions, joinstr)
             .then( user => {
                 if ( user ) {
 
+                    // console.log(">>>> apiCall: ", api, " user: ", user);
+
                     // if api call returns a promise then handle it and return the promise result
                     // otherwise we have a direct result that we can return to the browser
-                    var result = apiCall(null, req.body, "POST", res);
-                    if ( typeof result === "object" && typeof result.then === "function" ) {
+                    // we don't pass the user here because it isn't in the proper format and we don't need it
+                    var result = apiCall(user, req.body, "POST", res);
+                    if ( typeof result === "object" && result.then && typeof result.then === "function" ) {
                         result.then(obj => {
                             if ( DEBUG1 ) {
-                                console.log( (ddbg()), "apiCall promise returned: ", req.body["api"] || req.body["useajax"], " = ", obj );
+                                console.log( (ddbg()), "apiCall promise returned: ", obj );
                             }
-                            res.json(obj);
+                            res.send(obj);
                             res.end();
                         });
                     } else if ( typeof result === "string" ) {
                         if ( DEBUG1 ) {
-                            console.log( (ddbg()), "apiCall string returned: ", req.body["api"] || req.body["useajax"], " = ", result );
+                            console.log( (ddbg()), "apiCall string returned: ", result );
                         }
                         res.send(result);
                         res.end;
                     } else if ( typeof result === "object") {
                         if ( DEBUG1 ) {
-                            console.log( (ddbg()), "apiCall object returned: ", req.body["api"] || req.body["useajax"], " = ", result );
+                            console.log( (ddbg()), "apiCall object returned: ", result );
                         }
                         res.json(result);
                         res.end();
@@ -13726,9 +13734,8 @@ if ( app && applistening ) {
                 }
             })
             .catch(reason => {
-                var api = req.body["api"] || req.body["useajax"];
                 console.log( (ddbg()), "API Call [" + api + "] failed for User = " + userid + ". Security violation possible for hpcode = " + hpcode );
-                res.send("API POST error, Check Logs for detailed error messages");
+                res.send("POST error on api call. Check Logs for detailed error messages");
                 res.end();
             });
 

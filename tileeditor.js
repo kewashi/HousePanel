@@ -62,7 +62,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
     if ( str_type==="page" ) {
         var roomnum = et_Globals.aid;
         jqxhr = $.post(returnURL, 
-            {useajax: "pagetile", userid: userid, thingid: thingid, id: roomnum, type: 'page', value: thingindex, attr: customname},
+            {api: "pagetile", userid: userid, thingid: thingid, id: roomnum, type: 'page', value: thingindex, attr: customname, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;
@@ -79,7 +79,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
         htmlcontent = "<div class=\"" + thingclass + "\" id='te_wysiwyg'>" + htmlcontent + "</div>";
 
         jqxhr = $.post(returnURL, 
-            {useajax: "wysiwyg", userid: userid, thingid: thingid, id: bid, type: str_type, tile: thingindex, value: "", attr: ""},
+            {api: "wysiwyg", userid: userid, thingid: thingid, id: bid, type: str_type, tile: thingindex, value: "", attr: "", hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;
@@ -115,7 +115,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
 
                 // load the clipboard
                 $.post(cm_Globals.returnURL,
-                    {api: "clipboard", userid: userid, type: str_type, tile: thingindex, value: "", attr: "load"},
+                    {api: "clipboard", userid: userid, type: str_type, tile: thingindex, value: "", attr: "load", hpcode: cm_Globals.options.hpcode},
                     function (presult, pstatus) {
                         if (pstatus==="success" ) {
                             et_Globals.clipboard = presult;
@@ -1751,7 +1751,7 @@ function updateNames(userid, thingid, str_type, thingindex) {
 
     var returnURL = cm_Globals.returnURL;
     $.post(returnURL, 
-        {useajax: "updatenames", userid: userid, thingid: thingid, id: 0, type: str_type, value: newname, tile: thingindex},
+        {api: "updatenames", userid: userid, thingid: thingid, id: 0, type: str_type, value: newname, tile: thingindex, hpcode: cm_Globals.options.hpcode},
         function (presult, pstatus) {
             if (pstatus==="success" && presult.startsWith("success") ) {
                 if ( str_type==="page"  ) {
@@ -1824,8 +1824,8 @@ function saveCSSFile(userid, str_type, thingindex, sheetContents, reload) {
         subcontent= encodeURI(subcontent);
 
         $.post(returnURL, 
-            {useajax: "savetileedit", userid: userid, skin: skin, id: n1, n1: n1, n2: n2, nlen: sheetContents.length, 
-                                      type: str_type, value: subcontent, attr: newname, tile: thingindex, pname: pname},
+            {api: "savetileedit", userid: userid, skin: skin, id: n1, n1: n1, n2: n2, nlen: sheetContents.length, 
+                                      type: str_type, value: subcontent, attr: newname, tile: thingindex, pname: pname, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     if ( DEBUGte ) {
@@ -2642,7 +2642,8 @@ function getIcons() {
 
     // removed the old method of reading icons from iconlist.txt since the files are no longer there
     $.post(returnURL, 
-        {useajax: "geticons", id: 0, userid: et_Globals.userid, thingid: et_Globals.thingid, type: "none", value: localPath, attr: iCategory, skin: skindir, pname: pname},
+        {api: "geticons", id: 0, userid: et_Globals.userid, thingid: et_Globals.thingid, type: "none", 
+         value: localPath, attr: iCategory, skin: skindir, pname: pname, hpcode: cm_Globals.options.hpcode},
         function (presult, pstatus) {
             if (pstatus==="success" && presult ) {
                 $('#iconList').html(presult);
@@ -2886,7 +2887,7 @@ function removeCSSRule(str_type, strMatchSelector, thingindex, scope=null){
 function saveClipboard(userid, str_type, thingindex, rules) {
     var returnURL = cm_Globals.returnURL;
     $.post(returnURL,
-        {api: "clipboard", userid: userid, type: str_type, tile: thingindex, value: rules, attr: "save"},
+        {api: "clipboard", userid: userid, type: str_type, tile: thingindex, value: rules, attr: "save", hpcode: cm_Globals.options.hpcode},
         function (presult, pstatus) {
             if (pstatus==="success" ) {
                 console.log(`>>>> clipboard updated with ${rules.length} items: `, rules);

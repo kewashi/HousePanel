@@ -37,7 +37,6 @@ var pagename = "main";
 // end-users are welcome to use this but it is intended for development only
 // use the timers options to turn off polling
 cm_Globals.disablepub = false;
-cm_Globals.logwebsocket = false;
 cm_Globals.enableclickedit = false;
 
 Number.prototype.pad = function(size) {
@@ -193,9 +192,6 @@ function getOptions() {
         var email = $("#emailid").val();
         var skin = $("#skinid").val();
         var hpcode = $("#hpcode").val();
-        console.log(">>>> hpcode: ", hpcode);
-        // var config = $("#configsid").val();
-        // config = JSON.parse(config);
         
         // get panel and mode from main screen if it is there
         try {
@@ -207,42 +203,51 @@ function getOptions() {
 
         // set the customization lists
         $.post(cm_Globals.returnURL, 
-            {useajax: "getoptions", userid: userid, pname: pname, id:"none", type:"none", hpcode: cm_Globals.options.hpcode},
+            {api: "getoptions", userid: userid, pname: pname, id:"none", type:"none", hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if ( pstatus==="success" ) {
                     cm_Globals.options["rules"] = presult[0];
                     cm_Globals.options["config"] = presult[1];
+                    cm_Globals.options["mode"] = presult[2];
                 } else {
                     throw "error - failure reading custom options and rules from database for user = " + userid;
                 }
 
+                // handle black screen
                 var blackout = cm_Globals.options.config.blackout;
                 blackout = (blackout === "true") || (blackout === true) ? true : false;
+                if ( (priorOpmode === "Sleep" || cm_Globals.options["mode"]==="Night") && blackout ) {
+                    priorOpmode = "Sleep";
+                    execButton("blackout");
+                } else {
+                    priorOpmode = "Operate";
+                    setCookie("opmode", priorOpmode);
+                }
         
                 // get the mode
-                $.post(cm_Globals.returnURL, 
-                    {useajax: "getmode", userid: userid, hpcode: cm_Globals.options.hpcode},
-                    function (presult, pstatus) {
-                        if ( pstatus==="success" ) {
-                            var themode = presult;
-                            cm_Globals.options["mode"] = themode;
+                // $.post(cm_Globals.returnURL, 
+                //     {api: "getmode", userid: userid, hpcode: cm_Globals.options.hpcode},
+                //     function (presult, pstatus) {
+                //         if ( pstatus==="success" ) {
+                //             var themode = presult;
+                //             cm_Globals.options["mode"] = themode;
         
-                            // handle black screen
-                            if ( (priorOpmode === "Sleep" || themode==="Night") && blackout ) {
-                                priorOpmode = "Sleep";
-                                execButton("blackout");
-                            } else {
-                                priorOpmode = "Operate";
-                                setCookie("opmode", priorOpmode);
-                            }
-                        }
-                    }
-                );
+                //             // handle black screen
+                //             if ( (priorOpmode === "Sleep" || themode==="Night") && blackout ) {
+                //                 priorOpmode = "Sleep";
+                //                 execButton("blackout");
+                //             } else {
+                //                 priorOpmode = "Operate";
+                //                 setCookie("opmode", priorOpmode);
+                //             }
+                //         }
+                //     }
+                // );
             }, "json"
         );
 
     } catch(e) {
-        console.log(e);
+        console.error(e);
         alert("Fatal Error - Cannot display HousePanel because something went wrong in setting up configuration options");
     }
 }
@@ -265,7 +270,7 @@ function getHubs() {
 
         // read the hubs
         $.post(cm_Globals.returnURL, 
-            {useajax: "gethubs", userid: userid, pname: pname, id:"none", type:"none", hpcode: cm_Globals.options.hpcode},
+            {api: "gethubs", userid: userid, pname: pname, id:"none", type:"none", hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     cm_Globals.hubs = presult;
@@ -309,7 +314,7 @@ $(document).ready(function() {
             throw "Return URL not defined by host page. Using default.";
         }
     } catch(e) {
-        console.log("***Warning*** ", e);
+        console.warn(e);
         cm_Globals.returnURL = "http://localhost:8580";
     }
 
@@ -383,7 +388,7 @@ $(document).ready(function() {
                         execButton("rehome");
                         break;
                     default:
-                        console.log("pressed letter: ", letter, " code: ", e.which);
+                        console.warn("Ignored letter: ", letter);
                 }
             }
         });
@@ -464,7 +469,6 @@ $(document).ready(function() {
         // });
         $("#dragregion").on("swiperight", function(evt, touchdata) {
             if ( priorOpmode==="Operate" && $(touchdata.startEvnt.target).hasClass("panel") ) {
-                // console.log(">>> touchdata: ", touchdata);
                 nextTab();
             }
             evt.stopPropagation();
@@ -475,7 +479,6 @@ $(document).ready(function() {
         // });
         $("#dragregion").on("swipeleft", function(evt, touchdata ) {
             if ( priorOpmode==="Operate" && $(touchdata.startEvnt.target).hasClass("panel") ) {
-                // console.log(">>> touchdata: ", touchdata);
                 prevTab();
             }
             evt.stopPropagation();
@@ -593,11 +596,11 @@ $(document).ready(function() {
             }
         });
 
-        cm_Globals.apiSecret = $("input[name='apiSecret']").val();
-    }  else {
-        cm_Globals.apiSecret = "";
+        // cm_Globals.apiSecret = $("input[name='apiSecret']").val();
+    // }  else {
+    //     cm_Globals.apiSecret = "";
     }
-    console.log(">>>> API Secret: ", cm_Globals.apiSecret);
+    cm_Globals.apiSecret = $("input[name='apiSecret']").val() || "";
 
     // load things and options
     if ( pagename==="main" || pagename==="auth" || pagename==="options" ) {
@@ -748,7 +751,7 @@ function returnMainPage() {
         var hubtimer = $("input[name='hubtimer']").val();
         var hubindex = $("input[name='hubindex']").val();
         $.post(cm_Globals.returnURL, 
-                {useajax: "setdefhub", userid: cm_Globals.options.userid, hubid: defhub, value: defhub, 
+                {api: "setdefhub", userid: cm_Globals.options.userid, hubid: defhub, value: defhub, 
                  id: hubindex, attr: hubtimer, hpcode: cm_Globals.options.hpcode}
         );
     }
@@ -798,7 +801,6 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
     var wsSocket = null;
 
     try {
-        // console.log("Creating webSocket for: ", webSocketUrl);
         wsSocket = new WebSocket(webSocketUrl, "housepanel");
     } catch(err) {
         console.error("Error attempting to create webSocket for: ", webSocketUrl," error: ", err);
@@ -814,7 +816,6 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                 wsSocket.send(userid.toString() + "|" + wsport);
             }
         }
-        // console.log( "ready state: ",  wsSocket.readyState );
         sendUser();
     };
     
@@ -844,10 +845,6 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                 blackout = (blackout === "true") || (blackout === true) ? true : false;
             } else {
                 blackout = false;
-            }
-
-            if ( cm_Globals.logwebsocket ) {
-                console.log("webSocket pushed: ", presult);
             }
 
             // reload page if signalled from server
@@ -893,7 +890,6 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
             } else if (bid==="setposition" ) {
                 var thingid = pvalue.thingid;
                 var thing = $("#t-"+thingid);
-                // console.log("pushClient setposition: ", thingid, thetype, pvalue);
                 if ( thing ) {
                     relocateTile(thing, thetype, pvalue);
                 }
@@ -962,9 +958,8 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
 
                 // blank screen if night mode set
                 if ( (typeof pvalue.themode !== "undefined")  && 
-                     blackout===true && (priorOpmode === "Operate" || priorOpmode === "Sleep") ) {
-
-                    // console.log("mode: ", pvalue.themode, " priorMode: ", priorOpmode);
+                      blackout===true && (priorOpmode === "Operate" || priorOpmode === "Sleep") ) 
+                {
                     cm_Globals.options.themode = pvalue.themode;
                     if ( pvalue.themode === "Night" ) {
                         execButton("blackout");
@@ -1071,7 +1066,6 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
     modalWindows[modalid] = 1;
     modalStatus = saveOpmode.length; // modalStatus + 1;
     var isbody = false;
-    // console.log("saveOpmode: ", saveOpmode, " modalid: ", modalid, " cnt: ", modalStatus);
     
     var modaldata = modalcontent;
     var modalhook;
@@ -1194,7 +1188,6 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
                 if ( responsefunction ) {
                     responsefunction(this, modaldata);
                 }
-                // console.log("closing modal: ", modalid);
                 closeModal(modalid);
             }
         });
@@ -1204,7 +1197,6 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
             if ( responsefunction ) {
                 responsefunction(this, modaldata);
             } else {
-                // console.log("closing modal: ", modalid);
                 closeModal(modalid);
             }
             evt.stopPropagation();
@@ -1225,10 +1217,8 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
         $("body").off("singletap");
         $("body").on("singletap",function(evt) {
             if ( (evt.target.id === modalid && modalid!=="modalpopup" )  ) {
-                // console.log("modal opt 1");
                 evt.stopPropagation();
             } else {
-                // console.log("modal opt 2");
                 closeModal(modalid);
                 if ( responsefunction ) {
                     responsefunction(evt.target, modaldata);
@@ -1257,12 +1247,11 @@ function closeModal(modalid) {
         priorOpmode = "Operate";
     }
     modalStatus = saveOpmode.length;
-    // console.log("priorOpmode = " + priorOpmode, "saveOpmode = ", saveOpmode, " modalid: ", modalid, " modalStatus: ", modalStatus);
 }
 
 function popupMessage(message, timer=0, pos = null) {
     if ( pos===null ) {
-        var pstyle = "position: absolute; border: 6px black solid; background-color: blue; color: white; font-weight: bold; font-size: 18px; left: 330px; top: 75px; width: 600px; height: auto; padding: 30px;";
+        var pstyle = "position: absolute; border: 6px black solid; background-color: blue; color: white; font-weight: bold; font-size: 18px; left: 350px; top: 60px; width: 600px; height: auto; padding: 30px;";
         pos = {style: pstyle};
     }
     createModal("popupmessage", message, "body", false, pos, null, function() {
@@ -1303,7 +1292,6 @@ function setupColors() {
                 var hexval = $(this).minicolors("value");
                 var hsl = rgb2hsv( newcolor.r, newcolor.g, newcolor.b );
                 var hslstr = "hsl("+hsl.hue.pad(3)+","+hsl.saturation.pad(3)+","+hsl.level.pad(3)+")";
-                // console.log("color = " + hexval+" hsl = "+hslstr);
                 var tile = '#t-'+aid;
                 var bid = $(tile).attr("bid");
                 var hubid = $(tile).attr("hub");
@@ -1348,10 +1336,10 @@ function setupColors() {
                 console.log("setupColors: userid= ", userid, " thingid= ", thingid, " tileid= ", tileid, " hint= ", hint,
                 " command= ", command, " bid= ", bid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", hubid, " linkhub= ", linkhub,
                 " type= ", thetype, " linktype= ", linktype, " subid= ", subid, " value= ", hslstr, 
-                " linkval= ", linkval, " attr=", hexval);
+                " linkval= ", linkval, " attr=", hexval, " hpcode: ", cm_Globals.options.hpcode);
 
                 $.post(cm_Globals.returnURL, 
-                       {useajax: "doaction", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: hslstr, hint: hint,
+                       {api: "doaction", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: hslstr, hint: hint,
                         subid: realsubid, attr: hexval, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval,
                         hpcode: cm_Globals.options.hpcode} );
             }
@@ -1413,9 +1401,10 @@ function setupSliders() {
         //     linkval = "";
         }
 
-        console.log("Slider action: command= ", command, " bid= ", bid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", linkhub, " type= ", linktype, " subid= ", realsubid, " hint= ", hint, " value= ", thevalue, " linkval= ", linkval);
+        console.log("Slider action: command= ", command, " bid= ", bid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", linkhub, " type= ", 
+                     linktype, " subid= ", realsubid, " hint= ", hint, " value= ", thevalue, " linkval= ", linkval, " hpcode: ", cm_Globals.options.hpcode);
         $.post(cm_Globals.returnURL, 
-            {useajax: "doaction", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: thevalue, attr: subid, hint: hint,
+            {api: "doaction", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: thevalue, attr: subid, hint: hint,
             subid: realsubid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode});
     }
 
@@ -1539,11 +1528,10 @@ function setupPagemove() {
             var userid = cm_Globals.options.userid;
             var pname = cm_Globals.options.pname;
             $.post(cm_Globals.returnURL, 
-                {useajax: "setorder", userid: userid, pname: pname, id: "none", type: "rooms", value: pages, hpcode: cm_Globals.options.hpcode},
+                {api: "setorder", userid: userid, pname: pname, id: "none", type: "rooms", value: pages, hpcode: cm_Globals.options.hpcode},
                 function (presult, pstatus) {
                     if (pstatus==="success" ) {
                         cm_Globals.reordered = true;
-                        console.log("setorder: ", presult );
                     }
                 }, "json"
             );
@@ -1604,11 +1592,10 @@ function setupSortable() {
                 });
 
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "setorder", userid: userid, pname: pname, id: "none", type: "things", value: tilenums, hpcode: cm_Globals.options.hpcode},
+                    {api: "setorder", userid: userid, pname: pname, id: "none", type: "things", value: tilenums, hpcode: cm_Globals.options.hpcode},
                     function (presult, pstatus) {
                         if (pstatus==="success" ) {
                             cm_Globals.reordered = true;
-                            console.log("setorder: ", presult );
                         }
                     }, "json"
                 );
@@ -1703,8 +1690,6 @@ function setupDraggable() {
             },
             stop: function(evt, ui) {
                 var thing = evt.target; // ui.draggable;
-                console.log("Stopped dragging: ", $(evt.target).attr("type") );
-
                 startPos.left = evt.pageX - delx;   // parseInt($(evt.target).offset().left);
                 startPos.top  = evt.pageY - dely;   // parseInt($(evt.target).offset().top);
                 var panel = $(thing).attr("panel");
@@ -1735,15 +1720,9 @@ function setupDraggable() {
                 // now post back to housepanel to save the position
                 // also send the dragthing object to get panel name and tile pid index
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "setposition", userid: cm_Globals.options.userid, pname: cm_Globals.options.pname, 
-                     id: bid, type: thingtype, attr: startPos, tileid: tile, thingid: thingid, hpcode: cm_Globals.options.hpcode},
-                    function (presult, pstatus) {
-                        if (pstatus==="success") {
-                            console.log("setposition: ", presult, "id",bid,"type",thingtype, "attr",startPos, "tile",tile,"thingid",thingid);
-                        }
-                    }
+                    {api: "setposition", userid: cm_Globals.options.userid, pname: cm_Globals.options.pname, 
+                     id: bid, type: thingtype, attr: startPos, tileid: tile, thingid: thingid, hpcode: cm_Globals.options.hpcode}
                 );
-
             }
         });
 
@@ -1818,7 +1797,6 @@ function setupDraggable() {
                         // var lastLeft = parseInt( $(lastThing).position().left );
                         // var thingTop = evt.pageY;
                         // var thingLeft = evt.pageX;
-                        // console.log("Y, X, LastY, LastX, id: ", thingTop, thingLeft, lastTop, lastLeft, $(lastThing).attr("bid") );
                         // if ( (Math.abs( thingTop - lastTop) > 150) || (Math.abs(thingLeft - lastLeft) > 150) ) {
                         //     startPos.top = thingTop;
                         //     startPos.left = thingLeft;
@@ -1832,11 +1810,10 @@ function setupDraggable() {
                                 // add it to the system
                                 // the ajax call must return a valid "div" block for the dragged new thing
                                 $.post(cm_Globals.returnURL, 
-                                    {useajax: "addthing", userid: userid, pname: pname, id: bid, type: thingtype, value: panel, panelid: panelid, 
+                                    {api: "addthing", userid: userid, pname: pname, id: bid, type: thingtype, value: panel, panelid: panelid, 
                                      attr: startPos, hubid: hubid, hubindex: hubindex, roomid: roomid, pname: pname, tileid: 0, hpcode: cm_Globals.options.hpcode},
                                     function (presult, pstatus) {
                                         if (pstatus==="success" && !presult.startsWith("error") ) {
-                                            console.log( "Added " + thingname + " of type " + thingtype + " and bid= " + bid + " to room " + panel, " pos: ", startPos);
                                             $("div.panel-"+panel).append(presult);
                                             var newthing = $("div.panel-"+panel+" div.thing").last();
                                             $(newthing).css( startPos );
@@ -1896,7 +1873,6 @@ function relocateTile(thing, thingtype, tileloc) {
             zidx = tileloc["z-index"];
             $(thing).css("z-index", tileloc["z-index"]);
         }
-        // console.log("relocate: ", zpos, zleft, ztop, zidx);
         if ( zpos === "relative" ) {
             var stylestr = `position: ${zpos}; left: ${zleft}; top: ${ztop}; z-index: ${zidx}`;
             $(thing).attr("style",stylestr);
@@ -1912,7 +1888,6 @@ function rehomeTiles() {
     var startPos = {top: 0, left: 0, "z-index": 1, position: "relative"};
     var pid = $("li[aria-selected='true']").attr("aria-labelledby");
     var panel = $("#"+pid).html();
-    // console.log("panel: ", pid, panel);
 
     $("div.thing[panel="+panel+"]").each( function() {
 
@@ -1922,13 +1897,12 @@ function rehomeTiles() {
         var thingid = $(this).attr("thingid");
         var pname = cm_Globals.options.pname;
 
-        // console.log(bid, thingtype, tile, thingid, pname, startPos);
         $.post(cm_Globals.returnURL, 
-            {useajax: "setposition", userid: cm_Globals.options.userid, pname: pname, id: bid, type: thingtype, 
+            {api: "setposition", userid: cm_Globals.options.userid, pname: pname, id: bid, type: thingtype, 
              attr: startPos, tileid: tile, thingid: thingid, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if ( pstatus!=="success" ) {
-                    console.log("status: ", pstatus, " result: ", presult);
+                    console.error("status: ", pstatus, " result: ", presult);
                 }
             }
         );
@@ -1957,12 +1931,16 @@ function dynoPost(ajaxcall, body, callback) {
     if ( body && typeof body === "object" ) { 
         body["api"] = ajaxcall;
         body.pname = pname;
-        body.hpcode = cm_Globals.options.hpcode;
+        if ( cm_Globals.options ) {
+            body.hpcode = cm_Globals.options.hpcode;
+        }
+        body.apiSecret = cm_Globals.apiSecret;
+
         if ( body.reload ) {
             isreload = true;
         }
     } else {
-        body = {api: ajaxcall, userid: cm_Globals.options.userid, pname: pname, hpcode: cm_Globals.options.hpcode};
+        body = {api: ajaxcall, userid: cm_Globals.options.userid, pname: pname, hpcode: cm_Globals.options.hpcode, apiSecret: cm_Globals.apiSecret};
     }
 
     if ( callback && typeof callback==="function" ) {
@@ -1990,27 +1968,22 @@ function execForgotPassword() {
     var emailname = genobj.emailid;
     var mobile = genobj.mobile;
     if ( emailname.length < 5 ) {
-        alert("Enter a valid email or mobile phone number before requesting a reset. You will be sent a txt message.");
+        alert("Enter a valid email or mobile phone number before requesting a password reset.");
     } else {
         // alert("email: " + emailname + " mobile: " + mobile);
         $.post(cm_Globals.returnURL, 
             {api: "forgotpw", email: emailname, mobile: mobile, apiSecret: cm_Globals.apiSecret},
             function(presult, pstatus) {
-                if ( pstatus==="success" && presult && typeof presult === "object" && presult.id ) {
-                    var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 100px; padding-top: 50px; text-align: center;";
+                if ( pstatus==="success" && presult && typeof presult === "object" ) {
+                    var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 350px; top: 60px; width: 400px; height: 100px; padding-top: 50px; text-align: center;";
                     var pos = {style: pstyle};
                     var userid = presult.id;
-                    // console.log("user: ", presult);
                     createModal("loginfo","Login reset code sent and printed to log for user# " + userid + "<br>On the next screen please provide that code <br>along with the new password information.<br>", "body", "Done", pos, function(ui) {
                         closeModal("loginfo");
                         window.location.href = cm_Globals.returnURL + "/forgotpw?userid="+userid;
                     });
-                    // setTimeout(function() {
-                    //     closeModal("loginfo");
-                    //     window.location.href = cm_Globals.returnURL;
-                    // },60000);
                 } else {
-                    // console.log("presult = ", presult);
+                    console.error("error: ", presult, " status: ", pstatus);
                     alert("There was a problem attempting to reset your password.");
                     window.location.href = cm_Globals.returnURL;
                 }
@@ -2035,10 +2008,10 @@ function execCreateUser() {
         alert("Passwords do not match. Try again.");
     } else {
         $.post(cm_Globals.returnURL, 
-            {useajax: "createuser", email: emailname, uname: username, mobile: mobile, pword: newpw, hpcode: "createuser"}, 
+            {api: "createuser", email: emailname, uname: username, mobile: mobile, pword: newpw, apiSecret: cm_Globals.apiSecret}, 
             function(presult, pstatus) {
                 if ( pstatus==="success" && presult && typeof presult === "object" && presult.id ) {
-                    var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
+                    var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 350px; top: 60px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
                     var pos = {style: pstyle};
                     console.log("new user created: ", presult);
                     var userid = presult.id;
@@ -2076,33 +2049,29 @@ function execValidatePassword() {
     var panelpw = genobj.panelpword;
     var emailname = genobj.email;
     var uname = genobj.uname;
-    // var hpcode = genobj.hpcode;
+    var hpcode = genobj.hpcode;
     var newhpcode = genobj.newhpcode;
     var mobile = genobj.mobile;
-    // console.log("genobj: ", genobj);
+    var apiSecret = genobj.apiSecret;
 
     if ( newpw.length < 6 ) {
         alert("Password provided is too short. Must be 6 or more characters in length");
     } else if ( newpw !== newpw2 ) {
         alert("Passwords do not match. Try again.");
-    // } else if ( hpcode !== newhpcode ) {
-    //     alert("Security code is incorrect.");
+    } else if ( hpcode !== newhpcode ) {
+        alert("Security code: " + newhpcode + " is incorrect.");
     } else {
         $.post(cm_Globals.returnURL, 
-            {useajax: "updatepassword", userid: userid, email:emailname, mobile:mobile, uname: uname, pword: newpw, pname: pname, panelpw: panelpw, hpcode: newhpcode}, 
+            {api: "updatepassword", userid: userid, email:emailname, mobile:mobile, uname: uname, 
+             pword: newpw, pname: pname, panelpw: panelpw, hpcode: newhpcode, apiSecret: apiSecret},
             function(presult, pstatus) {
                 if ( pstatus==="success" && presult && typeof presult === "object" ) {
-                    var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
+                    var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 350px; top: 60px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
                     var pos = {style: pstyle};
-                    console.log("updatepassword details = ", presult);
                     var msg = `User ${presult.email} and panel ${presult.pname} passwords updated successfully.<br>Please log in with the new credentials.<br>API calls will use hpcode=${presult.hpcode}`;
                     createModal("loginfo", msg, "body", "Done", pos, function(ui) {
                         window.location.href = cm_Globals.returnURL;
                     });
-                    // setTimeout(function() {
-                    //     closeModal("loginfo");
-                    //     window.location.href = cm_Globals.returnURL;
-                    // },60000);
                 } else {
                     pstyle = "position: absolute; border: 6px black solid; background-color: red; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
                     pos = {style: pstyle};
@@ -2122,50 +2091,42 @@ function execValidateUser() {
     var userid = genobj.userid;
     var emailname = genobj.email;
     var mobile = genobj.mobile;
-    // var hpcode = genobj.hpcode;
+    var hpcode = genobj.hpcode;
     var newhpcode = genobj.newhpcode;
-    // console.log("validateUser genobj: ", genobj);
 
-    // if ( hpcode !== newhpcode ) {
-    //     alert("Security code is incorrect.");
-    // } else {
+    if ( hpcode !== newhpcode ) {
+        alert("Security code: " + newhpcode + " is incorrect.");
+    } else {
         $.post(cm_Globals.returnURL, 
-            {useajax: "validateuser", userid: userid, email:emailname, mobile:mobile, hpcode: newhpcode}, 
+            {api: "validateuser", userid: userid, email:emailname, mobile:mobile, hpcode: newhpcode, apiSecret: cm_Globals.apiSecret}, 
             function(presult, pstatus) {
                 if ( pstatus==="success" && presult && typeof presult === "object" ) {
-                    var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
-                    var pos = {style: pstyle};
-                    createModal("loginfo","User with email: " + emailname + " successfully validated. <br><br>", "body", "Done", pos, function(ui) {
+                    var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 350px; top: 60px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
+                    createModal("loginfo","User with email: " + emailname + " successfully validated. <br><br>", "body", "Done", {style: pstyle}, function(ui) {
                         window.location.href = cm_Globals.returnURL;
                     });
                 } else {
                     pstyle = "position: absolute; border: 6px black solid; background-color: red; color: white; font-size: 14px; left: 550px; top: 10px; width: 400px; height: 150px; padding-top: 50px; text-align: center;";
-                    pos = {style: pstyle};
-                    var errstr = "";
-                    if ( typeof presult === "string" ) { errstr = "<br>" + presult; }
-                    createModal("loginfo","There was a problem with updating a new password." + errstr + "<br><br>Please try again.", "body", "Okay", pos, function(ui) {
+                    console.error("Validate User login problem. presult: ", presult);
+                    createModal("loginfo","There was a problem with updating a new password.<br><br>Please try again.", "body", "Okay", {style: pstyle}, function(ui) {
                         window.location.href = cm_Globals.returnURL;
                     });
                 }
             }
         );
-    // }
+    }
 }
 
 function execButton(buttonid) {
-
-    // console.log("buttonid: ", buttonid, " priorOpmode: ", priorOpmode, " modalStatus: ", modalStatus, " edited? ", cm_Globals.edited);
     if ( buttonid==="optSave") {
 
         var oobj = formToObject("optionspage");
 
         dynoPost("saveoptions", oobj, function(presult, pstatus) {
             if ( pstatus!=="success" ) {
-                // console.log(pstatus, " result: ", presult, " optionsobj: ", oobj);
                 alert("Options page failed to save properly");
                 window.location.href = cm_Globals.returnURL;
             } else {
-                // console.log("results: ", presult, " optionsobj: ", oobj);
                 if ( typeof presult === "object" && presult.result === "logout" ) {
                     window.location.href = cm_Globals.returnURL + "/logout?pname=" + presult.pname;
                 } else {
@@ -2200,8 +2161,7 @@ function execButton(buttonid) {
 
         dynoPost("dologin", genobj, function(presult, pstatus) {
             if ( pstatus === "success" && presult && typeof presult === "object" ) {
-                // console.log("login successful for user: ",  presult["users_email"], " and panel: ", presult["panels_pname"]);
-                var pstyle = "position: absolute; border: 6px black solid; background-color: blue; color: white; font-weight: bold; font-size: 24px; left: 330px; top: 75px; width: 600px; height: 220px; padding-top: 20px;";
+                var pstyle = "position: absolute; border: 6px black solid; background-color: blue; color: white; font-weight: bold; font-size: 24px; left: 130px; top: 75px; width: 600px; height: 220px; padding-top: 20px;";
                 var pos = {style: pstyle};
 
                 createModal("loginfo","User Email: " + presult["users_email"] + "<br>Username: " + presult["users_uname"] + "<br>Logged into panel: " + presult["panels_pname"] + "<br>With skin: " + presult["panels_skin"] + "<br><br>Page loading in 3 seconds... ",
@@ -2211,8 +2171,7 @@ function execButton(buttonid) {
                     window.location.href = cm_Globals.returnURL;
                 },3000);
             } else {
-                // console.log("not logged in. ", presult);
-                var pstyle = "position: absolute; border: 6px black solid; background-color: red; color: white; font-weight: bold; font-size: 24px; left: 330px; top: 75px; width: 600px; height: 180px; padding-top: 50px;";
+                var pstyle = "position: absolute; border: 6px black solid; background-color: red; color: white; font-weight: bold; font-size: 24px; left: 130px; top: 75px; width: 600px; height: 180px; padding-top: 50px;";
                 var pos = {style: pstyle};
                 createModal("loginfo","Either the User and Password pair are invalid, or the requested Panel and Password pair are invalid. <br><br>Please try again.",
                             "body", false, pos);
@@ -2253,7 +2212,7 @@ function execButton(buttonid) {
             // alert("phototimer = " + phototimer + " pname = " + pname);
 
             $.post(cm_Globals.returnURL, 
-                {useajax: "getphotos", userid: cm_Globals.options.userid, pname: pname, hpcode: cm_Globals.options.hpcode}, 
+                {api: "getphotos", userid: cm_Globals.options.userid, pname: pname, hpcode: cm_Globals.options.hpcode}, 
                 function(presult, pstatus) {
                     if ( presult && typeof presult == "object" ) {
                         var photos = presult;
@@ -2306,7 +2265,6 @@ function execButton(buttonid) {
         priorOpmode = "Reorder";
         setCookie("opmode", priorOpmode);
     } else if ( buttonid === "edit" && priorOpmode==="Operate") {
-        // console.log("Edit button: ", buttonid, " opmode: ", priorOpmode);
         $("#showversion").hide();
         $("#quickedit").html("P");
         addEditLink();
@@ -2349,7 +2307,7 @@ function execButton(buttonid) {
         cm_Globals.snap =  ! cm_Globals.snap;
 
     } else if ( buttonid==="refreshpage" && priorOpmode==="Operate" ) {
-        var pstyle = "position: absolute; background-color: blue; color: white; font-weight: bold; font-size: 24px; left: 300px; top: 300px; width: 600px; height: 100px; margin-left: 50px; margin-top: 50px;";
+        var pstyle = "position: absolute; background-color: blue; color: white; font-weight: bold; font-size: 24px; left: 350px; top: 300px; width: 600px; height: 100px; margin-left: 50px; margin-top: 50px;";
         var rstyle = "position: absolute; background-color: blue; color: white; font-weight: normal; font-size: 24px; left: 200px; top: 200px; width: 800px; height: 250px; margin-left: 50px; margin-top: 50px;";
         createModal("modalpopup", "Screen will reload when hub refresh is done...","body", false, {style: pstyle});
         dynoPost(buttonid, "", function(presult, pstatus) {
@@ -2369,9 +2327,9 @@ function execButton(buttonid) {
     // default is to call main node app with the id as a path
     } else {
         if ( priorOpmode!=="Operate") {
-            console.log("command not supported while editing or customizing: ", buttonid);
+            console.warn("command not supported while editing or customizing: ", buttonid);
         } else {
-            console.log("command not supported: ", buttonid);
+            console.error("command not supported: ", buttonid);
         }
         // window.location.href = cm_Globals.returnURL + "/" + buttonid;
     }
@@ -2466,7 +2424,7 @@ function setupButtons() {
                 if ( clk==="okay" ) {
                     alert("Removing panel: " + pname);
                     $.post(cm_Globals.returnURL, 
-                        {useajax: "delpanel", userid: cm_Globals.options.userid, pname: pname, hpcode: cm_Globals.options.hpcode}
+                        {api: "delpanel", userid: cm_Globals.options.userid, pname: pname, hpcode: cm_Globals.options.hpcode}
                     );
                 }
             });
@@ -2479,7 +2437,7 @@ function setupButtons() {
                 if ( clk==="okay" ) {
                     alert("Using panel: " + pname);
                     $.post(cm_Globals.returnURL, 
-                        {useajax: "usepanel", userid: cm_Globals.options.userid, pname: pname, hpcode: cm_Globals.options.hpcode}
+                        {api: "usepanel", userid: cm_Globals.options.userid, pname: pname, hpcode: cm_Globals.options.hpcode}
                     );
                 }
             });
@@ -2494,7 +2452,7 @@ function setupButtons() {
                 if ( clk==="okay" ) {
                     alert("Removing user: " + uname + " | " + emailname);
                     $.post(cm_Globals.returnURL, 
-                        {useajax: "deluser", userid: cm_Globals.options.userid, uname: uname, email: emailname, hpcode: cm_Globals.options.hpcode}
+                        {api: "deluser", userid: cm_Globals.options.userid, uname: uname, email: emailname, hpcode: cm_Globals.options.hpcode}
                     );
                 }
             });
@@ -2631,8 +2589,6 @@ function setupButtons() {
             formData.hubhost = $("input[name='hubhost']").val();
             formData.hpcode = cm_Globals.options.hpcode;
             $.post(cm_Globals.returnURL, formData,  function(presult, pstatus) {
-                // console.log("hubauth: ", presult);
-                // alert("wait... presult.action = " + presult.action);
 
                 if ( pstatus==="success" && typeof presult==="object" && presult.action ) {
                     var obj = presult;
@@ -2705,7 +2661,7 @@ function setupButtons() {
                 if ( clk==="okay" ) {
                     // remove it from the system
                     $.post(cm_Globals.returnURL, 
-                        {useajax: "hubdelete", userid: cm_Globals.options.userid, pname: pname, hubid: hubId, id: hubindex, hpcode: cm_Globals.options.hpcode},
+                        {api: "hubdelete", userid: cm_Globals.options.userid, pname: pname, hubid: hubId, id: hubindex, hpcode: cm_Globals.options.hpcode},
                         function (presult, pstatus) {
                             if (pstatus==="success" && typeof presult === "string") {
                                 $("#newthingcount").html(presult);
@@ -2715,7 +2671,7 @@ function setupButtons() {
                                 }, 3000);
                             } else {
                                 $("#newthingcount").html("error - could not remove hub: " + hubname + " hub ID: " + hubId);
-                                // console.log(presult);
+                                console.error("error - could not remove hub: " + hubname + " hub ID: " + hubId);
                             }
                         }
                     );
@@ -2918,13 +2874,12 @@ function addEditLink() {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "delthing", userid: userid, id: bid, type: thingtype, value: panel, 
+                    {api: "delthing", userid: userid, id: bid, type: thingtype, value: panel, 
                                           attr: "", hubid: hubid, tileid: tile, thingid: thingid, roomid: roomid, 
                                           pname: pname, panelid: panelid, hpcode: cm_Globals.options.hpcode},
                     function (presult, pstatus) {
                         // check for an object returned which should be a promise object
                         if (pstatus==="success" && ( typeof presult==="object" || (typeof presult === "string" && !presult.startsWith("error"))) ) {
-                            // console.log( "delthing presult: ", presult );
                             $(thing).remove();
                         }
                     }
@@ -2961,13 +2916,11 @@ function addEditLink() {
         }
 
         $.post(cm_Globals.returnURL, 
-            {useajax: "setposition", userid: cm_Globals.options.userid, type: str_type, attr: startPos, 
+            {api: "setposition", userid: cm_Globals.options.userid, type: str_type, attr: startPos, 
                                      tileid: tile, thingid: thingid, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if ( pstatus === "success" ) {
-                    console.log(presult);
                     saveTileEdit(cm_Globals.options.userid, str_type, tile);
-         
                     delEditLink();
                     addEditLink();                                
                 }
@@ -2997,11 +2950,10 @@ function addEditLink() {
 
                 // remove it from the system
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "pagedelete", userid: cm_Globals.options.userid, id: roomnum, type: "none", hpcode: cm_Globals.options.hpcode,
+                    {api: "pagedelete", userid: cm_Globals.options.userid, id: roomnum, type: "none", hpcode: cm_Globals.options.hpcode,
                                             value: roomname, roomid: roomid, attr: "none", panelid: panelid, pname: pname},
                     function (presult, pstatus) {
                         if (pstatus==="success" && typeof presult === "string" && !presult.startsWith("error") ) {
-                            console.log(presult);
                             $("li[roomnum="+roomnum+"]").remove();
                             $("#"+defaultTab).trigger("click");
                         } else {
@@ -3020,7 +2972,6 @@ function addEditLink() {
         var roomnum = $(evt.target).attr("roomnum");
         var roomname = $(evt.target).attr("roomname");
         var roomid = $("#panel-"+roomname).attr("roomid");
-        // console.log("editing room: ", roomid, roomnum, roomname);
         editTile(cm_Globals.options.userid, roomid, roomname, "page", roomname, roomnum, 0, "", "-1", 0, "None", roomname);
     });
    
@@ -3034,13 +2985,12 @@ function addEditLink() {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "pageadd", userid: cm_Globals.options.userid, id: "none", panelid: panelid, pname: pname, hpcode: cm_Globals.options.hpcode},
+                    {api: "pageadd", userid: cm_Globals.options.userid, id: "none", panelid: panelid, pname: pname, hpcode: cm_Globals.options.hpcode},
                     function (presult, pstatus) {
                         if (pstatus==="success" && typeof presult === "object" ) {
-                            // console.log("Added room: ", presult);
                             window.location.href = cm_Globals.returnURL;
                         } else {
-                            console.log("status: ", pstatus, " result: ", presult);
+                            console.error("status: ", pstatus, " result: ", presult);
                         }
                     }
                 );
@@ -3433,7 +3383,6 @@ function processKeyVal(targetid, aid, key, value) {
             {api: "weathericon", userid: cm_Globals.options.userid, type: "tomorrowio", value: value, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if ( pstatus==="success" ) {
-                    console.log("weatherCode result: ", presult);
                     $(targetid).html(presult);
                 }
             }
@@ -3668,7 +3617,7 @@ function clockUpdater(whichclock, forceget) {
         clockoptions.push(opt2);
 
         $.post(cm_Globals.returnURL, 
-            {useajax: "getclock", userid: userid, pname: pname, id: whichclock, thingid: thingid, tileid: tileid, 
+            {api: "getclock", userid: userid, pname: pname, id: whichclock, thingid: thingid, tileid: tileid, 
                                   type: "clock", attr: clockoptions, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if ( pstatus==="success" && presult && typeof presult==="object" ) {
@@ -3978,26 +3927,22 @@ function checkPassword(tile, thingname, pw, ro, thevalue, yesaction) {
         var clk = $(ui).attr("name");
         if ( clk==="okay" ) {
             if ( pw==="" ) {
-                // console.log("Tile action confirmed for tile [" + thingname + "]");
                 yesaction(tile, thingname, ro, thevalue);
             } else {
                 userpw = $("#userpw").val();
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "pwhash", userid: cm_Globals.options.userid, pname: pname, id: "none", 
+                    {api: "pwhash", userid: cm_Globals.options.userid, pname: pname, id: "none", 
                                         type: "verify", value: userpw, attr: pw, hpcode: cm_Globals.options.hpcode},
                     function (presult, pstatus) {
                         if ( pstatus==="success" && presult==="success" ) {
-                            // console.log("Protected tile [" + thingname + "] access granted.");
                             yesaction(tile, thingname, ro, thevalue);
                         } else {
-                            console.log("Protected tile [" + thingname + "] access denied.");
+                            console.warn("Protected tile [" + thingname + "] access denied.");
                         }
                     }
                 );
 
             }
-        } else {
-            console.log("Protected tile [" + thingname + "] access cancelled.");
         }
         closeModal("modalexec");
     },
@@ -4073,13 +4018,9 @@ function processClickWithValue(that, thingname, ro, subid, thetype, thevalue, nu
                 var hubid = $(tile).attr("hub");
                 var hubindex = $(tile).attr("hubindex");
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "dorules", userid: userid, id: bid, thingid: aid, type: thetype, value: thevalue,
-                     subid: subid, hubid: hubid, hubindex: hubindex, tileid: tileid, hpcode: cm_Globals.options.hpcode},
-                     function (presult, pstatus) {
-                        if ( pstatus === "success" ) {
-                            console.log(presult);
-                        }
-                     });
+                    {api: "dorules", userid: userid, id: bid, thingid: aid, type: thetype, value: thevalue,
+                     subid: subid, hubid: hubid, hubindex: hubindex, tileid: tileid, hpcode: cm_Globals.options.hpcode}
+                );
             }
         }
         closeModal("modalexec");
@@ -4282,7 +4223,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
                             }
                             window.open(userval,'_blank');
                         } catch(e) {
-                            console.log("user provided URL failed to open: ", e);
+                            console.error("user provided URL failed to open: ", e);
                         }
                     }
 
@@ -4307,7 +4248,6 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
             (thetype==="sonos" && !subid.startsWith("_"))
         );
     }
-    console.log("linkval = ", linkval," command = ", command, " subid: ", subid, " realsubid: ", realsubid, " passive: ", ispassive);
 
     // turn momentary and piston items on or off temporarily
     // but only for the subid items that expect it
@@ -4330,14 +4270,12 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         } else if ( thevalue  && (thevalue==="ON" || thevalue==="OFF") ) {
             thevalue = thevalue==="OFF" ? "OFF" : "ON";
         }
-        // console.log(ajaxcall + ": thingname= " + thingname + " command= " + command + " bid= "+bid+" linkbid+ "+linkbid+" linkhub= " + linkhub + " type= " + thetype + " linktype= " + linktype + " subid= " + subid + " value= " + thevalue + " linkval= " + linkval + " attr="+theattr);
 
         $.post(cm_Globals.returnURL, 
-            {useajax: ajaxcall, userid: userid, pname: pname, thingid: thingid, tileid: tileid, id: linkbid, type: linktype, value: thevalue, hint: hint,
+            {api: ajaxcall, userid: userid, pname: pname, thingid: thingid, tileid: tileid, id: linkbid, type: linktype, value: thevalue, hint: hint,
                 attr: subid, subid: realsubid, hubid: hubid, hubindex: linkhub, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode},
             function(presult, pstatus) {
                 if (pstatus==="success") {
-                    // console.log( ajaxcall + ": POST returned:", presult );
                     if (thetype==="piston") {
                         $(targetid).addClass("firing");
                         $(targetid).html("firing");
@@ -4374,7 +4312,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
             theattr = "";
             if ( thevalue ) {
                 $.post(cm_Globals.returnURL, 
-                    {useajax: ajaxcall, userid: userid, pname: pname, id: bid, thingid: thingid, tileid: tileid, type: thetype, value: thevalue, roomid: roomid, hint: hint,
+                    {api: ajaxcall, userid: userid, pname: pname, id: bid, thingid: thingid, tileid: tileid, type: thetype, value: thevalue, roomid: roomid, hint: hint,
                      attr: theattr, subid: "switch", hubid: hubid, hubindex: linkhub, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode} );
             }
         });
@@ -4463,7 +4401,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         console.log("userid= ", userid, " thingid= ", thingid, " tileid= ", tileid, " hint= ", hint,
                     " command= ", command, " bid= ", bid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", hubid, " linkhub= ", linkhub,
                     " type= ", thetype, " linktype= ", linktype, " subid= ", subid, " realsubid= ", realsubid, " value= ", thevalue, 
-                    " linkval= ", linkval, " attr=", theattr);
+                    " linkval= ", linkval, " attr=", theattr, " hpcode=", cm_Globals.options.hpcode);
 
         // create a visual cue that we clicked on this item
         $(targetid).addClass("clicked");
@@ -4476,13 +4414,12 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         // alert("API call: " + ajaxcall + " bid: " + bid + " type: " + thetype + " value: " + thevalue + " subid: " + realsubid + " hint: " + hint + " hubid: " + hubid);
 
         $.post(cm_Globals.returnURL, 
-            {useajax: ajaxcall, userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: thevalue, hint: hint,
+            {api: ajaxcall, userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: thevalue, hint: hint,
                                 attr: theattr, subid: realsubid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, 
                                 linkval: linkval, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if (pstatus==="success") {
                     if ( presult && typeof presult === "object" ) {
-                        console.log("Success: ", presult);
 
                         // display a table or graph is this is a LIST command
                         if ( command==="LIST" ) {
@@ -4573,18 +4510,16 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
                             // note that we pass the original subid not the realsubid even though they are the same here for now
                             $("#resetList").on("tap", function(evt) {
                                 $.post(cm_Globals.returnURL, 
-                                    {useajax: "resetlist", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, 
-                                                           value: thevalue, hint: hint, attr: theattr, subid: subid, hubid: hubid, hubindex: linkhub, 
-                                                           tileid: tileid, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode},
-                                     function (presult, pstatus) {
-                                        console.log(presult);
-                                     });
+                                    {api: "resetlist", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, 
+                                            value: thevalue, hint: hint, attr: theattr, subid: subid, hubid: hubid, hubindex: linkhub, 
+                                            tileid: tileid, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode}
+                                );
                                 $("#resetList").off("tap");
                                 closeModal("listview");
                             });
                          }
                     } else {
-                        console.log(presult);
+                        console.error(presult);
                     }
                 }
             }, "json"

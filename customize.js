@@ -53,7 +53,7 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
 
     // set the customization list
     $.post(cm_Globals.returnURL, 
-        {useajax: "getrules", userid: userid, id: bid},
+        {api: "getrules", userid: userid, id: bid, hpcode: cm_Globals.options.hpcode},
         function (presult, pstatus) {
             if (pstatus==="success" ) {
                 cm_Globals.rules = presult;
@@ -70,7 +70,7 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
     // first get all devices from the server for this user
     // mydb.getRows("devices","*","userid = "+userid)
     // .then(rows => {
-    $.post(cm_Globals.returnURL, {useajax: "getdevices", userid: userid},
+    $.post(cm_Globals.returnURL, {api: "getdevices", userid: userid, hpcode: cm_Globals.options.hpcode},
         function(presult, pstatus) {
             if (pstatus==="success" && typeof presult === "object") {
                 // create the devices object list
@@ -984,7 +984,7 @@ function initExistingFields() {
             // send rules to server
             var rules = encodeURI(JSON.stringify(cm_Globals.rules));
             $.post(cm_Globals.returnURL, 
-                {useajax: "updcustom", userid: cm_Globals.options.userid, id: bid, 
+                {api: "updcustom", userid: cm_Globals.options.userid, id: bid, hpcode: cm_Globals.options.hpcode,
                  rules: rules, tileid: tileid, subid: subid, value: null, attr: null},
                 function (presult, pstatus) {
                     if (pstatus==="success") {
@@ -1027,7 +1027,7 @@ function initExistingFields() {
             // send rules to server
             var rules = encodeURI(JSON.stringify(cm_Globals.rules));
             $.post(cm_Globals.returnURL, 
-                {useajax: "updcustom", userid: cm_Globals.options.userid, id: bid, 
+                {api: "updcustom", userid: cm_Globals.options.userid, id: bid, hpcode: cm_Globals.options.hpcode,
                  rules: rules, tileid: tileid, subid: subid, value: null, attr: null},
                 function (presult, pstatus) {
                     if (pstatus==="success") {
@@ -1259,8 +1259,8 @@ function applyCustomField(action, subid) {
     }
 
     $.post(cm_Globals.returnURL, 
-        {useajax: action, userid: cm_Globals.options.userid, id: bid, value: customtype, attr: content,
-            rules: rules, tileid: tileid, subid: subid},
+        {api: action, userid: cm_Globals.options.userid, id: bid, value: customtype, attr: content,
+            rules: rules, tileid: tileid, subid: subid, hpcode: cm_Globals.options.hpcode},
         function (presult, pstatus) {
             if (pstatus==="success") {
                 cm_Globals.reload = true;
@@ -1317,8 +1317,8 @@ function showPreview() {
     var thingvalue = encodeURI(JSON.stringify(device));
     
     $.post(cm_Globals.returnURL, 
-        {useajax: "wysiwyg", userid: cm_Globals.options.userid, tileid: tileid, id: bid, thingid: aid, type: str_type, 
-         value: thingvalue, attr: swattr},
+        {api: "wysiwyg", userid: cm_Globals.options.userid, tileid: tileid, 
+         id: bid, thingid: aid, type: str_type, value: thingvalue, attr: swattr, hpcode: cm_Globals.options.hpcode},
         function (presult, pstatus) {
             if (pstatus==="success" ) {
                 $("#cm_preview").html(presult);       
