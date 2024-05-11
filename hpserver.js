@@ -645,11 +645,26 @@ async function getUserName(req) {
         if ( uhash && rows ) {
             for ( var i=0; i<rows.length; i++ ) {
                 var row = rows[i];
+                var emailname = row["users_email"];
 
                 // if username hash matches uname hash or email hash and if panel name hash match then proceed
-                if ( ( pw_hash(row["users_email"]) === uhash || pw_hash(row["users_uname"]) === uhash ) && 
+                if ( ( pw_hash(emailname) === uhash || pw_hash(row["users_uname"]) === uhash ) && 
                         ( pw_hash(row["panels_pname"]) === phash ) ) {
                     therow = row;
+
+                    // fix legacy logins that don't have a hpcode security check
+                    if ( !therow["users_hpcode"] ) {
+                        var permcode = getNewCode(emailname);
+                        therow["users_hpcode"] = permcode;
+                        mydb.updateRow("users",{hpcode: permcode},"id = "+ row["users_id"])
+                        .then( () => {
+                            console.log( (ddbg()), "Added missing API security code to login user:", emailname, 
+                                                   "For security purposes, all API calls will use hpcode="+permcode);
+                        })
+                        .catch( reason => {
+                            console.log( (ddbg()), reason);
+                        });
+                    }
                     break;
                 }
             }
@@ -4624,7 +4639,7 @@ function forgotPassword(body) {
             // replace with a permanent code that must be used to make API calls
             // this will be different than the login authentication code
             // which means the login authentication code cannot be used for API calls and vice versa
-            // we don't communicate this value until the user has been valided, unless validation is diabled
+            // we don't communicate this value until the user has been validated, unless validation is diabled
             var delay = 15 * 60000;
             setTimeout(function() {
                 var permcode = getNewCode(emailname);
@@ -4994,8 +5009,6 @@ function getAuthPage(user, configoptions, hubs, hostname, rmsg) {
     }
 
     function getHubPanels(authhubs, defhub) {
-
-        // var allhubtypes = { "Hubitat": "Hubitat", "ISY": "ISY", "Sonos": "Sonos", "NewSmartThings":"SmartThings", "Ford": "Ford", "Lincoln": "Lincoln" };
         var allhubtypes = GLB.dbinfo.hubs;
         var $tc = "";
         $tc += "<div class='hubopt'><label for=\"pickhub\" class=\"startupinp\">Authorize Hub: </label>";
@@ -6229,20 +6242,20 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
             // }
             
             // for music status show a play bar in front of it
-            // now use the real item name and back enable old one
+            // no longer do this because we now use the real controls
             // note that we add the sibling to the music controls
             // so that linked tiles will operate properly
             // only one sibling for all the controls. The js file deals with this.
-            if (tkey==="musicstatus" || (thingtype==="music" && tkey==="status") ) {
-                $tc += "<div class=\"overlay music-controls" + subtype + " v_"+kindex+"\">";
-                if (sibling) { $tc += sibling; }
-                $tc += aidi + " subid=\"music-previous\" title=\"Previous\" class=\""+thingtype+" music-previous" + pkindex + "\"></div>";
-                $tc += aidi + " subid=\"music-pause\" title=\"Pause\" class=\""+thingtype+" music-pause" + pkindex + "\"></div>";
-                $tc += aidi + " subid=\"music-play\" title=\"Play\" class=\""+thingtype+" music-play" + pkindex + "\"></div>";
-                $tc += aidi + " subid=\"music-stop\" title=\"Stop\" class=\""+thingtype+" music-stop" + pkindex + "\"></div>";
-                $tc += aidi + " subid=\"music-next\" title=\"Next\" class=\""+thingtype+" music-next" + pkindex + "\"></div>";
-                $tc += "</div>";
-            }
+            // if (tkey==="musicstatus" || (thingtype==="music" && tkey==="status") ) {
+            //     $tc += "<div class=\"overlay music-controls" + subtype + " v_"+kindex+"\">";
+            //     if (sibling) { $tc += sibling; }
+            //     $tc += aidi + " subid=\"music-previous\" title=\"Previous\" class=\""+thingtype+" music-previous" + pkindex + "\"></div>";
+            //     $tc += aidi + " subid=\"music-pause\" title=\"Pause\" class=\""+thingtype+" music-pause" + pkindex + "\"></div>";
+            //     $tc += aidi + " subid=\"music-play\" title=\"Play\" class=\""+thingtype+" music-play" + pkindex + "\"></div>";
+            //     $tc += aidi + " subid=\"music-stop\" title=\"Stop\" class=\""+thingtype+" music-stop" + pkindex + "\"></div>";
+            //     $tc += aidi + " subid=\"music-next\" title=\"Next\" class=\""+thingtype+" music-next" + pkindex + "\"></div>";
+            //     $tc += "</div>";
+            // }
 
             // include class for main thing type, the subtype, a sub-key, and a state (extra)
             // also include a special hack for other tiles that return number_ to remove that

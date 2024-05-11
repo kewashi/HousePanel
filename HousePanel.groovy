@@ -2900,53 +2900,54 @@ def setMusic(swid, cmd, swattr, subid) {
             newsw = "unmuted"
             item.unmute()
             resp['mute'] = newsw
-        } else if ( subid=="level-up" ) {
+        } else if ( subid=="level-up" || subid=="_levelUp" || subid=="volume-up" ) {
             newsw = cmd.toInteger()
             newsw = (newsw >= 95) ? 100 : newsw - (newsw % 5) + 5
             item.setLevel(newsw)
             resp['level'] = newsw
-        } else if ( subid=="level-dn" ) {
+            resp["volume"] = newsw
+        } else if ( subid=="level-dn" || subid=="_levelDown" || subid=="volume-dn" ) {
             newsw = cmd.toInteger()
             def del = (newsw % 5) == 0 ? 5 : newsw % 5
             newsw = (newsw <= 5) ? 0 : newsw - del
             item.setLevel(newsw)
             resp['level'] = newsw
+            resp["volume"] = newsw
         } else if ( subid=="_groupVolumeUp" || subid=="_volumeUp" ) {
             def grpvol = item.currentValue("volume")
             grpvol = (grpvol > 95) ? 100 : grpvol + 5
             item.setVolume(grpvol)
+            resp["level"] = grpvol
             resp["volume"] = grpvol
         } else if ( subid=="_groupVolumeDown" || subid=="_volumeDown" ) {
             def grpvol = item.currentValue("volume")
             grpvol = (grpvol < 5) ? 0 : grpvol - 5
             item.setVolume(grpvol)
+            resp["level"] = grpvol
             resp["volume"] = grpvol
-        } else if ( subid=="level" ) {
-            newsw = cmd.toInteger()
-            item.setLevel(newsw)
-            resp['level'] = newsw
-        } else if ( subid=="music-play" || swattr.contains(" music-play") ) {
-            newsw = "playing"
-            item.play()
-            resp['status'] = newsw
-            // resp['trackDescription'] = item.currentValue("trackDescription")
-        } else if ( subid=="music-stop" || swattr.contains(" music-stop") ) {
-            newsw = "stopped"
-            item.stop()
-            resp['status'] = newsw
-            // resp['trackDescription'] = ""
-        } else if ( subid=="music-pause" || swattr.contains(" music-pause") ) {
-            newsw = "paused"
-            item.pause()
-            resp['status'] = newsw
-        } else if ( subid=="music-previous" || swattr.contains(" music-previous") ) {
-            item.previousTrack()
-            resp = getMusic(swid, item)
-            // resp['trackDescription'] = item.currentValue("trackDescription")
-        } else if ( subid=="music-next" || swattr.contains(" music-next") ) {
-            item.nextTrack()
-            resp = getMusic(swid, item)
-            // resp['trackDescription'] = item.currentValue("trackDescription")
+        } else if ( subid=="level" || subid=="volume" ) {
+            newvol = cmd.toInteger()
+            item.setLevel(newvol)
+            resp["level"] = newvol
+            resp["volume"] = newvol
+        // } else if ( subid=="music-play" || swattr.contains(" music-play") ) {
+        //     newsw = "playing"
+        //     item.play()
+        //     resp['status'] = newsw
+        // } else if ( subid=="music-stop" || swattr.contains(" music-stop") ) {
+        //     newsw = "stopped"
+        //     item.stop()
+        //     resp['status'] = newsw
+        // } else if ( subid=="music-pause" || swattr.contains(" music-pause") ) {
+        //     newsw = "paused"
+        //     item.pause()
+        //     resp['status'] = newsw
+        // } else if ( subid=="music-previous" || swattr.contains(" music-previous") ) {
+        //     item.previousTrack()
+        //     resp = getMusic(swid, item)
+        // } else if ( subid=="music-next" || swattr.contains(" music-next") ) {
+        //     item.nextTrack()
+        //     resp = getMusic(swid, item)
         } else if ( subid=="_setVolume" || subid=="_setLevel" ) {
             def newvol = cmd.toInteger()
             resp["level"] = newvol

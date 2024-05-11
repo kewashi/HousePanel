@@ -2,10 +2,10 @@
     "packageName": "HousePanel",
 	"minimumHEVersion": "2.1.9",
 	"author": "Ken Washington",
-	"version": "3.2.8",
-	"dateReleased": "2024-02-12",
+	"version": "3.2.15",
+	"dateReleased": "2024-05-11",
 	"licenseFile": "",
-	"releaseNotes": "V3.2.7 updates and bug fixes to the new LIST customize feature and other code cleanup. Color bulb push updates were changed in this version so you should also update the Node.js modules. See https://housepanel.net for documentation.",
+	"releaseNotes": "V3.2.15 includes updated security measures and cleans up music tiles. This update also requires the Node.js modules to be updated. See https://housepanel.net for documentation.",
 	"apps" : [
 		{
 			"id" : "56776347-587d-4e5d-8a1a-bbd02238f63f",
