@@ -4519,7 +4519,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
                             });
                          }
                     } else {
-                        console.error(presult);
+                        console.log(presult);
                     }
                 }
             }, "json"

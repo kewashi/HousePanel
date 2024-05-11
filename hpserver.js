@@ -28,9 +28,10 @@ const DEBUG19 = false;              // new ST Event Sink debugs
 const DEBUG20 = false;              // New SmartThings detail
 const DEBUG21 = false;              // New ST sink message debug
 const DEBUG22 = false;              // login info
+const DEBUG23 = false;              // customize post call debugs
 const DEBUGcurl = false;            // detailed inspection
 const DEBUGsonos = false;           // Sonos hub debugging
-const DEBUGisy = false;              // ISY debug info
+const DEBUGisy = false;             // ISY debug info
 const DEBUGtmp = true;              // used to debug anything temporarily using ||
 
 // various control options
@@ -11461,8 +11462,10 @@ function updCustom(api, userid, tileid, swid, swattr, subid, swval, rules) {
         var rulerow = {userid: userid, configkey: configkey, configval: rulejson};
         result = mydb.updateRow("configs", rulerow, "userid = "+userid+" AND configkey = '"+configkey+"'")
         .then(res => {
-            var str = "Updated " + goodrules.length + " customizations for field: " + swid + " and user " + userid;
-            console.log((ddbg()), str);
+            var str = "Updated " + goodrules.length + " customizations for tile: " + tileid + ", id: " + swid + ", and user: " + userid;
+            if ( DEBUG23 ) {
+                console.log((ddbg()), str, "rules: \n", goodrules);
+            }
 
             // now handle the list request by clearing out old values if there and adding first value based on now
             // this will always use the new format for "content" so the tileid parameter should be zero
@@ -11495,7 +11498,7 @@ function updCustom(api, userid, tileid, swid, swattr, subid, swval, rules) {
                             console.log( (ddbg()), reason) ;
                         });
                 });
-            }    
+            }
             return str;
         })
         .catch( reason => {
@@ -11506,12 +11509,16 @@ function updCustom(api, userid, tileid, swid, swattr, subid, swval, rules) {
         result = mydb.deleteRow("configs", "userid = "+userid+" AND configkey='"+configkey+"'")
         .then(res => {
             var str = "Removed customizations Tile ID: " + swid + " and user: " + userid;
-            console.log((ddbg()), str);
+            if ( DEBUG23 ) {
+                console.log((ddbg()), str);
+            }
             if ( swval==="LIST" ) {
                 mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${swid}' AND subid = '${subid}'`)
                 .then(res2 => {
                     var numListDel = res2.getAffectedItemsCount();
-                    console.log( (ddbg()), `Deleted ${numListDel} LIST rows for deviceid=${swid} and subid=${subid}`);
+                    if ( DEBUG23 ) {
+                        console.log( (ddbg()), `Deleted ${numListDel} LIST rows for deviceid=${swid} and subid=${subid}`);
+                    }
                 })
                 .catch(reason => {
                     console.log( (ddbg()), reason) ;
@@ -11523,7 +11530,6 @@ function updCustom(api, userid, tileid, swid, swattr, subid, swval, rules) {
             console.log( (ddbg()), reason);
         });
     }
-
     return result;
 }
 
@@ -11791,11 +11797,6 @@ function apiCall(user, body, protocol, res) {
 
                     tc += "</div>";
                     tc += "</div>";
-                    // make the fake tile for the room for editing purposes
-                    // var faketile = {"panel": "panel", "tab": "Tab", "tabon": "Tab Selected", "name": "Name", "nameon":"Name Selected"};
-                    // var thesensor = { "id": "r_" + swid, "name": swval, thingid: 0, roomid: roomid, hubtype: "None",
-                    //                   "hubnum": "-1", "hubindex": 0, "type": "page", "value": faketile};
-                    // result = makeThing(userid, pname, null, 0, tileid, thesensor, "wysiwyg", 0, 0, 500, "", "pe_wysiwyg", null);
                     result = tc;
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
@@ -11811,9 +11812,7 @@ function apiCall(user, body, protocol, res) {
                     .then(results => {
                         var configoptions = results[0];
                         var device = results[1];
-                        var pvalue = decodeURI2(device.pvalue);
-                        // var device = JSON.parse(decodeURI(body.value));
-                        
+                        var pvalue = decodeURI2(device.pvalue);                        
                         var thesensor = {id: swid, name: device.name, thingid: thingid, roomid: 0, 
                                          type: device.devicetype, hubnum: "-1", hubindex: device.hubid, hubtype: "None", 
                                          hint: device.hint, refresh: device.refresh, value: pvalue};
@@ -11981,12 +11980,14 @@ function apiCall(user, body, protocol, res) {
                 var configkey = "user_" + swid;
                 result = mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
                 .then(row => {
-                    var rulelist = null;
+                    var rulelist;
                     if ( row ) {
                         rulelist = JSON.parse(row.configval);
                         if ( DEBUG2 ) {
                             console.log( (ddbg()),"rule list for user: ", userid," swid: ", swid, " rules: ", jsonshow(rulelist) );
                         }
+                    } else {
+                        rulelist = [];
                     }
                     return rulelist;
                 }).catch(reason => {
@@ -13644,7 +13645,7 @@ if ( app && applistening ) {
                         if ( DEBUG1 ) {
                             console.log( (ddbg()), "login function promise returned: ", req.body["api"], " = ", obj );
                         }
-                        res.send(obj);
+                        res.json(obj);
                         res.end();
                     });
                 } else if ( typeof result === "string" ) {
@@ -13708,7 +13709,7 @@ if ( app && applistening ) {
                             if ( DEBUG1 ) {
                                 console.log( (ddbg()), "apiCall promise returned: ", obj );
                             }
-                            res.send(obj);
+                            res.json(obj);
                             res.end();
                         });
                     } else if ( typeof result === "string" ) {
