@@ -632,10 +632,10 @@ $(document).ready(function() {
         $("#listthing").on('click', function() {
             if ( $("#showthing").hasClass("hidden") ) {
                 $("#showthing").removeClass("hidden");
-                $(this).html("Authorized Things");
+                $(this).html("Authorized Devices");
             } else {
                 $("#showthing").addClass("hidden");
-                $(this).html("Show Authorized Things");
+                $(this).html("Show Authorized Devices");
             }
         });
 

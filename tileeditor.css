@@ -84,8 +84,9 @@ div.greeting, div.donate {
 }
 
 div.donate {
-    width: 600px;
+    width: 760px;
     padding-top: 20px;
+    background-color: white;
 }
 
 div.logingreeting {
@@ -470,6 +471,7 @@ form {
     border: 0px;
     padding: 0px;
     margin: 0px;
+    margin-left: -4px;
     background: #ffffff;
     width: 100%;
 }
@@ -668,9 +670,8 @@ table.showid td.hubid {
 table.showid td.rightside, table.showid th.rightside {
     border-right: 1px solid #999999;
 }
-table.showid td.infobtns {
-    text-align: left; 
-    width: 15%;
+table.showid .infobtns {
+    width: 200px;
 }
 table.showid th.thingname, table.showid th.thingarr, table.showid th.infotype, 
 table.showid th.infoid, table.showid th.hubid, table.showid th.infonum, table.showid th.infobtns {
@@ -678,12 +679,19 @@ table.showid th.infoid, table.showid th.hubid, table.showid th.infonum, table.sh
     font-size: 19px;
     border-top: 1px solid #999999;
 }
+div.infosum {
+    margin-left: 20px;
+    width: 700px;
+    margin-top: 10px;
+    margin-bottom: 20px;
+    padding: 10px;
+    border: 1px solid black;
+}
 div.infopage {
     margin-left: 20px;
     width: 85%;
     margin-top: 10px;
     margin-bottom: 20px;
-    border: 1px solid black;
     padding: 10px;
 }
 div.returninfo {

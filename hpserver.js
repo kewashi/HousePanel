@@ -9966,21 +9966,22 @@ function getInfoPage(user, configoptions, hubs, req) {
         }
         $tc += hidden("configsid", JSON.stringify(configs), "configsid");
         $tc += "</form>";
-        $tc += "<div class=\"infopage\">";
+        $tc += "<div class=\"infosum\">";
         $tc += "<div class='bold'>Site url = " + GLB.returnURL + "</div>";
-        $tc += "<div class='bold'>Current user = " + uname + " (ID: #" + userid + ")</div>";
-        $tc += "<div class='bold'>Displaying panel = " + pname + "</div>";
-        $tc += "<div class='bold'>Client on port = " + currentport + "</div>";
-        $tc += "<div class='bold'>User email = " + useremail + "</div>";
+        $tc += "<div class='bold'>User ID: " + userid + "</div>";
+        $tc += "<div class='bold'>Username: " + uname + "</div>";
+        $tc += "<div class='bold'>User email: " + useremail + "</div>";
+        $tc += "<div class='bold'>Displaying panel: " + pname + "</div>";
+        $tc += "<div class='bold'>Client on port: " + currentport + "</div>";
         // $tc += "<div class='bold'>Skin folder = " + skin + "</div>";
-        $tc += "<div class='bold'>" + numhubs + " Hubs defined</div>";
-        $tc += "<hr />";
+        $tc += "<div class='bold'>" + numhubs + " Hubs authorized</div><br>";
         
         var num = 0;
         hubs.forEach (function(hub) {
             // putStats(hub);
             if ( hub.hubid !== "-1" ) {
                 num++;
+                $tc += "<hr />";
                 $tc += "<div class='bold'>Hub ID #" + num + "</div>";
                 for ( var hubattr in hub ) {
                     var skip = false;
@@ -9994,7 +9995,6 @@ function getInfoPage(user, configoptions, hubs, req) {
                         $tc += "<div class='wrap'>" + hubattr + " = " + hub[hubattr] + "</div>";
                     }
                 }
-                $tc += "<hr />";
             }
         });
 
@@ -10017,12 +10017,88 @@ function getInfoPage(user, configoptions, hubs, req) {
             $tc +=  str;
         }
 
+        // Section 1 - show dev history
         $tc += "<button id=\"listhistory\" class=\"showhistory\">Show Dev Log</button>";
         $tc += "<div id=\"showhistory\" class=\"infopage hidden\">";
         $tc += "<pre>" + GLB.devhistory + "</pre>";
         $tc += "</div>";
-        
-        $tc += "<br><button id=\"listthing\" class=\"showhistory\">Authorized Things</button>";
+
+        // Section 2 - show customizations
+        var customList = [];
+        for ( var i in configoptions ) {
+
+            var theoption = configoptions[i];
+            var key = theoption.configkey;
+            if ( key.startsWith("user_") ) {
+
+                var ruleid = key.substr(5);
+                var val = theoption.configval;
+                if ( typeof val === "object" ) {
+                    var lines = val;
+                } else {
+                    lines = decodeURI2(val);
+                }
+
+                if ( lines && is_array(lines) ) {
+            
+                    // allow user to skip wrapping single entry in an array
+                    // the GUI will never do this but a user might in a manual edit
+                    if ( !is_array(lines[0]) ) {
+                        lines = [lines];
+                    }
+
+                    lines.forEach(function(line) {
+                        var customType = line[0];
+                        var customValue = line[1];
+                        var customSubid = line[2];
+                        customList.push( [customType, ruleid, customValue, customSubid] );
+                    });
+                }
+            }
+        }
+            
+        // sort the list by type
+        if ( customList.length ) {
+            customList = customList.sort( (a,b) => {
+                if ( a[0]===b[0] ) {
+                    var x = 0;
+                } else if ( a[0] < b[0] ) {
+                    x = -1;
+                } else {
+                    x = 1;
+                }
+                return x;
+            });
+
+            // display the customizations
+            $tc += "<br><button id=\"listcustom\" class=\"showhistory\">Show Customizations</button>";
+            $tc += "<div id=\"showcustom\" class=\"infopage hidden\">";
+            $tc += "<table class=\"showid\">";
+            $tc += "<thead><tr>" + 
+                "<th class=\"infotype\">Type</th>" + 
+                "<th class=\"thingname\">Custom ID</th>" + 
+                "<th class=\"thingarr\">Custom Value</th>" +
+                "<th class=\"infonum\">Field</th>" +
+                "<th class=\"infobtns rightside\">Action</th>" +
+            "</tr></thead>";
+
+            var trid = 0;
+            customList.forEach(function(item) {
+                trid++;
+                $tc += `<tr id="trid_${trid}">` + 
+                    "<td class=\"infotype\">" + item[0] + "</td>" +
+                    "<td class=\"thingname\">" + item[1] + "</td>" +
+                    "<td class=\"thingarr\">" + item[2] + "</td>" +
+                    "<td class=\"infonum\">" + item[3] + "</td>" +
+                    `<td class="infobtns rightside"><button class="editbutton" trid="${trid}">Edit</button>` +
+                    `<button class="delbutton" trid="${trid}">Del</button></td>` +
+                "</tr>";
+            });
+            $tc += "</table></div>";
+        }
+
+        // section 3 - show authorized devices
+        $tc += "<br><button id=\"listthing\" class=\"showhistory\">Authorized Devices</button>";
         $tc += "<div id=\"showthing\" class=\"infopage\">";
         $tc += "<table class=\"showid\">";
         $tc += "<thead><tr><th class=\"thingname\">Name" + 
@@ -10079,79 +10155,6 @@ function getInfoPage(user, configoptions, hubs, req) {
         }
         $tc += "</table></div>";
 
-        // show all the customizations
-        var customList = [];
-        for ( var i in configoptions ) {
-
-            var theoption = configoptions[i];
-            var key = theoption.configkey;
-            if ( key.startsWith("user_") ) {
-
-                var ruleid = key.substr(5);
-                var val = theoption.configval;
-                if ( typeof val === "object" ) {
-                    var lines = val;
-                } else {
-                    lines = decodeURI2(val);
-                }
-
-                if ( lines && is_array(lines) ) {
-            
-                    // allow user to skip wrapping single entry in an array
-                    // the GUI will never do this but a user might in a manual edit
-                    if ( !is_array(lines[0]) ) {
-                        lines = [lines];
-                    }
-
-                    lines.forEach(function(line) {
-                        var customType = line[0];
-                        var customValue = line[1];
-                        var customSubid = line[2];
-                        customList.push( [customType, ruleid, customValue, customSubid] );
-                    });
-                }
-            }
-        }
-                
-        // sort the list by type
-        if ( customList.length ) {
-            customList = customList.sort( (a,b) => {
-                if ( a[0]===b[0] ) {
-                    var x = 0;
-                } else if ( a[0] < b[0] ) {
-                    x = -1;
-                } else {
-                    x = 1;
-                }
-                return x;
-            });
-
-            // display the customizations
-            $tc += "<br><button id=\"listcustom\" class=\"showhistory\">Show Customizations</button>";
-            $tc += "<div id=\"showcustom\" class=\"infopage hidden\">";
-            $tc += "<table class=\"showid\">";
-            $tc += "<thead><tr>" + 
-                "<th class=\"infotype\">Type</th>" + 
-                "<th class=\"thingname\">Custom ID</th>" + 
-                "<th class=\"thingarr\">Custom Value</th>" +
-                "<th class=\"infonum\">Field</th>" +
-                "<th class=\"infobtns rightside\">Action</th>" +
-            "</tr></thead>";
-
-            var trid = 0;
-            customList.forEach(function(item) {
-                trid++;
-                $tc += `<tr id="trid_${trid}">` + 
-                    "<td class=\"infotype\">" + item[0] + "</td>" +
-                    "<td class=\"thingname\">" + item[1] + "</td>" +
-                    "<td class=\"thingarr\">" + item[2] + "</td>" +
-                    "<td class=\"infonum\">" + item[3] + "</td>" +
-                    `<td class="infobtns rightside"><button class="editbutton" trid="${trid}">Edit</button>` +
-                    `<button class="delbutton" trid="${trid}">Del</button></td>` +
-                "</tr>";
-            });
-            $tc += "</table></div>";
-        }
 
         $tc += "<button class=\"infobutton fixbottom\">Return to HousePanel</button>";
 
