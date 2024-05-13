@@ -1939,32 +1939,8 @@ def setVariable(swid, cmd, swattr, subid ) {
 // and we accommodate switches, shades, and api calls with valid cmd values
 // replaced button check with full blown button call
 def setOther(swid, cmd, swattr, subid, item=null ) {
-    def resp = [:]
-    def newsw
     item  = item ? item : myothers.find{it.id == swid }
-    def lightflags = ["switch","level","hue","saturation","colorTemperature","color"]
-    def doorflags = ["door","contact"]
-    def buttonflags = ["pushed","held","doubleTapped","released","_push","_hold","_doubleTap","_release"]
-    
-    if ( item ) {
-        logcaller(item.getDisplayName(), swid, cmd, swattr, subid, "debug")
-
-        if ( lightflags.contains(subid) ) {
-            resp = setGenericLight(myothers, "other", swid, cmd, swattr, subid, item)
-        } else if ( doorflags.contains(subid) ) {
-            resp = setGenericDoor(myothers, swid, cmd, swattr, subid, item)
-        } else if ( subid=="windowShade" ) {
-            resp = setShade(swid, cmd, swattr, subid)
-        } else if ( buttonflags.contains(subid) ) {
-            resp = setButton(swid, cmd, swattr, subid, item)
-        } else {
-            def isgood = sendCommand(item, subid, cmd)
-            if ( !isgood ) {
-                logger("no command was processed in setOther for swid= ${swid}, cmd= ${cmd}", "warn")
-            }
-            resp = getOther(swid, item)
-        }
-    }
+    def resp = setActuator(swid, cmd, swattr, subid, item)
     return resp
 }
 
@@ -1985,6 +1961,15 @@ def setActuator(swid, cmd, swattr, subid, item=null ) {
             resp = setGenericDoor(myothers, swid, cmd, swattr, subid, item)
         } else if ( subid=="windowShade" ) {
             resp = setShade(swid, cmd, swattr, subid)
+        // handle sliders
+        } else if ( subid=="level" && item.hasCommand("setLevel") ) {
+            newvol = cmd.toInteger()
+            item.setLevel(newvol)
+            resp["level"] = newvol
+        } else if ( subid=="volume" && item.hasCommand("setVolume") ) {
+            newvol = cmd.toInteger()
+            item.setVolume(newvol)
+            resp["volume"] = newvol
         // handle broadcom IR devices before buttons since that uses _push function
         } else if ( item.hasCommand("learnIR") && item.hasCommand("learnRF") ) {
             def succ = sendCommand(item, subid, cmd)
@@ -1997,7 +1982,7 @@ def setActuator(swid, cmd, swattr, subid, item=null ) {
         } else {
             def isgood = sendCommand(item, subid, cmd)
             if ( !isgood ) {
-                logger("invalid command in setActuator. swid= ${swid}, subid= ${subid}, cmd= ${cmd}", "warn")
+                logger("invalid command. swid= ${swid}, subid= ${subid}, cmd= ${cmd}", "warn")
             }
             resp = getActuator(swid, item)
         }

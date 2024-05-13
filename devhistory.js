@@ -1,4 +1,5 @@
 const devhistory = `
+3.2.16  Added edit and delete feature to info page for customizations
 3.2.15  Fix volume bug in music tiles and clean up to remove the old controls
 3.2.14  Bugfix to prior update addressing customize post json result errors
 3.2.13  Add security layer to POST calls to prevent external controls of home

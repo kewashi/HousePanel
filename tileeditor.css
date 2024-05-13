@@ -632,7 +632,7 @@ table.roomoptions tr.hiderow {
 }
 
 table.showid .thingname, table.showid .thingarr, table.showid .infotype, 
-table.showid .infoid, table.showid .hubid, table.showid .infonum {
+table.showid .infoid, table.showid .hubid, table.showid .infonum, table.showid .infobtns {
     padding-left: 5px;
     text-align: center; 
     width: 10%;  
@@ -665,11 +665,15 @@ table.showid td.hubid {
     max-width: 100px;
     width: 15%;  
 }
-table.showid td.infonum, table.showid th.infonum {
+table.showid td.rightside, table.showid th.rightside {
     border-right: 1px solid #999999;
 }
+table.showid td.infobtns {
+    text-align: left; 
+    width: 15%;
+}
 table.showid th.thingname, table.showid th.thingarr, table.showid th.infotype, 
-table.showid th.infoid, table.showid th.hubid, table.showid th.infonum {
+table.showid th.infoid, table.showid th.hubid, table.showid th.infonum, table.showid th.infobtns {
     font-weight: bold;
     font-size: 19px;
     border-top: 1px solid #999999;
@@ -752,6 +756,14 @@ button.infobutton:hover, button.showhistory:hover {
 }
 button.showhistory {
     margin-top: 20px;
+}
+button.delbutton, button.editbutton {
+    width: 80px; height: 26px;
+    margin-left: 10px;
+    padding-left: 2px; padding-right: 2px;
+}
+button.delbutton:hover, button.editbutton:hover {
+    filter: invert(1);
 }
 .fixbottom {
     position: fixed; 

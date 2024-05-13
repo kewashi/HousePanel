@@ -9949,6 +9949,9 @@ function getInfoPage(user, configoptions, hubs, req) {
         });
 
         $tc += "<form>";
+        $tc += hidden("userid", userid, "userid");
+        $tc += hidden("emailid", useremail, "emailid");
+        $tc += hidden("skinid", skin, "skinid");
         $tc += hidden("returnURL", GLB.returnURL);
         $tc += hidden("pathname", pathname);
         $tc += hidden("pagename", "info");
@@ -10028,7 +10031,7 @@ function getInfoPage(user, configoptions, hubs, req) {
             "</th><th class=\"infoid\">Thing id" +
             "</th><th class=\"infotype\">Type" + 
             "</th><th class=\"hubid\">Hub" +
-            "</th><th class=\"infonum\">Tile Num</th></tr></thead>";
+            "</th><th class=\"infonum rightside\">Tile Num</th></tr></thead>";
 
         // don't need to sort here because we did so in the call to the main page
         // var devices = sortedSensors("hubnum", "name", "type");
@@ -10072,7 +10075,7 @@ function getInfoPage(user, configoptions, hubs, req) {
                 "</td><td class=\"infoid\">" + device["devices_deviceid"] +
                 "</td><td class=\"infotype\">" + device["devices_devicetype"] +
                 "</td><td class=\"hubid\">" + hubstr + 
-                "</td><td class=\"infonum\">" + device["devices_id"] + "</td></tr>";
+                "</td><td class=\"infonum rightside\">" + device["devices_id"] + "</td></tr>";
         }
         $tc += "</table></div>";
 
@@ -10127,16 +10130,25 @@ function getInfoPage(user, configoptions, hubs, req) {
             $tc += "<br><button id=\"listcustom\" class=\"showhistory\">Show Customizations</button>";
             $tc += "<div id=\"showcustom\" class=\"infopage hidden\">";
             $tc += "<table class=\"showid\">";
-            $tc += "<thead><tr><th class=\"infotype\">Type" + 
-                "</th><th class=\"thingname\">Custom ID" + 
-                "</th><th class=\"thingarr\">Custom Value" +
-                "</th><th class=\"infonum\">Field</th></tr></thead>";
+            $tc += "<thead><tr>" + 
+                "<th class=\"infotype\">Type</th>" + 
+                "<th class=\"thingname\">Custom ID</th>" + 
+                "<th class=\"thingarr\">Custom Value</th>" +
+                "<th class=\"infonum\">Field</th>" +
+                "<th class=\"infobtns rightside\">Action</th>" +
+            "</tr></thead>";
 
+            var trid = 0;
             customList.forEach(function(item) {
-                $tc += "<tr><td class=\"infotype\">" + item[0] +
-                    "</td><td class=\"thingname\">" + item[1] +
-                    "</td><td class=\"thingarr\">" + item[2] +
-                    "</td><td class=\"infonum\">" + item[3] + "</td></tr>";
+                trid++;
+                $tc += `<tr id="trid_${trid}">` + 
+                    "<td class=\"infotype\">" + item[0] + "</td>" +
+                    "<td class=\"thingname\">" + item[1] + "</td>" +
+                    "<td class=\"thingarr\">" + item[2] + "</td>" +
+                    "<td class=\"infonum\">" + item[3] + "</td>" +
+                    `<td class="infobtns rightside"><button class="editbutton" trid="${trid}">Edit</button>` +
+                    `<button class="delbutton" trid="${trid}">Del</button></td>` +
+                "</tr>";
             });
             $tc += "</table></div>";
         }
@@ -11445,12 +11457,10 @@ function parseCustomizeContent(tileid, swattr) {
     return [linkid, targetsubid, nreset];
 }
 
-function updCustom(api, userid, tileid, swid, swattr, subid, swval, rules) {
-    
-    // var reserved = ["index","rooms","things","config","control","time","useroptions"];
+function updCustom(userid, tileid, swid, swval, oldsubid, subid, swtype, rules) {
     var configkey = "user_" + swid;
     var goodrules = [];
-    var content = swattr;
+    var content = swval;
 
     // handle encryption and check for valid customization
     // fixed bug below that didn't use the new goodrules array
@@ -11475,27 +11485,27 @@ function updCustom(api, userid, tileid, swid, swattr, subid, swval, rules) {
         var rulerow = {userid: userid, configkey: configkey, configval: rulejson};
         result = mydb.updateRow("configs", rulerow, "userid = "+userid+" AND configkey = '"+configkey+"'")
         .then(res => {
-            var str = "Updated " + goodrules.length + " customizations for tile: " + tileid + ", id: " + swid + ", and user: " + userid;
+            var str = "Updated " + goodrules.length + " customizations for id: " + swid + ", and user: " + userid;
             if ( DEBUG23 ) {
-                console.log((ddbg()), str, "rules: \n", goodrules);
+                console.log((ddbg()), str, "rules: \n", goodrules, " rulerow: ", rulerow);
             }
 
             // now handle the list request by clearing out old values if there and adding first value based on now
             // this will always use the new format for "content" so the tileid parameter should be zero
-            if ( swval === "LIST" ) {
+            if ( swtype === "LIST" ) {
 
                 var arr = parseCustomizeContent(tileid, content);
                 var linkid = arr[0];
                 var targetsubid = arr[1];
 
                 Promise.all([
-                    mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${swid}' AND subid = '${subid}'`),
+                    mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${swid}' AND subid = '${oldsubid}'`),
                     mydb.getRow("devices","name, pvalue", `userid = ${userid} AND id = ${linkid}`)
                 ])
                 .then(res2 => {
                     var numListDel = res2[0].getAffectedItemsCount();
                     if ( numListDel > 0 ) {
-                        console.log((ddbg()), "Removed " + numListDel + " items from old LIST for subid = " + subid);
+                        console.log((ddbg()), "Removed " + numListDel + " items from old LIST for subid = " + oldsubid);
                     }
                         var device = res2[1];
                         var pvalue = decodeURI2(device.pvalue);
@@ -11505,7 +11515,9 @@ function updCustom(api, userid, tileid, swid, swattr, subid, swval, rules) {
                         var newList = {userid: userid, deviceid: swid, subid: subid, ltime: today, lvalue: theval};
                         mydb.addRow("lists", newList)
                         .then(() => {
-                            console.log((ddbg()), `Added first item for field: ${targetsubid} from Tile #${linkid} into field: ${subid} of a new list: (${today},${theval})`);
+                            if ( DEBUG23 ) {
+                                console.log((ddbg()), `Added first item for field: ${targetsubid} from Tile #${linkid} into field: ${subid} of a new list: (${today},${theval})`);
+                            }
                         })
                         .catch(reason => {
                             console.log( (ddbg()), reason) ;
@@ -11515,9 +11527,11 @@ function updCustom(api, userid, tileid, swid, swattr, subid, swval, rules) {
             return str;
         })
         .catch( reason => {
-            console.log( (ddbg()), reason);
+            console.error( (ddbg()), reason);
+            return "error - problem encountered attempting to update rules";
         });
 
+    // if we get here, the rules are empty so we can remove the item from the db
     } else {
         result = mydb.deleteRow("configs", "userid = "+userid+" AND configkey='"+configkey+"'")
         .then(res => {
@@ -11525,22 +11539,24 @@ function updCustom(api, userid, tileid, swid, swattr, subid, swval, rules) {
             if ( DEBUG23 ) {
                 console.log((ddbg()), str);
             }
-            if ( swval==="LIST" ) {
-                mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${swid}' AND subid = '${subid}'`)
+            if ( swtype==="LIST" ) {
+                mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${swid}' AND subid = '${oldsubid}'`)
                 .then(res2 => {
                     var numListDel = res2.getAffectedItemsCount();
                     if ( DEBUG23 ) {
-                        console.log( (ddbg()), `Deleted ${numListDel} LIST rows for deviceid=${swid} and subid=${subid}`);
+                        console.log( (ddbg()), `Deleted ${numListDel} LIST rows for deviceid=${swid} and subid=${oldsubid}`);
                     }
                 })
                 .catch(reason => {
-                    console.log( (ddbg()), reason) ;
+                    console.error( (ddbg()), reason);
+                    str = "error - problem encountered attempting to delete a rule";
                 });
             }
             return str;
         })
         .catch( reason => {
-            console.log( (ddbg()), reason);
+            console.error( (ddbg()), reason);
+            return "error - problem encountered attempting to update rules";
         });
     }
     return result;
@@ -11983,7 +11999,7 @@ function apiCall(user, body, protocol, res) {
                     }
                     return [rulelist, configlist, themode];
                 }).catch(reason => {
-                    console.log( (ddbg()), "apiCall - getoptiopns: ", reason);
+                    console.error( (ddbg()), "apiCall - getoptiopns: ", reason);
                     return null;
                 });
                 break;
@@ -12004,7 +12020,68 @@ function apiCall(user, body, protocol, res) {
                     }
                     return rulelist;
                 }).catch(reason => {
-                    console.log( (ddbg()), "apiCall - getrules: ", reason);
+                    console.error( (ddbg()), "apiCall - getrules: ", reason);
+                    return null;
+                });
+                break;
+
+            // similar to above but we get the rules and edit them based on what is sent in
+            // and then pass it on to our rules updater function to update them
+            case "editrules":
+                var configkey = "user_" + swid;
+                var newsubid = swattr;
+                var newrule = [swtype, swval, newsubid];
+                result = mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
+                .then(row => {
+                    var rulelist = [];
+                    if ( row ) {
+                        var oldrules = JSON.parse(row.configval);
+
+                        // loop through the list of rules and update the one that was edited
+                        // we do this by either pushing the existing one or the edited one to a new array
+                        for ( var i = 0; i < oldrules.length; i++ ) {
+                            var therule = oldrules[i];
+                            if ( therule[2] === subid ) {
+                                rulelist.push(newrule);
+                            } else {
+                                rulelist.push(therule);
+                            }
+                        };
+                    }
+
+                    // save the updated config row
+                    updCustom(userid, 0, swid, swval, subid, newsubid, swtype, rulelist);
+                    return rulelist;
+                }).catch(reason => {
+                    console.error( (ddbg()), "apiCall - editrules: ", reason);
+                    return null;
+                });
+                break;
+
+            // similar to above but we delete the pointed to rule
+            // and then pass it on to our rules updater function to update them
+            case "delrules":
+                var configkey = "user_" + swid;
+                result = mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
+                .then(row => {
+                    var rulelist = [];
+                    if ( row ) {
+                        var oldrules = JSON.parse(row.configval);
+
+                        // loop through the list of rules and only push those not deleted
+                        for ( var i = 0; i < oldrules.length; i++ ) {
+                            var therule = oldrules[i];
+                            if ( therule[2] !== subid ) {
+                                rulelist.push(therule);
+                            }
+                        };
+                    }
+
+                    // save the updated config row
+                    updCustom(userid, 0, swid, swval, subid, subid, swtype, rulelist);
+                    return rulelist;
+                }).catch(reason => {
+                    console.error( (ddbg()), "apiCall - delrules: ", reason);
                     return null;
                 });
                 break;
@@ -12227,7 +12304,7 @@ function apiCall(user, body, protocol, res) {
                     } else {
                         rules = null;
                     }
-                    result = updCustom(api, userid, tileid, swid, swattr, subid, swval, rules);
+                    result = updCustom(userid, tileid, swid, swval, subid, subid, swtype, rules);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }

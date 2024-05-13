@@ -1193,6 +1193,7 @@ function applyCustomField(action, subid) {
                 if ( rule[2]===subid ) {
                     cm_Globals.rules[i] = therule;
                     existing = true;
+                    console.log("existing: ", subid, " rule: ", therule, " oldrules: ", oldrules);
                     break;
                 }
             }
@@ -1244,7 +1245,8 @@ function applyCustomField(action, subid) {
         rules = encodeURI(JSON.stringify(cm_Globals.rules));
     }
 
-    var callobj = {api: action, userid: cm_Globals.options.userid, id: bid, value: customtype, attr: content,
+    // change call variables to make more sense to reuse this function to edit customizations in info page (see editrules)
+    var callobj = {api: action, userid: cm_Globals.options.userid, id: bid, type: customtype, value: content,
                    rules: rules, tileid: tileid, subid: subid, hpcode: cm_Globals.options.hpcode};
     $.post(cm_Globals.returnURL, callobj,
         function (presult, pstatus) {

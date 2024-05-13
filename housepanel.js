@@ -616,6 +616,9 @@ $(document).ready(function() {
             }
         });
     } else if ( pagename==="info" ) {
+
+        getOptions();
+
         $("#listhistory").on('click', function() {
             if ( $("#showhistory").hasClass("hidden") ) {
                 $("#showhistory").removeClass("hidden");
@@ -645,6 +648,92 @@ $(document).ready(function() {
                 $(this).html("Show Customizations");
             }
         });
+
+        // handle new edit and delete buttons for customizations
+        $("table.showid button.editbutton").on('click', function() {
+            var trid = $(this).attr("trid");
+            var typeedit = $(`#trid_${trid} > td.infotype`).html();
+            var idedit = $(`#trid_${trid} > td.thingname`).html();
+            var valedit = $(`#trid_${trid} > td.thingarr`).html();
+            var subidedit = $(`#trid_${trid} > td.infonum`).html();
+            var offset = $(this).offset();
+            var pos = {top: offset.top+35, left: 250, width: "auto", height: "auto", border: "4px solid black"};
+            var htmlcontent =  "<div class='ddlDialog'>";
+            htmlcontent += `<p><strong>Editing ${typeedit} type custom value for Custom ID: ${idedit}</p></strong><br><br>`;
+            htmlcontent += "<div class='ddlDialog'><label for='editfield'>New Field: </label><br>";
+            htmlcontent += `<input class='editcustom' id='editfield' type='text' size='20' value="${subidedit}" /></div><br><br>`;
+            htmlcontent += "<div class='ddlDialog'><label for='editval'>New Custom Value: </label><br>";
+            htmlcontent += `<input class='editcustom' id='editval' type='text' size='80' value="${valedit}" /></div><br><br>`;
+            htmlcontent += "</div>";
+
+            createModal("modalexec", htmlcontent, "body", true, pos, 
+            function(ui) {
+                var clk = $(ui).attr("name");
+                if ( clk==="okay" ) {
+                    var newval = $("#editval").val();
+                    var newsubid = $("#editfield").val();
+                    if ( newsubid !== subidedit || newval !== valedit ) {
+                        $.post(cm_Globals.returnURL, 
+                            {api: "editrules", userid: cm_Globals.options.userid, id: idedit, type: typeedit,
+                             value: newval, subid: subidedit, attr: newsubid, hpcode: cm_Globals.options.hpcode},
+                            function (presult, pstatus) {
+                                if ( pstatus==="success" ) {
+                                    console.log(`Updated rule: Custom ID: ${idedit} Field: ${newsubid} Value: ${newval} Result: ${presult}`);
+
+                                    // now update the screen with the new values
+                                    $(`#trid_${trid} > td.thingarr`).html(newval);
+                                    $(`#trid_${trid} > td.infonum`).html(newsubid);
+                                } else {
+                                    console.warn("Something went wrong, so no customizations were updated");
+                                }
+                            }
+                        );                    
+                    } else {
+                        console.log("No changes made, nothing done.");
+                    }
+                }
+                closeModal("modalexec");
+            });
+        });
+
+        $("table.showid button.delbutton").on('click', function() {
+            var trid = $(this).attr("trid");
+            var typeedit = $(`#trid_${trid} > td.infotype`).html();
+            var idedit = $(`#trid_${trid} > td.thingname`).html();
+            var valedit = $(`#trid_${trid} > td.thingarr`).html();
+            var subidedit = $(`#trid_${trid} > td.infonum`).html();
+            var offset = $(this).offset();
+            var pos = {top: offset.top+35, left: 250, width: "auto", height: "auto", border: "4px solid black"};
+            var htmlcontent =  "<div class='ddlDialog'>";
+            htmlcontent += `<div class='ddlDialog'><strong>Remove ${typeedit} type for Custom ID: ${idedit}</p></strong></div><br>`;
+            htmlcontent += "<div class='ddlDialog'>Are you sure?</div>";
+            htmlcontent += "</div>";
+
+            createModal("modalexec", htmlcontent, "body", true, pos, 
+            function(ui) {
+                var clk = $(ui).attr("name");
+                if ( clk==="okay" ) {
+                    $.post(cm_Globals.returnURL, 
+                        {api: "delrules", userid: cm_Globals.options.userid, id: idedit, type: typeedit,
+                            value: valedit, subid: subidedit, hpcode: cm_Globals.options.hpcode},
+                        function (presult, pstatus) {
+                            if ( pstatus==="success" ) {
+                                console.log(`Custom ID: ${idedit} Field: ${subidedit} Value: ${valedit} Deleted`);
+
+                                // now update the screen by deleting this row
+                                $(`#trid_${trid}`).remove();
+                            } else {
+                                console.warn("Something went wrong, so no customizations were updated");
+                            }
+                        }
+                    );                    
+                }
+                closeModal("modalexec");
+            });
+            // var trid = $(this).attr("trid");
+            // alert("trid = " + trid);
+        });
+
     }
     
     // handle button setup for all pages
