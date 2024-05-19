@@ -1,4 +1,5 @@
 const devhistory = `
+3.2.17  Minor tweaks to clean up the code
 3.2.16  Added edit and delete feature to info page for customizations and GUI tweaks
 3.2.15  Fix volume bug in music tiles and clean up to remove the old controls
 3.2.14  Bugfix to prior update addressing customize post json result errors

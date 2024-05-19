@@ -139,16 +139,6 @@ exports.sqlDatabase = class sqlDatabase {
 
             that.getRow(usertable, "*", conditions)
             .then( function(result) {
-                // // handle errors from getRow
-                // if ( that.error ) {
-                //     if ( typeof reject === "function" ) {
-                //         reject(that.error);
-                //     } else {
-                //         resolve()
-                //     }
-                //     return null;
-                // }
-
                 // if row is there then update it and return the update promise
                 // also set the lastid field to the existing row so we can get it if needed
                 if ( result ) {

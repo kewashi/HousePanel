@@ -836,7 +836,7 @@ function initCustomActions() {
             var oldsave = saveOpmode;
             if ( repname === "Add" && subid.startsWith("_") ) {
                 // alert("You cannot add a field that begins with an underscore. That is reserved for existing commands");                
-                createModal("modalremove","You cannot add field: " + subid + " to tile: " + tilename + ".  Fields beginning with an underscore are reserved for existing commands", "table.cm_table", "Dismiss", pos), function() {
+                createModal("modalremove","You cannot add field: " + subid + " to tile: " + tilename + " linked to a User Field Name that begins with an underscore. Underscore fields are reserved for existing commands.", "table.cm_table", "Dismiss", pos), function() {
                     closeModal("modalremove");
                     saveOpmode = oldsave;
                     priorOpmode = "Modal";

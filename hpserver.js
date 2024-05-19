@@ -714,7 +714,9 @@ function getTypes() {
         thingtypes.push("sonos");
     }
     if ( array_key_exists("ISY", GLB.dbinfo.hubs) ) {
-        thingtypes.push("isy");
+        if ( !thingtypes.includes("isy") ) {
+            thingtypes.push("isy");
+        }
     }
 
     thingtypes.sort();
@@ -2013,7 +2015,7 @@ function getDevices(hub) {
                         var origname = content["name"] || "";
                         var pvalue = content["value"];
                         var hint = hubType;
-                        var refresh = "";
+                        var refresh = "never";
 
                         if ( !pvalue ) {
                             console.log( (ddbg()),"Something went wrong loading Hubitat device: ", content);
@@ -2950,6 +2952,10 @@ function getDevices(hub) {
                     var currentIds = [];
                     rows.forEach(row => {
                         currentIds.push(row.id);
+
+                        // delete any duplicate that has this same deviceid and type but a different sql id
+                        // mydb.deleteRow("devices",`id != ${row.id} AND deviceid = '${row.deviceid}' AND devicetype = '${row.devicetype}`);
+
                     });
                     var idstr = "(" + currentIds.join(",") + ")";
 
@@ -2979,31 +2985,6 @@ function getDevices(hub) {
                 // return "No devices and no tiles removed";
             });
         }
-
-        // remove dead tiles
-        // function removeDeadTiles(userid, hubindex, currentDevices) {
-
-        //     // go through all tiles and remove those that don't have devices
-        //     var joinstr = mydb.getJoinStr("things","tileid","devices","id");
-        //     return mydb.getRows("things","things.id as things_id, devices.deviceid as devices_deviceid, devices.hubid as devices_hubid",
-        //                         "things.userid = "+userid+" AND devices.hubid = "+hubindex,joinstr)
-        //     .then(things => {
-        //         if ( !things ) return 0;
-        //         var numremoved = 0;
-        //         things.forEach(thing => {
-        //             var devstr = "'"+thing["devices_deviceid"]+"'";
-        //             if ( !currentDevices.includes(devstr) ) {
-        //                 numremoved++
-        //                 mydb.deleteRow("things","id = " + thing["things_id"]);
-        //             }
-        //         });
-        //         return numremoved;
-        //     })
-        //     .catch(reason => {
-        //         console.log( (ddbg()), reason );
-        //         return 0;
-        //     });
-        // }
 
         function getFordVehicles() {
 
