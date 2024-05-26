@@ -1096,6 +1096,8 @@ function getHubInfo(hub) {
             }
             
             // now update the placeholders with the real hub name and ID
+            // we now get even more info back from the hub but we don't need it
+            console.log((ddbg()), "hub info returnd: ", jsonbody);
             hub["hubname"]  = hubName;
             hub["hubid"] = hubId;
             updateHub(hub, hubId);
@@ -9610,6 +9612,8 @@ function apiCall(user, body, protocol, res) {
                 if ( protocol==="POST" ) {
 
                     // now load the new data
+                    // set result to blank for no errors to proceed with auth steps
+                    result = "";
                     var hub = {};
                     hub["userid"] = userid;
                     hub["hubhost"] = body.hubhost;
@@ -9666,37 +9670,44 @@ function apiCall(user, body, protocol, res) {
                         // now set the endpoint based on the AppID provided
                         hub.hubaccess = hub.useraccess;
                         hub.hubendpt = hub.hubhost + "/apps/api/" + hub.userendpt;
+
+                    } else {
+                        // set an error result to skip auth steps
+                        result = "error - invalide hub type: " + hub.hubtype + " in hubauth. Only ISY and Hubitat hubs are supported.";
+                        console.error((ddbg()), "Invalid hub: ", hub);
                     }
 
-                    if ( DEBUG2 ||  DEBUGtmp ) {
+                    if ( DEBUG2 ) {
                         console.log((ddbg()), "hub in hubauth: ", hub);
                     }
 
-                    // point to the hub being authorized
-                    result = mydb.updateRow("users",{defhub: hubid},"id = " + userid)
-                    .then( () => {
-                        return mydb.updateRow("hubs", hub, "userid = " + userid + " AND hubid = '"+hubid+"'");
-                    })
-                    // add the hub to the database or update it
-                    .then(result => {
-                        hub.id = mydb.getId();
-                        if ( DEBUG2 ) {
-                            console.log( (ddbg()), "oauth hub: ", hub, " id: ", hub.id );
-                        }
-                        return getHubObj(hub);
-                    })
-                    .then(obj => {
-                        if ( DEBUG2 ) {
-                            console.log( (ddbg()), "hub auth: ", obj);
-                        }
-                        res.send(obj);
-                        res.end();
-                    })
-                    .catch(reason => {
-                        console.log( (ddbg()), reason);
-                        res.send("error - something went wrong");
-                        res.end();
-                    });
+                    if ( result==="" ) {
+                        // point to the hub being authorized
+                        result = mydb.updateRow("users",{defhub: hubid},"id = " + userid)
+                        .then( () => {
+                            return mydb.updateRow("hubs", hub, "userid = " + userid + " AND hubid = '"+hubid+"'");
+                        })
+                        // add the hub to the database or update it
+                        .then(result => {
+                            hub.id = mydb.getId();
+                            if ( DEBUG2 ) {
+                                console.log( (ddbg()), "oauth hub: ", hub, " id: ", hub.id );
+                            }
+                            return getHubObj(hub);
+                        })
+                        .then(obj => {
+                            if ( DEBUG2 ) {
+                                console.log( (ddbg()), "hub auth: ", obj);
+                            }
+                            res.send(obj);
+                            res.end();
+                        })
+                        .catch(reason => {
+                            console.log( (ddbg()), reason);
+                            res.send("error - something went wrong in hubauth");
+                            res.end();
+                        });
+                    }
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -9993,7 +10004,7 @@ function setupISYSocket() {
                 var origin = "com.universal-devices.websockets.isy";
                 var header = {"Authorization": "Basic " + base64, "Sec-WebSocket-Protocol": "ISYSUB",  
                                 "Sec-WebSocket-Version": "13", "Origin": origin};
-                wshost = wshost + "/subscribe";
+                wshost = wshost + "/rest/subscribe";
                 var opts = {rejectUnauthorized: false};
                 var wsconfigs = {tlsOptions: opts, closeTimeout: 2000};
                 var wsone = new webSocketClient(wsconfigs);
@@ -10573,7 +10584,7 @@ if ( app && applistening ) {
                 mydb.getRow("hubs","*","hubid = '" + hubid + "'")
                 .then(hub => {
                     var userid = hub.userid;
-                    if ( DEBUG1 || DEBUGtmp ) {
+                    if ( DEBUG1 ) {
                         console.log( (ddbg()), "init request - hub: ", hub);
                     }
 
@@ -10622,7 +10633,7 @@ if ( app && applistening ) {
 
                     // update the hub and push data to the auth page using a forced reload
                     if ( updhub ) {
-                        if ( DEBUG1 || DEBUGtmp ) {
+                        if ( DEBUG1 ) {
                             console.log( (ddbg()), "init request - hub updating to: ", hub);
                         }
                         mydb.updateRow("hubs", hub, "id = " + hub.id)
