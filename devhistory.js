@@ -1,4 +1,7 @@
 const devhistory = `
+3.3.3   Major code cleanup and simplification of hub registration including pushing data from groovy
+3.3.2   Only support manual AccessToken; push data to hubs; add support for multiple analog clocks
+3.3.1   Remove all references to hubs that are no longer supported including ST
 3.2.17  Minor tweaks to clean up the code
 3.2.16  Added edit and delete feature to info page for customizations and GUI tweaks
 3.2.15  Fix volume bug in music tiles and clean up to remove the old controls

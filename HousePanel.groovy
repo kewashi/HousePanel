@@ -34,7 +34,7 @@ public static String handle() { return "HousePanel" }
 @Field static final String sBLANK         = ''
 @Field static final String sLINEBR        = '<br>'
 @Field static final String sSMALL         = 'small'
-@Field static final String sCLR4D9        = '#2784D9'
+@Field static final String sCLRBLUE       = '#2784D9'
 @Field static final String sCLRRED        = 'red'
 @Field static final String sCLRGRY        = 'gray'
 @Field static final String sCLRGRN        = 'green'
@@ -44,17 +44,17 @@ public static String handle() { return "HousePanel" }
     inpired by Tonesto7 homebridge2 app
 ***********************************************/
 static String getAppImg(String imgName) { return "https://housepanel.net/wp-content/uploads/${imgName}" }
-static String sectH3TS(String t, String st, String i = sNULL, String c=sCLR4D9) { return "<h3 style='color:${c};font-weight: bold'>${i ? "<img src='${i}' width='48'> " : sBLANK} ${t?.replaceAll("\\n", sLINEBR)}</h3>${st ?: sBLANK}" }
-static String sectHead(String str, String img = sNULL) { return str ? "<h3 style='margin-top:0;margin-bottom:0;'>" + spanImgStr(img) + span(str, sCLR4D9, sNULL, true) + '</h3>' + "<hr style='background-color:${sCLRGRY};font-style:italic;height:1px;border:0;margin-top:0;margin-bottom:0;'>" : sBLANK }
+static String sectH3TS(String t, String st, String i = sNULL, String c=sCLRBLUE) { return "<h3 style='color:${c};font-weight: bold'>${i ? "<img src='${i}' width='48'> " : sBLANK} ${t?.replaceAll("\\n", sLINEBR)}</h3>${st ?: sBLANK}" }
+static String sectHead(String str, String img = sNULL) { return str ? "<h3 style='margin-top:0;margin-bottom:0;'>" + spanImgStr(img) + span(str, sCLRBLUE, sNULL, true) + '</h3>' + "<hr style='background-color:${sCLRGRY};font-style:italic;height:1px;border:0;margin-top:0;margin-bottom:0;'>" : sBLANK }
 
 // Root HTML Objects
 static String span(String str, String clr=sNULL, String sz=sNULL, Boolean bld=false, Boolean br=false) { return str ? "<span ${(clr || sz || bld) ? "style='${clr ? "color: ${clr};" : sBLANK}${sz ? "font-size: ${sz};" : sBLANK}${bld ? 'font-weight: bold;' : sBLANK}'" : sBLANK}>${str}</span>${br ? sLINEBR : sBLANK}" : sBLANK }
 static String div(String str, String clr=sNULL, String sz=sNULL, Boolean bld=false, Boolean br=false) { return str ? "<div ${(clr || sz || bld) ? "style='${clr ? "color: ${clr};" : sBLANK}${sz ? "font-size: ${sz};" : sBLANK}${bld ? 'font-weight: bold;' : sBLANK}'" : sBLANK}>${str}</div>${br ? sLINEBR : sBLANK}" : sBLANK }
 static String spanImgStr(String img=sNULL) { return img ? span("<img src='${(!img.startsWith('http')) ? getAppImg(img) : img}' width='42'> ") : sBLANK }
 static String divSmBld(String str, String clr=sNULL, String img=sNULL)     { return str ? div(spanImgStr(img) + span(str), clr, sSMALL, true)      : sBLANK }
-static String htmlLine(String color=sCLR4D9, Integer width = null) { return "<hr style='background-color:${color};height:1px;border:0;margin-top:0;margin-bottom:0;${width ? "width: ${width}px;" : sBLANK}'>" }
+static String htmlLine(String color=sCLRBLUE, Integer width = null) { return "<hr style='background-color:${color};height:1px;border:0;margin-top:0;margin-bottom:0;${width ? "width: ${width}px;" : sBLANK}'>" }
 static String lineBr(Boolean show=true) { return show ? sLINEBR : sBLANK }
-static String inputFooter(String str, String clr=sCLR4D9, Boolean noBr=false) { return str ? lineBr(!noBr) + divSmBld(str, clr) : sBLANK }
+static String inputFooter(String str, String clr=sCLRBLUE, Boolean noBr=false) { return str ? lineBr(!noBr) + divSmBld(str, clr) : sBLANK }
 
 // Custom versions of the root objects above
 static String spanSm(String str, String clr=sNULL, String img=sNULL)       { return str ? spanImgStr(img) + span(str, clr, sSMALL)                 : sBLANK }
@@ -145,10 +145,10 @@ def mainPage() {
             desc += myothers ? spanSmBld("Sensor${myothers.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${myothers.size()})") : sBLANK
             desc += myactuators ? spanSmBld("Actuator${myactuators.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${myactuators.size()})") : sBLANK
 
-            desc += htmlLine(sCLR4D9, 150)
-            desc += inputFooter('Tap to modify...')
+            desc += htmlLine(sCLRBLUE, 200)
+            desc += inputFooter('Tap to select devices...')
 
-            href 'deviceSelectPage', title: spanSmBld('Device Selection'), required: false, description: (desc ? spanSm(desc, sCLR4D9) : inputFooter('Tap to select devices...', sCLRGRY, true))
+            href 'deviceSelectPage', title: spanSmBld('Device Selection'), required: false, description: (desc ? spanSm(desc, sCLRBLUE) : inputFooter('Tap to select devices...', sCLRGRY, true))
         }
 
         section(sectHead('Variable Configuration:')) {
@@ -159,12 +159,27 @@ def mainPage() {
                 numvar += settings["var_${varname}"] ? 1 : 0
             }
             vdesc += numvar > 0 ? spanSmBld("Variable${ (numvar > 1) ? 's' : sBLANK}") + spanSmBr(" (${numvar})") : sBLANK
-            href 'variablesPage', title: spanSmBld('Variable Selection'), description: (vdesc ? spanSm(vdesc, sCLR4D9) : inputFooter('Tap to select variables...', sCLRGRY, true))
+            vdesc += htmlLine(sCLRBLUE, 200)
+            vdesc += inputFooter("Tap to select Variables...", sCLRBLUE, false)
+            href 'variablesPage', title: spanSmBld('Variable Selection'), description: (vdesc ? spanSm(vdesc, sCLRBLUE) : inputFooter('Tap to select variables...', sCLRGRY, true))
         }
 
         section(sectHead('App Preferences:')) {
-            // String sDesc = getSetDesc()
-            href 'settingsPage', title: spanSmBld('App Settings'), description: " Options "
+            String vdesc = sBLANK
+
+            vdesc += spanSmBld("Hub Prefix: ", sCLRBLUE) + spanSmBr("${settings.hubprefix}" )
+            vdesc += spanSmBld("Weather Tomorrow.io API key: ", sCLRBLUE) + spanSmBr("${settings.weatherapi}" )
+            vdesc += spanSmBld("Weather ZipCode: ", sCLRBLUE) + spanSmBr("${settings.weatherzip}" )
+            vdesc += htmlLine(sCLRBLUE, 600)
+            vdesc += spanSmBld("accessToken: ", sCLRBLUE) + spanSmBr("${state.accessToken}" )
+            vdesc += spanSmBld("App ID: ", sCLRBLUE) + spanSmBr("${app.id}" )
+            vdesc += spanSmBld("Local Endpt: ", sCLRBLUE) + spanSmBr("${state.endpt}" )
+            vdesc += spanSmBld("Cloud Endpt: ", sCLRBLUE) + spanSmBr("${state.cloudendpt}" )
+            vdesc += spanSmBld("callback IPs: ", sCLRBLUE) + spanSmBr("${settings.webSocketHost}" + ", ${settings.webSocketHost2}" + ", ${settings.webSocketHost3}" )
+            vdesc += spanSmBld("callback Ports: ", sCLRBLUE) + spanSmBr("${settings.webSocketPort}" + ", ${settings.webSocketPort2}" + ", ${settings.webSocketPort3}" )
+            vdesc += htmlLine(sCLRBLUE, 600)
+            vdesc += inputFooter("Tap to update App Preferences...", sCLRBLUE, false)
+            href 'settingsPage', title: spanSmBld('App Preferences'), description: vdesc
             label title: spanSmBld('Label this Instance (optional)'), description: 'Rename this App', defaultValue: app?.name, required: false
         }
     }
@@ -180,16 +195,17 @@ def settingsPage() {
             input (name: "hubprefix", type: "text", multiple: false, title: "Hub Prefix:", required: false, defaultValue: "h_")
             input (name: "weatherapi", type: "text", multiple: false, title: "Tomorrow.io API key", required: false, defaultValue: "")
             input (name: "weatherzip", type: "text", multiple: false, title: "Zip Code for Weather", required: false, defaultValue: "10001")
-            paragraph "Enable Pistons? You must have WebCore installed for this to work. Beta feature for Hubitat hubs."
-            input (name: "usepistons", type: "bool", multiple: false, title: "Use Pistons?", required: false, defaultValue: false)
+            // paragraph "Enable Pistons? You must have WebCore installed for this to work. Beta feature for Hubitat hubs."
+            // input (name: "usepistons", type: "bool", multiple: false, title: "Use Pistons?", required: false, defaultValue: false)
             paragraph "Specify these parameters to enable your panel to stay in sync with things when they change in your home. " +
-                      "This is not a hard requirement but if you don't provide the IP of where you are hositng your panel will get out of sync. " +
-                      "A single Port number or a range can be provided, such as 8561-8563. If a range is given all ports inside the range will be updated." +
-                      "Ranges are inclusive, so 8561-8564 will update ports 8561, 8562, 8563, and 8564"
-                      "ISY node server users should make sure to set the restPort to a value inside one of theese ranges"
-            input "webSocketHost", "text", title: "Host IP", defaultValue: "192.168.4.4", required: false
-            input "webSocketPort", "text", title: "Port or Range", defaultValue: "8560", required: false
-            paragraph "The Alternate 2nd and 3rd Host IP and Port values are used to send hub pushes to additional installations of HousePanel. " +
+                      "This is required if you are using HousePanel to support an ISY node server. Otherwise, for Hubitat dashboards, "
+                      "this is not a hard requirement. However, if you don't provide the IP of where you are hositng your hpserver.js app, your panel will get out of sync. " +
+                      "A single Port number or a range can be provided, such as 9100-9105. If a range is given all ports inclusive of the the range will be updated." +
+                      "Ranges are inclusive, so 9100-9105 will update ports 9100, 9101, 9102, 9103, 9104, and 9105. "
+                      "ISY node server users must set the restPort configuration parameter to a value inside one of these ranges"
+            input "webSocketHost", "text", title: "Host IP", defaultValue: "192.168.1.1", required: true
+            input "webSocketPort", "text", title: "Port or Range", defaultValue: "9100", required: true
+            paragraph "The Alternate 2nd and 3rd Host IP and Port values/ranges are used to send hub pushes to additional installations of HousePanel. " +
                     "If left as 0 additional hub pushes will not occur. Only use this if you are hosting two or three versions of HP " +
                     "that need to stay in sync with this smart home hub. This app also supports the ISY Hubitat Node Server, and for that case " +
                     "you should set one of these to the port used there. Otherwise, this setting is mostly used for development debugging and can be safely left as 0"
@@ -217,7 +233,7 @@ def deviceSelectPage() {
         appInfoSect()
 
         section(sectHead('Define Specific Categories:')) {
-            paragraph spanSmBldBr('Description:', sCLR4D9) + spanSm('Select devices to show in each category below', sCLR4D9)
+            paragraph spanSmBldBr('Description:', sCLRBLUE) + spanSm('Select devices to show in each category below', sCLRBLUE)
             paragraph spanSmBldBr('NOTE: ') + spanSmBldBr('Duplicates are allowed, but not recommended.')
         }
 
@@ -298,7 +314,8 @@ def updated() {
 }
 
 def initialize() {
-    state.usepistons = settings?.usepistons ?: false
+    // state.usepistons = settings?.usepistons ?: false
+    state.usepistons = false
 
     // reset variable usage
     removeAllInUseGlobalVar()
@@ -333,9 +350,12 @@ def initialize() {
     
     def pattern = ~/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/
     def portpatt = ~/\d{3,}-?(\d{3,})?/
+    def hubname = location.getName()
 
+    // report and send to servers name=hubname, id=app.id, type=Hubitat, value=array(accessToken, endpt, cloudendpt) 
+    // def postHubRange(ip, port, msgtype, name, id, subid, type, value) {
     if ( (state.directIP.startsWith("http") || state.directIP ==~ pattern) && state.directPort ==~ portpatt ) {
-        postHubRange(state.directIP, state.directPort, "initialize", "", "", "", "", "")
+        postHubRange(state.directIP, state.directPort, "initialize", hubname, app.id, "", "Hubitat", [state.accessToken, state.endpt, state.cloudendpt])
         logger("state changes will be posted to HP at IP: ${state.directIP}:${state.directPort} ", "info")
 
     } else {
@@ -343,14 +363,14 @@ def initialize() {
     }
 
     if ( (state.directIP2.startsWith("http") || state.directIP2 ==~ pattern) && state.directPort2 ==~ portpatt ) {
-        postHubRange(state.directIP2, state.directPort2, "initialize", "", "", "", "", "")
+        postHubRange(state.directIP2, state.directPort2, "initialize", hubname, app.id, "", "Hubitat", [state.accessToken, state.endpt, state.cloudendpt])
         logger("state changes will also be posted to HP at: ${state.directIP2}:${state.directPort2} ", "info")
     } else {
         state.directIP2 = "0"
     }
 
     if ( (state.directIP3.startsWith("http") || state.directIP3 ==~ pattern) && state.directPort3 ==~ portpatt ) {
-        postHubRange(state.directIP3, state.directPort3, "initialize", "", "", "", "", "")
+        postHubRange(state.directIP3, state.directPort3, "initialize", hubname, app.id, "", "Hubitat", [state.accessToken, state.endpt, state.cloudendpt])
         logger("state changes will also be posted to HP at: ${state.directIP3}:${state.directPort3} ", "info")
     } else {
         state.directIP3 = "0"
@@ -374,21 +394,15 @@ def configureHub() {
         state.accessToken = createAccessToken()
     }
     state.endpt = app.getFullLocalApiServerUrl()
-    def cloudendpt = app.getFullApiServerUrl()
+    state.cloudendpt = app.getFullApiServerUrl()
     state.hubid = app.getHubUID() 
-    def hubip = app.getLocalApiServerUrl() 
-    def cloudhubip = app.getApiServerUrl()
 
-    logger("To skip OAUTH flow use this Access Token and either the local or cloud EndPoint values","info")
-    logger("ISY Node Server users must use these values in the configuraiton settings of the node server", "info")
+    logger("You must provide the Access Token and the App ID values. The end point shown will be automatically created","info")
     logger("Access Token = ${state.accessToken}","info")
+    logger("App ID = ${app.id}", "info")
     logger("Hubitat Local EndPoint = ${state.endpt}", "info")
-    logger("Hubitat Cloud EndPoint = ${cloudendpt}", "info")
-
-    logger("Other useful information to know", "debug")
-    logger("Hub ID = ${state.hubid}", "debug")
-    logger("Local Hub IP = ${hubip}", "debug")
-    logger("Cloud Hub IP = ${cloudhubip}", "debug")
+    logger("Hubitat Cloud EndPoint = ${state.cloudendpt}", "info")
+    logger("Hub ID = ${state.hubid}", "info")
 
     logger("Updates pushed to the following IP addresses and ports","debug")
     logger("1st IP Address = ${state.directIP}", "debug")
@@ -1293,9 +1307,11 @@ def getWeathers(resp) {
 
 def getHubInfo() {
     def resp =  [ sitename: location.getName(),
+                  appId: app.id,
                   hubId: state.hubid,
                   accessToken: state.accessToken,
                   endpt: state.endpt,
+                  cloudendpt: state.cloudendpt,
                   hubtype: "Hubitat" ]
     return resp
 }
@@ -3254,7 +3270,8 @@ def variableHandler(evt) {
 }
 
 def postHub(ip, port, msgtype, name, id, subid, type, value) {
-    Map abody = [
+    if ( msgtype && ip && ip!="0" && port && port!="0"  ) {
+        Map abody = [
                 msgtype: msgtype,
                 hubid: state.hubid,
                 change_name: name,
@@ -3264,7 +3281,6 @@ def postHub(ip, port, msgtype, name, id, subid, type, value) {
                 change_value: value
             ]
 
-    if ( msgtype && ip && ip!="0" && port && port!="0"  ) {
         logger("HousePanel postHub ${msgtype} to IP= ${ip}:${port} name= ${name} id= ${id} subid= ${subid} type= ${type} value= ${value}", "debug")
         if (ip.startsWith("http") ) {
             sendHttpPost(ip, port, abody)

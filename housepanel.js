@@ -184,7 +184,7 @@ function findHub(hubid, id) {
 // obtain options using an ajax api call
 // could probably read Options file instead
 // but doing it this way ensure we get what main app sees
-function getOptions() {
+function getOptions(pagename) {
     var amode = getCookie("opmode");
     priorOpmode = amode === "Sleep" ? amode : "Operate";
     try {
@@ -216,33 +216,13 @@ function getOptions() {
                 // handle black screen
                 var blackout = cm_Globals.options.config.blackout;
                 blackout = (blackout === "true") || (blackout === true) ? true : false;
-                if ( (priorOpmode === "Sleep" || cm_Globals.options["mode"]==="Night") && blackout ) {
+                if ( pagename==="main" && ((priorOpmode === "Sleep" || cm_Globals.options["mode"]==="Night") && blackout) ) {
                     priorOpmode = "Sleep";
                     execButton("blackout");
                 } else {
                     priorOpmode = "Operate";
                     setCookie("opmode", priorOpmode);
-                }
-        
-                // get the mode
-                // $.post(cm_Globals.returnURL, 
-                //     {api: "getmode", userid: userid, hpcode: cm_Globals.options.hpcode},
-                //     function (presult, pstatus) {
-                //         if ( pstatus==="success" ) {
-                //             var themode = presult;
-                //             cm_Globals.options["mode"] = themode;
-        
-                //             // handle black screen
-                //             if ( (priorOpmode === "Sleep" || themode==="Night") && blackout ) {
-                //                 priorOpmode = "Sleep";
-                //                 execButton("blackout");
-                //             } else {
-                //                 priorOpmode = "Operate";
-                //                 setCookie("opmode", priorOpmode);
-                //             }
-                //         }
-                //     }
-                // );
+                }        
             }, "json"
         );
 
@@ -284,9 +264,9 @@ function getHubs() {
                             // otherwise the hub devices will just be retrieved from the hub
                             // if set to zero we force a refresh at the user provided fast refresh rate
                             var hubtimer = parseInt(hub.hubtimer, 10) * 1000;
-                            if ( hubtimer === 0 || (hubtimer > fast_timer && fast_timer !== 0) ) {
-                                hubtimer = fast_timer;
-                            }
+                            // if ( hubtimer === 0 || (hubtimer > fast_timer && fast_timer !== 0) ) {
+                            //     hubtimer = fast_timer;
+                            // }
                             // alert("hub: " + hub.hubtype + " timer: " + hubtimer);
                             setupTimer("hub", hubtimer, hub);
                         }
@@ -502,18 +482,18 @@ $(document).ready(function() {
     }
 
     // auth page is displayed until reload with updated info so blink
-    if ( pagename==="auth" ) {
-        if ( $("#newthingcount") && $("#newthingcount").html().startsWith("Retrieving") ) {
-            var blinkauth = setInterval(function() {
-                $("#newthingcount").fadeTo(400, 0.1 ).fadeTo(400, 1);
-            }, 1000);
-        }
-    }
+    // if ( pagename==="auth" ) {
+    //     if ( $("#newthingcount") && $("#newthingcount").html().startsWith("Retrieving") ) {
+    //         var blinkauth = setInterval(function() {
+    //             $("#newthingcount").fadeTo(400, 0.1 ).fadeTo(400, 1);
+    //         }, 1000);
+    //     }
+    // }
     
     // create key bindings for the login screen
     if ( pagename==="login" ) {
 
-        initWebsocket();
+        // initWebsocket();
 
         var unamere = /^\D\S{2,}$/;      // start with a letter and be three long at least
         // $("#uname").val("default");
@@ -605,7 +585,7 @@ $(document).ready(function() {
     // load things and options
     if ( pagename==="main" || pagename==="auth" || pagename==="options" ) {
 
-        getOptions();
+        getOptions(pagename);
         getHubs();
         
         // disable return key
@@ -617,7 +597,7 @@ $(document).ready(function() {
         });
     } else if ( pagename==="info" ) {
 
-        getOptions();
+        getOptions(pagename);
 
         $("#listhistory").on('click', function() {
             if ( $("#showhistory").hasClass("hidden") ) {
@@ -876,7 +856,9 @@ function initWebsocket() {
             var portnum = pname.substring(0,1);
             var port = webSocketPort + parseInt(portnum);
             webSocketUrl += ":" + port;
-            $("#infoport").html("#"+portnum);
+            if ( $("#infoport") ) {
+                $("#infoport").html("#"+portnum);
+            }
             setupWebsocket(userid, port, webSocketUrl);
         }
     } catch(err) {
@@ -1702,7 +1684,6 @@ function updateSortNumber(thetile, num) {
    $(thetile).children(".sortnum").html(num);
 }
 
-
 function setupDraggable() {
     var startPos = {top: 0, left: 0, "z-index": 0, position: "relative", priorStart: "relative"};
     var delx = 0;
@@ -2495,6 +2476,7 @@ function setupButtons() {
         });
 
     } else if ( pagename==="options") {
+        initWebsocket();
         setupCustomCount();
         setupFilters();
         var pos = {position: "absolute", top: 100, left: 100, width: 600, height: 120, border: "4px solid"};
@@ -2560,9 +2542,7 @@ function setupButtons() {
 
     } else if ( pagename==="auth" ) {
 
-        // populate the clientSecret field that could have funky characters
-        // var funkysecret = $("input[name='csecret']").val();
-        // $("input[name='clientsecret']").val(funkysecret);
+        initWebsocket();
         $("#newthingcount").html("Select a hub to re-authorize or select the 'New' hub to add a hub");
         var hubId = $("#pickhub").val();
         setupAuthHub(hubId);
@@ -2578,77 +2558,18 @@ function setupButtons() {
         // note that types can only be set when a new hub is being added
         $("select[name='hubtype']").on('change', function(evt) {
             var hubType = $(this).val();
-            var hideaccess = $("#hideaccess_hub");
-            var hubTarget = $("input[name='hubhost']");
-            var hubhost = hubTarget.val();
-            var hubname = $("input[name='hubname']").val();
-            var clientid = $("input[name='clientid']").val();
-            var clientsecret = $("input[name='clientsecret']").val();
-            var useraccess = $("input[name='useraccess']").val();
-            var userendpt = $("input[name='userendpt']").val();
-            var hubtimer = $("input[name='hubtimer']").val();
-            var hub = {id: 0, hubhost: "", hubname: hubname, clientid: clientid, clientsecret: clientsecret, useraccess: useraccess, userendpt: userendpt, hubid: "new",
-                       hubtimer: hubtimer, hubaccess: "", hubendpt: "", hubrefresh: ""};
-            var clientLabel = "Client ID: ";
-            var secretLabel = "Client Secret: ";
-            $("#inp_hubid").hide();
-            $("#inp_clientid").show();
-            $("#inp_clientsecret").show();
-            hideaccess.hide();
 
-            if ( hubType==="NewSmartThings" ) {
-                hub.hubhost = "https://api.smartthings.com";
-                hub.hubtimer = 0;
-                $("#inp_clientid").hide();
-                $("#inp_clientsecret").hide();
-                hub.hubname = "SmartThings Home";
-                hubTarget.prop("disabled", true);
-                $("#newthingcount").html("Ready to authorize your new SmartThings API account. Account access information required in cfg file");
-            } else if ( hubType==="Sonos" ) {
-                hub.hubhost = "https://api.sonos.com";
-                hub.hubtimer = 0;
-                $("#inp_clientid").hide();
-                $("#inp_clientsecret").hide();
-                hub.hubname = "Sonos";
-                hubTarget.prop("disabled", true);
-                $("#newthingcount").html("Ready to authorize your Sonos account. The hub name can be set to anything or the name Sonos will be assigned.");
-            } else if ( hubType==="Hubitat" ) {
-                hub.hubhost = "https://oauth.cloud.hubitat.com";
-                hub.hubname = "Hubitat Home";
-                hubTarget.prop("disabled", false);
-                hideaccess.show();
-                $("#newthingcount").html("Ready to authorize your Hubitat hub. For local use, change Hub API above to your hub's local IP. The hub name will be obtained automatically.");
-            } else if ( hubType==="Ford" || hubType==="Lincoln" ) {
-                hub.hubhost = "https://dah2vb2cprod.b2clogin.com";
-                hub.hubtimer = 0;
-                hub.hubname = hubType + " Vehicle";
-                hubTarget.prop("disabled", true);
-                $("#newthingcount").html("Ready to authorize your Ford or Lincoln vehicle. Account access information required in cfg file");
+            if ( hubType==="Hubitat" ) {
+                var accessLabel = "Access Token: ";
+                var endptLabel = "App ID: ";
+                $("#newthingcount").html("Defining a new Hubitat hub. The hub parameters will be obtained automatically.");
             } else if ( hubType==="ISY" ) {
-                hub.hubhost = "https://192.168.xxx.yyy:8443";
-                hub.hubname = "ISY Home";
-                hubTarget.prop("disabled", false);
-                clientLabel = "Username: ";
-                secretLabel = "Password: ";
-                $("#newthingcount").html("To authorize your Universal Devices ISY account, enter your ISY username and password and set the IP last two digits.");
-            } else {
-                hideaccess.show();
-                hubTarget.prop("disabled", false);
+                accessLabel = "Username: ";
+                endptLabel = "Password: ";
+                $("#newthingcount").html("Defining a new ISY hub. Please Username and password for your ISY account.");
             }
-            $("#labelclientId").html(clientLabel);
-            $("#labelclientSecret").html(secretLabel);
-            $("input[name='hubindex']").val(hub.id);
-            $("input[name='hubhost']").val(hub.hubhost);
-            $("input[name='hubname']").val(hub.hubname);
-            $("input[name='clientid']").val(hub.clientid);
-            $("input[name='clientsecret']").val(hub.clientsecret);
-            $("input[name='useraccess']").val(hub.useraccess);
-            $("input[name='userendpt']").val(hub.userendpt);
-            $("input[name='hubid']").val(hub.hubid);
-            $("input[name='hubtimer']").val(hub.hubtimer);
-            $("input[name='hubaccess']").val(hub.hubaccess);
-            $("input[name='hubendpt']").val(hub.hubendpt);
-            $("input[name='hubrefresh']").val(hub.hubrefresh);
+            $("#labelAccess").html(accessLabel);
+            $("#labelEndpt").html(endptLabel);
         });
         
         // this clears out the message window
@@ -2656,8 +2577,7 @@ function setupButtons() {
             $("#newthingcount").html("");
         });
         
-        // handle auth submissions
-        // add on one time info from user
+        // handle auth submissions - modified to only do manual auth flow
         $("input.hubauth").on("click",function(evt) {
             try {
                 var formData = formToObject("hubform");
@@ -2675,49 +2595,13 @@ function setupButtons() {
             // others return a request to start an OATH redirection flow
             formData["api"] = "hubauth";
             formData.hubtype = $("select[name='hubtype']").val();
-            formData.hubhost = $("input[name='hubhost']").val();
-            formData.hpcode = cm_Globals.options.hpcode;
+            console.log("globals: ", cm_Globals, " formData: ", formData);
             $.post(cm_Globals.returnURL, formData,  function(presult, pstatus) {
 
-                if ( pstatus==="success" && typeof presult==="object" && presult.action ) {
+                if ( pstatus==="success" && typeof presult==="object" && presult.action && presult.action === "things" ) {
                     var obj = presult;
+                    $("#newthingcount").html("Hub " + obj.hubName + " of type (" + obj.hubType+") authorized " + obj.numdevices + " devices");
 
-                    // for hubs that have auth info in the config file we do nothing but notify user of retrieval
-                    if ( obj.action === "things" ) {
-                        $("#newthingcount").html("Hub " + obj.hubName + " of type (" + obj.hubType+") authorized " + obj.numdevices + " devices");
-                    }
-
-                    // if oauth flow then start the process with a redirection to site
-                    // was updated to handle specific client_type values for user level auth and user scope values
-                    else if ( obj.action === "oauth" ) {
-                        // $("#newthingcount").html("Redirecting to OAUTH page");
-                        var nvpreq = "response_type=code";
-                        if ( obj.client_type ) {
-                            nvpreq = nvpreq + "&client_type=" + obj.client_type;
-                        }
-                        if ( obj.scope ) {
-                            nvpreq = nvpreq + "&scope=" + encodeURI(obj.scope);
-                        }
-                        if ( obj.state ) {
-                            nvpreq = nvpreq + "&state=" + encodeURI(obj.state);
-                        }
-                        if ( obj.model ) {
-                            nvpreq = nvpreq + "&make=" + obj.model;
-                        }
-                        if ( obj.appId ) {
-                            nvpreq = nvpreq + "&application_id=" + obj.appId;
-                        }
-                        nvpreq= nvpreq + "&client_id=" + obj.clientId + "&redirect_uri=" + encodeURI(obj.url);
-                        // alert("preparing to launch with nvpreq = "+ nvpreq);
-
-                        // navigate over to the server to authorize
-                        var location = obj.host + "?" + nvpreq;
-                        window.location.href = location;
-                    }
-
-                    else if ( obj.action === "error" ) {
-                        $("#newthingcount").html(obj.reason);
-                    }
                 } else {
                     if (typeof presult==="string" ) {
                         $("#newthingcount").html(presult);
@@ -2780,77 +2664,68 @@ function setupAuthHub(hubId) {
 
     // replace all the values
     $("input[name='hubindex']").val(hubindex);
-    $("input[name='hubhost']").val(hub.hubhost);
-    $("input[name='clientid']").val(hub.clientid);
-    $("input[name='clientsecret']").val(hub.clientsecret);
-    $("input[name='useraccess']").val(hub.useraccess);
-    $("input[name='userendpt']").val(hub.userendpt);
     $("input[name='hubname']").val(hub.hubname);
     $("input[name='hubid']").val(hub.hubid);
     $("input[name='hubtimer']").val(hub.hubtimer);
-    $("input[name='hubaccess']").val(hub.hubaccess);
-    $("input[name='hubendpt']").val(hub.hubendpt);
+    $("input[name='hubhost']").val(hub.hubhost);
+    $("input[name='useraccess']").val(hub.useraccess);
+    $("input[name='userendpt']").val(hub.userendpt);
     $("input[name='hubrefresh']").val(hub.hubrefresh);
     $("select[name='hubtype']").val(hub.hubtype);
-    var clientLabel = "Client ID: ";
-    var secretLabel = "Client Secret: ";
+    // $("input[name='hubid']").prop("disabled", true);
+    var accessLabel = "Access Token: ";
+    var endptLabel = "App ID: ";
     var hideaccess = $("#hideaccess_hub");
-    $("#inp_hubid").hide();
-    hideaccess.hide();
-    $("#inp_clientid").show();
-    $("#inp_clientsecret").show();
+    hideaccess.show();
 
+    // handle new hubs - user sets type and the Hubitat groovy app or HubitatController python app fills out the rest of the fields
     if ( hubId==="new" ) {
+        $("#hubdiv").show();
         $("select[name='hubtype']").val("Hubitat").prop("disabled", false);
         $("input[name='hubhost']").prop("disabled", false);
         $("input[name='hubname']").prop("disabled", false);
-        $("input[name='hubhost']").val("https://oauth.cloud.hubitat.com");
-        $("input[name='hubname']").val("Hubitat Home");
+        $("input[name='hubname']").val("");
+        $("input[name='useraccess']").val("");
+        $("input[name='userendpt']").val("");
+        $("input[name='hubid']").val("");
+        $("input[name='hubrefresh']").val("0");
         $("input.hubauth").removeClass("hidden");
         $("input.hubdel").addClass("hidden");
-        hideaccess.show();
-        $("#newthingcount").html("Fill out the fields below, starting with selecting a hub type to add a new hub");
+        $("#newthingcount").html("Stay on this page while you fill out the HousePanel settings on the Hubitat or ISY hub, and the fields will be populated. " +
+            "You can also fill out the fields manually before selecting the Authorize Hub button below. The only required input is Hub Type.");
+
+    // this is for the blank hub for default devices
     } else if ( hubId==="-1" ) {
+        $("#hubdiv").hide();
         $("select[name='hubtype']").prop("disabled", true);
         $("input[name='hubhost']").prop("disabled", true);
         $("input[name='hubname']").prop("disabled", true);
-        $("input.hubdel").addClass("hidden");
         $("input.hubauth").addClass("hidden");
-        $("#inp_clientid").hide();
-        $("#inp_clientsecret").hide();
+        $("input.hubdel").addClass("hidden");
         hideaccess.hide();
         $("#newthingcount").html("This \"hub\" is reserved for things not associated with a real hub. It cannot be altered, removed, or authorized. " +
                                  "You can change the Refresh timer before returning to main page to change how often special tiles get updated."
         );
+
+    // this branch is for existing hubs that need updating - their type cannot be changed
     } else {
-        // existing hubs, don't allow type to be changed
+        $("#hubdiv").show();
         $("select[name='hubtype']").prop("disabled", true);
         $("input[name='hubhost']").prop("disabled", false);
         $("input[name='hubname']").prop("disabled", false);
         $("input.hubauth").removeClass("hidden");
         $("input.hubdel").removeClass("hidden");
         $("#newthingcount").html("Re-authorize or delete the " + hub.hubname + " (" + hub.hubtype + ") hub/account here. " +
-                                 "You can change the Refresh timer before returning to main page to change how often " + hub.hubtype + " tiles get updated."
+                                 "You can do this by staying here and updating the HousePanel settings on the Hubitat or ISY hubs, or update the fields manually. " +
+                                 "You can also change the Refresh Timer value to change how often " + hub.hubtype + " tiles are polled for updating ."
         );
         if ( hub.hubtype === "ISY" ) {
-            clientLabel = "Username: ";
-            secretLabel = "Password: ";    
-        } else if ( hub.hubtype === "Ford" || hub.hubtype === "Lincoln" ) {
-            $("input[name='hubhost']").prop("disabled", true);
-        } else if ( hub.hubtype === "Hubitat" ) {
-            hideaccess.show();
-        } else if ( hub.hubtype === "Sonos" ) {
-            $("input[name='hubhost']").prop("disabled", true);
-            $("#inp_clientid").hide();
-            $("#inp_clientsecret").hide();
-        } else if ( hub.hubtype === "NewSmartThings" ) {
-            $("#inp_clientid").hide();
-            $("#inp_clientsecret").hide();
-            $("input[name='hubhost']").prop("disabled", true);
+            accessLabel = "Username: ";
+            endptLabel = "Password: ";    
         }
     }
-    $("#labelclientId").html(clientLabel);
-    $("#labelclientSecret").html(secretLabel);
+    $("#labelAccess").html(accessLabel);
+    $("#labelEndpt").html(endptLabel);
 }
 
 function addEditLink() {
@@ -3518,8 +3393,10 @@ function processKeyVal(targetid, aid, key, value) {
     } else if ( key.startsWith("_number_") && value.startsWith("number_") ) {
         value = value.substring(7);
 
-    } else if ( key === "skin" && value.startsWith("CoolClock") ) {
-        value = '<canvas id="clock_' + aid + '" class="' + value + '"></canvas>';
+    // changed this so we can use customizer to make multiple analog clocks anywhere
+    // } else if ( key === "skin" && value.startsWith("CoolClock") ) {
+    } else if ( key.startsWith("skin") && value.startsWith("CoolClock:") ) {
+        value = '<canvas id="clock_' + key + "_" + aid + '" class="' + value + '"></canvas>';
         isclock = ( oldvalue !== value );
     
     // handle updating album art info
@@ -4329,12 +4206,10 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
     if ( command==="" || command==="LINK" ) {
         ispassive = (ispassive || subid==="thingname" || subid==="custom" || subid==="temperature" || subid==="feelsLike" || subid==="battery" || 
             subid==="presence" || subid.startsWith("motion") || subid.startsWith("contact") || subid==="status_" || subid==="status" || subid==="deviceType" || subid==="localExec" ||
-            subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" || subid==="name" || subid==="skin" || subid==="thermostatOperatingState" ||
+            subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" || subid==="name" || subid.startsWith("skin") || subid==="thermostatOperatingState" ||
             subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" || subid==="numberOfButtons" || subid==="humidity" ||
             subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") || subid==="illuminance" ||
-            (subid.startsWith("label")) || (subid.startsWith("text")) ||
-            (thetype==="ford" && !subid.startsWith("_")) ||
-            (thetype==="sonos" && !subid.startsWith("_"))
+            (subid.startsWith("label")) || (subid.startsWith("text"))
         );
     }
 
