@@ -13,7 +13,6 @@ cm_Globals.thingindex = null;
 cm_Globals.allthings = null;
 cm_Globals.options = null;
 cm_Globals.returnURL = "";
-cm_Globals.hubId = "all";
 cm_Globals.wsclient = null;
 cm_Globals.tabs = true;
 cm_Globals.snap = false;
@@ -477,19 +476,8 @@ $(document).ready(function() {
                 } catch (f) { }
             }
         }
-
-        cm_Globals.hubId = getCookie( 'defaultHub' );
     }
 
-    // auth page is displayed until reload with updated info so blink
-    // if ( pagename==="auth" ) {
-    //     if ( $("#newthingcount") && $("#newthingcount").html().startsWith("Retrieving") ) {
-    //         var blinkauth = setInterval(function() {
-    //             $("#newthingcount").fadeTo(400, 0.1 ).fadeTo(400, 1);
-    //         }, 1000);
-    //     }
-    // }
-    
     // create key bindings for the login screen
     if ( pagename==="login" ) {
 
@@ -598,6 +586,10 @@ $(document).ready(function() {
     } else if ( pagename==="info" ) {
 
         getOptions(pagename);
+
+        $("button.infobutton").on('click', function() {
+            window.location.href = cm_Globals.returnURL;
+        });
 
         $("#listhistory").on('click', function() {
             if ( $("#showhistory").hasClass("hidden") ) {
@@ -717,6 +709,7 @@ $(document).ready(function() {
     }
     
     // handle button setup for all pages
+    
     if ( $("div.formbutton") ) {
         $("div.formbutton").on('click', function(evt) {
             var buttonid = $(this).attr("id");
@@ -741,18 +734,6 @@ $(document).ready(function() {
                 evt.stopPropagation();
                 execButton(buttonid);
             }
-        });
-    }
-
-    // this is button that returns to main HP page
-    // it saves the default hub before returning if on the auth page
-    if ( $("button.infobutton") ) {
-        // $("button.infobutton").addClass("disabled").prop("disabled", true);
-        // setTimeout(function() {
-        //     $("button.infobutton").removeClass("disabled").prop("disabled", false);
-        // }, 200);
-        $("button.infobutton").on('click', function() {
-            returnMainPage();
         });
     }
 
@@ -815,15 +796,18 @@ function getActiveTab() {
 }
 
 function returnMainPage() {
-    if ( pagename=="auth" ) {
-        var defhub = $("#pickhub").val();
-        var hubtimer = $("input[name='hubtimer']").val();
-        var hubindex = $("input[name='hubindex']").val();
-        $.post(cm_Globals.returnURL, 
-                {api: "setdefhub", userid: cm_Globals.options.userid, hubid: defhub, value: defhub, 
-                 id: hubindex, attr: hubtimer, hpcode: cm_Globals.options.hpcode}
-        );
-    }
+    var defhub = $("input [name='huboptpick']").val();
+    var pickid = $("input [name='huboptpick']").attr("id");
+    var hubindex = $("input[name='hubindex']").val();
+    // console.log("pickedhub = ", defhub, pickid, hubindex);
+    setCookie("defaultHub", defhub);
+    $.post(cm_Globals.returnURL, 
+            {api: "setdefhub", userid: cm_Globals.options.userid, hubid: defhub, value: defhub, 
+             id: hubindex, attr: null, hpcode: cm_Globals.options.hpcode}, 
+            function(presult, pstatus) {
+                window.location.href = cm_Globals.returnURL;
+            }
+    );
     window.location.href = cm_Globals.returnURL;
 }
 
@@ -2212,7 +2196,6 @@ function execButton(buttonid) {
     } else if ( buttonid==="optReset" ) {
         // reset the forms on the options page to their starting values
         $("#optionspage")[0].reset();
-        // $("#filteroptions")[0].reset();
 
     } else if ( buttonid==="createuser" ) {
         execCreateUser();
@@ -2539,17 +2522,32 @@ function setupButtons() {
             }
         });
 
+        // this is button that returns to main HP page
+        // it saves the default hub before returning if on the auth page
+        $("button.infobutton").on('click', function() {
+            // returnMainPage();
+            window.location.href = cm_Globals.returnURL;
+        });
+
 
     } else if ( pagename==="auth" ) {
 
         initWebsocket();
         $("#newthingcount").html("Select a hub to re-authorize or select the 'New' hub to add a hub");
-        var hubId = $("#pickhub").val();
+        var hubId = getCookie("defaultHub");
+        if ( !hubId ||  hubId==="all" ) {
+            hubId = $("#pickhub").val();
+        }
         setupAuthHub(hubId);
 
         // now we use the DB index of the hub to ensure it is unique
         $("#pickhub").on('change',function(evt) {
+            // var hubindex = $(this).attr("id");
             var hubId = $(this).val();
+
+            // save this in a cookie so we can return to this hub
+            setCookie("defaultHub", hubId);
+
             setupAuthHub(hubId);
             evt.stopPropagation(); 
         });
@@ -2639,7 +2637,7 @@ function setupButtons() {
                             if (pstatus==="success" && typeof presult === "string") {
                                 $("#newthingcount").html(presult);
                                 setTimeout(function() {
-                                    var location = cm_Globals.returnURL + "/reauth";
+                                    var location = cm_Globals.returnURL + "/userauth";
                                     window.location.href = location;
                                 }, 3000);
                             } else {
@@ -2654,7 +2652,13 @@ function setupButtons() {
             
             evt.stopPropagation(); 
         });
-    
+
+        // this is button that returns to main HP page
+        // it saves the default hub before returning if on the auth page
+        $("button.infobutton").on('click', function() {
+            returnMainPage();
+        });
+        
     }
 }
 
@@ -2717,7 +2721,7 @@ function setupAuthHub(hubId) {
         $("input.hubdel").removeClass("hidden");
         $("#newthingcount").html("Re-authorize or delete the " + hub.hubname + " (" + hub.hubtype + ") hub/account here. " +
                                  "You can do this by staying here and updating the HousePanel settings on the Hubitat or ISY hubs, or update the fields manually. " +
-                                 "You can also change the Refresh Timer value to change how often " + hub.hubtype + " tiles are polled for updating ."
+                                 "You can also change the Refresh Timer value to change how often " + hub.hubtype + " tiles are polled for updating."
         );
         if ( hub.hubtype === "ISY" ) {
             accessLabel = "Username: ";
@@ -3052,9 +3056,14 @@ function showType(ischecked, theval, hubpick) {
 
 function setupFilters() {
     
-//    alert("Setting up filters");
    // set up option box clicks
-    var pickedhub = cm_Globals.hubId;
+   // fixed bug that forgot to click on the saved hub from cookies
+    var pickedhub = getCookie("defaultHub");
+    // console.log("pickedhub = ", pickedhub);
+    if ( !pickedhub )  {
+        pickedhub = "-1";
+        setCookie("defaultHub", "-1");
+    }
 
     function updateClick() {
         var theval = $(this).val();
@@ -3073,12 +3082,14 @@ function setupFilters() {
     $('input[name="huboptpick"]').on("click", function() {
         // get the id of the hub type we just picked
         pickedhub = $(this).val();
-        cm_Globals.hubId = pickedhub;
-        setCookie("defaultHub", cm_Globals.hubId);
+        var pickid = $(this).attr("id");
+        // console.log("pickedhub = ", pickedhub, pickid);
+        setCookie("defaultHub", pickedhub);
 
         // reset all filters using hub setting
         $('input[name="useroptions[]"]').each(updateClick);
     });
+    $(`input[value="${pickedhub}"]`).prop('selected',true);
 
     $("div#thingfilters").on("click", function() {
         var filter = $("#filterup");
@@ -3165,7 +3176,7 @@ function setupCustomCount() {
         };
         
         // show the items of this type
-        showType(true, stype, "-1"); // cm_Globals.hubId);
+        showType(true, stype, "-1");
         
         // remove excess if we are going down
         if ( newcnt>0 && newcnt < currentcnt ) {

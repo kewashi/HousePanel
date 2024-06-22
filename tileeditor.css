@@ -732,14 +732,14 @@ div.buttonopts {
 }
 
 /* buttons */
-input {
+input, button {
     background-repeat: no-repeat;
 }
 div.buttons, form.buttons {
     display: inline;
 }
 input.submitbutton, input.resetbutton, input.authbutton, 
-div.restoretabs, div.formbutton, button.showhistory, button.infobutton {
+div.restoretabs, div.formbutton, button.bluebutton {
     background-color: rgb(34, 110, 187);
     width: 150px; height: 50px; margin-left: 10px; margin-right: 30px;
     cursor: pointer;    border: none;
@@ -756,13 +756,13 @@ div.loginline div.formbutton {
     background-color: rgb(34, 110, 187);
 }
 
-button.showhistory, button.infobutton {
+button.infobutton {
     width: 250px;
 }
-button.infobutton:hover, button.showhistory:hover {
+/* button.infobutton:hover, button.showhistory:hover {
     font-weight: bold;    color: #ffffff;
-}
-button.showhistory {
+} */
+button.showhistory, button.showcustom {
     margin-top: 20px;
 }
 button.delbutton, button.editbutton {
@@ -770,7 +770,7 @@ button.delbutton, button.editbutton {
     margin-left: 10px;
     padding-left: 2px; padding-right: 2px;
 }
-button.delbutton:hover, button.editbutton:hover {
+button.delbutton:hover, button.editbutton:hover, button.bluebutton:hover {
     filter: invert(1);
 }
 .fixbottom {

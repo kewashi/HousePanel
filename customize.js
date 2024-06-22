@@ -277,6 +277,7 @@ function getExistingFields(tileid, curval) {
     for ( var i in sortdevices ) {
         var sensor = sortdevices[i];
         var id = sensor["id"].toString();
+        var hubid = sensor["hubname"];
         if ( tileid==null || id !== tileid ) {
             var thingname = sensor["name"];
             var thingtype = sensor["devicetype"];
@@ -285,7 +286,7 @@ function getExistingFields(tileid, curval) {
             } else {
                 selected = "";
             }
-            results+= "<option value='" + id + "'" + selected + ">" + thingname + " (" + thingtype + " #"+id+")</option>";
+            results+= "<option value='" + id + "'" + selected + ">" + thingname + " (" + thingtype + ": "+id+" hub: " + hubid + ")</option>";
         }
     }
     return results;

@@ -1022,17 +1022,6 @@ def getVariables(resp) {
     return resp
 }
 
-def renameVariable(String oldName, String newName) {
-    def vid = "${state.prefix}variables"
-    def resp = []
-    resp = getVariables(resp)
-    def pvalue = resp[0]
-
-    postHubRange(state.directIP, state.directPort, "update", "Variables", vid, oldName, "variables", pvalue)
-    postHubRange(state.directIP2, state.directPort2, "update", "Variables", vid, oldName, "variables", pvalue)
-    postHubRange(state.directIP3, state.directPort3, "update", "Variables", vid, oldName, "variables", pvalue)
-}
-
 // modified to only return one mode tile
 def getModes(resp) {
     def vals = ["mode"]
@@ -2477,7 +2466,7 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
                 item.setColor([hue: hue100, saturation: s, level: v])
                 newlevel = v
                 newonoff = "on"
-                logger("color click: hue= ${hue100}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")                
+                logger("color click: hue= ${hue100}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
             } else if ( cmd.startsWith("#") ) {
                 newcolor = cmd;
                 def r = cmd.substring(1,3)
@@ -2931,24 +2920,6 @@ def setMusic(swid, cmd, swattr, subid) {
             item.setLevel(newvol)
             resp["level"] = newvol
             resp["volume"] = newvol
-        // } else if ( subid=="music-play" || swattr.contains(" music-play") ) {
-        //     newsw = "playing"
-        //     item.play()
-        //     resp['status'] = newsw
-        // } else if ( subid=="music-stop" || swattr.contains(" music-stop") ) {
-        //     newsw = "stopped"
-        //     item.stop()
-        //     resp['status'] = newsw
-        // } else if ( subid=="music-pause" || swattr.contains(" music-pause") ) {
-        //     newsw = "paused"
-        //     item.pause()
-        //     resp['status'] = newsw
-        // } else if ( subid=="music-previous" || swattr.contains(" music-previous") ) {
-        //     item.previousTrack()
-        //     resp = getMusic(swid, item)
-        // } else if ( subid=="music-next" || swattr.contains(" music-next") ) {
-        //     item.nextTrack()
-        //     resp = getMusic(swid, item)
         } else if ( subid=="_setVolume" || subid=="_setLevel" ) {
             def newvol = cmd.toInteger()
             resp["level"] = newvol
@@ -3192,29 +3163,27 @@ def changeHandler(evt) {
             postHubRange(state.directIP, state.directPort, "update", deviceName, deviceid, subid, devtype, colorarray)
             postHubRange(state.directIP2, state.directPort2, "update", deviceName, deviceid, subid, devtype, colorarray)
             postHubRange(state.directIP3, state.directPort3, "update", deviceName, deviceid, subid, devtype, colorarray)
-
-            // set it to change color based on attribute change
-            logger("color update: ${deviceName} id ${deviceid} type ${devtype} changed to ${color} by changing ${subid} to ${value}, h100: ${h100}, h: ${h}, s: ${s}, v: ${v} ", "debug") 
+            logger("color update: ${deviceName} id ${deviceid} type ${devtype} changed to ${color} by changing ${subid} to ${value}, h100: ${h100}, h: ${h}, s: ${s}, v: ${v} ", "info") 
         } else if ( devtype=="music" && subid=="trackData" ) {
             def newvalue = jsonslurper.parseText(value)
             newvalue = translateObjects(newvalue, musicmap)
             postHubRange(state.directIP, state.directPort, "update", deviceName, deviceid, subid, devtype, newvalue)
             postHubRange(state.directIP2, state.directPort2, "update", deviceName, deviceid, subid, devtype, newvalue)
             postHubRange(state.directIP3, state.directPort3, "update", deviceName, deviceid, subid, devtype, newvalue)
-            logger("thing update: ${deviceName} id ${deviceid} type ${devtype} by changing ${subid} to ${newvalue}", "debug")
+            logger("thing update: ${deviceName} id ${deviceid} type ${devtype} by changing ${subid} to ${newvalue}", "info")
         } else if ( devtype=="audio" && subid=="trackData" ) {
             def newvalue = jsonslurper.parseText(value)
             newvalue = translateObjects(newvalue, audiomap)            
             postHubRange(state.directIP, state.directPort, "update", deviceName, deviceid, subid, devtype, newvalue)
             postHubRange(state.directIP2, state.directPort2, "update", deviceName, deviceid, subid, devtype, newvalue)
             postHubRange(state.directIP3, state.directPort3, "update", deviceName, deviceid, subid, devtype, newvalue)
-            logger("thing update: ${deviceName} id ${deviceid} type ${devtype} by changing ${subid} to ${newvalue}", "debug")
+            logger("thing update: ${deviceName} id ${deviceid} type ${devtype} by changing ${subid} to ${newvalue}", "info")
         } else {
             // make the original attribute change
             postHubRange(state.directIP, state.directPort, "update", deviceName, deviceid, subid, devtype, value)
             postHubRange(state.directIP2, state.directPort2, "update", deviceName, deviceid, subid, devtype, value)
             postHubRange(state.directIP3, state.directPort3, "update", deviceName, deviceid, subid, devtype, value)
-            logger("thing update: ${deviceName} id ${deviceid} type ${devtype} by changing ${subid} to ${value}", "debug")
+            logger("thing update: ${deviceName} id ${deviceid} type ${devtype} by changing ${subid} to ${value}", "info")
         }
 
     }
@@ -3226,13 +3195,12 @@ def modeChangeHandler(evt) {
     def themode = evt?.value
     def deviceName = evt?.displayName
     def subid = evt?.name
-    logger("New mode= ${themode} with subid= ${subid} and name= ${deviceName} to HousePanel clients", "debug")
-    if (themode && deviceName && state?.directIP && state?.directPort) {
-        def modeid = "${state.prefix}mode"
-        logger("Sending new mode= ${themode} with id= ${modeid} to HousePanel clients", "debug")
+    def modeid = "${state.prefix}mode"
+    if (themode && deviceName) {
         postHubRange(state.directIP, state.directPort, "update", deviceName, modeid, "themode", "mode", themode)
         postHubRange(state.directIP2, state.directPort2, "update", deviceName, modeid, "themode", "mode", themode)
         postHubRange(state.directIP3, state.directPort3, "update", deviceName, modeid, "themode", "mode", themode)
+        logger("New mode= ${themode} with subid= ${subid},  id= ${modeid}, name= ${deviceName} to HousePanel clients", "info")
     }
 }
 
@@ -3242,12 +3210,12 @@ def hsmStatusHandler(evt) {
     def themode = evt?.value
     def deviceName = evt?.displayName
     def subid = evt?.name
-    logger("New HSM= ${themode} with subid= ${subid} and name= ${deviceName} to HousePanel clients", "debug")
-    if (themode && state?.directIP && state?.directPort) {
-        def modeid = "${state.prefix}hsm"
+    def modeid = "${state.prefix}hsm"
+    if (themode && deviceName) {
         postHubRange(state.directIP, state.directPort, "update", deviceName, modeid, "state", "hsm", themode)
         postHubRange(state.directIP2, state.directPort2, "update", deviceName, modeid, "state", "hsm", themode)
         postHubRange(state.directIP3, state.directPort3, "update", deviceName, modeid, "state", "hsm", themode)
+        logger("New hsm= ${themode} with subid= ${subid}, id= ${modeid}, and name= ${deviceName} to HousePanel clients", "info")
     }
 }
 
@@ -3258,14 +3226,13 @@ def variableHandler(evt) {
     def theval = evt?.value
     def varname = evt?.name
 
-    if ( varname.startsWith("variable:") ) {
+    if ( varname && varname.startsWith("variable:") ) {
         // name returned as "variable:name" so we get everything after the :
         varname = varname.substring(9)
-        logger("Variable changed, name = ${varname}, val = ${theval}", "debug")
-
         postHubRange(state.directIP, state.directPort, "update", "Variables", vid, varname, "variable", theval)
         postHubRange(state.directIP2, state.directPort2, "update", "Variables", vid, varname, "variable", theval)
         postHubRange(state.directIP3, state.directPort3, "update", "Variables", vid, varname, "variable", theval)
+        logger("Variable changed, name= ${varname}, val= ${theval}", "info")
     }
 }
 
