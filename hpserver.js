@@ -64,9 +64,7 @@ var d = new Date().toString();
 var k = d.indexOf(" ",14);
 var dstr = d.substring(0, k);
 GLB.apiSecret = getNewCode(dstr);
-// console.log(">>>> apiSecret = ", GLB.apiSecret, " dstr = ", dstr, " d= ", d);
-
-GLB.warnonce = {};
+// GLB.warnonce = {};
 
 GLB.defaultrooms = {
     "Kitchen": "clock|kitchen|sink|pantry|dinette" ,
@@ -150,7 +148,7 @@ GLB.mainISYMap = {
                     "CLIFS": "thermostatFanMode", "CLIFRS": "thermostatFanSetting", 
                     "CLISMD": "thermostatHold"},                                       {"_query":"QUERY", "heatingSetpoint":"SET_HEAT", "heatingSetpoint-up":"HUP", "heatingSetpoint-dn":"HDN",
                                                                                         "coolingSetpoint":"SET_COOL", "coolingSetpoint-up":"CUP", "coolingSetpoint-dn":"CDN",
-                                                                                        "thermostatMode":"SET_TMODE", "thermostatFanMode":"SET_FMODE"}, "5.1" ],
+                                                                                        "_setThermostatMode":"SET_TMODE", "_setThermostatFanMode":"SET_FMODE"}, "5.1" ],
     "temperature": [{"GV0": "status_", "BATLVL": "battery", "TEMPOUT": "temperature",
                      "CLIHUM":"humidity"},                                             {"_query":"QUERY"}, "5.2" ], 
     "illuminance": [{"GV0": "status_", "BATLVL": "battery", "LUMIN": "illuminance"},   {"_query":"QUERY"}, "5.3" ],
@@ -2072,6 +2070,18 @@ function mapIsycmd(subid, devicetype) {
         }
     }
     return cmd;
+}
+
+function mapIsyparm(parm, swval) {
+    var isyparm = null;
+    const tmap = {"off":1, "heat":2, "cool": 3, "auto": 4, "emergencyHeat": 5, "emergency": 5};
+    const fanmap = {"auto":1, "on":2, "circulate": 7};
+    if ( parm === "SET_TMODE" && array_key_exists(swval, tmap) ) {
+        isyparm = tmap[swval];
+    } else if ( parm==="SET_FMODE" && array_key_exists(swval, fanmap) ) {
+        isyparm = fanmap[swval];
+    }
+    return isyparm;
 }
 
 function getColorName(index) {
@@ -4435,11 +4445,14 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
             tkeyshow = tkeyshow + " " + realsubid;
         }
         
+        // if ( tkey==="hue" || tkey==="saturation" ||
+        //     tkey==="heatingSetpoint" || tkey==="coolingSetpoint"  ||
+        //     tkey.startsWith("Int_") || tkey.startsWith("State_") ) 
+        // {
         if ( tkey==="hue" || tkey==="saturation" ||
-            tkey==="heatingSetpoint" || tkey==="coolingSetpoint"  ||
-            tkey.startsWith("Int_") || tkey.startsWith("State_") ) 
+             tkey==="heatingSetpoint" || tkey==="coolingSetpoint" ) 
         {
-
+    
             // fix thermostats to have proper consistent tags
             // this is supported by changes in the .js file and .css file
             // notice we use alias name in actual value and original key in up/down arrows
@@ -4486,6 +4499,10 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
                 extra = "";
             } else {
                 extra = " " + tval;
+            }
+
+            if ( tkey.startsWith("def_Int") || tkey.startsWith("def_State") ) {
+                extra += " vardef";
             }
             
             // fix track names for groups, empty, and super long
@@ -4539,6 +4556,8 @@ function makeThing(userid, pname, configoptions, cnt, kindex, thesensor, panelna
             // couid do in CSS but this is easier and faster
             if ( tkey.startsWith("uom_") ) {
                 $tc += "<div class=\"overlay "+tkey+" hidden v_"+kindex+"\">";
+            } else if ( tkey.startsWith("def_") ) {
+                $tc += "<div class=\"overlay "+tkey+" vardef v_"+kindex+"\">";
             } else {
                 $tc += "<div class=\"overlay "+tkey+" v_"+kindex+"\">";
             }
@@ -6250,7 +6269,12 @@ function callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, h
                         // if a numerical value is passed then send it with the command
                         if ( is_number(swval) ) {
                             cmd = cmd + "/" + swval.toString();
-                        }
+                        } else {
+                            var isyparm = mapIsyparm(isycmd, swval);
+                            if ( isyparm ) {
+                                cmd = cmd + "/" + isyparm;;
+                            }
+                        } 
                         curl_call(hubEndpt + cmd, isyheader, false, false, "GET", getNodeResponse);
                         result = cmd;
                     } else {
