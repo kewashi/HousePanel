@@ -173,6 +173,7 @@ def mainPage() {
             vdesc += htmlLine(sCLRBLUE, 600)
             vdesc += spanSmBld("accessToken: ", sCLRBLUE) + spanSmBr("${state.accessToken}" )
             vdesc += spanSmBld("App ID: ", sCLRBLUE) + spanSmBr("${app.id}" )
+            vdesc += spanSmBld("Hubname: ", sCLRBLUE) + spanSmBr("${state.hubname}" )
             vdesc += spanSmBld("Local Endpt: ", sCLRBLUE) + spanSmBr("${state.endpt}" )
             vdesc += spanSmBld("Cloud Endpt: ", sCLRBLUE) + spanSmBr("${state.cloudendpt}" )
             vdesc += spanSmBld("callback IPs: ", sCLRBLUE) + spanSmBr("${settings.webSocketHost}" + ", ${settings.webSocketHost2}" + ", ${settings.webSocketHost3}" )
@@ -346,16 +347,15 @@ def initialize() {
         webCoRE_init()
     }
     state.loggingLevelIDE = settings.configLogLevel?.toInteger() ?: 3
-    logger("Installed hub with settings: ${settings} ", "debug")
+    logger("Installed hub ${state.hubname} with settings: ${settings} ", "debug")
     
     def pattern = ~/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/
     def portpatt = ~/\d{3,}-?(\d{3,})?/
-    def hubname = location.getName()
 
     // report and send to servers name=hubname, id=app.id, type=Hubitat, value=array(accessToken, endpt, cloudendpt) 
     // def postHubRange(ip, port, msgtype, name, id, subid, type, value) {
     if ( (state.directIP.startsWith("http") || state.directIP ==~ pattern) && state.directPort ==~ portpatt ) {
-        postHubRange(state.directIP, state.directPort, "initialize", hubname, app.id, "", "Hubitat", [state.accessToken, state.endpt, state.cloudendpt])
+        postHubRange(state.directIP, state.directPort, "initialize", state.hubname, app.id, "", "Hubitat", [state.accessToken, state.endpt, state.cloudendpt])
         logger("state changes will be posted to HP at IP: ${state.directIP}:${state.directPort} ", "info")
 
     } else {
@@ -363,14 +363,14 @@ def initialize() {
     }
 
     if ( (state.directIP2.startsWith("http") || state.directIP2 ==~ pattern) && state.directPort2 ==~ portpatt ) {
-        postHubRange(state.directIP2, state.directPort2, "initialize", hubname, app.id, "", "Hubitat", [state.accessToken, state.endpt, state.cloudendpt])
+        postHubRange(state.directIP2, state.directPort2, "initialize", state.hubname, app.id, "", "Hubitat", [state.accessToken, state.endpt, state.cloudendpt])
         logger("state changes will also be posted to HP at: ${state.directIP2}:${state.directPort2} ", "info")
     } else {
         state.directIP2 = "0"
     }
 
     if ( (state.directIP3.startsWith("http") || state.directIP3 ==~ pattern) && state.directPort3 ==~ portpatt ) {
-        postHubRange(state.directIP3, state.directPort3, "initialize", hubname, app.id, "", "Hubitat", [state.accessToken, state.endpt, state.cloudendpt])
+        postHubRange(state.directIP3, state.directPort3, "initialize", state.hubname, app.id, "", "Hubitat", [state.accessToken, state.endpt, state.cloudendpt])
         logger("state changes will also be posted to HP at: ${state.directIP3}:${state.directPort3} ", "info")
     } else {
         state.directIP3 = "0"
@@ -395,11 +395,13 @@ def configureHub() {
     }
     state.endpt = app.getFullLocalApiServerUrl()
     state.cloudendpt = app.getFullApiServerUrl()
-    state.hubid = app.getHubUID() 
+    state.hubid = app.getHubUID()
+    state.hubname = location.getName()
 
     logger("You must provide the Access Token and the App ID values. The end point shown will be automatically created","info")
     logger("Access Token = ${state.accessToken}","info")
     logger("App ID = ${app.id}", "info")
+    logger("Hub Name = ${state.hubname}", "info")
     logger("Hubitat Local EndPoint = ${state.endpt}", "info")
     logger("Hubitat Cloud EndPoint = ${state.cloudendpt}", "info")
     logger("Hub ID = ${state.hubid}", "info")
@@ -3380,6 +3382,10 @@ private getWebData(Map params, Boolean text=true) {
 // we only get this token to confirm OAUTH is configured
 // for making API calls we use the Bearer Token obtained via OAUTH flow
 Boolean getAccessToken() {
+    if (!state.hubname) {
+        state.hubname = location.getName()
+    }
+
     try {
         if (!state.accessToken) {
             state.accessToken = createAccessToken()

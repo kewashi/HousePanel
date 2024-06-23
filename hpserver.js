@@ -6079,7 +6079,6 @@ function callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, h
         if ( !hub ) { return null; }
 
         var access_token = hub.hubaccess;
-        var user_token = hub.useraccess;
         var hubEndpt = hub.hubendpt;
         var result;
 
@@ -10669,13 +10668,16 @@ if ( app && applistening ) {
                         }
 
                         // init sends the AppID as the id in change_device field
+                        // note - the userendpt field is now used to store the App ID only
                         if ( req.body['change_device'] ) {
                             updhub = updhub || (hub.userendpt !== req.body['change_device']);
                             hub.userendpt = req.body['change_device'].toString();
 
                             // set default endpt based on AppID
                             // this will almost always be overwritten below
-                            hub.hubendpt = hub.hubhost + "/apps/api/" + hub.userendpt;
+                            if ( hub.hubhost ) {
+                                hub.hubendpt = hub.hubhost + "/apps/api/" + hub.userendpt;
+                            }
                         }
 
                         // init sends the Access Token, endpt, and cloudendpt in the value as an array
