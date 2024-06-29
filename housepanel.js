@@ -3807,9 +3807,10 @@ function setupPage() {
                 var numButtons = parseInt($(numbtnid).html());
                 var thelist = [];
                 for (var i = 1; i <= numButtons; i++) {
-                   thelist.push(i.toString());
+                    var item = "Button #" + i.toString() + "|" + i.toString();
+                    thelist.push(item);
                 }                
-                processClickWithList(that, thingname, ro, subid, thelist, "Button #");
+                processClickWithList(that, thingname, ro, subid, thelist);
             } else {
                 processClickWithValue(that, thingname, ro, subid,  thetype, "", 1);
             }
@@ -3835,7 +3836,26 @@ function setupPage() {
 
         } else if ( subid === "themode" ) {
             processClickWithList(that, thingname, ro, subid, ["Day","Evening","Night","Away"]);
-       
+
+        } else if ( subid==="_setBedPreset" || subid==="_setBedPresetTimer" ) {
+            // processClickWithList(that, thingname, ro, subid, ["Favorite","Flat","ZeroG","Snore","WatchTV","Read"]);
+            processClickWithValue(that, thingname, ro, subid, thetype, { "": ["Favorite","Flat","ZeroG","Snore","WatchTV","Read"]});
+
+        } else if ( subid==="_setBedPosition" ) {
+            processClickWithValue(that, thingname, ro, subid, thetype, {"Position": [0,10,20,30,40,45,50,60,70,80,90], "Actuator":["Head|H","Foot|F"]} );
+
+        } else if ( subid==="_setCoreClimateState" ) {
+            processClickWithValue(that, thingname, ro, subid, thetype, {"Temperature":["HEATING_PUSH_LOW", "HEATING_PUSH_MED", "HEATING_PUSH_HIGH","COOLING_PUSH_LOW", "COOLING_PUSH_MED", "COOLING_PUSH_HIGH"], "Timer (min)": 30} );
+
+        } else if ( subid==="_setFootWarmingState" ) {
+            processClickWithValue(that, thingname, ro, subid, thetype, {"Temp":["Off","Low","Medium","High"], "Timer":["30m","1h","2h","3h","4h","5h","6h"]} );
+
+        } else if ( subid==="_setResponsiveAirState" ) {
+            processClickWithValue(that, thingname, ro, subid, thetype, {"State":[true, false]} );
+
+        } else if ( subid==="_setUnderbedLightState" ) {
+            processClickWithValue(that, thingname, ro, subid, thetype, {"State":["Auto","On","Off"], "Timer":["Forever", "15m", "30m", "45m", "1h","2h","3h"], "Brightness":["Off","Low","Medium","High"]} );
+
         // handle commands that have parameters required
         // this is signalled by the value set otherwise the command value is the command string name
         } else if ( subid.startsWith("_") && isNumeric(thevalue) ) {
@@ -3940,35 +3960,75 @@ function checkPassword(tile, thingname, pw, ro, thevalue, yesaction) {
     });
 }
 
-function processClickWithValue(that, thingname, ro, subid, thetype, thevalue, numParams) {
+// thevalues = value or {name: value} or array: {name: [value]}
+function processClickWithValue(that, thingname, ro, subid, thetype, thevalues, numParams=0) {
 
+    if ( typeof thevalues === "object" ) {
+        var prefixes = Object.keys(thevalues);
+        numParams = prefixes.length;
+    } else {
+        prefixes = null;
+    }
+    
     if ( numParams <= 0 ) {
-        processClick(that, thingname, ro, thevalue, "");
+        processClick(that, thingname, ro, thevalues, "");
         return;
     }
 
     var userid = cm_Globals.options.userid;
-    var oldvalue = thevalue;
     var tpos = $(that).offset();
     var ttop = (tpos.top > 125) ? tpos.top - 120 : 5;
     var pos = {top: ttop, left: tpos.left};
-    var htmlcontent;
-    htmlcontent = "<p>Enter new value for tile: " + thingname + "</p>";
-    if ( numParams > 1 ) {
+    var thevalue;
+    var prefix;
+
+    var htmlcontent = "<p>Enter new value for tile: " + thingname + "</p>";
+    if ( numParams > 1 || (prefixes && prefixes[0]!=="") ) {
         htmlcontent = htmlcontent + "<p>For: " + subid + "</p>";
-        thevalue = "";
     }
     htmlcontent += "<div class='ddlDialog'>";
-    
-    for (var i = 1; i <= numParams; i++) {
-        var id = "newsubid" + i.toString()
-        if ( numParams > 1 ) {
-            var prefix = "Param #" + i.toString();
-        } else {
+
+    for (var i = 0; i < numParams; i++) {
+        if ( prefixes ) {
+            prefix = prefixes[i];
+            thevalue = thevalues[prefix];
+            if ( prefix==="" ) {
+                prefix = subid;
+            }
+        } else if ( numParams===1 ) {
             prefix = subid;
+            thevalue = thevalues;
+        } else {
+            prefix = "Param #" + (i+1).toString();
+            thevalue = "";
         }
-        htmlcontent += "<p><label for='" + id + "'>" + prefix + ": </label>";
-        htmlcontent += "<input class='ddlDialog' id='" + id + "' type='text' size='20' value='" + thevalue + "' /></p>";
+
+        if ( prefix.startsWith("_set" ) ) {
+            prefix = prefix.substring(4);
+        } else if ( prefix.startsWith("_") ) {
+            prefix = prefix.substring(1);
+        }
+
+        var id = "newsubid" + (i+1).toString();
+        if ( typeof thevalue === "object" && Array.isArray(thevalue) ) {
+            htmlcontent += `<div class='ddlDialog'><label for='picklist${id}'>${prefix}: </label>`;
+            htmlcontent += `<select id="${id}" name="picklist${id}" class="picklist">`;
+            thevalue.forEach(function(val) {
+                if ( typeof val === "string" && val.indexOf("|") !== -1 ) {
+                    var thevals = val.split("|");
+                    var dval = thevals[0];
+                    val = thevals[1];
+                } else {
+                    dval = val;
+                }
+                htmlcontent += "<option value=\"" + val + "\">" + dval + "</option>";
+            });
+            htmlcontent += "</select></div>";
+        
+        } else {
+            htmlcontent += "<p><label for='" + id + "'>" + prefix + ": </label>";
+            htmlcontent += "<input class='ddlDialog' id='" + id + "' type='text' size='20' value='" + thevalue + "' /></p>";
+        }
      }                
     htmlcontent += "</div>";
     
@@ -3976,18 +4036,19 @@ function processClickWithValue(that, thingname, ro, subid, thetype, thevalue, nu
     function(ui) {
         var clk = $(ui).attr("name");
         if ( clk==="okay" ) {
-            thevalue = "";
-            for (var i = 1; i <= numParams; i++) {
-                var id = "#newsubid" + i.toString()
-                thevalue = thevalue + $(id).val();
-                if ( i < numParams ) {
-                    thevalue = thevalue + "|";
+            var values = "";
+            for (var i = 0; i < numParams; i++) {
+                if ( i > 0 ) {
+                    values = values + "|";
                 }
+                var id = "#newsubid" + (i+1).toString()
+                values = values + $(id).val();
             }
-            processClick(that, thingname, ro, thevalue, "");
+            processClick(that, thingname, ro, values, "");
 
             // do a manual rule and list op if a repeat variable is provided
-            if ( thetype==="variables" && oldvalue===thevalue)  {
+            // this is only here to invoke LIST rules for values that get posted that are same as prior values
+            if ( numParams===1 && thetype==="variables" )  {
                 var aid = $(that).attr("aid");
                 var tile = '#t-'+aid;
                 var tileid = $(tile).attr("tile");
@@ -3995,7 +4056,7 @@ function processClickWithValue(that, thingname, ro, subid, thetype, thevalue, nu
                 var hubid = $(tile).attr("hub");
                 var hubindex = $(tile).attr("hubindex");
                 $.post(cm_Globals.returnURL, 
-                    {api: "dorules", userid: userid, id: bid, thingid: aid, type: thetype, value: thevalue,
+                    {api: "dorules", userid: userid, id: bid, thingid: aid, type: thetype, value: values,
                      subid: subid, hubid: hubid, hubindex: hubindex, tileid: tileid, hpcode: cm_Globals.options.hpcode}
                 );
             }
@@ -4017,16 +4078,31 @@ function processClickWithValue(that, thingname, ro, subid, thetype, thevalue, nu
     });
 }
 
-function processClickWithList(tile, thingname, ro, subid, thelist, prefix = "") {
+function processClickWithList(tile, thingname, ro, subid, thelist) {
     var tpos = $(tile).offset();
     var ttop = (tpos.top > 125) ? tpos.top - 120 : 5;
     var pos = {top: ttop, left: tpos.left};
     var htmlcontent;
+    var prefix;
+    if ( subid.startsWith("_set" ) ) {
+        prefix = subid.substring(4);
+    } else if ( subid.startsWith("_") ) {
+        prefix = subid.substring(1);
+    } else {
+        prefix = subid;
+    }
     htmlcontent = "<p>Select value from list for tile: " + thingname + "</p>";
-    htmlcontent += "<div class='ddlDialog'><label for='picklist'>" + subid + ":</label>";
+    htmlcontent += "<div class='ddlDialog'><label for='picklist'>" + prefix + ":</label>";
     htmlcontent += "<select id=\"picklist\" name=\"picklist\" class=\"picklist\">";
     thelist.forEach(function(val) {
-        htmlcontent += "<option value=\"" + val + "\">" + prefix + val + "</option>";
+        if ( typeof val === "string" && val.indexOf("|") !== -1 ) {
+            var thevals = val.split("|");
+            var dval = thevals[0];
+            val = thevals[1];
+        } else {
+            dval = val;
+        }
+        htmlcontent += "<option value=\"" + val + "\">" + dval + "</option>";
     });
     htmlcontent += "</select></div>";
     
@@ -4053,21 +4129,6 @@ function processClickWithList(tile, thingname, ro, subid, thelist, prefix = "") 
         });
     });
 }
-
-// function stripOnoff(thevalue) {
-//     var newvalue = thevalue.toLowerCase();
-//     if ( newvalue==="on" || newvalue==="off" ) {
-//         return " ";
-//     } else if ( newvalue.endsWith("on") ) {
-//         thevalue = thevalue.substring(0, thevalue.length-2);
-//     } else if ( newvalue.endsWith("off") ) {
-//         thevalue = thevalue.substring(0, thevalue.length-3);
-//     }
-//     if ( thevalue.substr(-1)!==" " && thevalue.substr(-1)!=="_" && thevalue.substr(-1)!=="-" && thevalue.substr(-1)!=="|" ) {
-//         thevalue+= " ";
-//     }
-//     return thevalue;
-// }
 
 function addOnoff(targetid, subid, thevalue) {
     if ( subid==="allon") {

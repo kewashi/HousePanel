@@ -1653,8 +1653,19 @@ def sendCommand(item, subid, cmd) {
     // multiple variables passed in cmd with separater | string
     } else {
         cmd = cmd.toString()
-        def parm = cmd.split(/\|/)
-        def n = parm.size()
+        def rawparm = cmd.split(/\|/)
+        def n = rawparm.size()
+        def parm = []
+
+        // convert things that look like numbers from strings to numbers
+        rawparm.each { aparm -> 
+            if ( aparm.isNumber() ) {
+                parm << aparm.toInteger()
+            } else {
+                parm << aparm
+            }
+        }
+
         if (n == 1) {
             item."$subid"(parm[0])
         } else if (n == 2) {
