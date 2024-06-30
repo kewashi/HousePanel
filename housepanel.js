@@ -3845,7 +3845,7 @@ function setupPage() {
             processClickWithValue(that, thingname, ro, subid, thetype, {"Position": [0,10,20,30,40,45,50,60,70,80,90], "Actuator":["Head|H","Foot|F"]} );
 
         } else if ( subid==="_setCoreClimateState" ) {
-            processClickWithValue(that, thingname, ro, subid, thetype, {"Temperature":["Heat Low|HEATING_PUSH_LOW", "Heat Med|HEATING_PUSH_MED", "Heat High|HEATING_PUSH_HIGH","Cool Low|COOLING_PULL_LOW", "Cool Med|COOLING_PULL_MED", "Cool High|COOLING_PULL_HIGH"], "Timer (min)": 30} );
+            processClickWithValue(that, thingname, ro, subid, thetype, {"Temperature":["Off|OFF", "Heat Low|HEATING_PUSH_LOW", "Heat Med|HEATING_PUSH_MED", "Heat High|HEATING_PUSH_HIGH","Cool Low|COOLING_PULL_LOW", "Cool Med|COOLING_PULL_MED", "Cool High|COOLING_PULL_HIGH"], "Timer (min)": 30} );
 
         } else if ( subid==="_setFootWarmingState" ) {
             processClickWithValue(that, thingname, ro, subid, thetype, {"Temp":["Off","Low","Medium","High"], "Timer":["30m","1h","2h","3h","4h","5h","6h"]} );
