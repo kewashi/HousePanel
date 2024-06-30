@@ -868,7 +868,7 @@ def ignoredAttributes() {
 
 def ignoredCommands() {
     def ignore = ["setLevel","setHue","setSaturation","setColorTemperature","setColor","setAdjustedColor",
-                  "enrollResponse","ping","configure","setAssociationGroup","setConfigParameter","release", "poll",
+                  "enrollResponse","ping","configure","setAssociationGroup","setConfigParameter","release",
                   "reloadAllCodes","unlockWithTimeout","markDeviceOnline","markDeviceOffline","updateFirmware",
                   "childOff","childOn","childRefresh","childSetLevel","componentOff","componentOn","componentRefresh","componentSetColor",
                   "componentSetColorTemperatures","componentSetLevel","startLevelChange","stopLevelChange"
