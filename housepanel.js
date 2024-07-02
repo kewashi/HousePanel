@@ -3810,51 +3810,64 @@ function setupPage() {
                     var item = "Button #" + i.toString() + "|" + i.toString();
                     thelist.push(item);
                 }                
-                processClickWithList(that, thingname, ro, subid, thelist);
+                processClickWithValue(that, thingname, ro, subid, thetype, {"": thelist});
             } else {
                 processClickWithValue(that, thingname, ro, subid,  thetype, "", 1);
             }
 
-        // various known special cases where we select from a list
+        // various known special cases where we select from a list or a group of lists
+        // this is all handled by the ClickWithValue function that has been generalized to handles lists and dicts
         } else if ( subid === "_setMotion") {
-            processClickWithList(that, thingname, ro, subid, ["active","inactive"]);
+            processClickWithValue(that, thingname, ro, subid, thetype, {"": ["active","inactive"]});
 
         } else if ( subid === "thermostatMode" || subid==="_setThermostatMode") {
-            processClickWithList(that, thingname, ro, "_setThermostatMode", ["heat","cool","auto","off"]);
+            processClickWithValue(that, thingname, ro, "_setThermostatMode", thetype, {"": ["heat","cool","auto","off"]});
 
         } else if ( subid === "thermostatFanMode" || subid==="_setThermostatFanMode") {
-            processClickWithList(that, thingname, ro, "_setThermostatFanMode", ["auto","on","circulate"]);
+            processClickWithValue(that, thingname, ro, "_setThermostatFanMode", thetype, {"": ["auto","on","circulate"]});
 
         } else if ( subid === "_setChirp") {
-            processClickWithList(that, thingname, ro, subid, ["ding-dong","harp","navi","wind-chime","none"]);
-       
+            processClickWithValue(that, thingname, ro, subid, thetype, {"": ["ding-dong","harp","navi","wind-chime","none"]});
+      
         } else if ( subid === "_startPositionChange") {
-            processClickWithList(that, thingname, ro, subid, ["open","close"]);
+            processClickWithValue(that, thingname, ro, subid, thetype, {"Position": ["open","close"]});
        
         } else if ( subid === "_startLevelChange") {
-            processClickWithList(that, thingname, ro, subid, ["up","down"]);
+            processClickWithValue(that, thingname, ro, subid, thetype, {"Direction": ["up","down"]});
 
         } else if ( subid === "themode" ) {
-            processClickWithList(that, thingname, ro, subid, ["Day","Evening","Night","Away"]);
+            processClickWithValue(that, thingname, ro, subid, thetype, {"Mode": ["Day","Evening","Night","Away"]});
 
-        } else if ( subid==="_setBedPreset" || subid==="_setBedPresetTimer" ) {
-            // processClickWithList(that, thingname, ro, subid, ["Favorite","Flat","ZeroG","Snore","WatchTV","Read"]);
-            processClickWithValue(that, thingname, ro, subid, thetype, { "": ["Favorite","Flat","ZeroG","Snore","WatchTV","Read"]});
+        } else if ( subid==="_setBedPreset" ) {
+            processClickWithValue(that, thingname, ro, subid, thetype, {"": ["Favorite","Flat","ZeroG","Snore","WatchTV","Read"]});
+
+        } else if ( subid==="_setBedPresetTimer" ) {
+            // it is weird that this uses "Off" while the underbed light uses "Forever" to ignore the timer
+            processClickWithValue(that, thingname, ro, subid, thetype, {"BedPreset": ["Favorite","Flat","ZeroG","Snore","WatchTV","Read"], "Timer":["Off","15m","30m","45m","1h","2h","3h"]});
+
+        } else if ( subid==="sleepNumber" || subid==="_setSleepNumber" ) {
+            processClickWithValue(that, thingname, ro, "_setSleepNumber", thetype, {"": thevalue} );
+
+        } else if ( subid==="headPosition" ) {
+            processClickWithValue(that, thingname, ro, "_setBedPosition", thetype, {"Position": [0,10,20,30,40,45,50,60,70,80,90], "Actuator":["Head|H"]} );
+
+        } else if ( subid==="footPosition" ) {
+            processClickWithValue(that, thingname, ro, "_setBedPosition", thetype, {"Position": [0,10,20,30,40,45,50,60,70,80,90], "Actuator":["Foot|F"]} );
 
         } else if ( subid==="_setBedPosition" ) {
             processClickWithValue(that, thingname, ro, subid, thetype, {"Position": [0,10,20,30,40,45,50,60,70,80,90], "Actuator":["Head|H","Foot|F"]} );
 
-        } else if ( subid==="_setCoreClimateState" ) {
-            processClickWithValue(that, thingname, ro, subid, thetype, {"Temperature":["Off|OFF", "Heat Low|HEATING_PUSH_LOW", "Heat Med|HEATING_PUSH_MED", "Heat High|HEATING_PUSH_HIGH","Cool Low|COOLING_PULL_LOW", "Cool Med|COOLING_PULL_MED", "Cool High|COOLING_PULL_HIGH"], "Timer (min)": 30} );
+        } else if ( subid==="_setCoreClimateState" || subid==="coreClimateTemp" ) {
+            processClickWithValue(that, thingname, ro, "_setCoreClimateState", thetype, {"Temperature":["Off|OFF", "Heat Low|HEATING_PUSH_LOW", "Heat Med|HEATING_PUSH_MED", "Heat High|HEATING_PUSH_HIGH","Cool Low|COOLING_PULL_LOW", "Cool Med|COOLING_PULL_MED", "Cool High|COOLING_PULL_HIGH"], "Timer (min)": 30} );
 
-        } else if ( subid==="_setFootWarmingState" ) {
-            processClickWithValue(that, thingname, ro, subid, thetype, {"Temp":["Off","Low","Medium","High"], "Timer":["30m","1h","2h","3h","4h","5h","6h"]} );
+        } else if ( subid==="_setFootWarmingState" || subid==="footWarmingTemp" ) {
+            processClickWithValue(that, thingname, ro, "_setFootWarmingState", thetype, {"Temp":["Off","Low","Medium","High"], "Timer":["30m","1h","2h","3h","4h","5h","6h"]} );
 
-        } else if ( subid==="_setResponsiveAirState" ) {
-            processClickWithValue(that, thingname, ro, subid, thetype, {"State":[true, false]} );
+        } else if ( subid==="_setResponsiveAirState" || subid==="responsiveAir" ) {
+            processClickWithValue(that, thingname, ro, "_setResponsiveAirState", thetype, {"State":[true, false]} );
 
-        } else if ( subid==="_setUnderbedLightState" ) {
-            processClickWithValue(that, thingname, ro, subid, thetype, {"State":["Auto","On","Off"], "Timer":["Forever", "15m", "30m", "45m", "1h","2h","3h"], "Brightness":["Off","Low","Medium","High"]} );
+        } else if ( subid==="_setUnderbedLightState" || subid==="underbedLightState" || subid==="underbedLightTimer" || subid==="underbedLightBrightness" ) {
+            processClickWithValue(that, thingname, ro, "_setUnderbedLightState", thetype, {"State":["Auto","On","Off"], "Timer":["Forever","15m","30m","45m","1h","2h","3h"], "Brightness":["Off","Low","Medium","High"]} );
 
         // handle commands that have parameters required
         // this is signalled by the value set otherwise the command value is the command string name
@@ -3961,6 +3974,7 @@ function checkPassword(tile, thingname, pw, ro, thevalue, yesaction) {
 }
 
 // thevalues = value or {name: value} or array: {name: [value]}
+// this new flexibility allowed me to remove the process List function
 function processClickWithValue(that, thingname, ro, subid, thetype, thevalues, numParams=0) {
 
     if ( typeof thevalues === "object" ) {
@@ -3984,7 +3998,8 @@ function processClickWithValue(that, thingname, ro, subid, thetype, thevalues, n
 
     var htmlcontent = "<p>Enter new value for tile: " + thingname + "</p>";
     if ( numParams > 1 || (prefixes && prefixes[0]!=="") ) {
-        htmlcontent = htmlcontent + "<p>For: " + subid + "</p>";
+        var strsubid = subid.startsWith("_set") ? subid.substring(4) : subid;
+        htmlcontent = htmlcontent + "<p>For: " + strsubid + "</p>";
     }
     htmlcontent += "<div class='ddlDialog'>";
 
@@ -4068,58 +4083,6 @@ function processClickWithValue(that, thingname, ro, subid, thetype, thevalues, n
         $("#newsubidValue").focus();
         $("#newsubidValue").off("keydown");
         $("#newsubidValue").on("keydown",function(e) {
-            if ( e.which===13  ){
-                $("#modalokay").trigger("click");
-            }
-            if ( e.which===27  ){
-                $("#modalcancel").trigger("click");
-            }
-        });
-    });
-}
-
-function processClickWithList(tile, thingname, ro, subid, thelist) {
-    var tpos = $(tile).offset();
-    var ttop = (tpos.top > 125) ? tpos.top - 120 : 5;
-    var pos = {top: ttop, left: tpos.left};
-    var htmlcontent;
-    var prefix;
-    if ( subid.startsWith("_set" ) ) {
-        prefix = subid.substring(4);
-    } else if ( subid.startsWith("_") ) {
-        prefix = subid.substring(1);
-    } else {
-        prefix = subid;
-    }
-    htmlcontent = "<p>Select value from list for tile: " + thingname + "</p>";
-    htmlcontent += "<div class='ddlDialog'><label for='picklist'>" + prefix + ":</label>";
-    htmlcontent += "<select id=\"picklist\" name=\"picklist\" class=\"picklist\">";
-    thelist.forEach(function(val) {
-        if ( typeof val === "string" && val.indexOf("|") !== -1 ) {
-            var thevals = val.split("|");
-            var dval = thevals[0];
-            val = thevals[1];
-        } else {
-            dval = val;
-        }
-        htmlcontent += "<option value=\"" + val + "\">" + dval + "</option>";
-    });
-    htmlcontent += "</select></div>";
-    
-    createModal("modalpick", htmlcontent, "body", true, pos, 
-    function(ui) {
-        var clk = $(ui).attr("name");
-        if ( clk==="okay" ) {
-            thevalue = $("#picklist").val();
-            processClick(tile, thingname, ro, thevalue, "", subid);
-        }
-        closeModal("modalpick");
-    },
-    // after box loads set focus to field
-    function() {
-        $("#picklist").focus();
-        $("#picklist").off("keydown");
-        $("#picklist").on("keydown",function(e) {
             if ( e.which===13  ){
                 $("#modalokay").trigger("click");
             }
