@@ -2800,12 +2800,12 @@ function addEditLink() {
         var userid = cm_Globals.options.userid;
         if ( pwsib && pwsib.length > 0 ) {
             pw = pwsib.children("div.password").html();
-            checkPassword(thing, "Tile customize", pw, false, "", runCustom);
+            checkPassword(thing, "Tile customize", pw, false, "", null, runCustom);
             priorOpmode = "Edit";
         } else {
             runCustom(thing," ", false);
         }
-        function runCustom(thing, name, ro, thevalue) {
+        function runCustom(thing, name, ro, thevalue, theattr=  true, subid= null) {
             var str_type = $(thing).attr("type");
             var tile = $(thing).attr("tile");
             var bid = $(thing).attr("bid");
@@ -3796,7 +3796,7 @@ function setupPage() {
         // the dynamically created dialog box includes an input string if pw given
         // uses a simple md5 hash to store user password - this is not strong security
         if ( pw!==false && typeof pw === "string" && pw!=="false" ) {
-            checkPassword(that, thingname, pw, ro, thevalue, processClick);
+            checkPassword(that, thingname, pw, ro, thevalue, subid, processClick);
         
         // handle buttons by searching for sibling that has number of buttons listed
         // this won't be found if the button is a link so we just make user put in a number
@@ -3849,7 +3849,7 @@ function setupPage() {
             processClickWithValue(that, thingname, ro, "_setSleepNumber", thetype, {"": thevalue} );
 
         } else if ( subid==="headPosition" ) {
-            processClickWithValue(that, thingname, ro, "_setBedPosition", thetype, {"Position": [0,10,20,30,40,45,50,60,70,80,90], "Actuator":["Head|H"]} );
+            processClickWithValue(that, thingname, ro, "_setBedPosition", thetype, {"": [0,10,20,30,40,45,50,60,70,80,90], "Actuator":["Head|H"]} );
 
         } else if ( subid==="footPosition" ) {
             processClickWithValue(that, thingname, ro, "_setBedPosition", thetype, {"Position": [0,10,20,30,40,45,50,60,70,80,90], "Actuator":["Foot|F"]} );
@@ -3915,7 +3915,7 @@ function setupPage() {
    
 }
 
-function checkPassword(tile, thingname, pw, ro, thevalue, yesaction) {
+function checkPassword(tile, thingname, pw, ro, thevalue, subid, yesaction) {
 
     var userpw = "";
     var tpos = $(tile).offset();
@@ -3937,7 +3937,7 @@ function checkPassword(tile, thingname, pw, ro, thevalue, yesaction) {
         var clk = $(ui).attr("name");
         if ( clk==="okay" ) {
             if ( pw==="" ) {
-                yesaction(tile, thingname, ro, thevalue);
+                yesaction(tile, thingname, ro, thevalue, true, subid);
             } else {
                 userpw = $("#userpw").val();
                 $.post(cm_Globals.returnURL, 
@@ -3945,7 +3945,7 @@ function checkPassword(tile, thingname, pw, ro, thevalue, yesaction) {
                                         type: "verify", value: userpw, attr: pw, hpcode: cm_Globals.options.hpcode},
                     function (presult, pstatus) {
                         if ( pstatus==="success" && presult==="success" ) {
-                            yesaction(tile, thingname, ro, thevalue);
+                            yesaction(tile, thingname, ro, thevalue, true, subid);
                         } else {
                             console.warn("Protected tile [" + thingname + "] access denied.");
                         }
@@ -3985,7 +3985,7 @@ function processClickWithValue(that, thingname, ro, subid, thetype, thevalues, n
     }
     
     if ( numParams <= 0 ) {
-        processClick(that, thingname, ro, thevalues, "");
+        processClick(that, thingname, ro, thevalues, false, subid);
         return;
     }
 
@@ -4059,7 +4059,7 @@ function processClickWithValue(that, thingname, ro, subid, thetype, thevalues, n
                 var id = "#newsubid" + (i+1).toString()
                 values = values + $(id).val();
             }
-            processClick(that, thingname, ro, values, "");
+            processClick(that, thingname, ro, values, false, subid);
 
             // do a manual rule and list op if a repeat variable is provided
             // this is only here to invoke LIST rules for values that get posted that are same as prior values
