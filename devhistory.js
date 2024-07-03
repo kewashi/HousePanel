@@ -1,4 +1,5 @@
 const devhistory = `
+3.3.6   Another tweak for Sleep number and generic fix for number and boolean parameters
 3.3.5   Generalized inputs and added support for Sleep number bed parameter selection
 3.3.4   Changed useroption to usroption, fixed dead node removal, force unique devices
 3.3.3   Major code cleanup and simplification of hub registration including pushing data from groovy

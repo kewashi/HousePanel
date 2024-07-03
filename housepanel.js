@@ -3253,6 +3253,10 @@ function updateTile(aid, presult) {
             value = value.replace(/\n/g, "<br>");
         }
 
+        if ( typeof value === "boolean" ) {
+            value = value.toString();
+        }
+
         // skip objects except single entry arrays
         if ( dothis && ( typeof value==="object" || ( typeof value==="string" && value.startsWith("{") ) ) ) {
             dothis = false;
@@ -3845,8 +3849,8 @@ function setupPage() {
             // it is weird that this uses "Off" while the underbed light uses "Forever" to ignore the timer
             processClickWithValue(that, thingname, ro, subid, thetype, {"BedPreset": ["Favorite","Flat","ZeroG","Snore","WatchTV","Read"], "Timer":["Off","15m","30m","45m","1h","2h","3h"]});
 
-        } else if ( subid==="sleepNumber" || subid==="_setSleepNumber" ) {
-            processClickWithValue(that, thingname, ro, "_setSleepNumber", thetype, {"": thevalue} );
+        } else if ( subid==="sleepNumber" ) {
+            processClickWithValue(that, thingname, ro, "_setSleepNumber", thetype, thevalue, 1 );
 
         } else if ( subid==="headPosition" ) {
             processClickWithValue(that, thingname, ro, "_setBedPosition", thetype, {"": [0,10,20,30,40,45,50,60,70,80,90], "Actuator":["Head|H"]} );
@@ -4059,6 +4063,7 @@ function processClickWithValue(that, thingname, ro, subid, thetype, thevalues, n
                 var id = "#newsubid" + (i+1).toString()
                 values = values + $(id).val();
             }
+            // console.log(">>>> values: ", values, " type: ", (typeof values), " numParams: ", numParams );
             processClick(that, thingname, ro, values, false, subid);
 
             // do a manual rule and list op if a repeat variable is provided
@@ -4399,7 +4404,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
 
         console.log("userid= ", userid, " thingid= ", thingid, " tileid= ", tileid, " hint= ", hint,
                     " command= ", command, " bid= ", bid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", hubid, " linkhub= ", linkhub,
-                    " type= ", thetype, " linktype= ", linktype, " subid= ", subid, " realsubid= ", realsubid, " value= ", thevalue, 
+                    " type= ", thetype, " linktype= ", linktype, " subid= ", subid, " realsubid= ", realsubid, " value= ", thevalue, " type: ", (typeof thevalue),
                     " linkval= ", linkval, " attr=", theattr, " hpcode=", cm_Globals.options.hpcode);
 
         // create a visual cue that we clicked on this item

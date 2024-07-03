@@ -867,11 +867,9 @@ def ignoredAttributes() {
 }
 
 def ignoredCommands() {
-    def ignore = ["setLevel","setHue","setSaturation","setColorTemperature","setColor","setAdjustedColor",
-                  "enrollResponse","ping","configure","setAssociationGroup","setConfigParameter","release",
-                  "reloadAllCodes","unlockWithTimeout","markDeviceOnline","markDeviceOffline","updateFirmware",
-                  "childOff","childOn","childRefresh","childSetLevel","componentOff","componentOn","componentRefresh","componentSetColor",
-                  "componentSetColorTemperatures","componentSetLevel","startLevelChange","stopLevelChange"
+    def ignore = ["enrollResponse","setAssociationGroup","markDeviceOnline","markDeviceOffline","updateFirmware",
+                  "childOff","childOn","childRefresh","childSetLevel",
+                  "componentOff","componentOn","componentRefresh","componentSetColor","componentSetColorTemperatures","componentSetLevel"
                   ]
     return ignore
 }
@@ -1649,6 +1647,9 @@ def sendCommand(item, subid, cmd) {
     
     // a single parameter passed in the cmd variable
     } else if ( cmd.toString().indexOf("|") == -1 ) {
+        if ( cmd.isNumber() ) {
+            cmd = cmd.toInteger()
+        }
         item."$subid"(cmd)
     // multiple variables passed in cmd with separater | string
     } else {
@@ -2957,12 +2958,13 @@ def registerAll() {
     registerLocations()
 
     // register all the devices in time steps
-    def delay = 5
+    def delaygap = 20
+    def delay = delaygap
     mydevices.each { item -> 
         if ( settings[item]?.size() > 0 ) {
             logger("registering ${item} ", "debug")
             runIn(delay, "register_${item}", [overwrite: true])
-            delay = delay + 5
+            delay = delay + delaygap
         }
     }
 }

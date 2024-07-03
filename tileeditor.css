@@ -2205,6 +2205,11 @@ div.thing div.overlay div.arrow-it {
     height: 25px; width: 36px; border: none;
     padding-left: 0px; padding-right: 0px;
 }
+div.thing div.overlay._ping,
+div.thing div.overlay._configure,
+div.thing div.overlay._setConfigParameter,
+div.thing div.overlay._reloadAllCodes,
+div.thing div.overlay._unlockWithTimeout,
 div.thing div.overlay.enabled,
 div.thing div.overlay.deviceClass,
 div.thing div.overlay.dcPeriod,
@@ -2217,10 +2222,17 @@ div.thing div.overlay.sgid,
 div.thing div.overlay.wattage,
 div.thing div.overlay.devtype,
 div.thing div.overlay.property,
+div.thing div.overlay._setHue,
+div.thing div.overlay._setSaturation,
 div.thing div.overlay._setLevel,
+div.thing div.overlay._setColor,
+div.thing div.overlay._setColorTemperature,
+div.thing div.overlay._setAdjustedColor,
 div.thing div.overlay._setPosition,
 div.thing div.overlay._startLevelChange,
-div.thing div.overlay._startPositionChange
+div.thing div.overlay._stopLevelChange,
+div.thing div.overlay._startPositionChange,
+div.thing div.overlay._stopPositionChange
 {
     display: none;
 }

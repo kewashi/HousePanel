@@ -194,6 +194,10 @@ function getOnOff(str_type, subid, val) {
         onoff = ["ON","OFF"];
     } else if ( subid.startsWith("momentary") ) {
         onoff = ["on","off"];
+    } else if ( subid.startsWith("underbedLightState") ) {
+        onoff = ["Auto","On","Off"];
+    } else if ( subid.startsWith("underbedLightBrightness") ) {
+        onoff = ["Off","Low","Medium","High"];
     } else if ( subid.startsWith("button") ) {
         onoff = ["pushed","held","released","doubleTapped"];
     } else if ( subid.startsWith("contact" ) || subid.startsWith("valve" ) ) {

@@ -6133,7 +6133,7 @@ function callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, h
             var promise = new Promise( function(resolve, reject) {
 
                 if ( DEBUG1 ) {
-                    console.log((ddbg()), "callHub curl: ", jsonshow(nvpreq));
+                    console.log((ddbg()), "callHub curl: ", jsonshow(nvpreq), " value type: ", (typeof swval));
                 }
                 curl_call(host, header, nvpreq, false, "POST", function(err, res, body) {
                     if ( DEBUG7 ) {
@@ -6809,9 +6809,12 @@ function doAction(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, 
         }
 
     } else {
+        // if ( !isNaN(parseInt(swval))) {
+        //     swval = parseInt(swval);
+        // }
         if ( DEBUG1 ) {
             console.log( (ddbg()), `callHub: userid: ${userid}, hubindex: ${hubindex}, tileid: ${tileid}`, 
-                                   `swid: ${swid}, swtype: ${swtype}, swval: ${swval}, swattr: ${swattr}, subid: ${subid}`);
+                                   `swid: ${swid}, swtype: ${swtype}, swval: ${swval}, swattr: ${swattr}, subid: ${subid}`, " type: ", (typeof swval) );
         }
         msg = callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, hint, null, false);
     }
