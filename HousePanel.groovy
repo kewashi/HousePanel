@@ -126,6 +126,7 @@ def mainPage() {
             desc += mypowers ? spanSmBld("Power${mypowers.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mypowers.size()})") : sBLANK
             desc += mypresences ? spanSmBld("Presence${mypresences.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mypresences.size()})") : sBLANK
             desc += mymotions ? spanSmBld("Motion Sensor${mymotions.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mymotions.size()})") : sBLANK
+            desc += mybeds ? spanSmBld("Sleep Sensor${mybeds.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mybeds.size()})") : sBLANK
             desc += mycontacts ? spanSmBld("Contact Sensor${mycontacts.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mycontacts.size()})") : sBLANK
             desc += mydoors ? spanSmBld("Door${mydoors.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mydoors.size()})") : sBLANK
             desc += mygarages ? spanSmBld("Garage Door${mygarages.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mygarages.size()})") : sBLANK
@@ -245,9 +246,10 @@ def deviceSelectPage() {
                 input "mybulbs", "capability.colorControl", hideWhenEmpty: true, multiple: true, required: false, title: "Color Control Bulbs"
                 input "mypowers", "capability.powerMeter", hideWhenEmpty: true, multiple: true, required: false, title: "Power Meters"
         }
-        section (sectHead("Motion and Presence","boypresent.png")) {
+        section (sectHead("Presence, Motions, and Sleep","boypresent.png")) {
                 input "mypresences", "capability.presenceSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Presence"
                 input "mymotions", "capability.motionSensor", multiple: true, required: false, title: "Motion"
+                input "mybeds", "capability.sleepSensor", multiple: true, required: false, title: "Sleep"
         }
         section (sectHead("Doors, Contacts, Locks, and Shades","closedoor.png")) {
                 input "mycontacts", "capability.contactSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Contact Sensors"
@@ -664,6 +666,10 @@ def getPresence(swid, item=null) {
     getThing(mypresences, swid, item)
 }
 
+def getBed(swid, item=null) {
+    getThing(mybeds, swid, item)
+}
+
 def getWater(swid, item=null) {
     getThing(mywaters, swid, item)
 }
@@ -959,6 +965,7 @@ def getAllThings() {
     resp = getLocks(resp)
     resp = getMotions(resp)
     resp = getPresences(resp)
+    resp = getBeds(resp)
     resp = getThermostats(resp)
     resp = getTemperatures(resp)
     resp = getIlluminances(resp)
@@ -1180,6 +1187,15 @@ def getPresences(resp) {
     } catch (e) { logger(e, "error") }
     return resp
 }
+def getBeds(resp) {
+    try {
+        mybeds?.each {
+            def multivalue = getBed(it.id, it)
+            resp << [name: it.displayName, id: it.id, value: multivalue, type: "sleep"]
+        }
+    } catch (e) { logger(e, "error") }
+    return resp
+}
 def getWaters(resp) {
     try {
         mywaters?.each {
@@ -1318,6 +1334,7 @@ def autoType(swid) {
     else if ( myaudios?.find{it.id.toInteger() == swid } ) { swtype= "audio" }
     else if ( mythermostats?.find{it.id.toInteger() == swid} ) { swtype = "thermostat" }
     else if ( mypresences?.find{it.id.toInteger() == swid } ) { swtype= "presence" }
+    else if ( mybeds?.find{it.id.toInteger() == swid } ) { swtype= "sleep" }
     else if ( myweathers?.find{it.id.toInteger() == swid } ) { swtype= "weather" }
     // else if ( myaccuweathers?.find{it.id.toInteger() == swid } ) { swtype= "weather" }
     else if ( mymotions?.find{it.id.toInteger() == swid && (it.hasAttribute("presence_type") || it.hasAttribute("roomActivity")) } ) { swtype = "aqaramotion" }
@@ -1460,6 +1477,10 @@ def doAction() {
       case "presence" :
         cmdresult = setPresence(swid, cmd, swattr, subid)
         break
+
+      case "sleep" :
+        cmdresult = setBed(swid, cmd, swattr, subid)
+        break
     
       case "variables" :
         cmdresult = setVariable(swid, cmd, swattr, subid)
@@ -1560,6 +1581,10 @@ def doQuery() {
     case "presence" :
         cmdresult = getPresence(swid)
         break
+        
+    case "sleep" :
+        cmdresult = getBed(swid)
+        break
          
     case "water" :
         cmdresult = getWater(swid)
@@ -1641,9 +1666,10 @@ def sendCommand(item, subid, cmd) {
     }
 
     // first situation is a command with no parameters
-    def status = true
+    def parm
     if ( cmd == subid || cmd=="0" || !cmd ) {
         item."$subid"()
+        parm = true
     
     // a single parameter passed in the cmd variable
     } else if ( cmd.toString().indexOf("|") == -1 ) {
@@ -1651,12 +1677,13 @@ def sendCommand(item, subid, cmd) {
             cmd = cmd.toInteger()
         }
         item."$subid"(cmd)
+        parm = cmd
     // multiple variables passed in cmd with separater | string
     } else {
         cmd = cmd.toString()
         def rawparm = cmd.split(/\|/)
         def n = rawparm.size()
-        def parm = []
+        parm = []
 
         // convert things that look like numbers from strings to numbers
         rawparm.each { aparm -> 
@@ -1677,10 +1704,10 @@ def sendCommand(item, subid, cmd) {
             item."$subid"(parm[0], parm[1], parm[2], parm[3])
         } else {
             logger("Command ${subid} skipped with ${n} parameters - this many parameters are not supported", "warn")
-            status = false
+            parm = false
         }
     }
-    return status
+    return parm
 }
 
 def setPiston(swid, cmd, swattr, subid) {
@@ -1897,6 +1924,40 @@ def setPresence(swid, cmd, swattr, subid) {
     if ( item ) {
         sendCommand(item, subid, cmd)
         resp = getPresence(swid, item)
+    }
+    return resp
+}
+
+def setBed(swid, cmd, swattr, subid) {
+    logcaller("setBed", swid, cmd, swattr, subid)
+    def resp = [:]
+    item  = item ? item : mybeds.find{it.id == swid }
+    if ( item ) {
+
+        def isgood = sendCommand(item, subid, cmd)
+        if ( isgood == false || isgood == true ) {
+            resp = getBed(swid, item)
+        } else if ( subid=="headPosition" || subid=="_setHeadPosition" || (subid=="_setBedPosition" && cmd.endsWith("|H")) ) {
+            resp["headPostion"] = isgood[0]
+        } else if ( subid=="footPosition" || subid=="_setFootPosition" || (subid=="_setBedPosition" && cmd.endsWith("|F")) ) {
+            resp["footPostion"] = isgood[0]
+        } else if ( subid=="coreClimateTemp" || subid=="_setCoreClimateState" ) {
+            resp["coreClimateTemp"] = isgood[0]
+            resp["coreClimateTimer"] = isgood[1]
+        } else if ( subid=="sleepNumber" || subid=="_setSleepNumber" ) {
+            resp["sleepNumber"] = cmd
+        } else if ( subid=="_setFootWarmingState" || subid=="footWarmingTemp" || subid=="footWarmingTimer" ) {
+            resp["footWarmingTemp"] = isgood[0]
+            resp["footWarmingTimer"] = isgood[1]
+        } else if ( subid=="_setUnderbedLightState" || subid=="underbedLightState" || subid=="underbedLightTimer" || subid=="underbedLightBrightness" ) {
+            resp["underbedLightState"] = isgood[0]
+            resp["underbedLightTimer"] = isgood[1]
+            resp["underbedLightBrightness"] = isgood[2]
+        } else if ( subid=="_setResponsiveAirState" || subid=="responsiveAir" ) {
+            resp["responsiveAir"] = cmd
+        } else {
+            resp = getBed(swid, item)
+        }
     }
     return resp
 }
@@ -2948,7 +3009,7 @@ def setMusic(swid, cmd, swattr, subid) {
 }
 
 def registerAll() {
-    List mydevices = ["myswitches", "mydimmers", "mybulbs", "mypresences", "mybuttons",
+    List mydevices = ["myswitches", "mydimmers", "mybulbs", "mypresences", "mybuttons", "mybeds",
                       "mymotions", "mycontacts", "mydoors", "mygarages", "mylocks", "mythermostats", "myshades",
                       "mytemperatures", "myilluminances", "myweathers",
                       "mywaters", "mysmokes", "mycosensors", "myco2sensors", 
@@ -2998,6 +3059,9 @@ def register_mypresences() {
 }
 def register_mymotions() {
     registerChangeHandler(settings?.mymotions)
+}
+def register_mybeds() {
+    registerChangeHandler(settings?.mybeds)
 }
 def register_mycontacts() {
     registerChangeHandler(settings?.mycontacts)

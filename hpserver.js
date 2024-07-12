@@ -128,6 +128,7 @@ GLB.mainISYMap = {
     "cosensor":    [{"GV0": "status_", "BATLVL": "battery", "ST": "carbonMonoxide"},   {"_query":"QUERY","_clear":"CLEAR","_detected":"DETECTED","_test":"TEST"}, "7.4" ],
     "co2sensor":   [{"GV0": "status_", "BATLVL": "battery", "CO2LVL":"carbonDioxide"}, {"_query":"QUERY"}, "7.5" ],
     "smoke":       [{"GV0": "status_", "BATLVL": "battery", "ST": "smoke"},            {"_query":"QUERY","_clear":"CLEAR","_detected":"DETECTED","_test":"TEST"}, "7.6" ],
+    "sleep":       [{"GV0": "status_", "BATLVL": "battery", "ST": "sleepSensor"},      {"_query":"QUERY","_arrived":"ARRIVE","_departed":"DEPART"}, "7.7" ],
 
     "door":        [{"GV0": "status_", "BATLVL": "battery", "ST": "door"},             {"_query":"QUERY","_open":"OPEN","_close":"CLOSE","door":"ST","ST:open":"OPEN","ST:close":"CLOSE"}, "2.1" ],
     "garage":      [{"GV0": "status_", "BATLVL": "battery", "ST": "door"},             {"_query":"QUERY","_open":"OPEN","_close":"CLOSE","door":"ST","ST:open":"OPEN","ST:close":"CLOSE"}, "2.2" ],
@@ -8043,7 +8044,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
     
     Promise.all( [
         mydb.getRows("rooms", "*", "userid = "+userid+" AND panelid = "+panelid, "", "rooms.rorder"),
-        mydb.getRows("devices", devices_fields, "devices.userid = " + userid + " GROUP BY devices.deviceid", devices_joinstr, "hubs.hubid, devices.name"),
+        mydb.getRows("devices", devices_fields, "devices.userid = " + userid + " GROUP BY devices.deviceid, devices.devicetype", devices_joinstr, "hubs.hubid, devices.name"),
         mydb.getRows("things",  things_fields, conditions, [joinstr1, joinstr2, joinstr3], "rooms.rorder, things.torder, things.id")
     ])
     .then( results => {

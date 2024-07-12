@@ -1,4 +1,5 @@
 const devhistory = `
+3.3.7   Add support for sleep device types since Sleep number devices now support that
 3.3.6   Another tweak for Sleep number and generic fix for number and boolean parameters
 3.3.5   Generalized inputs and added support for Sleep number bed parameter selection
 3.3.4   Changed useroption to usroption, fixed dead node removal, force unique devices

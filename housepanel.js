@@ -3864,7 +3864,7 @@ function setupPage() {
         } else if ( subid==="_setCoreClimateState" || subid==="coreClimateTemp" ) {
             processClickWithValue(that, thingname, ro, "_setCoreClimateState", thetype, {"Temperature":["Off|OFF", "Heat Low|HEATING_PUSH_LOW", "Heat Med|HEATING_PUSH_MED", "Heat High|HEATING_PUSH_HIGH","Cool Low|COOLING_PULL_LOW", "Cool Med|COOLING_PULL_MED", "Cool High|COOLING_PULL_HIGH"], "Timer (min)": 30} );
 
-        } else if ( subid==="_setFootWarmingState" || subid==="footWarmingTemp" ) {
+        } else if ( subid==="_setFootWarmingState" || subid==="footWarmingTemp" || subid=="footWarmingTimer" ) {
             processClickWithValue(that, thingname, ro, "_setFootWarmingState", thetype, {"Temp":["Off","Low","Medium","High"], "Timer":["30m","1h","2h","3h","4h","5h","6h"]} );
 
         } else if ( subid==="_setResponsiveAirState" || subid==="responsiveAir" ) {

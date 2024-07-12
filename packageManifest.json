@@ -2,10 +2,10 @@
     "packageName": "HousePanel",
 	"minimumHEVersion": "2.1.9",
 	"author": "Ken Washington",
-	"version": "3.3.5",
+	"version": "3.3.7",
 	"dateReleased": "2024-06-29",
 	"licenseFile": "",
-	"releaseNotes": "V3.3.5 Simplified hub auth to display info on GUI and added SleepNumber bed support. This update also requires the Node.js modules to be updated. See https://housepanel.net for documentation.",
+	"releaseNotes": "V3.3.7 Tweaked SleepNumber bed support to support sleep types. This update also requires the Node.js modules to be updated. See https://housepanel.net for documentation.",
 	"apps" : [
 		{
 			"id" : "56776347-587d-4e5d-8a1a-bbd02238f63f",
