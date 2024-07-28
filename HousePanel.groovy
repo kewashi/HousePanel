@@ -29,7 +29,7 @@ public static String handle() { return "HousePanel" }
     STATICALLY DEFINED VARIABLES
     inpired by Tonesto7 homebridge2 app
 ***********************************************/
-@Field static final String appVersionFLD  = '3.2.5'
+@Field static final String appVersionFLD  = '3.3.8'
 @Field static final String sNULL          = (String) null
 @Field static final String sBLANK         = ''
 @Field static final String sLINEBR        = '<br>'
@@ -65,7 +65,7 @@ static String spanSmBldBr(String str, String clr=sNULL, String img=sNULL)  { ret
 definition(
     name: "${handle()}",
     namespace: "kewashi",
-    author: "Kenneth Washington",
+    author: "Ken Washington",
     description: "Tap here to install ${handle()} - a highly customizable smarthome dashboard. ",
     category: "Convenience",
     iconUrl: "",
@@ -400,7 +400,7 @@ def configureHub() {
     state.hubid = app.getHubUID()
     state.hubname = location.getName()
 
-    logger("You must provide the Access Token and the App ID values. The end point shown will be automatically created","info")
+    logger("Setup values Access Token, App ID, Hub Name, Hub ID, and End Points shown will be pushed or can be entered manually","info")
     logger("Access Token = ${state.accessToken}","info")
     logger("App ID = ${app.id}", "info")
     logger("Hub Name = ${state.hubname}", "info")
@@ -3182,10 +3182,7 @@ def changeHandler(evt) {
             } else if ( oldpower==0.0 ) {
                 skip = false
             } else {
-                delta = (state.powervals[deviceid]- oldpower) / oldpower 
-                if ( delta < 0.0 ) {
-                    delta = 0.0 - delta
-                }
+                delta = Math.abs(state.powervals[deviceid]- oldpower) / oldpower 
                 skip = (delta < 0.15)
             }
             logger("delta = ${delta} skip = ${skip}", "debug")
@@ -3315,7 +3312,7 @@ def variableHandler(evt) {
     }
 }
 
-def postHub(ip, port, msgtype, name, id, subid, type, value) {
+def postHub(ip, port, msgtype, name, id, subid, type, value, isfirst) {
     if ( msgtype && ip && ip!="0" && port && port!="0"  ) {
         Map abody = [
                 msgtype: msgtype,
@@ -3329,10 +3326,10 @@ def postHub(ip, port, msgtype, name, id, subid, type, value) {
 
         logger("HousePanel postHub ${msgtype} to IP= ${ip}:${port} name= ${name} id= ${id} subid= ${subid} type= ${type} value= ${value}", "debug")
         if (ip.startsWith("http") ) {
-            sendHttpPost(ip, port, abody)
+            sendHttpPost(ip, port, abody, isfirst)
         } else {
             def iphttp = "http://${ip}"
-            sendHttpPost(iphttp, port, abody)
+            sendHttpPost(iphttp, port, abody, isfirst)
             // def params = [
             //     method: "POST",
             //     path: "/",
@@ -3349,27 +3346,12 @@ def postHub(ip, port, msgtype, name, id, subid, type, value) {
 }
 
 def postHubRange(ip, port, msgtype, name, id, subid, type, value) {
-    // use regex to get range - this code should work and is more general, but also slower
-    // def rangepatt = /(\d{2,})\s*\-\s*(\d{2,})?/
-    // def (range, port1, port2) = ( port =~ rangepatt )[0]
-    // if ( port1 && !port2 ) {
-    //     postHub(ip, port1, msgtype, name, id, subid, type, value)
-    // } else if ( port1 && port2 ) {
-    //     int i1 = Integer.parseInt(port1)
-    //     int i2 = IntegerparseInt(port2)
-    //     if ( i2 < i1 ) {
-    //         i2 = i1
-    //     }
-    //     for (int i = i1; i <= i2; i++ ) {
-    //         port = i.toString()
-    //         postHub(ip, port, msgtype, name, id, subid, type, value)
-    //     }
-    // }
     if ( !ip || !port ) return
 
+    def isfirst = ip == state.directIP ? "debug" : "trace"
     def dashloc = port.indexOf("-")
     if ( dashloc == -1 ) {
-        postHub(ip, port, msgtype, name, id, subid, type, value)
+        postHub(ip, port, msgtype, name, id, subid, type, value, isfirst)
     } else {
         String port1 = port.substring(0, dashloc)
         String port2 = port.substring(dashloc+1)
@@ -3377,13 +3359,14 @@ def postHubRange(ip, port, msgtype, name, id, subid, type, value) {
         int i2 = Integer.parseInt(port2)
         if ( i2 < i1 ) { i2 = i1 }
         for (int i = i1; i <= i2; i++ ) {
+            isfirst = i > i1 ? "trace" : isfirst
             port = i.toString()
-            postHub(ip, port, msgtype, name, id, subid, type, value)
+            postHub(ip, port, msgtype, name, id, subid, type, value, isfirst)
         }
     }
 }
 
-void sendHttpPost(ip, port, Map body) {
+void sendHttpPost(ip, port, Map body, isfirst) {
     def contentType = "application/json"
     Map params = [
         uri: "${ip}:${port}",
@@ -3393,15 +3376,13 @@ void sendHttpPost(ip, port, Map body) {
         ignoreSSLIssues: true,
         timeout: 20
     ]
-    def isfirst = ip == state.directIP ? "debug" : false
+    // def isfirst = ip == state.directIP ? "info" : false
     asynchttpPost("asyncHttpCmdResp", params, [execDt: now(), prdebug: isfirst])
 }
 
 void asyncHttpCmdResp(response, data) {
     def dt = now() - data.execDt
-    if ( data.prdebug ) {
-        logger("Resp: ${response} | Process time: ${dt}", data.prdebug)
-    }
+    logger("Resp: ${response} | Process time: ${dt}", data.prdebug)
 }
 
 // Wrapper nction for all logging.
@@ -3430,10 +3411,6 @@ private logger(msg, level = "debug") {
 
         case "trace":
             if (state.loggingLevelIDE >= 5) log.trace msg
-            break
-
-        default:
-            log.debug msg
             break
     }
 }

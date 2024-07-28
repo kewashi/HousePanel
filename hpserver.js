@@ -7391,7 +7391,7 @@ function getInfoPage(user, configoptions, hubs, req) {
             $tc += "<table class=\"showid\">";
             $tc += "<thead><tr>" + 
                 "<th class=\"infotype\">Type</th>" + 
-                "<th class=\"thingname\">Custom ID</th>" + 
+                "<th class=\"thingid\">Custom ID</th>" + 
                 "<th class=\"thingarr\">Custom Value</th>" +
                 "<th class=\"infonum\">Field</th>" +
                 "<th class=\"infobtns rightside\">Action</th>" +
@@ -7402,7 +7402,7 @@ function getInfoPage(user, configoptions, hubs, req) {
                 trid++;
                 $tc += `<tr id="trid_${trid}">` + 
                     "<td class=\"infotype\">" + item[0] + "</td>" +
-                    "<td class=\"thingname\">" + item[1] + "</td>" +
+                    "<td class=\"thingid\">" + item[1] + "</td>" +
                     "<td class=\"thingarr\">" + item[2] + "</td>" +
                     "<td class=\"infonum\">" + item[3] + "</td>" +
                     `<td class="infobtns rightside"><button class="editbutton" trid="${trid}">Edit</button>` +
@@ -9276,12 +9276,13 @@ function apiCall(user, body, protocol, res) {
             // similar to above but we get the rules and edit them based on what is sent in
             // and then pass it on to our rules updater function to update them
             case "editrules":
-                var configkey = "user_" + swid;
+                var oldid = body["oldid"];
+                var configkey = "user_" + oldid;
                 var newsubid = swattr;
                 var newrule = [swtype, swval, newsubid];
+                var rulelist = [];
                 result = mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
                 .then(row => {
-                    var rulelist = [];
                     if ( row ) {
                         var oldrules = JSON.parse(row.configval);
 
@@ -9300,7 +9301,33 @@ function apiCall(user, body, protocol, res) {
                     // save the updated config row
                     updCustom(userid, 0, swid, swval, subid, newsubid, swtype, rulelist);
                     return rulelist;
-                }).catch(reason => {
+                })
+                .then(rulelist => {
+                    // remove old ones if we changed the id
+                    if ( oldid!==swid ) {
+                        configkey = "user_" + oldid;
+                        var oldrulelist = [];
+                        mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
+                        .then(row => {
+                            if ( row ) {
+                                var oldrules = JSON.parse(row.configval);
+        
+                                // loop through the old rules and include only those that were not reassigned above
+                                for ( var i = 0; i < oldrules.length; i++ ) {
+                                    var oldrule = oldrules[i];
+                                    if ( oldrule[2] !== subid ) {
+                                        oldrulelist.push(oldrules[i]);
+                                    }
+                                };
+                            }
+
+                            // save the updated config row
+                            updCustom(userid, 0, oldid, swval, oldid, subid, swtype, oldrulelist);
+                        });
+                        return rulelist;
+                    }
+                })
+                .catch(reason => {
                     console.error( (ddbg()), "apiCall - editrules: ", reason);
                     return null;
                 });

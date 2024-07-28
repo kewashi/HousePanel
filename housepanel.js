@@ -625,13 +625,15 @@ $(document).ready(function() {
         $("table.showid button.editbutton").on('click', function() {
             var trid = $(this).attr("trid");
             var typeedit = $(`#trid_${trid} > td.infotype`).html();
-            var idedit = $(`#trid_${trid} > td.thingname`).html();
+            var idedit = $(`#trid_${trid} > td.thingid`).html();
             var valedit = $(`#trid_${trid} > td.thingarr`).html();
             var subidedit = $(`#trid_${trid} > td.infonum`).html();
             var offset = $(this).offset();
             var pos = {top: offset.top+35, left: 250, width: "auto", height: "auto", border: "4px solid black"};
             var htmlcontent =  "<div class='ddlDialog'>";
             htmlcontent += `<p><strong>Editing ${typeedit} type custom value for Custom ID: ${idedit}</p></strong><br><br>`;
+            htmlcontent += "<div class='ddlDialog'><label for='editID'>New ID: </label><br>";
+            htmlcontent += `<input class='editcustom' id='editID' type='text' size='20' value="${idedit}" /></div><br><br>`;
             htmlcontent += "<div class='ddlDialog'><label for='editfield'>New Field: </label><br>";
             htmlcontent += `<input class='editcustom' id='editfield' type='text' size='20' value="${subidedit}" /></div><br><br>`;
             htmlcontent += "<div class='ddlDialog'><label for='editval'>New Custom Value: </label><br>";
@@ -642,19 +644,22 @@ $(document).ready(function() {
             function(ui) {
                 var clk = $(ui).attr("name");
                 if ( clk==="okay" ) {
+                    var newid = $("#editID").val();
                     var newval = $("#editval").val();
                     var newsubid = $("#editfield").val();
-                    if ( newsubid !== subidedit || newval !== valedit ) {
+                    if ( newsubid !== subidedit || newval !== valedit || newid !== idedit ) {
                         $.post(cm_Globals.returnURL, 
-                            {api: "editrules", userid: cm_Globals.options.userid, id: idedit, type: typeedit,
+                            {api: "editrules", userid: cm_Globals.options.userid, id: newid, oldid: idedit, type: typeedit,
                              value: newval, subid: subidedit, attr: newsubid, hpcode: cm_Globals.options.hpcode},
                             function (presult, pstatus) {
                                 if ( pstatus==="success" ) {
                                     console.log(`Updated rule: Custom ID: ${idedit} Field: ${newsubid} Value: ${newval} Result: ${presult}`);
 
                                     // now update the screen with the new values
+                                    $(`#trid_${trid} > td.thingid`).html(newid);
                                     $(`#trid_${trid} > td.thingarr`).html(newval);
                                     $(`#trid_${trid} > td.infonum`).html(newsubid);
+                                    console.log(">>>> updated rule list: ", presult);
                                 } else {
                                     console.warn("Something went wrong, so no customizations were updated");
                                 }
@@ -671,7 +676,7 @@ $(document).ready(function() {
         $("table.showid button.delbutton").on('click', function() {
             var trid = $(this).attr("trid");
             var typeedit = $(`#trid_${trid} > td.infotype`).html();
-            var idedit = $(`#trid_${trid} > td.thingname`).html();
+            var idedit = $(`#trid_${trid} > td.thingid`).html();
             var valedit = $(`#trid_${trid} > td.thingarr`).html();
             var subidedit = $(`#trid_${trid} > td.infonum`).html();
             var offset = $(this).offset();
@@ -796,18 +801,20 @@ function getActiveTab() {
 }
 
 function returnMainPage() {
-    var defhub = $("input [name='huboptpick']").val();
-    var pickid = $("input [name='huboptpick']").attr("id");
-    var hubindex = $("input[name='hubindex']").val();
-    // console.log("pickedhub = ", defhub, pickid, hubindex);
-    setCookie("defaultHub", defhub);
-    $.post(cm_Globals.returnURL, 
-            {api: "setdefhub", userid: cm_Globals.options.userid, hubid: defhub, value: defhub, 
-             id: hubindex, attr: null, hpcode: cm_Globals.options.hpcode}, 
-            function(presult, pstatus) {
-                window.location.href = cm_Globals.returnURL;
-            }
-    );
+    var defhub = getCookie("defaultHub");
+    // var defhub = $("input [name='huboptpick']").val();
+    // var hubindex = $("input[name='hubindex']").val();
+    if ( !defhub || defhub==="undefined" ) {
+        defhub = "-1";
+        setCookie("defaultHub", defhub);
+    }
+    // $.post(cm_Globals.returnURL, 
+    //         {api: "setdefhub", userid: cm_Globals.options.userid, hubid: defhub, value: defhub, 
+    //          id: hubindex, attr: null, hpcode: cm_Globals.options.hpcode}, 
+    //         function(presult, pstatus) {
+    //             window.location.href = cm_Globals.returnURL;
+    //         }
+    // );
     window.location.href = cm_Globals.returnURL;
 }
 
@@ -2535,8 +2542,9 @@ function setupButtons() {
         initWebsocket();
         $("#newthingcount").html("Select a hub to re-authorize or select the 'New' hub to add a hub");
         var hubId = getCookie("defaultHub");
-        if ( !hubId ||  hubId==="all" ) {
-            hubId = $("#pickhub").val();
+        if ( !hubId || hubId==="undefined" ||  hubId==="all" ) {
+            // hubId = $("#pickhub").val();
+            hubId = "-1";
         }
         setupAuthHub(hubId);
 
@@ -2665,8 +2673,10 @@ function setupButtons() {
 function setupAuthHub(hubId) {
     var hub = findHub(hubId,"hubid");
     var hubindex = hub.id;
+    console.log("hubId = ", hubId, " hubindex = ", hubindex);
 
     // replace all the values
+    $("select[name='pickhub']").val(hubId);
     $("input[name='hubindex']").val(hubindex);
     $("input[name='hubname']").val(hub.hubname);
     $("input[name='hubid']").val(hub.hubid);
@@ -3060,7 +3070,7 @@ function setupFilters() {
    // fixed bug that forgot to click on the saved hub from cookies
     var pickedhub = getCookie("defaultHub");
     // console.log("pickedhub = ", pickedhub);
-    if ( !pickedhub )  {
+    if ( !pickedhub || pickedhub==="undefined" )  {
         pickedhub = "-1";
         setCookie("defaultHub", "-1");
     }
@@ -3084,7 +3094,9 @@ function setupFilters() {
         pickedhub = $(this).val();
         var pickid = $(this).attr("id");
         // console.log("pickedhub = ", pickedhub, pickid);
-        setCookie("defaultHub", pickedhub);
+        if ( pickedhub && pickedhub!== "undefined" ) {
+            setCookie("defaultHub", pickedhub);
+        }
 
         // reset all filters using hub setting
         $('input[name="useroptions[]"]').each(updateClick);
