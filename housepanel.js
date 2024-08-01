@@ -631,37 +631,47 @@ $(document).ready(function() {
             var offset = $(this).offset();
             var pos = {top: offset.top+35, left: 250, width: "auto", height: "auto", border: "4px solid black"};
             var htmlcontent =  "<div class='ddlDialog'>";
-            htmlcontent += `<p><strong>Editing ${typeedit} type custom value for Custom ID: ${idedit}</p></strong><br><br>`;
+            htmlcontent += `<p><strong>Editing ${typeedit} customization</p></strong><br>`;
             htmlcontent += "<div class='ddlDialog'><label for='editID'>New ID: </label><br>";
-            htmlcontent += `<input class='editcustom' id='editID' type='text' size='20' value="${idedit}" /></div><br><br>`;
+            htmlcontent += `<input class='editcustom' id='editID' type='text' size='20' value="${idedit}" /></div>`;
+            htmlcontent += `<div class='ddlDialog'><input class='cboxcustom' id='editAllid' type='checkbox' size='5' /><label for='editAlid'>Migrate All IDs?</label></div><br>`;
             htmlcontent += "<div class='ddlDialog'><label for='editfield'>New Field: </label><br>";
-            htmlcontent += `<input class='editcustom' id='editfield' type='text' size='20' value="${subidedit}" /></div><br><br>`;
+            htmlcontent += `<input class='editcustom' id='editfield' type='text' size='20' value="${subidedit}" /></div><br>`;
             htmlcontent += "<div class='ddlDialog'><label for='editval'>New Custom Value: </label><br>";
-            htmlcontent += `<input class='editcustom' id='editval' type='text' size='80' value="${valedit}" /></div><br><br>`;
-            htmlcontent += "</div>";
+            htmlcontent += `<input class='editcustom' id='editval' type='text' size='80' value="${valedit}" /></div>`;
+            if ( typeedit==="RULE" || typeedit==="LINK" ) {
+                htmlcontent += `<div class='ddlDialog'><input class='cboxcustom' id='editAllRules' type='checkbox' size='5' /><label for='editAllRules'>Migrate All ${typeedit}s?</label></div>`;
+            }
+            htmlcontent += "<br></div>";
 
             createModal("modalexec", htmlcontent, "body", true, pos, 
             function(ui) {
                 var clk = $(ui).attr("name");
+                var newid = $("#editID").val();
+                var newval = $("#editval").val();
+                var newsubid = $("#editfield").val();
+                var doall = $("#editAllid").prop("checked");
+                if ( typeedit==="RULE" || typeedit==="LINK" ) {
+                    var dorules = $("#editAllRules").prop("checked");
+                } else {
+                    dorules = false;
+                }
                 if ( clk==="okay" ) {
-                    var newid = $("#editID").val();
-                    var newval = $("#editval").val();
-                    var newsubid = $("#editfield").val();
+                    console.log("new: ", newid, newval, newsubid, doall, " old: ", idedit, valedit, subidedit);
                     if ( newsubid !== subidedit || newval !== valedit || newid !== idedit ) {
                         $.post(cm_Globals.returnURL, 
-                            {api: "editrules", userid: cm_Globals.options.userid, id: newid, oldid: idedit, type: typeedit,
-                             value: newval, subid: subidedit, attr: newsubid, hpcode: cm_Globals.options.hpcode},
+                            {api: "editrules", userid: cm_Globals.options.userid, id: idedit, newid: newid, type: typeedit, doall: doall, dorules: dorules,
+                             value: valedit, newval: newval, subid: subidedit, newsubid: newsubid, hpcode: cm_Globals.options.hpcode},
                             function (presult, pstatus) {
                                 if ( pstatus==="success" ) {
-                                    console.log(`Updated rule: Custom ID: ${idedit} Field: ${newsubid} Value: ${newval} Result: ${presult}`);
+                                    console.log(`Updated rule: Custom ID: ${idedit} to ${newid} Field: ${subidedit} to ${newsubid} Value: ${newval} Result: ${presult}`);
 
                                     // now update the screen with the new values
                                     $(`#trid_${trid} > td.thingid`).html(newid);
                                     $(`#trid_${trid} > td.thingarr`).html(newval);
                                     $(`#trid_${trid} > td.infonum`).html(newsubid);
-                                    console.log(">>>> updated rule list: ", presult);
                                 } else {
-                                    console.warn("Something went wrong, so no customizations were updated");
+                                    console.warn("Something went wrong, no customizations were updated");
                                 }
                             }
                         );                    
@@ -669,6 +679,7 @@ $(document).ready(function() {
                         console.log("No changes made, nothing done.");
                     }
                 }
+                console.log("Values: ", clk, newid, newval, newsubid, doall);
                 closeModal("modalexec");
             });
         });

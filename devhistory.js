@@ -1,4 +1,5 @@
 const devhistory = `
+3.3.9   Edit flexibility for customizations on the info page
 3.3.8   Add ability to move customizations from one tile to another and Fix debug for posthub 
 3.3.7   Add support for sleep device types since Sleep number devices now support that
 3.3.6   Another tweak for Sleep number and generic fix for number and boolean parameters

@@ -2314,3 +2314,8 @@ div.variables.vardef {
     position: absolute;
     left: 5px;
 }
+
+input.cboxcustom {
+    margin-left: 2px;
+    margin-right: 10px;
+}

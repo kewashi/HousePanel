@@ -8760,25 +8760,27 @@ function updCustom(userid, tileid, swid, swval, oldsubid, subid, swtype, rules) 
     // handle encryption and check for valid customization
     // fixed bug below that didn't use the new goodrules array
     if ( rules && is_array(rules) && rules.length ) {
-        for (var i = 0; i < rules.length; i++) {
-            var rule = rules[i];
+
+        rules.forEach(rule => {
             if ( is_array(rule) && rule.length>2 && rule[0] && rule[2] ) {
                 var customval = rule[1].toString();
                 var r2 = rule[2];
                 var rtype = rule[0];
-                if ( rtype==="TEXT" && r2==="password" && customval.length < 60 ) {
+
+                // convert to hash if user is entering a password
+                // note that if user isn't entering this pw field, the value is already in hash format
+                if ( rtype==="TEXT" && r2==="password" && customval.length > 0 && r2===subid ) {
                     customval = pw_hash(customval);
                 }
                 goodrules.push( [rtype, customval, r2] );
             }
-        }
+        });        
     }
 
-    var result;
     if ( goodrules.length > 0 ) {
         var rulejson = JSON.stringify(goodrules);
-        var rulerow = {userid: userid, configkey: configkey, configval: rulejson};
-        result = mydb.updateRow("configs", rulerow, "userid = "+userid+" AND configkey = '"+configkey+"'")
+        var rulerow = {userid: userid, configkey: configkey, configval: rulejson, configtype: 1};
+        mydb.updateRow("configs", rulerow, "userid = "+userid+" AND configkey = '"+configkey+"'")
         .then(res => {
             var str = "Updated " + goodrules.length + " customizations for id: " + swid + ", and user: " + userid;
             if ( DEBUG23 ) {
@@ -8821,27 +8823,20 @@ function updCustom(userid, tileid, swid, swval, oldsubid, subid, swtype, rules) 
                             }    
                         })
                         .catch(reason => {
-                            onsole.log((ddbg()), reason);
+                            console.warn( (ddbg()), reason);
                         });
                     }
-                })
-
+                });
             }
-            return str;
         })
         .catch( reason => {
             console.error( (ddbg()), reason);
-            return "error - problem encountered attempting to update rules";
         });
 
     // if we get here, the rules are empty so we can remove the item from the db
     } else {
-        result = mydb.deleteRow("configs", "userid = "+userid+" AND configkey='"+configkey+"'")
+        mydb.deleteRow("configs", "userid = "+userid+" AND configkey='"+configkey+"'")
         .then(res => {
-            var str = "Removed customizations Tile ID: " + swid + " and user: " + userid;
-            if ( DEBUG23 ) {
-                console.log((ddbg()), str);
-            }
             if ( swtype==="LIST" ) {
                 mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${swid}' AND subid = '${oldsubid}'`)
                 .then(res2 => {
@@ -8852,17 +8847,15 @@ function updCustom(userid, tileid, swid, swval, oldsubid, subid, swtype, rules) 
                 })
                 .catch(reason => {
                     console.error( (ddbg()), reason);
-                    str = "error - problem encountered attempting to delete a rule";
                 });
             }
-            return str;
         })
         .catch( reason => {
             console.error( (ddbg()), reason);
             return "error - problem encountered attempting to update rules";
         });
     }
-    return result;
+    return goodrules;
 }
 
 function findHub(hubid, hubs) {
@@ -9276,11 +9269,32 @@ function apiCall(user, body, protocol, res) {
             // similar to above but we get the rules and edit them based on what is sent in
             // and then pass it on to our rules updater function to update them
             case "editrules":
-                var oldid = body["oldid"];
-                var configkey = "user_" + oldid;
-                var newsubid = swattr;
-                var newrule = [swtype, swval, newsubid];
+
+                // first get the list of updated rules from the original subid and swid
+                var newid = body["newid"];
+                var newsubid = body["newsubid"];
+                var newval = body["newval"];
+                var doall = body["doall"] === "true" ? true : false;
+                var dorules = body["dorules"] === "true" ? true : false;
+                var configkey = "user_" + swid;
+                var newrule = [swtype, newval, newsubid];
                 var rulelist = [];
+                var k1 = 0;
+                var newvalfront;
+
+                // get the global replacement value for LINK and RULE bulk replacements
+                if ( dorules && swtype==="LINK" ) {
+                    k1 = swval.indexOf("::");
+                    newvalfront = newval.substr(0, k1+1);
+                } else if ( dorules && swtype==="RULE" ) {
+                    k1 = swval.indexOf("=");
+                    newvalfront = newval.substr(0, k1+1);
+                } else {
+                    k1 = 0;
+                    newvalfront = "";
+                    dorules = false;
+                }
+
                 result = mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
                 .then(row => {
                     if ( row ) {
@@ -9288,44 +9302,86 @@ function apiCall(user, body, protocol, res) {
 
                         // loop through the list of rules and update the one that was edited
                         // we do this by either pushing the existing one or the edited one to a new array
-                        for ( var i = 0; i < oldrules.length; i++ ) {
-                            var therule = oldrules[i];
-                            if ( therule[2] === subid ) {
+                        var newpushed = false;
+                        oldrules.forEach(therule => {
+                            if ( therule[2] === subid && therule[0]===swtype && !newpushed ) {
                                 rulelist.push(newrule);
+                                newpushed = true;
                             } else {
+                                // fix up the other rules if we picked the option to update all rules
+                                if ( dorules && k1 && therule[0]===swtype ) {
+                                    var updval = newvalfront + therule[1].substring(k1);
+                                    therule = [swtype, updval, therule[2] ];
+                                }
                                 rulelist.push(therule);
                             }
-                        };
-                    }
+                        });
 
-                    // save the updated config row
-                    updCustom(userid, 0, swid, swval, subid, newsubid, swtype, rulelist);
+                        if ( !newpushed ) {
+                            rulelist.push(newrule);
+                        }
+                    }
                     return rulelist;
                 })
                 .then(rulelist => {
-                    // remove old ones if we changed the id
-                    if ( oldid!==swid ) {
-                        configkey = "user_" + oldid;
+
+                    // handle simple case where the swid did not change
+                    // for this simple case we just update the database and return
+                    if ( newid === swid ) {
+                        updCustom(userid, 0, swid, newval, subid, newsubid, swtype, rulelist);
+
+                    // for the more complicated case where we changed the swid, we have to do two passes
+                    } else {
+
+                        // remove the reassigned item from the original list if we changed the id
+                        // if we have the option to move all id's then only push things of different type
                         var oldrulelist = [];
+                        rulelist.forEach(therule => {
+                            if ( (!doall && (therule[2]!==subid || therule[0]!==swtype)) ||
+                                  (doall && (therule[0]!==swtype ) ) ) {
+                                oldrulelist.push(therule);
+                            }
+                        });
+                        updCustom(userid, 0, swid, null, subid, subid, swtype, oldrulelist);
+
+                        // get the list of rules from the destination and add to it
+                        configkey = "user_" + newid;
+                        var newrulelist = [];
+
+                        // move over the old one's if that option was picked
+                        var newpushed = false;
+                        if ( doall ) {
+                            rulelist.forEach(therule => {
+                                if ( therule[0]===swtype ) {
+                                    newrulelist.push(therule);
+                                    if ( therule[2]===newsubid ) {
+                                        newpushed = true;
+                                    }
+                                }
+                            });
+                        }
+
+                        // get the rules for the new ID and merge our old ones or the migrated one
                         mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
                         .then(row => {
                             if ( row ) {
-                                var oldrules = JSON.parse(row.configval);
-        
-                                // loop through the old rules and include only those that were not reassigned above
-                                for ( var i = 0; i < oldrules.length; i++ ) {
-                                    var oldrule = oldrules[i];
-                                    if ( oldrule[2] !== subid ) {
-                                        oldrulelist.push(oldrules[i]);
+                                var newrules = JSON.parse(row.configval);
+                                newrules.forEach(therule => {
+                                    if ( therule[2]===newsubid && therule[0]===swtype && !newpushed ) {
+                                        newrulelist.push(newrule);
+                                        newpushed = true;
+                                    } else {
+                                        newrulelist.push(therule);
                                     }
-                                };
+                                });
                             }
-
-                            // save the updated config row
-                            updCustom(userid, 0, oldid, swval, oldid, subid, swtype, oldrulelist);
+                            if ( !newpushed ) {
+                                newrulelist.push(newrule);
+                            }
+                            updCustom(userid, 0, newid, newval, newsubid, newsubid, swtype, newrulelist);
                         });
-                        return rulelist;
                     }
+                    return rulelist;
                 })
                 .catch(reason => {
                     console.error( (ddbg()), "apiCall - editrules: ", reason);
@@ -9590,7 +9646,8 @@ function apiCall(user, body, protocol, res) {
                     } else {
                         rules = null;
                     }
-                    result = updCustom(userid, tileid, swid, swval, subid, subid, swtype, rules);
+                    updCustom(userid, tileid, swid, swval, subid, subid, swtype, rules);
+                    return rules;
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
