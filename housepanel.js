@@ -57,7 +57,7 @@ function isNumeric(str) {
     return resp;
 }
 
-function setCookie(name, value, options={path: "/", expires: 365, SameSite: "lax" } ) {
+function setCookie(cname, value, options={path: "/", expires: 365, SameSite: "lax" } ) {
 
     if ( typeof options !== "object" ) {
         options={path: "/", expires: 365, SameSite: "strict" } 
@@ -80,7 +80,8 @@ function setCookie(name, value, options={path: "/", expires: 365, SameSite: "lax
         options.expires = d.toUTCString();
     }
 
-    let updatedCookie = encodeURIComponent(name) + "=" + encodeURIComponent(value);
+    var name = cname + cm_Globals.port;
+    var updatedCookie = encodeURIComponent(name) + "=" + encodeURIComponent(value);
   
     for (let optionKey in options) {
       updatedCookie += "; " + optionKey;
@@ -94,7 +95,7 @@ function setCookie(name, value, options={path: "/", expires: 365, SameSite: "lax
   }
 
 function getCookie(cname) {
-    var name = cname + "=";
+    var name = cname + cm_Globals.port + "=";
     var decodedCookie = decodeURIComponent(document.cookie);
     var ca = decodedCookie.split(';');
     for(var i = 0; i <ca.length; i++) {
@@ -191,7 +192,7 @@ function getOptions(pagename) {
         var email = $("#emailid").val();
         var skin = $("#skinid").val();
         var hpcode = $("#hpcode").val();
-        
+
         // get panel and mode from main screen if it is there
         try {
             var pname = $("#showversion span#infoname").html();
@@ -289,12 +290,14 @@ $(document).ready(function() {
     // set the global return URL value
     try {
         cm_Globals.returnURL = $("input[name='returnURL']").val();
+        cm_Globals.port = $("input[name='webDisplayPort']").val();
         if ( !cm_Globals.returnURL ) {
             throw "Return URL not defined by host page. Using default.";
         }
     } catch(e) {
         console.warn(e);
         cm_Globals.returnURL = "http://localhost:8580";
+        cm_Globals.port = "8580";
     }
 
     try {
@@ -464,13 +467,13 @@ $(document).ready(function() {
         });
 
         // get default tab from cookie and go to that tab
-        var defaultTab = getCookie( 'defaultTab' );
+        var defaultTab = getCookie("defaultTab");
         if ( defaultTab && tabcount > 1 ) {
             try {
                 $("#"+defaultTab).trigger("click");
             } catch (e) {
                 defaultTab = $("#roomtabs > li.ui-tabs-tab").first().attr("aria-labelledby");
-                setCookie('defaultTab', defaultTab);
+                setCookie("defaultTab", defaultTab);
                 try {
                     $("#"+defaultTab).trigger("click");
                 } catch (f) { }
@@ -813,19 +816,10 @@ function getActiveTab() {
 
 function returnMainPage() {
     var defhub = getCookie("defaultHub");
-    // var defhub = $("input [name='huboptpick']").val();
-    // var hubindex = $("input[name='hubindex']").val();
     if ( !defhub || defhub==="undefined" ) {
         defhub = "-1";
         setCookie("defaultHub", defhub);
     }
-    // $.post(cm_Globals.returnURL, 
-    //         {api: "setdefhub", userid: cm_Globals.options.userid, hubid: defhub, value: defhub, 
-    //          id: hubindex, attr: null, hpcode: cm_Globals.options.hpcode}, 
-    //         function(presult, pstatus) {
-    //             window.location.href = cm_Globals.returnURL;
-    //         }
-    // );
     window.location.href = cm_Globals.returnURL;
 }
 
@@ -845,8 +839,7 @@ function initWebsocket() {
     try {
         var userid = $("#userid").val();
         var webSocketUrl = $("input[name='webSocketUrl']").val();
-        var webSocketPort = $("input[name='webSocketServerPort']").val();
-        webSocketPort = parseInt(webSocketPort);
+        var webSocketPort = parseInt($("input[name='webSocketServerPort']").val());
 
         if ( userid && webSocketUrl ) {
 
@@ -2926,15 +2919,15 @@ function addEditLink() {
         var clickid = $(evt.target).parent().attr("aria-labelledby");
         var pos = {top: 100, left: 10};
         var pname = cm_Globals.options.pname;
-        createModal("modaldel","Remove Room #" + roomnum + " with Name: " + roomname +" from HousePanel panel: " + pname + ". Are you sure?", "body" , true, pos, function(ui, content) {
+        createModal("modaldel","Remove room #" + roomnum + " (ID #" + roomid +") with name: " + roomname +" from panel: " + pname + ". Are you sure?", "body" , true, pos, function(ui, content) {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
                 
                 // fix default tab if it is on our deleted page
-                var defaultTab = getCookie( 'defaultTab' );
+                var defaultTab = getCookie("defaultTab");
                 if ( defaultTab === clickid ) {
                     defaultTab = $("#roomtabs").children().first().attr("aria-labelledby");
-                    setCookie('defaultTab', defaultTab);
+                    setCookie("defaultTab", defaultTab);
                 }
 
                 // remove it from the system
@@ -3518,7 +3511,7 @@ function setupTabclick() {
         // save this tab for default next time
         var defaultTab = $(this).attr("id");
         if ( defaultTab ) {
-            setCookie( 'defaultTab', defaultTab );
+            setCookie("defaultTab", defaultTab);
         }
     });
 }
@@ -4086,7 +4079,6 @@ function processClickWithValue(that, thingname, ro, subid, thetype, thevalues, n
                 var id = "#newsubid" + (i+1).toString()
                 values = values + $(id).val();
             }
-            // console.log(">>>> values: ", values, " type: ", (typeof values), " numParams: ", numParams );
             processClick(that, thingname, ro, values, false, subid);
 
             // do a manual rule and list op if a repeat variable is provided

@@ -66,14 +66,23 @@ var dstr = d.substring(0, k);
 GLB.apiSecret = getNewCode(dstr);
 // GLB.warnonce = {};
 
+// GLB.defaultrooms = {
+//     "Kitchen": "clock|kitchen|sink|pantry|dinette" ,
+//     "Family": "clock|family|mud|fireplace|casual|thermostat",
+//     "Living": "clock|living|dining|entry|front door|foyer",
+//     "Office": "clock|office|computer|desk|work",
+//     "Bedroom": "clock|bedroom|kid|kids|bathroom|closet|master|guest",
+//     "Outside": "clock|garage|yard|outside|porch|patio|driveway|weather",
+//     "Music": "clock|music|tv|television|alexa|echo|stereo|bose|samsung|pioneer"
+// };
 GLB.defaultrooms = {
-    "Kitchen": "clock|kitchen|sink|pantry|dinette" ,
-    "Family": "clock|family|mud|fireplace|casual|thermostat",
-    "Living": "clock|living|dining|entry|front door|foyer",
-    "Office": "clock|office|computer|desk|work",
-    "Bedroom": "clock|bedroom|kid|kids|bathroom|closet|master|guest",
-    "Outside": "clock|garage|yard|outside|porch|patio|driveway|weather",
-    "Music": "clock|music|tv|television|alexa|echo|stereo|bose|samsung|pioneer"
+    "Kitchen": 1 ,
+    "Family": 2,
+    "Living": 3,
+    "Office": 4,
+    "Bedroom": 5,
+    "Outside": 6,
+    "Music": 7
 };
 
 // any attribute here will be ignored for events and display
@@ -2259,6 +2268,7 @@ function getLoginPage(req, userid, pname, emailname, mobile, hostname) {
     var webSocketUrl = getSocketUrl(hostname);
     tc+= hidden("webSocketUrl", webSocketUrl);
     tc+= hidden("webSocketServerPort", GLB.webSocketServerPort);
+    tc+= hidden("webDisplayPort", GLB.port);
     tc+= hidden("api", "dologin");
     tc+= hidden("apiSecret", GLB.apiSecret);
     // tc+= hidden("userid", userid, "userid");
@@ -2346,6 +2356,7 @@ function getLoginPage(req, userid, pname, emailname, mobile, hostname) {
     var webSocketUrl = getSocketUrl(hostname);
     tc+= hidden("webSocketUrl", webSocketUrl);
     tc+= hidden("webSocketServerPort", GLB.webSocketServerPort);
+    tc+= hidden("webDisplayPort", GLB.port);
     tc+= hidden("api", "createuser");
     tc+= hidden("apiSecret", GLB.apiSecret);
     // tc+= hidden("userid", userid);
@@ -2439,7 +2450,7 @@ function createUser(body) {
         return Promise.all( [
                 new Promise( function (resolve, reject) { resolve(newuser); }),
                 makeNewConfig(userid),
-                makeNewRooms(userid, pname),
+                makeNewRooms(userid, pname, "", "skin-housepanel", GLB.defaultrooms),
                 makeDefaultHub(userid)
             ] );
     })
@@ -2783,10 +2794,10 @@ function getController() {
     return controlval;
 }
 
-
-function makeNewRooms(userid, pname) {
+// this function now makes a panel and fills it with rooms based on names passed
+function makeNewRooms(userid, pname, password, skin, defaultrooms) {
     var promise = new Promise(function(resolve, reject) {
-        var defaultpanel = {userid: userid, pname: pname, password: "", skin: "skin-housepanel"};
+        var defaultpanel = {userid: userid, pname: pname, password: password, skin: skin};
         mydb.addRow("panels", defaultpanel)
         .then(resultPanel => {
             // if we added a default panel okay create a set of default rooms
@@ -2794,7 +2805,7 @@ function makeNewRooms(userid, pname) {
             defaultpanel.id = panelid;
             var rooms = [];
             var k = 0;
-            for ( var roomname in GLB.defaultrooms ) {
+            for ( var roomname in defaultrooms ) {
                 k++;
                 var room = {userid: userid, panelid: panelid, rname: roomname, rorder: k};
                 mydb.addRow("rooms", room)
@@ -2803,7 +2814,7 @@ function makeNewRooms(userid, pname) {
                     rooms.push(room);
 
                     // if we added the last room then resolve the promise
-                    if ( k === Object.keys(GLB.defaultrooms).length ) {
+                    if ( k === Object.keys(defaultrooms).length ) {
                         resolve([defaultpanel, rooms]);
                     }
                 })
@@ -3292,6 +3303,7 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
         $tc += hidden("pathname", "/");
         $tc += hidden("webSocketUrl", webSocketUrl);
         $tc += hidden("webSocketServerPort", GLB.webSocketServerPort);
+        $tc += hidden("webDisplayPort", GLB.port);
         $tc += hidden("userid", userid, "userid");
         $tc += hidden("emailid", useremail, "emailid");
         $tc += hidden("skinid", skin, "skinid");
@@ -7214,8 +7226,8 @@ function addPage(userid, panelid ) {
 function getInfoPage(user, configoptions, hubs, req) {
  
     // get the port number
-    var currentport = getCookie(req, "pname") || "1:default";
-    if ( currentport.substring(1,2)!==":" ) {
+    var currentport = getCookie(req, "pname");
+    if ( typeof currentport!=="string" || currentport.substring(1,2)!==":" ) {
         currentport = "Unknown";
     } else {
         currentport = GLB.webSocketServerPort + parseInt(currentport.substring(0,1));
@@ -7319,13 +7331,14 @@ function getInfoPage(user, configoptions, hubs, req) {
             var str = "<p>Currently connected to " + clients[userid].length + " clients.</p>";
             str = str + "<br><hr><br>";
             for (var i=0; i < clients[userid].length; i++) {
+                var j = i+1;
                 var port = clients[userid][i].socket.server["_connectionKey"];
                 var lenport = port.length;
                 port = port.substring(lenport-4);
                 if ( port === currentport ) {
-                    str = str + "<strong>Client #" + i + " host= " + clients[userid][i].socket.remoteAddress + ":" + port + "</strong><br>";
+                    str = str + "<strong>Client #" + j + " host= " + clients[userid][i].socket.remoteAddress + ":" + port + "</strong><br>";
                 } else {
-                    str = str + "Client #" + i + " host= " + clients[userid][i].socket.remoteAddress + ":" + port + "<br>";
+                    str = str + "Client #" + j + " host= " + clients[userid][i].socket.remoteAddress + ":" + port + "<br>";
                 }
             }
             str = str + "<br><hr><br>";
@@ -7737,6 +7750,7 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc += hidden("pathname", pathname);
         $tc += hidden("webSocketUrl", webSocketUrl);
         $tc += hidden("webSocketServerPort", GLB.webSocketServerPort);
+        $tc += hidden("webDisplayPort", GLB.port);
         $tc += hidden("userid", userid, "userid");
         $tc += hidden("uname", uname, "unameid");
         $tc += hidden("emailid", useremail, "emailid");
@@ -8173,6 +8187,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
         tc += hidden("pathname", pathname);
         tc += hidden("webSocketUrl", webSocketUrl);
         tc += hidden("webSocketServerPort", GLB.webSocketServerPort);
+        tc += hidden("webDisplayPort", GLB.port);
         tc += hidden("userid", userid, "userid");
         tc += hidden("panelid", panelid, "panelid");
         tc += hidden("skinid", skin, "skinid");
@@ -8486,18 +8501,20 @@ function processOptions(userid, panelid, optarray) {
                     console.log( (ddbg()), reason);
                 });
             } else {
-                obj["password"] = newPassword;
-                return mydb.addRow("panels", obj)
+
+                // this is where we make a new panel and rooms within that panel
+                return makeNewRooms(userid, newPanel, newPassword, newSkin, roomnames)
                 .then(results => {
-                    panelid = mydb.getId();
-                    obj["result"] = "logout";
-                    obj.id = panelid;
-                    obj.useremail = user.email;
-                    obj.mobile = user.mobile;
+                    var panelobj = results[0];
+                    rooms = results[1];
+                    panelid = panelobj.id;
+                    panelobj["result"] = "logout";
+                    panelobj["useremail"] = user.email;
+                    panelobj["mobile"] = user.mobile;
                     if ( DEBUG4 ) {
-                        console.log( (ddbg()), "obj: ", obj, "add results: ", results);
+                        console.log( (ddbg()), "retobj: ", panelobj, " new panel: ", panelobj, " new rooms: ", rooms);
                     }
-                    return obj;
+                    return panelobj;
                 })
                 .catch(reason => {
                     console.log( (ddbg()), reason);
@@ -9018,7 +9035,6 @@ function apiCall(user, body, protocol, res) {
                     } else {
                         result = doAction(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, hint, command, linkval);
                     }
-                    // result = "call doAction for tile ID: " + swid;
                 }
                 break;
                 
@@ -9247,175 +9263,186 @@ function apiCall(user, body, protocol, res) {
             
             // this returns just the rules list for a specific user and device swid
             case "getrules":
-                var configkey = "user_" + swid;
-                result = mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
-                .then(row => {
-                    var rulelist;
-                    if ( row ) {
-                        rulelist = JSON.parse(row.configval);
-                        if ( DEBUG2 ) {
-                            console.log( (ddbg()),"rule list for user: ", userid," swid: ", swid, " rules: ", jsonshow(rulelist) );
+                if ( protocol==="POST" ) {
+                    var configkey = "user_" + swid;
+                    result = mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
+                    .then(row => {
+                        var rulelist;
+                        if ( row ) {
+                            rulelist = JSON.parse(row.configval);
+                            if ( DEBUG2 ) {
+                                console.log( (ddbg()),"rule list for user: ", userid," swid: ", swid, " rules: ", jsonshow(rulelist) );
+                            }
+                        } else {
+                            rulelist = [];
                         }
-                    } else {
-                        rulelist = [];
-                    }
-                    return rulelist;
-                }).catch(reason => {
-                    console.error( (ddbg()), "apiCall - getrules: ", reason);
-                    return null;
-                });
+                        return rulelist;
+                    }).catch(reason => {
+                        console.error( (ddbg()), "apiCall - getrules: ", reason);
+                        return [];
+                    });
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
                 break;
 
             // similar to above but we get the rules and edit them based on what is sent in
             // and then pass it on to our rules updater function to update them
             case "editrules":
+                if ( protocol==="POST" ) {
+                    // first get the list of updated rules from the original subid and swid
+                    var newid = body["newid"];
+                    var newsubid = body["newsubid"];
+                    var newval = body["newval"];
+                    var doall = body["doall"] === "true" ? true : false;
+                    var dorules = body["dorules"] === "true" ? true : false;
+                    var configkey = "user_" + swid;
+                    var newrule = [swtype, newval, newsubid];
+                    var rulelist = [];
+                    var k1 = 0;
+                    var newvalfront;
 
-                // first get the list of updated rules from the original subid and swid
-                var newid = body["newid"];
-                var newsubid = body["newsubid"];
-                var newval = body["newval"];
-                var doall = body["doall"] === "true" ? true : false;
-                var dorules = body["dorules"] === "true" ? true : false;
-                var configkey = "user_" + swid;
-                var newrule = [swtype, newval, newsubid];
-                var rulelist = [];
-                var k1 = 0;
-                var newvalfront;
-
-                // get the global replacement value for LINK and RULE bulk replacements
-                if ( dorules && swtype==="LINK" ) {
-                    k1 = swval.indexOf("::");
-                    newvalfront = newval.substr(0, k1+1);
-                } else if ( dorules && swtype==="RULE" ) {
-                    k1 = swval.indexOf("=");
-                    newvalfront = newval.substr(0, k1+1);
-                } else {
-                    k1 = 0;
-                    newvalfront = "";
-                    dorules = false;
-                }
-
-                result = mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
-                .then(row => {
-                    if ( row ) {
-                        var oldrules = JSON.parse(row.configval);
-
-                        // loop through the list of rules and update the one that was edited
-                        // we do this by either pushing the existing one or the edited one to a new array
-                        var newpushed = false;
-                        oldrules.forEach(therule => {
-                            if ( therule[2] === subid && therule[0]===swtype && !newpushed ) {
-                                rulelist.push(newrule);
-                                newpushed = true;
-                            } else {
-                                // fix up the other rules if we picked the option to update all rules
-                                if ( dorules && k1 && therule[0]===swtype ) {
-                                    var updval = newvalfront + therule[1].substring(k1);
-                                    therule = [swtype, updval, therule[2] ];
-                                }
-                                rulelist.push(therule);
-                            }
-                        });
-
-                        if ( !newpushed ) {
-                            rulelist.push(newrule);
-                        }
-                    }
-                    return rulelist;
-                })
-                .then(rulelist => {
-
-                    // handle simple case where the swid did not change
-                    // for this simple case we just update the database and return
-                    if ( newid === swid ) {
-                        updCustom(userid, 0, swid, newval, subid, newsubid, swtype, rulelist);
-
-                    // for the more complicated case where we changed the swid, we have to do two passes
+                    // get the global replacement value for LINK and RULE bulk replacements
+                    if ( dorules && swtype==="LINK" ) {
+                        k1 = swval.indexOf("::");
+                        newvalfront = newval.substr(0, k1+1);
+                    } else if ( dorules && swtype==="RULE" ) {
+                        k1 = swval.indexOf("=");
+                        newvalfront = newval.substr(0, k1+1);
                     } else {
+                        k1 = 0;
+                        newvalfront = "";
+                        dorules = false;
+                    }
 
-                        // remove the reassigned item from the original list if we changed the id
-                        // if we have the option to move all id's then only push things of different type
-                        var oldrulelist = [];
-                        rulelist.forEach(therule => {
-                            if ( (!doall && (therule[2]!==subid || therule[0]!==swtype)) ||
-                                  (doall && (therule[0]!==swtype ) ) ) {
-                                oldrulelist.push(therule);
-                            }
-                        });
-                        updCustom(userid, 0, swid, null, subid, subid, swtype, oldrulelist);
+                    result = mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
+                    .then(row => {
+                        if ( row ) {
+                            var oldrules = JSON.parse(row.configval);
 
-                        // get the list of rules from the destination and add to it
-                        configkey = "user_" + newid;
-                        var newrulelist = [];
-
-                        // move over the old one's if that option was picked
-                        var newpushed = false;
-                        if ( doall ) {
-                            rulelist.forEach(therule => {
-                                if ( therule[0]===swtype ) {
-                                    newrulelist.push(therule);
-                                    if ( therule[2]===newsubid ) {
-                                        newpushed = true;
+                            // loop through the list of rules and update the one that was edited
+                            // we do this by either pushing the existing one or the edited one to a new array
+                            var newpushed = false;
+                            oldrules.forEach(therule => {
+                                if ( therule[2] === subid && therule[0]===swtype && !newpushed ) {
+                                    rulelist.push(newrule);
+                                    newpushed = true;
+                                } else {
+                                    // fix up the other rules if we picked the option to update all rules
+                                    if ( dorules && k1 && therule[0]===swtype ) {
+                                        var updval = newvalfront + therule[1].substring(k1);
+                                        therule = [swtype, updval, therule[2] ];
                                     }
+                                    rulelist.push(therule);
                                 }
                             });
-                        }
 
-                        // get the rules for the new ID and merge our old ones or the migrated one
-                        mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
-                        .then(row => {
-                            if ( row ) {
-                                var newrules = JSON.parse(row.configval);
-                                newrules.forEach(therule => {
-                                    if ( therule[2]===newsubid && therule[0]===swtype && !newpushed ) {
-                                        newrulelist.push(newrule);
-                                        newpushed = true;
-                                    } else {
+                            if ( !newpushed ) {
+                                rulelist.push(newrule);
+                            }
+                        }
+                        return rulelist;
+                    })
+                    .then(rulelist => {
+
+                        // handle simple case where the swid did not change
+                        // for this simple case we just update the database and return
+                        if ( newid === swid ) {
+                            updCustom(userid, 0, swid, newval, subid, newsubid, swtype, rulelist);
+
+                        // for the more complicated case where we changed the swid, we have to do two passes
+                        } else {
+
+                            // remove the reassigned item from the original list if we changed the id
+                            // if we have the option to move all id's then only push things of different type
+                            var oldrulelist = [];
+                            rulelist.forEach(therule => {
+                                if ( (!doall && (therule[2]!==subid || therule[0]!==swtype)) ||
+                                    (doall && (therule[0]!==swtype ) ) ) {
+                                    oldrulelist.push(therule);
+                                }
+                            });
+                            updCustom(userid, 0, swid, null, subid, subid, swtype, oldrulelist);
+
+                            // get the list of rules from the destination and add to it
+                            configkey = "user_" + newid;
+                            var newrulelist = [];
+
+                            // move over the old one's if that option was picked
+                            var newpushed = false;
+                            if ( doall ) {
+                                rulelist.forEach(therule => {
+                                    if ( therule[0]===swtype ) {
                                         newrulelist.push(therule);
+                                        if ( therule[2]===newsubid ) {
+                                            newpushed = true;
+                                        }
                                     }
                                 });
                             }
-                            if ( !newpushed ) {
-                                newrulelist.push(newrule);
-                            }
-                            updCustom(userid, 0, newid, newval, newsubid, newsubid, swtype, newrulelist);
-                        });
-                    }
-                    return rulelist;
-                })
-                .catch(reason => {
-                    console.error( (ddbg()), "apiCall - editrules: ", reason);
-                    return null;
-                });
+
+                            // get the rules for the new ID and merge our old ones or the migrated one
+                            mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
+                            .then(row => {
+                                if ( row ) {
+                                    var newrules = JSON.parse(row.configval);
+                                    newrules.forEach(therule => {
+                                        if ( therule[2]===newsubid && therule[0]===swtype && !newpushed ) {
+                                            newrulelist.push(newrule);
+                                            newpushed = true;
+                                        } else {
+                                            newrulelist.push(therule);
+                                        }
+                                    });
+                                }
+                                if ( !newpushed ) {
+                                    newrulelist.push(newrule);
+                                }
+                                updCustom(userid, 0, newid, newval, newsubid, newsubid, swtype, newrulelist);
+                            });
+                        }
+                        return rulelist;
+                    })
+                    .catch(reason => {
+                        console.error( (ddbg()), "apiCall - editrules: ", reason);
+                        return null;
+                    });
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
                 break;
 
             // similar to above but we delete the pointed to rule
             // and then pass it on to our rules updater function to update them
             case "delrules":
-                var configkey = "user_" + swid;
-                result = mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
-                .then(row => {
-                    var rulelist = [];
-                    if ( row ) {
-                        var oldrules = JSON.parse(row.configval);
+                if ( protocol==="POST" ) {
+                    var configkey = "user_" + swid;
+                    result = mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'")
+                    .then(row => {
+                        var rulelist = [];
+                        if ( row ) {
+                            var oldrules = JSON.parse(row.configval);
 
-                        // loop through the list of rules and only push those not deleted
-                        for ( var i = 0; i < oldrules.length; i++ ) {
-                            var therule = oldrules[i];
-                            if ( therule[2] !== subid ) {
-                                rulelist.push(therule);
-                            }
-                        };
-                    }
+                            // loop through the list of rules and only push those not deleted
+                            for ( var i = 0; i < oldrules.length; i++ ) {
+                                var therule = oldrules[i];
+                                if ( therule[2] !== subid ) {
+                                    rulelist.push(therule);
+                                }
+                            };
+                        }
 
-                    // save the updated config row
-                    // since we are deleting we signal that by sending null in swval place
-                    updCustom(userid, 0, swid, null, subid, subid, swtype, rulelist);
-                    return rulelist;
-                }).catch(reason => {
-                    console.error( (ddbg()), "apiCall - delrules: ", reason);
-                    return null;
-                });
+                        // save the updated config row
+                        // since we are deleting we signal that by sending null in swval place
+                        updCustom(userid, 0, swid, null, subid, subid, swtype, rulelist);
+                        return rulelist;
+                    }).catch(reason => {
+                        console.error( (ddbg()), "apiCall - delrules: ", reason);
+                        return null;
+                    });
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
                 break;
             
             // this returns just the rules list for a specific user and device swid
@@ -10928,6 +10955,11 @@ if ( app && applistening ) {
             // the advantage of this is we can get the user object for making api calls much easier
             // assuming the caller knows the userid and hpcode values
             var userid = req.body["userid"];
+            if ( req.body["pname"] ) {
+               var pname = req.body["pname"] || "default";
+            } else {
+                pname = "default";
+            }
             if ( isNaN(parseInt(userid)) ) {
                 userid = -1;
             }
@@ -10936,8 +10968,7 @@ if ( app && applistening ) {
             var fields = "users.id as users_id, users.email as users_email, users.uname as users_uname, users.mobile as users_mobile, users.password as users_password, " +
                          "users.usertype as users_usertype, users.defhub as users_defhub, users.hpcode as users_hpcode, " + 
                          "panels.id as panels_id, panels.userid as panels_userid, panels.pname as panels_pname, panels.password as panels_password, panels.skin as panels_skin";
-            var conditions = `users.id = ${userid} AND users.hpcode = '${hpcode}'`;
-            // mydb.getRow("users","*", `id = ${userid} AND hpcode = '${hpcode}'`)
+            var conditions = `users.id = ${userid} AND panels.pname = '${pname}' AND users.hpcode = '${hpcode}'`;
             mydb.getRow("panels", fields, conditions, joinstr)
             .then( user => {
                 if ( user ) {
