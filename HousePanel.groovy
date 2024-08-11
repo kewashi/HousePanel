@@ -29,7 +29,7 @@ public static String handle() { return "HousePanel" }
     STATICALLY DEFINED VARIABLES
     inpired by Tonesto7 homebridge2 app
 ***********************************************/
-@Field static final String appVersionFLD  = '3.3.8'
+@Field static final String appVersionFLD  = '3.4.1'
 @Field static final String sNULL          = (String) null
 @Field static final String sBLANK         = ''
 @Field static final String sLINEBR        = '<br>'
@@ -1646,6 +1646,7 @@ def doQuery() {
 
 def sendCommand(item, subid, cmd) {
 
+    logger("sendComand: subid = ${subid} cmd = ${cmd}", "debug")
     if ( subid.startsWith("_" ) ) {
         subid = subid.substring(1)
     }
@@ -1666,13 +1667,14 @@ def sendCommand(item, subid, cmd) {
     }
 
     // first situation is a command with no parameters
+    cmd = cmd.toString()
     def parm
     if ( cmd == subid || cmd=="0" || !cmd ) {
         item."$subid"()
         parm = true
     
     // a single parameter passed in the cmd variable
-    } else if ( cmd.toString().indexOf("|") == -1 ) {
+    } else if ( cmd.indexOf("|") == -1 ) {
         if ( cmd.isNumber() ) {
             cmd = cmd.toInteger()
         }
@@ -1680,7 +1682,6 @@ def sendCommand(item, subid, cmd) {
         parm = cmd
     // multiple variables passed in cmd with separater | string
     } else {
-        cmd = cmd.toString()
         def rawparm = cmd.split(/\|/)
         def n = rawparm.size()
         parm = []
@@ -1828,6 +1829,7 @@ def setShade(swid, cmd, swattr, subid) {
 
         } else if ( subid=="level-up" || subid=="position-up" || subid=="raise" ) {
             newposition = curposition
+            cmd = cmd.toString()
             def del = (cmd.isNumber() && cmd > 0) ? cmd.toInteger() : 5
             if ( del > 10 ) { del = 10 }
             newposition = (newposition >= 100 - del) ? 100 : newposition + del
@@ -1838,9 +1840,8 @@ def setShade(swid, cmd, swattr, subid) {
             }
 
         } else if ( subid=="level-dn" || subid=="position-dn" || subid=="lower" ) {
-
-            // 
             newposition = curposition
+            cmd = cmd.toString()
             def del = (cmd.isNumber() && cmd > 0) ? cmd.toInteger() : 5
             if ( del > 10 ) { del = 10 }
             // del = (newposition % del) == 0 ? del : newposition % del
@@ -1853,7 +1854,6 @@ def setShade(swid, cmd, swattr, subid) {
 
         // handle slider cases
         } else if ( ((subid=="level" || subid=="position") && cmd.isNumber()) || swattr.isNumber() ) {
-
             if ( swattr.isNumber() ) {
                 newposition = swattr.toInteger()
             } else {
@@ -1879,6 +1879,10 @@ def setShade(swid, cmd, swattr, subid) {
 
         // handle direct command cases and other edge casees such as API calls
         } else {
+            cmd = cmd.toString()
+            if ( cmd.isNumber) {
+                cmd = cmd.toInteger()
+            }
             sendCommand(item, subid, cmd)
             newposition = item.currentValue("position")
         }
@@ -1971,6 +1975,7 @@ def setButton(swid, cmd, swattr, subid, item=null ) {
     def butmap = ["pushed": "push", "held":"hold", "doubleTapped": "doubleTap", "released": "release"]
     def revmap = ["push": "pushed", "hold":"held", "doubleTap": "doubleTapped", "release": "released"]
     subid = subid.toString()
+    cmd = cmd.toString()
 
     item  = item ? item : mybuttons.find{it.id == swid }
     if ( item ) {
@@ -2280,6 +2285,7 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
     def newname = item.displayName
     def swtrigger = "switch"
     def origcmd = cmd
+    cmd = cmd.toString()
     
     if (item ) {
         
@@ -2345,8 +2351,9 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
             if ( item.hasAttribute("level") ) {
                 newlevel = item.currentValue("level")
                 newlevel = newlevel.toInteger()
-                def del = (cmd.isNumber() && cmd > 0) ? cmd.toInteger() : 5
+                def del = cmd.isNumber() ? cmd.toInteger() : 5
                 if ( del > 10 ) { del = 10 }
+                if ( del < 5 ) { del = 5 }
                 newlevel = (newlevel >= 100 - del) ? 100 : newlevel - ( newlevel % del ) + del
                 item.setLevel(newlevel)
                 if ( item.hasAttribute("hue") && item.hasAttribute("saturation") && item.hasAttribute("color") ) {
@@ -2367,8 +2374,9 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
             if ( item.hasAttribute("level") ) {
                 newlevel = item.currentValue("level")
                 newlevel = newlevel.toInteger()
-                def del = (cmd.isNumber() && cmd > 0) ? cmd.toInteger() : 5
+                def del = cmd.isNumber() ? cmd.toInteger() : 5
                 if ( del > 10 ) { del = 10 }
+                if ( del < 5 ) { del = 5 }
                 del = (newlevel % del) == 0 ? del : newlevel % del
                 newlevel = (newlevel <= del) ? del : newlevel - del
                 item.setLevel(newlevel)
@@ -2408,7 +2416,7 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
             break
          
         case "hue-up":
-            if ( cmd.isNumber() && item.hasAttribute("hue") ) {
+            if ( item.hasAttribute("hue") ) {
                 hue = item.currentValue("hue").toInteger()
                 hue = (hue >= 95) ? 100 : hue - (hue % 5) + 5
                 item.setHue(hue)
@@ -2423,7 +2431,7 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
             break
               
         case "hue-dn":
-            if ( cmd.isNumber() && item.hasAttribute("hue") ) {
+            if ( item.hasAttribute("hue") ) {
                 hue = item.currentValue("hue").toInteger()
                 def del = (hue % 5) == 0 ? 5 : hue % 5
                 hue = (hue <= 5) ? 5 : hue - del
@@ -2439,7 +2447,7 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
             break
               
         case "hue":
-            if ( cmd.isNumber() && item.hasAttribute("hue") ) {
+            if ( item.hasAttribute("hue") ) {
                 hue = item.currentValue("hue").toInteger()
                 /* temperature drifts up so we cant use round down method */
                 if ( cmd.isNumber() ) {
@@ -2502,18 +2510,17 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
             break
 
         case "colorTemperature-up":
+                def del = 100
                 temperature = item.currentValue("colorTemperature").toInteger()
-                temperature = (temperature >= 6500) ? 6500 : temperature - (temperature % 100) + 100
+                temperature = (temperature >= 6500) ? 6500 : temperature - (temperature % 100) + del
                 item.setColorTemperature(temperature)
                 newonoff = "on"
             break
               
         case "colorTemperature-dn":
-                temperature = item.currentValue("colorTemperature").toInteger()
-                /* temperature drifts up so we cant use round down method */
                 def del = 100
-                temperature = (temperature <= 2700) ? 2700 : temperature - del
-                temperature = (temperature >= 6500) ? 6500 : temperature - (temperature % 100)
+                temperature = item.currentValue("colorTemperature").toInteger()
+                temperature = (temperature < 2800) ? 2700 : temperature - (temperature % 100) - del
                 item.setColorTemperature(temperature)
                 newonoff = "on"
             break

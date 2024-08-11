@@ -1086,7 +1086,7 @@ function getHubInfo(hub) {
                     return;
                 }
             } catch(e) {
-                console.log( (ddbg()), "error retrieving hub ID and name. ", e, "\n body: ", body);
+                console.error( (ddbg()), "error retrieving hub ID and name. ", e, "\n body: ", body);
                 hubName = hub.hubname
                 hubId = hub.hubid;
                 reject(e);
@@ -1094,12 +1094,11 @@ function getHubInfo(hub) {
             }
 
             if ( DEBUG2 ) {
-                console.log( (ddbg()), "hub info: ", hub);
+                console.log((ddbg()), "hub info returned: ", jsonbody);
             }
             
             // now update the placeholders with the real hub name and ID
             // we now get even more info back from the hub but we don't need it
-            console.log((ddbg()), "hub info returnd: ", jsonbody);
             hub["hubname"]  = hubName;
             hub["hubid"] = hubId;
             updateHub(hub, hubId);
@@ -2673,7 +2672,6 @@ async function makeNewConfig(userid) {
     configs.push( await addConfigItem(userid, "kiosk", "false") );
     configs.push( await addConfigItem(userid, "blackout", "false") );
     configs.push( await addConfigItem(userid, "rules", "true") );
-    configs.push( await addConfigItem(userid, "timezone", "480") );           // changed this from place name to time offset from GMT
     configs.push( await addConfigItem(userid, "phototimer","0") );
     configs.push( await addConfigItem(userid, "fast_timer","0") );            // timers for polling all other tiles and hubs
     configs.push( await addConfigItem(userid, "slow_timer","0") );            // timers for images, frames, customs, blanks, videos polling
@@ -3283,19 +3281,18 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
         // provide welcome page with instructions for what to do
         // this will show only if the user hasn't set up HP
         // or if a reauth is requested or when converting old passwords
-        $tc += "<div class=\"greeting\">";
-
-        $tc +="<p>This is where you link a hub to " +
-                "HousePanel to gain access to your smart home devices. " +
-                "Hubitat and ISY hubs are supported. " +
-                "You can link any number and combination of hubs. " + 
-                "To authorize a Hubitat hub you must provide an access token and the hub endpoint " + 
-                "These are both shown in the HousePanel app on the Hubitat hub. " +
-                "ISY hubs require you to enter your username and password in the fields shown below, " +
-                "and enter the IP of your hub in the Host API Url field " +
-                "using format https://xxx.xxx.xxx.xxx:8443" +
-                "</p>";
-        $tc += "</div>";
+        // $tc += "<div class=\"greeting\">";
+        // $tc +="<p>This is where you link a hub to " +
+        //         "HousePanel to gain access to your smart home devices. " +
+        //         "Hubitat and ISY hubs are supported. " +
+        //         "You can link any number and combination of hubs. " + 
+        //         "To authorize a Hubitat hub you must provide an access token and the hub endpoint " + 
+        //         "These are both shown in the HousePanel app on the Hubitat hub. " +
+        //         "ISY hubs require you to enter your username and password in the fields shown below, " +
+        //         "and enter the IP of your hub in the Host API Url field " +
+        //         "using format https://xxx.xxx.xxx.xxx:8443" +
+        //         "</p>";
+        // $tc += "</div>";
         
         var webSocketUrl = getSocketUrl(hostname);
         $tc += hidden("pagename", "auth");
@@ -3305,6 +3302,7 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
         $tc += hidden("webSocketServerPort", GLB.webSocketServerPort);
         $tc += hidden("webDisplayPort", GLB.port);
         $tc += hidden("userid", userid, "userid");
+        $tc += hidden("pname", pname);
         $tc += hidden("emailid", useremail, "emailid");
         $tc += hidden("skinid", skin, "skinid");
         $tc += hidden("hpcode", hpcode, "hpcode");
@@ -3316,7 +3314,7 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
                 configs[key] = configoptions[i].configval;
             }
         }
-        $tc += hidden("configsid", JSON.stringify(configs), "configsid");
+        // $tc += hidden("configsid", JSON.stringify(configs), "configsid");
         $tc += "<div class=\"greetingopts\">";
             
         if ( hubs ) {
@@ -3403,7 +3401,7 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
         $tc += hidden("uname", uname);
         $tc += hidden("panelid", panelid);
         $tc += hidden("pname", pname);
-        $tc += hidden("skin", skin);
+        $tc += hidden("skinid", skin,"skinid");
         $tc += hidden("hubindex", hubindex);
         $tc += hidden("hpcode", hpcode, "hpcode");
 
@@ -4739,11 +4737,8 @@ function getClock(clockid) {
     var dateofmonth = dates.date;
     var weekday = dates.weekday;
 
-    // TODO - enable user timezone settings in options
     var fmttime = "h:I:S A";
     var timezone = d.getTimezoneOffset();
-
-    // could use 0 here for timezone since it is always the current timezone until I implement user settings in the options
     var timeofday = getFormattedTime(fmttime, d, timezone);
 
     var dclock = {"name": clockname, "skin": clockskin, "weekday": weekday,
@@ -7285,6 +7280,7 @@ function getInfoPage(user, configoptions, hubs, req) {
 
         $tc += "<form>";
         $tc += hidden("userid", userid, "userid");
+        $tc += hidden("pname", pname);
         $tc += hidden("emailid", useremail, "emailid");
         $tc += hidden("skinid", skin, "skinid");
         $tc += hidden("returnURL", GLB.returnURL);
@@ -7299,7 +7295,7 @@ function getInfoPage(user, configoptions, hubs, req) {
                 configs[key] = configoptions[i].configval;
             }
         }
-        $tc += hidden("configsid", JSON.stringify(configs), "configsid");
+        // $tc += hidden("configsid", JSON.stringify(configs), "configsid");
         $tc += "</form>";
         $tc += "<div class=\"infosum\">";
         $tc += "<div class='bold'>Site url = " + GLB.returnURL + "</div>";
@@ -7710,9 +7706,9 @@ function getOptionsPage(user, configoptions, hubs, req) {
         var $kioskoptions = getConfigItem(configoptions, "kiosk") || "false";
         var blackout = getConfigItem(configoptions, "blackout") || "false";
         var $ruleoptions = getConfigItem(configoptions, "rules") || "true";
-        var timezone = getConfigItem(configoptions, "timezone") || "480";
-        timezone = parseInt(timezone);
-        if ( isNaN(timezone) ) { timezone = 480; }
+        // var timezone = getConfigItem(configoptions, "timezone") || "480";
+        // timezone = parseInt(timezone);
+        // if ( isNaN(timezone) ) { timezone = 480; }
         var phototimer = parseInt(getConfigItem(configoptions, "phototimer"));
         if ( isNaN(phototimer) ) { phototimer = 0; }
         var fcastcity = getConfigItem(configoptions, "fcastcity") || "san-carlos";
@@ -7755,21 +7751,21 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc += hidden("uname", uname, "unameid");
         $tc += hidden("emailid", useremail, "emailid");
         $tc += hidden("panelid", panelid, "panelid");
-        $tc += hidden("pname", pname, "pname");
+        $tc += hidden("pname", pname);
         $tc += hidden("hpcode", hpcode, "hpcode");
         $tc += hidden("apiSecret", GLB.apiSecret);
 
-        var configs = {};
-        for (var i in configoptions) {
-            var key = configoptions[i].configkey;
-            if ( !key.startsWith("user_") ) {
-                configs[key] = configoptions[i].configval;
-            }
-        }
-        $tc += hidden("configsid", JSON.stringify(configs), "configsid");
+        // var configs = {};
+        // for (var i in configoptions) {
+        //     var key = configoptions[i].configkey;
+        //     if ( !key.startsWith("user_") ) {
+        //         configs[key] = configoptions[i].configval;
+        //     }
+        // }
+        // $tc += hidden("configsid", JSON.stringify(configs), "configsid");
 
         $tc += "<h3>" + GLB.APPNAME + " Options</h3>";
-        $tc += "<h3>for user: " + uname + "  email: " + useremail + "</h3>";
+        $tc += "<h3>Email: " + useremail + "</h3>";
         // $tc += "<h3>on panel: " + pname + "</h3>";
         
         // manage panels here - select existing, remove, or add
@@ -7781,36 +7777,26 @@ function getOptionsPage(user, configoptions, hubs, req) {
         //        " you will not be able to remove it." +
         //        "</div>";
 
-        $tc += "<div class=\"filteroption\">";
 
         // // users can update their username here
-        $tc += "<div><label class=\"optioninp\">Username: </label>";
-        $tc += "<input id=\"newUsername\" class=\"optioninp\" name=\"newUsername\" size=\"20\" type=\"text\" value=\"" + uname + "\"/></div>"; 
+        $tc += "<div class=\"filteroption\">";
+        // $tc += "<div><label class=\"optioninp\">Username: </label>";
+        $tc += " Username: ";
+        $tc += "<input id=\"newUsername\" class=\"optioninp\" name=\"newUsername\" size=\"20\" type=\"text\" value=\"" + uname + "\"/>"; 
+        $tc += "</div>";
 
         // available panels to pick from
-        $tc += "<label class =\"optioninp\">Select panel from list or enter new panel name below:</label>";
+        $tc += "<div class=\"filteroption\">";
+        $tc += "Panel Options:<br>";
+        $tc += "<label class =\"optioninp\">Select panel:</label>";
             $tc += "<select class=\"optioninp\" id='userpanel' name='userpanel'>"; 
             panels.forEach(panel => {
                 const selected = (panel.pname === pname) ? " selected" : "";
                 $tc += "<option value='" + panel.id + "'" + selected + ">" + panel.pname  + "</option>";
             });
         $tc += "</select><br/>";
-        $tc += "<div><label class=\"optioninp\">Panel Name: </label>";
+        $tc += "<div><label class=\"optioninp\">New Panel Name: </label>";
         $tc += "<input id=\"panelname\" class=\"optioninp\" name=\"panelname\" size=\"20\" type=\"text\" value=\"" + pname + "\"/></div>";
-        $tc += "</div>";
-
-        // skins to pick from
-        $tc += "<div class=\"filteroption\">";
-        $tc += "<label class =\"optioninp\">Select Skin to Use on This Panel:</label>";
-        $tc += "<select class=\"optioninp\" id='userskin' name='userskin'>"; 
-        skins.forEach(askin => {
-            var skinval = "skin-"+askin;
-            const selected = (skinval === skin) ? " selected" : "";
-            $tc += "<option value='" + skinval + "'" + selected + ">" + askin  + "</option>";
-        });
-        $tc += "</select>";
-        $tc += "<input id='newSkinName' class='optioninp' name='newSkinName' size=\"40\" type=\"text\" value=\"\"/></div>"; 
-        $tc += "<button id='cloneSkin' class='bluebutton'>Clone Skin</button>";
         $tc += "</div>";
 
         // panel passwords
@@ -7821,6 +7807,18 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc += "<input id=\"panelPw2\" class=\"optioninp\" name=\"panelPw2\" size=\"20\" type=\"password\" value=\"\"/></div>"; 
         $tc += "</div>";
 
+        // skins to pick from
+        $tc += "<div class=\"filteroption\">";
+        $tc += "<label class =\"optioninp\">Skin:</label>";
+        $tc += "<select class=\"optioninp\" id='userskin' name='userskin'>"; 
+        skins.forEach(askin => {
+            var skinval = "skin-"+askin;
+            const selected = (skinval === skin) ? " selected" : "";
+            $tc += "<option value='" + skinval + "'" + selected + ">" + askin  + "</option>";
+        });
+        $tc += "</select>";
+        $tc += "</div>";
+
         // $tc += "<div class=\"buttongrp\">";
         //     $tc+= "<div id=\"usePanel\" class=\"smallbutton\">Select Panel</div>";
         //     $tc+= "<div id=\"delPanel\" class=\"smallbutton\">Delete Panel</div>";
@@ -7828,20 +7826,20 @@ function getOptionsPage(user, configoptions, hubs, req) {
         // $tc += "</div>";
 
         $tc += "<div class=\"filteroption\">";
-        $tc += "<label class =\"optioninp\">Options:</label>";
-        $tc += "<div><label for=\"kioskid\" class=\"optioninp\">Kiosk Mode: </label>";    
+        $tc += "Other Options:";
+        $tc += "<div><label for=\"kioskid\" class=\"optioncbox\">Kiosk Mode: </label>";    
         var $kstr = ($kioskoptions===true || $kioskoptions==="true") ? " checked" : "";
         $tc+= "<input class=\"optionchk\" id=\"kioskid\" type=\"checkbox\" name=\"kiosk\"  value=\"" + $kioskoptions + "\"" + $kstr + "/></div>";
-        $tc += "<div><label for=\"ruleid\" class=\"optioninp\">Enable Rules? </label>";
+        $tc += "<div><label for=\"ruleid\" class=\"optioncbox\">Enable Rules? </label>";
         $kstr = ($ruleoptions===true || $ruleoptions==="true") ? " checked" : "";
         $tc += "<input class=\"optionchk\" id=\"ruleid\" type=\"checkbox\" name=\"rules\"  value=\"" + $ruleoptions + "\"" + $kstr + "/></div>";
-        $tc += "<div><label for=\"clrblackid\" class=\"optioninp\">Blackout on Night Mode: </label>";    
+        $tc += "<div><label for=\"clrblackid\" class=\"optioncbox\">Blackout on <br>Night & Away Modes: </label>";    
         $kstr = (blackout===true || blackout==="true") ? " checked" : "";
         $tc+= "<input class=\"optionchk\" id=\"clrblackid\" type=\"checkbox\" name=\"blackout\"  value=\"" + blackout + "\"" + $kstr + "/></div>";
         $tc+= "<div><label for=\"photoid\" class=\"optioninp\">Photo timer (sec): </label>";
         $tc+= "<input class=\"optioninp\" id=\"photoid\" name=\"phototimer\" type=\"number\"  min='0' max='300' step='5' value=\"" + phototimer + "\" /></div>";
-        $tc += "<div><label for=\"newtimezone\" class=\"optioninp\">Timezone: </label>";
-        $tc += "<input id=\"newtimezone\" class=\"optioninp\" name=\"timezone\" size=\"20\" type=\"number\" min='-660' max='840', step='60' value=\"" + timezone + "\"/></div>"; 
+        // $tc += "<div><label for=\"newtimezone\" class=\"optioninp\">Timezone: </label>";
+        // $tc += "<input id=\"newtimezone\" class=\"optioninp\" name=\"timezone\" size=\"20\" type=\"number\" min='-660' max='840', step='60' value=\"" + timezone + "\"/></div>"; 
         $tc += "<div><label class=\"optioninp\" title=\"Polling for authenticated hubs\">Hub polling timer: </label>";
         $tc += "<input class=\"optioninp\" name=\"fast_timer\" size=\"20\" type=\"text\" value=\"" + fast_timer + "\"/></div>"; 
         $tc += "<div><label class=\"optioninp\" title=\"Blanks, customs, frames, images polling\">Special polling timer: </label>";
@@ -8189,6 +8187,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
         tc += hidden("webSocketServerPort", GLB.webSocketServerPort);
         tc += hidden("webDisplayPort", GLB.port);
         tc += hidden("userid", userid, "userid");
+        tc += hidden("pname", pname);
         tc += hidden("panelid", panelid, "panelid");
         tc += hidden("skinid", skin, "skinid");
         tc += hidden("emailid", useremail, "emailid");
@@ -8379,8 +8378,8 @@ function processOptions(userid, panelid, optarray) {
                 configoptions["blackout"] = "true";
             } else if ( key==="phototimer" ) {
                 configoptions["phototimer"] = val;
-            } else if ( key==="timezone") {
-                configoptions["timezone"] = val;
+            // } else if ( key==="timezone") {
+            //     configoptions["timezone"] = val;
             } else if ( key==="fast_timer") {
                 configoptions["fast_timer"] = val;
             } else if ( key==="slow_timer") {
@@ -9801,13 +9800,13 @@ function apiCall(user, body, protocol, res) {
                     // useraccess is always used for the access token now
                     // userendpt is the password for ISY hubs and the AppID for Hubitat
                     // the actual endpt is determined from these values
+                    var userAccess = body.useraccess;
+                    var appID = body.userendpt;
                     hub["useraccess"] = body.useraccess;
-                    hub["userendpt"] = body.userendpt;
+                    hub["userendpt"] = appID;
                     hub["hubrefresh"] = "";
 
-                    // grab the existing hubid for hubs that previously existed
-                    // if we are defining a new hub this will be the value "new"
-                    // for new hubs the hubid won't exist in the db so it will be added
+                    // make a random hubid if this hub doesn't exist - this will be ignored it the hub is found using ID or AccessToken
                     var hubid = body.hubid;
                     if ( hubid==="" || hubid==="new" ) {
                         var rstr = getRandomInt(1001, 9999);
@@ -9838,13 +9837,22 @@ function apiCall(user, body, protocol, res) {
 
                     } else if ( hub.hubtype==="Hubitat") {
                         // fix up host if http wasn't given
-                        if ( hub.hubhost && !hub["hubhost"].toLowerCase().startsWith("http") ) {
-                            hub.hubhost = "http://" + hub["hubhost"];
+                        // handle case for server vs local device
+                        if ( hub.hubhost && typeof hub.hubhost === "string" && !hub["hubhost"].toLowerCase().startsWith("http") ) {
+                            if ( hub["hubhost"].startsWith("housepanel.net") ) {
+                                hub.hubhost = "https://" + hub["hubhost"];
+                            } else {
+                                hub.hubhost = "http://" + hub["hubhost"];
+                            }
                         }
 
                         // now set the endpoint based on the AppID provided
                         hub.hubaccess = hub.useraccess;
-                        hub.hubendpt = hub.hubhost + "/apps/api/" + hub.userendpt;
+                        if (hub["hubhost"].startsWith("https://cloud")) {
+                            hub.hubendpt = hub.hubhost + "/apps/" + appID;
+                        } else {
+                            hub.hubendpt = hub.hubhost + "/apps/api/" + appID;
+                        }
 
                     } else {
                         // set an error result to skip auth steps
@@ -9861,10 +9869,14 @@ function apiCall(user, body, protocol, res) {
                         result = mydb.updateRow("users",{defhub: hubid},"id = " + userid)
                         .then( () => {
                             // get existing hub based on the ID assuming it is there
-                            return mydb.getRow("hubs", "*", "userid = " + userid + " AND hubid = '"+hubid+"'")
+                            // we also check the accesstoken and the appID since these could match it too
+                            // this prevents extra ghost hubs from being created when we don't know the hubid
+                            return mydb.getRow("hubs", "*", `userid = ${userid} AND (hubid = '${hubid}' OR hubaccess = '${userAccess}' OR userendpt = '${appID}')`)
                             .then(row => {
                                 if ( row ) {
                                     hub.id = row.id;
+                                    hub.hubid = row.hubid;
+                                    hub.hubname = row.hubname;
                                     return hub;
                                 } else {
                                     return mydb.addRow("hubs", hub, "userid = " + userid)
@@ -10787,11 +10799,16 @@ if ( app && applistening ) {
                         if ( req.body['change_device'] ) {
                             updhub = updhub || (hub.userendpt !== req.body['change_device']);
                             hub.userendpt = req.body['change_device'].toString();
+                            var appID = hub.userendpt;
 
                             // set default endpt based on AppID
                             // this will almost always be overwritten below
                             if ( hub.hubhost ) {
-                                hub.hubendpt = hub.hubhost + "/apps/api/" + hub.userendpt;
+                                if ( GLB.returnURL.startsWith("https://cloud") ) {
+                                    hub.hubendpt = hub.hubhost + "/apps/" + appID;
+                                } else {
+                                    hub.hubendpt = hub.hubhost + "/apps/api/" + appID;
+                                }
                             }
                         }
 
@@ -10802,12 +10819,12 @@ if ( app && applistening ) {
                             updhub = updhub || (hub.hubaccess !== valarray[0]);
                             hub.hubaccess = valarray[0];
 
-                            updhub = updhub || (hub.hubendpt !== valarray[1]);
-                            hub.hubendpt = valarray[1];
-
-                            if ( GLB.useCloud ) {
+                            if ( GLB.returnURL.startsWith("https://cloud") ) {
                                 updhub = updhub || (hub.hubendpt !== valarray[2]);
                                 hub.hubendpt = valarray[2];
+                            } else {
+                                updhub = updhub || (hub.hubendpt !== valarray[1]);
+                                hub.hubendpt = valarray[1];
                             }
 
                             // determine the hostname from the endpt

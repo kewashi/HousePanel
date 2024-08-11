@@ -267,7 +267,7 @@ input.startupinp, input.optionnuminp {
     display: inline-block;
 }
 
-label.optioninp, select.optioninp {
+label.optioninp, select.optioninp, label.optioncbox {
     font-style: normal;
     font-weight: normal;
     font-size: 16px;
@@ -276,6 +276,10 @@ label.optioninp, select.optioninp {
     width: 150px;
     display: inline-block;
     text-align: right;
+}
+
+label.optioncbox {
+    width: 200px;
 }
 
 input.optionchk {

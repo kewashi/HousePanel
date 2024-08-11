@@ -1,4 +1,5 @@
 const devhistory = `
+3.4.1   Fix groovy app to make button calls work, fix cloud hub calls, misc cleanup
 3.3.9   Edit flexibility for customizations on the info page and fix multiple panels feature
 3.3.8   Add ability to move customizations from one tile to another and Fix debug for posthub 
 3.3.7   Add support for sleep device types since Sleep number devices now support that

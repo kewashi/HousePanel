@@ -192,14 +192,18 @@ function getOptions(pagename) {
         var email = $("#emailid").val();
         var skin = $("#skinid").val();
         var hpcode = $("#hpcode").val();
-
+        
         // get panel and mode from main screen if it is there
         try {
-            var pname = $("#showversion span#infoname").html();
+            if ( $("input[name='pname']") ) {
+                var pname = $("input[name='pname']").val()
+            } else {
+                pname = $("#showversion span#infoname").html();
+            }
         } catch(e) {
             pname = "default";
         }
-        cm_Globals.options = {userid: userid, email: email, skin: skin, pname: pname, mode: "Unknown", hpcode: hpcode, config: {}, rules: {}};
+        cm_Globals.options = {userid: userid, email: email, skin: skin, pname: pname, mode: "Day", hpcode: hpcode, config: {}, rules: {}};
 
         // set the customization lists
         $.post(cm_Globals.returnURL, 
@@ -213,10 +217,14 @@ function getOptions(pagename) {
                     throw "error - failure reading custom options and rules from database for user = " + userid;
                 }
 
-                // handle black screen
+                // // handle black screen
                 var blackout = cm_Globals.options.config.blackout;
                 blackout = (blackout === "true") || (blackout === true) ? true : false;
-                if ( pagename==="main" && ((priorOpmode === "Sleep" || cm_Globals.options["mode"]==="Night") && blackout) ) {
+                if ( pagename==="main" && ((priorOpmode === "Sleep" || 
+                        cm_Globals.options["mode"]==="Night" || 
+                        // cm_Globals.options["mode"]==="Day" || 
+                        // cm_Globals.options["mode"]==="Evening" || 
+                        cm_Globals.options["mode"]==="Away" ) && blackout) ) {
                     priorOpmode = "Sleep";
                     execButton("blackout");
                 } else {
@@ -237,7 +245,7 @@ function getOptions(pagename) {
 // but doing it this way ensure we get what main app sees
 function getHubs() {
     try {
-        var userid = $("#userid").val();
+        var userid = cm_Globals.options.userid;
         var pname = cm_Globals.options.pname;
         var config = cm_Globals.options.config;
         try {
@@ -1026,8 +1034,8 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                 if ( (typeof pvalue.themode !== "undefined")  && 
                       blackout===true && (priorOpmode === "Operate" || priorOpmode === "Sleep") ) 
                 {
-                    cm_Globals.options.themode = pvalue.themode;
-                    if ( pvalue.themode === "Night" ) {
+                    cm_Globals.options["mode"] = pvalue.themode;
+                    if ( pvalue.themode === "Night" || pvalue.themode === "Away" ) {
                         execButton("blackout");
                         priorOpmode = "Sleep";
                     } else if ( $("#blankme") ) {
@@ -1837,6 +1845,7 @@ function setupDraggable() {
                 var hubid = $(thing).attr("hubid");
                 var hubindex = $(thing).attr("hubindex");
                 var userid = cm_Globals.options.userid;
+                var pname = cm_Globals.options.pname;
                 var panelid = $("input[name='panelid']").val();
                 startPos.left = 0;
                 startPos.top  = 0;
@@ -1851,7 +1860,6 @@ function setupDraggable() {
                         var container = $("#panel-"+panel);
                         // var lastthing = $("div.panel-"+panel+" div.thing").last();
                         var roomid = $("#panel-"+panel).attr("roomid");
-                        var pname = cm_Globals.options.pname;
                         pos = {position: "absolute", top: evt.pageY, left: evt.pageX, width: 300, height: "auto"};
                         var zmax = getMaxZindex(panel);
                         startPos["z-index"] = zmax;
@@ -2306,6 +2314,8 @@ function execButton(buttonid) {
         }
 
         // clicking anywhere will restore the window to normal
+        // but if we are in Night or Away mode screen will go blank again immediately
+        // this is a feature that prevents people from using panel at night and in away mode
         $("#blankme").off("singletap");
         $("#blankme").on("singletap", function(evt) {
             if ( photohandle ) {
@@ -2658,8 +2668,8 @@ function setupButtons() {
                             }
                         }
                     );
-                    closeModal("modalhub");
                 }
+                closeModal("modalhub");
             });
             
             evt.stopPropagation(); 
