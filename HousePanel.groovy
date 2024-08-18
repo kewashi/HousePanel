@@ -1880,7 +1880,7 @@ def setShade(swid, cmd, swattr, subid) {
         // handle direct command cases and other edge casees such as API calls
         } else {
             cmd = cmd.toString()
-            if ( cmd.isNumber) {
+            if ( cmd.isNumber() ) {
                 cmd = cmd.toInteger()
             }
             sendCommand(item, subid, cmd)

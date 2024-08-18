@@ -2,10 +2,10 @@
     "packageName": "HousePanel",
 	"minimumHEVersion": "2.1.9",
 	"author": "Ken Washington",
-	"version": "3.4.1",
-	"dateReleased": "2024-08-10",
+	"version": "3.4.2",
+	"dateReleased": "2024-08-17",
 	"licenseFile": "",
-	"releaseNotes": "V3.4.1 Fix button calls, fix cloud hub calls, misc cleanup. This update also requires the Node.js modules to be updated. See https://housepanel.net for documentation.",
+	"releaseNotes": "V3.4.2 Fix shade bug and add icon upload feature. This update also requires the Node.js modules to be updated. See https://housepanel.net for documentation.",
 	"apps" : [
 		{
 			"id" : "56776347-587d-4e5d-8a1a-bbd02238f63f",

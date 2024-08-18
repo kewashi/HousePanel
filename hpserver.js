@@ -21,7 +21,7 @@ const DEBUG12 = false;              // hub push updates
 const DEBUG13 = false;              // URL callbacks
 const DEBUG14 = false;              // tile link details
 const DEBUG15 = false;              // new user and forgot password
-const DEBUG16 = false;              // writing and custom names
+const DEBUG16 = false;              // writing, custom names, and image deletes
 const DEBUG17 = false;              // push client
 const DEBUG22 = false;              // login info
 const DEBUG23 = false;              // customize post call debugs
@@ -45,6 +45,7 @@ const cookieParser = require('cookie-parser');
 const request = require('request');
 const url = require('url');
 const nodemailer = require('nodemailer');
+const multer = require('multer');
 // const countrytime = require('countries-and-timezones');
 
 // load supporting modules
@@ -66,15 +67,6 @@ var dstr = d.substring(0, k);
 GLB.apiSecret = getNewCode(dstr);
 // GLB.warnonce = {};
 
-// GLB.defaultrooms = {
-//     "Kitchen": "clock|kitchen|sink|pantry|dinette" ,
-//     "Family": "clock|family|mud|fireplace|casual|thermostat",
-//     "Living": "clock|living|dining|entry|front door|foyer",
-//     "Office": "clock|office|computer|desk|work",
-//     "Bedroom": "clock|bedroom|kid|kids|bathroom|closet|master|guest",
-//     "Outside": "clock|garage|yard|outside|porch|patio|driveway|weather",
-//     "Music": "clock|music|tv|television|alexa|echo|stereo|bose|samsung|pioneer"
-// };
 GLB.defaultrooms = {
     "Kitchen": 1 ,
     "Family": 2,
@@ -2211,11 +2203,6 @@ function translateIsy(devicetype, value, isyid, val, formatted, uom, prec, subid
             obj = GLB.uomMap[uom];
             setSelect(subid, obj);
         } else {
-            // var warnid = "uom_"+isyid;
-            // if ( typeof GLB.warnonce[warnid] === "undefined" || GLB.warnonce[warnid]===false ) {
-            //     console.log( (ddbg()), "Warning, no translation provided for ISY id: ", isyid);
-            //     GLB.warnonce[warnid] = true;
-            // }
             newvalue[subid] = val;
         }
     }
@@ -3582,8 +3569,6 @@ function getNewPage(userid, pname, skin, configoptions, cnt, roomid, roomname, k
     // $tc += "<div class='prevTab'> </div><div class='nextTab'> </div>";
 
     // the things list can be integers or arrays depending on drag/drop
-    // var idxkeys = Object.keys(GLB.options["index"]);
-    // var idxvals = Object.values(GLB.options["index"]);
     var zcolor = 200;
     things.forEach(function(thing) {
         
@@ -6759,7 +6744,7 @@ function doAction(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, 
             });
         } else if ( command==="RULE" ) {
             if ( !GLB.dbinfo.enablerules ) {
-                msg = "error - rules are disabled.";
+                msg = "warning - rules are disabled.";
             } else {
                 var configkey = "user_" + swid;
                 linkval = linkval.toString();
@@ -7996,12 +7981,302 @@ function getOptionsPage(user, configoptions, hubs, req) {
 
 }
 
+// process user options page
+function processOptions(userid, panelid, optarray) {
+
+    // first get the configurations and things and then call routine to update them
+    userid = parseInt(userid);
+    panelid = parseInt(panelid);
+    if ( DEBUG4 ) {
+        console.log( (ddbg()), "userid: ", userid, " panelid: ", panelid);
+        console.log( (ddbg()), "optarray: ", jsonshow(optarray) );
+    }
+
+    // get the hub filters and process them first
+    var joinstr = mydb.getJoinStr("things","roomid","rooms","id");
+    var fields = "things.id as things_id, things.userid as things_userid, things.roomid as things_roomid, " +
+        "things.tileid as things_tileid, things.posy as things_posy, things.posx as things_posx, " +
+        "things.zindex as things_zindex, things.torder as things_torder, things.customname as things_customname, " +
+        "rooms.id as rooms_id, rooms.panelid as rooms_panelid, rooms.rname as rooms_rname, rooms.rorder as rooms_rorder";
+
+    return Promise.all([
+        mydb.getRow("hubs","*","userid = "+userid+" AND hubid = '-1'"),
+        mydb.getRow("users","*","id = "+userid),
+        mydb.getRow("panels","*","id = "+panelid),
+        mydb.getRows("rooms","*","userid = "+userid+" AND panelid="+panelid),
+        mydb.getRows("configs","*","userid = "+userid+" AND configtype=0"),
+        mydb.getRows("devices","*","userid = "+userid+" AND hint='special'"),
+        mydb.getRows("things", fields, "things.userid = "+userid+" AND rooms.panelid = "+panelid, joinstr)
+    ])
+    .then(results => {
+        var hubzero = results[0];
+        var user = results[1];
+        var panel = results[2];
+        var rooms = results[3];
+        var configs = results[4];
+        var specials = results[5];
+        var things = results[6];
+        var configoptions = {};
+        if ( configs ) {
+            configs.forEach(function(item) {
+                var key = item.configkey;
+                var val = item.configval;
+                try {
+                    var parseval = JSON.parse(val);
+                } catch (e) {
+                    parseval = val;
+                }
+                configoptions[key] = parseval;
+            });
+        }
+        return doProcessOptions(optarray, configoptions, hubzero, user, panel, things, rooms, specials);
+    })
+    .catch(reason => {
+        console.log( (ddbg()), reason);
+        return reason;
+    });
+
+    function doProcessOptions(optarray, configoptions, hubzero, user, panel, things, rooms, specials) {
+        if (DEBUG4) {
+            console.log( (ddbg()), jsonshow(hubzero) );
+            console.log( (ddbg()), jsonshow(things) );
+            console.log( (ddbg()), jsonshow(rooms) );
+            console.log( (ddbg()), jsonshow(specials) );
+        }
+        
+        var roomnames = {};
+        rooms.forEach(function(item) {
+            var id = item.id;
+            var rname = item.rname;
+            roomnames[rname] = id;
+        });
+        var specialtiles = configoptions["specialtiles"];
+
+        // // use clock instead of blank for default only tile
+        // var onlytile = {userid: userid, tileid: onlytileid, posy: 0, posz: 0, zindex: 1, torder: 1, customname: "Digital Clock"};
+        // var onlyarr = [onlytile,0,0,1,""];
+
+        // // checkbox items simply will not be there if not selected
+        configoptions["kiosk"] = "false";
+        configoptions["rules"] = "false";
+        configoptions["blackout"] = "false";
+
+        // get old panel info to check for changes
+        var oldPanel = panel.pname;
+        var oldSkin = panel.skin;
+
+        // force all three to be given for change to happen
+        var accucity = "";
+        var accuregion = "";
+        var accucode = "";
+        var fcastcity = "";
+        var fcastregion = "";
+        var fcastcode = "";
+        var newPassword = "";
+        var newName = "";
+        var newSkin = oldSkin;
+        var newPanel = oldPanel;
+        var useroptions = [];
+        var huboptpick = "-1";
+
+        for (var key in optarray) {
+            var val = optarray[key];
+            if ( typeof val === "string" ) val = val.trim();
+
+            //skip the returns from the submit button and the flag
+            if (key==="options" || key==="api" || key==="useajax"  || key==="userid" || key==="panelid" || key==="webSocketUrl" || key==="returnURL" ||
+                key==="pagename" || key==="pathname" || key==="userpanel" || key==="pname" || key==="uname" || key==="panelPw2" ) {
+                continue;
+
+            } else if ( key==="newUsername" ) {
+                // the \D ensures we start with a non-numerica character
+                // and the \S ensures we have at least 2 non-white space characters following
+                if ( val && val.match(/^\D\S{2,}$/) ) {
+                    newName = val;
+                    mydb.updateRow("users",{uname: newName},"id = " + userid);
+                }
+            } else if ( key==="panelname" ) {
+                if ( val && val.match(/^\D\S{2,}$/) ) {
+                    newPanel = val;
+                }
+            } else if ( key==="panelPw1") {
+                var pw1 = val;
+                var pw2 = optarray["panelPw2"].trim();
+                if ( pw1 === pw2 && pw1.match(/^\D\S{5,}$/) ) {
+                    newPassword = pw_hash(pw1);
+                }
+            } else if ( key==="userskin" ) {
+                newSkin = val;
+            } else if ( key==="useroptions" ) {
+                key = "usroptions";
+                useroptions = val;
+            } else if ( key==="usroptions" ) {
+                useroptions = val;
+            } else if ( key==="huboptpick" ) {
+                huboptpick = val;
+            } else if ( key==="kiosk") {
+                configoptions["kiosk"] = "true";
+            } else if ( key==="rules") {
+                configoptions["rules"] = "true";
+            } else if ( key==="blackout") {
+                configoptions["blackout"] = "true";
+            } else if ( key==="phototimer" ) {
+                configoptions["phototimer"] = val;
+            // } else if ( key==="timezone") {
+            //     configoptions["timezone"] = val;
+            } else if ( key==="fast_timer") {
+                configoptions["fast_timer"] = val;
+            } else if ( key==="slow_timer") {
+                configoptions["slow_timer"] = val;
+            } else if ( key==="fcastcity" ) {
+                fcastcity = val;
+                configoptions["fcastcity"] = val;
+            } else if ( key==="fcastregion" ) {
+                fcastregion = val;
+                configoptions["fcastregion"] = val;
+            } else if ( key==="fcastcode" ) {
+                fcastcode = val;
+                configoptions["fcastcode"] = val;
+            } else if ( key==="accucity" ) {
+                accucity = val;
+                configoptions["accucity"] = val;
+            } else if ( key==="accuregion" ) {
+                accuregion = val;
+                configoptions["accuregion"] = val;
+            } else if ( key==="accucode" ) {
+                accucode = val;
+                configoptions["accucode"] = val;
+            
+            // handle user selected special tile count
+            } else if ( key.substring(0,4)==="cnt_" ) {
+                var stype = key.substring(4);
+                if ( array_key_exists(stype, specialtiles) ) {
+                    var oldcount = specialtiles[stype];
+                    var newcount = parseInt(val);
+                    if ( isNaN(newcount) ) { newcount = oldcount; }
+                    specialtiles[stype] = newcount;
+                    configoptions["specialtiles"] = specialtiles;
+                    updSpecials(userid, hubzero["id"], stype, newcount, specials);
+                }
+            
+            // made this more robust by checking room name being valid
+            } else if ( array_key_exists(key, roomnames) && is_array(val) ) {
+                
+                // first delete any tile that isn't checked
+                var roomid = parseInt(roomnames[key]);
+                var maxtorder = 0;
+                things.forEach(function(item) {
+                    var tnum = item["things_tileid"];
+                    if ( item["things_roomid"]===roomid ) {
+                        var torder = parseInt(item["things_torder"]);
+                        if ( !isNaN(torder) && torder > maxtorder ) { maxtorder = torder; } 
+                        if ( ! in_array(tnum, val) ) {
+                            mydb.deleteRow("things","id = "+ item["things_id"]);
+                        }
+                    }
+                });
+                maxtorder++;
+        
+                // add any new ones that were not there before
+                val.forEach(function(tilestr) {
+                    var tilenum = parseInt(tilestr);
+                    var exist = false;
+                    things.forEach(function(item) {
+                        exist = exist || (item["things_roomid"]===roomid && item["things_tileid"]===tilenum);
+                    });
+                    if ( !exist ) {
+                        var updrow = {userid: userid, roomid: roomid, tileid: tilenum, posy: 0, posx: 0, zindex: 1, torder: maxtorder, customname: ""};
+                        mydb.addRow("things",updrow);
+                    }
+                });
+
+            }
+        }
+        
+        // save the hub filter options
+        saveFilters(userid, useroptions, huboptpick);
+
+        // handle the weather codes - write into this users folder
+        writeForecastWidget(userid, fcastcity, fcastregion, fcastcode);
+        writeAccuWeather(userid, accucity, accuregion, accucode);
+        
+        var d = new Date();
+        var timesig = GLB.HPVERSION + " @ " + d.getTime();
+        configoptions["time"] = timesig;
+        
+        // save the configuration parameters in the main options array
+        for ( var key in configoptions ) {  
+            if ( typeof configoptions[key] === "object" ) {
+                var configstr = JSON.stringify(configoptions[key]);
+            } else {
+                configstr = configoptions[key];
+            }
+            var config = {userid: userid, configkey: key, configval: configstr};
+            mydb.updateRow("configs", config,"userid = "+userid+" AND configkey = '"+key+"'")
+            .then( () => {
+            })
+            .catch( reason => {
+                console.warn( (ddbg()), reason);
+            });
+        }
+
+        // we return the object that was updated plus a flag to logout or reload the page
+        return mydb.getRow("panels","*", "userid = " + userid + " AND pname = '" + newPanel + "'")
+        .then(row => {
+            var obj = {userid: userid, pname: newPanel, skin: newSkin};
+            if ( row ) {
+                panelid = row.id;
+                if ( newPassword || (newPanel!==oldPanel)) {
+                    obj["password"] = newPassword;
+                }
+                return mydb.updateRow("panels", obj, "id = " + panelid)
+                .then(results => {
+                    obj["result"] = (newPassword || (newPanel!==oldPanel)) ? "logout" : "reload";
+                    obj.id = panelid;
+                    obj.useremail = user.email;
+                    obj.mobile = user.mobile;
+                    if ( DEBUG4 ) {
+                        console.log( (ddbg()), "obj: ", obj, " update results: ", results);
+                    }
+                    return obj;
+                })
+                .catch(reason => {
+                    console.warn( (ddbg()), reason);
+                });
+            } else {
+
+                // this is where we make a new panel and rooms within that panel
+                return makeNewRooms(userid, newPanel, newPassword, newSkin, roomnames)
+                .then(results => {
+                    var panelobj = results[0];
+                    rooms = results[1];
+                    panelid = panelobj.id;
+                    panelobj["result"] = "logout";
+                    panelobj["useremail"] = user.email;
+                    panelobj["mobile"] = user.mobile;
+                    if ( DEBUG4 ) {
+                        console.log( (ddbg()), "retobj: ", panelobj, " new panel: ", panelobj, " new rooms: ", rooms);
+                    }
+                    return panelobj;
+                })
+                .catch(reason => {
+                    console.warn( (ddbg()), reason);
+                });    
+            }
+        })
+        .catch(reason => {
+            console.warn( (ddbg()), reason);
+        })
+    }
+    
+}
+
 function getErrorPage(reason) {
     var tc = "";
     tc += getHeader(0, null, null, true);
     tc += "<h2>HousePanel Error</h2>"
-    tc += "<div class=\"error\">You are seeing this because HousePanel experienced an error.";
-    tc += "<br><br>Stated reason: " + reason;
+    tc += "<div class=\"error\">You are seeing this because HousePanel experienced a fatal error.";
+    tc += "<br><br>Reason: " + reason;
     tc += "</div>";
     tc += getFooter();
     return tc;
@@ -8237,296 +8512,6 @@ function saveFilters(userid, useroptions, huboptpick) {
     }
 }
 
-// process user options page
-function processOptions(userid, panelid, optarray) {
-
-    // first get the configurations and things and then call routine to update them
-    userid = parseInt(userid);
-    panelid = parseInt(panelid);
-    if ( DEBUG4 ) {
-        console.log( (ddbg()), "userid: ", userid, " panelid: ", panelid);
-        console.log( (ddbg()), "optarray: ", jsonshow(optarray) );
-    }
-
-    // get the hub filters and process them first
-    var joinstr = mydb.getJoinStr("things","roomid","rooms","id");
-    var fields = "things.id as things_id, things.userid as things_userid, things.roomid as things_roomid, " +
-        "things.tileid as things_tileid, things.posy as things_posy, things.posx as things_posx, " +
-        "things.zindex as things_zindex, things.torder as things_torder, things.customname as things_customname, " +
-        "rooms.id as rooms_id, rooms.panelid as rooms_panelid, rooms.rname as rooms_rname, rooms.rorder as rooms_rorder";
-
-    return Promise.all([
-        mydb.getRow("hubs","*","hubid = '-1'"),
-        mydb.getRow("users","*","id = "+userid),
-        mydb.getRow("panels","*","id = "+panelid),
-        mydb.getRows("rooms","*","userid = "+userid+" AND panelid="+panelid),
-        mydb.getRows("configs","*","userid = "+userid+" AND configtype=0"),
-        mydb.getRows("devices","*","userid = "+userid+" AND hint='special'"),
-        mydb.getRows("things", fields, "things.userid = "+userid+" AND rooms.panelid = "+panelid, joinstr)
-    ])
-    .then(results => {
-        var hubzero = results[0];
-        var user = results[1];
-        var panel = results[2];
-        var rooms = results[3];
-        var configs = results[4];
-        var specials = results[5];
-        var things = results[6];
-        var configoptions = {};
-        if ( configs ) {
-            configs.forEach(function(item) {
-                var key = item.configkey;
-                var val = item.configval;
-                try {
-                    var parseval = JSON.parse(val);
-                } catch (e) {
-                    parseval = val;
-                }
-                configoptions[key] = parseval;
-            });
-        }
-        return doProcessOptions(optarray, configoptions, hubzero, user, panel, things, rooms, specials);
-    })
-    .catch(reason => {
-        console.log( (ddbg()), reason);
-        return reason;
-    });
-
-    function doProcessOptions(optarray, configoptions, hubzero, user, panel, things, rooms, specials) {
-        if (DEBUG4) {
-            console.log( (ddbg()), jsonshow(hubzero) );
-            console.log( (ddbg()), jsonshow(things) );
-            console.log( (ddbg()), jsonshow(rooms) );
-            console.log( (ddbg()), jsonshow(specials) );
-        }
-        
-        var roomnames = {};
-        rooms.forEach(function(item) {
-            var id = item.id;
-            var rname = item.rname;
-            roomnames[rname] = id;
-        });
-        var specialtiles = configoptions["specialtiles"];
-
-        // // use clock instead of blank for default only tile
-        // var onlytile = {userid: userid, tileid: onlytileid, posy: 0, posz: 0, zindex: 1, torder: 1, customname: "Digital Clock"};
-        // var onlyarr = [onlytile,0,0,1,""];
-
-        // // checkbox items simply will not be there if not selected
-        configoptions["kiosk"] = "false";
-        configoptions["rules"] = "false";
-        configoptions["blackout"] = "false";
-
-        // get old panel info to check for changes
-        var oldPanel = panel.pname;
-        var oldSkin = panel.skin;
-
-        // force all three to be given for change to happen
-        var accucity = "";
-        var accuregion = "";
-        var accucode = "";
-        var fcastcity = "";
-        var fcastregion = "";
-        var fcastcode = "";
-        var newPassword = "";
-        var newName = "";
-        var newSkin = oldSkin;
-        var newPanel = oldPanel;
-        var useroptions = [];
-        var huboptpick = "-1";
-
-        for (var key in optarray) {
-            var val = optarray[key];
-            if ( typeof val === "string" ) val = val.trim();
-
-            //skip the returns from the submit button and the flag
-            if (key==="options" || key==="api" || key==="useajax"  || key==="userid" || key==="panelid" || key==="webSocketUrl" || key==="returnURL" ||
-                key==="pagename" || key==="pathname" || key==="userpanel" || key==="pname" || key==="uname" || key==="panelPw2" ) {
-                continue;
-
-            } else if ( key==="newUsername" ) {
-                // the \D ensures we start with a non-numerica character
-                // and the \S ensures we have at least 2 non-white space characters following
-                if ( val && val.match(/^\D\S{2,}$/) ) {
-                    newName = val;
-                    mydb.updateRow("users",{uname: newName},"id = " + userid);
-                }
-            } else if ( key==="panelname" ) {
-                if ( val && val.match(/^\D\S{2,}$/) ) {
-                    newPanel = val;
-                }
-            } else if ( key==="panelPw1") {
-                var pw1 = val;
-                var pw2 = optarray["panelPw2"].trim();
-                if ( pw1 === pw2 && pw1.match(/^\D\S{5,}$/) ) {
-                    newPassword = pw_hash(pw1);
-                }
-            } else if ( key==="userskin" ) {
-                newSkin = val;
-            } else if ( key==="useroptions" ) {
-                key = "usroptions";
-                useroptions = val;
-            } else if ( key==="usroptions" ) {
-                useroptions = val;
-            } else if ( key==="huboptpick" ) {
-                huboptpick = val;
-            } else if ( key==="kiosk") {
-                configoptions["kiosk"] = "true";
-            } else if ( key==="rules") {
-                configoptions["rules"] = "true";
-            } else if ( key==="blackout") {
-                configoptions["blackout"] = "true";
-            } else if ( key==="phototimer" ) {
-                configoptions["phototimer"] = val;
-            // } else if ( key==="timezone") {
-            //     configoptions["timezone"] = val;
-            } else if ( key==="fast_timer") {
-                configoptions["fast_timer"] = val;
-            } else if ( key==="slow_timer") {
-                configoptions["slow_timer"] = val;
-            } else if ( key==="fcastcity" ) {
-                fcastcity = val;
-                configoptions["fcastcity"] = val;
-            } else if ( key==="fcastregion" ) {
-                fcastregion = val;
-                configoptions["fcastregion"] = val;
-            } else if ( key==="fcastcode" ) {
-                fcastcode = val;
-                configoptions["fcastcode"] = val;
-            } else if ( key==="accucity" ) {
-                accucity = val;
-                configoptions["accucity"] = val;
-            } else if ( key==="accuregion" ) {
-                accuregion = val;
-                configoptions["accuregion"] = val;
-            } else if ( key==="accucode" ) {
-                accucode = val;
-                configoptions["accucode"] = val;
-            
-            // handle user selected special tile count
-            } else if ( key.substring(0,4)==="cnt_" ) {
-                var stype = key.substring(4);
-                if ( array_key_exists(stype, specialtiles) ) {
-                    var oldcount = specialtiles[stype];
-                    var newcount = parseInt(val);
-                    if ( isNaN(newcount) ) { newcount = oldcount; }
-                    specialtiles[stype] = newcount;
-                    configoptions["specialtiles"] = specialtiles;
-                    updSpecials(userid, hubzero["id"], stype, newcount, specials);
-                }
-            
-            // made this more robust by checking room name being valid
-            } else if ( array_key_exists(key, roomnames) && is_array(val) ) {
-                
-                // first delete any tile that isn't checked
-                var roomid = parseInt(roomnames[key]);
-                var maxtorder = 0;
-                things.forEach(function(item) {
-                    var tnum = item["things_tileid"];
-                    if ( item["things_roomid"]===roomid ) {
-                        var torder = parseInt(item["things_torder"]);
-                        if ( !isNaN(torder) && torder > maxtorder ) { maxtorder = torder; } 
-                        if ( ! in_array(tnum, val) ) {
-                            mydb.deleteRow("things","id = "+ item["things_id"]);
-                        }
-                    }
-                });
-                maxtorder++;
-        
-                // add any new ones that were not there before
-                val.forEach(function(tilestr) {
-                    var tilenum = parseInt(tilestr);
-                    var exist = false;
-                    things.forEach(function(item) {
-                        exist = exist || (item["things_roomid"]===roomid && item["things_tileid"]===tilenum);
-                    });
-                    if ( !exist ) {
-                        var updrow = {userid: userid, roomid: roomid, tileid: tilenum, posy: 0, posx: 0, zindex: 1, torder: maxtorder, customname: ""};
-                        mydb.addRow("things",updrow);
-                    }
-                });
-
-            }
-        }
-        
-        // save the hub filter options
-        saveFilters(userid, useroptions, huboptpick);
-
-        // handle the weather codes - write into this users folder
-        writeForecastWidget(userid, fcastcity, fcastregion, fcastcode);
-        writeAccuWeather(userid, accucity, accuregion, accucode);
-        
-        var d = new Date();
-        var timesig = GLB.HPVERSION + " @ " + d.getTime();
-        configoptions["time"] = timesig;
-        
-        // save the configuration parameters in the main options array
-        for ( var key in configoptions ) {  
-            if ( typeof configoptions[key] === "object" ) {
-                var configstr = JSON.stringify(configoptions[key]);
-            } else {
-                configstr = configoptions[key];
-            }
-            var config = {userid: userid, configkey: key, configval: configstr};
-            mydb.updateRow("configs", config,"userid = "+userid+" AND configkey = '"+key+"'")
-            .then( () => {
-            })
-            .catch( reason => {
-                console.log( (ddbg()), reason);
-            });
-        }
-
-        // we return the object that was updated plus a flag to logout or reload the page
-        return mydb.getRow("panels","*", "userid = " + userid + " AND pname = '" + newPanel + "'")
-        .then(row => {
-            var obj = {userid: userid, pname: newPanel, skin: newSkin};
-            if ( row ) {
-                panelid = row.id;
-                if ( newPassword || (newPanel!==oldPanel)) {
-                    obj["password"] = newPassword;
-                }
-                return mydb.updateRow("panels", obj, "id = " + panelid)
-                .then(results => {
-                    obj["result"] = (newPassword || (newPanel!==oldPanel)) ? "logout" : "reload";
-                    obj.id = panelid;
-                    obj.useremail = user.email;
-                    obj.mobile = user.mobile;
-                    if ( DEBUG4 ) {
-                        console.log( (ddbg()), "obj: ", obj, " update results: ", results);
-                    }
-                    return obj;
-                })
-                .catch(reason => {
-                    console.log( (ddbg()), reason);
-                });
-            } else {
-
-                // this is where we make a new panel and rooms within that panel
-                return makeNewRooms(userid, newPanel, newPassword, newSkin, roomnames)
-                .then(results => {
-                    var panelobj = results[0];
-                    rooms = results[1];
-                    panelid = panelobj.id;
-                    panelobj["result"] = "logout";
-                    panelobj["useremail"] = user.email;
-                    panelobj["mobile"] = user.mobile;
-                    if ( DEBUG4 ) {
-                        console.log( (ddbg()), "retobj: ", panelobj, " new panel: ", panelobj, " new rooms: ", rooms);
-                    }
-                    return panelobj;
-                })
-                .catch(reason => {
-                    console.log( (ddbg()), reason);
-                });    
-            }
-        })
-        .catch(reason => {
-            console.log( (ddbg()), reason);
-        })
-    }
-    
-}
-
 // this routine updates the null hub with the special tile count requested
 async function updSpecials(userid, hubindex, stype, newcount, specials) {
 
@@ -8660,6 +8645,7 @@ function getIcons(userid, pname, skin, icondir, category) {
     var $tc = "";
     if ( dirlist ) {
         var allowed = ["png","jpg","jpeg","gif","JPG","GIF","PNG","JPEG"];
+        var num = 0;
         dirlist.forEach( function(filename) {
             var froot = path.basename(filename);
             var ext = path.extname(filename).slice(1);
@@ -8670,8 +8656,9 @@ function getIcons(userid, pname, skin, icondir, category) {
                 showicon = filedir;
             }
             if ( in_array(ext, allowed) ) {
+                num++;
                 $tc += '<div class="iconcat">';
-                $tc += '<img src="' + filedir +'" show="' + showicon + '" class="icon" title="' + froot + '" />';
+                $tc += '<img num="'+num+'" src="' + filedir +'" show="' + showicon + '" class="icon" title="' + froot + '" />';
                 $tc += '</div>';
             }
         });
@@ -8708,6 +8695,25 @@ function getPhotos(userid, pname) {
         });
     }
     return photos;
+}
+
+function delImages(userid, pname, files) {
+    if ( is_array(files) && files.length ) {
+        try {
+            files.forEach(fname => {
+                fs.unlinkSync("./"+fname);
+            });
+            if ( DEBUG16 ) {
+                console.log((ddbg()), "Image files removed: ", files);
+            }
+            return files;
+        } catch (reason) {
+            console.error((ddbg()), "error - trying to remove image files. ", reason);
+            return [];
+        }
+    } else {
+        return [];
+    }
 }
 
 function pw_hash(pword, algo) {
@@ -9715,6 +9721,10 @@ function apiCall(user, body, protocol, res) {
 
             case "geticons":
                 result = getIcons(userid, pname, skin, swval, swattr);
+                break;
+
+            case "delimages":
+                result = delImages(userid, pname, swval);
                 break;
 
             case "setdefhub":
@@ -10759,7 +10769,7 @@ if ( app && applistening ) {
     // found in the HousePanel.groovy application with this line
     //     postHub(state.directIP, state.directPort, "update", deviceName, deviceid, attr, value)
     // *********************************************************************************************
-    app.post("*", function (req, res) {
+    app.post("/", function (req, res) {
 
         // get user name
         var hubid;
@@ -10881,7 +10891,7 @@ if ( app && applistening ) {
 
         // handle msg events from Hubitat here
         // these message can now only come from Hubitat since ST groovy is gone
-        } else if ( req.path==="/" && req.body['msgtype'] === "update" ) {
+        } else if ( req.body['msgtype'] === "update" ) {
             if ( DEBUG12 ) {
                 console.log( (ddbg()), "Received update msg from hub: ", req.body["hubid"], " msg: ", req.body);
             }
@@ -10904,7 +10914,7 @@ if ( app && applistening ) {
         // however we skip validateuser because that will have the proper userid and hpcode included
         // note that dologin and forgotpw use the same form tagged to id = loginform
         // th 
-        } else if ( req.path==="/" && logincalls.includes(api) && req.body["apiSecret"]===GLB.apiSecret ) {
+        } else if ( logincalls.includes(api) && req.body["apiSecret"]===GLB.apiSecret ) {
             var result = null;
             switch (api) {
                 case "dologin":
@@ -10965,7 +10975,7 @@ if ( app && applistening ) {
         // GET calls from a browser are easier because the cookie will be set
         // this means that user GET API calls can only be made from a device that has HP running on it
         // POST calls can be made from any platform as long as hpcode, the userid and tileid values are known
-        } else if ( req.path==="/" && req.body["userid"] && api ) {
+        } else if ( req.body["userid"] && api ) {
 
             // perform security check to prevent random POST calls
             // we do this by checking for valid user and hpcode matching what we have in the DB for this user
@@ -11033,9 +11043,44 @@ if ( app && applistening ) {
         // handle unknown requests
         } else {
             console.log( (ddbg()), "HousePanel unknown POST to path: ", req.path, " body:", req.body);
-            res.send("unknonwn message sent to HousePanel");
+            res.send("unknown message sent to HousePanel");
             res.end();
         }
 
     });
+
+    // user multer to grab the file and the body sent to post
+    var storage = multer.diskStorage({
+        destination: function(req, file, callback) {
+            var userid = req.query.userid;
+            var pname = req.query.pname;
+            var hpcode = req.query.hpcode;
+            var category = req.query.category;
+            var dest = "./user"+userid+"/"+pname;
+            if ( category==="User_Icons" ) {
+                dest += "/icons";
+            } else if ( category==="User_Media" ) {
+                dest += "/media";
+            } else if ( category==="User_Photos" ) {
+                dest += "/photos";
+            } else {
+                dest += "/media";
+            }
+            if ( DEBUG16 ) {
+                console.log((ddbg()), "userid: ", userid, " pname: ", pname, " category: ", category, " hpcode: ", hpcode," dest: ", dest);
+            }
+            callback(null, dest);
+        },
+        filename: function(req, file, callback) {
+            callback(null, file.originalname);
+        }
+    });
+
+    const limitobj = {fileSize: 4096000};
+    const upload = multer({storage: storage, limits: limitobj});
+    app.post("/upload", upload.single("uploaded_file"), function(req, res){
+        res.json(req.file);
+        res.end();
+    });
+
 }

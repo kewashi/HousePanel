@@ -1,4 +1,5 @@
 const devhistory = `
+3.4.2   Bugfix in shades, add user custom image and icon upload and manage feature
 3.4.1   Fix groovy app to make button calls work, fix cloud hub calls, misc cleanup
 3.3.9   Edit flexibility for customizations on the info page and fix multiple panels feature
 3.3.8   Add ability to move customizations from one tile to another and Fix debug for posthub 

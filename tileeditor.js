@@ -494,17 +494,26 @@ function setupIcons(category) {
 
     $("#iconList").off("click","img");
     $("#iconList").on("click","img", function() {
-        var str_type = $("#tileDialog").attr("str_type");
-        var thingindex = $("#tileDialog").attr("thingindex");
-        
-        var img = $(this).attr("show") || $(this).attr("src");
-        var subid = $("#subidTarget").html();
-        var strIconTarget = getCssRuleTarget(str_type, subid, thingindex);
-        if ( DEBUGte ) {
-            console.log("Clicked on img= "+img+" Category= "+category+" strIconTarget= "+strIconTarget+" type= "+str_type+" subid= "+subid+" index= "+thingindex);
+
+        // if we are in manage mode then clicking on an image selects it for removal
+        if ( $("#uplButtons").hasClass("hidden") && ! $("#mngButtons").hasClass("hidden") ) {
+            var chkbool = $(this).prev().prop("checked") ? false : true;
+            $(this).prev().prop("checked", chkbool);
+        // otherwise we pick it to set the icon image
+        } else {
+            var str_type = $("#tileDialog").attr("str_type");
+            var thingindex = $("#tileDialog").attr("thingindex");
+            
+            var img = $(this).attr("show") || $(this).attr("src");
+            var subid = $("#subidTarget").html();
+            var strIconTarget = getCssRuleTarget(str_type, subid, thingindex);
+            if ( DEBUGte ) {
+                console.log("Clicked on img= "+img+" Category= "+category+" strIconTarget= "+strIconTarget+" type= "+str_type+" subid= "+subid+" index= "+thingindex);
+            }
+            iconSelected(category, strIconTarget, img, str_type, thingindex);
         }
-        iconSelected(category, strIconTarget, img, str_type, thingindex);
     });
+
 }
 
 function checkboxHandler(idselect, onaction, offaction, overlay, isreset) {
@@ -837,7 +846,62 @@ function initDialogBinds(str_type, thingindex) {
 
     $("#iconSrc").off('change');
     $("#iconSrc").on('change', function (event) {
-        getIcons(str_type, thingindex);	
+        getIcons();	
+        event.stopPropagation;
+    });
+
+    $("#imgmanage").off("click");
+    $("#imgmanage").on("click", function(event) {
+        // console.log(">>>> manage image not yet implemented.");
+        $("#uplButtons").addClass("hidden");
+        $("#mngButtons").removeClass("hidden");
+        $("#iconSrc").prop("disabled", true);
+        $("#noIcon").prop("disabled", true);
+        $("div.iconcat img.icon").each(function() {
+            var num = $(this).attr("num");
+            $(this).before('<input type="checkbox" num="'+num+'" class="delCheckbox" />')
+        });
+        event.stopPropagation;
+    });
+
+    $("#imgcancel").off("click");
+    $("#imgcancel").on("click", function(event) {
+        $("#uplButtons").removeClass("hidden");
+        $("#mngButtons").addClass("hidden");
+        $("#iconSrc").prop("disabled", false);
+        $("#noIcon").prop("disabled", false);
+        $("div.iconcat input.delCheckbox").each(function() {
+            $(this).remove();
+        });
+        event.stopPropagation;
+    });
+
+    $("#imgdelete").off("click");
+    $("#imgdelete").on("click", function(event) {
+        $("#uplButtons").removeClass("hidden");
+        $("#mngButtons").addClass("hidden");
+        $("#iconSrc").prop("disabled", false);
+        $("#noIcon").prop("disabled", false);
+        var imagestodel = [];
+        $("div.iconcat input.delCheckbox").each(function() {
+            if ( $(this).prop("checked") === true ) {
+                imagestodel.push($(this).next().attr("src"));
+            }
+        });
+        event.stopPropagation;
+
+        // now remove them from the disk
+        if ( imagestodel.length > 0 ) {
+            delImages(imagestodel);
+        }
+    });
+
+    $("#imgupload").off("click");
+    $("#imgupload").on("click", function(event) {
+        $("#uplButtons").addClass("hidden");
+        $("#iconSrc").prop("disabled", true);
+        $("#noIcon").prop("disabled", true);
+        uploadImage();
         event.stopPropagation;
     });
     
@@ -1342,10 +1406,21 @@ function iconlist() {
 	dh += "<div id='editicon'>";
 
     // icon selector
-	dh += "<div id='iconChoices'>";
+	dh += "<div class='radiogroup' id='iconChoices'>";
 	dh += "<select name=\"iconSrc\" id=\"iconSrc\" class=\"ddlDialog\"></select>";
 	dh += "<input type='checkbox' id='noIcon'>";
 	dh += "<label class=\"iconChecks\" for=\"noIcon\">None</label>";
+	dh += "</div>";
+
+    // uplaod and manage buttons
+    dh += "<div class='hidden' id='uplButtons'>";
+    dh += "<button class='tebutton' id ='imgupload'>Upload</button>";
+    dh += "<button  class='tebutton' id='imgmanage'>Manage</button>"
+	dh += "</div>";
+
+    dh += "<div class='hidden' id='mngButtons'>";
+    dh += "<button  class='tebutton' id='imgdelete'>Delete</button>"
+    dh += "<button  class='tebutton' id='imgcancel'>Cancel</button>"
 	dh += "</div>";
 
     // icon placement
@@ -1447,7 +1522,7 @@ function editSection(str_type, thingindex) {
     dh += "<div id='editSection'>";
 
     dh += "<div class='colorgroup'><div class='sizeText' id=\"labelName\"></div><input name=\"editName\" id=\"editName\" class=\"ddlDialog\" value=\"" + "" +"\"></div>";
-    dh += "<div class='colorgroup'><button id='processName' type='button'>Save Name</button></div>";
+    dh += "<div class='colorgroup'><button class='tebutton' id='processName'>Save Name</button></div>";
     dh += scopeSection(str_type);
 
 
@@ -1594,7 +1669,7 @@ function setupClicks(str_type, thingindex) {
 
     initColor(str_type, firstsub, thingindex);
     loadSubSelect(str_type, firstsub, thingindex);
-    getIcons(str_type, thingindex);
+    getIcons();
     initDialogBinds(str_type, thingindex);
     initOnceBinds(str_type, thingindex);
     
@@ -1614,7 +1689,6 @@ function loadSubSelect(str_type, firstsub, thingindex) {
         subcontent += "<option value='name'>Name</option>";
         subcontent += "<option value='nameon'>Name Selected</option>";
     } else {
-        // subcontent += "<div class='editInfo'><button class='cm_button' id='cm_activateCustomize'>Customize</button></div>";
         subcontent += "<div class='editInfo'>Select Feature:</div>";
         subcontent += "<select id='subidselect' name='subselect'>";
     
@@ -1789,8 +1863,8 @@ function saveCSSFile(userid, str_type, thingindex, sheetContents, reload) {
     if ( $("#editName") ) {
         newname = $("#editName").val();
     }
-    var skin = $("#skinid").val();
-    var pname = $("#showversion span#infoname").html();
+    var skin = cm_Globals.options.skin;
+    var pname = cm_Globals.options.pname;
 
     // use this regexp to add returns after open and closed brackets and semi-colons
     var regex = /[{;}]/g;
@@ -1849,7 +1923,7 @@ function saveCSSFile(userid, str_type, thingindex, sheetContents, reload) {
                         if ( cm_Globals.edited && reload ) {
                             return;
                         } else if ( !reload ) {
-                            alert("A new custom CSS file was generated for panel = [" + pname + "] This will be automatically updated as you make edits. You must relaunch editor again.");
+                            alert("A new custom CSS file was generated for panel = [" + pname + "]. This will be automatically updated as you make edits. You must relaunch editor again.");
                             window.location.href = cm_Globals.returnURL;
                         }
                     }
@@ -1881,9 +1955,9 @@ function resetInverted(selector) {
 function getResetButton() {
     var resetbutton = "<div class='sectionbreak'></div>" + 
     "<div id='resetButtonGroup' class='editSection_inline'>" +
-        "<button id='editReset'>Reset</button>" + 
-        "<button id='editCopy'>Copy</button>" +
-        "<button id='editPaste'>Paste</button>" +
+        "<button class='tebutton' id='editReset'>Reset</button>" + 
+        "<button class='tebutton' id='editCopy'>Copy</button>" +
+        "<button class='tebutton' id='editPaste'>Paste</button>" +
     "</div>";
     return resetbutton;
 }
@@ -2597,22 +2671,15 @@ function updateColor(strCaller, cssRuleTarget, str_type, subid, thingindex, strC
 
 // the old ST icons are now stored locally and obtained from an internal list for efficiency
 function getIconCategories(iCategory) {
-    var specialCat = ["Main_Icons","Main_Media","User_Icons","User_Media"];
-    var specialCat = ["Main_Icons","Main_Media","User_Icons","User_Media"];
     // var specialCat = ["Main_Icons","Main_Media","Main_Photos","Modern_Icons","Modern_Media","Modern_Photos","User_Icons","User_Media","User_Photos"];
-    // var arrCat = [];
-    
-    var specialCat = ["Main_Icons","Main_Media","User_Icons","User_Media"];    
-    // var specialCat = ["Main_Icons","Main_Media","Main_Photos","Modern_Icons","Modern_Media","Modern_Photos","User_Icons","User_Media","User_Photos"];
-    // var arrCat = [];
-    
-    var arrCat = ["Alarm","Appliances","BMW","Bath","Bedroom","Camera","Categories","Colors","Contact","Custom",
+    var arrCat = ["Main_Icons","Main_Media","User_Icons","User_Media","User_Photos",
+                  "Alarm","Appliances","BMW","Bath","Bedroom","Camera","Categories","Colors","Contact","Custom",
                   "Doors","Electronics","Entertainment","Food_Dining","Fridge","Harmony","Health_Wellness","Home",
                   "Illuminance","Indicators","Kids","Lighting","Lights","Locks","Motion","Nest","Office","Outdoor",
                   "Particulate","People","Presence","Quirky","Samsung","Seasonal_Fall","Seasonal_Winter","Secondary",
                   "Security","Shields","Sonos","Switches","Tesla","Thermostat","Transportation","Unknown","Valves",
                   "Vents","Weather"];
-    arrCat = specialCat.concat(arrCat);
+    // arrCat = specialCat.concat(arrCat);
                   
     $('#iconSrc').empty();
     arrCat.forEach(function(iconCat) {
@@ -2629,31 +2696,148 @@ function getIcons() {
     var returnURL = cm_Globals.returnURL;
     var iCategory = $("#iconSrc").val();
     getIconCategories(iCategory);
-    var skindir = $("#skinid").val();
-    var pname = $("#showversion span#infoname").html();
+    var skin = cm_Globals.options.skin;
+    var pname = cm_Globals.options.pname;
     
     // change to use php to gather icons in an ajax post call
     // this replaces the old method that fails on GoDaddy
     if ( !iCategory ) { iCategory = 'Main_Icons'; }
     var localPath = "";
     if ( iCategory.startsWith("Main_") ) {
+        $("#uplButtons").removeClass("block").addClass("hidden");
         localPath = iCategory.substr(5).toLowerCase();
     } else if ( iCategory.startsWith("User_") ) {
         localPath = iCategory.substr(5).toLowerCase();
+        $("#uplButtons").removeClass("hidden").addClass("block");
     } else {
         localPath = iCategory;
+        $("#uplButtons").removeClass("block").addClass("hidden");
     }
 
     // removed the old method of reading icons from iconlist.txt since the files are no longer there
     $.post(returnURL, 
         {api: "geticons", id: 0, userid: et_Globals.userid, thingid: et_Globals.thingid, type: "none", 
-         value: localPath, attr: iCategory, skin: skindir, pname: pname, hpcode: cm_Globals.options.hpcode},
+         value: localPath, attr: iCategory, skin: skin, pname: pname, hpcode: cm_Globals.options.hpcode},
         function (presult, pstatus) {
             if (pstatus==="success" && presult ) {
                 $('#iconList').html(presult);
                 setupIcons(iCategory);
             } else {
                 $('#iconList').html("<div class='error'>No icons available for: " + iCategory + "</div>");
+            }
+        }
+    );
+}
+
+function uploadImage() {
+    var pos = {top: 100, left: 150, width: 300};
+    var iCategory = $("#iconSrc").val();
+    var catText = iCategory.replace(/_/g, ' ')
+    var userid = et_Globals.userid;
+    var pname = cm_Globals.options.pname;
+    var hpcode = cm_Globals.options.hpcode;
+
+    // make the form to submit the file
+    // the name attribute must match the name given in the multer instance of upload.single or upload.array
+    var htmlcontent =  "<div>";
+    htmlcontent += `<strong>Select file to upload to ${catText}:</strong><br><br>
+        <form action="#" class="upload" method="post" id="uploadImage" enctype="multipart/form-data">
+        <div>
+        <input type="file" id="imageInput" accept="image/*" name="uploaded_file" />
+        </div>
+        <input type="hidden" id="fuserid" name="userid" value="${userid}" />
+        <input type="hidden" id="fpanel" name="panel" value="${pname}" />
+        <input type="hidden" id="fhpcode" name="hpcode" value="${hpcode}" />
+        <input type="hidden" id="fcategory" name="category" value="${iCategory}" />
+        <br><br>
+        <input type="submit" name="upload" value="Upload" class="tebutton">
+        <input id="uplcancel" name="cancel" type="button" value="Cancel" class="tebutton">
+        </form>`;
+    htmlcontent+= "</div>";
+
+    createModal("modalupl", htmlcontent, "body", false, pos,
+        function(ui) {
+            $("#uplButtons").removeClass("hidden");
+            $("#iconSrc").prop("disabled", false);
+            $("#noIcon").prop("disabled", false);    
+            closeModal("modalupl");
+        },
+        function() {
+            $("#uplcancel").on("click", function(e) {
+                console.log("closing");
+                $("#uplButtons").removeClass("hidden");
+                $("#iconSrc").prop("disabled", false);
+                $("#noIcon").prop("disabled", false);    
+                closeModal("modalupl");
+            });
+            
+            $("form.upload").on("submit");
+            $("form.upload").on("submit", function(e) {
+                e.preventDefault();
+
+                var imageInput = $('#imageInput')[0];
+                if ( imageInput.files.length > 0 ) {
+                    var thefile = imageInput.files[0];
+                    console.log("Image selected to upload: ", thefile);
+                } else {
+                    console.log("No file was selected to upload");
+                    $("#uplButtons").removeClass("hidden");
+                    $("#iconSrc").prop("disabled", false);
+                    $("#noIcon").prop("disabled", false);
+                    closeModal("modalupl");
+                }
+
+                // get the form and submit via ajax
+                var myform = new FormData($(this)[0]);
+                $.ajax({
+                    url: cm_Globals.returnURL+'/upload?userid='+userid+'&pname='+pname+'&category='+iCategory+'&hpcode='+hpcode, 
+                    type: 'POST',
+                    method: 'POST',
+                    dataType: 'json',
+                    data: myform,
+                    cache: false,
+                    processData: false,
+                    contentType: false,
+                    success: function (presult) {
+                        $("#uplButtons").removeClass("hidden");
+                        $("#iconSrc").prop("disabled", false);
+                        $("#noIcon").prop("disabled", false);
+                        closeModal("modalupl");
+                        getIcons();	
+                        console.log("File: ", presult.filename," uploaded successfully to: ", presult.path);
+                    },
+                    error: function(presult) {
+                        $("#uplButtons").removeClass("hidden");
+                        $("#iconSrc").prop("disabled", false);
+                        $("#noIcon").prop("disabled", false);
+                        console.error("File upload failed: ", presult);
+                        closeModal("modalupl");
+                    }
+                });
+            });
+
+        }
+    );
+}
+
+function delImages(files) {
+    var userid = et_Globals.userid;
+    var pname = cm_Globals.options.pname;
+    var returnURL = cm_Globals.returnURL;
+    $.post(returnURL,
+        {api: "delimages", userid: userid, pname: pname, value: files, hpcode: cm_Globals.options.hpcode},
+        function (presult, pstatus) {
+            if (pstatus==="success" && presult ) {
+                $("div.iconcat input.delCheckbox").each(function() {
+                    if ( $(this).prop("checked") === true ) {
+                        $(this).parent().remove()
+                    } else {
+                        $(this).remove();
+                    }
+                });
+                console.log(`>>>> files removed: `, presult);
+            } else {
+                console.error("Error attempting to remove files: ", files, " status: ", pstatus);
             }
         }
     );

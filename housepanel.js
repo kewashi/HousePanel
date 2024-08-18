@@ -1290,7 +1290,7 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
         // or if this is a popup window any click will close it
         $("body").off("singletap");
         $("body").on("singletap",function(evt) {
-            if ( (evt.target.id === modalid && modalid!=="modalpopup" )  ) {
+            if ( (evt.target.id === modalid && modalid!=="modalpopup" ) || modalid==="modalupl" ) {
                 evt.stopPropagation();
             } else {
                 closeModal(modalid);

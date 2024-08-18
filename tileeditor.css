@@ -1132,12 +1132,20 @@ input[type="button"]#wholetile {
     float: left;
     margin-left: 5px;
 }
+
 #iconChoices {
     margin: 3px;
     margin-bottom: 5px;
-    float: left;
     width: 240px; 
     height: auto;
+}
+
+input.delCheckbox {
+    position: relative;
+    width: 11px;
+    height: 11px;
+    z-index: 99;
+    float: left;
 }
 
 #tileDisplay {
@@ -1246,15 +1254,23 @@ div.colorgroup.font {
 #editEffect {
     margin-left: 0px;
 }
+div.iconcat {
+    display: inline-block;
+}
+#iconList {
+    margin-top: 10px;
+}
 #iconList img.icon {
     position: relative;
     display: block;
     float: left;
     margin: 2px;
-    margin-bottom: 5px;
+    margin-top: 1px;
+    margin-bottom: 4px;
     height: 42px;
     width: 42px;
     object-fit: contain;
+    z-index: 20;
 }
 #iconList img.icon:hover {
 	position: relative;
@@ -1408,12 +1424,14 @@ div.radiogroup input {
 /*#alignIcon input, #alignIcon label {
     display: inline-block;
     margin-right: 5px;
+    #editReset, #editCopy, #editPaste {
 }*/
-#editReset, #editCopy, #editPaste {
+button.tebutton, input.tebutton {
     display: inline-block;
     padding-left: 10px;
     padding-right: 10px;
-    margin-right: 5px;
+    margin-right: 2px;
+    margin-left: 3px;
     font-weight: bold;
     font-size: 16px;
 }
