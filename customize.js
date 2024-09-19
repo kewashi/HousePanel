@@ -18,11 +18,10 @@ cm_Globals.natives = [];
 cm_Globals.defaultclick = "name";
 
 // tile custom popup box
-function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {  
+function customizeTile(userid, tileid, bid, thingid, str_type, hubnum) {  
 
     // save our tile id in a global variable
     cm_Globals.devices = null;
-    cm_Globals.aid = aid;
     cm_Globals.id = bid;
     cm_Globals.hubnum = hubnum;
     cm_Globals.reload = false;
@@ -33,13 +32,13 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
 
     // this is the tileid value in the things list which is the base device.id value
     cm_Globals.tileid = tileid;
+    cm_Globals.thingid = thingid;
 
-    // note that "aid" is the same as "thingid" so we don't pass it in here
     var customname;
     try {
-        customname = $("#a-"+aid+"-name").text();
+        customname = $("#a-"+thingid+"-name").text();
         if ( !customname ) {
-            customname = $("#s-"+aid).text();
+            customname = $("#s-"+thingid).text();
         }
     } catch(e) {
         customname = "";
@@ -66,8 +65,6 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
 
 
     // first get all devices from the server for this user
-    // mydb.getRows("devices","*","userid = "+userid)
-    // .then(rows => {
     $.post(cm_Globals.returnURL, {api: "getdevices", userid: userid, hpcode: cm_Globals.options.hpcode},
         function(presult, pstatus) {
             if (pstatus==="success" && typeof presult === "object") {
@@ -277,7 +274,8 @@ function getExistingFields(tileid, curval) {
     for ( var i in sortdevices ) {
         var sensor = sortdevices[i];
         var id = sensor["id"].toString();
-        var hubid = sensor["hubname"];
+        var uid = sensor["uid"].toString();
+        var hubname = sensor["hubname"];
         if ( tileid==null || id !== tileid ) {
             var thingname = sensor["name"];
             var thingtype = sensor["devicetype"];
@@ -286,7 +284,7 @@ function getExistingFields(tileid, curval) {
             } else {
                 selected = "";
             }
-            results+= "<option value='" + id + "'" + selected + ">" + thingname + " (" + thingtype + ": "+id+" hub: " + hubid + ")</option>";
+            results+= "<option value='" + id + "'" + selected + ">" + thingname + " (" + thingtype + ", id: "+id+", uid: "+uid+" hub: " + hubname + ")</option>";
         }
     }
     return results;
@@ -956,6 +954,7 @@ function initExistingFields() {
         }
         var tileid = cm_Globals.tileid;
         var thing = cm_Globals.devices[tileid]
+        var uid = thing.uid;
         var bid = thing.deviceid;
         var subid = $("#cm_userfield").val();
         var item = $("#cm_builtinfields option[value='"+subid+"']");
@@ -976,7 +975,7 @@ function initExistingFields() {
             var rules = encodeURI(JSON.stringify(cm_Globals.rules));
             $.post(cm_Globals.returnURL, 
                 {api: "updcustom", userid: cm_Globals.options.userid, id: bid, hpcode: cm_Globals.options.hpcode,
-                 rules: rules, tileid: tileid, subid: subid, value: null, attr: null},
+                 rules: rules, tileid: tileid, uid: uid, subid: subid, value: null, attr: null},
                 function (presult, pstatus) {
                     if (pstatus==="success") {
                         cm_Globals.reload = true;
@@ -998,6 +997,7 @@ function initExistingFields() {
         }
         var tileid = cm_Globals.tileid;
         var thing = cm_Globals.devices[tileid]
+        var uid = thing.uid;
         var bid = thing.deviceid;
         var ncount = $("#cm_builtinfields option[order]").length
         var subid = $("#cm_userfield").val();
@@ -1019,7 +1019,7 @@ function initExistingFields() {
             var rules = encodeURI(JSON.stringify(cm_Globals.rules));
             $.post(cm_Globals.returnURL, 
                 {api: "updcustom", userid: cm_Globals.options.userid, id: bid, hpcode: cm_Globals.options.hpcode,
-                 rules: rules, tileid: tileid, subid: subid, value: null, attr: null},
+                 rules: rules, tileid: tileid, uid: uid, subid: subid, value: null, attr: null},
                 function (presult, pstatus) {
                     if (pstatus==="success") {
                         cm_Globals.reload = true;
@@ -1145,6 +1145,7 @@ function applyCustomField(action, subid) {
 
     var tileid = cm_Globals.tileid;
     var thing = cm_Globals.devices[tileid]
+    var uid = thing.uid;
     var bid = thing.deviceid;
     var nreset = "d";
     var targetsubid = subid;
@@ -1273,7 +1274,7 @@ function applyCustomField(action, subid) {
 }
 
 function showPreview() {
-    var aid = cm_Globals.aid;
+    var thingid = cm_Globals.thingid;
     var bid = cm_Globals.id;
     var tileid = cm_Globals.tileid;
     var str_type = cm_Globals.type;
@@ -1303,7 +1304,7 @@ function showPreview() {
     
     $.post(cm_Globals.returnURL, 
         {api: "wysiwyg", userid: cm_Globals.options.userid, tileid: tileid, 
-         id: bid, thingid: aid, type: str_type, value: thingvalue, attr: swattr, hpcode: cm_Globals.options.hpcode},
+         id: bid, thingid: thingid, type: str_type, value: thingvalue, attr: swattr, hpcode: cm_Globals.options.hpcode},
         function (presult, pstatus) {
             if (pstatus==="success" ) {
                 $("#cm_preview").html(presult);       

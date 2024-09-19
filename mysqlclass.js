@@ -126,7 +126,9 @@ exports.sqlDatabase = class sqlDatabase {
     // this either updates or adds a new row to the table
     // it first tries to update. If it fails then conditions are ignored and an attempt to add values
     // will be made as a new row. This will only succeed if all required fields are provided
-    updateRow(usertable, values, conditions) {
+    // the force parameter if true will skip the test of addRow and assume the update query is valid
+    // if it is not valid the query will throw an exception
+    updateRow(usertable, values, conditions, force = false) {
         if ( !usertable ) {
             return this.die("No table specified in call to updateRow");
         }
@@ -134,38 +136,40 @@ exports.sqlDatabase = class sqlDatabase {
             return this.die("Attempted to update row with no conditions set");
         }
 
-        var that = this;
-        var promise = new Promise( function(resolve, reject) { 
-
-            that.getRow(usertable, "*", conditions)
-            .then( function(result) {
+        // if we know row is there, use force to go straight to update query
+        // this option also requires the id field to be present
+        if ( force && values.id ) {
+            this.insertId = values.id;
+            var str = buildUpdateStr();
+            if ( DEBUGsql ) {
+                console.log(">>>> force updating row with query: ", str );
+            }
+            return this.query(str);
+        } else {
+            var that = this;
+            return that.getRow(usertable, "id", conditions)
+            .then( result => {
                 // if row is there then update it and return the update promise
                 // also set the lastid field to the existing row so we can get it if needed
                 if ( result ) {
                     that.insertId = result.id;
                     var str = buildUpdateStr();
                     if ( DEBUGsql ) {
-                        console.log(">>>> updating row: ", result, "\n >>>> query: ", str );
+                        console.log(">>>> updating row with query: ", str );
                     }
-                    resolve (that.query(str) );
+                    return that.query(str);
 
                 // otherwise add a new row and return the add promise
                 } else {
-                    that.insertId = 0;
                     if ( DEBUGsql ) {
-                        console.log(">>>> adding row to table ", usertable, " with values: ", values);
+                        console.log(">>>> adding row to table ", usertable, " with values: ", values, " and conditions: ", conditions);
                     }
-                    if ( values.id ) { delete values.id; }
-                    resolve (that.addRow(usertable, values) );
+                    return that.addRow(usertable, values);
                 }
-            })
-            .catch( reason => {
-                reject(reason);
             });
-
-        });
-
-        return promise;
+            
+        }
+            
 
         function buildUpdateStr() {
             var updatestr = "";
@@ -324,7 +328,11 @@ exports.sqlDatabase = class sqlDatabase {
             } else {
                 if ( firstrow===true ) {
                     that.connection.get(options.sql, [], function(err, row) {
-                        that.insertId = row ? row.id : 0;
+                        if ( row && typeof row === "object" && row.id!==null ) {
+                            that.insertId = row.id;
+                        } else {
+                            that.insertId = 0;
+                        }
                         getorall(err, row);
                     });
                 } else {
@@ -343,10 +351,10 @@ exports.sqlDatabase = class sqlDatabase {
                     reject(null);
                 } else {
                     that.recentResults = rows;
-                    resolve(rows);
-                    if ( callback ) {
+                    if ( callback && typeof callback === "function" ) {
                         callback(rows);
                     }
+                    resolve(rows);
                 }
             }
         });
@@ -386,31 +394,51 @@ exports.sqlDatabase = class sqlDatabase {
                     }
                 });
             } else {
-                that.connection.run(str, [], function(err) {
-                    if ( err ) {
-                        that.error = err;
-                        reject(err);
-                    } else {
-                        var sqlresult = {};
-                        sqlresult.insertId = this.lastID ? this.lastID : that.insertId;
-                        sqlresult.affectedRows = this.changes;
-                        that.insertId = sqlresult.insertId;
-                        that.impacted = sqlresult.affectedRows;
 
-                        // mimick X protocol
-                        sqlresult.getAffectedItemsCount = function() {
-                            return this.affectedRows;
+                // run a get if the query is a select
+                if ( typeof str === "string" && str.toUpperCase().startsWith("SELECT") ) {
+                    that.connection.get(str, [], function(err, row) {
+                        if ( err ) {
+                            reject(err);
+                        } else {
+                            if ( callback && typeof callback === "function" ) {
+                                callback(row);
+                            }
+                            resolve(row);
                         }
-                        sqlresult.getAutoIncrementValue = function() {
-                            return this.insertId;
-                        }
-                        resolve(sqlresult);
-                    }
+                    });
+                } else {
+                    that.connection.run(str, [], function(err) {
+                        if ( err ) {
+                            that.error = err;
+                            reject(err);
+                        } else {
+                            var sqlresult = {};
+                            sqlresult.insertId = this.lastID ? this.lastID : that.insertId;
+                            sqlresult.affectedRows = this.changes ? this.changes : null;
+                            sqlresult.impactedId = that.insertId;
+                            that.insertId = sqlresult.insertId;
+                            that.impacted = sqlresult.affectedRows;
 
-                    if ( callback ) {
-                        callback(sqlresult);
-                    }
-                });
+                            // mimick X protocol
+                            sqlresult.getAffectedItemsCount = function() {
+                                return this.affectedRows;
+                            }
+                            sqlresult.getAutoIncrementValue = function() {
+                                return this.insertId;
+                            }
+                            // added this to ensure it only returns an existing impacted ID when doing updates
+                            sqlresult.getImpactedId = function() {
+                                return this.impactedId;
+                            }
+                            resolve(sqlresult);
+                        }
+
+                        if ( callback ) {
+                            callback(sqlresult);
+                        }
+                    });
+                }
             }
         });
         return promise;

@@ -14,27 +14,27 @@ et_Globals.priorIcon = "none";
 et_Globals.tileCount = 0;
 et_Globals.clipboard = [];
 
-function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thingclass, hubid, hubindex, hubType, customname, htmlcontent) {  
+function editTile(userid, thingid, pagename, str_type, thingindex, bid, thingclass, hubid, hubindex, hubType, customname, htmlcontent) {  
     var returnURL = cm_Globals.returnURL;
-    et_Globals.aid = aid;  // roomnum for pages
-    et_Globals.id = bid;
+    et_Globals.id = bid;          // roomnum for pages
     et_Globals.hubid = hubid;
     et_Globals.hubindex = hubindex;
     et_Globals.hubType = hubType;
     et_Globals.pagename = pagename;
+    et_Globals.roomnum = bid ? bid : 0;
     et_Globals.userid = userid;
     et_Globals.thingid = thingid;
 
     if ( str_type==="page" ) {
-        et_Globals.wholetarget = getCssRuleTarget(str_type, "panel", thingindex, "thistile");
+        et_Globals.wholetarget = getCssRuleTarget(str_type, "panel", pagename, "thistile");
     } else {
         et_Globals.wholetarget = getCssRuleTarget(str_type, "wholetile", thingindex, "thitile");
     }
 
     var dialog_html = "<div id='tileDialog' class='tileDialog' str_type='" + str_type + "' thingindex='" + thingindex +"' >";
     if ( str_type==="page" ) {
-        dialog_html += "<div class='editheader' id='editheader'>Editing Page#" + et_Globals.aid + 
-                   " Name: " + thingindex + "</div>";
+        dialog_html += "<div class='editheader' id='editheader'>Editing Page#" + et_Globals.roomnum + 
+                   " Name: " + et_Globals.pagename + "</div>";
         
     } else {
         dialog_html += "<div class='editheader' id='editheader'>Editing Tile #" + thingindex + 
@@ -60,9 +60,9 @@ function editTile(userid, thingid, pagename, str_type, thingindex, aid, bid, thi
     // we either use the passed in content or make an Ajax call to get the content
     var jqxhr = null;
     if ( str_type==="page" ) {
-        var roomnum = et_Globals.aid;
+        var roomnum = et_Globals.roomnum;
         jqxhr = $.post(returnURL, 
-            {api: "pagetile", userid: userid, thingid: thingid, id: roomnum, type: 'page', value: thingindex, attr: customname, hpcode: cm_Globals.options.hpcode},
+            {api: "pagetile", userid: userid, thingid: thingid, id: roomnum, type: 'page', value: pagename, attr: customname, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;
@@ -304,11 +304,14 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
     var target = "";
 
     if ( str_type==="page" ) {
-        
+
+        var pagename = et_Globals.pagename;
+        // var pagename = thingindex;
+        // console.log(">>>>> ", et_Globals.pagename, thingindex);
         if ( subid==="tab" ) {
             // target = "li.ui-tabs-tab.ui-state-default";
             if ( scope==="thistile" ) { 
-                target = `.ui-tabs .ui-tabs-nav li.tab-${thingindex}.ui-tabs-tab`;
+                target = `.ui-tabs .ui-tabs-nav li.tab-${pagename}.ui-tabs-tab`;
             } else {
                 target = ".ui-tabs .ui-tabs-nav li.ui-tabs-tab";                
             }
@@ -316,25 +319,25 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
         } else if ( subid==="tabon" ) {
             // target = "li.ui-tabs-tab.ui-state-default.ui-tabs-active";
             if ( scope==="thistile" ) { 
-                target = `.ui-tabs .ui-tabs-nav li.tab-${thingindex}.ui-tabs-tab.ui-tabs-active.ui-state-active`;
+                target = `.ui-tabs .ui-tabs-nav li.tab-${pagename}.ui-tabs-tab.ui-tabs-active.ui-state-active`;
             } else {
                 target = ".ui-tabs .ui-tabs-nav li.ui-tabs-tab.ui-tabs-active.ui-state-active";
             }
 
         } else if ( subid==="panel" ) {
             target = "#dragregion div.panel";
-            if ( scope==="thistile" ) { target+= '.panel-'+ thingindex; }
+            if ( scope==="thistile" ) { target+= '.panel-'+ pagename; }
         
         } else if ( subid==="name" ) {
             if ( scope==="thistile" ) { 
-                target = `.ui-tabs .ui-tabs-nav li.tab-${thingindex}.ui-tabs-tab a.ui-tabs-anchor`;
+                target = `.ui-tabs .ui-tabs-nav li.tab-${pagename}.ui-tabs-tab a.ui-tabs-anchor`;
             } else {
                 target = ".ui-tabs .ui-tabs-nav li.ui-tabs-tab a.ui-tabs-anchor";
             }
         
         } else if ( subid==="nameon" ) {
             if ( scope==="thistile" ) { 
-                target = `.ui-tabs .ui-tabs-nav li.tab-${thingindex}.ui-tabs-tab.ui-tabs-active a.ui-tabs-anchor`;
+                target = `.ui-tabs .ui-tabs-nav li.tab-${pagename}.ui-tabs-tab.ui-tabs-active a.ui-tabs-anchor`;
             } else {
                 target = ".ui-tabs .ui-tabs-nav li.ui-tabs-tab.ui-tabs-active a.ui-tabs-anchor";
             }
@@ -445,14 +448,14 @@ function toggleTile(target, str_type, subid, setvalue) {
         swval = swval.replace(" ","_");
     }
     if ( str_type === "thermostat" && subid==="temperature" ) {
-        ostarget = "#a-" + et_Globals.aid + "-thermostatOperatingState";
+        ostarget = "#a-" + et_Globals.thingid + "-thermostatOperatingState";
         swval = $(ostarget).html();
     }
 
     if ( typeof swval==="string" && swval.startsWith("LINK::") ) {
         var ipos = swval.lastIndexOf("::");
         var linkid = swval.substring(ipos+2);
-        var linkaid = $("div.thing[tile='"+linkid+"']").attr("aid");
+        var linkaid = $("div.thing[tile='"+linkid+"']").attr("thingid");
         swval = $("#a-"+linkaid+"-"+subid).html();
     }
 
@@ -588,7 +591,6 @@ function initOnceBinds(str_type, thingindex) {
     $(`#tileDisplay div.thing.${str_type}-thing`).off('click', trigger);
     $(`#tileDisplay div.thing.${str_type}-thing`).on('click', trigger, function(event) {
         var target = event.target;
-        // only allow picking of things with an "aid" element - changed from "id" to pick up arrows
         if ( ! $(target).attr("aid") ) {
             target = $(target).parent();
             if ( ! $(target).attr("aid") ) {
@@ -596,10 +598,10 @@ function initOnceBinds(str_type, thingindex) {
             }
         }
         var subid = $(target).attr("subid");
-        var aid = $(target).attr("aid");
+        var taid = $(target).attr("aid");
         var targetid = "#"+$(target).attr("id");
-        var ustr_type = $("#t-"+aid).attr("type");
-        var uthingindex = $("#t-"+aid).attr("tile");
+        var ustr_type = $("#t-"+taid).attr("type");
+        var uthingindex = $("#t-"+taid).attr("tile");
 
         if ( ustr_type && uthingindex ) {
             str_type = ustr_type;
@@ -1489,25 +1491,6 @@ function scopeSection(str_type) {
             dh += `<option value="${scope}">${scopemap[scope]}</option>`;
         }
     }
-
-    // if ( str_type==="page" ) {
-    //     dh += "<option value=\"thistile\" selected>This page</option>";
-    //     dh += "<option value=\"alltile\">All pages</option>";
-    // } else {
-    //     if ( et_Globals.pagename==="floorplan" ) {
-    //         var seltile = "";
-    //         var selpage = " selected";
-    //     } else {
-    //         seltile = " selected";
-    //         selpage = "";
-    //     }
-    //     dh += "<option value=\"thistile\"" + seltile + ">" + mapScope("thistile", str_type) + "</option>";       // old mode 0
-    //     dh += "<option value=\"thispage\"" + selpage + ">This tile, This page</option>";       // old mode 0 w/ floorplan
-    //     dh += "<option value=\"typetile\">All " + str_type + " tiles, All pages</option>";     // old mode 1
-    //     dh += "<option value=\"typepage\">All " + str_type + " tiles, This page</option>";     // new mode
-    //     dh += "<option value=\"alltile\">All tiles, All pages</option>";                       // old mode 2
-    //     dh += "<option value=\"allpage\">All tiles, This page</option>";                        // new mode
-    // }
     dh += "</select></div>";
     return dh;
 }
@@ -1972,7 +1955,7 @@ function initColor(str_type, subid, thingindex) {
 
     var newtitle;
     if ( str_type==="page" ) {
-        newtitle = "Editing Page#" + et_Globals.aid + " Name: " + thingindex;
+        newtitle = "Editing Page#" + et_Globals.id + " Name: " + thingindex;
         $("#labelName").html("Page Name");
     } else {
         newtitle = "Editing Tile #" + thingindex + " of Type: " + str_type;
@@ -2698,6 +2681,7 @@ function getIcons() {
     getIconCategories(iCategory);
     var skin = cm_Globals.options.skin;
     var pname = cm_Globals.options.pname;
+    var thingid = et_Globals.thingid;
     
     // change to use php to gather icons in an ajax post call
     // this replaces the old method that fails on GoDaddy
@@ -2716,7 +2700,7 @@ function getIcons() {
 
     // removed the old method of reading icons from iconlist.txt since the files are no longer there
     $.post(returnURL, 
-        {api: "geticons", id: 0, userid: et_Globals.userid, thingid: et_Globals.thingid, type: "none", 
+        {api: "geticons", id: 0, userid: et_Globals.userid, thingid: thingid, type: "none", 
          value: localPath, attr: iCategory, skin: skin, pname: pname, hpcode: cm_Globals.options.hpcode},
         function (presult, pstatus) {
             if (pstatus==="success" && presult ) {

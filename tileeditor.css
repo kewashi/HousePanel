@@ -238,8 +238,8 @@ div.loginline input {
 div.loginmore {
     position: absolute;
     font-size: 19px;
-    left: 550px;
-    top: 10px;
+    left: 350px;
+    top: 70px;
     width: 400px;
 }
 
@@ -809,7 +809,7 @@ input.resetbutton, input.submitbutton {
 div.restoretabs.hidden, div.thing.hidden.catalog-thing {
     display: none;
 }
-div.filteroption .smallbutton {
+div.filteroption .smallbutton, button.smallbutton {
     padding: 4px;
     height: auto;
     width: 60px;
@@ -841,7 +841,7 @@ div.radiobutton label {
     margin-top: 4px; margin-bottom: 4px;
     margin-left: 10px;
 }
-div.filteroption .smallbutton:hover {
+div.filteroption .smallbutton:hover, button.smallbutton:hover {
     background-color: black;
     color: white;
 }

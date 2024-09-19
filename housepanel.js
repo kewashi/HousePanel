@@ -314,18 +314,6 @@ $(document).ready(function() {
         pagename = "main";
     }
     
-    try {
-        var pathname = $("input[name='pathname']").val();
-    } catch(e) {
-        pathname = "/";
-    }
-
-    // reroute to main page if undefined asked for
-    if ( pathname==="/undefined" ) {
-        window.location.href = cm_Globals.returnURL;
-    }
-    // alert(pathname + " returnURL= " + cm_Globals.returnURL);
-
     // show tabs and hide skin
     if ( pagename==="main" ) {
         $("#tabs").tabs();
@@ -401,6 +389,7 @@ $(document).ready(function() {
             mc +='<div id="m_edit" class="menuitem">Edit</div>';
             mc +='<div id="m_rehome" class="menuitem">rehome tiLes</div>';
             mc +='<div id="m_operate" class="menuitem">oPerate</div>';
+            mc +='<div id="m_logout" class="menuitem">loGout</div>';
             var good = createModal("modalpopup", mc, "body" , false, pos, function(ui, content) {
                 var buttonid = $(ui).attr("id");
                 if ( buttonid && $(ui).attr("class") === "menuitem" ) {
@@ -1008,16 +997,18 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                 }
 
                 // update all the tiles that match this type and id
+                // use thingid instead of aid
+                // note that thingid is the exact same values so this change works
                 var panelItems = $('div.panel div.thing[bid="'+bid+'"]');
                 try {
                     if ( panelItems ) {
                         panelItems.each(function() {
-                            var aid = $(this).attr("aid");
-                            updateTile(aid, pvalue);
+                            var thingid = $(this).attr("thingid");
+                            updateTile(thingid, pvalue);
 
                             // add class for heating mode for thermostats
                             if ( newstate ) {
-                                var targettemp = $("#a-"+aid+"-temperature");
+                                var targettemp = $("#a-"+thingid+"-temperature");
                                 $(targettemp).removeClass("cooling");
                                 $(targettemp).removeClass("heating");
                                 $(targettemp).removeClass("idle");
@@ -1341,7 +1332,8 @@ function setupColors() {
     
    $("div.overlay.color >div.color").each( function() {
         var that = $(this);
-        var aid = that.attr("aid");
+        var taid = that.attr("aid");
+        var tile = '#t-'+taid;
         var defcolor = that.html();
         var subid = "color";
         if ( !defcolor ) {
@@ -1366,18 +1358,18 @@ function setupColors() {
                 var hexval = $(this).minicolors("value");
                 var hsl = rgb2hsv( newcolor.r, newcolor.g, newcolor.b );
                 var hslstr = "hsl("+hsl.hue.pad(3)+","+hsl.saturation.pad(3)+","+hsl.level.pad(3)+")";
-                var tile = '#t-'+aid;
                 var bid = $(tile).attr("bid");
                 var hubid = $(tile).attr("hub");
                 var hubindex = $(tile).attr("hubindex");
                 var thetype = $(tile).attr("type");
                 var userid = cm_Globals.options.userid;
+                var uid = $(tile).attr("uid");
                 var thingid = $(tile).attr("thingid");
                 var tileid = $(tile).attr("tile");
                 var hint = $(tile).attr("hint");
                 var pname = cm_Globals.options.pname;
 
-                var usertile =  $("#sb-"+aid+"-"+subid);
+                var usertile =  $("#sb-"+thingid+"-"+subid);
                 var command = "";
                 var linktype = thetype;
                 var linkval = "";
@@ -1408,7 +1400,7 @@ function setupColors() {
                     linkval = "";
                 }
                 console.log("setupColors: userid= ", userid, " thingid= ", thingid, " tileid= ", tileid, " hint= ", hint,
-                " command= ", command, " bid= ", bid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", hubid, " linkhub= ", linkhub,
+                " command= ", command, " bid= ", bid, " uid= ", uid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", hubid, " linkhub= ", linkhub,
                 " type= ", thetype, " linktype= ", linktype, " subid= ", subid, " value= ", hslstr, 
                 " linkval= ", linkval, " attr=", hexval, " hpcode: ", cm_Globals.options.hpcode);
 
@@ -1428,8 +1420,8 @@ function setupSliders() {
         var thing = $(evt.target);
         thing.attr("value",ui.value);
         
-        var aid = thing.attr("aid");
-        var tile = '#t-'+aid;
+        var taid = thing.attr("aid");
+        var tile = '#t-'+taid;
         var bid = $(tile).attr("bid");
         var hubid = $(tile).attr("hub");
         var hubindex = $(tile).attr("hubindex");
@@ -1438,11 +1430,12 @@ function setupSliders() {
         var thetype = $(tile).attr("type");
         var userid = cm_Globals.options.userid;
         var thingid = $(tile).attr("thingid");
+        var uid = $(tile).attr("uid");
         var tileid = $(tile).attr("tile");
         var hint = $(tile).attr("hint");
         var pname = cm_Globals.options.pname;
         
-        var usertile =  $("#sb-"+aid+"-"+subid);
+        var usertile =  $("#sb-"+thingid+"-"+subid);
         var command = "";
         var linktype = thetype;
         var linkval = thevalue;
@@ -1475,10 +1468,10 @@ function setupSliders() {
         //     linkval = "";
         }
 
-        console.log("Slider action: command= ", command, " bid= ", bid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", linkhub, " type= ", 
+        console.log("Slider action: command= ", command, " uid= ", uid, " bid= ", bid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", linkhub, " type= ", 
                      linktype, " subid= ", realsubid, " hint= ", hint, " value= ", thevalue, " linkval= ", linkval, " hpcode: ", cm_Globals.options.hpcode);
         $.post(cm_Globals.returnURL, 
-            {api: "doaction", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: thevalue, attr: subid, hint: hint,
+            {api: "doaction", userid: userid, pname: pname, id: linkbid, uid: uid, thingid: thingid, type: linktype, value: thevalue, attr: subid, hint: hint,
             subid: realsubid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode});
     }
 
@@ -1769,7 +1762,6 @@ function setupDraggable() {
                 var tile = $(thing).attr("tile");
                 var thingid = $(thing).attr("thingid");
                 var bid = $(thing).attr("bid");
-                var id = $(thing).attr("id");
                 var thingtype = $(thing).attr("type");0
                 $(thing).css("z-index", startPos["z-index"] );
 
@@ -2040,8 +2032,8 @@ function execForgotPassword() {
     var genobj = formToObject("loginform");
     var emailname = genobj.emailid;
     var mobile = genobj.mobile;
-    if ( emailname.length < 5 ) {
-        alert("Enter a valid email or mobile phone number before requesting a password reset.");
+    if ( emailname.length < 5 || emailname.indexOf("@") < 1 || emailname.indexOf(".")===-1 ) {
+        alert("Email [" + emailname + "] is not valid. Enter a valid email to request a password reset.");
     } else {
         // alert("email: " + emailname + " mobile: " + mobile);
         $.post(cm_Globals.returnURL, 
@@ -2051,7 +2043,7 @@ function execForgotPassword() {
                     var pstyle = "position: absolute; border: 6px black solid; background-color: green; color: white; font-size: 14px; left: 350px; top: 60px; width: 400px; height: 100px; padding-top: 50px; text-align: center;";
                     var pos = {style: pstyle};
                     var userid = presult.id;
-                    createModal("loginfo","Login reset code sent and printed to log for user# " + userid + "<br>On the next screen please provide that code <br>along with the new password information.<br>", "body", "Done", pos, function(ui) {
+                    createModal("loginfo","Login reset code sent to: " + emailname + "<br>On the next screen please provide that code <br>to create a new password.<br>", "body", "Done", pos, function(ui) {
                         closeModal("loginfo");
                         window.location.href = cm_Globals.returnURL + "/forgotpw?userid="+userid;
                     });
@@ -2072,11 +2064,36 @@ function execCreateUser() {
     var emailname = genobj.newemailid;
     var mobile = genobj.newmobile;
     var username = genobj.newuname;
+    var ipos = emailname.indexOf("@");
+    if ( username==="" ) {
+        if (ipos=== -1) {
+            username = emailname;
+        } else {
+            username = emailname.substring(0, ipos);
+        }
+        $("#newunameid").val(username);
+    }
     var newpw = genobj.newpword;
     var newpw2 = genobj.newpword2;
+    var pwordre = /^\S{6,}$/;             // no white space and at least 6 digits 
+    var pworddigit = /.*\d+.*/;           // force at least one digit
+    var pwordcap = /.*[A-Z]+.*/;           // force at least one digit
+    var pwordsym = /.*[!@#\$\%\^\&\*\(\)\[\]\<\>\_\:\;\'\"]+.*/;
+    var mobilere = /^\d{7,}$/;            // at least 7 digits 
+    var unamere = /^\S+$/;                // no white space and at least 2 digits
+    var emailre = /^\S+@\S+\.\S{2,}$/;    // email form xxx@yyyyy.zzz
 
-    if ( newpw.length < 6 ) {
-        alert("Password provided is too short. Must be 6 or more characters in length");
+
+    // console.log(">>>> ", emailname, mobile, username, newpw, newpw2 );
+
+    if (!emailre.test(emailname) ) {
+        alert("Email [" + emailname + "] is not a valid email address. Try again.");
+    } else if ( !mobilere.test(mobile) ) {
+        alert("Mobile [" + mobile + "] is not valid. Must be at least 7 numerical digits (no spaces, dashes, or parens). Try again.");
+    } else if (!unamere.test(username) ) {
+        alert("Username [" + username + "] is not a valid name. Must not contain blanks and be at least 2 characters long. Try again.");
+    } else if ( !pwordre.test(newpw) || !pworddigit.test(newpw) || !pwordsym.test(newpw)  || !pwordcap.test(newpw) ) {
+        alert("Password is not valid. Must contain a number digit, a symbol ($,!,@,#,%,^,&,*,:,;), a CAP letter A-Z, and be at least 6 characters long. Try again.");
     } else if ( newpw !== newpw2 ) {
         alert("Passwords do not match. Try again.");
     } else {
@@ -2090,11 +2107,11 @@ function execCreateUser() {
                     var userid = presult.id;
                     var usertype = parseInt(presult.usertype);
                     if ( !usertype || usertype === 0 ) {
-                        createModal("loginfo","New user created. Please validate using code in log file or sent to mobile: <b>" + mobile+ "</b> or <b>" + emailname + "</b> to activate this account.<br><br>", "body", "Done", pos, function(ui) {
+                        createModal("loginfo","New user created. Please validate using code emailed to: " + emailname + " to activate this account.<br><br>", "body", "Done", pos, function(ui) {
                             window.location.href = cm_Globals.returnURL + "/activateuser?userid="+userid;
                         });
                     } else {
-                        createModal("loginfo","New user created. Please login using the email ["  + emailname + "], phone [" + mobile + "], and password you created to log into this account.<br><br>", "body", "Done", pos, function(ui) {
+                        createModal("loginfo","New user created. Please login using Email ["  + emailname + "], Mobile [" + mobile + "], and password you created to log into this account.<br><br>", "body", "Done", pos, function(ui) {
                             window.location.href = cm_Globals.returnURL;
                         });
                     }
@@ -2492,7 +2509,8 @@ function setupButtons() {
             // $("#delPanel").html("Delete Panel");
         });
         $("#delPanel").on("tap", function(evt) {
-            const pname = $("#panelname").val();
+            // const pname = $("#panelname").val();
+            var pname = cm_Globals.options.pname;
             createModal("modalhub","Delete Panel: " + pname + " Are you sure?", "body" , true, pos, function(ui) {
                 var clk = $(ui).attr("name");
                 closeModal("modalhub");
@@ -2505,7 +2523,8 @@ function setupButtons() {
             });
         });
         $("#usePanel").on("tap", function(evt) {
-            const pname = $("#panelname").val();
+            // const pname = $("#panelname").val();
+            var pname = cm_Globals.options.pname;
             createModal("modalhub","Activate and switch to Panel: " + pname + " Are you sure?", "body" , true, pos, function(ui) {
                 var clk = $(ui).attr("name");
                 closeModal("modalhub");
@@ -2518,17 +2537,19 @@ function setupButtons() {
             });
         });
         $("#delUser").on("tap", function(evt) {
+            evt.stopPropagation(); 
             const uname = $("#unameid").val();
             const emailname = $("#emailid").val();
             const userid = cm_Globals.options.userid;
-            createModal("modalhub","Remove User #" + userid + " uname: " + uname + " email: " + emailname + " Are you sure?", "body" , true, pos, function(ui) {
+            const pname = cm_Globals.options.pname;
+            createModal("modalhub","Remove Username: " + uname + " with Email: " + emailname + "<br>This action is not reversable. Your account will be deleted permanently.<br>Are you sure?", "body" , true, pos, function(ui) {
                 var clk = $(ui).attr("name");
                 closeModal("modalhub");
                 if ( clk==="okay" ) {
-                    alert("Removing user: " + uname + " | " + emailname);
                     $.post(cm_Globals.returnURL, 
-                        {api: "deluser", userid: cm_Globals.options.userid, uname: uname, email: emailname, hpcode: cm_Globals.options.hpcode}
+                        {api: "deluser", userid: userid, uname: uname, pname: pname, email: emailname, hpcode: cm_Globals.options.hpcode}
                     );
+                    window.location.href = cm_Globals.returnURL;
                 }
             });
         });
@@ -2760,15 +2781,14 @@ function addEditLink() {
 
     // add links to edit and delete this tile
     $("div.panel > div.thing").each(function() {
-        var editdiv = "<div class=\"editlink\" aid=" + $(this).attr("id") + "> </div>";
-        var cmzdiv = "<div class=\"cmzlink\" aid=" + $(this).attr("id") + ">" + $(this).attr("tile")  + "</div>";
-        var deldiv = "<div class=\"dellink\" aid=" + $(this).attr("id") + "> </div>";
-        // var resetdiv = "<div class=\"rstlink\" aid=" + $(this).attr("id") + ">R</div>";
+        var editdiv = "<div class=\"editlink\" taid=" + $(this).attr("id") + "> </div>";
+        var cmzdiv = "<div class=\"cmzlink\" taid=" + $(this).attr("id") + ">" + $(this).attr("tile")  + "</div>";
+        var deldiv = "<div class=\"dellink\" taid=" + $(this).attr("id") + "> </div>";
         var sizediv = "<div class=\"sizelink ui-resizable-handle ui-resizable-se\"> </div>";
         $(this).append(cmzdiv).append(editdiv).append(deldiv).append(sizediv);
     });
     $("div.panel > div.thing[style*='absolute']").each(function() {
-        var resetdiv = "<div class=\"rstlink\" aid=" + $(this).attr("id") + ">R</div>";
+        var resetdiv = "<div class=\"rstlink\" taid=" + $(this).attr("id") + ">R</div>";
         $(this).append(resetdiv);
     });
     
@@ -2787,9 +2807,8 @@ function addEditLink() {
     $("div.editlink").off("click");
     $("div.editlink").on("click",function(evt) {
         evt.stopPropagation();
-        var taid = $(evt.target).attr("aid");
+        var taid = $(evt.target).attr("taid");
         var thing = "#" + taid;
-        var aid = taid.substring(2);
         var str_type = $(thing).attr("type");
         var tile = $(thing).attr("tile");
         var strhtml = $(thing).html();
@@ -2802,24 +2821,24 @@ function addEditLink() {
         var thingid = $(thing).attr("thingid");
         var userid = cm_Globals.options.userid;
         try {
-            var customname = $("#a-"+aid+"-name").html();
+            var customname = $("#a-"+thingid+"-name").html();
         } catch(e) {
-            customname = $("#s-"+aid).html();
+            customname = $("#s-"+thingid).html();
         }
 
         // replace all the id tags to avoid dynamic updates
         strhtml = strhtml.replace(/ id="/g, " id=\"x_");
         // cm_Globals.edited = true;
 
-        editTile(userid, thingid, panel, str_type, tile, aid, bid, thingclass, hubid, hubindex, hubType, customname, strhtml);
+        editTile(userid, thingid, panel, str_type, tile, bid, thingclass, hubid, hubindex, hubType, customname, strhtml);
     });
     
     $("div.cmzlink").off("click");
     $("div.cmzlink").on("click",function(evt) {
         evt.stopPropagation();
-        var taid = $(evt.target).attr("aid");
+        var taid = $(evt.target).attr("taid");
         var thing = "#" + taid;
-        var aid = taid.substring(2);
+        var thingid = $(thing).attr("thingid");
         var pwsib = $(evt.target).siblings("div.overlay.password");
         var userid = cm_Globals.options.userid;
         if ( pwsib && pwsib.length > 0 ) {
@@ -2834,7 +2853,7 @@ function addEditLink() {
             var tile = $(thing).attr("tile");
             var bid = $(thing).attr("bid");
             var hubid = $(thing).attr("hub");
-            customizeTile(userid, tile, aid, bid, str_type, hubid);
+            customizeTile(userid, tile, bid, thingid, str_type, hubid);
         }
     });
     
@@ -2842,7 +2861,8 @@ function addEditLink() {
     $("div.dellink").on("click",function(evt) {
         evt.stopPropagation();
         var regheight = parseInt($("#dragregion").height() * 0.7);
-        var thing = "#" + $(evt.target).attr("aid");
+        var taid = $(evt.target).attr("taid");
+        var thing = "#" + taid;
         var thingtype = $(thing).attr("type");
         var tile = $(thing).attr("tile");
         var bid = $(thing).attr("bid");
@@ -2884,10 +2904,11 @@ function addEditLink() {
 
     $("div.rstlink").off("click");
     $("div.rstlink").on("click",function(evt) {
-        var taid = $(evt.target).attr("aid");
+        var taid = $(evt.target).attr("taid");
         var thing = "#" + taid;
         var str_type = $(thing).attr("type");
         var tile = $(thing).attr("tile");
+        var bid = $(thing).attr("bid");
         var thingid = $(thing).attr("thingid");
         var panel = $(thing).attr("panel");
 
@@ -2909,7 +2930,7 @@ function addEditLink() {
 
         $.post(cm_Globals.returnURL, 
             {api: "setposition", userid: cm_Globals.options.userid, type: str_type, attr: startPos, 
-                                     tileid: tile, thingid: thingid, hpcode: cm_Globals.options.hpcode},
+                                id: bid, tileid: tile, thingid: thingid, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if ( pstatus === "success" ) {
                     saveTileEdit(cm_Globals.options.userid, str_type, tile);
@@ -2964,7 +2985,7 @@ function addEditLink() {
         var roomnum = $(evt.target).attr("roomnum");
         var roomname = $(evt.target).attr("roomname");
         var roomid = $("#panel-"+roomname).attr("roomid");
-        editTile(cm_Globals.options.userid, roomid, roomname, "page", roomname, roomnum, 0, "", "-1", 0, "None", roomname);
+        editTile(cm_Globals.options.userid, roomid, roomname, "page", roomname, roomnum, "", "-1", 0, "None", roomname);
     });
    
     $("#addpage").off("click");
@@ -3448,7 +3469,6 @@ function processKeyVal(targetid, aid, key, value) {
         } else {
             wstr = " class='trackImage' width='120px' height='120px' ";
         }
-        // alert("aid= " + aid + " image width info: " + wstr );
         value = "<img" + wstr + "src='" + trackImage + "'>";
 
     } else if ( key === "trackDescription" ) {
@@ -3497,15 +3517,15 @@ function processKeyVal(targetid, aid, key, value) {
     return isclock;
 }
 
-function refreshTile(tileid, aid, bid, thetype, hubid) {
+function refreshTile(tileid, bid, thingid, thetype, hubid) {
     var pname = cm_Globals.options.pname;
     try {
         $.post(cm_Globals.returnURL, 
-            {api: "doquery", userid: cm_Globals.options.userid, pname: pname, id: bid, tileid: tileid, 
+            {api: "doquery", userid: cm_Globals.options.userid, pname: pname, id: bid, thingid: thingid, tileid: tileid, 
                              type: thetype, hubid: hubid, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if ( pstatus==="success" && presult && typeof presult==="object" ) {
-                    updateTile(aid, presult);
+                    updateTile(thingid, presult);
                     updateLink(bid, presult);
                 }
             }, 
@@ -3644,8 +3664,8 @@ function clockUpdater(whichclock, forceget) {
 
         // update all the clock tiles for this type
         $('div.panel div.thing[bid="'+clocktype+'"]').each(function() {
-            var aid = $(this).attr("aid");
-            updateTile(aid, updobj);
+            var thingid = $(this).attr("thingid");
+            updateTile(thingid, updobj);
         });
         updateLink(clocktype, updobj);
 
@@ -3672,10 +3692,10 @@ function setupTimer(timertype, timerval, hub) {
                 var hubid = that[2];
                 $("div[hub='" + hubid+"']").each( function() {
                     var tileid = $(this).attr("tile");
-                    var aid = $(this).attr("aid");
                     var bid = $(this).attr("bid");
+                    var thingid = $(this).attr("thingid");
                     var thetype = $(this).attr("type");
-                    refreshTile(tileid, aid, bid, thetype, hubid);
+                    refreshTile(tileid, bid, thingid, thetype, hubid);
                 });
 
             } catch(err) {
@@ -3702,7 +3722,6 @@ function setupPage() {
 
         if ( priorOpmode=="Operate" ) {
             var thing = $(this).parent();
-            var aid = $(thing).attr("aid");
             var str_type = $(thing).attr("type");
             var tile = $(thing).attr("tile");
             var strhtml = $(thing).html();
@@ -3715,12 +3734,12 @@ function setupPage() {
             var thingid = $(thing).attr("thingid");
             var userid = cm_Globals.options.userid;
             try {
-                var customname = $("#a-"+aid+"-name").html();
+                var customname = $("#a-"+thingid+"-name").html();
             } catch(e) {
-                customname = $("#s-"+aid).html();
+                customname = $("#s-"+thingid).html();
             }
             strhtml = strhtml.replace(/ id="/g, " id=\"x_");
-            editTile(userid, thingid, panel, str_type, tile, aid, bid, thingclass, hubid, hubindex, hubType, customname, strhtml);
+            editTile(userid, thingid, panel, str_type, tile, bid, thingclass, hubid, hubindex, hubType, customname, strhtml);
         }
     });
 
@@ -3733,8 +3752,6 @@ function setupPage() {
 
     $("div.thing div.overlay > div").off("singletap");
     $("div.thing div.overlay > div").on("singletap", function(evt) {
-
-        var userid = cm_Globals.options.userid;
         var that = this;
         var aid = $(this).attr("aid");
         var subid = $(this).attr("subid");
@@ -3754,7 +3771,6 @@ function setupPage() {
             return;
         }
         
-        // var tile = '#t-'+aid;
         var doconfirm = $(this).hasClass("confirm") || subid.startsWith("c__");
         var trigger = subid;
         if ( subid.startsWith("c__") ) {
@@ -4094,14 +4110,15 @@ function processClickWithValue(that, thingname, ro, subid, thetype, thevalues, n
             // do a manual rule and list op if a repeat variable is provided
             // this is only here to invoke LIST rules for values that get posted that are same as prior values
             if ( numParams===1 && thetype==="variables" )  {
-                var aid = $(that).attr("aid");
-                var tile = '#t-'+aid;
+                var taid = $(that).attr("aid");
+                var tile = '#t-'+taid;
                 var tileid = $(tile).attr("tile");
                 var bid = $(tile).attr("bid");
+                var thingid = $(tile).attr("thingid");
                 var hubid = $(tile).attr("hub");
                 var hubindex = $(tile).attr("hubindex");
                 $.post(cm_Globals.returnURL, 
-                    {api: "dorules", userid: userid, id: bid, thingid: aid, type: thetype, value: values,
+                    {api: "dorules", userid: userid, id: bid, thingid: thingid, type: thetype, value: values,
                      subid: subid, hubid: hubid, hubindex: hubindex, tileid: tileid, hpcode: cm_Globals.options.hpcode}
                 );
             }
@@ -4141,7 +4158,7 @@ function addOnoff(targetid, subid, thevalue) {
 // for the main things table that holds the index keys for devices shown on pages
 // tileid below is the index in the devices table to the absolute device information
 function processClick(that, thingname, ro, thevalue, theattr = true, subid  = null) {
-    var aid = $(that).attr("aid");
+    var taid = $(that).attr("aid");
     if ( theattr===true ) {
         theattr = $(that).attr("class");
     } else if ( theattr===false ) {
@@ -4151,12 +4168,13 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         subid = $(that).attr("subid");
     }
     var realsubid = subid;
-    var tile = '#t-'+aid;
+    var tile = '#t-'+taid;
     var thetype = $(tile).attr("type");
     var linktype = thetype;
     var linkval = "";
     var command = "";
     var bid = $(tile).attr("bid");
+    var uid =$(tile).attr("uid");
     var linkbid = bid;
     var hubid = $(tile).attr("hub");
     var linkhub = $(tile).attr("hubindex");
@@ -4172,12 +4190,12 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
 
     if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
         var slen = subid.length;
-        targetid = '#a-'+aid+'-'+subid.substring(0,slen-3);
+        targetid = '#a-'+thingid+'-'+subid.substring(0,slen-3);
     } else {
         if ( subid==="thingname" ) {
-            targetid = "#s-"+aid;
+            targetid = "#s-"+thingid;
         } else {
-            targetid = '#a-'+aid+'-'+subid;
+            targetid = '#a-'+thingid+'-'+subid;
         }
     }
 
@@ -4188,15 +4206,6 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         return;
     }
 
-    // if any button edit field is clicked on do nothing since user is editing
-    // if ( subid === "pushed" || subid==="released" || subid==="held" || subid==="doubleTapped" ) {
-    //     return;
-    // }
-
-    // set attr to name for ISY hubs
-    // if ( thetype === "isy" ) {
-    //     theattr = $("#a-"+aid+"-name").html();
-    // }
     var hint = $(tile).attr("hint");
 
     // all hubs now use the same doaction call name
@@ -4204,15 +4213,15 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
 
     // special case of thermostat clicking on things without values
     // send the temperature as the value
-    if ( !thevalue && (thetype==="thermostat") && ($("#a-"+aid+"-temperature")!==null) &&
+    if ( !thevalue && (thetype==="thermostat") && ($("#a-"+thingid+"-temperature")!==null) &&
          ( subid.endsWith("-up") || subid.endsWith("-dn") ) ) {
-        thevalue = $("#a-"+aid+"-temperature").html();
+        thevalue = $("#a-"+thingid+"-temperature").html();
     }
 
-    // determine if this is a LINK or RULE by checking for sb-aid sibling element
+    // determine if this is a LINK or RULE by checking for sb-thingid sibling element
     // this includes setting the bid of the linked tile if needed
     // new logic based on DB version
-    var usertile =  $("#sb-"+aid+"-"+subid);
+    var usertile =  $("#sb-"+thingid+"-"+subid);
     var linkval = thevalue;
     var linkid = 0;
     if ( usertile && usertile.attr("linkval") ) {
@@ -4327,8 +4336,8 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         var panel = $(tile).attr("panel");
         thevalue = addOnoff(targetid, subid, thevalue);
         $('div[panel="' + panel + '"] div.overlay.switch div').each(function() {
-            var aid = $(this).attr("aid");
-            var tile = '#t-'+aid;
+            var taid = $(this).attr("aid");
+            var tile = '#t-'+taid;
             var thetype = $(tile).attr("type");
             var bid = $(tile).attr("bid");
             var hubid = $(tile).attr("hub");
@@ -4353,15 +4362,15 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         msg += "hubtype = " + hubtype + "<br>";
         msg += "hubindex = " + linkhub + "<br>";
         msg += "hubid = " + hubid + "<br>";
-        msg += "screen id = " + aid + "<br>";
+        msg += "thing id = " + thingid + "<br>";
+        msg += "scr id = " + uid + "<br>";
         msg += "sql id = " + tileid + "<br>";
-        msg += "device id = " + bid + "<br>";
+        msg += "dev id = " + bid + "<br>";
         if ( hint && hint !== hubtype ) {
             msg += "hint = "+hint + "<br>";
         }
         msg += "<hr>";
-        // $('div.overlay > div[aid="'+aid+'"]').each(function() {
-        $('div #t-'+aid+' > div.overlay > div').each(function() {
+        $('div #t-'+thingid+' > div.overlay > div').each(function() {
             if ( $(this).hasClass("minicolors") ) {
                 msg += "color = " + $(this).children("div.color").attr("value") + "<br>";
             } else {
@@ -4423,7 +4432,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
 
         // set value to volume for volume triggers
         else if ( subid==="_volumeDown" || subid==="_volumeUp" ) {
-            var targetvol = '#a-'+aid+'-volume';
+            var targetvol = '#a-'+thingid+'-volume';
             thevalue = $(targetvol).attr("value");
         }
 
@@ -4437,11 +4446,6 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         setTimeout( function(){ $(targetid).removeClass("clicked"); }, 750 );
 
         // pass the call to main routine
-        // if an object is returned then show it in a popup dialog
-        // removed this behavior since it is confusing - only do it above for passive tiles
-        // values returned from actions are pushed back to GUI from server via pushClient call
-        // alert("API call: " + ajaxcall + " bid: " + bid + " type: " + thetype + " value: " + thevalue + " subid: " + realsubid + " hint: " + hint + " hubid: " + hubid);
-
         $.post(cm_Globals.returnURL, 
             {api: ajaxcall, userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: thevalue, hint: hint,
                                 attr: theattr, subid: realsubid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, 
