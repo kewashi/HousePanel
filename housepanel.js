@@ -1807,7 +1807,7 @@ function setupDraggable() {
                 var tileid = $(thing).attr("tile");
                 var thingtype = $(thing).attr("type");0
                 var newsize = ui.size;                
-                var target = getCssRuleTarget(thingtype, 'wholetile', tile, "thistile");
+                var target = getCssRuleTarget(thingtype, 'wholetile', tileid, "thistile");
                 var rule = "width: " + newsize.width.toString() + "px; " +
                            "height: " + newsize.height.toString() + "px;";
                 addCSSRule(target, rule, false);
