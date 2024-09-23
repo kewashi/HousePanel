@@ -1759,9 +1759,10 @@ function setupDraggable() {
                 startPos.left = evt.pageX - delx;   // parseInt($(evt.target).offset().left);
                 startPos.top  = evt.pageY - dely;   // parseInt($(evt.target).offset().top);
                 var panel = $(thing).attr("panel");
-                var tile = $(thing).attr("tile");
+                var tileid = $(thing).attr("tile");
                 var thingid = $(thing).attr("thingid");
                 var bid = $(thing).attr("bid");
+                var uid = $(thing).attr("uid");
                 var thingtype = $(thing).attr("type");0
                 $(thing).css("z-index", startPos["z-index"] );
 
@@ -1781,12 +1782,13 @@ function setupDraggable() {
 
                 delEditLink();
                 addEditLink();
+                setupDraggable();
                         
                 // now post back to housepanel to save the position
                 // also send the dragthing object to get panel name and tile pid index
                 $.post(cm_Globals.returnURL, 
                     {api: "setposition", userid: cm_Globals.options.userid, pname: cm_Globals.options.pname, 
-                     id: bid, type: thingtype, attr: startPos, tileid: tile, thingid: thingid, hpcode: cm_Globals.options.hpcode}
+                     id: bid, type: thingtype, attr: startPos, tileid: tileid, uid: uid, thingid: thingid, hpcode: cm_Globals.options.hpcode}
                 );
             }
         });
@@ -1802,14 +1804,14 @@ function setupDraggable() {
             stop: function(evt, ui) {
                 cm_Globals.edited = true;
                 var thing = evt.target;
-                var tile = $(thing).attr("tile");
+                var tileid = $(thing).attr("tile");
                 var thingtype = $(thing).attr("type");0
                 var newsize = ui.size;                
                 var target = getCssRuleTarget(thingtype, 'wholetile', tile, "thistile");
                 var rule = "width: " + newsize.width.toString() + "px; " +
                            "height: " + newsize.height.toString() + "px;";
                 addCSSRule(target, rule, false);
-                saveTileEdit(cm_Globals.options.userid, thingtype, tile);
+                saveTileEdit(cm_Globals.options.userid, thingtype, tileid);
             }
         });
     }
@@ -1882,12 +1884,13 @@ function setupDraggable() {
                                             $("div.panel-"+panel).append(presult);
                                             var newthing = $("div.panel-"+panel+" div.thing").last();
                                             $(newthing).css( startPos );
-                                            thingDraggable( newthing, cm_Globals.snap, container );
+                                            thingDraggable( newthing, cm_Globals.snap, "parent" );
                                             setupPage();
                                             setupSliders();
                                             setupColors();
                                             delEditLink();
                                             addEditLink();
+                                            // setupDraggable();
                                         } else {
                                             console.error("error attempting to add a tile. pstatus: ", pstatus, " presult: ", presult);
                                         }
@@ -1958,13 +1961,13 @@ function rehomeTiles() {
 
         var bid = $(this).attr("bid");
         var thingtype = $(this).attr("type");
-        var tile = $(this).attr("tile");
+        var tileid = $(this).attr("tile");
         var thingid = $(this).attr("thingid");
         var pname = cm_Globals.options.pname;
 
         $.post(cm_Globals.returnURL, 
             {api: "setposition", userid: cm_Globals.options.userid, pname: pname, id: bid, type: thingtype, 
-             attr: startPos, tileid: tile, thingid: thingid, hpcode: cm_Globals.options.hpcode},
+             attr: startPos, tileid: tileid, thingid: thingid, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if ( pstatus!=="success" ) {
                     console.error("status: ", pstatus, " result: ", presult);
@@ -2083,8 +2086,6 @@ function execCreateUser() {
     var unamere = /^\S+$/;                // no white space and at least 2 digits
     var emailre = /^\S+@\S+\.\S{2,}$/;    // email form xxx@yyyyy.zzz
 
-
-    // console.log(">>>> ", emailname, mobile, username, newpw, newpw2 );
 
     if (!emailre.test(emailname) ) {
         alert("Email [" + emailname + "] is not a valid email address. Try again.");
@@ -2782,7 +2783,7 @@ function addEditLink() {
     // add links to edit and delete this tile
     $("div.panel > div.thing").each(function() {
         var editdiv = "<div class=\"editlink\" taid=" + $(this).attr("id") + "> </div>";
-        var cmzdiv = "<div class=\"cmzlink\" taid=" + $(this).attr("id") + ">" + $(this).attr("tile")  + "</div>";
+        var cmzdiv = "<div class=\"cmzlink\" taid=" + $(this).attr("id") + ">" + $(this).attr("uid")  + "</div>";
         var deldiv = "<div class=\"dellink\" taid=" + $(this).attr("id") + "> </div>";
         var sizediv = "<div class=\"sizelink ui-resizable-handle ui-resizable-se\"> </div>";
         $(this).append(cmzdiv).append(editdiv).append(deldiv).append(sizediv);
@@ -2810,7 +2811,8 @@ function addEditLink() {
         var taid = $(evt.target).attr("taid");
         var thing = "#" + taid;
         var str_type = $(thing).attr("type");
-        var tile = $(thing).attr("tile");
+        var tileid = $(thing).attr("tile");
+        var uid = $(thing).attr("uid");
         var strhtml = $(thing).html();
         var thingclass = $(thing).attr("class");
         var panel = $(thing).attr("panel")
@@ -2830,7 +2832,7 @@ function addEditLink() {
         strhtml = strhtml.replace(/ id="/g, " id=\"x_");
         // cm_Globals.edited = true;
 
-        editTile(userid, thingid, panel, str_type, tile, bid, thingclass, hubid, hubindex, hubType, customname, strhtml);
+        editTile(userid, thingid, panel, str_type, tileid, uid, bid, thingclass, hubid, hubindex, hubType, customname, strhtml);
     });
     
     $("div.cmzlink").off("click");
@@ -2850,10 +2852,11 @@ function addEditLink() {
         }
         function runCustom(thing, name, ro, thevalue, theattr=  true, subid= null) {
             var str_type = $(thing).attr("type");
-            var tile = $(thing).attr("tile");
+            var tileid = $(thing).attr("tile");
+            var uid = $(thing).attr("uid");
             var bid = $(thing).attr("bid");
             var hubid = $(thing).attr("hub");
-            customizeTile(userid, tile, bid, thingid, str_type, hubid);
+            customizeTile(userid, tileid, uid, bid, thingid, str_type, hubid);
         }
     });
     
@@ -2864,7 +2867,8 @@ function addEditLink() {
         var taid = $(evt.target).attr("taid");
         var thing = "#" + taid;
         var thingtype = $(thing).attr("type");
-        var tile = $(thing).attr("tile");
+        var tileid = $(thing).attr("tile");
+        var uid = $(thing).attr("uid");
         var bid = $(thing).attr("bid");
         var panel = $(thing).attr("panel");
         var tilename = $(thing).find(".thingname").text();
@@ -2887,7 +2891,7 @@ function addEditLink() {
             if ( clk==="okay" ) {
                 $.post(cm_Globals.returnURL, 
                     {api: "delthing", userid: userid, id: bid, type: thingtype, value: panel, 
-                                          attr: "", hubid: hubid, tileid: tile, thingid: thingid, roomid: roomid, 
+                                          attr: "", hubid: hubid, tileid: tileid, uid: uid, thingid: thingid, roomid: roomid, 
                                           pname: pname, panelid: panelid, hpcode: cm_Globals.options.hpcode},
                     function (presult, pstatus) {
                         // check for an object returned which should be a promise object
@@ -2907,21 +2911,21 @@ function addEditLink() {
         var taid = $(evt.target).attr("taid");
         var thing = "#" + taid;
         var str_type = $(thing).attr("type");
-        var tile = $(thing).attr("tile");
+        var tileid = $(thing).attr("tile");
         var bid = $(thing).attr("bid");
         var thingid = $(thing).attr("thingid");
         var panel = $(thing).attr("panel");
 
         evt.stopPropagation();
 
-        // remove custom size settings for this tile
-        var target = getCssRuleTarget(str_type, 'wholetile', tile, "thistile");
+        // remove custom size settings for this tileid
+        var target = getCssRuleTarget(str_type, 'wholetile', tileid, "thistile");
         var rule1 = "width:";
         var rule2 = "height:";
-        removeCSSRule(target, tile, rule1, "thistile");
-        removeCSSRule(target, tile, rule2, "thistile");
+        removeCSSRule(target, tileid, rule1, "thistile");
+        removeCSSRule(target, tileid, rule2, "thistile");
 
-        // reset the position of just this tile to be relative and save the reset widths
+        // reset the position of just this tileid to be relative and save the reset widths
         var startPos = {top: 0, left: 0, "z-index": 1, position: "relative"};
         if (str_type==="bulb") {
             var zmax = getMaxZindex(panel) + 1;
@@ -2930,12 +2934,13 @@ function addEditLink() {
 
         $.post(cm_Globals.returnURL, 
             {api: "setposition", userid: cm_Globals.options.userid, type: str_type, attr: startPos, 
-                                id: bid, tileid: tile, thingid: thingid, hpcode: cm_Globals.options.hpcode},
+                                id: bid, tileid: tileid, thingid: thingid, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if ( pstatus === "success" ) {
-                    saveTileEdit(cm_Globals.options.userid, str_type, tile);
+                    saveTileEdit(cm_Globals.options.userid, str_type, tileid);
                     delEditLink();
-                    addEditLink();                                
+                    addEditLink();
+                    setupDraggable();
                 }
             }
         );
@@ -2985,7 +2990,7 @@ function addEditLink() {
         var roomnum = $(evt.target).attr("roomnum");
         var roomname = $(evt.target).attr("roomname");
         var roomid = $("#panel-"+roomname).attr("roomid");
-        editTile(cm_Globals.options.userid, roomid, roomname, "page", roomname, roomnum, "", "-1", 0, "None", roomname);
+        editTile(cm_Globals.options.userid, roomid, roomname, "page", roomname, roomid, roomnum, "", "-1", 0, "None", roomname);
     });
    
     $("#addpage").off("click");
@@ -3723,7 +3728,8 @@ function setupPage() {
         if ( priorOpmode=="Operate" ) {
             var thing = $(this).parent();
             var str_type = $(thing).attr("type");
-            var tile = $(thing).attr("tile");
+            var tileid = $(thing).attr("tile");
+            var uid = $(thing).attr("uid");
             var strhtml = $(thing).html();
             var thingclass = $(thing).attr("class");
             var panel = $(thing).attr("panel")
@@ -3739,7 +3745,7 @@ function setupPage() {
                 customname = $("#s-"+thingid).html();
             }
             strhtml = strhtml.replace(/ id="/g, " id=\"x_");
-            editTile(userid, thingid, panel, str_type, tile, bid, thingclass, hubid, hubindex, hubType, customname, strhtml);
+            editTile(userid, thingid, panel, str_type, tileid, uid, bid, thingclass, hubid, hubindex, hubType, customname, strhtml);
         }
     });
 
@@ -4174,7 +4180,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
     var linkval = "";
     var command = "";
     var bid = $(tile).attr("bid");
-    var uid =$(tile).attr("uid");
+    var uid = $(tile).attr("uid");
     var linkbid = bid;
     var hubid = $(tile).attr("hub");
     var linkhub = $(tile).attr("hubindex");
@@ -4344,13 +4350,14 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
             var linkhub = $(tile).attr("hubindex");
             var thingid = $(tile).attr("thingid");
             var tileid = $(tile).attr("tile");
+            var uid = $(tile).attr("uid");
             var roomid = $("#panel-"+panel).attr("roomid");
 
             // force use of command mode by setting attr to blank
             theattr = "";
             if ( thevalue ) {
                 $.post(cm_Globals.returnURL, 
-                    {api: ajaxcall, userid: userid, pname: pname, id: bid, thingid: thingid, tileid: tileid, type: thetype, value: thevalue, roomid: roomid, hint: hint,
+                    {api: ajaxcall, userid: userid, pname: pname, id: bid, thingid: thingid, tileid: tileid, uid: uid, type: thetype, value: thevalue, roomid: roomid, hint: hint,
                      attr: theattr, subid: "switch", hubid: hubid, hubindex: linkhub, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode} );
             }
         });
@@ -4362,10 +4369,10 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         msg += "hubtype = " + hubtype + "<br>";
         msg += "hubindex = " + linkhub + "<br>";
         msg += "hubid = " + hubid + "<br>";
-        msg += "thing id = " + thingid + "<br>";
-        msg += "scr id = " + uid + "<br>";
-        msg += "sql id = " + tileid + "<br>";
         msg += "dev id = " + bid + "<br>";
+        msg += "thing id = " + thingid + "<br>";
+        msg += "sql id = " + tileid + "<br>";
+        msg += "scr id = " + uid + "<br>";
         if ( hint && hint !== hubtype ) {
             msg += "hint = "+hint + "<br>";
         }

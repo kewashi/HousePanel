@@ -13,12 +13,13 @@ cm_Globals.id = null;
 cm_Globals.usertext = "";
 cm_Globals.reload = false;
 cm_Globals.tileid = null;
+cm_Globals.uid = null;
 cm_Globals.natives = [];
 // cm_Globals.thingidx = null;
 cm_Globals.defaultclick = "name";
 
 // tile custom popup box
-function customizeTile(userid, tileid, bid, thingid, str_type, hubnum) {  
+function customizeTile(userid, tileid, uid, bid, thingid, str_type, hubnum) {  
 
     // save our tile id in a global variable
     cm_Globals.devices = null;
@@ -32,6 +33,7 @@ function customizeTile(userid, tileid, bid, thingid, str_type, hubnum) {
 
     // this is the tileid value in the things list which is the base device.id value
     cm_Globals.tileid = tileid;
+    cm_Globals.uid = uid;
     cm_Globals.thingid = thingid;
 
     var customname;
@@ -57,7 +59,7 @@ function customizeTile(userid, tileid, bid, thingid, str_type, hubnum) {
                 }
                 checkDone("getrules");
             } else {
-                console.log(">>>> error - failure reading rules from database. ", pstatus);
+                console.error(">>>> error - failure reading rules from database. ", pstatus);
                 checkDone("getrules");
             }
         }, "json"
@@ -72,14 +74,14 @@ function customizeTile(userid, tileid, bid, thingid, str_type, hubnum) {
                 cm_Globals.devices = presult;
                 for ( var id in presult ) {
                     var val = presult[id];
-                    if ( val.deviceid === "clockdigital" ) {
-                        cm_Globals.currentid = val.id;
+                    if ( val.deviceid === bid ) {
+                        cm_Globals.currentid = val.uid;
                     }
-                }
+                };
                 checkDone("devices");
             } else {
                 cm_Globals.devices = null;
-                console.log(">>>> error - could not load devices to use the customizer");
+                console.error(">>>> error - could not load devices to use the customizer");
                 checkDone("devices");
             }
         }, "json"
@@ -100,7 +102,7 @@ function customizeTile(userid, tileid, bid, thingid, str_type, hubnum) {
 
         // start of dialog
         var dh = "<div id='customizeDialog' class='tileDialog'>";
-        dh += "<div class='editheader' id='cm_header'>Customizing Tile #" + tileid + "</div>";
+        dh += "<div class='editheader' id='cm_header'>Customizing Tile UID: " + uid + "</div>";
         dh+= "<table class ='cm_table'>";
         dh+= "<tr>";
             dh+= "<td colspan='2'>" +  customHeaderPanel() + "</td>";
@@ -124,7 +126,7 @@ function customizeTile(userid, tileid, bid, thingid, str_type, hubnum) {
                 $("body").off("keypress");
                 // reload window unless modal Tile Editor window is open
                 cm_Globals.tileid = null;
-                // cm_Globals.thingidx = null;
+                cm_Globals.uid = null;
 
                 // only reload if we made changes
                 closeModal("modalcustom");
@@ -141,8 +143,8 @@ function customizeTile(userid, tileid, bid, thingid, str_type, hubnum) {
                     return;
                 } else {
                     try {
-                        getDefaultSubids(cm_Globals.tileid);
-                        var thing = cm_Globals.devices[cm_Globals.tileid];
+                        getDefaultSubids();
+                        var thing = cm_Globals.devices[cm_Globals.uid];
                         $("#cm_subheader").html(thing.name);
                         initCustomActions();
                         handleBuiltin(cm_Globals.defaultclick);
@@ -249,8 +251,8 @@ function sortedSensors(unsorted, one, two, three) {
     return sensors;
 }
 
-function getDefaultSubids(tileid) {
-    loadExistingFields(tileid, null);
+function getDefaultSubids() {
+    loadExistingFields(null);
     $("#cm_customtype option[value='TEXT']").prop('selected',true);
     
     var pc = loadTextPanel();
@@ -279,12 +281,13 @@ function getExistingFields(tileid, curval) {
         if ( tileid==null || id !== tileid ) {
             var thingname = sensor["name"];
             var thingtype = sensor["devicetype"];
-            if ( id === curval ) {
+            if ( uid === curval ) {
                 selected = " selected";
             } else {
                 selected = "";
             }
-            results+= "<option value='" + id + "'" + selected + ">" + thingname + " (" + thingtype + ", id: "+id+", uid: "+uid+" hub: " + hubname + ")</option>";
+            // results+= "<option value='" + uid + "'" + selected + ">" + thingname + " (" + thingtype + ", id: "+id+", uid: "+uid+" hub: " + hubname + ")</option>";
+            results+= "<option value='" + uid + "'" + selected + ">" + thingname + " (" + thingtype + ", hub: " + hubname + ")</option>";
         }
     }
     return results;
@@ -305,7 +308,7 @@ function loadLinkPanel(curval) {
     dh+="</select></div>";
 
     // list of available fields to select for the linked tile
-    dh+= "<div class='cm_group'>Selected ID: <div id='cm_linkbid'></div>";
+    dh+= "<div class='cm_group'>Selected UID: <div id='cm_linkbid'></div>";
     dh+= "<div>Available Fields:</div>";
     dh+= "<select size='6' id='cm_linkfields' name='cm_linkfields'>"; 
     dh+="</select></div>";
@@ -388,7 +391,7 @@ function loadListPanel(loadedval) {
     loadedval = loadedval.toString();
 
     var arr = parseContent(servicetype, loadedval, null);
-    var linkid = arr[0];
+    var uid = arr[0];
     var curval = arr[1];
     var nreset = arr[2];
 
@@ -397,7 +400,7 @@ function loadListPanel(loadedval) {
     // pass null as the tile to skip since we want all of them
     // in fact the default tile will be this tile for most cases
     dh+= "<select id='cm_link' name='cm_link'>";    
-    dh+= getExistingFields( null, linkid);
+    dh+= getExistingFields( null, uid);
     dh+="</select></div>";
 
     // list of available fields to select for the linked tile
@@ -501,9 +504,9 @@ function loadUrlPanel() {
 }
 
 // returns an options list and subid list of available fields of a given tile
-function loadLinkItem(linkid, allowuser, defvalue) {
+function loadLinkItem(uid, allowuser, defvalue) {
     try {
-        var thing = cm_Globals.devices[linkid];
+        var thing = cm_Globals.devices[uid];
         var thevalue = thing.pvalue;
     } catch(e) {
         return null;
@@ -588,15 +591,15 @@ function loadLinkItem(linkid, allowuser, defvalue) {
 }
 
 function parseContent(customType, content, subid) {
-    var linkid;
+    var uid;
     var linkval;
     var nreset;
     if ( customType==="LINK") {
         var n = content===null ? -1 : content.indexOf("::");
         if ( n=== -1 ) {
-            // linkid = content==null ? cm_Globals.currentid : content;
-            linkid = content===null ? 1 : content;
-            var pvalue = cm_Globals.devices[linkid].pvalue;
+            // uid = content==null ? cm_Globals.currentid : content;
+            uid = content===null ? 1 : content;
+            var pvalue = cm_Globals.devices[uid].pvalue;
 
             // set a default subid field based on legacy subid or popular real subids to target
             var i = 0;
@@ -609,14 +612,14 @@ function parseContent(customType, content, subid) {
                 i++;
             }
         } else {
-            linkid = content.substring(0, n);
+            uid = content.substring(0, n);
             linkval = content.substring(n+2);
         }
     } else {
         var n = content===null ? -1 : content.indexOf("::");
         if ( n===-1 ) {
-            linkid = content===null ? cm_Globals.currentid : content;
-            var pvalue = cm_Globals.devices[linkid].pvalue;
+            uid = content===null ? cm_Globals.currentid : content;
+            var pvalue = cm_Globals.devices[uid].pvalue;
             // set a default subid field based on popular real subids to target
             var i = 0;
             for (var key in pvalue) {
@@ -633,18 +636,18 @@ function parseContent(customType, content, subid) {
             var part2 = content.substring(n+2);
             var m = part2.indexOf("::");
             if ( m=== -1 ) {
-                linkid = cm_Globals.tileid;
+                uid = cm_Globals.tileid;
                 linkval = part1;
                 nreset = part2;
             } else {
-                linkid = part1;
+                uid = part1;
                 linkval = part2.substring(0, m);
                 nreset = part2.substring(m+2);
             }
         }
     }
-    cm_Globals.currentid = linkid;
-    return [linkid, linkval, nreset];
+    cm_Globals.currentid = uid;
+    return [uid, linkval, nreset];
 }
 
  function initLinkActions(customType, content, subid) {
@@ -660,21 +663,22 @@ function parseContent(customType, content, subid) {
     function doInit(customType, content, subid) {
 
         var arr = parseContent(customType, content, subid);
-        var linkid = arr[0];
+        var uid = arr[0];
         var targetsubid = arr[1];
         var nreset = arr[2];
-        var device = cm_Globals.devices[linkid];
+        var device = cm_Globals.devices[uid];
 
         if ( !device ) {
-            console.log(">>>> No device returned for the linked tile: #", linkid);
+            console.log(">>>> No device returned for the linked tile: #", uid);
             return;
         }
         var bid = device.deviceid;
         
         // set the drop down list to the linked item
-        $("#cm_link").prop("value", linkid);
-        $("#cm_link option[value='" + linkid + "']").prop('selected',true).click();
-        $("#cm_linkbid").html(bid + " => Tile #" + linkid);
+        $("#cm_link").prop("value", uid);
+        $("#cm_link option[value='" + uid + "']").prop('selected',true).click();
+        // $("#cm_linkbid").html(bid + " => UID: " + uid);
+        $("#cm_linkbid").html("UID: " + uid);
 
         // load the type of reset for list types
         if ( customType==="LIST" ) {
@@ -683,7 +687,7 @@ function parseContent(customType, content, subid) {
         }
 
         // read the existing fields of the linked tile, excluded user items
-        results = loadLinkItem(linkid, false, targetsubid);
+        results = loadLinkItem(uid, false, targetsubid);
 
         if ( results ) {
             $("#cm_linkfields").html(results.fields);
@@ -709,7 +713,7 @@ function parseContent(customType, content, subid) {
             $("#cm_userfield").val(subid);
 
         } else {
-            console.log(`>>>> something went wrong loading ${customType} list. linkid = ${linkid} `);
+            console.log(`>>>> something went wrong loading ${customType} list. uid = ${uid} `);
         }
     }
     
@@ -718,8 +722,8 @@ function parseContent(customType, content, subid) {
     // then fill the list box with the subid's available
     $("#cm_link").off('change');
     $("#cm_link").on('change', function(event) {
-        var linkid = $(this).val();
-        cm_Globals.currentid = linkid;
+        var linkuid = $(this).val();
+        cm_Globals.currentid = linkuid;
         var localType = $("#cm_cutomtype").val();
         doInit(localType, null, null);
         event.stopPropagation();
@@ -886,9 +890,10 @@ function initCustomActions() {
     });
 }
  
-function loadExistingFields(tileid, subid) {
+function loadExistingFields(subid) {
     // show the existing fields
-    var results = loadLinkItem(tileid, true, subid);
+    var uid = cm_Globals.uid;
+    var results = loadLinkItem(uid, true, subid);
     if ( results ) {
 
         $("#cm_builtinfields").html(results.fields);
@@ -953,8 +958,8 @@ function initExistingFields() {
             return;
         }
         var tileid = cm_Globals.tileid;
-        var thing = cm_Globals.devices[tileid]
-        var uid = thing.uid;
+        var uid = cm_Globals.uid;
+        var thing = cm_Globals.devices[uid]
         var bid = thing.deviceid;
         var subid = $("#cm_userfield").val();
         var item = $("#cm_builtinfields option[value='"+subid+"']");
@@ -996,8 +1001,8 @@ function initExistingFields() {
             return;
         }
         var tileid = cm_Globals.tileid;
-        var thing = cm_Globals.devices[tileid]
-        var uid = thing.uid;
+        var uid = cm_Globals.uid;
+        var thing = cm_Globals.devices[uid]
         var bid = thing.deviceid;
         var ncount = $("#cm_builtinfields option[order]").length
         var subid = $("#cm_userfield").val();
@@ -1052,9 +1057,9 @@ function handleBuiltin(subid) {
     // var idx = cm_Globals.thingidx;
     // var allthings = cm_Globals.allthings;
     // var thing = allthings[idx];
-    var tileid = cm_Globals.tileid;
-    var thing = cm_Globals.devices[tileid]
-    var value = thing.pvalue;
+    // var uid = cm_Globals.uid;
+    // var thing = cm_Globals.devices[uid]
+    // var value = thing.pvalue;
 
     var item = $("#cm_builtinfields option[value='"+subid+"']");
     var cmtype = $(item).attr("command");
@@ -1144,8 +1149,8 @@ function handleBuiltin(subid) {
 function applyCustomField(action, subid) {
 
     var tileid = cm_Globals.tileid;
-    var thing = cm_Globals.devices[tileid]
-    var uid = thing.uid;
+    var uid = cm_Globals.uid;
+    var thing = cm_Globals.devices[uid]
     var bid = thing.deviceid;
     var nreset = "d";
     var targetsubid = subid;
@@ -1249,7 +1254,7 @@ function applyCustomField(action, subid) {
 
     // change call variables to make more sense to reuse this function to edit customizations in info page (see editrules)
     var callobj = {api: action, userid: cm_Globals.options.userid, id: bid, type: customtype, value: content,
-                   rules: rules, tileid: tileid, subid: subid, hpcode: cm_Globals.options.hpcode};
+                   rules: rules, tileid: tileid, uid: uid, subid: subid, hpcode: cm_Globals.options.hpcode};
     $.post(cm_Globals.returnURL, callobj,
         function (presult, pstatus) {
             if (pstatus==="success") {
@@ -1257,11 +1262,11 @@ function applyCustomField(action, subid) {
                 
                 // update the visual boxes on screen
                 if ( action==="addcustom" ) {
-                    loadExistingFields(cm_Globals.tileid, subid);
+                    loadExistingFields(subid);
                     loadRightPanel(customtype, content, subid);
                     initExistingFields();
                 } else {
-                    loadExistingFields(cm_Globals.tileid, null);
+                    loadExistingFields(null);
                     loadRightPanel("TEXT", null, null);
                     initExistingFields();
                 }
@@ -1277,9 +1282,10 @@ function showPreview() {
     var thingid = cm_Globals.thingid;
     var bid = cm_Globals.id;
     var tileid = cm_Globals.tileid;
+    var uid = cm_Globals.uid;
     var str_type = cm_Globals.type;
     var swattr = cm_Globals.customname;
-    var device = clone(cm_Globals.devices[tileid]);
+    var device = clone(cm_Globals.devices[uid]);
 
     // make an unresolved item for each rule/link
     if ( cm_Globals.rules ) {
@@ -1303,10 +1309,11 @@ function showPreview() {
     var thingvalue = encodeURI(JSON.stringify(device));
     
     $.post(cm_Globals.returnURL, 
-        {api: "wysiwyg", userid: cm_Globals.options.userid, tileid: tileid, 
+        {api: "wysiwyg", userid: cm_Globals.options.userid, tileid: tileid, uid: uid,
          id: bid, thingid: thingid, type: str_type, value: thingvalue, attr: swattr, hpcode: cm_Globals.options.hpcode},
         function (presult, pstatus) {
             if (pstatus==="success" ) {
+                // console.log(">>>> ", presult);
                 $("#cm_preview").html(presult);       
                 // activate click on items
                 $("#te_wysiwyg").off('click');

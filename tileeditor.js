@@ -14,7 +14,7 @@ et_Globals.priorIcon = "none";
 et_Globals.tileCount = 0;
 et_Globals.clipboard = [];
 
-function editTile(userid, thingid, pagename, str_type, thingindex, bid, thingclass, hubid, hubindex, hubType, customname, htmlcontent) {  
+function editTile(userid, thingid, pagename, str_type, thingindex, uid, bid, thingclass, hubid, hubindex, hubType, customname, htmlcontent) {  
     var returnURL = cm_Globals.returnURL;
     et_Globals.id = bid;          // roomnum for pages
     et_Globals.hubid = hubid;
@@ -24,6 +24,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, bid, thingcla
     et_Globals.roomnum = bid ? bid : 0;
     et_Globals.userid = userid;
     et_Globals.thingid = thingid;
+    et_Globals.uid = uid;
 
     if ( str_type==="page" ) {
         et_Globals.wholetarget = getCssRuleTarget(str_type, "panel", pagename, "thistile");
@@ -31,14 +32,14 @@ function editTile(userid, thingid, pagename, str_type, thingindex, bid, thingcla
         et_Globals.wholetarget = getCssRuleTarget(str_type, "wholetile", thingindex, "thitile");
     }
 
-    var dialog_html = "<div id='tileDialog' class='tileDialog' str_type='" + str_type + "' thingindex='" + thingindex +"' >";
+    var dialog_html = `<div id='tileDialog' class='tileDialog' str_type='${str_type}' thingindex='${thingindex}' uid='${uid}'>`;
     if ( str_type==="page" ) {
-        dialog_html += "<div class='editheader' id='editheader'>Editing Page#" + et_Globals.roomnum + 
-                   " Name: " + et_Globals.pagename + "</div>";
+        dialog_html += "<div class='editheader' id='editheader'>Editing Page #" + et_Globals.roomnum + 
+                   ", Name: " + et_Globals.pagename + "</div>";
         
     } else {
-        dialog_html += "<div class='editheader' id='editheader'>Editing Tile #" + thingindex + 
-                   " of Type: " + str_type + "</div>";
+        dialog_html += "<div class='editheader' id='editheader'>Editing Tile #" + uid + 
+                   ", Type: " + str_type + "</div>";
     }
 
     // option on the left side
@@ -79,7 +80,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, bid, thingcla
         htmlcontent = "<div class=\"" + thingclass + "\" id='te_wysiwyg'>" + htmlcontent + "</div>";
 
         jqxhr = $.post(returnURL, 
-            {api: "wysiwyg", userid: userid, thingid: thingid, id: bid, type: str_type, tile: thingindex, value: "", attr: "", hpcode: cm_Globals.options.hpcode},
+            {api: "wysiwyg", userid: userid, thingid: thingid, id: bid, type: str_type, tileid: thingindex, uid: uid, value: "", attr: "", hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;
@@ -562,8 +563,9 @@ function initOnceBinds(str_type, thingindex) {
     $("#scopeEffect").on('change', function(event) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
+        var uid = $("#tileDialog").attr("uid");
         var subid = $("#subidTarget").html();
-        initColor(str_type, subid, thingindex);
+        initColor(str_type, subid, thingindex, uid);
         initDialogBinds(str_type, thingindex);
         event.stopPropagation();
     });
@@ -573,6 +575,7 @@ function initOnceBinds(str_type, thingindex) {
     $("#subidselect").on('change', function(event) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
+        var uid = $("#tileDialog").attr("uid");
         var subid = $(event.target).val();
 
         if ( str_type!=="page" ) {
@@ -580,7 +583,7 @@ function initOnceBinds(str_type, thingindex) {
             var targetid = "#x_a-"+$(target).attr("aid")+"-"+subid;
             toggleTile(targetid, str_type, subid, false);
         }
-        initColor(str_type, subid, thingindex);
+        initColor(str_type, subid, thingindex, uid);
         initDialogBinds(str_type, thingindex);
         event.stopPropagation();
     });
@@ -591,6 +594,7 @@ function initOnceBinds(str_type, thingindex) {
     $(`#tileDisplay div.thing.${str_type}-thing`).off('click', trigger);
     $(`#tileDisplay div.thing.${str_type}-thing`).on('click', trigger, function(event) {
         var target = event.target;
+        var uid = $("#tileDialog").attr("uid");
         if ( ! $(target).attr("aid") ) {
             target = $(target).parent();
             if ( ! $(target).attr("aid") ) {
@@ -602,10 +606,12 @@ function initOnceBinds(str_type, thingindex) {
         var targetid = "#"+$(target).attr("id");
         var ustr_type = $("#t-"+taid).attr("type");
         var uthingindex = $("#t-"+taid).attr("tile");
+        var uuid = $("#t-"+taid).attr("uid");
 
         if ( ustr_type && uthingindex ) {
             str_type = ustr_type;
             thingindex = uthingindex;
+            uid = uuid;
         }
 
         $("#tileDialog").attr("str_type",str_type);
@@ -617,7 +623,7 @@ function initOnceBinds(str_type, thingindex) {
         // update everything to reflect current tile
         $("#subidselect").val(subid);
         toggleTile(targetid, str_type, subid, true);
-        initColor(str_type, subid, thingindex);
+        initColor(str_type, subid, thingindex, uid);
         initDialogBinds(str_type, thingindex);
         event.stopPropagation();
     });
@@ -1649,8 +1655,8 @@ function setupClicks(str_type, thingindex) {
         var targetid = "#x_a-"+$(target).attr("aid")+"-"+firstsub;
         toggleTile( targetid, str_type, firstsub, false);
     }
-
-    initColor(str_type, firstsub, thingindex);
+    var uid = $("#tileDialog").attr("uid");
+    initColor(str_type, firstsub, thingindex, uid);
     loadSubSelect(str_type, firstsub, thingindex);
     getIcons();
     initDialogBinds(str_type, thingindex);
@@ -1946,7 +1952,7 @@ function getResetButton() {
 }
 
 // add all the color selectors
-function initColor(str_type, subid, thingindex) {
+function initColor(str_type, subid, thingindex, uid) {
   
     var onstart;
     if ( subid==="thingname" ) {
@@ -1958,7 +1964,7 @@ function initColor(str_type, subid, thingindex) {
         newtitle = "Editing Page#" + et_Globals.id + " Name: " + thingindex;
         $("#labelName").html("Page Name");
     } else {
-        newtitle = "Editing Tile #" + thingindex + " of Type: " + str_type;
+        newtitle = "Editing Tile #" + uid + ", Type: " + str_type;
         $("#labelName").html("Tile Name");
         var tgname = getCssRuleTarget(str_type, "name", thingindex, "thistile");
         var name =  $(tgname).html();
@@ -2819,7 +2825,7 @@ function delImages(files) {
                         $(this).remove();
                     }
                 });
-                console.log(`>>>> files removed: `, presult);
+                // console.log(`>>>> files removed: `, presult);
             } else {
                 console.error("Error attempting to remove files: ", files, " status: ", pstatus);
             }
@@ -3062,7 +3068,7 @@ function saveClipboard(userid, str_type, thingindex, rules) {
         {api: "clipboard", userid: userid, type: str_type, tile: thingindex, value: rules, attr: "save", hpcode: cm_Globals.options.hpcode},
         function (presult, pstatus) {
             if (pstatus==="success" ) {
-                console.log(`>>>> clipboard updated with ${rules.length} items: `, rules);
+                // console.log(`>>>> clipboard updated with ${rules.length} items: `, rules);
                 $("#clipboard").val(rules.length + " items");
                 et_Globals.clipboard = rules;
             }
