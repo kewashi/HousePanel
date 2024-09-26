@@ -1309,11 +1309,8 @@ function showPreview() {
     }
 
     var thingvalue = encodeURI(JSON.stringify(device));
-    var theobj = {api: "wysiwyg", userid: cm_Globals.options.userid, tileid: tileid, uid: uid, panel: panel,
-        id: bid, thingid: thingid, type: str_type, value: thingvalue, attr: swattr, hpcode: cm_Globals.options.hpcode};
-    
     $.post(cm_Globals.returnURL, 
-        {api: "wysiwyg", userid: cm_Globals.options.userid, tileid: tileid, uid: uid,
+        {api: "wysiwyg", userid: cm_Globals.options.userid, tileid: tileid, uid: uid, roomname: panel,
          id: bid, thingid: thingid, type: str_type, value: thingvalue, attr: swattr, hpcode: cm_Globals.options.hpcode},
         function (presult, pstatus) {
             if (pstatus==="success" ) {

@@ -9327,7 +9327,7 @@ function apiCall(user, body, protocol, res) {
                     var devices_fields = "devices.id as devices_id, devices.uid as devices_uid, devices.userid as devices_userid, devices.deviceid as devices_deviceid, " +
                         "devices.name as devices_name, devices.devicetype as devices_devicetype, devices.hint as devices_hint, devices.hubid as devices_hubid, " +
                         "devices.refresh as devices_refresh, devices.pvalue as devices_pvalue, " +
-                        "hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubhost as hubs_hubhost, hubs.hubname as hubs_hubname, " +
+                        "hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubhost as hubs_hubhost, hubs.hubname as hubs_hubname, hubs.hubtype as hubs_hubtype, " +
                         "hubs.clientid as hubs_clientid, hubs.clientsecret as hubs_clientsecret, hubs.hubaccess as hubs_hubaccess, hubs.hubrefresh as hubs_hubrefresh, " +
                         "hubs.useraccess as hubs_useraccess, hubs.userendpt as hubs_userendpt, hubs.hubtimer as hubs_hubtimer";
                     var result = Promise.all([
@@ -9345,11 +9345,12 @@ function apiCall(user, body, protocol, res) {
                         });
                         // var device = alldevices[uid];
                         // var pvalue = decodeURI2(device.pvalue);
+                        var linkdev = alldevices[uid];
                         var device = JSON.parse(decodeURI(swval));
                         var pvalue = device.pvalue;
 
-                        var thesensor = {id: swid, name: device.name, thingid: 999, uid: uid, roomid: 0, 
-                                         type: device.devicetype, hubnum: "-1", hubindex: device.hubid, hubtype: "Unknown", 
+                        var thesensor = {id: swid, name: device.name, thingid: -1, uid: uid, roomid: 0, 
+                                         type: device.devicetype, hubnum: linkdev["hubs_hubid"], hubindex: device.hubid, hubtype: linkdev["hubs_hubtype"], 
                                          hint: device.hint, refresh: device.refresh, value: pvalue};
                         var customname = swattr;
                         return makeThing(userid, pname, configoptions, tileid, thesensor, roomname, 0, 0, 999, customname, "te_wysiwyg", alldevices);
