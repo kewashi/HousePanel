@@ -19,7 +19,7 @@ cm_Globals.natives = [];
 cm_Globals.defaultclick = "name";
 
 // tile custom popup box
-function customizeTile(userid, tileid, uid, bid, thingid, str_type, hubnum) {  
+function customizeTile(userid, tileid, uid, bid, thingid, str_type, hubnum, panel) {  
 
     // save our tile id in a global variable
     cm_Globals.devices = null;
@@ -28,6 +28,7 @@ function customizeTile(userid, tileid, uid, bid, thingid, str_type, hubnum) {
     cm_Globals.reload = false;
     cm_Globals.userid = userid;
     cm_Globals.type = str_type;
+    cm_Globals.panel = panel;
     cm_Globals.rules = [];
     var isdone = {getrules: false, devices: false};
 
@@ -59,7 +60,7 @@ function customizeTile(userid, tileid, uid, bid, thingid, str_type, hubnum) {
                 }
                 checkDone("getrules");
             } else {
-                console.error(">>>> error - failure reading rules from database. ", pstatus);
+                console.error("error - failure reading rules from database. ", pstatus);
                 checkDone("getrules");
             }
         }, "json"
@@ -81,7 +82,7 @@ function customizeTile(userid, tileid, uid, bid, thingid, str_type, hubnum) {
                 checkDone("devices");
             } else {
                 cm_Globals.devices = null;
-                console.error(">>>> error - could not load devices to use the customizer");
+                console.error("error - could not load devices to use the customizer");
                 checkDone("devices");
             }
         }, "json"
@@ -669,7 +670,7 @@ function parseContent(customType, content, subid) {
         var device = cm_Globals.devices[uid];
 
         if ( !device ) {
-            console.log(">>>> No device returned for the linked tile: #", uid);
+            console.error("error - No device returned for the linked tile: #", uid);
             return;
         }
         var bid = device.deviceid;
@@ -713,7 +714,7 @@ function parseContent(customType, content, subid) {
             $("#cm_userfield").val(subid);
 
         } else {
-            console.log(`>>>> something went wrong loading ${customType} list. uid = ${uid} `);
+            console.error(`error - something went wrong loading ${customType} list. uid = ${uid} `);
         }
     }
     
@@ -1286,7 +1287,8 @@ function showPreview() {
     var str_type = cm_Globals.type;
     var swattr = cm_Globals.customname;
     var device = clone(cm_Globals.devices[uid]);
-
+    var panel = cm_Globals.panel;
+    
     // make an unresolved item for each rule/link
     if ( cm_Globals.rules ) {
         cm_Globals.rules.forEach(rule => {
@@ -1307,15 +1309,15 @@ function showPreview() {
     }
 
     var thingvalue = encodeURI(JSON.stringify(device));
+    var theobj = {api: "wysiwyg", userid: cm_Globals.options.userid, tileid: tileid, uid: uid, panel: panel,
+        id: bid, thingid: thingid, type: str_type, value: thingvalue, attr: swattr, hpcode: cm_Globals.options.hpcode};
     
     $.post(cm_Globals.returnURL, 
         {api: "wysiwyg", userid: cm_Globals.options.userid, tileid: tileid, uid: uid,
          id: bid, thingid: thingid, type: str_type, value: thingvalue, attr: swattr, hpcode: cm_Globals.options.hpcode},
         function (presult, pstatus) {
             if (pstatus==="success" ) {
-                // console.log(">>>> ", presult);
                 $("#cm_preview").html(presult);       
-                // activate click on items
                 $("#te_wysiwyg").off('click');
                 $("#te_wysiwyg").on('click', function(event) {
                     var subid = $(event.target).attr("subid");

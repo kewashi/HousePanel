@@ -63,7 +63,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, uid, bid, thi
     if ( str_type==="page" ) {
         var roomnum = et_Globals.roomnum;
         jqxhr = $.post(returnURL, 
-            {api: "pagetile", userid: userid, thingid: thingid, id: roomnum, type: 'page', value: pagename, attr: customname, hpcode: cm_Globals.options.hpcode},
+            {api: "pagetile", userid: userid, thingid: thingid, id: roomnum, type: 'page', value: pagename, pagename: pagename, attr: customname, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if (pstatus==="success" ) {
                     htmlcontent = presult;

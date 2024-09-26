@@ -2,10 +2,10 @@
     "packageName": "HousePanel",
 	"minimumHEVersion": "2.1.9",
 	"author": "Ken Washington",
-	"version": "3.4.3",
+	"version": "3.4.4",
 	"dateReleased": "2024-09-22",
 	"licenseFile": "",
-	"releaseNotes": "V3.4.3 New uid field for devices to keep tile numbers low for each user. Made device reads more robust. This update requires the Node.js modules to be updated. See https://housepanel.net for documentation.",
+	"releaseNotes": "V3.4.4 Bugfix for tile customizer to properly display LINK items in devices. This update requires the Node.js modules to be updated. See https://housepanel.net for documentation.",
 	"apps" : [
 		{
 			"id" : "56776347-587d-4e5d-8a1a-bbd02238f63f",

@@ -1473,9 +1473,11 @@ div.thing div.overlay.color {
 /* this makes cirles for color selections */
 div.thing div.overlay.color div.color {
     position: absolute;
-    width: auto;
+    width: 58px;
+    left: 10px;
+    padding-left: 0px;
     display: block;
-    margin-top: 30px;
+    margin-top: 32px;
     z-index: 9999;
 }
 

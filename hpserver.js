@@ -4498,6 +4498,7 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
         var ipos = helperval.indexOf("::");
         var command = helperval.substr(0, ipos);
         var linkval = helperval.substr(ipos+2);
+        var linktileval = linkval;
         var sibling;
 
         var jpos = linkval.indexOf("::");
@@ -4509,11 +4510,11 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
             // for new links this will be the realsubid for legacy links it will be the subid used in the link
             // realsubid = linkval.substr(0, jpos)
             // var linkid = linkval.substr(jpos+2);
-            var linkid = linkval.substring(0, jpos);
+            var linkuid = linkval.substring(0, jpos);
             realsubid = linkval.substring(jpos+2);
 
             // get the device for this linked tile
-            var linkdev = alldevices[linkid];
+            var linkdev = alldevices[linkuid];
             if ( linkdev && realsubid ) {
                 
                 // replace the place holder value with the linked value
@@ -4521,9 +4522,9 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
                     linktype = linkdev["devices_devicetype"];
                     linkid = linkdev["devices_id"];
                     linkbid = linkdev["devices_deviceid"];
-                    linkhub = linkdev["hubs_id"];
+                    linkhub = linkdev["devices_hubid"];
                     hint = linkdev["devices_hint"];
-                    var linktileval = decodeURI2(linkdev["devices_pvalue"]);
+                    linktileval = decodeURI2(linkdev["devices_pvalue"]);
 
                     // put linked val through the customization
                     // also include processing of special tiles that could be linked too
@@ -4573,7 +4574,7 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
                 helperval = "LINK::error";
                 tval = "LINK::error";
             }
-            sibling= "<div id=\"" + wwx + "sb-"+cnt+"-"+subid+"\""+" aid=\""+cnt+"\" linkid=\""+linkid+"\" hint=\""+hint+"\" linktype=\""+linktype+"\" linkhub=\""+linkhub+"\" linkval=\""+helperval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
+            sibling= "<div id=\"" + wwx + "sb-"+cnt+"-"+subid+"\""+" aid=\""+cnt+"\" linkuid=\""+linkuid+"\" hint=\""+hint+"\" linktype=\""+linktype+"\" linkhub=\""+linkhub+"\" linkval=\""+helperval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
         }
 
         // use the original type here so we have it for later
@@ -7223,7 +7224,8 @@ function addThing(userid, pname, bid, thingtype, panel, hubid, hubindex, roomid,
         "devices.name as devices_name, devices.devicetype as devices_devicetype, devices.hint as devices_hint, " +
         "devices.refresh as devices_refresh, devices.pvalue as devices_pvalue, " +
         "hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubtype as hubs_hubtype";
-        return mydb.getRow("devices", fields, "devices.userid = "+userid+" AND hubs.hubid='"+hubid+"' AND devices.deviceid='"+bid+"' AND devices.devicetype='"+thingtype+"'", joinstr)
+        // return mydb.getRow("devices", fields, "devices.userid = "+userid+" AND hubs.hubid='"+hubid+"' AND devices.deviceid='"+bid+"' AND devices.devicetype='"+thingtype+"'", joinstr)
+        return mydb.getRow("devices", fields, "devices.userid = "+userid+" AND hubs.id='"+hubindex+"' AND devices.deviceid='"+bid+"' AND devices.devicetype='"+thingtype+"'", joinstr)
         .then(row => {
             if ( row && is_object(row) ) {
 
@@ -7232,6 +7234,7 @@ function addThing(userid, pname, bid, thingtype, panel, hubid, hubindex, roomid,
                 var uid = device["devices_uid"];
                 var hint = device["devices_hint"];
                 var refresh = device["devices_refresh"];
+                var hubid = device["hubs_hubid"];
                 var hubtype = device["hubs_hubtype"];
                 var pvalue = decodeURI2(device["devices_pvalue"]);
                 hubindex = device["hubs_id"];
@@ -7789,7 +7792,7 @@ function getCatalog(userid, hubpick, hubs, useroptions, sensors) {
         var thingtype = device["devices_devicetype"];
         var thingname = device["devices_name"] || "";
         var hubId = device["hubs_hubid"];
-        var hubindex = device["hubs_id"];
+        var hubindex = device["devices_hubid"];
         var id = device["devices_id"];
         var uid = device["devices_uid"];
         var cat = "cat-" + id.toString();
@@ -8516,7 +8519,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
     // first get the room list and make the header
     var devices_joinstr = mydb.getJoinStr("devices","hubid","hubs","id");
     var devices_fields = "devices.id as devices_id, devices.uid as devices_uid, devices.userid as devices_userid, devices.deviceid as devices_deviceid, " +
-        "devices.name as devices_name, devices.devicetype as devices_devicetype, devices.hint as devices_hint, " +
+        "devices.name as devices_name, devices.devicetype as devices_devicetype, devices.hint as devices_hint, devices.hubid as devices_hubid, " +
         "devices.refresh as devices_refresh, devices.pvalue as devices_pvalue, " +
         "hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubhost as hubs_hubhost, hubs.hubname as hubs_hubname, " +
         "hubs.clientid as hubs_clientid, hubs.clientsecret as hubs_clientsecret, hubs.hubaccess as hubs_hubaccess, hubs.hubrefresh as hubs_hubrefresh, " +
@@ -9020,9 +9023,9 @@ function updCustom(userid, tileid, swid, swval, oldsubid, subid, swtype, rules) 
                 .then( ()=> {
                     if ( content ) {
                         var arr = parseCustomizeContent(tileid, content);
-                        var linkid = arr[0];
+                        var uid = arr[0];
                         var targetsubid = arr[1];
-                        mydb.getRow("devices","*", `userid = ${userid} AND id = ${linkid}`)
+                        mydb.getRow("devices","*", `userid = ${userid} AND uid = ${uid}`)
                         .then(device => {
                             if ( device ) {
                                 var pvalue = decodeURI2(device.pvalue);
@@ -9162,6 +9165,7 @@ function apiCall(user, body, protocol, res) {
     var roomid = body["roomid"] || 0;
     var hubindex = body["hubindex"] || 0;
     var hint = body["hint"] || "";
+    var roomname = body["roomname"] || "Unknown";
    
     // new logic now gets this info from DB so user doesn't need to pass it in a post api call
     // but they do need to have the special hpcode value or you wouldn't get this far
@@ -9288,7 +9292,6 @@ function apiCall(user, body, protocol, res) {
                 if ( protocol==="POST" ) {
                     var tc = "";
                     var roomnum = swid;
-                    var roomname = swval;
 
                     // a fake tile for pages that includes tabs
                     tc += "<div id=\"pe_wysiwyg\" class=\"thing page-thing\" type=\"page\">";
@@ -9319,9 +9322,17 @@ function apiCall(user, body, protocol, res) {
 
             case "wysiwyg":
                 if ( protocol==="POST" ) {
+
+                    var devices_joinstr = mydb.getJoinStr("devices","hubid","hubs","id");
+                    var devices_fields = "devices.id as devices_id, devices.uid as devices_uid, devices.userid as devices_userid, devices.deviceid as devices_deviceid, " +
+                        "devices.name as devices_name, devices.devicetype as devices_devicetype, devices.hint as devices_hint, devices.hubid as devices_hubid, " +
+                        "devices.refresh as devices_refresh, devices.pvalue as devices_pvalue, " +
+                        "hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubhost as hubs_hubhost, hubs.hubname as hubs_hubname, " +
+                        "hubs.clientid as hubs_clientid, hubs.clientsecret as hubs_clientsecret, hubs.hubaccess as hubs_hubaccess, hubs.hubrefresh as hubs_hubrefresh, " +
+                        "hubs.useraccess as hubs_useraccess, hubs.userendpt as hubs_userendpt, hubs.hubtimer as hubs_hubtimer";
                     var result = Promise.all([
                         mydb.getRows("configs", "*", "userid = "+userid),
-                        mydb.getRows("devices", "*", "userid = "+userid)
+                        mydb.getRows("devices", devices_fields, "devices.userid = " + userid + " GROUP BY devices.deviceid, devices.devicetype", devices_joinstr, "hubs.hubid, devices.name")
                     ])
                     .then(results => {
                         var configoptions = results[0];
@@ -9329,17 +9340,19 @@ function apiCall(user, body, protocol, res) {
                         var alldevices = {};
                         var luid;
                         devices.forEach(function(dev) {
-                            luid = dev["uid"];
+                            luid = dev["devices_uid"];
                             alldevices[luid] = dev;
                         });
-                        var device = alldevices[uid];
+                        // var device = alldevices[uid];
+                        // var pvalue = decodeURI2(device.pvalue);
+                        var device = JSON.parse(decodeURI(swval));
+                        var pvalue = device.pvalue;
 
-                        var pvalue = decodeURI2(device.pvalue);                        
                         var thesensor = {id: swid, name: device.name, thingid: 999, uid: uid, roomid: 0, 
-                                         type: device.devicetype, hubnum: "-1", hubindex: device.hubid, hubtype: "None", 
+                                         type: device.devicetype, hubnum: "-1", hubindex: device.hubid, hubtype: "Unknown", 
                                          hint: device.hint, refresh: device.refresh, value: pvalue};
                         var customname = swattr;
-                        return makeThing(userid, pname, configoptions, tileid, thesensor, "wysiwyg", 0, 0, 999, customname, "te_wysiwyg", alldevices);
+                        return makeThing(userid, pname, configoptions, tileid, thesensor, roomname, 0, 0, 999, customname, "te_wysiwyg", alldevices);
                     }).catch(reason => {
                         console.error( (ddbg()), reason);
                         return null;
@@ -9373,9 +9386,8 @@ function apiCall(user, body, protocol, res) {
 
             case "addthing":
                 if ( protocol==="POST" ) {
-                    var rname = swval;
                     var startpos = swattr;
-                    result = addThing(userid, pname, swid, swtype, rname, hubid, hubindex, roomid, startpos);
+                    result = addThing(userid, pname, swid, swtype, roomname, hubid, hubindex, roomid, startpos);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -9384,8 +9396,7 @@ function apiCall(user, body, protocol, res) {
             // use the new thingid for the swattr value to delete the specific thing on the page
             case "delthing":
                 if ( protocol==="POST" ) {
-                    var rname = swval;
-                    result = delThing(userid, swid, swtype, rname, tileid, uid, thingid);
+                    result = delThing(userid, swid, swtype, roomname, tileid, uid, thingid);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -9393,7 +9404,6 @@ function apiCall(user, body, protocol, res) {
 
             case "pagedelete":
                 if ( protocol==="POST" ) {
-                    var roomname = swval;
                     result = delPage(userid, roomid, roomname, pname);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";

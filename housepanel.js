@@ -1376,7 +1376,7 @@ function setupColors() {
                 var linkbid = bid;
                 var linkhub = hubindex;
                 var realsubid = subid;
-                var linkid = 0;
+                var linkuid = 0;
     
                 if ( usertile && usertile.attr("command") ) {
                     command = usertile.attr("command");    // command type
@@ -1385,7 +1385,7 @@ function setupColors() {
                     linkhub = usertile.attr("linkhub");
                     linktype = usertile.attr("linktype");
                     realsubid = usertile.attr("subid");
-                    linkid = usertile.attr("linkid");
+                    linkuid = usertile.attr("linkuid");
                 }
                 if ( typeof linkval === "string" && 
                      (linkval.startsWith("GET::") || linkval.startsWith("POST::") || 
@@ -1400,7 +1400,7 @@ function setupColors() {
                     linkval = "";
                 }
                 console.log("setupColors: userid= ", userid, " thingid= ", thingid, " tileid= ", tileid, " hint= ", hint,
-                " command= ", command, " bid= ", bid, " uid= ", uid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", hubid, " linkhub= ", linkhub,
+                " command= ", command, " bid= ", bid, " uid= ", uid, " linkbid= ", linkbid, " linkuid= ", linkuid, " hub= ", hubid, " linkhub= ", linkhub,
                 " type= ", thetype, " linktype= ", linktype, " subid= ", subid, " value= ", hslstr, 
                 " linkval= ", linkval, " attr=", hexval, " hpcode: ", cm_Globals.options.hpcode);
 
@@ -1442,7 +1442,7 @@ function setupSliders() {
         var linkbid = bid;
         var realsubid = subid;
         var linkhub = hubindex;
-        var linkid = 0;
+        var linkuid = 0;
 
         if ( usertile && usertile.attr("command") ) {
             command = usertile.attr("command");    // command type
@@ -1451,7 +1451,7 @@ function setupSliders() {
             linkhub = usertile.attr("linkhub");
             linktype = usertile.attr("linktype");
             realsubid = usertile.attr("subid");
-            linkid = usertile.attr("linkid");
+            linkuid = usertile.attr("linkuid");
             hint = usertile.attr("hint");
         }
 
@@ -1463,12 +1463,9 @@ function setupSliders() {
             var jcolon = linkval.indexOf("::");
             command = linkval.substring(0, jcolon);
             linkval = linkval.substring(jcolon+2);
-        // } else {
-        //     command = "";
-        //     linkval = "";
         }
 
-        console.log("Slider action: command= ", command, " uid= ", uid, " bid= ", bid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", linkhub, " type= ", 
+        console.log("Slider action: command= ", command, " uid= ", uid, " bid= ", bid, " linkbid= ", linkbid, " linkuid= ", linkuid, " hub= ", linkhub, " type= ", 
                      linktype, " subid= ", realsubid, " hint= ", hint, " value= ", thevalue, " linkval= ", linkval, " hpcode: ", cm_Globals.options.hpcode);
         $.post(cm_Globals.returnURL, 
             {api: "doaction", userid: userid, pname: pname, id: linkbid, uid: uid, thingid: thingid, type: linktype, value: thevalue, attr: subid, hint: hint,
@@ -1877,7 +1874,7 @@ function setupDraggable() {
                                 // add it to the system
                                 // the ajax call must return a valid "div" block for the dragged new thing
                                 $.post(cm_Globals.returnURL, 
-                                    {api: "addthing", userid: userid, pname: pname, id: bid, type: thingtype, value: panel, panelid: panelid, 
+                                    {api: "addthing", userid: userid, pname: pname, id: bid, type: thingtype, value: panel, roomname: panel, panelid: panelid, 
                                      attr: startPos, hubid: hubid, hubindex: hubindex, roomid: roomid, pname: pname, tileid: 0, hpcode: cm_Globals.options.hpcode},
                                     function (presult, pstatus) {
                                         if (pstatus==="success" && !presult.startsWith("error") ) {
@@ -2856,7 +2853,8 @@ function addEditLink() {
             var uid = $(thing).attr("uid");
             var bid = $(thing).attr("bid");
             var hubid = $(thing).attr("hub");
-            customizeTile(userid, tileid, uid, bid, thingid, str_type, hubid);
+            var panel = $(thing).attr("panel");
+            customizeTile(userid, tileid, uid, bid, thingid, str_type, hubid, panel);
         }
     });
     
@@ -2890,7 +2888,7 @@ function addEditLink() {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
                 $.post(cm_Globals.returnURL, 
-                    {api: "delthing", userid: userid, id: bid, type: thingtype, value: panel, 
+                    {api: "delthing", userid: userid, id: bid, type: thingtype, value: panel, roomname: panel,
                                           attr: "", hubid: hubid, tileid: tileid, uid: uid, thingid: thingid, roomid: roomid, 
                                           pname: pname, panelid: panelid, hpcode: cm_Globals.options.hpcode},
                     function (presult, pstatus) {
@@ -2969,7 +2967,7 @@ function addEditLink() {
                 // remove it from the system
                 $.post(cm_Globals.returnURL, 
                     {api: "pagedelete", userid: cm_Globals.options.userid, id: roomnum, type: "none", hpcode: cm_Globals.options.hpcode,
-                                            value: roomname, roomid: roomid, attr: "none", panelid: panelid, pname: pname},
+                                            value: roomname, roomname: roomname, roomid: roomid, attr: "none", panelid: panelid, pname: pname},
                     function (presult, pstatus) {
                         if (pstatus==="success" && typeof presult === "string" && !presult.startsWith("error") ) {
                             $("li[roomnum="+roomnum+"]").remove();
@@ -4229,7 +4227,6 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
     // new logic based on DB version
     var usertile =  $("#sb-"+thingid+"-"+subid);
     var linkval = thevalue;
-    var linkid = 0;
     if ( usertile && usertile.attr("linkval") ) {
         command = usertile.attr("command");
         linkval = usertile.attr("linkval");
@@ -4240,7 +4237,6 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         if ( subid.endsWith("-dn") || subid.endsWith("up") ) {
             realsubid += subid.substring(subid.length-3);
         }
-        linkid = usertile.attr("linkid");
         hint = usertile.attr("hint");
     }
 
@@ -4444,7 +4440,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         }
 
         console.log("userid= ", userid, " thingid= ", thingid, " tileid= ", tileid, " hint= ", hint,
-                    " command= ", command, " bid= ", bid, " linkbid= ", linkbid, " linkid= ", linkid, " hub= ", hubid, " linkhub= ", linkhub,
+                    " command= ", command, " bid= ", bid, " linkbid= ", linkbid, " hub= ", hubid, " linkhub= ", linkhub,
                     " type= ", thetype, " linktype= ", linktype, " subid= ", subid, " realsubid= ", realsubid, " value= ", thevalue, " type: ", (typeof thevalue),
                     " linkval= ", linkval, " attr=", theattr, " hpcode=", cm_Globals.options.hpcode);
 
