@@ -2537,7 +2537,7 @@ function getLoginPage(req, userid, pname, emailname, mobile, hostname) {
     tc+= "<div class='logingreeting'>";
     tc+= "<h2 class='login'>" + GLB.APPNAME + "</h2>";
 
-    if ( !GLB.dbinfo.allownewuser || GLB.dbinfo.allownewuser==="false" ) {
+    if ( !GLB.dbinfo.allownewuser || GLB.dbinfo.allownewuser==="false" || GLB.dbinfo.allownewuser.includes("none") ) {
         tc+= "<div class='loginline'>";
         tc+= "Sorry, but HousePanel is no longer available for new public users. You can still use the \"freeware\" ";
         tc+= "version of HousePanel by downloading the files onto your own server or rPI. Instructions for how ";
@@ -2608,7 +2608,8 @@ function createUser(body) {
     }
 
     return checkUser(emailname)
-    .then( () => {
+    .then( res => {
+        console.log( (ddbg()), "createUser result: ", res);
         return addNewUser(emailname, username, mobile, pword);
     })
     .then( newuser => {
@@ -2717,15 +2718,23 @@ function createUser(body) {
 // promise function to check for existing user
 function checkUser(emailname) {
     var promise = new Promise(function(resolve, reject) {
-        if ( !emailname ) {
-            reject("error - A valid email address must be provided to create a new account.");
+
+        var emailre = /^\S+@\S+\.\S{2,}$/;    // email form xxx@yyyyy.zzz
+        if ( ! emailre.test(emailname) ) {
+            reject(`error - ${emailname} is not a valid email address.`);
         }
-        mydb.getRow("users","*","email = '"+emailname+"'")
+
+        var allow = GLB.dbinfo.allownewuser;
+        if ( allow==="false" || (is_array(allow) && !allow.includes("all") && ( allow.includes("none") || !allow.includes(emailname) )) ) {
+            reject(`error - ${emailname} is not allowed to create a new HousePanel account or log in`);
+        }
+
+        mydb.getRow("users","id","email = '"+emailname+"'")
         .then(row => {
             if ( row ) {
-                throw "error - user with email [" + emailname + "] already exists"; 
+                reject("error - user with email [" + emailname + "] already exists"); 
             } else {
-                resolve("success");
+                resolve(emailname);
             }
         })
         .catch(reason => {
@@ -10633,7 +10642,7 @@ GLB.dbinfo = {
     "dbtype": "sqlite",
     "port": "8580",
     "websocketport": "8380",
-    "allownewuser" : "true",
+    "allownewuser" : ["all"],
     "service": "none"
 };
 GLB.dbinfo.hubs = { Hubitat: "Hubitat", ISY: "ISY" };
