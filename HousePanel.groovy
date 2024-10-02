@@ -171,17 +171,37 @@ def mainPage() {
             vdesc += spanSmBld("Hub Prefix: ", sCLRBLUE) + spanSmBr("${settings.hubprefix}" )
             vdesc += spanSmBld("Weather Tomorrow.io API key: ", sCLRBLUE) + spanSmBr("${settings.weatherapi}" )
             vdesc += spanSmBld("Weather ZipCode: ", sCLRBLUE) + spanSmBr("${settings.weatherzip}" )
-            vdesc += htmlLine(sCLRBLUE, 600)
-            vdesc += spanSmBld("accessToken: ", sCLRBLUE) + spanSmBr("${state.accessToken}" )
-            vdesc += spanSmBld("App ID: ", sCLRBLUE) + spanSmBr("${app.id}" )
-            vdesc += spanSmBld("Hubname: ", sCLRBLUE) + spanSmBr("${state.hubname}" )
-            vdesc += spanSmBld("Local Endpt: ", sCLRBLUE) + spanSmBr("${state.endpt}" )
-            vdesc += spanSmBld("Cloud Endpt: ", sCLRBLUE) + spanSmBr("${state.cloudendpt}" )
-            vdesc += spanSmBld("callback IPs: ", sCLRBLUE) + spanSmBr("${settings.webSocketHost}" + ", ${settings.webSocketHost2}" + ", ${settings.webSocketHost3}" )
-            vdesc += spanSmBld("callback Ports: ", sCLRBLUE) + spanSmBr("${settings.webSocketPort}" + ", ${settings.webSocketPort2}" + ", ${settings.webSocketPort3}" )
+            // vdesc += spanSmBld("accessToken: ", sCLRBLUE) + spanSmBr("${state.accessToken}" )
+            // vdesc += spanSmBld("App ID: ", sCLRBLUE) + spanSmBr("${app.id}" )
+            // vdesc += spanSmBld("Hubname: ", sCLRBLUE) + spanSmBr("${state.hubname}" )
+            // vdesc += spanSmBld("Local Endpt: ", sCLRBLUE) + spanSmBr("${state.endpt}" )
+            // vdesc += spanSmBld("Cloud Endpt: ", sCLRBLUE) + spanSmBr("${state.cloudendpt}" )
+            vdesc += spanSmBld("callback IP 1: ", sCLRBLUE) + spanSmBr("${settings.webSocketHost}:${settings.webSocketPort}" )
+            vdesc += spanSmBld("callback IP 2: ", sCLRBLUE) + spanSmBr("${settings.webSocketHost2}:${settings.webSocketPort2}" )
+            vdesc += spanSmBld("callback IP 3: ", sCLRBLUE) + spanSmBr("${settings.webSocketHost3}:${settings.webSocketPort3}" )
             vdesc += htmlLine(sCLRBLUE, 600)
             vdesc += inputFooter("Tap to update App Preferences...", sCLRBLUE, false)
             href 'settingsPage', title: spanSmBld('App Preferences'), description: vdesc
+        }
+
+        section(sectHead('New Hub Setup:')) {
+
+            String vdesc = sBLANK
+            vdesc += spanSmBld("accessToken: ", sCLRBLUE) + spanSmBr("${state.accessToken}" )
+            vdesc += spanSmBld("App ID: ", sCLRBLUE) + spanSmBr("${app.id}" )
+            vdesc += spanSmBld("Hub ID: ", sCLRBLUE) + spanSmBr("${state.hubid}" )
+            vdesc += spanSmBld("Hubname: ", sCLRBLUE) + spanSmBr("${state.hubname}" )
+            vdesc += spanSmBld("Cloud Endpt: ", sCLRBLUE) + spanSmBr("${state.cloudendpt}" )
+            vdesc += spanSmBld("Local Endpt: ", sCLRBLUE) + spanSmBr("${state.endpt}" )
+            vdesc += htmlLine(sCLRBLUE, 600)
+            paragraph vdesc
+
+            paragraph inputFooter("Enter User ID and HPCODE below then push the buton to send hub registration parameters to the HousePanel server. These are displayed on the Hub Authorization page.", sCLRBLUE, false)
+            input (name: "userid", type: "text", multiple: false, title: "User ID:", required: false, defaultValue: "0")
+            input (name: "hpcode", type: "text", multiple: false, title: "HPCODE:", required: false, defaultValue: "")
+            input(name: 'pushdata', type: 'button', multiple: false, title: 'Push Data', required: false)
+
+            paragraph inputFooter(" ", sCLRBLUE, false)
             label title: spanSmBld('Label this Instance (optional)'), description: 'Rename this App', defaultValue: app?.name, required: false
         }
     }
@@ -193,24 +213,21 @@ def settingsPage() {
         appInfoSect()
 
         section("HousePanel Configuration") {
-            paragraph "Select a prefix to uniquely identify certain tiles for this hub. "
+            paragraph "Select a prefix to uniquely identify certain tiles for this hub. This only matters if you are using more than one hub. The prefix for each hub must be unique. "
             input (name: "hubprefix", type: "text", multiple: false, title: "Hub Prefix:", required: false, defaultValue: "h_")
             input (name: "weatherapi", type: "text", multiple: false, title: "Tomorrow.io API key", required: false, defaultValue: "")
             input (name: "weatherzip", type: "text", multiple: false, title: "Zip Code for Weather", required: false, defaultValue: "10001")
             // paragraph "Enable Pistons? You must have WebCore installed for this to work. Beta feature for Hubitat hubs."
             // input (name: "usepistons", type: "bool", multiple: false, title: "Use Pistons?", required: false, defaultValue: false)
             paragraph "Specify these parameters to enable your panel to stay in sync with things when they change in your home. " +
-                      "This is required if you are using HousePanel to support an ISY node server. Otherwise, for Hubitat dashboards, "
-                      "this is not a hard requirement. However, if you don't provide the IP of where you are hositng your hpserver.js app, your panel will get out of sync. " +
-                      "A single Port number or a range can be provided, such as 9100-9105. If a range is given all ports inclusive of the the range will be updated." +
-                      "Ranges are inclusive, so 9100-9105 will update ports 9100, 9101, 9102, 9103, 9104, and 9105. "
-                      "ISY node server users must set the restPort configuration parameter to a value inside one of these ranges"
-            input "webSocketHost", "text", title: "Host IP", defaultValue: "192.168.1.1", required: true
-            input "webSocketPort", "text", title: "Port or Range", defaultValue: "9100", required: true
+                      "Beta web-hosted users must keep the default which points to my server where the beta is hosted. " +
+                      "Users hosting their own instance must change this to point to their local IP where it is hosted. "
+            input "webSocketHost", "text", title: "Host IP", defaultValue: "https://housepanel.net", required: true
+            input "webSocketPort", "text", title: "Port", defaultValue: "8680", required: true
             paragraph "The Alternate 2nd and 3rd Host IP and Port values/ranges are used to send hub pushes to additional installations of HousePanel. " +
                     "If left as 0 additional hub pushes will not occur. Only use this if you are hosting two or three versions of HP " +
                     "that need to stay in sync with this smart home hub. This app also supports the ISY Hubitat Node Server, and for that case " +
-                    "you should set one of these to the port used there. Otherwise, this setting is mostly used for development debugging and can be safely left as 0"
+                    "you should set one of these to the port used there. Otherwise, these settings are mostly used for development debugging and can be safely left as 0"
             input "webSocketHost2", "text", title: "2nd Host IP", defaultValue: "0", required: false
             input "webSocketPort2", "text", title: "2nd Port or Range", defaultValue: "0", required: false
             input "webSocketHost3", "text", title: "3rd Host IP", defaultValue: "0", required: false
@@ -228,6 +245,21 @@ def settingsPage() {
 
     }
 }
+
+// def newHubPage() {
+//     return dynamicPage(name: 'newHubPage', nextPage: sBLANK, title: sBLANK, install: false, uninstall: false) {
+
+//         appInfoSect()
+
+//         section("Push New Hub Information") {
+//             paragraph "Enter your User ID number here. This is displayed on the Hub Authorization page, and in the upper right corner of the main display. "
+//             input (name: "userid", type: "text", multiple: false, title: "User ID:", required: false, defaultValue: "0")
+
+//             input(name: 'pushdata', type: 'button', multiple: false, title: 'Push Data', required: false)
+//         }
+
+//     }
+// }
 
 def deviceSelectPage() {
     return dynamicPage(name: 'deviceSelectPage', title: sBLANK, install: false, uninstall: false) {
@@ -304,6 +336,32 @@ def variablesPage() {
                 input (name: "var_${varname}", type: "bool", multiple: false, title: "${varname}?", required: false, defaultValue: false)
             }
         }
+    }
+}
+
+def appButtonHandler(String buttonName) {
+
+    if ( buttonName == "pushdata" ) {
+        String vdesc = sBLANK
+        vdesc += " Access Token = ${state.accessToken}"
+        vdesc += " app ID = ${app.id}"
+        vdesc += " hub ID = ${state.hubid}"
+        vdesc += " hubname = ${state.hubname}"
+        vdesc += " cloud endpt = ${state.cloudendpt}"
+        vdesc += " local endpt = ${state.endpt}"
+        logger(vdesc, "info")
+
+        def devtype = "Hubitat"
+        def userid = settings?.userid ?: 0
+        def hpcode = settings?.hpcode ?: ""
+        def subid = app.id
+        Map value = ["accesstoken": state.accessToken, "appid": app.id, "hubname": state.hubname, "hubid": state.hubid,
+                     "cloudendpt": state.cloudendpt, "localendpt": state.endpt, "hubtimer": "0", "hpcode": hpcode]
+
+        postHubRange(state.directIP, state.directPort, "authupd", "", userid, subid, devtype, value)
+        postHubRange(state.directIP2, state.directPort2, "authupd", "", userid, subid, devtype, value)
+        postHubRange(state.directIP3, state.directPort3, "authupd", "", userid, subid, devtype, value)
+
     }
 }
 
@@ -3147,13 +3205,13 @@ def registerChangeHandler(devices) {
 
 def changeHandler(evt) {
 
-    def musicmap = ["name": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
+    Map musicmap = ["name": "trackDescription", "artist": "currentArtist", "album": "currentAlbum",
                     "trackData": "", "metaData":"", "trackMetaData":"trackImage",
                     "trackNumber":"trackNumber", "music":"", "trackUri":"", "uri":"", "transportUri":"", "enqueuedUri":"",
                     "audioSource": "mediaSource", "station":"",
                     "status": "status", "level":"level", "mute":"mute"]
 
-    def audiomap = ["name":"name", "title":"trackDescription", "artist": "currentArtist", "album": "currentAlbum",
+    Map audiomap = ["name":"name", "title":"trackDescription", "artist": "currentArtist", "album": "currentAlbum",
                    "albumArtUrl": "", "mediaSource": "", "deviceIcon":"deviceIcon", "alexaPlaylists":"",
                    "phraseSpoken":"", "supportedMusic":"", "trackData":"", "trackImageHtml":"", "wakeWords":"", "alexaWakeWord":"",
                    "My Likes":"", "deviceFamily":"", "lastUpdated":"", "deviceStatus":"", "onlineStatus":"", "btDeviceConnected":"",

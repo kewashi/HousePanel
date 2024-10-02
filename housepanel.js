@@ -168,10 +168,10 @@ function clone(obj) {
 }
 
 function findHub(hubid, id) {
-    var thehub = cm_Globals.hubs[0];
+    var thehub = null;
     hubid = hubid.toString();
-    cm_Globals.hubs.forEach( function(hub) {
-        if ( (!id || id==="id") && hubid === hub["id"].toString() ) {
+    cm_Globals.hubs.forEach( hub => {
+        if ( (id==="id") && hubid === hub["id"].toString() ) {
             thehub = hub;
         } else if ( hubid === hub[id].toString() ) {
             thehub = hub;
@@ -268,7 +268,7 @@ function getHubs() {
                             setupTimer("slow", slow_timer, hub);
                         // all other hubs refresh at their token refresh rate or the user given fast rate if quicker
                         } else {
-                            // if there is a hubrefresh code that will be used to refresh accesstoken
+                            // if there is a hubtimer code that will be used to refresh accesstoken
                             // otherwise the hub devices will just be retrieved from the hub
                             // if set to zero we force a refresh at the user provided fast refresh rate
                             var hubtimer = parseInt(hub.hubtimer, 10) * 1000;
@@ -841,17 +841,21 @@ function initWebsocket() {
         if ( userid && webSocketUrl ) {
 
             // get the port from the panel name cookie
-            var pname = getCookie("pname");
-            if ( pname.substring(1,2)!==":" ) {
-                pname = "1:" + pname;
-            }
-            var portnum = pname.substring(0,1);
-            var port = webSocketPort + parseInt(portnum);
-            webSocketUrl += ":" + port;
+            // var pname = getCookie("pname");
+            // if ( pname.substring(1,2)!==":" ) {
+            //     pname = "1:" + pname;
+            // }
+            // var portnum = pname.substring(0,1);
+            // var port = webSocketPort + parseInt(portnum);
+            
+            // port is now adjusted based on userid since each user needs their own websocket port
+            // we only support one panel so no longer need to do anything with panels to separate them
+            var wsport = webSocketPort + parseInt(userid);
+            webSocketUrl += ":" + wsport;
             if ( $("#infoport") ) {
-                $("#infoport").html("#"+portnum);
+                $("#infoport").html("User #"+userid);
             }
-            setupWebsocket(userid, port, webSocketUrl);
+            setupWebsocket(userid, wsport, webSocketUrl);
         }
     } catch(err) {
         console.error( "error - could not initialize websocket. err: ", err);
@@ -899,9 +903,10 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
         try {
             var presult = JSON.parse(evt.data);
             var bid = presult.id;
+            var userid = presult.userid;
+            if ( !userid ) { userid = 0; }
             var thetype = presult.type;
             var pvalue = presult.value;
-            var clientcount = presult.clientcount;
             var subid = presult.trigger;
             if ( cm_Globals.options && cm_Globals.options.config && cm_Globals.options.config.blackout ) {
                 var blackout = cm_Globals.options.config.blackout;
@@ -955,6 +960,29 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                 var thing = $("#t-"+thingid);
                 if ( thing ) {
                     relocateTile(thing, thetype, pvalue);
+                }
+
+            } else if ( bid==="authupd" ) {
+
+                console.log(">>>> pushClient processing pvalue: ", pvalue);
+                var hpcode = pvalue.hpcode || "";
+                console.log(">>>> id checks: ", userid, "=", cm_Globals.options.userid, hpcode, "=", cm_Globals.options.hpcode );
+
+                $("#pickhub").val("hubopt_0");
+                setupAuthHub("new", userid);
+                $("#hubdiv > select[name='hubtype']").val(thetype);
+                
+                // now set the fields to the values pushed from HousePanel groovy
+                var cloudendpt = pvalue.cloudendpt;
+                var iloc = cloudendpt.indexOf("/apps");
+                if ( $("#inp_hubhost") && iloc > 0 && hpcode === cm_Globals.options.hpcode && userid===cm_Globals.options.userid ) {
+                    var hubhost = cloudendpt.substring(0, iloc);
+                    $("#inp_hubhost").val(hubhost);
+                    $("#inp_access").val(pvalue.accesstoken);
+                    $("#inp_endpt").val(pvalue.appid);
+                    $("#inp_hubname").val(pvalue.hubname);
+                    $("#inp_hubid").val(pvalue.hubid);
+                    $("#inp_hubtimer").val(pvalue.hubtimer || "0");
                 }
 
             } else if ( bid && thetype && pvalue && typeof pvalue==="object" ) {
@@ -2572,14 +2600,16 @@ function setupButtons() {
 
     } else if ( pagename==="auth" ) {
 
+        const mainhubmsg = "Select a hub from the list to re-authorize or remove it, or select 'New' to add a new hub";
         initWebsocket();
-        $("#newthingcount").html("Select a hub to re-authorize or select the 'New' hub to add a hub");
+        $("#newthingcount").html(mainhubmsg);
         var hubId = getCookie("defaultHub");
         if ( !hubId || hubId==="undefined" ||  hubId==="all" ) {
             // hubId = $("#pickhub").val();
             hubId = "-1";
         }
-        setupAuthHub(hubId);
+        var userid = $("input[name='userid']").val();
+        setupAuthHub(hubId, userid);
 
         // now we use the DB index of the hub to ensure it is unique
         $("#pickhub").on('change',function(evt) {
@@ -2589,7 +2619,7 @@ function setupButtons() {
             // save this in a cookie so we can return to this hub
             setCookie("defaultHub", hubId);
 
-            setupAuthHub(hubId);
+            setupAuthHub(hubId, userid);
             evt.stopPropagation(); 
         });
 
@@ -2601,22 +2631,29 @@ function setupButtons() {
             if ( hubType==="Hubitat" ) {
                 var accessLabel = "Access Token: ";
                 var endptLabel = "App ID: ";
-                $("#newthingcount").html("Defining a new Hubitat hub. The hub parameters will be obtained automatically.");
+                var newhubmsg = "Stay on this page while you fill out the settings in the HousePanel groovy app in Hubitat, and the fields will be populated. " + 
+                                 "You can also fill out the Access Token and App ID fields manually. Hub Name and Hub ID will be determined from the hub.";
+                $("input[name='hubhost']").val("https://cloud.hubitat.com/api/hubID");
+                $("#newthingcount").html(newhubmsg);
             } else if ( hubType==="ISY" ) {
                 accessLabel = "Username: ";
                 endptLabel = "Password: ";
-                $("#newthingcount").html("Defining a new ISY hub. Please Username and password for your ISY account.");
+                newhubmsg = "ISY hubs are local. To authorize this hub you must provide the Username and Password of your ISY account. Hub Name and Hub ID will be randomly generated.";
+                $("input[name='hubhost']").val("https://192.168.xxx.yyy:8443");
+                $("#newthingcount").html(newhubmsg);
             }
+            $("input[name='hubid']").val(hubType+"_new");
             $("#labelAccess").html(accessLabel);
             $("#labelEndpt").html(endptLabel);
         });
         
         // this clears out the message window
         $("#newthingcount").on('click',function(evt) {
-            $("#newthingcount").html("");
+            $("#newthingcount").html(mainhubmsg);
         });
         
         // handle auth submissions - modified to only do manual auth flow
+        // TODO - error check for fields properly filled out
         $("input.hubauth").on("click",function(evt) {
             try {
                 var formData = formToObject("hubform");
@@ -2652,7 +2689,7 @@ function setupButtons() {
             });
             evt.stopPropagation();
         });
-        
+
         // this feature works but not on the last hub
         $("input.hubdel").on("click", function(evt) {
             var hubId = $("input[name='hubid']").val();
@@ -2676,6 +2713,7 @@ function setupButtons() {
                         {api: "hubdelete", userid: cm_Globals.options.userid, pname: pname, hubid: hubId, id: hubindex, hpcode: cm_Globals.options.hpcode},
                         function (presult, pstatus) {
                             if (pstatus==="success" && typeof presult === "string") {
+                                setCookie("defaultHub", "-1");
                                 $("#newthingcount").html(presult);
                                 setTimeout(function() {
                                     var location = cm_Globals.returnURL + "/userauth";
@@ -2703,74 +2741,78 @@ function setupButtons() {
     }
 }
 
-function setupAuthHub(hubId) {
-    var hub = findHub(hubId,"hubid");
-    var hubindex = hub.id;
-    console.log("hubId = ", hubId, " hubindex = ", hubindex);
-
-    // replace all the values
+function setupAuthHub(hubId, userid) {
     $("select[name='pickhub']").val(hubId);
-    $("input[name='hubindex']").val(hubindex);
-    $("input[name='hubname']").val(hub.hubname);
-    $("input[name='hubid']").val(hub.hubid);
-    $("input[name='hubtimer']").val(hub.hubtimer);
-    $("input[name='hubhost']").val(hub.hubhost);
-    $("input[name='useraccess']").val(hub.useraccess);
-    $("input[name='userendpt']").val(hub.userendpt);
-    $("input[name='hubrefresh']").val(hub.hubrefresh);
-    $("select[name='hubtype']").val(hub.hubtype);
-    // $("input[name='hubid']").prop("disabled", true);
+    var newhubmsg;
     var accessLabel = "Access Token: ";
     var endptLabel = "App ID: ";
-    var hideaccess = $("#hideaccess_hub");
-    hideaccess.show();
+
+    var hpcode = cm_Globals.options.hpcode;
 
     // handle new hubs - user sets type and the Hubitat groovy app or HubitatController python app fills out the rest of the fields
     if ( hubId==="new" ) {
         $("#hubdiv").show();
+        newhubmsg = "Press the \"Push Data\" button in the HousePanel groovy app in Hubitat and these fields will be populated.<br>" +
+                    "For this to work you must provide [userid = " + userid + "] and [hpcode = " + hpcode + "] in the Hubitat groovy app.<br>" +
+                    "Or you can provide Hub Host, Access Token, and App ID manually. Hub Name and Hub ID will be determined from the hub.";
+        $("#hubdiv").show();
+        $("#hideaccess_hub").show();
         $("select[name='hubtype']").val("Hubitat").prop("disabled", false);
-        $("input[name='hubhost']").prop("disabled", false);
-        $("input[name='hubname']").prop("disabled", false);
-        $("input[name='hubname']").val("");
+        $("input[name='hubhost']").val("https://cloud.hubitat.com/api/hubID").prop("disabled", false);
+        $("input[name='hubname']").prop("disabled", false).val("");
         $("input[name='useraccess']").val("");
         $("input[name='userendpt']").val("");
-        $("input[name='hubid']").val("");
-        $("input[name='hubrefresh']").val("0");
+        $("input[name='hubid']").val("Hubitat_new");
+        $("input[name='hubtimer']").val("0");
         $("input.hubauth").removeClass("hidden");
         $("input.hubdel").addClass("hidden");
-        $("#newthingcount").html("Stay on this page while you fill out the HousePanel settings on the Hubitat or ISY hub, and the fields will be populated. " +
-            "You can also fill out the fields manually before selecting the Authorize Hub button below. The only required input is Hub Type.");
+        $("#newthingcount").html(newhubmsg);
 
     // this is for the blank hub for default devices
     } else if ( hubId==="-1" ) {
+        newhubmsg = "This \"hub\" is reserved for things not associated with a real hub. It cannot be altered, removed, or authorized. " +
+                    "You can change the Refresh timer before returning to main page to change how often special tiles get updated.";
         $("#hubdiv").hide();
-        $("select[name='hubtype']").prop("disabled", true);
-        $("input[name='hubhost']").prop("disabled", true);
-        $("input[name='hubname']").prop("disabled", true);
+        $("#hideaccess_hub").hide();
+        $("select[name='hubtype']").prop("disabled", true).val("None");
+        $("input[name='hubhost']").prop("disabled", true).val("None");
+        $("input[name='hubname']").prop("disabled", true).val("None");
+        $("input[name='hubid']").val("-1");
         $("input.hubauth").addClass("hidden");
         $("input.hubdel").addClass("hidden");
-        hideaccess.hide();
-        $("#newthingcount").html("This \"hub\" is reserved for things not associated with a real hub. It cannot be altered, removed, or authorized. " +
-                                 "You can change the Refresh timer before returning to main page to change how often special tiles get updated."
-        );
 
     // this branch is for existing hubs that need updating - their type cannot be changed
     } else {
+        var hub = findHub(hubId,"hubid");
+        if ( hub ) {
+            // replace all the values
+            $("input[name='hubindex']").val(hub.id);
+            $("input[name='hubname']").val(hub.hubname);
+            $("input[name='hubid']").val(hub.hubid);
+            $("input[name='hubhost']").val(hub.hubhost);
+            $("input[name='hubtimer']").val(hub.hubtimer);
+            $("input[name='useraccess']").val(hub.useraccess);
+            $("input[name='userendpt']").val(hub.userendpt);
+            $("select[name='hubtype']").val(hub.hubtype);
+        }
+        
+        newhubmsg = "Re-authorize or delete the " + hub.hubname + " (" + hub.hubtype + ") hub/account here. " +
+                    "You can do this by staying here and updating the settings in the HousePanel groovy app, or update the fields manually. " +
+                    "You can also change the Refresh Timer value to change how often devices on this hub are polled to update. (0 = never)";
         $("#hubdiv").show();
+        $("#hideaccess_hub").show();
         $("select[name='hubtype']").prop("disabled", true);
         $("input[name='hubhost']").prop("disabled", false);
         $("input[name='hubname']").prop("disabled", false);
         $("input.hubauth").removeClass("hidden");
         $("input.hubdel").removeClass("hidden");
-        $("#newthingcount").html("Re-authorize or delete the " + hub.hubname + " (" + hub.hubtype + ") hub/account here. " +
-                                 "You can do this by staying here and updating the HousePanel settings on the Hubitat or ISY hubs, or update the fields manually. " +
-                                 "You can also change the Refresh Timer value to change how often " + hub.hubtype + " tiles are polled for updating."
-        );
         if ( hub.hubtype === "ISY" ) {
             accessLabel = "Username: ";
             endptLabel = "Password: ";    
         }
     }
+
+    $("#newthingcount").html(newhubmsg);
     $("#labelAccess").html(accessLabel);
     $("#labelEndpt").html(endptLabel);
 }

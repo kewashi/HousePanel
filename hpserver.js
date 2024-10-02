@@ -1052,43 +1052,30 @@ function getHubInfo(hub) {
 
         // this branch is for ISY and other hubs that don't need to get their name via a hub call
         } else {
-            updateHub(hub, hub.hubid);
+            if ( hub.hubid=== hub.hubtype + "_new" ) {
+                var rstr = getRandomInt(1001, 9999);
+                hub.hubid = hub.hubtype + rstr.toString();
+            }
+            updateHub(hub);
         }
 
         // this saves hubid in the user table and updates or adds the hub to the hub table
         // and then calls routine to retreive devices from the hub and return them in an array
-        function updateHub(hub, oldhubId) {
-            if ( oldhubId ) {
-                hub.hubid = oldhubId;
-            }
+        function updateHub(hub) {
 
-            mydb.updateRow("users",{defhub: hub.hubid},"id = " + userid)
-            .then( () => {
-                if ( DEBUG2 ) {
-                    console.log( (ddbg()), "Ready to update or add hub: ", hub);
-                }
-                // update any hub with the same hubid attribute
-                // if no such hub exists this will add it
-                var upditem = "userid = " + userid+" AND hubid = '"+hub.hubid+"'";
-                return mydb.updateRow("hubs", hub, upditem);
-            })
+            Promise.all([
+                mydb.updateRow("users",{defhub: hub.hubid}, "id = " + userid, true),
+                mydb.updateRow("hubs", hub, "userid = " + userid+" AND id = " + hub.id, true),
+                getDevices(hub)
+            ])
             .then( res => {
-                // switched from using the mydb instance to avoid cross-talk between multiple users
-                // hub.id = mydb.getId();
-                hub.id = res.getImpactedId();
-                if ( DEBUG2 ) {
-                    console.log( (ddbg()), "updated hub with id: ", hub.id, " hub: ", hub);
-                }
-                return getDevices(hub);
-            })
-            .then(devices => {
+                var devices = res[2];
                 removeDeadThings(userid);
                 resolve(devices);
             }).catch(reason => {
                 console.error( (ddbg()), reason);
                 reject(reason);
             });
-
         }
 
         // function hubitatCallback(err, res, body) {
@@ -1097,21 +1084,21 @@ function getHubInfo(hub) {
             var hubId = hub.hubid;
 
             try {
-                // jsonbody = JSON.parse(body);
-                hubName = body["sitename"];
-                // the groovy hub info object uses hubId while other objects use hubid
-                hubId = body["hubId"];
-                if ( DEBUG2 ) {
-                    console.log( (ddbg()), "hub info: ", hubName, hubId );
+                if ( body["sitename"] ) {
+                    hubName = body["sitename"];
+                } else {
+                    console.warn( (ddbg()), "warning - Hub name is not defined so using the user provided name: ", hubName);
                 }
-                if ( !hubId || !hubName ) {
-                    reject("hubName or hubId is not defined");
+
+                if ( body["hubId"] ) {
+                    hubId = body["hubId"];
+                } else {
+                    console.error( (ddbg()), "error - hubId was not obtained from the hub.");
+                    reject("hubId was not obtained from the hub");
                     return;
                 }
             } catch(e) {
                 console.error( (ddbg()), "error retrieving hub ID and name. ", e, "\n body: ", body);
-                hubName = hub.hubname
-                hubId = hub.hubid;
                 reject(e);
                 return;
             }
@@ -1122,10 +1109,9 @@ function getHubInfo(hub) {
             
             // now update the placeholders with the real hub name and ID
             // we now get even more info back from the hub but we don't need it
-            hub["hubname"]  = hubName;
-            hub["hubid"] = hubId;
-            updateHub(hub, hubId);
-
+            hub.hubname  = hubName;
+            hub.hubid = hubId;
+            updateHub(hub);
         }
     
     });
@@ -3440,7 +3426,7 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
         } else {
             numdev = 0;
         }
-        return getinfocontents(configoptions, hubs, hub, numdev);
+        return getauthcontents(configoptions, hubs, hub, numdev);
     })
     .catch(reason => {
         console.log( (ddbg()), reason );
@@ -3449,7 +3435,7 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
 
     return result;
 
-    function getinfocontents(configoptions, hubs, hub, numdev) {
+    function getauthcontents(configoptions, hubs, hub, numdev) {
 
         var $tc = "";
 
@@ -3625,7 +3611,7 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
         $tc += "<div><label for='inp_hubname' class=\"startupinp\">Hub Name: </label>";
         $tc += "<input id='inp_hubname' class=\"startupinp\" name=\"hubname\" size=\"80\" type=\"text\" value=\"" + hub["hubname"] + "\"/></div>"; 
 
-        $tc += "<div><label for='inp_hubid' class=\"startupinp\">hub ID: </label>";
+        $tc += "<div><label for='inp_hubid' class=\"startupinp\">Hub ID: </label>";
         $tc += "<input id='inp_hubid' class=\"startupinp\" name=\"hubid\" size=\"80\" type=\"text\" value=\"" + hub["hubid"] + "\"/></div>"; 
 
         $tc += "<div><label for='inp_hubtimer' class=\"startupinp\">Refresh Timer: </label>";
@@ -6209,7 +6195,8 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
 function pushClient(userid, swid, swtype, subid, body) {
     // send the new results to all clients
     var entry = {};
-    entry["id"] = swid || "";
+    entry["userid"] = userid;
+    entry["id"] = swid;
     entry["type"] = swtype;
     entry["trigger"] = subid;
     var pvalue;
@@ -9146,7 +9133,11 @@ function getHubObj(hub) {
                 reject(reason);
             });
         } else {
-            var msg = "Access Token and Hub Endpt are missing. These are now both required for Hubitat and ISY hubs.";
+            if ( hubType === "ISY" ) {
+                var msg = "Hub username and password must both be provided to register an ISY hub";
+            } else {
+                msg = "Access Token and App ID are both required to register a Hubitat hub";
+            }
             result = {action: "error", reason: msg};
             resolve(result);
         }
@@ -9459,8 +9450,8 @@ function apiCall(user, body, protocol, res) {
                                             strmsg+= "<br>";
                                             hubrecurse(n, hubs[n]);
                                         } else {
-                                            removeDeadThings(userid),
-                                            removeHublessDevices(userid)
+                                            removeDeadThings(userid);
+                                            removeHublessDevices(userid);
                                             resolve(strmsg);
                                         }
                                     })
@@ -10085,11 +10076,12 @@ function apiCall(user, body, protocol, res) {
                     hub["userendpt"] = appID;
                     hub["hubrefresh"] = "";
 
-                    // make a random hubid if this hub doesn't exist - this will be ignored it the hub is found using ID or AccessToken
+                    // make a random hubid if this hub doesn't exist - this will be replaced if a Hubitat hub
                     var hubid = body.hubid;
                     if ( hubid==="" || hubid==="new" ) {
-                        var rstr = getRandomInt(1001, 9999);
-                        hubid = hub.hubtype + rstr.toString();
+                        // var rstr = getRandomInt(1001, 9999);
+                        // hubid = hub.hubtype + rstr.toString();
+                        hubid = hub.hubtype + "_new";
                     }
                     hub["hubid"] = hubid;
 
@@ -10139,38 +10131,30 @@ function apiCall(user, body, protocol, res) {
                         console.error((ddbg()), "Invalid hub: ", hub);
                     }
 
-                    if ( DEBUG2 ) {
-                        console.log((ddbg()), "hub in hubauth: ", hub);
-                    }
-
                     if ( result==="" ) {
-                        // point to the hub being authorized
-                        result = mydb.updateRow("users",{defhub: hubid},"id = " + userid)
-                        .then( () => {
-                            // get existing hub based on the ID assuming it is there
-                            // we also check the accesstoken and the appID since these could match it too
-                            // this prevents extra ghost hubs from being created when we don't know the hubid
-                            return mydb.getRow("hubs", "*", `userid = ${userid} AND (hubid = '${hubid}' OR hubaccess = '${userAccess}' OR userendpt = '${appID}')`)
-                            .then(row => {
-                                if ( row ) {
-                                    hub.id = row.id;
-                                    hub.hubid = row.hubid;
-                                    hub.hubname = row.hubname;
+                        // check if hub exists
+                        const cond2 = `userid = ${userid} AND hubid = '${hubid}'`;
+                        result = mydb.getRow("hubs", "*", cond2)
+                        .then(row => {
+                            if ( row ) {
+                                hub.id = row.id;
+                                hub.hubid = row.hubid;
+                                hub.hubname = row.hubname;
+                                return hub;
+                            } else {
+                                // add a placeholder hub that we update later in updateHub function
+                                return mydb.addRow("hubs", hub, "userid = " + userid)
+                                .then(res => {
+                                    hub.id = res.getImpactedId();
                                     return hub;
-                                } else {
-                                    return mydb.addRow("hubs", hub, "userid = " + userid)
-                                    .then(res => {
-                                        hub.id = mydb.getId();
-                                        return hub;
-                                    })
-                                }
-                            });
+                                })
+                            }
                         })
-                        // add the hub to the database or update it
                         .then(ahub => {
                             if ( DEBUG2 ) {
-                                console.log( (ddbg()), "oauth hub: ", ahub, " id: ", ahub.id );
+                                console.log( (ddbg()), "authhub: ", ahub );
                             }
+                            // update the hub that was added above
                             return getHubObj(ahub);
                         })
                         .catch(reason => {
@@ -10183,7 +10167,6 @@ function apiCall(user, body, protocol, res) {
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
-
                 break;
         
             case "hubdelete":
@@ -11088,6 +11071,7 @@ if ( app && applistening ) {
 
         // get user name
         var hubid;
+        var userid;
         var api = req.body["api"] || req.body["useajax"] || "";
         const logincalls = ["forgotpw", "createuser", "validateuser", "updatepassword", "dologin" ];
 
@@ -11099,130 +11083,142 @@ if ( app && applistening ) {
             }
 
             if ( hubid ) {
-                // if we find an existing hub then just update the devices
+                // update the devices of all hubs matching this hubid regardless of the user
+                // each user's hub should have a unique hubid so this works fine
                 // with the new groovy app we also can now update the AccessToken and hubEndpt values based on what was pushed back
                 // if these values are not present then user has not updated to the latest version so we ignore
-                mydb.getRow("hubs","*","hubid = '" + hubid + "'")
-                .then(hub => {
-                    var userid = hub.userid;
-                    if ( DEBUG1 ) {
-                        console.log( (ddbg()), "init request - hub: ", hub);
+                // this update does not work for new hubs about to be authorized because they are not yet in the DB and they don't have a hubid
+                 mydb.getRows("hubs","*", `hubid = '${hubid}'`)
+                .then(hubs => {
+                    if ( !hubs ) {
+                        throw "Invalid hub returned from HousePanel groovy app";
                     }
 
-                    // handle Hubitat hub update pushes
-                    var updhub = false;
-                    if ( req.body['change_type'] === "Hubitat" ) {
+                    hubs.forEach(hub => {
 
-                        // init sends hub name in the change_name field
-                        if ( req.body['change_name'] ) {
-                            updhub = updhub || (hub.hubname !== req.body['change_name']);
-                            hub.hubname = req.body['change_name'];
+                        userid = hub.userid;
+
+                        if ( DEBUG1 ) {
+                            console.log( (ddbg()), "init request - hub: ", hub);
                         }
 
-                        // init sends the AppID as the id in change_device field
-                        // note - the userendpt field is now used to store the App ID only
-                        if ( req.body['change_device'] ) {
-                            updhub = updhub || (hub.userendpt !== req.body['change_device']);
-                            hub.userendpt = req.body['change_device'].toString();
-                            var appID = hub.userendpt;
+                        // handle Hubitat hub update pushes
+                        var updhub = false;
+                        if ( req.body['change_type'] === "Hubitat" ) {
 
-                            // set default endpt based on AppID
-                            // this will almost always be overwritten below
-                            if ( hub.hubhost ) {
-                                if ( GLB.returnURL.startsWith("https://housepanel.net") ) {
-                                    hub.hubendpt = hub.hubhost + "/apps/" + appID;
-                                } else {
-                                    hub.hubendpt = hub.hubhost + "/apps/api/" + appID;
+                            // init sends hub name in the change_name field
+                            if ( req.body['change_name'] ) {
+                                updhub = updhub || (hub.hubname !== req.body['change_name']);
+                                hub.hubname = req.body['change_name'];
+                            }
+
+                            // init sends the AppID as the id in change_device field
+                            // note - the userendpt field is now used to store the App ID only
+                            if ( req.body['change_device'] ) {
+                                updhub = updhub || (hub.userendpt !== req.body['change_device']);
+                                hub.userendpt = req.body['change_device'].toString();
+                                var appID = hub.userendpt;
+
+                                // set default endpt based on AppID
+                                // this will almost always be overwritten below
+                                if ( hub.hubhost ) {
+                                    if ( GLB.returnURL.startsWith("https://housepanel.net") ) {
+                                        hub.hubendpt = hub.hubhost + "/apps/" + appID;
+                                    } else {
+                                        hub.hubendpt = hub.hubhost + "/apps/api/" + appID;
+                                    }
                                 }
                             }
-                        }
 
-                        // init sends the Access Token, endpt, and cloudendpt in the value as an array
-                        if ( req.body['change_value'] ) {
-                            var valarray = req.body['change_value'];
-                            
-                            updhub = updhub || (hub.hubaccess !== valarray[0]);
-                            hub.hubaccess = valarray[0];
+                            // init sends the Access Token, endpt, and cloudendpt in the value as an array
+                            if ( req.body['change_value'] ) {
+                                var valarray = req.body['change_value'];
+                                
+                                updhub = updhub || (hub.hubaccess !== valarray[0]);
+                                hub.hubaccess = valarray[0];
 
-                            if ( GLB.returnURL.startsWith("https://housepanel.net") ) {
-                                updhub = updhub || (hub.hubendpt !== valarray[2]);
-                                hub.hubendpt = valarray[2];
-                            } else {
-                                updhub = updhub || (hub.hubendpt !== valarray[1]);
-                                hub.hubendpt = valarray[1];
+                                // if we're pointing to my hosted server, use the cloud end point
+                                if ( GLB.returnURL.startsWith("https://housepanel.net") || hub.hubendpt.startsWith("https://housepanel.net") ) {
+                                    updhub = updhub || (hub.hubendpt !== valarray[2]);
+                                    hub.hubendpt = valarray[2];
+                                } else {
+                                    updhub = updhub || (hub.hubendpt !== valarray[1]);
+                                    hub.hubendpt = valarray[1];
+                                }
+
+                                // determine the hostname from the endpt
+                                var iloc = hub.hubendpt.indexOf("/apps");
+                                var newhost = hub.hubendpt.substring(0, iloc);
+                                updhub = updhub || (hub.hubhost !== newhost);
+                                hub.hubhost = newhost;
                             }
-
-                            // determine the hostname from the endpt
-                            var iloc = hub.hubendpt.indexOf("/apps");
-                            var newhost = hub.hubendpt.substring(0, iloc);
-                            updhub = updhub || (hub.hubhost !== newhost);
-                            hub.hubhost = newhost;
                         }
-                    }
 
-                    // update the hub and push data to the auth page using a forced reload
-                    if ( updhub ) {
-                        if ( DEBUG1 ) {
-                            console.log( (ddbg()), "init request - hub updating to: ", hub);
-                        }
-                        mydb.updateRow("hubs", hub, "id = " + hub.id)
-                        .then( ()=> {
+                        // update the hub and push data to the auth page using a forced reload
+                        if ( updhub ) {
+                            mydb.updateRow("hubs", hub, "id = " + hub.id)
+                            .then( ()=> {
+                                return removeHublessDevices(userid)
+                            })
+                            .then(numremoved => {
+                                if ( DEBUG1 ) {
+                                    console.log( (ddbg()), "Removed ", numremoved," devicdes");
+                                }
+                                if ( numremoved > 0 ) {
+                                    pushClient(userid, "reload", "all", "/");
+                                }
+                            })
+                            .catch(reason => {
+                                console.error( (ddbg()), reason);
+                            });
+                        } else if (hub) {
                             removeHublessDevices(userid)
                             .then(numremoved => {
                                 if ( DEBUG1 ) {
                                     console.log( (ddbg()), "Removed ", numremoved," devicdes");
                                 }
-                                pushClient(userid, "reload", "auth", "/userauth");
+                                return getDevices(hub)
+                            })
+                            .then(mydevices => {
+                                var numdevices = Object.keys(mydevices).length;
+                                var devices = Object.values(mydevices);
+                                if ( DEBUG1 ) {
+                                    console.log( (ddbg()), "initialized ", numdevices," devices. devices: ", jsonshow(devices));
+                                }
+                                return removeDeadThings(userid)
+                            })
+                            .then(numdelthings => {
+                                if ( DEBUG1 ) {
+                                    console.log( (ddbg()), "Removed ", numdelthings," things");
+                                }
+                                pushClient(userid, "reload", "all", "/");
                             })
                             .catch(reason => {
                                 console.error( (ddbg()), reason);
-                            });    
-                        })
-                        .catch(reason => {
-                            console.error( (ddbg()), reason);
-                        });
-                    } else {
-                        removeHublessDevices(userid)
-                        .then(numremoved => {
-                            if ( DEBUG1 ) {
-                                console.log( (ddbg()), "Removed ", numremoved," devicdes");
-                            }
-                            return getDevices(hub)
-                        })
-                        .then(mydevices => {
-                            var numdevices = Object.keys(mydevices).length;
-                            var devices = Object.values(mydevices);
-                            if ( DEBUG1 ) {
-                                console.log( (ddbg()), "initialized ", numdevices," devices. devices: ", jsonshow(devices));
-                            }
-                            return removeDeadThings(userid)
-                        })
-                        .then(numdelthings => {
-                            if ( DEBUG1 ) {
-                                console.log( (ddbg()), "Removed ", numdelthings," things");
-                            }
-                            pushClient(userid, "reload", "main", "/");
-                        })
-                        .catch(reason => {
-                            console.error( (ddbg()), reason);
-                        });
-                    }
-                            
+                            });
+                        }                                
+                    });
                 })
                 .catch(reason => {
                     console.error( (ddbg()), "initialize hub error: ", reason);
                 });
 
-                // returnmsg = "initialize caused devices to be updated for hub with id = " + hubid;
-
-                    // otherwise, we are initializing a new hub
-                    // it is safe to ignore this init call because we haven't set the hubid yet
-                    // which means we haven't done the first getDevices calle
-                    // } else {
-                    //     returnmsg = "initialize ignored for hub with id = " + hubid;
-                    // res.send(returnmsg);
-            //     res.send('error - hubid not provided in initialize call');
+                res.send("hubid processed successfully");
+            } else {
+                res.send("Invalid hubid not processed");
             }
+            res.end();
+
+        // this is where we receive the push from groovy to populate a new hub
+        // we send it to the browser of the userid specified
+        } else if ( req.body['msgtype'] === "authupd" ) {
+            // use this to push new data to the auth page
+            userid = req.body["change_device"];
+            var swtype = req.body["change_type"];
+            var subid = req.body["change_attribute"];
+            var pvalue = req.body["change_value"];
+            pushClient(userid, "authupd", swtype, subid, pvalue);
+            res.send("New hub auth information received and processed");
             res.end();
 
         // handle msg events from Hubitat here
@@ -11233,10 +11229,12 @@ if ( app && applistening ) {
             }
             hubid = req.body['hubid'];
             if ( hubid && hubid!=="-1" ) {
-                mydb.getRow("hubs","*","hubid = '" + hubid + "'")
-                .then(hub => {
-                    if ( hub ) {
-                        processHubMessage(hub.userid, req.body, false);
+                mydb.getRows("hubs","*","hubid = '" + hubid + "'")
+                .then(hubs => {
+                    if ( hubs ) {
+                        hubs.forEach(hub => {
+                            processHubMessage(hub.userid, req.body, false);
+                        });
                     }
                 }).catch(reason => {
                     console.log( (ddbg()), "Hubitat hub msg event error: ", reason);
@@ -11317,7 +11315,7 @@ if ( app && applistening ) {
             // we do this by checking for valid user and hpcode matching what we have in the DB for this user
             // the advantage of this is we can get the user object for making api calls much easier
             // assuming the caller knows the userid and hpcode values
-            var userid = req.body["userid"];
+            userid = req.body["userid"];
             if ( req.body["pname"] ) {
                var pname = req.body["pname"] || "default";
             } else {
