@@ -847,13 +847,9 @@ function initWebsocket() {
             }
             var portnum = pname.substring(0,1);
             var wsport = webSocketPort + parseInt(portnum);
-            
-            // port is now adjusted based on userid since each user needs their own websocket port
-            // we only support one panel so no longer need to do anything with panels to separate them
-            // var wsport = webSocketPort + parseInt(userid);
             webSocketUrl += ":" + wsport;
             if ( $("#infoport") ) {
-                $("#infoport").html("#"+userid);
+                $("#infoport").html("#"+portnum);
             }
             setupWebsocket(userid, wsport, webSocketUrl);
         }
