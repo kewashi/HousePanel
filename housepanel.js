@@ -841,19 +841,19 @@ function initWebsocket() {
         if ( userid && webSocketUrl ) {
 
             // get the port from the panel name cookie
-            // var pname = getCookie("pname");
-            // if ( pname.substring(1,2)!==":" ) {
-            //     pname = "1:" + pname;
-            // }
-            // var portnum = pname.substring(0,1);
-            // var port = webSocketPort + parseInt(portnum);
+            var pname = getCookie("pname");
+            if ( pname.substring(1,2)!==":" ) {
+                pname = "1:" + pname;
+            }
+            var portnum = pname.substring(0,1);
+            var wsport = webSocketPort + parseInt(portnum);
             
             // port is now adjusted based on userid since each user needs their own websocket port
             // we only support one panel so no longer need to do anything with panels to separate them
-            var wsport = webSocketPort + parseInt(userid);
+            // var wsport = webSocketPort + parseInt(userid);
             webSocketUrl += ":" + wsport;
             if ( $("#infoport") ) {
-                $("#infoport").html("User #"+userid);
+                $("#infoport").html("#"+userid);
             }
             setupWebsocket(userid, wsport, webSocketUrl);
         }
@@ -963,10 +963,7 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                 }
 
             } else if ( bid==="authupd" ) {
-
-                console.log(">>>> pushClient processing pvalue: ", pvalue);
                 var hpcode = pvalue.hpcode || "";
-                console.log(">>>> id checks: ", userid, "=", cm_Globals.options.userid, hpcode, "=", cm_Globals.options.hpcode );
 
                 $("#pickhub").val("hubopt_0");
                 setupAuthHub("new", userid);
