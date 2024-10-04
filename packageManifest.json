@@ -5,7 +5,7 @@
 	"version": "3.4.5",
 	"dateReleased": "2024-09-22",
 	"licenseFile": "",
-	"releaseNotes": "V3.4.5 Beta bug fixes. This update requires the Node.js modules to be updated. See https://housepanel.net for documentation.",
+	"releaseNotes": "V3.4.5 Beta bug fixes. This version works with the web-hosted version. See https://housepanel.net for documentation.",
 	"apps" : [
 		{
 			"id" : "56776347-587d-4e5d-8a1a-bbd02238f63f",
