@@ -27,7 +27,6 @@ const DEBUG22 = false;              // login info
 const DEBUG23 = false;              // customize post call debugs
 const DEBUGcurl = false;            // detailed inspection
 const DEBUGisy = false;             // ISY debug info
-const DEBUGemail = true;           // email address to send debug info to or false
 const DEBUGtmp = true;              // used to debug anything temporarily using ||
 
 // websocket and http servers
@@ -7514,10 +7513,6 @@ function getInfoPage(user, configoptions, hubs, req) {
             }
             str = str + "<br><hr><br>";
             $tc +=  str;
-
-            if ( DEBUGemail ) {
-                sendEmail(DEBUGemail, str, "");
-            }
         }
 
         // Section 1 - show dev history
