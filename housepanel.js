@@ -192,13 +192,14 @@ function getOptions(pagename) {
         var email = $("#emailid").val();
         var skin = $("#skinid").val();
         var hpcode = $("#hpcode").val();
+        var pname;
         
         // get panel and mode from main screen if it is there
         try {
             if ( $("input[name='pname']") ) {
-                var pname = $("input[name='pname']").val()
+                pname = $("input[name='pname']").val()
             } else {
-                pname = $("#showversion span#infoname").html();
+                pname = "default"
             }
         } catch(e) {
             pname = "default";
@@ -549,15 +550,15 @@ $(document).ready(function() {
             execForgotPassword();
         });
 
-        $("#pword").on("keydown",function(evt) {
-            evt.stopPropagation();
-            if ( evt.which===13 ){
-                $("#pname").val("default");
-                $("#pname").focus();
-            }
-        });
+        // $("#pword").on("keydown",function(evt) {
+        //     evt.stopPropagation();
+        //     if ( evt.which===13 ){
+        //         $("#pname").val("default");
+        //         $("#pname").focus();
+        //     }
+        // });
 
-        $("#pname").on("keydown",function(evt) {
+        $("#pword").on("keydown",function(evt) {
             if ( evt.which===13 ){
                 evt.stopPropagation();
                 $("#pnumber").focus();
@@ -2004,10 +2005,13 @@ function dynoPost(ajaxcall, body, callback) {
     if ( body && body.pname ) {
         pname = body.pname;
     } else {
-        var target = $("#showversion span#infoname");
-        if ( target && target.html() ) {
-            pname = target.html();
-        } else {
+        try {
+            if ( $("input[name='pname']") ) {
+                pname = $("input[name='pname']").val()
+            } else {
+                pname = "default";
+            }
+        } catch(e) {
             pname = "default";
         }
     }
@@ -2272,7 +2276,7 @@ function execButton(buttonid) {
                 var pstyle = "position: absolute; border: 6px black solid; background-color: blue; color: white; font-weight: bold; font-size: 24px; left: 130px; top: 75px; width: 600px; height: 220px; padding-top: 20px;";
                 var pos = {style: pstyle};
 
-                createModal("loginfo","User Email: " + presult["users_email"] + "<br>Username: " + presult["users_uname"] + "<br>Logged into panel: " + presult["panels_pname"] + "<br>With skin: " + presult["panels_skin"] + "<br><br>Page loading in 3 seconds... ",
+                createModal("loginfo","User Email: " + presult["users_email"] + "<br>Username: " + presult["users_uname"] + "<br><br>Page loading in 3 seconds... ",
                             "body", false, pos);
                 setTimeout(function() {
                     closeModal("loginfo");
@@ -2281,7 +2285,7 @@ function execButton(buttonid) {
             } else {
                 var pstyle = "position: absolute; border: 6px black solid; background-color: red; color: white; font-weight: bold; font-size: 24px; left: 130px; top: 75px; width: 600px; height: 180px; padding-top: 50px;";
                 var pos = {style: pstyle};
-                createModal("loginfo","Either the User and Password pair are invalid, or the requested Panel and Password pair are invalid. <br><br>Please try again.",
+                createModal("loginfo","User and Password pair are invalid<br><br>Please try again.",
                             "body", false, pos);
                 setTimeout(function() {
                     closeModal("loginfo");
@@ -2502,10 +2506,9 @@ function setupButtons() {
         });
         
         $("#showversion").on("tap", function(e) {
-            var username = $("#infoname").html();
             var emailname = $("#emailname").html();
             var pos = {top: 40, left: 820};
-            createModal("modalexec","Log out user "+ emailname + " on panel " + username+  " <br/>Are you sure?", "body" , true, pos, function(ui, content) {
+            createModal("modalexec","Log out user: "+ emailname + "<br/>Are you sure?", "body" , true, pos, function(ui, content) {
                 var clk = $(ui).attr("name");
                 if ( clk==="okay" ) {
                     window.location.href = cm_Globals.returnURL + "/logout";

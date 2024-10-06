@@ -3366,7 +3366,7 @@ function doLogin(body, res) {
             setCookie(res, "pname", pnumber + ":" + pw_hash(pname));
             if ( DEBUG3 ) {
                 console.log((ddbg()), therow);
-                console.log((ddbg()), "Successful login. userid: ", userid, " Username: ", uname, " Panelname: ", pname, " on panel #"+pnumber);
+                console.log((ddbg()), "Successful login. userid: ", userid, " Username: ", uname, " on panel #"+pnumber);
             }
 
             // lets make sure there is a null hub for this user
@@ -3378,13 +3378,12 @@ function doLogin(body, res) {
                     useraccess: "", userendpt: "", hubtimer: "0" };
                 mydb.updateRow("hubs",nullhub,"userid = " + userid + " AND hubid = '-1'")
                 .then( () => {
+                    makeDefaultFolder(userid, pname);
                 })
                 .catch(reason => {
                     console.log( (ddbg()), reason );
                 });
             
-                // re-create the user directory and default custom css if not there
-                makeDefaultFolder(userid, pname);
             }
         } else {
             delCookie(res, "uname");
@@ -8634,13 +8633,13 @@ function getMainPage(user, configoptions, hubs, req, res) {
         };
  
         // include doc button and panel name
-        var displayname = uname ? uname : useremail;
+        const displayname = uname ? uname : useremail;
         if ( kioskmode ) {
             tc += '<div id="showversion" class="hidden">';
         } else {
             tc += '<div id="showversion" class="showversion">';
         }
-        tc += '<span id="emailname" class="infoname">' + displayname + '</span> | <span id="infoname" class="infoname">' + pname + '</span><span class="infoname"> | V' + GLB.HPVERSION + '</span> | <span id="infoport" class="infoname"></span>';
+        tc += '<span id="emailname" class="infoname">' + displayname + '</span><span id="infoversion" class="infoname"> | V' + GLB.HPVERSION + '</span> | <span id="infoport" class="infoname"></span>';
         tc += '</div>';
         if ( kioskmode ) {
             tc += '<div id="quickedit" class="hidden">E</div>';
