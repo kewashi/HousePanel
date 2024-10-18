@@ -342,26 +342,16 @@ def variablesPage() {
 def appButtonHandler(String buttonName) {
 
     if ( buttonName == "pushdata" ) {
-        String vdesc = sBLANK
-        vdesc += " Access Token = ${state.accessToken}"
-        vdesc += " app ID = ${app.id}"
-        vdesc += " hub ID = ${state.hubid}"
-        vdesc += " hubname = ${state.hubname}"
-        vdesc += " cloud endpt = ${state.cloudendpt}"
-        vdesc += " local endpt = ${state.endpt}"
-        logger(vdesc, "info")
-
         def devtype = "Hubitat"
         def userid = settings?.userid ?: 0
         def hpcode = settings?.hpcode ?: ""
         def subid = app.id
         Map value = ["accesstoken": state.accessToken, "appid": app.id, "hubname": state.hubname, "hubid": state.hubid,
                      "cloudendpt": state.cloudendpt, "localendpt": state.endpt, "hubtimer": "0", "hpcode": hpcode]
-
+        logger("Pushing data: ${value}", "info")
         postHubRange(state.directIP, state.directPort, "authupd", "", userid, subid, devtype, value)
         postHubRange(state.directIP2, state.directPort2, "authupd", "", userid, subid, devtype, value)
         postHubRange(state.directIP3, state.directPort3, "authupd", "", userid, subid, devtype, value)
-
     }
 }
 

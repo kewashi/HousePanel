@@ -3690,7 +3690,7 @@ function clockUpdater(whichclock, forceget) {
             function (presult, pstatus) {
                 if ( pstatus==="success" && presult && typeof presult==="object" ) {
                     cm_Globals[whichclock] = presult;
-                    updateClock(whichclock, cm_Globals[whichclock]);
+                    updateClock(whichclock, presult);
                 }
             }, "json"
         );
@@ -3701,7 +3701,7 @@ function clockUpdater(whichclock, forceget) {
         clockdevice.time = getFormattedTime(clockdevice.fmt_time, clockdevice.tzone);
 
         // only update the time elements
-        var updobj = {time: clockdevice.time, date: clockdevice.date, weekday: clockdevice.weekday};
+        var updobj = {time: clockdevice.time};
 
         // update all the clock tiles for this type
         $('div.panel div.thing[bid="'+clocktype+'"]').each(function() {
@@ -3924,7 +3924,17 @@ function setupPage() {
             processClickWithValue(that, thingname, ro, subid, thetype, {"Direction": ["up","down"]});
 
         } else if ( subid === "themode" ) {
-            processClickWithValue(that, thingname, ro, subid, thetype, {"Mode": ["Day","Evening","Night","Away"]});
+            var arrmodes = [];
+            $("div.mode-thing").find("div.overlay > div.mode").each( function(index) {
+                var sid = $(this).attr("subid");
+                if ( sid.startsWith("_") ) {
+                    var locmode = $(this).html();
+                    if ( locmode!=="query" && locmode!=="" && !arrmodes.includes(locmode) ) {
+                        arrmodes.push(locmode);
+                    }
+                }
+            });
+            processClickWithValue(that, thingname, ro, subid, thetype, {"Mode": arrmodes});
 
         } else if ( subid==="_setBedPreset" ) {
             processClickWithValue(that, thingname, ro, subid, thetype, {"": ["Favorite","Flat","ZeroG","Snore","WatchTV","Read"]});

@@ -1,4 +1,5 @@
 const devhistory = `
+3.4.7   Minor tweak to Mode to capture all user modes in GUI
 3.4.6   Remove panel names from various screens
 3.4.5   Beta bug fixes to enable auto hub data and separate users
 3.4.4   Bugfix for tile customizer to show links properly
