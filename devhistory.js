@@ -1,4 +1,5 @@
 const devhistory = `
+3.4.8   Fix colorTemperature visual updates and re-enable PUT customs
 3.4.7   Minor tweak to Mode to capture all user modes in GUI
 3.4.6   Remove panel names from various screens
 3.4.5   Beta bug fixes to enable auto hub data and separate users

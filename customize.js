@@ -180,7 +180,7 @@ function customTypePanel() {
         dh+= "<option value='TEXT' selected>TEXT</option>";
         dh+= "<option value='POST'>POST</option>";
         dh+= "<option value='GET'>GET</option>";
-        // dh+= "<option value='PUT'>PUT</option>";
+        dh+= "<option value='PUT'>PUT</option>";
         dh+= "<option value='URL'>URL</option>";
         dh+= "<option value='LINK'>LINK</option>";
         dh+= "<option value='RULE'>RULE</option>";

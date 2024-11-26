@@ -1436,64 +1436,67 @@ function setupColors() {
 
 }
 
-function setupSliders() {
+function hpsliders(evt, ui) {
+    var thing = $(evt.target);
+    thing.attr("value",ui.value);
+    
+    var taid = thing.attr("aid");
+    var tile = '#t-'+taid;
+    var bid = $(tile).attr("bid");
+    var hubid = $(tile).attr("hub");
+    var hubindex = $(tile).attr("hubindex");
+    var subid = thing.attr("subid");
+    var thevalue = parseInt(ui.value);
+    var thetype = $(tile).attr("type");
+    var userid = cm_Globals.options.userid;
+    var thingid = $(tile).attr("thingid");
+    var uid = $(tile).attr("uid");
+    var tileid = $(tile).attr("tile");
+    var hint = $(tile).attr("hint");
+    var pname = cm_Globals.options.pname;
+    
+    var usertile =  $("#sb-"+thingid+"-"+subid);
+    var command = "";
+    var linktype = thetype;
+    var linkval = thevalue;
+    var linkbid = bid;
+    var realsubid = subid;
+    var linkhub = hubindex;
+    var linkuid = 0;
 
-    function hpsliders(evt, ui) {
-        var thing = $(evt.target);
-        thing.attr("value",ui.value);
-        
-        var taid = thing.attr("aid");
-        var tile = '#t-'+taid;
-        var bid = $(tile).attr("bid");
-        var hubid = $(tile).attr("hub");
-        var hubindex = $(tile).attr("hubindex");
-        var subid = thing.attr("subid");
-        var thevalue = parseInt(ui.value);
-        var thetype = $(tile).attr("type");
-        var userid = cm_Globals.options.userid;
-        var thingid = $(tile).attr("thingid");
-        var uid = $(tile).attr("uid");
-        var tileid = $(tile).attr("tile");
-        var hint = $(tile).attr("hint");
-        var pname = cm_Globals.options.pname;
-        
-        var usertile =  $("#sb-"+thingid+"-"+subid);
-        var command = "";
-        var linktype = thetype;
-        var linkval = thevalue;
-        var linkbid = bid;
-        var realsubid = subid;
-        var linkhub = hubindex;
-        var linkuid = 0;
-
-        if ( usertile && usertile.attr("command") ) {
-            command = usertile.attr("command");    // command type
-            linkval = usertile.attr("linkval");
-            linkbid = usertile.attr("linkbid");
-            linkhub = usertile.attr("linkhub");
-            linktype = usertile.attr("linktype");
-            realsubid = usertile.attr("subid");
-            linkuid = usertile.attr("linkuid");
-            hint = usertile.attr("hint");
-        }
-
-        if ( typeof linkval === "string" && 
-            (linkval.startsWith("GET::") || linkval.startsWith("POST::") || 
-             linkval.startsWith("PUT::") || 
-             linkval.startsWith("RULE::") || linkval.startsWith("URL::")) )
-        {
-            var jcolon = linkval.indexOf("::");
-            command = linkval.substring(0, jcolon);
-            linkval = linkval.substring(jcolon+2);
-        }
-
-        console.log("Slider action: command= ", command, " uid= ", uid, " bid= ", bid, " linkbid= ", linkbid, " linkuid= ", linkuid, " hub= ", linkhub, " type= ", 
-                     linktype, " subid= ", realsubid, " hint= ", hint, " value= ", thevalue, " linkval= ", linkval, " hpcode: ", cm_Globals.options.hpcode);
-        $.post(cm_Globals.returnURL, 
-            {api: "doaction", userid: userid, pname: pname, id: linkbid, uid: uid, thingid: thingid, type: linktype, value: thevalue, attr: subid, hint: hint,
-            subid: realsubid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode});
+    if ( usertile && usertile.attr("command") ) {
+        command = usertile.attr("command");    // command type
+        linkval = usertile.attr("linkval");
+        linkbid = usertile.attr("linkbid");
+        linkhub = usertile.attr("linkhub");
+        linktype = usertile.attr("linktype");
+        realsubid = usertile.attr("subid");
+        linkuid = usertile.attr("linkuid");
+        hint = usertile.attr("hint");
     }
 
+    if ( typeof linkval === "string" && 
+        (linkval.startsWith("GET::") || linkval.startsWith("POST::") || 
+         linkval.startsWith("PUT::") || 
+         linkval.startsWith("RULE::") || linkval.startsWith("URL::")) )
+    {
+        var jcolon = linkval.indexOf("::");
+        command = linkval.substring(0, jcolon);
+        linkval = linkval.substring(jcolon+2);
+    }
+
+    console.log("Slider action: command= ", command, " uid= ", uid, " bid= ", bid, " linkbid= ", linkbid, " linkuid= ", linkuid, " hub= ", linkhub, " type= ", 
+                 linktype, " subid= ", realsubid, " hint= ", hint, " value= ", thevalue, " linkval= ", linkval, " hpcode: ", cm_Globals.options.hpcode);
+    $.post(cm_Globals.returnURL, 
+        {api: "doaction", userid: userid, pname: pname, id: linkbid, uid: uid, thingid: thingid, type: linktype, value: thevalue, attr: subid, hint: hint,
+        subid: realsubid, hubid: hubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode},
+        function (presult, pstatus) {
+            console.log(">>>> pstatus: ", pstatus, " presult: ", presult);
+        }, "json"
+    );
+}
+
+function setupSliders() {
     
     $("div.overlay.level >div.level, div.overlay.onlevel >div.onlevel, div.overlay.volume >div.volume, div.overlay.groupVolume >div.groupVolume, div.overlay.position >div.position").slider({
         orientation: "horizontal",
@@ -3466,18 +3469,9 @@ function processKeyVal(targetid, aid, key, value) {
             }
         );
         return isclock;
-    //     var iconimg;
-    //     if ( Number.isNaN(icondigit) ) {
-    //         iconimg = value;
-    //     } else {
-    //         var iconstr = icondigit.toString();
-    //         if ( icondigit < 10 ) {
-    //             iconstr = "0" + iconstr;
-    //         }
-    //         iconimg = "media/Weather/" + iconstr + ".png";
-    //     }
-    //     value = "<img src=\"" + iconimg + "\" alt=\"" + iconstr + "\" width=\"80\" height=\"80\">";
-    } else if ( (key === "level" || key=== "onlevel" || key==="volume" || key==="groupVolume" || key==="position") && $(targetid).slider ) {
+
+    // handle sliders
+    } else if ( (key === "level" || key=== "onlevel" || key==="volume" || key==="groupVolume" || key==="position" || key==="colorTemperature") && $(targetid).slider ) {
         $(targetid).slider("value", value);
         $(targetid).attr("value",value);
         value = false;
