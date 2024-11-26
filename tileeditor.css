@@ -1680,7 +1680,6 @@ div.clock-thing div.overlay.tzone {
 
 /* hide hue & sat & level for bulbs because we now have color pickers */
 div.overlay.hue, div.overlay.saturation, 
-div.overlay.colorTemperature,
 div.overlay.RGB, div.overlay.colorName {
     display: none;
 }
@@ -1690,29 +1689,23 @@ div.overlay {
     width: 100%;
     display: block;
 }
-/* put sliders on bottom */
-div.thing div.overlay.level, div.thing div.overlay.position {
+/* put level sliders on bottom */
+div.thing div.overlay.level, div.thing div.overlay.position, div.thing div.overlay.colorTemperature {
     position: absolute;
-    height: 20px;
+    height: 10px;
+    padding-top: 5px;
+    padding-bottom: 5px;
     margin-top: 5px;
-    margin-bottom: 10px;
+    margin-bottom: 5px;
     bottom: 0px;
     width: 88%; left: 4%;
 }
 
+/* put colorT just above level sliders on bottom */
 div.thing div.overlay.colorTemperature {
-    position: absolute;
-    height: 20px;
-    margin-top: 5px;
-    margin-bottom: 20px;
-    bottom: 0px;
-    width: 88%; left: 4%;
+    bottom: 36px;
 }
 
-/* div.overlay.name {
-    display: none;
-    color: rgba(255, 255, 255, 1);
-} */
 div.page-thing, div.page-thing div.overlay.name {
     position: relative;
     display: block;

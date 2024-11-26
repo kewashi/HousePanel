@@ -649,7 +649,7 @@ function initDialogBinds(str_type, thingindex) {
         var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
         var borderstyle = $(this).val();
         if ( borderstyle!=="" ) {
-            if ( subid==="level" || subid==="onlevel" || subid==="volume" || subid==="position" ) {
+            if ( subid==="level" || subid==="onlevel" || subid==="volume" || subid==="position" || subid==="colorTemperature" ) {
                 var sliderbox= cssRuleTarget + " .ui-slider";
                 var sliderbox2= sliderbox + " span.ui-slider-handle";
                 addCSSRule(sliderbox, borderstyle);
@@ -2622,7 +2622,7 @@ function getish(str_type, thingindex, subid) {
 // main routine that sets the color of items
 function updateColor(strCaller, cssRuleTarget, str_type, subid, thingindex, strColor, target2) {
     
-    if ( subid==="level" || subid==="onlevel" || subid==="volume" || subid==="position" ) {
+    if ( subid==="level" || subid==="onlevel" || subid==="volume" || subid==="position" || subid==="colorTemperature" ) {
         cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
         var sliderline = cssRuleTarget;
         var sliderbox= sliderline + " .ui-slider";
@@ -2982,7 +2982,7 @@ function resetCSSRules(str_type, thingindex, onesubid){
                 numdel+= removeCSSRule(str_type, target1, thingindex);
 
                 // handle removal of slider formatting
-                if ( subid==="level" || subid==="onlevel" || subid==="volume" || subid==="position" ) {
+                if ( subid==="level" || subid==="onlevel" || subid==="volume" || subid==="position" || subid==="colorTemperature" ) {
                     var sliderbox = target1 + " .ui-slider";
                     numdel+= removeCSSRule(str_type, sliderbox, thingindex);
                     var sliderbox2= sliderbox + " span.ui-slider-handle";
@@ -3110,7 +3110,7 @@ function copyCSSRule(str_type, thingindex, fixsubid){
                 }
 
                 // handle removal of slider formatting
-                if ( subid==="level" || subid==="onlevel" || subid==="volume" || subid==="position" ) {
+                if ( subid==="level" || subid==="onlevel" || subid==="volume" || subid==="position" || subid==="colorTemperature" ) {
                     var sliderbox = target + " .ui-slider";
                     if ( typeof subidmap[sliderbox] === "undefined" ) {
                         subidmap[sliderbox] = subid;

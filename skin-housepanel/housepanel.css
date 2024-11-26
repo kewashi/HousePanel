@@ -274,24 +274,11 @@ div.overlay.power div.power::after, div.overlay.switch div.power::after {
     content: " (Watts)";
 }
 
-/* switchlevel / dimmer styling - make room for the dimmer controls */
-/* if you have a dimmer with power and energy controls - see custom below */
-/* things that can have sliders */
-div.switchlevel.colorTemperature, div.switchlevel.hue, div.switchlevel.saturation {
-    height: 20px;
-}
 /* div.switchlevel.level, div.bulb.level, div.music.level, div.shade.level, div.music.groupVolume, div.audio.volume, div.audio.groupVolume, div.position {
     height: 6px;
     width: 98%;
     color:rgba(0, 0, 0, 0.01);
 } */
-div.thing div.overlay.position, div.thing div.overlay.level {
-    color:rgba(0, 0, 0, 0.01);
-    width: 88%; margin-left: 0px; 
-    margin-top: 5px; margin-bottom: 10px;
-    height: 20px;
-    position: absolute;
-}
 
 /* momentary styling */
 div.momentary.off, div.switch.button.off, div.overlay.momentary div.momentary, div.overlay.switch div.switch.button {
