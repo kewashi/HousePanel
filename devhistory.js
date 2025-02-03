@@ -1,4 +1,6 @@
 const devhistory = `
+3.2.8   Debug and fix LINK feature and misc code cleanup
+3.2.7   Clean up room delete and dead node removal logic and code cleanup
 3.2.6   Updated list feature to allow lists from any tile
 3.2.5   Added graph capability to historical data lists
 3.2.4   New custom feature to collect lists of historical values in a table

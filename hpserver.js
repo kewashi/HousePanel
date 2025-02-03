@@ -383,7 +383,7 @@ function getHeader(userid, pname, skin, skip) {
 
     // chart capability loaded here
     $tc += '<script type="text/javascript" src="node_modules/chart.js/dist/chart.umd.js"></script>';
-    $tc += '<script type="text/javascript" src="node_modules/chart.js/dist/chart.js"></script>';
+    // $tc += '<script type="text/javascript" src="node_modules/chart.js/dist/chart.js"></script>';
     
     // load main script file
     var customhash = "js001_" + GLB.HPVERSION;
@@ -2044,15 +2044,16 @@ function getDevices(hub) {
 
                             // check if this is our last one and return array of devices
                             if ( devicecnt >= numdevices ) {
-                                resolve(mydevices);
                                 removeDeadNodes(userid, hubindex, currentDevices)
                                 .then(results => {
-                                    if ( DEBUG2 ) {
-                                        console.log( (ddbg()), results);
+                                    if ( results[0] || results[1] ) {
+                                        console.log( (ddbg()), "removed dead nodes: ", results);
                                     }
+                                    resolve(mydevices);
                                 })
                                 .catch(reason => {
                                     console.log( (ddbg()), reason );
+                                    resolve(mydevices);
                                 });
                             }                    
                         })
@@ -2888,52 +2889,76 @@ function getDevices(hub) {
 
         } // end of new ST 
         
-        // remove tiles and devices that are no longer on the hub
+        // rewrote this to first remove devices and then remove tiles that are stranded
+        // this version uses db queries which is much faster than what was here before
         function removeDeadNodes(userid, hubindex, currentDevices) {
-            var result = removeDeadTiles(userid, hubindex, currentDevices)
-            .then( numtiles => {
-                var indev = "(" + currentDevices.join(",") + ")";
-                return mydb.deleteRow("devices","userid = "+userid+" AND hubid = "+hubindex+" AND deviceid NOT IN " + indev)
-                .then( results => {
-                    var numdevices = results.getAffectedItemsCount();
-                    return "Removed " + numdevices + " devices and " + numtiles + " tiles";
+
+            // first, remove all devices that are tied to the queried hub but not returned by the query
+            var indev = "(" + currentDevices.join(",") + ")";
+            return mydb.deleteRow("devices","userid = "+userid+" AND hubid = "+hubindex+" AND deviceid NOT IN " + indev)
+            .then( results => {
+                var numdeldevices = results.getAffectedItemsCount();
+
+                // now get all defices for this user to use to check for stranded tiles
+                mydb.getRows("devices","id",`userid=${userid}`)
+                .then(rows => {
+                    var currentIds = [];
+                    rows.forEach(row => {
+                        currentIds.push(row.id);
+                    });
+                    var idstr = "(" + currentIds.join(",") + ")";
+
+                    // use query to remove all tiles that do not have a corresponding device in the DB
+                    // this will remove it from all rooms and panels
+                    return mydb.deleteRow("things",`userid=${userid} AND tileid NOT IN ${idstr}`)
+                    .then(res => {
+                        numdeltiles = res.getAffectedItemsCount();
+                        return [numdeldevices, numdeltiles];
+                        // return "Removed " + numdeldevices + " devices and " + numdeltiles + " tiles";
+                    })
+                    .catch(reason => {
+                        console.log( (ddbg()), reason );
+                        return [numdeldevices, 0];
+                        // return "Removed " + numdeldevices + " devices and unknown number of tiles due to an error";
+                    });
                 })
                 .catch(reason => {
-                    console.log( (ddbg()), reason, "\nsqlstr: ", mydb.getRequest() );
-                    return "Removed " + 0 + " devices and " + numtiles + " tiles";
+                    console.log( (ddbg()), reason );
+                    return [0, 0];
+                    // return "Removed unknown number of devices and tiles due to an error";
                 });
-            })
-            .catch(reason => {
-                console.log( (ddbg()), reason, "\nsqlstr: ", mydb.getRequest() );
-                return "No devices and no tiles removed";
-            });
-            return result;
-        }
-
-        // remove dead tiles
-        function removeDeadTiles(userid, hubindex, currentDevices) {
-
-            // go through all tiles and remove those that don't have devices
-            var joinstr = mydb.getJoinStr("things","tileid","devices","id");
-            return mydb.getRows("things","things.id as things_id, devices.deviceid as devices_deviceid, devices.hubid as devices_hubid",
-                                "things.userid = "+userid+" AND devices.hubid = "+hubindex,joinstr)
-            .then(things => {
-                if ( !things ) return 0;
-                var numremoved = 0;
-                things.forEach(thing => {
-                    var devstr = "'"+thing["devices_deviceid"]+"'";
-                    if ( !currentDevices.includes(devstr) ) {
-                        numremoved++
-                        mydb.deleteRow("things","id = " + thing["things_id"]);
-                    }
-                });
-                return numremoved;
             })
             .catch(reason => {
                 console.log( (ddbg()), reason );
-                return 0;
+                return [0, 0];
+                // return "No devices and no tiles removed";
             });
         }
+
+        // remove dead tiles
+        // function removeDeadTiles(userid, hubindex, currentDevices) {
+
+        //     // go through all tiles and remove those that don't have devices
+        //     var joinstr = mydb.getJoinStr("things","tileid","devices","id");
+        //     return mydb.getRows("things","things.id as things_id, devices.deviceid as devices_deviceid, devices.hubid as devices_hubid",
+        //                         "things.userid = "+userid+" AND devices.hubid = "+hubindex,joinstr)
+        //     .then(things => {
+        //         if ( !things ) return 0;
+        //         var numremoved = 0;
+        //         things.forEach(thing => {
+        //             var devstr = "'"+thing["devices_deviceid"]+"'";
+        //             if ( !currentDevices.includes(devstr) ) {
+        //                 numremoved++
+        //                 mydb.deleteRow("things","id = " + thing["things_id"]);
+        //             }
+        //         });
+        //         return numremoved;
+        //     })
+        //     .catch(reason => {
+        //         console.log( (ddbg()), reason );
+        //         return 0;
+        //     });
+        // }
 
         function getFordVehicles() {
 
@@ -3642,7 +3667,7 @@ function getDevices(hub) {
             }
         }
 
-    // end of the promise function to return to caller
+    // end of the getDevices promise function to return to caller
     });
     return promise;
 
@@ -3819,21 +3844,6 @@ function setIsyFields(nodeid, device, props) {
         }
     }
     return value;
-}
-
-// returns the maximum index from the options
-function getMaxIndex() {
-    var optindex = GLB.options.index;
-    var maxindex = 0;
-    if ( typeof optindex==="object" ) {
-        for ( var key in optindex ) {
-            var value = parseInt(optindex[key]);
-            if ( !isNaN(value) ) {
-                maxindex = ( value > maxindex ) ? value : maxindex;
-            }
-        }
-    }
-    return maxindex;
 }
 
 function getSpecials(configoptions) {
@@ -6626,6 +6636,8 @@ function processHubMessage(userid, hubmsg, newST) {
             }
 
             // handle special case where groovy pushes an array for color changes
+            // this branch should no longer ever be used because I changed color to send a Map object that is handled below
+            // I left this here for legacy support purposes which should still work but LIST and RULE attributes tied to hue, saturation, and level for bulbs will all fail
             if ( subid==="color" && is_array(value) && value.length > 3 && value[0] ) {
                 pvalue["hue"] = value[0];
                 pvalue["saturation"] = value[1];
@@ -7197,19 +7209,19 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, doli
                 lines.push(aline);
             });
         }
+        var dbdevices = results[2];
+        var devices = {};
+        dbdevices.forEach(device => {
+            var id = device.id;
+            devices[id] = device;
+        });
         if ( lines && lines.length ) {
             var dbhubs = results[1];
             var hubs = {};
-            for ( var ahub in dbhubs ) {
-                var id = dbhubs[ahub].id;
-                hubs[id] = dbhubs[ahub];
-            }
-            var dbdevices = results[2];
-            var devices = {};
-            for ( var adev in dbdevices ) {
-                var id = dbdevices[adev].id;
-                devices[id] = dbdevices[adev];
-            }
+            dbhubs.forEach(hub => {
+                var id = hub.id;
+                hubs[id] = hub;
+            });
             // invokeLists(deviceid, lines, pvalueinput);
             invokeRules(deviceid, lines, hubs, devices);
         }
@@ -7217,12 +7229,11 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, doli
     })
     .then(devices => {
         if ( dolists ) {
-            mydb.getRows("configs","*","userid = "+userid+" AND configkey LIKE 'user_%' AND NOT configkey = 'useroptions'")
+            // mydb.getRows("configs","*","userid = "+userid+" AND configkey LIKE 'user_%' AND NOT configkey = 'useroptions'")
+            mydb.getRows("configs","*","userid = "+userid+" AND configtype = 1")
             .then(configs => {
                 // must invoke separately and use all the configurations per query above
-                if ( configs ) {
-                    invokeLists(deviceid, configs, pvalueinput, devices);
-                }
+                invokeLists(deviceid, configs, pvalueinput, devices);
             })
             .catch(reason => {
                 console.log( (ddbg()), "invokeLists error: ", reason);
@@ -7236,13 +7247,24 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, doli
     // this populates all lists being tracked with new information upon changes
     function invokeLists(tileid, configs, pvalue, devices) {
         if ( DEBUG11 ) {
-            console.log( (ddbg()),`InvokeLists tileid: ${tileid}, items: `, items, " pvalue: ", pvalue);
+            console.log( (ddbg()),`InvokeLists tileid: ${tileid} pvalue: `, pvalue);
         }
 
         // loop through all the configs and capture the invoking device so we know which one to attribute
         for (var i in configs) {
             var config = configs[i];
             var sourcebid = config.configkey.substring(5); // "user_xxx"
+            var sourcetile = tileid;
+
+            // this little bit of code is only needed to deal with legacy LIST items
+            // that nobody should have except me. Otherwise we could just set sourcetile = 0 becasue it won't be used
+            // to confirm this, take a look into the code of parseCustomizeContent where user params are set
+            for (var devid in devices ) {
+                if ( devices[devid].deviceid === sourcebid ) {
+                    sourcetile = parseInt(devid);
+                    break;
+                }
+            }
             var rlines = decodeURI2(config.configval);
             var items = [];
             if ( is_array(rlines) ) {
@@ -7254,15 +7276,18 @@ function processRules(userid, deviceid, bid, thetype, trigger, pvalueinput, doli
             items.forEach( function(item) {
                 if (item[0]==="LIST") {
                     var lsubid = item[2];
-                    var arr = parseCustomizeContent(tileid, item[1]);
+                    var arr = parseCustomizeContent(sourcetile, item[1]);
                     var linkid = arr[0];
                     var targetsubid = arr[1];
          
-                    if ( linkid===tileid && targetsubid===trigger && devices[linkid] ) {                
-                        var lpvalue = decodeURI2(devices[linkid].pvalue);
+                    // if ( linkid===tileid && targetsubid===trigger && devices[linkid] ) {                
+                        // var lpvalue = decodeURI2(devices[linkid].pvalue);
+                    if ( linkid===tileid && targetsubid===trigger && pvalue[targetsubid] ) {                
+                        // var lpvalue = pvalue;
                         var d = new Date();
                         var today = d.toLocaleString();
-                        var newval = lpvalue[targetsubid].toString();
+                        // var newval = lpvalue[targetsubid].toString();
+                        var newval = pvalue[targetsubid];
                         var newobj = {userid: userid, deviceid: sourcebid, subid: lsubid, ltime: today, lvalue: newval }
 
                         // now get the last item in the list to see if this is a duplicate
@@ -9663,12 +9688,12 @@ function delThing(userid, bid, thingtype, panel, tileid, thingid) {
     .then(result => {
         var msg;
         if ( result ) {
-            msg = "removed tile #" + tileid + " deviceid: " + bid + " of type: " + thingtype + " from page: " + panel;
+            msg = "removed tile #" + tileid + " deviceid: " + bid + " of type: " + thingtype + " from room: " + panel;
             if ( DEBUG6 ) {
                 console.log( (ddbg()), msg);
             }
         } else {
-            msg = "error - could not remove tile #" + tileid + " deviceid: " + bid + " of type: " + thingtype + " from page: " + panel;
+            msg = "error - could not remove tile #" + tileid + " deviceid: " + bid + " of type: " + thingtype + " from room: " + panel;
             console.log( (ddbg()), msg);
         }
         return msg;
@@ -9679,22 +9704,30 @@ function delThing(userid, bid, thingtype, panel, tileid, thingid) {
     });
 }
 
-function delPage(userid, roomid, panel) {
+function delPage(userid, roomid, roomname, panel) {
 
-    return mydb.deleteRow("rooms","userid = "+userid+" AND id="+roomid)
+    return Promise.all([
+        mydb.deleteRow("rooms","userid = "+userid+" AND id="+roomid),
+        mydb.deleteRow("things","userid = "+userid+" AND roomid="+roomid)
+    ])
     .then(result => {
         var msg;
-        if ( result ) {
-            msg = "removed room #" + roomid + " of name: " + panel;
+        var numdelrooms = result[0].getAffectedItemsCount();
+        if ( numdelrooms ) {
+            msg = "removed room: " + roomname + " (" + roomid + ") from panel: " + panel;
+            var numdeltiles = result[1].getAffectedItemsCount();
+            if ( numdeltiles ) {
+                msg+= " and removed " + numdeltiles + " tiles that were in that room.";
+            }
         } else {
-            msg = "error - could not remove room #" + roomid + " of name: " + panel;
-            console.log( (ddbg()), "delPage - ", msg);
+            msg = "error - failed to remove room: " + roomname + " (" + roomid + ") from panel: " + pamel;
+            console.log( (ddbg()), "delPage - ", msg );
         }
         return msg;
     })
     .catch(reason => {
         console.log( (ddbg()), "delPage - ", reason);
-        return reason;
+        return "error - something went wrong trying to remove a";
     });
 }
 
@@ -11354,6 +11387,7 @@ function updCustom(api, userid, tileid, swid, swattr, subid, swval, rules) {
             console.log((ddbg()), str);
 
             // now handle the list request by clearing out old values if there and adding first value based on now
+            // this will always use the new format for "content" so the tileid parameter should be zero
             if ( swval === "LIST" ) {
 
                 var arr = parseCustomizeContent(tileid, content);
@@ -11753,7 +11787,8 @@ function apiCall(user, body, protocol, res) {
 
             case "pagedelete":
                 if ( protocol==="POST" ) {
-                    result = delPage(userid, roomid, swval);
+                    var roomname = swval;
+                    result = delPage(userid, roomid, roomname, pname);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -12387,7 +12422,7 @@ function apiCall(user, body, protocol, res) {
 
 // do reset on LIST based on timing type
 function resetList(userid, timing) {
-    mydb.getRows("configs","*",`configkey LIKE 'user%' AND configval LIKE '%["LIST",%'`)
+    mydb.getRows("configs","*",`userid=${userid} AND configtype=1 AND configval LIKE '%["LIST",%'`)
     .then(rows => {
         if ( rows ) {
             rows.forEach(row => {
@@ -12403,7 +12438,7 @@ function resetList(userid, timing) {
                         if ( timing === targettype ) {
                             mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${deviceid}' AND subid = '${subid}'`)
                             .then( res2=> {
-                                var numListDel = res2[0].getAffectedItemsCount();
+                                var numListDel = res2.getAffectedItemsCount();
                                 console.log( (ddbg()), `Deleted ${numListDel} rows for LIST associated with deviceid=${deviceid} and subid=${subid} based on criteria=${timing}`);
                             })
                             .catch(reason => {
@@ -12517,10 +12552,10 @@ function setupBrowserSocket() {
                         }
                         console.log( (ddbg()), str, "from host:", clientUrl, "port:", clientPort);
 
-                        if ( clientUrl === "::1" ) {
-                            EMULATEHUB = true;
-                            console.log( (ddbg()), "Local testing mode enabled. ISY hubs ignored...");
-                        }
+                        // if ( clientUrl === "::1" ) {
+                        //     EMULATEHUB = true;
+                        //     console.log( (ddbg()), "Local testing mode enabled. ISY hubs ignored...");
+                        // }
                     });
                 }
             });

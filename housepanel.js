@@ -2886,13 +2886,14 @@ function addEditLink() {
         var hubid = $(thing).attr("hub");
         var userid = cm_Globals.options.userid;
         var pname = cm_Globals.options.pname;
+        var panelid = $("input[name='panelid']").val();
 
         createModal("modaladd","Remove: "+ tilename + " of type: "+thingtype+" from room "+panel+"?<br>Are you sure?", "body" , true, pos, function(ui, content) {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
                 $.post(cm_Globals.returnURL, 
                     {useajax: "delthing", userid: userid, id: bid, type: thingtype, value: panel, 
-                                          attr: "", hubid: hubid, tileid: tile, thingid: thingid, roomid: roomid, pname: pname},
+                                          attr: "", hubid: hubid, tileid: tile, thingid: thingid, roomid: roomid, pname: pname, panelid: panelid},
                     function (presult, pstatus) {
                         // check for an object returned which should be a promise object
                         if (pstatus==="success" && ( typeof presult==="object" || (typeof presult === "string" && !presult.startsWith("error"))) ) {
@@ -2951,10 +2952,11 @@ function addEditLink() {
         var roomnum = $(evt.target).attr("roomnum");
         var roomname = $(evt.target).attr("roomname");
         var roomid = $("#panel-"+roomname).attr("roomid");
+        var panelid = $("input[name='panelid']").val();
         var clickid = $(evt.target).parent().attr("aria-labelledby");
         var pos = {top: 100, left: 10};
         var pname = cm_Globals.options.pname;
-        createModal("modaldel","Remove Room #" + roomnum + " with Name: " + roomname +" from HousePanel. Are you sure?", "body" , true, pos, function(ui, content) {
+        createModal("modaldel","Remove Room #" + roomnum + " with Name: " + roomname +" from HousePanel panel: " + pname + ". Are you sure?", "body" , true, pos, function(ui, content) {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
                 
@@ -2967,11 +2969,15 @@ function addEditLink() {
 
                 // remove it from the system
                 $.post(cm_Globals.returnURL, 
-                    {useajax: "pagedelete", userid: cm_Globals.options.userid, id: roomnum, type: "none", value: roomname, roomid: roomid, attr: "none", pname: pname},
+                    {useajax: "pagedelete", userid: cm_Globals.options.userid, id: roomnum, type: "none", value: roomname, roomid: roomid, attr: "none", panelid: panelid, pname: pname},
                     function (presult, pstatus) {
-                        if (pstatus==="success" && (typeof presult !== "string" || !presult.startsWith("error")) ) {
-                            // remove it visually
-                            $("li[roomnum="+roomnum+"]").remove();
+                        if (pstatus==="success" && typeof presult === "string" ) {
+                            console.log(presult);
+                            if ( !presult.startsWith("error") ) {
+                                // remove it visually and click on new default tab
+                                $("li[roomnum="+roomnum+"]").remove();
+                                $("#"+defaultTab).trigger("click");
+                            }
                         }
                     }
                 );

@@ -158,7 +158,7 @@ function customizeTile(userid, tileid, aid, bid, str_type, hubnum) {
                     return;
                 } else {
                     try {
-                        getDefaultSubids();
+                        getDefaultSubids(cm_Globals.tileid);
                         var thing = cm_Globals.devices[cm_Globals.tileid];
                         $("#cm_subheader").html(thing.name);
                         initCustomActions();
@@ -268,8 +268,8 @@ function sortedSensors(unsorted, one, two, three) {
     return sensors;
 }
 
-function getDefaultSubids() {
-    loadExistingFields(cm_Globals.tileid);
+function getDefaultSubids(tileid) {
+    loadExistingFields(tileid, null);
     $("#cm_customtype option[value='TEXT']").prop('selected',true);
     
     var pc = loadTextPanel();
@@ -341,8 +341,8 @@ function loadLinkPanel(curval) {
         "of this tile to link into the customized tile using the \"Available Fields\" list above on the right. Once you are happy with " +
         "your selection, click the \"Add\" button and this field will be added to the list of \"Existing Fields\" " +
         "shown on the left side of this dialog box. You can mix and match this with any other addition. " +
-        "You can add text or numbers to the end of the field name to make the link subid unique, or you can " +
-        "leave it as-is. If the field name exists in the list on the left it will be replaced. " +
+        "You can create your own unique field name by adding text or numbers to the end of the field name, or you can " +
+        "leave it as-is to accept the generated default. If the field name exists in the list on the left it will be replaced. " +
         "The existing fields list will be disabled when this type is selected. Change the type to move to " +
         "a different existing field or to change the type of this field away from a LINK.";
     $("#cm_dynoInfo").html(infotext);
@@ -410,8 +410,7 @@ function loadListPanel(loadedval) {
     var linkid = arr[0];
     var curval = arr[1];
     var nreset = arr[2];
-
-    console.log(`in loadListPanel, loadedval: ${loadedval}, linkid: ${linkid}, curval: ${curval}, nreset: ${nreset}`);
+    // console.log(`>>>> in loadListPanel, loadedval: ${loadedval}, linkid: ${linkid}, curval: ${curval}, nreset: ${nreset}`);
 
     dh+= "<div class='cm_group'><div><label for='cm_link'>Linked Tile: </label></div>";
 
@@ -448,12 +447,15 @@ function loadListPanel(loadedval) {
     dh+= "</div>";
     
     var infotext = "The \"" + servicetype + "\" option enables you to " +
-        "capture a time sequenced list of changes that happen to the selected field. " +
-        "This captured list becomes available for displaying in a table or a graphical plot. " +
-        "You must provide a new user-defined field name using the entry box on the left to associate with the list. " +
+        "capture a time sequenced list of changes that happen to any field of any tile. " +
+        "The default is the selected tile, but it can be changed to gather a list from another tile. " +
+        "This captured list becomes available for displaying in a table with a bar graph. " +
+        "You must provide a new user-defined field name using the entry box on the left to associate with the list, " +
+        "or accept the generated default, which will be list_ prepended to the field name. " +
         "Be aware that the data captured for list fields is stored locally and can be quite large for fields that change often, " +
-        "so be selective about which fields you use to capture lists. This feature was primarily designed for intended use with " +
+        "so be selective about which fields you use to capture lists. This feature was primarily designed for use with " +
         "user provided and user altered variables, but also works well with tracking weather and other numerical data. " +
+        "State devices like switches and contacts will be graphed as 1 for the active state and 0 for the inactive state. " +
         "Click the \"Add\" button and this field will be added to the list of \"Existing Fields\" " +
         "shown on the left side of this dialog box. You can mix and match this with any other addition.";
     $("#cm_dynoInfo").html(infotext);
@@ -662,9 +664,7 @@ function parseContent(customType, content, subid) {
         }
     }
     cm_Globals.currentid = linkid;
-
-    console.log(`parseContent, linkid: ${linkid}, linkval: ${linkval}, nreset: ${nreset}`);
-
+    // console.log(`>>>> parseContent, linkid: ${linkid}, linkval: ${linkval}, nreset: ${nreset}`);
     return [linkid, linkval, nreset];
 }
 
@@ -802,6 +802,37 @@ function initLinkSelect() {
     
 }
 
+function loadRightPanel(customType, acontent, subid) {
+    var content;
+    $("#cm_customtype option[value='" + customType + "']").prop('selected',true);
+    if ( customType === "LINK" ) {
+        content = loadLinkPanel(cm_Globals.currentid);
+        $("#cm_dynoContent").html(content);
+        initLinkActions(customType, acontent, subid);
+    } else if ( customType ==="URL" ) {
+        content = loadUrlPanel();
+        $("#cm_dynoContent").html(content);
+        initExistingFields();
+    } else if ( customType === "POST" || customType === "GET" || customType === "PUT" ) {
+        content = loadServicePanel(customType);
+        $("#cm_dynoContent").html(content);
+        initExistingFields();
+    } else if ( ENABLERULES && customType ==="RULE" ) {
+        content = loadRulePanel();
+        $("#cm_dynoContent").html(content);
+        initExistingFields();
+    } else if ( customType ==="LIST" ) {
+        // var linkid = $("#cm_userfield").val() + "::d";
+        content = loadListPanel(cm_Globals.currentid);
+        $("#cm_dynoContent").html(content);
+        initLinkActions(customType, acontent, subid);
+    } else {
+        content = loadTextPanel();
+        $("#cm_dynoContent").html(content);
+        initExistingFields();
+    }
+}
+
 /* 
  * routines that initialize actions upon selection
  */
@@ -810,36 +841,34 @@ function initCustomActions() {
     $("#cm_customtype").off('change');
     $("#cm_customtype").on('change', function (event) {
         var customType = $(this).val();
-        var content;
-        
-        
+        loadRightPanel(customType, null, null);        
         // load the dynamic panel with the right content
-        if ( customType === "LINK" ) {
-            content = loadLinkPanel(cm_Globals.currentid);
-            $("#cm_dynoContent").html(content);
-            initLinkActions(customType, null, null);
-        } else if ( customType ==="URL" ) {
-            content = loadUrlPanel();
-            $("#cm_dynoContent").html(content);
-            initExistingFields();
-        } else if ( customType === "POST" || customType === "GET" || customType === "PUT" ) {
-            content = loadServicePanel(customType);
-            $("#cm_dynoContent").html(content);
-            initExistingFields();
-        } else if ( ENABLERULES && customType ==="RULE" ) {
-            content = loadRulePanel();
-            $("#cm_dynoContent").html(content);
-            initExistingFields();
-        } else if ( customType ==="LIST" ) {
-            // var linkid = $("#cm_userfield").val() + "::d";
-            content = loadListPanel(cm_Globals.currentid);
-            $("#cm_dynoContent").html(content);
-            initLinkActions(customType, null, null);
-        } else {
-            content = loadTextPanel();
-            $("#cm_dynoContent").html(content);
-            initExistingFields();
-        }
+        // if ( customType === "LINK" ) {
+        //     content = loadLinkPanel(cm_Globals.currentid);
+        //     $("#cm_dynoContent").html(content);
+        //     initLinkActions(customType, null, null);
+        // } else if ( customType ==="URL" ) {
+        //     content = loadUrlPanel();
+        //     $("#cm_dynoContent").html(content);
+        //     initExistingFields();
+        // } else if ( customType === "POST" || customType === "GET" || customType === "PUT" ) {
+        //     content = loadServicePanel(customType);
+        //     $("#cm_dynoContent").html(content);
+        //     initExistingFields();
+        // } else if ( ENABLERULES && customType ==="RULE" ) {
+        //     content = loadRulePanel();
+        //     $("#cm_dynoContent").html(content);
+        //     initExistingFields();
+        // } else if ( customType ==="LIST" ) {
+        //     // var linkid = $("#cm_userfield").val() + "::d";
+        //     content = loadListPanel(cm_Globals.currentid);
+        //     $("#cm_dynoContent").html(content);
+        //     initLinkActions(customType, null, null);
+        // } else {
+        //     content = loadTextPanel();
+        //     $("#cm_dynoContent").html(content);
+        //     initExistingFields();
+        // }
         
         showPreview();
         event.stopPropagation;
@@ -907,13 +936,15 @@ function initCustomActions() {
     });
 }
  
-function loadExistingFields(tileid) {
+function loadExistingFields(tileid, subid) {
     // show the existing fields
     var results = loadLinkItem(tileid, true, subid);
     if ( results ) {
 
         $("#cm_builtinfields").html(results.fields);
-        var subid = results.firstitem;
+        if ( !subid ) {
+            subid = results.firstitem;
+        }
         cm_Globals.defaultclick = subid;
         
         if ( subid ) {
@@ -1165,6 +1196,7 @@ function applyCustomField(action, subid) {
     var thing = cm_Globals.devices[tileid]
     var bid = thing.deviceid;
     var nreset = "d";
+    var targetsubid = subid;
 
     if ( cm_Globals.rules ) {
         var oldrules = cm_Globals.rules.slice(0);
@@ -1184,7 +1216,7 @@ function applyCustomField(action, subid) {
         // var options = cm_Globals.options;
         if ( customtype==="LINK" ) {
             var linkid = $("#cm_link").val();
-            var targetsubid = $("#cm_linkfields").val();
+            targetsubid = $("#cm_linkfields").val();
             if ( linkid && targetsubid ) {
                 content = linkid + "::" + targetsubid;
             } else {
@@ -1223,6 +1255,7 @@ function applyCustomField(action, subid) {
         }
     } 
     else if ( action==="delcustom" && cm_Globals.rules && cm_Globals.rules.length ) {
+        targetsubid = null;
         var i = 0;
         while ( i < cm_Globals.rules.length ) {
             var rule = cm_Globals.rules[i];
@@ -1274,10 +1307,16 @@ function applyCustomField(action, subid) {
                 
                 // update the visual boxes on screen
                 if ( action==="addcustom" ) {
-                    loadExistingFields(tileid);
-                    handleBuiltin(subid);
+                    loadExistingFields(cm_Globals.tileid, subid);
+                    loadRightPanel(customtype, content, subid);
+                    initExistingFields();
+
+                    // TODO 
                 } else {
-                    getDefaultSubids();
+                    // getDefaultSubids(cm_Globals.tileid);
+                    loadExistingFields(cm_Globals.tileid, null);
+                    loadRightPanel("TEXT", null, null);
+                    initExistingFields();
                 }
             } else {
                 console.log("Error attempting to perform " + action + ". presult: ", presult);
