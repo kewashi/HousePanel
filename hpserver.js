@@ -51,6 +51,7 @@ const multer = require('multer');
 // load supporting modules
 var sqlclass = require("./mysqlclass");
 var devhistory = require("./devhistory.js");
+const { json } = require('stream/consumers');
 
 // global variables are all part of GLB object
 var GLB = {};
@@ -450,7 +451,9 @@ function encodeURI2(obj) {
 }
 
 function decodeURI2(str) {
-    if ( !str || typeof str !== "string" ) {
+    if ( typeof str === "object" ) {
+        return str;
+    } else if ( !str || typeof str !== "string" ) {
         return null;
     }
     
@@ -464,7 +467,6 @@ function decodeURI2(str) {
     try {
         obj = JSON.parse(decodestr);
     } catch(e) {
-        // console.log( (ddbg()),"error parsing existing string into an object, string: ", decodestr);
         obj = decodestr;
     }
     return obj;
@@ -5688,7 +5690,11 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
         var today = d.toLocaleString();
         for (var devuid in devices ) {
             if ( devices[devuid].deviceid === "clockdigital" ) {
-                today = devices[devuid].pvalue["date"] + ", " + devices[devuid].pvalue["time"];
+                var tpvalue = devices[devuid].pvalue;
+                if ( typeof tpvalue === "string") {
+                    tpvalue = decodeURI2(tpvalue);
+                }
+                today = getFormattedDate(tpvalue["fmt_date"], d).date + ", " + getFormattedTime(tpvalue["fmt_time"], d, tpvalue["tzone"]);
                 break;
             }
         }
