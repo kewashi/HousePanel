@@ -1,4 +1,5 @@
 const devhistory = `
+3.4.9   Change time used in lists to clock to match user selected format and timezome
 3.4.8   Fix colorTemperature visual updates and re-enable PUT customs
 3.4.7   Minor tweak to Mode to capture all user modes in GUI
 3.4.6   Remove panel names from various screens

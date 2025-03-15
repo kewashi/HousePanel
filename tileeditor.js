@@ -2624,16 +2624,17 @@ function updateColor(strCaller, cssRuleTarget, str_type, subid, thingindex, strC
     
     if ( subid==="level" || subid==="onlevel" || subid==="volume" || subid==="position" || subid==="colorTemperature" ) {
         cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
-        var sliderline = cssRuleTarget;
-        var sliderbox= sliderline + " .ui-slider";
-        var sliderbox2= sliderbox + " span.ui-slider-handle";
+        const sliderline = cssRuleTarget;
+        const sliderbox= sliderline + " .ui-slider";
+        const sliderbox2= sliderbox + " span.ui-slider-handle";
         if ( strCaller==="background" ) {
             addCSSRule(sliderline, "background-color: " + strColor + ";");
         } else if ( strCaller==="border" ) {
             addCSSRule(sliderbox, "border-color: " + strColor + ";");
-            addCSSRule(sliderbox2, "border-color: " + strColor + ";");		
-        } else {
             addCSSRule(sliderbox, "background-color: " + strColor + ";");		
+        } else {
+            // addCSSRule(sliderbox, "background-color: " + strColor + ";");		
+            addCSSRule(sliderbox2, "border-color: " + strColor + ";");		
             addCSSRule(sliderbox2, "background-color: " + strColor + ";");		
         }
 

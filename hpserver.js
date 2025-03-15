@@ -5683,6 +5683,16 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
             console.log( (ddbg()),`InvokeLists tileuid: ${tileuid} pvalue: `, pvalue);
         }
 
+        // get the time from our clock tile if it exists - this provides the user chosen format and time zone
+        var d = new Date();
+        var today = d.toLocaleString();
+        for (var devuid in devices ) {
+            if ( devices[devuid].deviceid === "clockdigital" ) {
+                today = devices[devuid].pvalue["date"] + ", " + devices[devuid].pvalue["time"];
+                break;
+            }
+        }
+
         // loop through all the configs and capture the invoking device so we know which one to attribute
         for (var i in configs) {
             var config = configs[i];
@@ -5712,10 +5722,6 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
                     var arr = parseCustomizeContent(sourcetile, item[1]);
                     var targetsubid = arr[1];
                     if ( arr[0]===tileuid && targetsubid===trigger && pvalue[targetsubid] ) {                
-                        // var lpvalue = pvalue;
-                        var d = new Date();
-                        var today = d.toLocaleString();
-                        // var newval = lpvalue[targetsubid].toString();
                         var newval = pvalue[targetsubid];
                         var newobj = {userid: userid, deviceid: sourcebid, subid: lsubid, ltime: today, lvalue: newval }
 
