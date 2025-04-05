@@ -9763,7 +9763,7 @@ function apiCall(user, body, protocol, res) {
             case "getdevices":
                 if ( protocol==="POST" ) {
                     result = Promise.all([
-                        mydb.getRows("devices","*", "userid = "+userid + " GROUP BY deviceid", false, "name, devicetype, hubid"),
+                        mydb.getRows("devices","*", `userid = ${userid} AND uid > 0 GROUP BY deviceid, devicetype`, false, "name, devicetype, hubid"),
                         mydb.getRows("configs","*", "userid = "+userid + " AND configtype=1"),
                         mydb.getRows("hubs","id, hubname", "userid = "+userid )
                     ])

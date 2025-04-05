@@ -1,4 +1,5 @@
 const devhistory = `
+3.5.1   Bugfix in customizer that skipped devices when added as different types
 3.4.9   Change time used in lists to clock to match user selected format and timezome
 3.4.8   Fix colorTemperature visual updates and re-enable PUT customs
 3.4.7   Minor tweak to Mode to capture all user modes in GUI

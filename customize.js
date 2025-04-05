@@ -72,6 +72,7 @@ function customizeTile(userid, tileid, uid, bid, thingid, str_type, hubnum, pane
         function(presult, pstatus) {
             if (pstatus==="success" && typeof presult === "object") {
                 // create the devices object list
+                // console.log( ">>>> customizeTile: getdevices() - loaded devices for user " + userid + ": ", presult);
                 cm_Globals.devices = presult;
                 for ( var id in presult ) {
                     var val = presult[id];
@@ -118,6 +119,7 @@ function customizeTile(userid, tileid, uid, bid, thingid, str_type, hubnum, pane
 
         // end of dialog
         dh += "</div>";
+        // console.log(">>>> customizeTile: dodisplay() - creating modal dialog with content:\n", dh);
 
         var pos = {top: 50, left: 50, zindex: 999};
         createModal("modalcustom", dh, "body", "Done", pos, 
@@ -146,7 +148,11 @@ function customizeTile(userid, tileid, uid, bid, thingid, str_type, hubnum, pane
                     try {
                         getDefaultSubids();
                         var thing = cm_Globals.devices[cm_Globals.uid];
-                        $("#cm_subheader").html(thing.name);
+                        if ( !thing ) {
+                            throw new Error("No device found for UID: " + cm_Globals.uid);
+                        } else {
+                            $("#cm_subheader").html(thing.name);
+                        }
                         initCustomActions();
                         handleBuiltin(cm_Globals.defaultclick);
                     } catch (e) {
@@ -1201,7 +1207,7 @@ function applyCustomField(action, subid) {
                 if ( rule[2]===subid ) {
                     cm_Globals.rules[i] = therule;
                     existing = true;
-                    console.log("existing: ", subid, " rule: ", therule, " oldrules: ", oldrules);
+                    // console.log("existing: ", subid, " rule: ", therule, " oldrules: ", oldrules);
                     break;
                 }
             }
