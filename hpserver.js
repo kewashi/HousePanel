@@ -4472,7 +4472,7 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
             if ( (typeof tval === "string") && tval.startsWith("LINK::") ) {
                 $tc += putLinkElement(bid, hint, tval, kindex, cnt, j, thingtype, tval, tkey, userSubtype, twidth, theight);
             } else {
-                $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, userSubtype, null, null, twidth, theight);
+                $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, userSubtype, null, tkey, twidth, theight);
             }
 
             j++;
@@ -4600,11 +4600,14 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
         var ttype = ` type="${thingtype}"`;
         var pn = ` pn="0"`;
         var n = 0;
-        if ( tkey.startsWith("_") && tval!=="0" && tval!== tkey.substring(1) ) {
+        
+        // fix the command subid for linked tiles by using the real subid instead of tkey
+        if ( realsubid.startsWith("_") && tval!=="0" && tval!== realsubid.substring(1) ) {
             n = parseInt(tval);
             if ( isNaN(n) ) { n = 0; }
             pn = ` pn="${n}"`
-            tval = tkey.substring(1)
+            // tval = realsubid.substring(1)
+            tval = tkey;
         }
 
         // handle global text substitutions
