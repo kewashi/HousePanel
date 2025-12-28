@@ -816,7 +816,7 @@ def getOther(swid, item=null) {
 def getPower(swid, item=null) {
     def resp = getThing(mypowers, swid, item)
     try {
-        state.powervals[swid] = Float.valueOf(resp.power)
+        state.powervals[swid] = resp.power.toFloat()
     } catch (e) {
         state.powervals[swid] = 0.0
     }
@@ -967,17 +967,25 @@ def getThing(things, swid, item=null) {
             }
         }
        
-        // fix color
-        if ( resp["hue"] && resp["saturation"] && resp["level"]) {
-            def h = resp["hue"].toInteger()
-            def s = resp["saturation"].toInteger()
+        // fix color - must have either hue/saturation or colorTemperature plus level
+        if ( ((resp["hue"] && resp["saturation"]) || resp["colorTemperature"]) && resp["level"] ) {
+            def h = resp["hue"] ? resp["hue"].toInteger() : 0
+            def s = resp["saturation"] ? resp["saturation"].toInteger() : 0
+            def ct = resp["colorTemperature"] ? resp["colorTemperature"].toInteger() : 0
             def v = resp["level"].toInteger()
             resp["hue"] = h
             resp["saturation"] = s
             resp["level"] = v
-            h = Math.round((h*360)/100)
-            def newcolor = hsv2rgb(h, s, v)
-            resp["color"] ? resp["color"] = newcolor : resp.put("color", newcolor)
+
+            // set color based on mode
+            def newcolor
+            if ( resp["colorMode"] && resp["colorMode"] == "CT" && ct ) {
+                newcolor = ct2rgb( ct, v )
+            } else {
+                h = Math.round((h*360)/100)
+                newcolor = hsv2rgb(h, s, v)
+            }
+            resp["color"] = newcolor
         }
         resp = addStatus(resp, item)
     }
@@ -2316,6 +2324,23 @@ def setDimmer(swid, cmd, swattr, subid) {
     return resp
 }
 
+def updateColor(item, h, s, v, ct) {
+    def newcolor
+    v = v ? v : item.currentValue("level").toInteger()
+    if ( item.hasAttribute("colorMode") && item.currentValue("colorMode") == "CT" ) {
+        ct = ct ? ct : (item.hasAttribute("colorTemperature") ? item.currentValue("colorTemperature").toInteger() : 0)
+        newcolor = ct2rgb(ct, v)
+        logger("newcolor CT set from a level change: ct= ${ct}, v= ${v}, newcolor= ${newcolor}","debug")
+    } else {
+        def hue100 = h ? h : (item.hasAttribute("hue") ? item.currentValue("hue").toInteger() : 0)
+        h = Math.round((hue100 * 360) / 100)
+        s = s ? s : (item.hasAttribute("saturation") ? item.currentValue("saturation").toInteger() : 0)
+        newcolor = hsv2rgb(h, s, v)
+        logger("newcolor RGB set from a level change: hue= ${hue100}, h= ${h} s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
+    }
+    return newcolor
+}
+
 // handle functions for bulbs, dimmers, and lights
 // hardened this to also handle regular switches
 // this is way more complex than I like but it has to handle a bunch
@@ -2404,15 +2429,7 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
                 if ( del < 5 ) { del = 5 }
                 newlevel = (newlevel >= 100 - del) ? 100 : newlevel - ( newlevel % del ) + del
                 item.setLevel(newlevel)
-                if ( item.hasAttribute("hue") && item.hasAttribute("saturation") && item.hasAttribute("color") ) {
-                    def hue100 = item.currentValue("hue").toInteger()
-                    def h = Math.round((hue100 * 360) / 100)
-                    def s = item.currentValue("saturation").toInteger()
-                    def v = newlevel
-                    newcolor = hsv2rgb(h, s, v)
-                    // item.setColor([hue: hue100, saturation: s, level: v])
-                    logger("level command result: hue= ${hue100}, h= ${h} s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
-                }
+                newcolor = updateColor(item, null, null, newlevel, null)
                 newonoff = "on"
             }
             break
@@ -2428,15 +2445,7 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
                 del = (newlevel % del) == 0 ? del : newlevel % del
                 newlevel = (newlevel <= del) ? del : newlevel - del
                 item.setLevel(newlevel)
-                if ( item.hasAttribute("hue") && item.hasAttribute("saturation") && item.hasAttribute("color") ) {
-                    def hue100 = item.currentValue("hue").toInteger()
-                    def h = Math.round((hue100 * 360) / 100)
-                    def s = item.currentValue("saturation").toInteger()
-                    def v = newlevel
-                    newcolor = hsv2rgb(h, s, v)
-                    // item.setColor([hue:hue100, saturation: s, level: v])
-                    logger("level command result: hue= ${hue100}, h= ${h} s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
-                }
+                newcolor = updateColor(item, null, null, newlevel, null)
                 newonoff = "on"
             }
             break
@@ -2445,21 +2454,13 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
             if ( cmd.isNumber() && item.hasAttribute("level") ) {
                 newlevel = cmd.toInteger()
                 newlevel = (newlevel >100) ? 100 : newlevel
-                newlevel = (newlevel < 0) ? 0 : newlevel
+                newlevel = (newlevel < 5) ? 5 : newlevel
                 item.setLevel(newlevel)
                 if ( item.hasAttribute("position") ) {
                     item.setPosition(newlevel)
                 }
-                if ( item.hasAttribute("hue") && item.hasAttribute("saturation") ) {
-                    def hue100 = item.currentValue("hue").toInteger()
-                    def h = Math.round((hue100 * 360) / 100)
-                    def s = item.currentValue("saturation").toInteger()
-                    def v = newlevel
-                    newcolor = hsv2rgb(h, s, v)
-                    // item.setColor([hue: hue100, saturation: s, level: v])
-                    logger("level command result: hue= ${hue100}, h= ${h} s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
-                }
-                newonoff = (newlevel == 0) ? "off" : "on"
+                newcolor = updateColor(item, null, null, newlevel, null)
+                newonoff = "on"
             }
             break
          
@@ -2468,13 +2469,8 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
                 hue = item.currentValue("hue").toInteger()
                 hue = (hue >= 95) ? 100 : hue - (hue % 5) + 5
                 item.setHue(hue)
-                def h = Math.round((hue * 360) / 100)
-                def s = item.currentValue("saturation").toInteger()
-                def v = item.currentValue("level").toInteger()
-                newcolor = hsv2rgb(h, s, v)
-                // item.setColor([hue:hue, saturation: s, level: v])
+                newcolor = updateColor(item, hue, null, null, null)
                 newonoff = "on"
-                logger("hue command result: hue= ${hue}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
             }
             break
               
@@ -2484,13 +2480,8 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
                 def del = (hue % 5) == 0 ? 5 : hue % 5
                 hue = (hue <= 5) ? 5 : hue - del
                 item.setHue(hue)
-                def h = Math.round((hue * 360) / 100)
-                def s = item.currentValue("saturation").toInteger()
-                def v = item.currentValue("level").toInteger()
-                newcolor = hsv2rgb(h, s, v)
-                // item.setColor([hue:hue, saturation: s, level: v])
-                newonoff = (v == 0) ? "off" : "on"
-                logger("hue command result: hue= ${hue}, h= ${h}, del= ${del} s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
+                newcolor = updateColor(item, hue, null, null, null)
+                newonoff = "on"
             }
             break
               
@@ -2502,12 +2493,8 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
                     hue = cmd.toInteger()
                 }
                 item.setHue(hue)
-                def h = Math.round((hue * 360) / 100)
-                def s = item.currentValue("saturation").toInteger()
-                def v = item.currentValue("level").toInteger()
-                newcolor = hsv2rgb(h, s, v)
-                // item.setColor([hue:hue, saturation: s, level: v])
-                newonoff = (v == 0) ? "off" : "on"
+                newcolor = updateColor(item, hue, null, null, null)
+                newonoff = "on"
                 logger("hue command result: hue= ${hue}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
             }
             break
@@ -2516,12 +2503,7 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
                 saturation = item.currentValue("saturation").toInteger()
                 saturation = (saturation >= 95) ? 100 : saturation - (saturation % 5) + 5
                 item.setSaturation(saturation)
-                def hue100 = item.currentValue("hue").toInteger()
-                def h = Math.round((hue100 * 360) / 100)
-                def s = saturation
-                def v = item.currentValue("level").toInteger()
-                newcolor = hsv2rgb(h, s, v)
-                // item.setColor([hue: hue100, saturation: s, level: v])
+                newcolor = updateColor(item, null, saturation, null, null)
                 newonoff = "on"
                 logger("saturation command result: hue= ${hue100}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
             break
@@ -2531,13 +2513,8 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
                 def del = (saturation % 5) == 0 ? 5 : saturation % 5
                 saturation = (saturation <= 5) ? 5 : saturation - del
                 item.setSaturation(saturation)
-                def hue100 = item.currentValue("hue").toInteger()
-                def h = Math.round((hue100 * 360) / 100)
-                def s = saturation
-                def v = item.currentValue("level").toInteger()
-                newcolor = hsv2rgb(h, saturation, v)
-                // item.setColor([hue: hue100, saturation: s, level: v])
-                newonoff = (v == 0) ? "off" : "on"
+                newcolor = updateColor(item, null, saturation, null, null)
+                newonoff = "on"
                 logger("saturation command result: hue= ${hue100}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
             break
               
@@ -2547,13 +2524,8 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
                     saturation = cmd.toInteger()
                 }
                 item.setSaturation(saturation)
-                def hue100 = item.currentValue("hue").toInteger()
-                def h = Math.round((hue100 * 360) / 100)
-                def s = saturation
-                def v = item.currentValue("level").toInteger()
-                newcolor = hsv2rgb(h, s, v)
-                // item.setColor([hue: hue100, saturation: s, level: v])
-                newonoff = (v == 0) ? "off" : "on"
+                newcolor = updateColor(item, null, saturation, null, null)
+                newonoff = "on"
                 logger("saturation command result: hue= ${hue100}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")                
             break
 
@@ -2562,6 +2534,7 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
                 temperature = item.currentValue("colorTemperature").toInteger()
                 temperature = (temperature >= 6500) ? 6500 : temperature - (temperature % 100) + del
                 item.setColorTemperature(temperature)
+                newcolor = updateColor(item, null, null, null, temperature)
                 newonoff = "on"
             break
               
@@ -2570,6 +2543,7 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
                 temperature = item.currentValue("colorTemperature").toInteger()
                 temperature = (temperature < 2800) ? 2700 : temperature - (temperature % 100) - del
                 item.setColorTemperature(temperature)
+                newcolor = updateColor(item, null, null, null, temperature)
                 newonoff = "on"
             break
               
@@ -2578,8 +2552,10 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
                 /* temperature drifts up so we cant use round down method */
                 if ( cmd.isNumber() ) {
                     temperature = cmd.toInteger()
+                    temperature = (temperature < 2700) ? 2700 : (temperature > 6500) ? 6500 : temperature
                     item.setColorTemperature(temperature)
                 }
+                newcolor = updateColor(item, null, null, null, temperature)
                 newonoff = "on"
             break
 
@@ -2596,7 +2572,7 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
                 item.setColor([hue: hue100, saturation: s, level: v])
                 newlevel = v
                 newonoff = "on"
-                logger("color click: hue= ${hue100}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")
+                logger("color click: hue= ${hue100}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","info")
             } else if ( cmd.startsWith("#") ) {
                 newcolor = cmd;
                 def r = cmd.substring(1,3)
@@ -2614,7 +2590,7 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
                 item.setColor([hue: hue100, saturation: s, level: v])
                 newlevel = v
                 newonoff = "on"
-                logger("color command: , r,g,b = ${r}, ${g}, ${b}, hue= ${hue100}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","debug")                
+                logger("color command: , r,g,b = ${r}, ${g}, ${b}, hue= ${hue100}, h= ${h}, s= ${s}, v= ${v}, newcolor= ${newcolor}","info")                
             }
             break
               
@@ -2628,12 +2604,12 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
         if ( item.hasAttribute("switch") && (newonoff=="on" || newonoff=="off" || newonoff=="flash") ) {
             resp.put(swtrigger, newonoff)
         }
-        if ( item.hasAttribute("color") && newcolor ) { resp.put("color", newcolor) }
-        if ( item.hasAttribute("hue") && hue ) { resp.put("hue", hue) }
-        if ( item.hasAttribute("saturation") && saturation ) { resp.put("saturation", saturation) }
-        if ( item.hasAttribute("colorTemperature") && temperature ) { resp.put("colorTemperature", temperature) }
-        if ( item.hasAttribute("level") && newlevel ) { resp.put("level", newlevel) }
-        if ( item.hasAttribute("position") && newlevel ) { resp.put("position", newlevel) }
+        if ( newcolor && item.hasAttribute("color") ) { resp.put("color", newcolor) }
+        if ( hue && item.hasAttribute("hue") ) { resp.put("hue", hue) }
+        if ( saturation && item.hasAttribute("saturation") ) { resp.put("saturation", saturation) }
+        if ( temperature && item.hasAttribute("colorTemperature") ) { resp.put("colorTemperature", temperature) }
+        if ( newlevel && item.hasAttribute("level") ) { resp.put("level", newlevel) }
+        if ( newlevel && item.hasAttribute("position") ) { resp.put("position", newlevel) }
 
         // do this so that user created TEXT fields using the customizer will return the custom command
         if ( subid.startsWith("_") ) {
@@ -2642,7 +2618,7 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
             postHubRange(state.directIP, state.directPort, "update", newname, swid, subid, devtype, value)
             postHubRange(state.directIP2, state.directPort2, "update", newname, swid, subid, devtype, value)
             postHubRange(state.directIP3, state.directPort3, "update", newname, swid, subid, devtype, value)
-            logger("thing update: ${newname} id ${swid} type ${devtype} by changing ${subid} to ${value}", "info")
+            logger("thing update: ${newname} id ${swid} type ${devtype} by changing ${subid} to ${value}", "debug")
         }
     }
     logger("generic light setter returned: ${resp}", "debug")
@@ -2695,7 +2671,59 @@ def hsv2rgb(h, s, v) {
     return hexval
 }
 
-def mapMinMax(value,oldMin,oldMax,newMin, newMax) {
+def ct2rgb(ct, level) {
+    def r, g, b
+
+    // Normalize
+    def temp = ct / 100.0
+    def scale = level / 100.0
+
+    // --- Red ---
+    if (temp <= 66) {
+        r = 255
+    } else {
+        r = 329.698727446 * Math.pow(temp - 60, -0.1332047592)
+    }
+
+    // --- Green ---
+    if (temp <= 66) {
+        g = 99.4708025861 * Math.log(temp) - 161.1195681661
+    } else {
+        g = 288.1221695283 * Math.pow(temp - 60, -0.0755148492)
+    }
+
+    // --- Blue ---
+    if (temp >= 66) {
+        b = 255
+    } else if (temp <= 19) {
+        b = 0
+    } else {
+        b = 138.5177312231 * Math.log(temp - 10) - 305.0447927307
+    }
+
+    // Clamp before scaling
+    r = Math.max(0, Math.min(255, r))
+    g = Math.max(0, Math.min(255, g))
+    b = Math.max(0, Math.min(255, b))
+
+    // Apply level
+    r = Math.round(r * scale).toInteger()
+    g = Math.round(g * scale).toInteger()
+    b = Math.round(b * scale).toInteger()
+
+    // Convert to hex (same style as hsv2rgb)
+    def rhex = Integer.toHexString(r)
+    def ghex = Integer.toHexString(g)
+    def bhex = Integer.toHexString(b)
+
+    if (rhex.length() == 1) rhex = "0" + rhex
+    if (ghex.length() == 1) ghex = "0" + ghex
+    if (bhex.length() == 1) bhex = "0" + bhex
+
+    return "#" + rhex + ghex + bhex
+}
+
+def mapMinMax(value,oldMin,oldMax,newMin=0, newMax=100) {
   def r = (newMax-newMin)*(value-oldMin)/(oldMax-oldMin)+newMin
   r = Math.round(r)
   return r.toInteger()
@@ -2733,12 +2761,10 @@ def rgb2hsv(r, g, b) {
     h100 = h100.toInteger()
     h = h*360
     h = h.toInteger()
-    // h = mapMinMax(h,0,1,0,360);
     s *= 100
     s = s.toInteger()
     v *= 100
     v = v.toInteger()
-    // def hsvstr = "hsl(${h},${s},${v})"
     return [h, s, v, h100]
 }
 
@@ -3219,49 +3245,49 @@ def changeHandler(evt) {
     def value = evt?.value
     def skip = false
     def jsonslurper = new JsonSlurper()
-    
+    def delta = 0.0
     def devtype = autoType(deviceid)
-    logger("handling id = ${deviceid} devtype = ${devtype} name = ${deviceName} subid = ${subid} value = ${value}", "trace")
 
     // handle power changes to skip if not changed by at least 15%
     // this value was set by trial and error for my particular plug
     if ( subid=="power" ) {
         try {
-            // log.info state.powervals
-            def delta = 0.0
             def oldpower = state.powervals[deviceid] ?: 0.0
-            oldpower = Float.valueOf(oldpower)
-            state.powervals[deviceid] = Float.valueOf(value)
-            if ( oldpower==0.0 && state.powervals[deviceid] < 1.0 ) {
+            oldpower = oldpower.toFloat()
+            def newpower = value.toFloat()
+            if ( oldpower==0.0 && newpower < 1.0 ) {
                 skip = true
             } else if ( oldpower==0.0 ) {
                 skip = false
             } else {
-                delta = Math.abs(state.powervals[deviceid]- oldpower) / oldpower 
+                delta = Math.abs(newpower - oldpower) / oldpower 
                 skip = (delta < 0.15)
             }
-            logger("delta = ${delta} skip = ${skip}", "debug")
-            
+            if ( !skip ) {
+                state.powervals[deviceid] = newpower
+                logger("power change accepted for ${deviceName} oldpower = ${oldpower} newpower = ${newpower} delta = ${delta}", "info")
+            } else {
+                logger("power change skipped for ${deviceName} oldpower = ${oldpower} newpower = ${newpower} delta = ${delta}", "debug")
+            }
         } catch (e) {
             skip= false
-            logger("problem in change handler for power device. oldpower: ${oldpower} error msg: ${e}", "error")
+            logger("problem in change handler for power device ${deviceName}. Error msg: ${e}", "error")
         }
     }
-    
-    // log.info "Sending ${src} Event ( ${deviceName}, ${deviceid}, ${subid}, ${value} ) to HousePanel clients  log = ${state.loggingLevelIDE}"
-    // log.info "skip= ${skip} deviceName= ${deviceName} subid= ${subid} value= ${value}"
+
     if ( !skip && deviceName && deviceid && subid && value) {
 
-        def item = mybulbs?.find{it.id.toInteger() == deviceid.toInteger()}
-        if ( (subid=="hue" || subid=="saturation" || subid=="level" || subid=="color") && item && item.hasAttribute("color") ) {
+        if ( (subid=="hue" || subid=="saturation" || subid=="level" || subid=="color" || subid=="colorTemperature" || subid=="colorMode") && devtype=="bulb" ) {
 
             // fix color bulbs - force subid to color if hue, saturation, or level changes
             def h
             def h100
             def s
             def v 
-            def c
+            def ct
             def color
+            def item = mybulbs?.find{it.id.toInteger() == deviceid.toInteger()}
+            cmode = subid=="colorMode" ? value : item.currentValue("colorMode")
             if ( subid == "color" && value.substring(0,1)=="#") {
                 def r = value.substring(1,3)
                 def g = value.substring(3,5)
@@ -3275,26 +3301,24 @@ def changeHandler(evt) {
                 //  Math.round((h * 100) / 360)
                 s = hsv[1]
                 v = hsv[2]
-                // c = item.currentValue("colorTemperature").toInteger()
                 color = value
             } else {
                 h100 = subid=="hue" ? value.toInteger() : item.currentValue("hue").toInteger()
                 s = subid=="saturation" ? value.toInteger() : item.currentValue("saturation").toInteger()
                 v = subid=="level" ? value.toInteger() : item.currentValue("level").toInteger()
-                // c = subid=="colorTemperature" ? value.toInteger() : item.currentValue("colorTemperature").toInteger()
-                h = mapMinMax(h100,0,100,0,360)     //  Math.round((h100*360)/100)
-                color = hsv2rgb(h, s, v)
+                ct = subid=="colorTemperature" ? value.toInteger() : item.currentValue("colorTemperature").toInteger()
+                color = updateColor(item, h100, s, v, ct) 
             }
 
             // for colors we have to set all parameters at the same time to avoid race conditions
             // changed this to use an object and send the actual trigger flag so that LIST now works
             // and the object logic using a Map is now generic and not specific to color arrays
-            // def colorarray = [h100, s, v, color]
-            Map colorarray = [hue: h100, saturation: s, level: v, color: color];
+            // def colorarray = [h100, s, v, color, colorMode]
+            Map colorarray = [hue: h100, saturation: s, level: v, color: color, colorMode: cmode]
             postHubRange(state.directIP, state.directPort, "update", deviceName, deviceid, subid, devtype, colorarray)
             postHubRange(state.directIP2, state.directPort2, "update", deviceName, deviceid, subid, devtype, colorarray)
             postHubRange(state.directIP3, state.directPort3, "update", deviceName, deviceid, subid, devtype, colorarray)
-            logger("color update: ${deviceName} id ${deviceid} type ${devtype} changed to ${color} by changing ${subid} to ${value}, h100: ${h100}, h: ${h}, s: ${s}, v: ${v} ", "info") 
+            logger("color update: ${deviceName} id ${deviceid} type ${devtype} changed to ${color} by changing ${subid} to ${value}, h100: ${h100}, h: ${h}, s: ${s}, v: ${v}, mode: ${cmode} ", "info") 
         } else if ( devtype=="music" && subid=="trackData" ) {
             def newvalue = jsonslurper.parseText(value)
             newvalue = translateObjects(newvalue, musicmap)

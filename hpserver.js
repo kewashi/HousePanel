@@ -2659,7 +2659,7 @@ function createUser(body) {
         })
 
         // get the confirmation code from the new user
-        var thecode = newuser.hpcode;
+        let thecode = newuser.hpcode;
 
         // var d = new Date();
         // var time = d.toLocaleTimeString();
@@ -2667,7 +2667,7 @@ function createUser(body) {
         // var len = logincode.length;
         // var mid = len / 2;
         // var thecode = logincode.substring(0,1) + logincode.substring(mid,mid+1) + logincode.substring(len-4);
-        var msg = "HousePanel confirmation code: " + thecode;
+        let msg = "HousePanel confirmation code: " + thecode;
 
         // write confirmation to console and email and/or text it to user
         console.log( (ddbg()), msg );
@@ -2682,9 +2682,9 @@ function createUser(body) {
         }
     
         // make the hpcode expire after 15 minutes, replaced by a permanent code to use for API calls
-        var delay = 15 * 60000;
+        const delay = 15 * 60000;
         setTimeout(function() {
-            var permcode = getNewCode(emailname);
+            let permcode = getNewCode(emailname);
             mydb.updateRow("users",{hpcode: permcode},"id = "+userid)
             .then( () => {
                 console.log( (ddbg()), "For security purposes, all API calls will use hpcode="+permcode);
@@ -2706,12 +2706,12 @@ function createUser(body) {
 function checkUser(emailname) {
     var promise = new Promise(function(resolve, reject) {
 
-        var emailre = /^\S+@\S+\.\S{2,}$/;    // email form xxx@yyyyy.zzz
+        let emailre = /^\S+@\S+\.\S{2,}$/;    // email form xxx@yyyyy.zzz
         if ( ! emailre.test(emailname) ) {
             reject(`error - ${emailname} is not a valid email address.`);
         }
 
-        var allow = GLB.dbinfo.allownewuser;
+        let allow = GLB.dbinfo.allownewuser;
         if ( allow==="false" || (is_array(allow) && !allow.includes("all") && ( allow.includes("none") || !allow.includes(emailname) )) ) {
             reject(`error - ${emailname} is not allowed to create a new HousePanel account or log in`);
         }
@@ -3166,9 +3166,9 @@ function forgotPassword(body) {
             // this will be different than the login authentication code
             // which means the login authentication code cannot be used for API calls and vice versa
             // we don't communicate this value until the user has been validated, unless validation is diabled
-            var delay = 15 * 60000;
+            const delay = 15 * 60000;
             setTimeout(function() {
-                var permcode = getNewCode(emailname);
+                const permcode = getNewCode(emailname);
                 mydb.updateRow("users",{hpcode: permcode},"id = "+userid)
                 .then( () => {
                     if ( GLB.dbinfo.service==="none" ) {
@@ -3870,15 +3870,16 @@ function getFileName(userid, pname, thingvalue, thingtype, configoptions) {
 
     var fw = "auto";
     var fh = "auto";
+    var fn = "";
 
     // get the name, width, height to create
     if ( array_key_exists("name", thingvalue) ) {
         var fn = thingvalue["name"].trim();
-    } else {
-        // fn = specialtiles[thingtype][0];
-        fn = thingtype.substring(0,1).toUpperCase() + thingtype.substring(1);
-        thingvalue["name"] = fn;
     }
+    if ( fn === "" ) {
+        fn = thingtype.substring(0,1).toUpperCase() + thingtype.substring(1);
+    }
+    thingvalue["name"] = fn;
     if ( array_key_exists("width", thingvalue) ) {
         fw = thingvalue["width"];
     } else {
@@ -4053,9 +4054,9 @@ function getFileName(userid, pname, thingvalue, thingtype, configoptions) {
     thingvalue[thingtype] = $v;
 
     // TODO - figure out a better way to show large images
-    if ( mediafile ) {
-        thingvalue["_media_"] = mediafile;
-    }
+    // if ( mediafile ) {
+    //     thingvalue["_media_"] = mediafile;
+    // }
     return thingvalue;
 }
 
@@ -4110,6 +4111,15 @@ function writeForecastWidget(userid, city, region, code) {
     $tc = $tc.replace("{{code}}", code);
     var fname = "user" + userid + "/Frame1.html";
     fs.writeFileSync(fname, $tc, {encoding: "utf8", flag:"w"});
+}
+
+// offer an alternative to entering city codes by allowing entire code block copied from either AccuWeather or WeatherWidget.io
+function writeWeatherWidget(userid, codeblock, framenum) {
+    if ( !userid || !codeblock ) {
+        return;
+    }
+    var fname = "user" + userid + "/Frame" + framenum + ".html";
+    fs.writeFileSync(fname, codeblock, {encoding: "utf8", flag:"w"});
 }
 
 function getWeatherIcon(num, weathertype) {
@@ -4602,12 +4612,16 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
         var n = 0;
         
         // fix the command subid for linked tiles by using the real subid instead of tkey
-        if ( realsubid.startsWith("_") && tval!=="0" && tval!== realsubid.substring(1) ) {
+        // if ( realsubid.startsWith("_") && tval!=="0" && tval!== realsubid.substring(1) ) {
+        if ( realsubid.startsWith("_") && tval!=="0" ) {
             n = parseInt(tval);
             if ( isNaN(n) ) { n = 0; }
             pn = ` pn="${n}"`
             // tval = realsubid.substring(1)
             tval = tkey;
+            if ( tkey.startsWith("_") ) {
+                tval = tkey.substring(1);
+            }
         }
 
         // handle global text substitutions
@@ -4812,14 +4826,19 @@ function getFormattedDate(fmtdate, d) {
             datestr = datestr.replace("M", month);
         }
         if ( fmtdate.indexOf("m")!==-1 ) {
-            datestr = datestr.replace("m", month.substr(0,3));
+            var mstr = (mofy + 1).toString();
+            if ( mstr.length < 2 ) {
+                mstr = "0" + mstr;
+            }   
+            datestr = datestr.replace("m", mstr);
         }
         if ( fmtdate.indexOf("W")!==-1 ) {
             datestr = datestr.replace("W", weekday);
         }
         if ( fmtdate.indexOf("w")!==-1 ) {
-            datestr = datestr.replace("w", weekday.substr(0,3));
-            weekday = weekday.substr(0,3);
+            var wstr = (dofw+1).toString();
+            datestr = datestr.replace("w", wstr);
+            weekday = wstr;
         }
     } else {
         fmtdate = "M d, Y";
@@ -5631,12 +5650,14 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
     Promise.all([
         mydb.getRow("configs","*","userid = "+userid+" AND configkey = '"+configkey+"'"),
         mydb.getRows("hubs", "*", "userid = "+userid),
-        mydb.getRows("devices", "*", "userid = "+userid)
+        mydb.getRows("devices", "*", "userid = "+userid),
+        mydb.getRow("devices","*","userid = "+userid+" AND deviceid = 'clockdigital'"),
     ])
     .then(results => {
         var config = results[0];
         var dbhubs = results[1];
         var dbdevices = results[2];
+        var dbclock = results[3];
         var devices = {};
         var lines = null;
         if ( config ) {
@@ -5662,15 +5683,17 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
             });
             invokeRules(uid, lines, hubs, devices);
         }
-        return devices;
+        return [devices, dbclock];
     })
-    .then(devices => {
+    .then( devarray => {
+        var devices = devarray[0];
+        var dbclock = devarray[1];
         if ( dolists ) {
             mydb.getRows("configs","*","userid = "+userid+" AND configtype = 1 AND configval LIKE '%LIST%'")
             .then(configs => {
                 // must invoke separately and use all the configurations per query above
                 if ( configs ) {
-                    invokeLists(uid, configs, pvalueinput, devices);
+                    invokeLists(uid, configs, pvalueinput, dbclock, devices);
                 }
             })
             .catch(reason => {
@@ -5683,24 +5706,31 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
     });
 
     // this populates all lists being tracked with new information upon changes
-    function invokeLists(tileuid, configs, pvalue, devices) {
+    function invokeLists(tileuid, configs, pvalue, dbclock, devices) {
         if ( DEBUG11 ) {
             console.log( (ddbg()),`InvokeLists tileuid: ${tileuid} pvalue: `, pvalue);
         }
 
         // get the time from our clock tile if it exists - this provides the user chosen format and time zone
         var d = new Date();
-        var today = d.toLocaleString();
-        for (var devuid in devices ) {
-            if ( devices[devuid].deviceid === "clockdigital" ) {
-                var tpvalue = devices[devuid].pvalue;
-                if ( typeof tpvalue === "string") {
-                    tpvalue = decodeURI2(tpvalue);
-                }
-                today = getFormattedDate(tpvalue["fmt_date"], d).date + ", " + getFormattedTime(tpvalue["fmt_time"], d, tpvalue["tzone"]);
-                break;
-            }
+        var today;
+        if ( dbclock && dbclock.pvalue ) {
+            var tpvalue = decodeURI2(dbclock.pvalue);
+            today = getFormattedDate(tpvalue["fmt_date"], d).date + ", " + getFormattedTime(tpvalue["fmt_time"], d, tpvalue["tzone"]);
+        } else {
+            today = d.toLocaleString();
         }
+
+        // for (var devuid in devices ) {
+        //     if ( devices[devuid].deviceid === "clockdigital" ) {
+        //         var tpvalue = devices[devuid].pvalue;
+        //         if ( typeof tpvalue === "string") {
+        //             tpvalue = decodeURI2(tpvalue);
+        //         }
+        //         today = getFormattedDate(tpvalue["fmt_date"], d).date + ", " + getFormattedTime(tpvalue["fmt_time"], d, tpvalue["tzone"]);
+        //         break;
+        //     }
+        // }
 
         // loop through all the configs and capture the invoking device so we know which one to attribute
         for (var i in configs) {
@@ -5789,31 +5819,32 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
             // the subid it is tied to is ignored as is the order number
             // so we only need to get item[0] and item[1]
             if ( item[0]==="RULE" ) {
-                var linkval = item[1].trim();
-                var isrule = false;
+                const linkval = item[1].trim();
+                let isrule = false;
 
                 // split the test line between commas and semi-colons
-                var testcommands = linkval.split(regsplit);
+                const testcommands = linkval.split(regsplit);
 
                 // only proceed if there are at least two parts and the first part starts with "if "
                 if ( testcommands.length > 1 && testcommands[0].trim().startsWith("if") ) {
 
                     // get the if and the rule and continue if in the right format
-                    var iftest = testcommands[0].match(ifpattern);
-                    var rulestr = (iftest && iftest.length>1 && iftest[2]) ? iftest[2] : "";
+                    const iftest = testcommands[0].match(ifpattern);
+                    const rulestr = (iftest && iftest.length>1 && iftest[2]) ? iftest[2] : "";
                     if ( iftest[1]==="if" && rulestr ) {
 
                         // get the rule set
-                        var ruleset = rulestr.split(/\s+/);
-                        var newset = [];
-                        var theword = "";
+                        const ruleset = rulestr.split(/\s+/);
+                        const newset = [];
+                        let theword = "";
                         ruleset.forEach(function(aword) {
                             aword = aword.trim();
-                            if ( aword.toLowerCase()==="or" || aword.toLowerCase()==="and" ) {
+                            const alower = aword.toLowerCase();
+                            if ( alower==="or" || alower==="and" ) {
                                 newset.push(theword);
-                                newset.push(aword.toLowerCase());
+                                newset.push(alower);
                                 theword = "";
-                            } else if ( aword.toLowerCase()==="am" || aword.toLowerCase()==="pm" ) {
+                            } else if ( alower==="am" || alower==="pm" ) {
                                 theword = theword + " " + aword;
                             } else {
                                 theword = theword + aword;
@@ -5821,24 +5852,24 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
                         }) 
                         newset.push(theword);
 
-
-                        var doand = true;
+                        let doand = true;
                         if ( DEBUG11 ) {
                             console.log( (ddbg()), "RULE debug: rulestr: ", rulestr, " rulseset: ", ruleset, " newset: ", newset);
                         }
         
                         // loop through each one and add to test
-                        var rulenum = 0;
-                        var priorand = false;
-                        var firstlogical = false;
-                        newset.forEach( function(rule) {
+                        let rulenum = 0;
+                        let priorand = false;
+                        let firstlogical = false;
+                        newset.forEach( function(ruleRaw) {
 
-                            var ruleparts = null;
-                            var ruletileid = null;
-                            var rulesubid = "";
-                            var rulevalue = "";
-                            var ruleop = "";
-                            var ruleop2 = "";
+                            let rule = ruleRaw.trim();
+                            let ruleparts = null;
+                            let ruletileid = null;
+                            let rulesubid = "";
+                            let rulevalue = "";
+                            let ruleop = "";
+                            let ruleop2 = "";
                             rule = rule.trim();
                             if ( DEBUG11 ) {
                                 console.log( (ddbg()), "RULE debug: rule step#", rulenum, " rule: ", rule);
@@ -5885,9 +5916,9 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
                                 }
 
                                 // use this tile's existing value for check if $ symbol given
-                                var jv = rulevalue.substring(0,1);
-                                var kv = rulevalue.indexOf("$");
-                                var rvindex;
+                                const jv = rulevalue.substring(0,1);
+                                const kv = rulevalue.indexOf("$");
+                                let rvindex;
                                 if ( jv === "$" ) {
                                     rvindex = rulevalue.substring(1);
                                     if ( array_key_exists(rvindex, pvalue) ) {
@@ -5900,9 +5931,9 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
                                 // use another tile's existing value for check using @tilenum$fieldname syntax
                                 // rvtile now is the uid of the referenced tile, not the id
                                 } else if ( jv === "@" && kv !== -1 ) {
-                                    var rvtile = rulevalue.substring(1, kv);
+                                    const rvtile = rulevalue.substring(1, kv);
                                     rvindex = rulevalue.substring(kv+1);
-                                    var rulepvalue = decodeURI2(devices[rvtile].pvalue);
+                                    const rulepvalue = decodeURI2(devices[rvtile].pvalue);
                                     if ( rulepvalue ) {
                                         rulevalue = rulepvalue[rvindex];
                                     } else {
@@ -5919,7 +5950,7 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
                                 }
         
                                 // compute the test if this test part has the required elements
-                                if ( ruletileid && ! isNaN(ruletileid) && ruleop && rulevalue ) {
+                                if ( ruletileid !== null && !isNaN(ruletileid) && ruleop && rulevalue!==undefined && rulevalue!==null && rulevalue!=="" ) {
 
                                     // find the tile index and proceed with activating the rule
                                     if ( ruletileid===tileuid && array_key_exists(rulesubid, pvalue) ) {
@@ -5956,20 +5987,21 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
                                     // we handle numbers, dates, and times differently than strings
                                     if ( ifvalue!==false ) {
 
-                                        var num1 = ifvalue;
-                                        var num2 = rulevalue;
+                                        let num1 = ifvalue;
+                                        let num2 = rulevalue;
+                                        let d1, d2;
                                         if ( rulesubid==="date") {
-                                            var d1 = new Date(ifvalue);
-                                            var d2 = new Date(rulevalue);
+                                            d1 = new Date(ifvalue);
+                                            d2 = new Date(rulevalue);
                                             num1 = d1.getTime();
                                             num2 = d2.getTime();
                                             if ( DEBUG11 ) {
                                                 console.log( (ddbg()), "ruleop=", ruleop," ifvalue=",ifvalue," rulevalue= ",rulevalue," d1=",d1," d2=",d2," num1=",num1," num2=",num2);
                                             }
                                         } else if ( rulesubid==="time") {
-                                            var today = new Date();
-                                            var d1 = new Date(today.toDateString() + " " + getTimeStr(ifvalue, rulevalue));
-                                            var d2 = new Date(today.toDateString() + " " + rulevalue);
+                                            const today = new Date();
+                                            d1 = new Date(today.toDateString() + " " + getTimeStr(ifvalue, rulevalue));
+                                            d2 = new Date(today.toDateString() + " " + rulevalue);
                                             num1 = d1.getTime();
                                             num2 = d2.getTime();
                                             if ( DEBUG11 ) {
@@ -5980,7 +6012,7 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
                                             num2 = parseFloat(rulevalue);
                                         }
 
-                                        var ismatch = ( 
+                                        let ismatch = ( 
                                             ( (ruleop==="=" || ruleop==="==") && (num1===num2) ) ||
                                             ( (ruleop==="!" || ruleop==="!=") && (num1!==num2) ) ||
                                             ( (ruleop==="<" ) && (num1 <  num2) ) ||
@@ -6045,6 +6077,7 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
 
     // this executes the rules in the list starting with either 0 or 1
     // rules without if statements start at 0, if RULES start at 1
+    // updated this to fix loop to use blocking values let instead of var to prevent async issues
     function execRules(userid, rulecaller, swtype, istart, testcommands, pvalue, hubs, devices) {
         // get a unique has for this rule to use for managing timers and gathering stats
         // we also use this to prevent dup rules within the same doAction cycle
@@ -6056,22 +6089,22 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
 
         // perform all of the commands if we meet the if test
         // const actpattern = /(\d+)\s*=\s*(\w+)\s*=\s*(\w+)\s*=?\s*(.*)/;
-        for (var i= istart; i<testcommands.length; i++) {
-            var autostr = testcommands[i];
+        for (let i= istart; i<testcommands.length; i++) {
+            let autostr = testcommands[i].trim();
 
             // get the parts of the auto exec
             // the regex is an alternate approach but it is slower and not needed for this simple syntax
             // var autoexec = autostr.match(actpattern);
             // the unshift is just so I can keep the same index numbers as when using regex
-            var autoexec = autostr.split("=");
+            let autoexec = autostr.split("=");
             autoexec.unshift(" ");
-            var len = autoexec.length;
+            let len = autoexec.length;
 
             if ( len >= 3 ) {
-                var rtileid = parseInt(autoexec[1].trim());
-                var rsubid = autoexec[2].trim();
-                var rvalue = len > 3 ? autoexec[3].trim() : "on" ;
-                var delay = len > 4 ? autoexec[4] : false;
+                let rtileid = parseInt(autoexec[1].trim());
+                let rsubid = autoexec[2].trim();
+                let rvalue = len > 3 ? autoexec[3].trim() : "on" ;
+                let delay = len > 4 ? autoexec[4] : false;
                 if ( delay ) {
                     delay = parseInt( delay.trim() );
                     if ( isNaN(delay) || delay<=0 ) {
@@ -6080,30 +6113,29 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
                         delay = delay * 1000;
                     }
                 }
-                var rswattr = len > 5 ? autoexec[5].trim() : "";
+                let rswattr = len > 5 ? autoexec[5].trim() : "";
                 if ( DEBUG11 ) {
                     console.log( (ddbg()), "RULE debug: exec step #", i, " rtileid: ", rtileid, " rsubid: ", rsubid, " rvalue: ", rvalue, " rswattr: ", rswattr, " delay: ", delay);
                 }
 
                 if ( rtileid && devices[rtileid] ) {
                     // var idxitems = ridx.split("|");
-                    var rswtype = devices[rtileid].devicetype;
-                    var rswid = devices[rtileid].deviceid;
-                    var hubindex = devices[rtileid].hubid;
-                    var rhint = devices[rtileid].hint;
-                    const tileid = devices[rtileid].id;
+                    let rswtype = devices[rtileid].devicetype;
+                    let rswid = devices[rtileid].deviceid;
+                    let hubindex = devices[rtileid].hubid;
+                    let rhint = devices[rtileid].hint;
+                    let tileid = devices[rtileid].id;
 
-                    var hub = hubs[hubindex];
-                    var devpvalue = decodeURI2(devices[rtileid].pvalue);
-
+                    let hub = hubs[hubindex];
+                    let devpvalue = decodeURI2(devices[rtileid].pvalue);
                     // handle requests for parameters of the trigger tile ($) or destination tile (@)
                     // disable hub calls for this type of rule
-                    var trigtype = rvalue.substr(0,1);
+                    let trigtype = rvalue.substr(0,1);
                     
                     // look for +n  or  -n  to modify rvalue if rvalue is a number
-                    var kpos = rvalue.indexOf("+");
-                    var kneg = rvalue.indexOf("-");
-                    var rvaldelta = 0;
+                    let kpos = rvalue.indexOf("+");
+                    let kneg = rvalue.indexOf("-");
+                    let rvaldelta = 0;
                     if ( kpos!==-1 && !isNaN(parseInt(rvalue.substr(kpos+1))) ) {
                         rvaldelta = parseInt(rvalue.substr(kpos+1).trim());
                         rvalue = rvalue.substr(0, kpos).trim();
@@ -6113,7 +6145,7 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
                         rvalue =  rvalue.substr(0, kneg).trim();
                     }
 
-                    var trigsubid = "";
+                    let trigsubid = "";
                     if ( trigtype==="$" || trigtype==="@" ) {
                         trigsubid = rvalue.substr(1);
 
@@ -6137,7 +6169,7 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
 
                     // fix up ISY hubs and handle toggle
                     if ( rswtype==="isy" && devpvalue ) {
-                        var curvalue = devpvalue[rsubid];
+                        let curvalue = devpvalue[rsubid];
                         
                         if ( rswtype==="isy" ) {
                             if ( rvalue==="on" || (rvalue==="toggle" && curvalue==="DOF") ) { rvalue = "DON"; }
@@ -6617,11 +6649,10 @@ function callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, h
 
 function queryHub(device, pname) {
 
-    var thingid = device.id;
-    var userid = device.userid;
-    var hubindex = device.hubid;
-    var swid = device.deviceid;
-    var swtype = device.devicetype;
+    const userid = device.userid;
+    const hubindex = device.hubid;
+    const swid = device.deviceid;
+    const swtype = device.devicetype;
 
     var promise = new Promise( function(resolve, reject) {
 
@@ -6630,10 +6661,9 @@ function queryHub(device, pname) {
             mydb.getRow("hubs","*","id = " + hubindex)
         ])
         .then(results => {
-            var configoptions = results[0];
-            var hub = results[1];
-            var hubid = hub["hubid"];
-
+            const configoptions = results[0];
+            const hub = results[1];
+            const hubid = hub["hubid"];
             if ( hubid==="-1" || hub.hubtype==="None" ) {
 
                 // clockdigital
@@ -6650,15 +6680,15 @@ function queryHub(device, pname) {
                     pvalue = getController();
                 } else {
                     pvalue = decodeURI2(device.pvalue);
-                    // pvalue = getCustomTile(userid, configoptions, pvalue, swid);
+                    pvalue = getCustomTile(userid, configoptions, pvalue, swid);
                     pvalue = getFileName(userid, pname, pvalue, swtype, configoptions);
                 }
                 resolve(pvalue);
 
             } else if ( hub.hubtype==="Hubitat" ) {
-                var host = hub.hubendpt + "/doquery";
-                var header = {"Content-Type": "application/json"};
-                var nvpreq = {"access_token": hub.hubaccess, "swid": swid, "swtype": swtype};
+                const host = hub.hubendpt + "/doquery";
+                const header = {"Content-Type": "application/json"};
+                const nvpreq = {"access_token": hub.hubaccess, "swid": swid, "swtype": swtype};
                 // var nvpreq = `access_token=${hub.hubaccess}&swid=${swid}&swtype=${swtype}`;
                 curl_call(host, header, nvpreq, false, "POST")
                 .then(res => {
@@ -6670,11 +6700,11 @@ function queryHub(device, pname) {
                 });
 
             } else if ( hub.hubtype==="ISY" ) {
-                var host = hub.hubendpt + "/nodes/" + swid;
-                var access_token  = hub.hubaccess;
-                var buff = Buffer.from(access_token);
-                var base64 = buff.toString('base64');
-                var header = {"Authorization": "Basic " + base64};
+                const host = hub.hubendpt + "/nodes/" + swid;
+                const access_token  = hub.hubaccess;
+                const buff = Buffer.from(access_token);
+                const base64 = buff.toString('base64');
+                const header = {"Authorization": "Basic " + base64};
                 curl_call(host, header, false, false, "GET")
                 .then(res => {
                     getNodeQueryResponse(res);
@@ -8049,11 +8079,11 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc += "</div>";
 
         $tc += "<div class=\"filteroption\">";
-        $tc += "Weather City Selection:<br/>";
+        $tc += "Weather City Selection:<br/>Option 1: Specify WeatherWidget.io or AccuWeather city or both<br/>";
         $tc += "<table>";
         $tc += "<tr>";
-        $tc += "<td style=\"width:15%; text-align:right\"><label for=\"fcastcityid\" class=\"kioskoption\">Forecast City: </label>";
-        $tc += "<br><span class='typeopt'>(for Frame1 tiles)</span></td>";
+        $tc += "<td style=\"width:15%; text-align:right\"><label for=\"fcastcityid\" class=\"kioskoption\">WeatherWidget City: </label>";
+        $tc += "<br><span class='typeopt'>(see: <a href=\"https://weatherwidget.io\">WeatherWidget.io</a>)</span></td>";
         $tc += "<td style=\"width:20%\"><input id=\"fcastcityid\" size=\"30\" type=\"text\" name=\"fcastcity\"  value=\"" + fcastcity + "\" /></td>";
         $tc += "<td style=\"width:20%; text-align:right\"><label for=\"fcastregionid\" class=\"kioskoption\">Forcast Region: </label></td>";
         $tc += "<td style=\"width:15%\"><input id=\"fcastregionid\" size=\"20\" type=\"text\" name=\"fcastregion\"  value=\"" + fcastregion + "\"/></td>";
@@ -8064,14 +8094,20 @@ function getOptionsPage(user, configoptions, hubs, req) {
 
         $tc += "<tr>";
         $tc += "<td style=\"width:15%; text-align:right\"><label for=\"accucityid\" class=\"kioskoption\">Accuweather City: </label>";
-        $tc += "<br><span class='typeopt'>(for Frame2 tiles)</span></td>";
+        $tc += "<br><span class='typeopt'>(see: <a href=\"https://www.accuweather.com\">AccuWeather.com</a>)</span></td>";
         $tc += "<td style=\"width:20%\"><input id=\"accucityid\" size=\"30\" type=\"text\" name=\"accucity\"  value=\"" + accucity + "\" /></td>";
         $tc += "<td style=\"width:20%; text-align:right\"><label for=\"accuregionid\" class=\"kioskoption\">Accuweather Region: </label></td>";
         $tc += "<td style=\"width:15%\"><input id=\"accuregionid\" size=\"20\" type=\"text\" name=\"accuregion\"  value=\"" + accuregion + "\"/></td>";
         $tc += "<td style=\"width:15%; text-align:right\"><label for=\"accucodeid\" class=\"kioskoption\">AccuWeather Code: </label></td>";
         $tc += "<td style=\"width:15%\"><input id=\"accucodeid\" size=\"20\" type=\"text\" name=\"accucode\"  value=\"" + accucode + "\"/></td>";
-        // $tc += "<br><span class='typeopt'>(for Frame2 tiles)</span></td>";
+        // $tc += "<br><span class='typeopt'>(for Frame 2 tiles)</span></td>";
         $tc += "</tr></table></div>";
+
+        $tc += `<div class="filteroption">
+                Weather City Selection:<br/>Option 2: Paste entire code block of your weather widget of choice into any Frame tile<br/>
+                <textarea id="widgetcodeid" name="widgetcode" rows="6" cols="80" placeholder="Paste your weather widget code here..."></textarea>
+                <input class="optionnuminp" id="widgetcodepanelid" name="widgetcodepanelid" type="number" min="1" max="4" step="1" value="1" />
+               </div>`;
 
         $tc += "<div class='greeting'>You can select how many special tiles of each type to include here." +
                " These tiles are used to show special content on your dashboard." +
@@ -9749,9 +9785,7 @@ function apiCall(user, body, protocol, res) {
                     row.pvalue = decodeURI2(row.pvalue);
                     if ( configoptions && is_object(configoptions) ) {
                         row.pvalue = getCustomTile(userid, configoptions, row.pvalue, row.id);
-                        if ( pname ) {
-                            row.pvalue = getFileName(userid, pname, row.pvalue, row.type, configoptions);
-                        }
+                        row.pvalue = getFileName(userid, pname, row.pvalue, row.devicetype, configoptions);
                     }
                     return row;
                 })
@@ -9781,9 +9815,9 @@ function apiCall(user, body, protocol, res) {
                                 row.pvalue = decodeURI2(row.pvalue);
                                 if ( configoptions && is_object(configoptions) ) {
                                     row.pvalue = getCustomTile(userid, configoptions, row.pvalue, row.id);
-                                    row.pvalue = getFileName(userid, pname, row.pvalue, row.type, configoptions);
-                                    var hubid = row.hubid;
-                                    var hubname = "None";
+                                    row.pvalue = getFileName(userid, pname, row.pvalue, row.devicetype, configoptions);
+                                    const hubid = row.hubid;
+                                    let hubname = "None";
                                     hubs.forEach(hub => {
                                         if ( hub.id === hubid ) {
                                             hubname = hub.hubname;
@@ -10205,10 +10239,18 @@ function apiCall(user, body, protocol, res) {
             case "getclock":
                 var conditions = `userid=${userid} AND deviceid='${swid}'`;
                 var clock;
-                result = mydb.getRow("devices", "*", conditions)
-                .then(device => {
+                // result = mydb.getRow("devices", "*", conditions)
+                result = Promise.all([
+                    mydb.getRow("devices","*", conditions),
+                    mydb.getRows("configs","*", "userid = " + userid + " AND configtype=1")
+                ])
+                .then(rows => {
+                    const device = rows[0];
+                    const configoptions = rows[1];
+                    if ( !device ) throw "Clock device not found for deviceid = " + swid;
                     clock = getClock(swid);
-                    clock = getCustomTile(userid, swattr, clock, swid);
+                    clock = getCustomTile(userid, configoptions, clock, swid);
+                    clock = getFileName(userid, pname, clock, device.devicetype, configoptions);
                     
                     // handle rules and time format user fields
                     processRules(userid, device.uid, swid, "clock", "time", clock, false, "apiCall" );
@@ -10738,7 +10780,7 @@ if ( app && applistening ) {
     // build the tables if they are not there
     // rewrote this using pragma which is better and faster than what I did previously
     const tables = ["configs", "devices","hubs", "panels", "rooms", "things", "users", "lists"];
-    var addedtables = 0;
+    let addedtables = 0;
 
     // select name from pragma_table_list where schema = 'main' and  not name like 'sqlite%'
     mydb.getRows("pragma_table_list","name","schema = 'main' AND NOT name LIKE 'sqlite%'")
@@ -10748,7 +10790,7 @@ if ( app && applistening ) {
             dbtables.push(row.name);
         });
             
-        for (var i in tables) {
+        for (let i in tables) {
             if ( dbtables.includes(tables[i]) ) {
                 // console.log( (ddbg()), "Table", tables[i], " successfully found");
 

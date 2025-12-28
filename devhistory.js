@@ -1,4 +1,7 @@
 const devhistory = `
+3.5.4   12/26/2025 fix bug in power change detection skip logic
+3.5.3   12/10/2025 fix colorTemperature command bug and minor code cleanup
+3.5.2   11/26/2025 fixed linked commands to show parameters and fix linked battery display
 3.5.1   Bugfix in customizer that skipped devices when added as different types
 3.4.9   Change time used in lists to clock to match user selected format and timezome
 3.4.8   Fix colorTemperature visual updates and re-enable PUT customs

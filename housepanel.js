@@ -3337,28 +3337,30 @@ function updateTile(aid, presult) {
     for (var key in presult) {
         var value = presult[key];
         var targetid = '#a-'+aid+'-'+key;
-        var dothis = $(targetid);
         
         // replace newlines with breaks for proper html rendering
         if ( typeof value==="string" && value.indexOf("\n")!==-1 ) {
             value = value.replace(/\n/g, "<br>");
         }
-
+        
         if ( typeof value === "boolean" ) {
             value = value.toString();
         }
-
+        
         // skip objects except single entry arrays
-        if ( dothis && ( typeof value==="object" || ( typeof value==="string" && value.startsWith("{") ) ) ) {
-            dothis = false;
-        }
+        // var dothis = (typeof $(targetid) === "object" );
+        // if ( dothis && ( typeof value==="object" || ( typeof value==="string" && value.startsWith("{") ) ) ) {
+        //     dothis = false;
+        // }
 
         // only take action if this key is found in this tile
-        if ( dothis ) {
+        var target = $(targetid);
+        if ( (typeof target === "object") && (typeof value !== "object") && !(typeof value==="string" && value.startsWith("{")) ) {
             // fix value if it is a command
-            var pn = parseInt($(targetid).attr("pn"));
-            if ( (isNaN(pn) || pn > 0) && key.startsWith("_") ) {
+            var pn = parseInt(target.attr("pn"));
+            if ( (isNaN(pn) || pn >= 0) && key.startsWith("_") ) {
                 value = key.substring(1);
+                // value = key;
             }
             isclock = isclock || processKeyVal(targetid, aid, key, value);
         }        
@@ -3399,8 +3401,9 @@ function updateLink(bid, pvalue) {
 
                     // fix value if it is a command
                     var pn = parseInt($(linktargetid).attr("pn"));
-                    if ( (isNaN(pn) || pn > 0) && key.startsWith("_") ) {
+                    if ( (isNaN(pn) || pn >= 0) && key.startsWith("_") ) {
                         value = key.substring(1);
+                        // value = key;
                     }
                     isclock = isclock || processKeyVal(linktargetid, sibid, key, value);
                 }
@@ -3447,7 +3450,7 @@ function processKeyVal(targetid, aid, key, value) {
     } else if ( key.startsWith("_") ) {
         value = key.substring(1);
 
-    // // handle weather icons that were not converted
+    // handle weather icons that were not converted
     } else if ( key==="weatherCode" && !isNaN(+value)  ) {
         $.post(cm_Globals.returnURL, 
             {api: "weathericon", userid: cm_Globals.options.userid, type: "tomorrowio", value: value, hpcode: cm_Globals.options.hpcode},
@@ -4322,11 +4325,12 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
     // to compensate for loss of inspection I added any custom field starting with "label" or "text" subid will inspect
     var ispassive = ro;
     if ( command==="" || command==="LINK" ) {
-        ispassive = (ispassive || subid==="thingname" || subid==="custom" || subid==="temperature" || subid==="feelsLike" || subid==="battery" || 
-            subid==="presence" || subid.startsWith("motion") || subid.startsWith("contact") || subid==="status_" || subid==="status" || subid==="deviceType" || subid==="localExec" ||
-            subid==="time" || subid==="date" || subid==="tzone" || subid==="weekday" || subid==="name" || subid.startsWith("skin") || subid==="thermostatOperatingState" ||
+        ispassive = (ispassive || subid==="thingname" || subid==="custom" || subid.startsWith("temperature") || subid==="feelsLike" || subid.startsWith("battery") || 
+            subid.startsWith("presence") || subid.startsWith("motion") || subid.startsWith("contact") || subid==="status_" || subid==="status" || subid==="deviceType" || subid==="localExec" ||
+            subid.startsWith("time") || subid.startsWith("date") || subid==="tzone" || subid==="weekday" || subid==="name" || subid.startsWith("skin") || subid==="thermostatOperatingState" ||
             subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" || subid==="numberOfButtons" || subid==="humidity" ||
-            subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") || subid==="illuminance" ||
+            subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") || subid==="illuminance" || 
+            subid==="colorMode" || subid==="colorName" ||
             (subid.startsWith("label")) || (subid.startsWith("text"))
         );
     }
@@ -4422,7 +4426,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
                 var inspectsubid = $(this).attr("subid");
                 var strval = $(this).html();
                 if ( strval && inspectsubid ) {
-                    if ( inspectsubid==="battery" ) {
+                    if ( inspectsubid.startsWith("battery") ) {
                         msg += inspectsubid + " = " + $(this).children().attr("style").substring(7);
                     } else if ( strval.indexOf("<img") !== -1 ) {
                         msg += inspectsubid + " =  (Image)";
@@ -4517,33 +4521,24 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
                             var ltotal = 0.0;
                             var ncount = 0;
                             var nstate = 0;
-                            var statetotal = 0;
                             var statetype = "on";
                             presult.forEach(obj => {
-                                timedata.push(obj.ltime);
                                 if ( !isNaN(parseFloat(obj.lvalue)) ) {
+                                    timedata.push(obj.ltime);
                                     ltotal+= parseFloat(obj.lvalue);
                                     valuedata.push(obj.lvalue);
                                     ncount++;
-                                } else if ( obj.lvalue==="on" || obj.lvalue==="off" || obj.lvalue==="active" || 
-                                            obj.lvalue==="inactive" || obj.lvalue==="open" || obj.lvalue==="closed" ) {
+                                    dispTable+= `<tr class='content'><td>${obj.ltime}</td><td>${obj.lvalue}</td></tr>`;
+                                } else if ( obj.lvalue==="on" || obj.lvalue==="off" || obj.lvalue==="active" || obj.lvalue==="present"  ) {
+                                    timedata.push(obj.ltime);
                                     nstate++;
-                                    if ( obj.lvalue==="on" || obj.lvalue==="open" || obj.lvalue==="active") {
-                                        statetotal++;
-                                        statetype = obj.lvalue;
-                                        valuedata.push(1);
-                                    } else {
-                                        valuedata.push(0);
-                                    }
-                                } else {
-                                    valuedata.push(0);
+                                    statetype = obj.lvalue;
+                                    valuedata.push(nstate);
+                                    dispTable+= `<tr class='content'><td>${obj.ltime}</td><td>${obj.lvalue}</td></tr>`;
                                 }
-
-                                dispTable+= `<tr class='content'><td>${obj.ltime}</td><td>${obj.lvalue}</td></tr>`;
                             });
                             if ( nstate > 0 ) {
-                                var onpercent = Math.round( (statetotal / nstate) * 1000.0 ) / 10.0;
-                                dispTable+= `<tr class='foot'><td>Percent ${statetype}:</td><td>${onpercent}%</td></tr>`;
+                                dispTable+= `<tr class='foot'><td>Activation total for state: ${statetype}</td><td>${nstate}</td></tr>`;
                             }
                             if ( ncount > 1 ) {
                                 if ( linktype === "variables" ) {

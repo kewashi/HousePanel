@@ -2193,10 +2193,8 @@ div.overlay.currentVersion,
 div.overlay.appId {
     display: none;
 }
-span.reddot {
-    margin-left: 5px;
-    background-color: "red";
-    color: "white";
+option.custom-option, span.reddot {
+    color: "red";
 }
 div.sonos-thing div.overlay.wss {
     display: none;

@@ -95,6 +95,7 @@ function customizeTile(userid, tileid, uid, bid, thingid, str_type, hubnum, pane
         }
 
         if ( isdone.getrules && isdone.devices ) {
+            // console.log(">>>> customizeTile: checkDone() - all data loaded, displaying customizer dialog.  cm_Globals.devices: ", cm_Globals.devices);
             dodisplay();
         }
     }
@@ -526,6 +527,7 @@ function loadLinkItem(uid, allowuser, defvalue) {
     // first load the native items
     for ( var tkey in thevalue ) {
         var tval = thevalue[tkey];
+        console.log("loadLinkItem: checking key " + tkey + " with value: ", tval);
 
         // skip if this item was replaced by a custom field handled below
         var iscustom = false;
@@ -542,6 +544,7 @@ function loadLinkItem(uid, allowuser, defvalue) {
                 try {
                     var jsontval = JSON.parse(tval);
                 } catch (jerr) {
+                    console.log("error parsing json object for key " + tkey + ": ", jerr);
                     jsontval = null;
                 }
             }
@@ -582,7 +585,7 @@ function loadLinkItem(uid, allowuser, defvalue) {
             var command = val[0];
             var linkval = val[1];
             itemorder++;
-            results+= "<option command='"+command+"' linkval='"+linkval+"' value='" + subid + "' order='"+itemorder+"'>" + subid + "<span class='reddot'> *</span></option>";
+            results+= "<option command='"+command+"' linkval='"+linkval+"' value='" + subid + "' order='"+itemorder+"'>" + subid + " *</option>";
             subids.push(subid);
         });
     }
