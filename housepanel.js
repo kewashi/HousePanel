@@ -244,18 +244,14 @@ function getOptions(pagename) {
 // obtain options using an ajax api call
 // could probably read Options file instead
 // but doing it this way ensure we get what main app sees
+// disable fast and slow timers, no longer used
 function getHubs() {
     try {
         var userid = cm_Globals.options.userid;
         var pname = cm_Globals.options.pname;
         var config = cm_Globals.options.config;
-        try {
-            var fast_timer = parseInt(config.fast_timer, 10) * 1000;
-            var slow_timer = parseInt(config.slow_timer, 10) * 1000;
-        } catch(e) {
-            fast_timer = 0;
-            slow_timer = 0;
-        }
+        var fast_timer = 0;
+        var slow_timer = 0;
 
         // read the hubs
         $.post(cm_Globals.returnURL, 
@@ -265,18 +261,9 @@ function getHubs() {
                     cm_Globals.hubs = presult;
                     cm_Globals.hubs.forEach(hub => {
                         // setup all special tiles not tied to hubs to refresh as user given slow rate
-                        if ( hub.hubtype === "None" && hub.hubid === "-1" ) {
-                            setupTimer("slow", slow_timer, hub);
-                        // all other hubs refresh at their token refresh rate or the user given fast rate if quicker
-                        } else {
+                        let hubtimer = parseInt(hub.hubtimer, 10) * 1000;
+                        if ( hubtimer > 0 &&  hub.hubtype !== "None" && hub.hubid !== "-1" ) {
                             // if there is a hubtimer code that will be used to refresh accesstoken
-                            // otherwise the hub devices will just be retrieved from the hub
-                            // if set to zero we force a refresh at the user provided fast refresh rate
-                            var hubtimer = parseInt(hub.hubtimer, 10) * 1000;
-                            // if ( hubtimer === 0 || (hubtimer > fast_timer && fast_timer !== 0) ) {
-                            //     hubtimer = fast_timer;
-                            // }
-                            // alert("hub: " + hub.hubtype + " timer: " + hubtimer);
                             setupTimer("hub", hubtimer, hub);
                         }
                     });
@@ -333,6 +320,9 @@ $(document).ready(function() {
                     case "O":
                         execButton("showoptions");
                         break;
+                    case "D":
+                        execButton("editdevices");
+                        break;
                     case "F":
                         execButton("refreshpage");
                         break;
@@ -377,7 +367,11 @@ $(document).ready(function() {
             evt.stopPropagation();
 
             var mc = '<div class="menubar">Main Menu</div>';
+            mc +='<div id="m_edit" class="menuitem">Edit</div>';
+            mc +='<div id="m_reorder" class="menuitem">Reorder</div>';
+            mc +='<div id="m_operate" class="menuitem">oPerate</div>';
             mc +='<div id="m_showoptions" class="menuitem">Options</div>';
+            mc +='<div id="m_editdevices" class="menuitem">edit Devices</div>';
             mc +='<div id="m_refreshpage" class="menuitem">reFresh</div>';
             mc +='<div id="m_userauth" class="menuitem">Hub auth</div>';
             mc +='<div id="m_showid" class="menuitem">show Info</div>';
@@ -386,10 +380,7 @@ $(document).ready(function() {
             mc +='<div id="m_blackout" class="menuitem">Blackout</div>';
             var snapstr = cm_Globals.snap ? "unset Snap" : "set Snap";
             mc +='<div id="m_snap" class="menuitem">' + snapstr + '</div>';
-            mc +='<div id="m_reorder" class="menuitem">Reorder</div>';
-            mc +='<div id="m_edit" class="menuitem">Edit</div>';
             mc +='<div id="m_rehome" class="menuitem">rehome tiLes</div>';
-            mc +='<div id="m_operate" class="menuitem">oPerate</div>';
             mc +='<div id="m_logout" class="menuitem">loGout</div>';
             var good = createModal("modalpopup", mc, "body" , false, pos, function(ui, content) {
                 var buttonid = $(ui).attr("id");
@@ -572,7 +563,7 @@ $(document).ready(function() {
     cm_Globals.apiSecret = $("input[name='apiSecret']").val() || "";
 
     // load things and options
-    if ( pagename==="main" || pagename==="auth" || pagename==="options" ) {
+    if ( pagename==="main" || pagename==="auth" || pagename==="options" || pagename==="editdevices" ) {
 
         getOptions(pagename);
         getHubs();
@@ -2234,15 +2225,30 @@ function execValidateUser() {
 }
 
 function execButton(buttonid) {
-    if ( buttonid==="optSave") {
-
-        var oobj = formToObject("optionspage");
-
-        dynoPost("saveoptions", oobj, function(presult, pstatus) {
+    if ( buttonid==="devSave") {
+        var oobj = formToObject("deveditpage");
+        dynoPost("savedevices", oobj, function(presult, pstatus) {
             if ( pstatus!=="success" ) {
-                alert("Options page failed to save properly");
+                alert("Device edit page failed to save properly");
+                // window.location.href = cm_Globals.returnURL;
+            } else {
+                if ( typeof presult === "object" && presult.result === "logout" ) {
+                    window.location.href = cm_Globals.returnURL + "/logout?pname=" + presult.pname;
+                } else {
+                    console.log("redirecting to main page. presult: ", presult);
+                    window.location.href = cm_Globals.returnURL;
+                }
+            }
+        });
+
+    } else if ( buttonid==="paramsSave") {
+        var oobj = formToObject("paramspage");
+        dynoPost("saveparams", oobj, function(presult, pstatus) {
+            if ( pstatus!=="success" ) {
+                alert("Parameter options page failed to save properly");
                 window.location.href = cm_Globals.returnURL;
             } else {
+                console.log("params save result: ", presult);
                 if ( typeof presult === "object" && presult.result === "logout" ) {
                     window.location.href = cm_Globals.returnURL + "/logout?pname=" + presult.pname;
                 } else {
@@ -2251,13 +2257,17 @@ function execButton(buttonid) {
             }
         });
 
-    } else if ( buttonid==="optCancel" ) {
+    } else if ( buttonid==="devCancel" || buttonid==="paramsCancel" ) {
         // do nothing but reload the main page
         window.location.href = cm_Globals.returnURL;
 
-    } else if ( buttonid==="optReset" ) {
+    } else if ( buttonid==="devReset") {
         // reset the forms on the options page to their starting values
-        $("#optionspage")[0].reset();
+        $("#deveditpage")[0].reset();
+
+    } else if ( buttonid==="paramsReset" ) {
+        // reset the forms on the options page to their starting values
+        $("#paramspage")[0].reset();
 
     } else if ( buttonid==="createuser" ) {
         execCreateUser();
@@ -2438,7 +2448,7 @@ function execButton(buttonid) {
         });
     
     // remaining menu buttons
-    } else if ( (buttonid==="showid" || buttonid==="userauth" || buttonid==="showoptions") && priorOpmode==="Operate" ) {
+    } else if ( (buttonid==="showid" || buttonid==="userauth" || buttonid==="showoptions" || buttonid==="editdevices") && priorOpmode==="Operate" ) {
         reload(buttonid); // window.location.href = cm_Globals.returnURL + "/" + buttonid;
 
     // default is to call main node app with the id as a path
@@ -2524,7 +2534,6 @@ function setupButtons() {
     } else if ( pagename==="options") {
         initWebsocket();
         setupCustomCount();
-        setupFilters();
         var pos = {position: "absolute", top: 100, left: 100, width: 600, height: 120, border: "4px solid"};
         // $("#showpanelname").hide();
         $("#userpanel").on("change", function(evt) {
@@ -2596,7 +2605,27 @@ function setupButtons() {
             window.location.href = cm_Globals.returnURL;
         });
 
+    } else if ( pagename==="editdevices") {
+        initWebsocket();
+        setupFilters();
 
+        $(document).on("keydown", function(evt) {
+            if ( evt.which === 27 ) {
+                window.location.href = cm_Globals.returnURL;
+            }
+        });
+        $("div.filteroption div, div.filteroption table").on("keydown", function(evt) {
+            if ( evt.which === 27 ) {
+                window.location.href = cm_Globals.returnURL;
+            }
+        });
+
+        // this is button that returns to main HP page
+        // it saves the default hub before returning if on the auth page
+        $("button.infobutton").on('click', function() {
+            // returnMainPage();
+            window.location.href = cm_Globals.returnURL;
+        });
     } else if ( pagename==="auth" ) {
 
         const mainhubmsg = "Select a hub from the list to re-authorize or remove it, or select 'New' to add a new hub";
@@ -3091,7 +3120,7 @@ function delEditLink() {
 }
 
 function showType(ischecked, theval, hubpick) {
-    if ( pagename==="options" ) {
+    if ( pagename==="editdevices" ) {
         if ( theval ) {
             var roomstr = 'table.roomoptions tr[type="'+theval+'"]';
         } else {
@@ -3165,7 +3194,13 @@ function setupFilters() {
     $('input[name="useroptions[]"]').each(updateClick);
     
     // upon click update the right rows
-    $('input[name="useroptions[]"]').on("click", updateClick);
+    $('input[name="useroptions[]"]').on("click", function() {
+        let pickedhub = $('input[name="huboptpick"]:checked').val();
+        setCookie("defaultHub", pickedhub);
+        var theval = $(this).val();
+        var ischecked = $(this).prop("checked");
+        showType(ischecked, theval, pickedhub);
+    })
 
     // hub specific filter
     $('input[name="huboptpick"]').on("click", function() {

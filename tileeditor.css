@@ -280,6 +280,7 @@ label.optioninp, select.optioninp, label.optioncbox {
 
 label.optioncbox {
     width: 200px;
+    margin-top: 0px;
 }
 
 input.optionchk {
@@ -297,7 +298,7 @@ input.optioninp {
     border-bottom: black solid 3px;
     margin-left: 5px;
     margin-top: 10px;
-    width: 300px;
+    width: auto;
 }
 
 input.optionnuminp {

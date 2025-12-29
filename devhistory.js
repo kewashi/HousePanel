@@ -1,4 +1,5 @@
 const devhistory = `
+3.5.5   12/28/2025 revamp options page and include simpler weather widget option
 3.5.4   12/26/2025 fix bug in power change detection skip logic
 3.5.3   12/10/2025 fix colorTemperature command bug and minor code cleanup
 3.5.2   11/26/2025 fixed linked commands to show parameters and fix linked battery display

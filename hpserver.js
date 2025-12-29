@@ -52,6 +52,7 @@ const multer = require('multer');
 var sqlclass = require("./mysqlclass");
 var devhistory = require("./devhistory.js");
 const { json } = require('stream/consumers');
+const { config } = require('process');
 
 // global variables are all part of GLB object
 var GLB = {};
@@ -2844,8 +2845,8 @@ async function makeNewConfig(userid) {
     configs.push( await addConfigItem(userid, "blackout", "false") );
     configs.push( await addConfigItem(userid, "rules", "true") );
     configs.push( await addConfigItem(userid, "phototimer","0") );
-    configs.push( await addConfigItem(userid, "fast_timer","0") );            // timers for polling all other tiles and hubs
-    configs.push( await addConfigItem(userid, "slow_timer","0") );            // timers for images, frames, customs, blanks, videos polling
+    configs.push( await addConfigItem(userid, "fast_timer","0") );            // unused at present
+    configs.push( await addConfigItem(userid, "slow_timer","0") );            // unused at present
     configs.push( await addConfigItem(userid, "fcastcity", "san-carlos") );   // (userid, "fcastcity") || "ann-arbor" );
     configs.push( await addConfigItem(userid, "fcastregion","San Carlos") );  // (userid, "fcastregion","Ann Arbor") );
     configs.push( await addConfigItem(userid, "fcastcode","37d51n122d26") );  // (userid, "fcastcode","42d28n83d74") );
@@ -2957,7 +2958,7 @@ function makeDefaultDevices(userid, hubid) {
 }
 
 function getController() {
-    var controlval = {"name": "Controller", "showoptions": "Options","refreshpage": "Refresh",
+    var controlval = {"name": "Controller", "showoptions": "Options", "editdevices": "Edit Devices", "refreshpage": "Refresh",
     "c__userauth": "Hub Auth","showid": "Show Info","toggletabs": "Toggle Tabs", "showdoc": "Documentation",
     "blackout": "Blackout","operate": "Operate","reorder": "Reorder","edit": "Edit"};
     return controlval;
@@ -4114,12 +4115,23 @@ function writeForecastWidget(userid, city, region, code) {
 }
 
 // offer an alternative to entering city codes by allowing entire code block copied from either AccuWeather or WeatherWidget.io
-function writeWeatherWidget(userid, codeblock, framenum) {
-    if ( !userid || !codeblock ) {
+function writeWeatherWidget(userid, weatherwidget, framenum) {
+    if ( !userid || !weatherwidget || !framenum ) {
         return;
     }
+
+    // fix up weather widget code to be a full html page
+    // but first check if its already a full html page
+    weatherwidget = weatherwidget.trim();
+    if ( ! (weatherwidget.toLowerCase().includes("<html") && weatherwidget.toLowerCase().includes("<body") &&
+            weatherwidget.toLocaleLowerCase().startsWith("<!doctype") ) ) {
+        weatherwidget = "<!DOCTYPE html>\n<html>\n<head>\n" +
+            "<title>Weather Widget</title>\n</head>\n<body>\n" +
+            weatherwidget + "\n</body>\n</html>\n";
+    }
+    
     var fname = "user" + userid + "/Frame" + framenum + ".html";
-    fs.writeFileSync(fname, codeblock, {encoding: "utf8", flag:"w"});
+    fs.writeFileSync(fname, weatherwidget, {encoding: "utf8", flag:"w"});
 }
 
 function getWeatherIcon(num, weathertype) {
@@ -7747,7 +7759,7 @@ function hubFilters(userid, hubpick, hubs, useroptions, pagename, ncols, isform)
     }
 
     // // buttons for all or no filters
-    $tc+= "<div id=\"thingfilters\" class='filteroption'>Select Things to Display:</div>";
+    $tc+= "<br><h3>Select Things to Display:</h2>";
     $tc+= "<div id=\"filterup\" class=\"filteroption\">";
     $tc+= "<div id=\"allid\" class=\"smallbutton\">All</div>";
     $tc+= "<div id=\"noneid\" class=\"smallbutton\">None</div>";
@@ -7873,7 +7885,7 @@ function getSocketUrl(hostname) {
     return webSocketUrl;
 }
 
-function getOptionsPage(user, configoptions, hubs, req) {
+function getParamsPage(user, configoptions, req) {
 
     var userid = user["users_id"];
     var useremail = user["users_email"];
@@ -7881,10 +7893,159 @@ function getOptionsPage(user, configoptions, hubs, req) {
     var hpcode = user["users_hpcode"];
     var pname = user["panels_pname"];
     var panelid = user["panels_id"];
-    var skin = user["panels_skin"];
+    var panelid = user["panels_id"];
+    var hostname = req.headers.host;
+    var webSocketUrl = getSocketUrl(hostname);
+    var fast_timer = getConfigItem(configoptions, "fast_timer") || "0";
+    var slow_timer = getConfigItem(configoptions, "slow_timer") || "0";
+    var $kioskoptions = getConfigItem(configoptions, "kiosk") || "false";
+    var blackout = getConfigItem(configoptions, "blackout") || "false";
+    var $ruleoptions = getConfigItem(configoptions, "rules") || "true";
+    var phototimer = parseInt(getConfigItem(configoptions, "phototimer"));
+    if ( isNaN(phototimer) ) { phototimer = 0; }
+    var fcastcity = getConfigItem(configoptions, "fcastcity") || "san-carlos";
+    var fcastregion = getConfigItem(configoptions, "fcastregion") || "San Carlos";
+    var fcastcode = getConfigItem(configoptions, "fcastcode") || "37d51n122d26";
+    var accucity = getConfigItem(configoptions, "accucity") || "sa-carlos";
+    var accuregion = getConfigItem(configoptions, "accuregion") || "us";
+    var accucode = getConfigItem(configoptions, "accucode") || "337226";
+    var specialtiles = getConfigItem(configoptions, "specialtiles");
+
+    var $tc = "";
+    $tc += getHeader(userid, null, null, true);
+
+    if ( GLB.dbinfo.donate===true ) {
+        $tc += "<div class=\"donate\">";
+        $tc += '<h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
+            <br /><div><form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank"> \
+            <input type="hidden" name="cmd" value="_s-xclick"> \
+            <input type="hidden" name="hosted_button_id" value="XS7MHW7XPYJA4"> \
+            <input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!"> \
+            <img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1"> \
+            </form></div>';
+        $tc += "</div>";
+    }
+
+    // this is the start of the options page
+    $tc += "<button class=\"bluebutton infobutton fixbottom\">Cancel and Return to HousePanel</button>";
+    $tc += "<h3>" + GLB.APPNAME + " Options</h3>";
+    // $tc += "<h3>Email: " + useremail + "</h3>";
+    $tc += "<br><button id=\"delUser\" class=\"smallbutton\">Delete User</button>";
+
+    $tc += "<form id=\"paramspage\" class=\"options\" name=\"paramspage\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
+    $tc += "<div class=\"options\">";
+
+    $tc += hidden("pagename", "options");
+    $tc += hidden("returnURL", GLB.returnURL);
+    $tc += hidden("webSocketUrl", webSocketUrl);
+    $tc += hidden("webSocketServerPort", GLB.webSocketServerPort);
+    $tc += hidden("webDisplayPort", GLB.port);
+    $tc += hidden("userid", userid, "userid");
+    $tc += hidden("uname", uname, "unameid");
+    $tc += hidden("emailid", useremail, "emailid");
+    $tc += hidden("panelid", panelid, "panelid");
+    $tc += hidden("pname", pname);
+    $tc += hidden("hpcode", hpcode, "hpcode");
+    $tc += hidden("apiSecret", GLB.apiSecret);
+
+    $tc += hidden("fast_timer", "0");
+    $tc += hidden("slow_timer", "0");
+
+    // // users can update their username here
+    $tc += "<div class=\"filteroption\">";
+    $tc += " Username: ";
+    $tc += "<input id=\"newUsername\" class=\"optioninp\" name=\"newUsername\" size=\"20\" type=\"text\" value=\"" + uname + "\"/>"; 
+    $tc += "<span class='typeopt'>(Email: " + useremail + ")</span>";
+    $tc += "</div>";
+
+    $tc += "<div class=\"filteroption\">";
+    $tc += "<div><label for=\"kioskid\" class=\"optioncbox\">Kiosk Mode? </label>";    
+    var $kstr = ($kioskoptions===true || $kioskoptions==="true") ? " checked" : "";
+    $tc+= "<input class=\"optionchk\" id=\"kioskid\" type=\"checkbox\" name=\"kiosk\"  value=\"" + $kioskoptions + "\"" + $kstr + "/></div>";
+    $tc += "<div><label for=\"ruleid\" class=\"optioncbox\">Enable Rules? </label>";
+    $kstr = ($ruleoptions===true || $ruleoptions==="true") ? " checked" : "";
+    $tc += "<input class=\"optionchk\" id=\"ruleid\" type=\"checkbox\" name=\"rules\"  value=\"" + $ruleoptions + "\"" + $kstr + "/></div>";
+    $tc += "<div><label for=\"clrblackid\" class=\"optioncbox\">Night & Away Blackout? </label>";    
+    $kstr = (blackout===true || blackout==="true") ? " checked" : "";
+    $tc+= "<input class=\"optionchk\" id=\"clrblackid\" type=\"checkbox\" name=\"blackout\"  value=\"" + blackout + "\"" + $kstr + "/></div>";
+    $tc+= "<div><label for=\"photoid\" class=\"optioninp\">Photo timer (sec): </label>";
+    $tc+= "<input class=\"optioninp\" id=\"photoid\" name=\"phototimer\" type=\"number\"  min='0' max='300' step='5' value=\"" + phototimer + "\" /></div>";
+    $tc += "</div>";
+
+    $tc += "<div class=\"filteroption\">";
+    $tc += "Weather City Selection Option 1:<br>Specify WeatherWidget.io or AccuWeather city or both<br/><br/>";
+    $tc += "<table>";
+    $tc += "<tr>";
+    $tc += "<td style=\"width:15%; text-align:right\"><label for=\"fcastcityid\" class=\"kioskoption\">WeatherWidget City: </label>";
+    $tc += "<br><span class='typeopt'>(see: <a href=\"https://weatherwidget.io\" target=\"_blank\">WeatherWidget.io</a>)</span></td>";
+    $tc += "<td style=\"width:20%\"><input id=\"fcastcityid\" size=\"30\" type=\"text\" name=\"fcastcity\"  value=\"" + fcastcity + "\" /></td>";
+    $tc += "<td style=\"width:20%; text-align:right\"><label for=\"fcastregionid\" class=\"kioskoption\">Forcast Region: </label></td>";
+    $tc += "<td style=\"width:15%\"><input id=\"fcastregionid\" size=\"20\" type=\"text\" name=\"fcastregion\"  value=\"" + fcastregion + "\"/></td>";
+    $tc += "<td style=\"width:15%; text-align:right\"><label for=\"fcastcodeid\" class=\"kioskoption\">Forecast Code: </label></td>";
+    $tc += "<td style=\"width:15%\"><input id=\"fcastcodeid\" size=\"20\" type=\"text\" name=\"fcastcode\"  value=\"" + fcastcode + "\"/></td>";
+    $tc += "</tr>";
+
+    $tc += "<tr>";
+    $tc += "<td style=\"width:15%; text-align:right\"><label for=\"accucityid\" class=\"kioskoption\">Accuweather City: </label>";
+    $tc += "<br><span class='typeopt'>(see: <a href=\"https://www.accuweather.com\" target=\"_blank\">AccuWeather.com</a>)</span></td>";
+    $tc += "<td style=\"width:20%\"><input id=\"accucityid\" size=\"30\" type=\"text\" name=\"accucity\"  value=\"" + accucity + "\" /></td>";
+    $tc += "<td style=\"width:20%; text-align:right\"><label for=\"accuregionid\" class=\"kioskoption\">Accuweather Region: </label></td>";
+    $tc += "<td style=\"width:15%\"><input id=\"accuregionid\" size=\"20\" type=\"text\" name=\"accuregion\"  value=\"" + accuregion + "\"/></td>";
+    $tc += "<td style=\"width:15%; text-align:right\"><label for=\"accucodeid\" class=\"kioskoption\">AccuWeather Code: </label></td>";
+    $tc += "<td style=\"width:15%\"><input id=\"accucodeid\" size=\"20\" type=\"text\" name=\"accucode\"  value=\"" + accucode + "\"/></td>";
+    $tc += "</tr></table></div>";
+
+    $tc += `<br/><div class="filteroption">
+            Weather City Selection Option 2:<br>Paste entire code block of your weather widget of choice into any Frame tile
+            <br><span class='typeopt'>(Frame number of 1 or 2 will replace the frame file generated from the above settings)</span><br><br>   
+            <table><tr>
+            <td>
+                <textarea id="widgetcodeid" name="widgetcode" rows="6" cols="80" placeholder="Paste your weather widget code here..."></textarea>
+            </td>
+            <td>
+                <label for="widgetcodepanelid" class="optioninp">Which Frame: </label>
+                <input id="widgetcodepanelid" name="widgetcodepanelid" type="number" min="0" max="20" step="1" value="0" />
+            </td>
+            </tr></table>
+            </div>`;
+            
+            
+    $tc += "<div class=\"filteroption\">";
+    $tc += "Specify number of special tiles:<br/>";
+    for (var $stype in specialtiles) {
+        var $customcnt = parseInt(specialtiles[$stype]);
+        if ( isNaN($customcnt) ) { $customcnt = 0; }
+        var $stypeid = "cnt_" + $stype;
+        $tc+= "<div><label for=\"$stypeid\" class=\"optioninp\"> " + $stype +  " tiles: </label>";
+        $tc+= "<input class=\"optionnuminp\" id=\"" + $stypeid + "\" name=\"" + $stypeid + "\" size=\"10\" type=\"number\"  min='1' max='20' step='1' value=\"" + $customcnt + "\" /></div>";
+    }
+    $tc+= "</div>";
+
+    // end of the options page
+    $tc+= "</div>";
+
+    $tc +='<div id="paramsSave" class="formbutton">Save</div>';
+    $tc +='<div id="paramsReset" class="formbutton">Reset</div>';
+    $tc +='<div id="paramsCancel" class="formbutton">Cancel</div><br>';
+    $tc+= "</div>";
+    $tc+= "</form>";
+
+
+    $tc+= getFooter();
+    return $tc;
+}
+
+function getDevicesPage(user, configoptions, hubs, req) {
+    var userid = user["users_id"];
+    var useremail = user["users_email"];
+    var uname = user["users_uname"];
+    var hpcode = user["users_hpcode"];
+    var pname = user["panels_pname"];
     var panelid = user["panels_id"];
     var hostname = req.headers.host;
     var hubpick = getCookie(req, "defaultHub");
+    var webSocketUrl = getSocketUrl(hostname);
+    var useroptions = getConfigItem(configoptions, "usroptions");
 
     var joinstr = mydb.getJoinStr("devices","hubid","hubs","id");
     var fields1 = "devices.id as devices_id, devices.uid as devices_uid, devices.userid as devices_userid, devices.deviceid as devices_deviceid, " +
@@ -7911,64 +8072,28 @@ function getOptionsPage(user, configoptions, hubs, req) {
         var rooms = resarray[0];
         var devices = resarray[1];
         var things = resarray[2];
-        var panels = resarray[3];
         if ( rooms && devices && things ) {
-            return renderOptionsPage(hubpick, rooms, devices, things, panels);
+            return renderDeviceRoomSection(hubpick, rooms, devices, things, hubs, useroptions);
         } else {
             return "error - problem with reading your existing tiles";
         }
     })
     .catch(reason => {
-        console.log( (ddbg()), "getOptionsPage - ", reason);
+        console.log( (ddbg()), "getParamsPage - ", reason);
         return "something went wrong";
     });
 
-    function renderOptionsPage(hubpick, rooms, devices, sensors, panels) {
+    function renderDeviceRoomSection(hubpick, rooms, devices, things, hubs, useroptions) {
 
-        var fast_timer = getConfigItem(configoptions, "fast_timer") || "3600";
-        var slow_timer = getConfigItem(configoptions, "slow_timer") || "900";
-        var $kioskoptions = getConfigItem(configoptions, "kiosk") || "false";
-        var blackout = getConfigItem(configoptions, "blackout") || "false";
-        var $ruleoptions = getConfigItem(configoptions, "rules") || "true";
-        // var timezone = getConfigItem(configoptions, "timezone") || "480";
-        // timezone = parseInt(timezone);
-        // if ( isNaN(timezone) ) { timezone = 480; }
-        var phototimer = parseInt(getConfigItem(configoptions, "phototimer"));
-        if ( isNaN(phototimer) ) { phototimer = 0; }
-        var fcastcity = getConfigItem(configoptions, "fcastcity") || "san-carlos";
-        var fcastregion = getConfigItem(configoptions, "fcastregion") || "San Carlos";
-        var fcastcode = getConfigItem(configoptions, "fcastcode") || "37d51n122d26";
-        var accucity = getConfigItem(configoptions, "accucity") || "sa-carlos";
-        var accuregion = getConfigItem(configoptions, "accuregion") || "us";
-        var accucode = getConfigItem(configoptions, "accucode") || "337226";
-        // var hubpick = getConfigItem(configoptions, "hubpick") || "all";
-        var webSocketUrl = getSocketUrl(hostname);
-        var useroptions = getConfigItem(configoptions, "usroptions");
-        var specialtiles = getConfigItem(configoptions, "specialtiles");
-        var skins = ["housepanel", "modern", "legacyblue"];
         var $tc = "";
         $tc += getHeader(userid, null, null, true);
 
-        if ( GLB.dbinfo.donate===true ) {
-            $tc += "<div class=\"donate\">";
-            $tc += '<h4>Donations appreciated for HousePanel support and continued improvement, but not required to proceed.</h4> \
-                <br /><div><form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank"> \
-                <input type="hidden" name="cmd" value="_s-xclick"> \
-                <input type="hidden" name="hosted_button_id" value="XS7MHW7XPYJA4"> \
-                <input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!"> \
-                <img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1"> \
-                </form></div>';
-            $tc += "</div>";
-        }
+        // $tc += "<button class=\"bluebutton infobutton fixbottom\">Cancel and Return to HousePanel</button>";
+        $tc += "<h3>" + GLB.APPNAME + " Edit Devices</h3>";
+        
+        $tc += "<form id=\"deveditpage\" class=\"options\" name=\"deveditpage\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
 
-        // this is the start of the options page
-        $tc += "<button class=\"bluebutton infobutton fixbottom\">Cancel and Return to HousePanel</button>";
-        $tc += "<h3>" + GLB.APPNAME + " Options</h3>";
-        $tc += "<h3>Email: " + useremail + "</h3>";
-        $tc += "<br><button id=\"delUser\" class=\"smallbutton\">Delete User</button>";
-        $tc += "<form id=\"optionspage\" class=\"options\" name=\"options\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
-
-        $tc += hidden("pagename", "options");
+        $tc += hidden("pagename", "editdevices");
         $tc += hidden("returnURL", GLB.returnURL);
         $tc += hidden("webSocketUrl", webSocketUrl);
         $tc += hidden("webSocketServerPort", GLB.webSocketServerPort);
@@ -7980,149 +8105,7 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc += hidden("pname", pname);
         $tc += hidden("hpcode", hpcode, "hpcode");
         $tc += hidden("apiSecret", GLB.apiSecret);
-
-        // var configs = {};
-        // for (var i in configoptions) {
-        //     var key = configoptions[i].configkey;
-        //     if ( !key.startsWith("user_") ) {
-        //         configs[key] = configoptions[i].configval;
-        //     }
-        // }
-        // $tc += hidden("configsid", JSON.stringify(configs), "configsid");
-
-        // $tc += "<h3>" + GLB.APPNAME + " Options</h3>";
-        // $tc += "<h3>Email: " + useremail + "</h3>";
-        // $tc += "<h3>on panel: " + pname + "</h3>";
-        
-        // manage panels here - select existing, remove, or add
-        // $tc += "<div class='greeting'>Users can have up to 9 panels, where each panel can be displayed" +
-        //        " on any device to give a different look and feel. This is where you add or remove panels." +
-        //        " This is also where you can completely remove your account from HousePanel by deleting this user." +
-        //        " Note that this action is irreversible and all deleted accounts will result in removing all devices" +
-        //        " from the HousePanel system. All active users must have at least one panel, so if you only have one" +
-        //        " you will not be able to remove it." +
-        //        "</div>";
-
-
-        // // users can update their username here
-        $tc += "<div class=\"filteroption\">";
-        // $tc += "<div><label class=\"optioninp\">Username: </label>";
-        $tc += " Username: ";
-        $tc += "<input id=\"newUsername\" class=\"optioninp\" name=\"newUsername\" size=\"20\" type=\"text\" value=\"" + uname + "\"/>"; 
-        $tc += "</div>";
-
-        // available panels to pick from
-        /*
-        $tc += "<div class=\"filteroption\">";
-        $tc += "Panel Options:<br>";
-        $tc += "<label class =\"optioninp\">Select panel:</label>";
-            $tc += "<select class=\"optioninp\" id='userpanel' name='userpanel'>"; 
-            panels.forEach(panel => {
-                const selected = (panel.pname === pname) ? " selected" : "";
-                $tc += "<option value='" + panel.id + "'" + selected + ">" + panel.pname  + "</option>";
-            });
-        $tc += "</select><br/>";
-        $tc += "<div><label class=\"optioninp\">New Panel Name: </label>";
-        $tc += "<input id=\"panelname\" class=\"optioninp\" name=\"panelname\" size=\"20\" type=\"text\" value=\"" + pname + "\"/></div>";
-        $tc += "</div>";
-        */
-
-        // panel passwords
-        /*
-        $tc += "<div class=\"filteroption\">";
-        $tc += "<div><label class=\"optioninp\">Panel Password: </label>";
-        $tc += "<input id=\"panelPw1\" class=\"optioninp\" name=\"panelPw1\" size=\"20\" type=\"password\" value=\"\"/></div>"; 
-        $tc += "<div><label class=\"optioninp\">Confirm Password: </label>";
-        $tc += "<input id=\"panelPw2\" class=\"optioninp\" name=\"panelPw2\" size=\"20\" type=\"password\" value=\"\"/></div>"; 
-        $tc += "</div>";
-        */
-
-        // skins to pick from
-        /*
-        $tc += "<div class=\"filteroption\">";
-        $tc += "<label class =\"optioninp\">Skin:</label>";
-        $tc += "<select class=\"optioninp\" id='userskin' name='userskin'>"; 
-        skins.forEach(askin => {
-            var skinval = "skin-"+askin;
-            const selected = (skinval === skin) ? " selected" : "";
-            $tc += "<option value='" + skinval + "'" + selected + ">" + askin  + "</option>";
-        });
-        $tc += "</select>";
-        $tc += "</div>";
-        */
-
-        // $tc += "<div class=\"buttongrp\">";
-        //     $tc+= "<div id=\"usePanel\" class=\"smallbutton\">Select Panel</div>";
-        //     $tc+= "<div id=\"delPanel\" class=\"smallbutton\">Delete Panel</div>";
-        //     $tc+= "<div id=\"delUser\" class=\"smallbutton\">Delete User</div>";
-        // $tc += "</div>";
-
-        $tc += "<div class=\"filteroption\">";
-        // $tc += "Other Options:";
-        $tc += "<div><label for=\"kioskid\" class=\"optioncbox\">Kiosk Mode: </label>";    
-        var $kstr = ($kioskoptions===true || $kioskoptions==="true") ? " checked" : "";
-        $tc+= "<input class=\"optionchk\" id=\"kioskid\" type=\"checkbox\" name=\"kiosk\"  value=\"" + $kioskoptions + "\"" + $kstr + "/></div>";
-        $tc += "<div><label for=\"ruleid\" class=\"optioncbox\">Enable Rules? </label>";
-        $kstr = ($ruleoptions===true || $ruleoptions==="true") ? " checked" : "";
-        $tc += "<input class=\"optionchk\" id=\"ruleid\" type=\"checkbox\" name=\"rules\"  value=\"" + $ruleoptions + "\"" + $kstr + "/></div>";
-        $tc += "<div><label for=\"clrblackid\" class=\"optioncbox\">Blackout on <br>Night & Away Modes: </label>";    
-        $kstr = (blackout===true || blackout==="true") ? " checked" : "";
-        $tc+= "<input class=\"optionchk\" id=\"clrblackid\" type=\"checkbox\" name=\"blackout\"  value=\"" + blackout + "\"" + $kstr + "/></div>";
-        $tc+= "<div><label for=\"photoid\" class=\"optioninp\">Photo timer (sec): </label>";
-        $tc+= "<input class=\"optioninp\" id=\"photoid\" name=\"phototimer\" type=\"number\"  min='0' max='300' step='5' value=\"" + phototimer + "\" /></div>";
-        // $tc += "<div><label for=\"newtimezone\" class=\"optioninp\">Timezone: </label>";
-        // $tc += "<input id=\"newtimezone\" class=\"optioninp\" name=\"timezone\" size=\"20\" type=\"number\" min='-660' max='840', step='60' value=\"" + timezone + "\"/></div>"; 
-        $tc += "<div><label class=\"optioninp\" title=\"Polling for authenticated hubs\">Hub polling timer: </label>";
-        $tc += "<input class=\"optioninp\" name=\"fast_timer\" size=\"20\" type=\"text\" value=\"" + fast_timer + "\"/></div>"; 
-        $tc += "<div><label class=\"optioninp\" title=\"Blanks, customs, frames, images polling\">Special polling timer: </label>";
-        $tc += "<input class=\"optioninp\" name=\"slow_timer\" size=\"20\" type=\"text\" value=\"" + slow_timer + "\"/></div>"; 
-        $tc += "</div>";
-
-        $tc += "<div class=\"filteroption\">";
-        $tc += "Weather City Selection:<br/>Option 1: Specify WeatherWidget.io or AccuWeather city or both<br/>";
-        $tc += "<table>";
-        $tc += "<tr>";
-        $tc += "<td style=\"width:15%; text-align:right\"><label for=\"fcastcityid\" class=\"kioskoption\">WeatherWidget City: </label>";
-        $tc += "<br><span class='typeopt'>(see: <a href=\"https://weatherwidget.io\">WeatherWidget.io</a>)</span></td>";
-        $tc += "<td style=\"width:20%\"><input id=\"fcastcityid\" size=\"30\" type=\"text\" name=\"fcastcity\"  value=\"" + fcastcity + "\" /></td>";
-        $tc += "<td style=\"width:20%; text-align:right\"><label for=\"fcastregionid\" class=\"kioskoption\">Forcast Region: </label></td>";
-        $tc += "<td style=\"width:15%\"><input id=\"fcastregionid\" size=\"20\" type=\"text\" name=\"fcastregion\"  value=\"" + fcastregion + "\"/></td>";
-        $tc += "<td style=\"width:15%; text-align:right\"><label for=\"fcastcodeid\" class=\"kioskoption\">Forecast Code: </label></td>";
-        $tc += "<td style=\"width:15%\"><input id=\"fcastcodeid\" size=\"20\" type=\"text\" name=\"fcastcode\"  value=\"" + fcastcode + "\"/></td>";
-        // $tc += "<br><span class='typeopt'>(for Frame1 tiles)</span></td>";
-        $tc += "</tr>";
-
-        $tc += "<tr>";
-        $tc += "<td style=\"width:15%; text-align:right\"><label for=\"accucityid\" class=\"kioskoption\">Accuweather City: </label>";
-        $tc += "<br><span class='typeopt'>(see: <a href=\"https://www.accuweather.com\">AccuWeather.com</a>)</span></td>";
-        $tc += "<td style=\"width:20%\"><input id=\"accucityid\" size=\"30\" type=\"text\" name=\"accucity\"  value=\"" + accucity + "\" /></td>";
-        $tc += "<td style=\"width:20%; text-align:right\"><label for=\"accuregionid\" class=\"kioskoption\">Accuweather Region: </label></td>";
-        $tc += "<td style=\"width:15%\"><input id=\"accuregionid\" size=\"20\" type=\"text\" name=\"accuregion\"  value=\"" + accuregion + "\"/></td>";
-        $tc += "<td style=\"width:15%; text-align:right\"><label for=\"accucodeid\" class=\"kioskoption\">AccuWeather Code: </label></td>";
-        $tc += "<td style=\"width:15%\"><input id=\"accucodeid\" size=\"20\" type=\"text\" name=\"accucode\"  value=\"" + accucode + "\"/></td>";
-        // $tc += "<br><span class='typeopt'>(for Frame 2 tiles)</span></td>";
-        $tc += "</tr></table></div>";
-
-        $tc += `<div class="filteroption">
-                Weather City Selection:<br/>Option 2: Paste entire code block of your weather widget of choice into any Frame tile<br/>
-                <textarea id="widgetcodeid" name="widgetcode" rows="6" cols="80" placeholder="Paste your weather widget code here..."></textarea>
-                <input class="optionnuminp" id="widgetcodepanelid" name="widgetcodepanelid" type="number" min="1" max="4" step="1" value="1" />
-               </div>`;
-
-        $tc += "<div class='greeting'>You can select how many special tiles of each type to include here." +
-               " These tiles are used to show special content on your dashboard." +
-               "</div>";
-        $tc += "<div class=\"filteroption\">";
-        $tc += "Specify number of special tiles:<br/>";
-        for (var $stype in specialtiles) {
-            var $customcnt = parseInt(specialtiles[$stype]);
-            if ( isNaN($customcnt) ) { $customcnt = 0; }
-            var $stypeid = "cnt_" + $stype;
-            $tc+= "<div><label for=\"$stypeid\" class=\"optioninp\"> " + $stype +  " tiles: </label>";
-            $tc+= "<input class=\"optionnuminp\" id=\"" + $stypeid + "\" name=\"" + $stypeid + "\" size=\"10\" type=\"number\"  min='0' max='99' step='1' value=\"" + $customcnt + "\" /></div>";
-        }
-        $tc+= "</div><br/><br/>";
-
+        $tc += hidden("hubpick", hubpick);
 
         $tc += "<div class='greeting'>Select which hubs and types of things to show in the table below." +
                " This might be useful if you have a large number of things and/or multiple hubs so you can select ." +
@@ -8167,14 +8150,7 @@ function getOptionsPage(user, configoptions, hubs, req) {
             var thingindex = device["devices_id"];
             var $special = "";
 
-            // write the table row
-            // if ( array_key_exists(thetype, specialtiles) ) {
-            //     var $special = " special";
-            // } else {
-            //     $special = "";
-            // }
             var $odd = $evenodd = false;
-            // if ( thetype ) {
             if (in_array(thetype, useroptions)) {
                 $evenodd = !$evenodd;
                 $evenodd ? $odd = " odd" : $odd = "";
@@ -8192,8 +8168,6 @@ function getOptionsPage(user, configoptions, hubs, req) {
             $tc+= "</td>";
 
             // loop through all the rooms
-            // this addresses room bug
-            // for ( var roomname in roomoptions ) {
             for (var i in rooms) {
                 var roomname = rooms[i].rname;
                 var roomid = rooms[i].id;
@@ -8202,8 +8176,8 @@ function getOptionsPage(user, configoptions, hubs, req) {
                 $tc+= "<td>";
                 
                 var ischecked = false;
-                for (var i in sensors) {
-                    var thing = sensors[i];
+                for (var i in things) {
+                    var thing = things[i];
                     if ( thing["things_tileid"] === thingindex &&  thing["things_roomid"] === roomid ) {
                         ischecked = true;
                     }
@@ -8222,9 +8196,9 @@ function getOptionsPage(user, configoptions, hubs, req) {
         $tc+= "</tbody></table>";
         $tc+= "</div>";
         $tc+= "<div class=\"buttonopts\">";
-        $tc +='<div id="optSave" class="formbutton">Save</div>';
-        $tc +='<div id="optReset" class="formbutton">Reset</div>';
-        $tc +='<div id="optCancel" class="formbutton">Cancel</div><br>';
+        $tc +='<div id="devSave" class="formbutton">Save</div>';
+        $tc +='<div id="devReset" class="formbutton">Reset</div>';
+        $tc +='<div id="devCancel" class="formbutton">Cancel</div><br>';
         $tc+= "</div>";
         $tc+= "</form>";
         $tc += getFooter();
@@ -8235,7 +8209,7 @@ function getOptionsPage(user, configoptions, hubs, req) {
 }
 
 // process user options page
-function processOptions(userid, panelid, optarray) {
+function processParams(userid, panelid, optarray) {
 
     // first get the configurations and things and then call routine to update them
     userid = parseInt(userid);
@@ -8245,30 +8219,15 @@ function processOptions(userid, panelid, optarray) {
         console.log( (ddbg()), "optarray: ", jsonshow(optarray) );
     }
 
-    // get the hub filters and process them first
-    var joinstr = mydb.getJoinStr("things","roomid","rooms","id");
-    var fields = "things.id as things_id, things.userid as things_userid, things.roomid as things_roomid, " +
-        "things.tileid as things_tileid, things.posy as things_posy, things.posx as things_posx, " +
-        "things.zindex as things_zindex, things.torder as things_torder, things.customname as things_customname, " +
-        "rooms.id as rooms_id, rooms.panelid as rooms_panelid, rooms.rname as rooms_rname, rooms.rorder as rooms_rorder";
-
     return Promise.all([
         mydb.getRow("hubs","*","userid = "+userid+" AND hubid = '-1'"),
-        mydb.getRow("users","*","id = "+userid),
-        mydb.getRow("panels","*","id = "+panelid),
-        mydb.getRows("rooms","*","userid = "+userid+" AND panelid="+panelid),
-        mydb.getRows("configs","*","userid = "+userid+" AND configtype=0"),
         mydb.getRows("devices","*","userid = "+userid+" AND hint='special'"),
-        mydb.getRows("things", fields, "things.userid = "+userid+" AND rooms.panelid = "+panelid, joinstr)
+        mydb.getRows("configs","*","userid = "+userid+" AND configtype=0")
     ])
     .then(results => {
         var hubzero = results[0];
-        var user = results[1];
-        var panel = results[2];
-        var rooms = results[3];
-        var configs = results[4];
-        var specials = results[5];
-        var things = results[6];
+        var specials = results[1];
+        var configs = results[2];
         var configoptions = {};
         if ( configs ) {
             configs.forEach(function(item) {
@@ -8282,63 +8241,36 @@ function processOptions(userid, panelid, optarray) {
                 configoptions[key] = parseval;
             });
         }
-        return doProcessOptions(optarray, configoptions, hubzero, user, panel, things, rooms, specials);
+        return doProcessOptions(optarray, configoptions, hubzero, specials);
     })
     .catch(reason => {
         console.log( (ddbg()), reason);
         return reason;
     });
 
-    function doProcessOptions(optarray, configoptions, hubzero, user, panel, things, rooms, specials) {
-        if (DEBUG4) {
-            console.log( (ddbg()), jsonshow(hubzero) );
-            console.log( (ddbg()), jsonshow(things) );
-            console.log( (ddbg()), jsonshow(rooms) );
-            console.log( (ddbg()), jsonshow(specials) );
-        }
-        
-        var roomnames = {};
-        rooms.forEach(function(item) {
-            var id = item.id;
-            var rname = item.rname;
-            roomnames[rname] = id;
-        });
+    function doProcessOptions(optarray, configoptions, hubzero, specials  ) {
         var specialtiles = configoptions["specialtiles"];
 
-        // // use clock instead of blank for default only tile
-        // var onlytile = {userid: userid, tileid: onlytileid, posy: 0, posz: 0, zindex: 1, torder: 1, customname: "Digital Clock"};
-        // var onlyarr = [onlytile,0,0,1,""];
-
-        // // checkbox items simply will not be there if not selected
         configoptions["kiosk"] = "false";
         configoptions["rules"] = "false";
         configoptions["blackout"] = "false";
-
-        // get old panel info to check for changes
-        var oldPanel = panel.pname;
-        var oldSkin = panel.skin;
-
-        // force all three to be given for change to happen
+        var newName = "";
         var accucity = "";
         var accuregion = "";
         var accucode = "";
         var fcastcity = "";
         var fcastregion = "";
         var fcastcode = "";
-        var newPassword = "";
-        var newName = "";
-        var newSkin = oldSkin;
-        var newPanel = oldPanel;
-        var useroptions = [];
-        var huboptpick = "-1";
+        var weatherwidget = "";
+        var frameid = 0;
 
         for (var key in optarray) {
             var val = optarray[key];
             if ( typeof val === "string" ) val = val.trim();
 
             //skip the returns from the submit button and the flag
-            if (key==="options" || key==="api" || key==="useajax"  || key==="userid" || key==="panelid" || key==="webSocketUrl" || key==="returnURL" ||
-                key==="pagename" || key==="pathname" || key==="userpanel" || key==="pname" || key==="uname" || key==="panelPw2" ) {
+            if (key==="options" || key==="editdevices" || key==="api" || key==="useajax"  || key==="userid" || key==="panelid" || key==="webSocketUrl" || key==="returnURL" || key==="hpcode" || key==="apiSecret" ||
+                key==="webSocketServerPort" || key==="webDisplayPort" || key==="pagename" || key==="pathname" || key==="userpanel" || key==="pname" || key==="uname" || key==="panelPw2" ) {
                 continue;
 
             } else if ( key==="newUsername" ) {
@@ -8348,25 +8280,6 @@ function processOptions(userid, panelid, optarray) {
                     newName = val;
                     mydb.updateRow("users",{uname: newName},"id = " + userid);
                 }
-            } else if ( key==="panelname" ) {
-                if ( val && val.match(/^\D\S{2,}$/) ) {
-                    newPanel = val;
-                }
-            } else if ( key==="panelPw1") {
-                var pw1 = val;
-                var pw2 = optarray["panelPw2"].trim();
-                if ( pw1 === pw2 && pw1.match(/^\D\S{5,}$/) ) {
-                    newPassword = pw_hash(pw1);
-                }
-            } else if ( key==="userskin" ) {
-                newSkin = val;
-            } else if ( key==="useroptions" ) {
-                key = "usroptions";
-                useroptions = val;
-            } else if ( key==="usroptions" ) {
-                useroptions = val;
-            } else if ( key==="huboptpick" ) {
-                huboptpick = val;
             } else if ( key==="kiosk") {
                 configoptions["kiosk"] = "true";
             } else if ( key==="rules") {
@@ -8375,12 +8288,6 @@ function processOptions(userid, panelid, optarray) {
                 configoptions["blackout"] = "true";
             } else if ( key==="phototimer" ) {
                 configoptions["phototimer"] = val;
-            // } else if ( key==="timezone") {
-            //     configoptions["timezone"] = val;
-            } else if ( key==="fast_timer") {
-                configoptions["fast_timer"] = val;
-            } else if ( key==="slow_timer") {
-                configoptions["slow_timer"] = val;
             } else if ( key==="fcastcity" ) {
                 fcastcity = val;
                 configoptions["fcastcity"] = val;
@@ -8399,6 +8306,10 @@ function processOptions(userid, panelid, optarray) {
             } else if ( key==="accucode" ) {
                 accucode = val;
                 configoptions["accucode"] = val;
+            } else if ( key==="widgetcode" ) {
+                weatherwidget = val;
+            } else if ( key==="widgetcodepanelid" ) {
+                frameid = parseInt(val);
             
             // handle user selected special tile count
             } else if ( key.substring(0,4)==="cnt_" ) {
@@ -8410,10 +8321,104 @@ function processOptions(userid, panelid, optarray) {
                     specialtiles[stype] = newcount;
                     configoptions["specialtiles"] = specialtiles;
                     updSpecials(userid, hubzero["id"], stype, newcount, specials);
-                }
-            
+                }            
+            }
+        }
+        
+        // handle the weather codes - write into this users folder
+        if ( weatherwidget && weatherwidget.length > 4 && frameid > 0 ) {
+            writeWeatherWidget(userid, weatherwidget, frameid);
+        } else {
+            writeForecastWidget(userid, fcastcity, fcastregion, fcastcode);
+            writeAccuWeather(userid, accucity, accuregion, accucode);
+        }
+        
+        var d = new Date();
+        var timesig = GLB.HPVERSION + " @ " + d.getTime();
+        configoptions["time"] = timesig;
+        
+        // save the configuration parameters in the main options array
+        for ( var key in configoptions ) {  
+            if ( typeof configoptions[key] === "object" ) {
+                var configstr = JSON.stringify(configoptions[key]);
+            } else {
+                configstr = configoptions[key];
+            }
+            var config = {userid: userid, configkey: key, configval: configstr};
+            mydb.updateRow("configs", config,"userid = "+userid+" AND configkey = '"+key+"'")
+            .then( () => {
+            })
+            .catch( reason => {
+                console.warn( (ddbg()), reason);
+            });
+        }
+        return configoptions;
+    }
+}
+
+function processDevices(userid, panelid, optarray) {
+
+    // first get the configurations and things and then call routine to update them
+    userid = parseInt(userid);
+    panelid = parseInt(panelid);
+    if ( DEBUG4 ) {
+        console.log( (ddbg()), "userid: ", userid, " panelid: ", panelid);
+        console.log( (ddbg()), "optarray: ", jsonshow(optarray) );
+    }
+
+    // get the hub filters and process them first
+    var joinstr = mydb.getJoinStr("things","roomid","rooms","id");
+    var fields = "things.id as things_id, things.userid as things_userid, things.roomid as things_roomid, " +
+        "things.tileid as things_tileid, things.posy as things_posy, things.posx as things_posx, " +
+        "things.zindex as things_zindex, things.torder as things_torder, things.customname as things_customname, " +
+        "rooms.id as rooms_id, rooms.panelid as rooms_panelid, rooms.rname as rooms_rname, rooms.rorder as rooms_rorder";
+
+    return Promise.all([
+        mydb.getRow("hubs","*","userid = "+userid+" AND hubid = '-1'"),
+        mydb.getRows("rooms","*","userid = "+userid+" AND panelid="+panelid),
+        mydb.getRows("things", fields, "things.userid = "+userid+" AND rooms.panelid = "+panelid, joinstr)
+    ])
+    .then(results => {
+        var hubzero = results[0];
+        var rooms = results[1];
+        var things = results[2];
+        return doProcessOptions(optarray, hubzero, rooms, things);
+    })
+    .catch(reason => {
+        console.log( (ddbg()), reason);
+        return reason;
+    });
+
+    function doProcessOptions(optarray, hubzero, rooms, things) {
+        if (DEBUG4) {
+            console.log( (ddbg()), jsonshow(hubzero) );
+            console.log( (ddbg()), jsonshow(rooms) );
+            console.log( (ddbg()), jsonshow(things) );
+        }
+        
+        var roomnames = {};
+        rooms.forEach(function(item) {
+            var id = item.id;
+            var rname = item.rname;
+            roomnames[rname] = id;
+        });
+
+        // force all three to be given for change to happen
+        var huboptpick = optarray["hubpick"] || "-1";
+        var useroptions = optarray["useroptions"] || [];
+
+        for (var key in optarray) {
+            var val = optarray[key];
+            if ( typeof val === "string" ) val = val.trim();
+
+            //skip the returns from the submit button and the flag
+            if (key==="editdevices" || key==="api" || key==="useajax"  || key==="userid" || key==="panelid" || key==="webSocketUrl" || key==="returnURL" ||
+                key==="pagename" || key==="pathname" || key==="userpanel" || key==="pname" || key==="uname" || key==="panelPw2" ) {
+                continue;
+            }
+           
             // made this more robust by checking room name being valid
-            } else if ( array_key_exists(key, roomnames) && is_array(val) ) {
+            if ( array_key_exists(key, roomnames) && is_array(val) ) {
                 
                 // first delete any tile that isn't checked
                 var roomid = parseInt(roomnames[key]);
@@ -8442,86 +8447,14 @@ function processOptions(userid, panelid, optarray) {
                         mydb.addRow("things",updrow);
                     }
                 });
-
             }
         }
         
         // save the hub filter options
         saveFilters(userid, useroptions, huboptpick);
-
-        // handle the weather codes - write into this users folder
-        writeForecastWidget(userid, fcastcity, fcastregion, fcastcode);
-        writeAccuWeather(userid, accucity, accuregion, accucode);
-        
-        var d = new Date();
-        var timesig = GLB.HPVERSION + " @ " + d.getTime();
-        configoptions["time"] = timesig;
-        
-        // save the configuration parameters in the main options array
-        for ( var key in configoptions ) {  
-            if ( typeof configoptions[key] === "object" ) {
-                var configstr = JSON.stringify(configoptions[key]);
-            } else {
-                configstr = configoptions[key];
-            }
-            var config = {userid: userid, configkey: key, configval: configstr};
-            mydb.updateRow("configs", config,"userid = "+userid+" AND configkey = '"+key+"'")
-            .then( () => {
-            })
-            .catch( reason => {
-                console.warn( (ddbg()), reason);
-            });
-        }
-
-        // we return the object that was updated plus a flag to logout or reload the page
-        return mydb.getRow("panels","*", "userid = " + userid + " AND pname = '" + newPanel + "'")
-        .then(row => {
-            var obj = {userid: userid, pname: newPanel, skin: newSkin};
-            if ( row ) {
-                panelid = row.id;
-                if ( newPassword || (newPanel!==oldPanel)) {
-                    obj["password"] = newPassword;
-                }
-                return mydb.updateRow("panels", obj, "id = " + panelid)
-                .then(results => {
-                    obj["result"] = (newPassword || (newPanel!==oldPanel)) ? "logout" : "reload";
-                    obj.id = panelid;
-                    obj.useremail = user.email;
-                    obj.mobile = user.mobile;
-                    if ( DEBUG4 ) {
-                        console.log( (ddbg()), "obj: ", obj, " update results: ", results);
-                    }
-                    return obj;
-                })
-                .catch(reason => {
-                    console.warn( (ddbg()), reason);
-                });
-            } else {
-
-                // this is where we make a new panel and rooms within that panel
-                return makeNewRooms(userid, newPanel, newPassword, newSkin, roomnames)
-                .then(results => {
-                    var panelobj = results[0];
-                    rooms = results[1];
-                    panelid = panelobj.id;
-                    panelobj["result"] = "logout";
-                    panelobj["useremail"] = user.email;
-                    panelobj["mobile"] = user.mobile;
-                    if ( DEBUG4 ) {
-                        console.log( (ddbg()), "retobj: ", panelobj, " new panel: ", panelobj, " new rooms: ", rooms);
-                    }
-                    return panelobj;
-                })
-                .catch(reason => {
-                    console.warn( (ddbg()), reason);
-                });    
-            }
-        })
-        .catch(reason => {
-            console.warn( (ddbg()), reason);
-        })
+        return {"things": "updated"};
+       
     }
-    
 }
 
 function getErrorPage(reason) {
@@ -8768,9 +8701,10 @@ async function updSpecials(userid, hubindex, stype, newcount, specials) {
     // get the number of specials of this type already here
     var numnow = 0;
     if ( specials ) {
-        specials.forEach(dev => {
+        for (const key in specials) {
+            const dev = specials[key];
             if ( dev.devicetype === stype ) numnow++;
-        });
+        }
     }
 
     // add new specials if we don't have enough
@@ -9863,9 +9797,17 @@ function apiCall(user, body, protocol, res) {
                 }
             break;
 
-            case "saveoptions":
+            case "savedevices":
                 if ( protocol==="POST" ) {
-                    result = processOptions(userid, panelid, body);
+                    result = processDevices(userid, panelid, body);
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
+
+            case "saveparams":
+                if ( protocol==="POST" ) {
+                    result = processParams(userid, panelid, body);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -11035,7 +10977,12 @@ if ( app && applistening ) {
                         });
 
                     } else if ( req.path==="/showoptions") {
-                        getOptionsPage(user, configoptions, hubs, req)
+                        result = getParamsPage(user, configoptions, req)
+                        res.send(result);
+                        res.end();
+
+                    } else if ( req.path==="/editdevices") {
+                        getDevicesPage(user, configoptions, hubs, req)
                         .then(result => {
                             res.send(result);
                             res.end();
