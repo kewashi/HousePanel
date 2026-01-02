@@ -14,10 +14,9 @@ et_Globals.priorIcon = "none";
 et_Globals.tileCount = 0;
 et_Globals.clipboard = [];
 
-function editTile(userid, thingid, pagename, str_type, thingindex, uid, bid, thingclass, hubid, hubindex, hubType, customname, htmlcontent) {  
+function editTile(userid, thingid, pagename, str_type, thingindex, uid, bid, thingclass, hubindex, hubType, customname, htmlcontent) {  
     var returnURL = cm_Globals.returnURL;
     et_Globals.id = bid;          // roomnum for pages
-    et_Globals.hubid = hubid;
     et_Globals.hubindex = hubindex;
     et_Globals.hubType = hubType;
     et_Globals.pagename = pagename;

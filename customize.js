@@ -19,17 +19,14 @@ cm_Globals.natives = [];
 cm_Globals.defaultclick = "name";
 
 // tile custom popup box
-function customizeTile(userid, tileid, uid, bid, thingid, str_type, hubnum, panel) {  
+function customizeTile(userid, tileid, uid, bid, thingid, str_type, panel) {  
 
     // save our tile id in a global variable
-    cm_Globals.devices = null;
     cm_Globals.id = bid;
-    cm_Globals.hubnum = hubnum;
     cm_Globals.reload = false;
     cm_Globals.userid = userid;
     cm_Globals.type = str_type;
     cm_Globals.panel = panel;
-    cm_Globals.rules = [];
     var isdone = {getrules: false, devices: false};
 
     // this is the tileid value in the things list which is the base device.id value
@@ -48,6 +45,16 @@ function customizeTile(userid, tileid, uid, bid, thingid, str_type, hubnum, pane
     }
     cm_Globals.customname = customname;
 
+    // first get all devices from the server for this user
+    // no longer need to do this because we have cm_Globals in the main program
+    for ( var id in cm_Globals.devices ) {
+        const val = cm_Globals.devices[id];
+        if ( val.deviceid === bid ) {
+            cm_Globals.currentid = val.uid;
+        }
+    };
+    checkDone("devices");
+
     // set the customization list
     $.post(cm_Globals.returnURL, 
         {api: "getrules", userid: userid, id: bid, hpcode: cm_Globals.options.hpcode},
@@ -62,29 +69,6 @@ function customizeTile(userid, tileid, uid, bid, thingid, str_type, hubnum, pane
             } else {
                 console.error("error - failure reading rules from database. ", pstatus);
                 checkDone("getrules");
-            }
-        }, "json"
-    );
-
-
-    // first get all devices from the server for this user
-    $.post(cm_Globals.returnURL, {api: "getdevices", userid: userid, hpcode: cm_Globals.options.hpcode},
-        function(presult, pstatus) {
-            if (pstatus==="success" && typeof presult === "object") {
-                // create the devices object list
-                // console.log( ">>>> customizeTile: getdevices() - loaded devices for user " + userid + ": ", presult);
-                cm_Globals.devices = presult;
-                for ( var id in presult ) {
-                    var val = presult[id];
-                    if ( val.deviceid === bid ) {
-                        cm_Globals.currentid = val.uid;
-                    }
-                };
-                checkDone("devices");
-            } else {
-                cm_Globals.devices = null;
-                console.error("error - could not load devices to use the customizer");
-                checkDone("devices");
             }
         }, "json"
     );
@@ -278,7 +262,6 @@ function getExistingFields(tileid, curval) {
     curval = curval.toString();
 
     // create a sorted list here
-    // var sensors = sortedSensors("name", "type", "hubnum");
     var sortdevices = sortedSensors( Object.values(cm_Globals.devices), "name", "devicetype" );
 
     for ( var i in sortdevices ) {

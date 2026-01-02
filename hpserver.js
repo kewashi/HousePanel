@@ -15,7 +15,7 @@ const DEBUG6 = false;               // tile adds and position moves
 const DEBUG7 = false;               // hub responses
 const DEBUG8 = false;               // API calls
 const DEBUG9 =  false;              // ISY webSocket success
-const DEBUG10 = false;              // sibling tag
+const DEBUG10 = false;              // unused tag - previously sibling
 const DEBUG11 = false;              // rules and lists
 const DEBUG12 = false;              // hub push updates
 const DEBUG13 = false;              // URL callbacks
@@ -46,6 +46,7 @@ const request = require('request');
 const url = require('url');
 const nodemailer = require('nodemailer');
 const multer = require('multer');
+const PUSHDELAY = 500;                               // delay to allow things to settle on startup
 // const countrytime = require('countries-and-timezones');
 
 // load supporting modules
@@ -53,6 +54,7 @@ var sqlclass = require("./mysqlclass");
 var devhistory = require("./devhistory.js");
 const { json } = require('stream/consumers');
 const { config } = require('process');
+const { type } = require('os');
 
 // global variables are all part of GLB object
 var GLB = {};
@@ -4283,14 +4285,10 @@ function uniqueWords(str) {
 }
 
 function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, postop, posleft, zindex, customname, wysiwyg, alldevices) {
-    var $tc = "";
-    var thingtype = thesensor["type"];
-    var bid = thesensor["id"];
-    if ( wysiwyg ) {
-        var wwx = "x_";
-    } else {
-        wwx = "";
-    }
+    let $tc = "";
+    let thingtype = thesensor["type"];
+    let bid = thesensor["id"];
+    const wwx = wysiwyg ? "x_" : "";
 
     // set custom name provided by tile editor
     // this is overruled by any name provided in the tile customizer
@@ -4419,8 +4417,8 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
     // create on screen element for each key
     // this includes a check for helper items created in tile customizer
     for ( var tkey in thingvalue ) {
-        var tval = thingvalue[tkey];
-        var userSubtype = subtype;
+        let tval = thingvalue[tkey];
+        let userSubtype = subtype;
 
         // add operating state for thermostats
         if ( thingtype === "thermostat" && tkey==="temperature" && thingvalue["thermostatOperatingState"] ) {
@@ -4428,7 +4426,7 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
         }
 
         // check value for "json" strings
-        var jsontval;
+        let jsontval;
         if ( is_object(tval) ) {
             jsontval = clone(tval);
         } else if ( typeof tval === "string" ) {
@@ -4439,14 +4437,9 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
             }
         }
         
-        // skip special audio and music tiles
-        // if ( tkey==="audioTrackData" || tkey==="trackData" || tkey==="forecast" ) {
-            // jsontval = null;
-            // tval = null;
-        // }
-
         // handle other cases where the value is an object like audio or music tiles
         // but audio, music, and weather and handled elsewhere so don't do it again here
+        // expanded json objects only descend 2 levels and won't honor customizations
         if ( jsontval && is_object(jsontval) ) {
 
             var isarr = is_array(jsontval);
@@ -4462,21 +4455,21 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
                 // skip adding an object element if it duplicates an existing one
                 if ( jtkey && jtval && !array_key_exists(jtkey, thingvalue) ) {
                     if ( is_object(jtval) ) {
-                        var isarr2 = is_array(jtval);
-                        for (var jtkey2 in jtval) {
-                            var jtval2 = jtval[jtkey2];
+                        let isarr2 = is_array(jtval);
+                        for (let jtkey2 in jtval) {
+                            let jtval2 = jtval[jtkey2];
                             if ( isarr2 ) {
                                 jtkey2 = jtkey + "_" + jtkey2.toString();
                             }
                             // only print strings and non duplicates - don't descend more than 2 levels
                             // i should have written putElement as a recursive function call - this is to be done later
                             if ( jtkey2 && jtval2 && (typeof jtval2!=="object") && !array_key_exists(jtkey2, thingvalue) ) {
-                                $tc += putElement(kindex, cnt, j, thingtype, jtval2, jtkey2, subtype, null, null, twidth, theight);
+                                $tc += putElement(kindex, cnt, bid, thingtype, jtval2, jtkey2, subtype, "", jtkey2, twidth, theight, "");
                                 j++;
                             }
                         }
                     } else {
-                        $tc += putElement(kindex, cnt, j, thingtype, jtval, jtkey, subtype, null, null, twidth, theight);
+                        $tc += putElement(kindex, cnt, bid, thingtype, jtval, jtkey, subtype, "", jtkey, twidth, theight, "");
                         j++;
                     }
                 }
@@ -4488,53 +4481,62 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
             // and companion tags are only printed within LINK elements on the browser now
             // print a hidden field for user web calls and links
             // this is what enables customization of any tile to happen
-            // this special element is not displayed and sits inside the overlay
-            // we only process the non helpers and look for helpers in same list
-
-            if ( (typeof tval === "string") && tval.startsWith("LINK::") ) {
-                $tc += putLinkElement(bid, hint, tval, kindex, cnt, j, thingtype, tval, tkey, userSubtype, twidth, theight);
-            } else {
-                $tc += putElement(kindex, cnt, j, thingtype, tval, tkey, userSubtype, null, tkey, twidth, theight);
-            }
-
+            $tc += putLinkElement(kindex, cnt, bid, thingtype, tval, tkey, userSubtype, twidth, theight);
             j++;
         }
     }    
 
-    $tc += "</div>";
+    $tc += "</div>";    
     return $tc;
 
-    function putLinkElement(bid, hint, helperval, kindex, cnt, j, thingtype, tval, tkey, subtype, twidth, theight) {
+    // modified to not write a sidecar element but to instead write a modified element directly
+    // this makes it easier to manage links since we don't have to look for sidecar elements
+    function putLinkElement(kindex, cnt, bid, thingtype, tval, tkey, subtype, twidth, theight)  {
 
         var linktype = thingtype;
-        var linkhub = 0;
-        var linkbid = bid;
         var subid = tkey;
         var realsubid = subid;
-        var linkid = 0;
-        var ipos = helperval.indexOf("::");
-        var command = helperval.substr(0, ipos);
-        var linkval = helperval.substr(ipos+2);
-        var linktileval = linkval;
-        var sibling;
+        var linkbid = bid;
+        let command = "";
+        let linkid = "";
+        let linkhub = "";
+        let linkval = tval ? tval : "";
+        let helperval = linkval.toString();
+        try {
+            const ipos = helperval.indexOf("::");
+            if ( ipos !== -1 ) {
+                command = helperval.substr(0, ipos);
+                linkval = helperval.substr(ipos+2);
+            }
+        } catch(e) {
+            console.error( (ddbg()), "error parsing link command from helperval: ", helperval, " error: ", e);
+            command = "";
+            linkval = helperval;
+        }
+        let linktileval = linkval;
 
-        var jpos = linkval.indexOf("::");
-        if ( command === "LINK" && jpos !== -1 && alldevices ) {
-
-            // we now pass the linkid and the realsubid here so it is easy to get the realsubid
-            // for this to work we changed the way LINK tiles are presented on screen
-            // note that this will now always show the subid after the linkid
-            // for new links this will be the realsubid for legacy links it will be the subid used in the link
-            // realsubid = linkval.substr(0, jpos)
-            // var linkid = linkval.substr(jpos+2);
-            var linkuid = linkval.substring(0, jpos);
-            realsubid = linkval.substring(jpos+2);
+        if ( command === "LINK" && alldevices ) {
+            linkval = helperval.substring(6);
+            let jpos = linkval.indexOf("::");
+            let linkuid = linkval;
+            if ( jpos !== -1 ) {
+                // new link format so we can get both linkid and realsubid
+                // we now pass the linkid and the realsubid here so it is easy to get the realsubid
+                // for this to work we changed the way LINK tiles are presented on screen
+                // note that this will now always show the subid after the linkid
+                // for new links this will be the realsubid for legacy links it will be the subid used in the link
+                // realsubid = linkval.substr(0, jpos)
+                // var linkid = linkval.substr(jpos+2);
+                linkuid = linkval.substring(0, jpos);
+                realsubid = linkval.substring(jpos+2);
+            }
 
             // get the device for this linked tile
             var linkdev = alldevices[linkuid];
             if ( linkdev && realsubid ) {
                 
                 // replace the place holder value with the linked value
+                // these will be updated in the updateLink() function later in housepanel.js
                 try {
                     linktype = linkdev["devices_devicetype"];
                     linkid = linkdev["devices_id"];
@@ -4550,61 +4552,59 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
                     // so this call is only here to properly format times and dates that are linked
                     linktileval = getCustomTile(userid, configoptions, linktileval, linkbid);
                     linktileval = getFileName(userid, pname, linktileval, linktype, configoptions);
-
-                } catch(e) {
-                    linktileval = {};
-                }
-                
-                // now look for the real value in this device
-                // use the link value - if subid isn't there look for subid's that form the beginning of our link subid
-                // this will only kick in if the configs DB is in the legacy format because new links will have the realsubid captured
-                var goodlink = false;
-                if ( array_key_exists(realsubid, linktileval) ) {
-                    tval = linktileval[realsubid];
-                    goodlink = true;
-                } else {
-                    for (var ltkey in linktileval) {
-                        if ( realsubid.startsWith(ltkey) ) {
-                            realsubid = ltkey;
-                            tval = linktileval[ltkey];
-                            goodlink = true;
-                            break;
-                        }
+                    if ( array_key_exists(realsubid, linktileval) ) {
+                        tval = linktileval[realsubid];
+                    } else {
+                        console.warn( (ddbg()), "warning, realsubid: ", realsubid, " not found in linked tile #"+linkuid);
+                        tval = helperval;
                     }
+                    // look for width and height and replace if there
+                    if ( array_key_exists("width",linktileval) && linktileval["width"] && twidth ) {
+                        twidth = linktileval["width"];
+                    }
+                    if ( array_key_exists("height",linktileval) && linktileval["height"] && theight ) {
+                        theight = linktileval["height"];
+                    }
+                } catch(e) {
+                    console.warn( (ddbg()), "warning for linkuid: ", linkuid, " realsubid: ", realsubid, " error: ", e);
+                    tval = helperval;
                 }
-
-                // handle case where link not found - set error condition
-                if ( !goodlink ) {
-                    helperval = "LINK::error";
-                    tval = "LINK::error";
-                }
-
-                // look for width and height and replace if there
-                if ( array_key_exists("width",linktileval) && linktileval["width"] && twidth ) {
-                    twidth = linktileval["width"];
-                }
-                if ( array_key_exists("height",linktileval) && linktileval["height"] && theight ) {
-                    theight = linktileval["height"];
-                }
-
             } else {
-                helperval = "LINK::error";
-                tval = "LINK::error";
+                tval = helperval;
             }
-            sibling= "<div id=\"" + wwx + "sb-"+cnt+"-"+subid+"\""+" aid=\""+cnt+"\" linkuid=\""+linkuid+"\" hint=\""+hint+"\" linktype=\""+linktype+"\" linkhub=\""+linkhub+"\" linkval=\""+helperval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
-        }
 
-        // use the original type here so we have it for later
-        // but in the actual target we use the linktype
-        // var sibling= "<div aid=\""+cnt+"\" linktype=\""+linktype+"\" value=\""+tval+"\" linkval=\""+linkval+"\" command=\""+command+"\" subid=\""+realsubid+"\" linkbid=\"" + linkbid + "\" class=\"user_hidden\"></div>";
-        if ( DEBUG10 ) {
-            console.log( (ddbg()), "bid: ", bid, " helperval: ", helperval, " sibling: ", sibling,"\n new tval: ", tval);
+        } else if ( command === "TEXT" ) {
+            tval = linkval;
+
+        // these commands don't get invoked upon page refresh
+        // to invoke them you must click on them
+        } else if ( command === "PUT" || command === "POST" ) {
+            tval = command + "::" + subid;
+
+        } else if ( command === "GET" ) {
+            const configkey = "user_" + bid;
+            const configval = getConfigItem(configoptions, configkey) || [];
+            configval.forEach( item => {
+                let weburl = item[1];
+                let skey = item[2];
+                tval = command + "::" + subid;
+                if ( item[0]===command && skey === tkey ) {
+                    curl_call(weburl, null, false, false, command)
+                    .then( response => {
+                        setTimeout( function() {
+                            urlCallback(userid, bid, thingtype, tkey, response, command);
+                        }, PUSHDELAY);
+                    })
+                    .catch( error => {
+                        console.error( (ddbg()), "error on " + command + " call: ", error, " userid=",userid, " bid=",bid, " thingtype=",thingtype, " tkey=",tkey);
+                    });
+                }
+            });          
         }
-        var $tc = putElement(kindex, cnt, j, linktype, tval, tkey, subtype, sibling, realsubid, twidth, theight);
-        return $tc;
+        return putElement(kindex, cnt, linkbid, linktype, tval, tkey, subtype, realsubid, twidth, theight, command);
     }
 
-    function putElement(kindex, i, j, thingtype, tval, tkey, subtype, sibling, realsubid, twidth, theight) {
+    function putElement(kindex, i, bid, thingtype, tval, tkey, subtype, realsubid, twidth, theight, command) {
         
         // cleans up the name of music tracks for proper html page display
         // no longer trim the name because that breaks album art
@@ -4615,17 +4615,19 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
             return tval;
         }
 
-        var $tc = "";
+        let $tc = "";
         var aitkey = "a-" + i + "-" + tkey;
         var pkindex = " p_" + kindex;
         var aidi = `<div aid="${i}"`;
         var ttype = ` type="${thingtype}"`;
         var pn = ` pn="0"`;
+        const bidtag = " linkbid=" + bid;
+        const commandtag = command ? ` command="${command}"` : "";
         var n = 0;
         
         // fix the command subid for linked tiles by using the real subid instead of tkey
         // if ( realsubid.startsWith("_") && tval!=="0" && tval!== realsubid.substring(1) ) {
-        if ( realsubid.startsWith("_") && tval!=="0" ) {
+        if ( realsubid && realsubid.startsWith("_") && tval!=="0" ) {
             n = parseInt(tval);
             if ( isNaN(n) ) { n = 0; }
             pn = ` pn="${n}"`
@@ -4655,39 +4657,41 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
             return $tc;
         }
             
-        // ignore keys for single attribute items and keys that match types
+        // build a styling tag for those that differ and include the command if there is one
         var tkeyshow = (tkey === thingtype) ? "" : " " + tkey;
-
-        // add real sub for linked tiles
-        if ( realsubid && realsubid!==tkey ) {
+        if ( realsubid && realsubid!==tkey && realsubid!==thingtype ) {
             tkeyshow = tkeyshow + " " + realsubid;
         }
+        if ( command ) {
+            tkeyshow = tkeyshow + " " + command.toLowerCase();
+        }
+
+        // make a tag to hold the real subid if this is a link
+        var realtag = "";
+        if ( command==="LINK" ) {
+            realtag = " realsubid=\"" + realsubid + "\"";
+        }
         
-        // if ( tkey==="hue" || tkey==="saturation" ||
-        //     tkey==="heatingSetpoint" || tkey==="coolingSetpoint"  ||
-        //     tkey.startsWith("Int_") || tkey.startsWith("State_") ) 
-        // {
-        if ( tkey==="hue" || tkey==="saturation" ||
-             tkey==="heatingSetpoint" || tkey==="coolingSetpoint" ) 
+        // fix thermostats to have proper consistent tags
+        // we use the real key name here since the link could be any random name
+        // this only matters if this is a link reference - but notice we keep the user's tkey in the styling
+        // we only use the realsubid to determine whether to apply this special type of styling
+        // notice we use alias name in actual value and original key in up/down arrows
+        if ( realsubid==="hue" || realsubid==="saturation" ||
+             realsubid==="heatingSetpoint" || realsubid==="coolingSetpoint" ) 
         {
-    
-            // fix thermostats to have proper consistent tags
-            // this is supported by changes in the .js file and .css file
-            // notice we use alias name in actual value and original key in up/down arrows
             $tc += "<div class=\"overlay " + tkey + " " + subtype + " v_" + kindex + "\">";
-            if (sibling) { $tc += sibling; }
             $tc += aidi + " subid=\"" + tkey + "-dn\" title=\"" + tkey + " down\" class=\"" + thingtype + " arrow-dn " + tkey + "-dn " + pkindex + "\"></div>";
-            $tc += aidi + pn + " subid=\"" + tkey + "\" title=\"" + thingtype + " " + tkey + "\" class=\"" + thingtype + " arrow-it " + tkeyshow + pkindex + "\"" + " id=\"" + wwx + aitkey + "\">" + tval + "</div>";
+            $tc += aidi + pn + bidtag + commandtag + " subid=\"" + tkey + "\" title=\"" + thingtype + " " + tkey + "\" class=\"" + thingtype + " arrow-it " + tkeyshow + pkindex + "\"" + " id=\"" + wwx + aitkey + "\">" + tval + "</div>";
             $tc += aidi + " subid=\"" + tkey + "-up\" title=\"" + tkey + " up\" class=\"" + thingtype + " arrow-up " + tkey + "-up " + pkindex + "\"></div>";
             $tc += "</div>";
 
         // process analog clocks signalled by use of a skin with a valid name other than digital
         // changed this so we can use customizer to make multiple analog clocks anywhere
         // } else if ( thingtype==="clock" && tkey==="skin" && tval && tval!=="digital" ) {
-        } else if ( tkey.startsWith("skin") && tval && tval.startsWith("CoolClock:") ) {
+        } else if ( realsubid==="skin" && tval && tval.startsWith("CoolClock:") ) {
             $tc += "<div class=\"overlay "+tkey+" v_"+kindex+"\">";
-            if (sibling) { $tc += sibling; }
-            $tc += aidi + pn + ttype + "\"  subid=\""+tkey+"\" title=\"Analog Clock\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + wwx +aitkey+"\">" +
+            $tc += aidi + pn + bidtag + commandtag + realtag + ttype + "\"  subid=\""+tkey+"\" title=\"Analog Clock\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + wwx +aitkey+"\">" +
                 "<canvas id=\"" + wwx + "clock_"+tkey+"_"+i+"\" class=\""+tval+"\"></canvas></div>";
             $tc += "</div>";
         } else {
@@ -4705,11 +4709,11 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
                 } else {
                     extra = "";
                 }
-            } else if ( tkey==="time" || tkey==="date" || tkey==="color" || typeof tval!=="string" || tval==="" || tval==="lastRunTime" || tval==="lastFinishTime" ||
-                    (tkey.substr(0,6)==="event_") || tkey.startsWith("_") ||
-                    tkey==="trackDescription" || tkey==="currentArtist" || tkey==="groupRole" ||
-                    tkey==="currentAlbum" || tkey==="trackImage" || tkey==="mediaSource" ||
-                    tkey==="weatherIcon" || tkey==="forecastIcon" ||
+            } else if ( realsubid==="time" || realsubid==="date" || realsubid==="color" || typeof tval!=="string" || tval==="" || tval==="lastRunTime" || tval==="lastFinishTime" ||
+                    (realsubid.substr(0,6)==="event_") || realsubid.startsWith("_") ||
+                    realsubid==="trackDescription" || realsubid==="currentArtist" || realsubid==="groupRole" ||
+                    realsubid==="currentAlbum" || realsubid==="trackImage" || realsubid==="mediaSource" ||
+                    realsubid==="weatherIcon" || realsubid==="forecastIcon" ||
                     !isNaN(+tval) || thingtype===tval ||
                     (tval.substring(0,7)==="number_") || 
                     (tval.indexOf("://")!==-1) ||
@@ -4719,15 +4723,15 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
                 extra = " " + tval;
             }
 
-            if ( tkey.startsWith("def_Int") || tkey.startsWith("def_State") ) {
+            if ( realsubid === "def_Int" || realsubid === "def_State" ) {
                 extra += " vardef";
             }
             
             // fix track names for groups, empty, and super long
-            if (tkey==="trackDescription") {
+            if (realsubid==="trackDescription") {
                 tval = fixTrack(tval);
             // change this over to a css so we can style it if needed
-            } else if (tkey==="trackImage") {
+            } else if (realsubid==="trackImage") {
                 if ( tval.substring(0,4) === "http" ) {
                     if ( twidth && theight ) {
                         tval = "<img class='" + tkey + "' width='" + twidth + "' height='" + theight + "' src='" + tval + "'>";
@@ -4735,36 +4739,13 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
                         tval = "<img class='" + tkey + "' width='120px' height='120px' src='" + tval + "'>";
                     }
                 }
-            } else if ( tkey === "battery") {
+            } else if ( realsubid === "battery") {
                 var powmod = parseInt(tval);
                 powmod = powmod - (powmod % 10);
                 tval = "<div style=\"width: " + tval + "%\" class=\"ovbLevel L" + powmod.toString() + "\"></div>";
             } else if ( tval && typeof tval==="string" && tval.startsWith("rtsp:") && tval.length > 40 ) {
                 extra = extra + " rtsp";
-                // tval = "<div class=\"rtspwrap\">" + tval + "</div>";
             }
-
-            // hide variable precisions and definitions
-            // if ( tkey.startsWith("prec_") || tkey.startsWith("def_") ) {
-            // if ( tkey.startsWith("def_") ) {
-            //         extra += " user_hidden";
-            // }
-            
-            // for music status show a play bar in front of it
-            // no longer do this because we now use the real controls
-            // note that we add the sibling to the music controls
-            // so that linked tiles will operate properly
-            // only one sibling for all the controls. The js file deals with this.
-            // if (tkey==="musicstatus" || (thingtype==="music" && tkey==="status") ) {
-            //     $tc += "<div class=\"overlay music-controls" + subtype + " v_"+kindex+"\">";
-            //     if (sibling) { $tc += sibling; }
-            //     $tc += aidi + " subid=\"music-previous\" title=\"Previous\" class=\""+thingtype+" music-previous" + pkindex + "\"></div>";
-            //     $tc += aidi + " subid=\"music-pause\" title=\"Pause\" class=\""+thingtype+" music-pause" + pkindex + "\"></div>";
-            //     $tc += aidi + " subid=\"music-play\" title=\"Play\" class=\""+thingtype+" music-play" + pkindex + "\"></div>";
-            //     $tc += aidi + " subid=\"music-stop\" title=\"Stop\" class=\""+thingtype+" music-stop" + pkindex + "\"></div>";
-            //     $tc += aidi + " subid=\"music-next\" title=\"Next\" class=\""+thingtype+" music-next" + pkindex + "\"></div>";
-            //     $tc += "</div>";
-            // }
 
             // include class for main thing type, the subtype, a sub-key, and a state (extra)
             // also include a special hack for other tiles that return number_ to remove that
@@ -4772,27 +4753,24 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
             // finally, adjust for level sliders that can't have values in the content
             // hide all fields that start with uom_ since that contains units 
             // couid do in CSS but this is easier and faster
-            if ( tkey.startsWith("uom_") ) {
+            if ( realsubid.startsWith("uom_") ) {
                 $tc += "<div class=\"overlay "+tkey+" hidden v_"+kindex+"\">";
-            } else if ( tkey.startsWith("def_") ) {
+            } else if ( realsubid.startsWith("def_") ) {
                 $tc += "<div class=\"overlay "+tkey+" vardef v_"+kindex+"\">";
             } else {
                 $tc += "<div class=\"overlay "+tkey+" v_"+kindex+"\">";
             }
 
-
-            if (sibling) { $tc += sibling; }
             if ( tkey === "level" || tkey==="onlevel" || tkey==="colorTemperature" || tkey==="volume" || tkey==="position" ) {
-                $tc += aidi + pn + ttype + " subid=\"" + tkey+"\" value=\""+tval+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + wwx + aitkey + "\"></div>";
+                $tc += aidi + pn + bidtag + commandtag + realtag + ttype + " subid=\"" + tkey+"\" value=\""+tval+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + wwx + aitkey + "\"></div>";
             } else if ( typeof tkey==="string" && typeof tval==="string" && tkey.substring(0,8)==="_number_" && tval.substring(0,7)==="number_" ) {
                 var numval = tkey.substring(8);
-                $tc += aidi + pn + ttype + " subid=\"" + tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + wwx + aitkey + "\">" + numval + "</div>";
+                $tc += aidi + pn + bidtag + commandtag + realtag + ttype + " subid=\"" + tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + wwx + aitkey + "\">" + numval + "</div>";
             } else {
-                if ( typeof tval==="string" && tval.substring(0,6)==="RULE::" && subtype!=="rule" ) {
+                if ( command==="RULE" && subtype!=="rule" ) {
                     tkeyshow += " rule";
                 }
-
-                $tc += aidi + pn + ttype + "  subid=\""+tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + extra + "\" id=\"" + wwx + aitkey + "\">" + tval + "</div>";
+                $tc += aidi + pn + bidtag + commandtag + realtag + ttype + "  subid=\""+tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + extra + "\" id=\"" + wwx + aitkey + "\">" + tval + "</div>";
             }
             $tc += "</div>";
         }
@@ -4969,23 +4947,33 @@ function getCustomName(defbase, cnum) {
 // create addon subid's for any tile
 // this enables a unique customization effect
 // we pass in the config options so this function doesn't run async
+// Documenting how custom tiles work here:
+// Each tile has a set of default subid's and values, and in the customer a user can add new ones or
+// replace existing ones. Each custom subid is stored in the DB as a config option with
+// configkey = "user_" + bid where bid is the deviceid of the tile being customized
+// configval is an encoded URI string representing an array of arrays
+// each subarray has three entries: [calltype, content, subid]
+// calltype is one of PUT, GET, POST, URL, LINK, LIST, RULE, TEXT
+// content is different for each calltype. For PUT, GET, POST, URL it is the URL to call.
+// For LINK it is linkid::realsubid where linkid is the deviceid and realsubid is the subid in that device
+// for RULE it is the rule logic used in the rule engine to perform instructions
+// for TEXT it is just a text string to display that 
+// for LIST it is linkid::realsubid::frequency where frequency is how often to reset the list
+// different things happen when these calltypes are used as shown in the doAction() function in hubserver.js
+// the value returned here is processed by the putElement() function to create the proper on screen element
 function getCustomTile(userid, configoptions, custom_val, bid) {
 
-    var configkey = "user_" + bid;
-    var updated_val = clone(custom_val);
-    for ( var i in configoptions ) {
-
-        var key = configoptions[i].configkey;
-        var val = configoptions[i].configval;
-        var keyuser = configoptions[i].userid;
-        if ( parseInt(userid) === parseInt(keyuser) && key === configkey ) {
-            if ( DEBUG14 ) {
-                console.log((ddbg()), "userid: ", userid, " key: ", key, " val: ", val);
-            }
+    const configkey = "user_" + bid;
+    let updated_val = clone(custom_val);
+    for ( const i in configoptions ) {
+        const key = configoptions[i].configkey;
+        const val = configoptions[i].configval;
+        const keyuser = configoptions[i].userid;
+        if ( key === configkey ) {
             if ( typeof val === "object" ) {
                 updated_val = processCustom(val, updated_val);
             } else if ( typeof val === "string" ) {
-                var lines = decodeURI2(val);
+                const lines = decodeURI2(val);
                 if ( lines ) {
                     updated_val = processCustom(lines, updated_val);
                 }
@@ -5021,77 +5009,79 @@ function getCustomTile(userid, configoptions, custom_val, bid) {
             // this strict rule is followed to enforce discipline use
             if ( is_array(msgs) && msgs.length >= 3 ) {
             
-                var calltype = msgs[0].toString().toUpperCase().trim();
-                var content = msgs[1].toString().trim();
-                // var posturl = encodeURIComponent(content);
-                var subidraw = msgs[2].trim();
-                var subid = subidraw.replace(/[\"\*\<\>\!\{\}\.\,\:\+\&\%]/g,""); //  str_replace(ignores, "", subidraw);
-                // var companion = "user_"+subid;
+                const calltype = msgs[0].toString().toUpperCase().trim();
+                const content = msgs[1].toString().trim();
+                const subidraw = msgs[2].trim();
+                // var subid = subidraw.replace(/[ \"\*\<\>\!\{\}\.\,\:\+\&\%]/g,"");
+                const subid = subidraw.replace(/[^A-Za-z0-9_]/g, "");
 
                 // process web calls made in custom tiles
                 // in a tag called user_subid where subid is the requested field
-                // web call results and linked values are stored in the subid field
-                if ( content && (calltype==="PUT" || calltype==="GET" || calltype==="POST" || calltype==="URL") )
-                {
-                    // custom_val[companion] = "::" + calltype + "::" + encodeURI(content);
-                    custom_val[subid] = calltype + "::" + subid;
-               
-                } else if ( calltype==="LINK" ) {
-                    // code for enabling mix and match subid's into custom tiles
-                    // since DB reads are fast, we can just store the tileid now
-                    // custom_val[companion] = "::" + calltype + "::" + content;
-                    // ----
-                    // converted this to just use content which now has linkid::realsubid
-                    // if the :: is missing from content it is a legacy configs file so add subid as a close guess
-                    // and the back compat code later will take care of reducing it down to the realsubid
-                    var j = content.indexOf("::");
+                // the values for GET and LINK are placeholders and will be replaced on the browser
+                // LINK is handled diferently. It passes the content which has the linkid and realsubid
+                // TEXT just passes the text to display but also includes the command identifier so we know it was a custom text
+                // that identifier will be removed in the putLinkeElement function
+                // everything else just gets the calltype and subid
+                if ( calltype === "LINK" ) {
+                    let j = content.indexOf("::");
                     if ( j=== -1 ) {
                         custom_val[subid]= "LINK::" + content + "::" + subid;
                     } else {
                         custom_val[subid]= "LINK::" + content;
                     }
-                            
-               
-                } else if ( calltype==="LIST" ) {
-                    // custom_val[subid]= "LIST::" + content;
-                    custom_val[subid]= "LIST::" + subid;
-               
-                } else if ( calltype==="RULE" ) {
-                    // custom_val[companion] = "::" + calltype + "::" + content;
-                    custom_val[subid] = "RULE::" + subid;
-
-                } else if ( calltype==="TEXT" ) {
-                    // code for any user provided text string
-                    // we could skip this but including it bypasses the hub call
-                    // which is more efficient and safe in case user provides
-                    // a subid that the hub might recognize - this way it is
-                    // guaranteed to just pass the text on the browser
-                    // custom_val[companion] = "::" + calltype + "::" + content;
-                    // custom_val[subid] = "TEXT::" + content;
+                } else if ( calltype === "TEXT" ) {                           
                     custom_val[subid] = content;
+                } else {
+                    custom_val[subid] = calltype + "::" + subid;
                 }
             }
         });
 
-        try {
-            // fix clock date if the format sting is provided
-            var d = new Date();
-            if ( array_key_exists("date", custom_val) && array_key_exists("fmt_date", custom_val) ) {
-                var dates = getFormattedDate(custom_val["fmt_date"], d);
-                custom_val["date"] = dates.date;
-                custom_val["weekday"] = dates.weekday;
+
+        function isDate(val) {
+            if ( typeof val==="string" ) {
+                var d = Date.parse(val);
+                return !isNaN(d);
             }
-            if ( array_key_exists("time", custom_val) && ( array_key_exists("fmt_time", custom_val) || array_key_exists("tzone", custom_val) ) ) {
-                var tz = custom_val["tzone"] || 0;
-                var tfmt = custom_val["fmt_time"] || "";
-                custom_val["time"] = getFormattedTime(tfmt, d, tz);
+            return false;
+        }
+
+        // fix any date field to the user custom format specified
+        // modified this to fix multiple date and time fields if present
+        const d = new Date();
+        if ( array_key_exists("fmt_date", custom_val) ) {
+            try {
+                const dates = getFormattedDate(custom_val["fmt_date"], d);
+                for ( var key in custom_val ) {
+                    if ( key.startsWith("date") && isDate(custom_val[key]) ) {
+                        custom_val["date"] = dates.date;                    
+                    }
+                    if ( key.startsWith("weekday") ) {
+                        custom_val[key] = dates.weekday;
+                    }
+                }
+            } catch (e) {
+                console.error((ddbg()), "error - setting custom date format");
             }
-        } catch (e) {
-            console.log((ddbg()), "error - setting custom date format for clock");
+        }
+
+        if ( array_key_exists("fmt_time", custom_val) || array_key_exists("tzone", custom_val)  ) {
+            try {
+                const tz = custom_val["tzone"] || 0;
+                const tfmt = custom_val["fmt_time"] || "";
+                const timeformatted = getFormattedTime(tfmt, d, tz);
+                for ( var key in custom_val ) {
+                    if ( key.startsWith("time") && isDate(custom_val[key]) ) {
+                        custom_val["time"] = timeformatted;
+                    }
+                }
+            } catch (e) {
+                console.error((ddbg()), "error - setting custom time format");
+            }
         }
         
         if ( DEBUG14 ) {
-            console.log((ddbg()), " customized tile: ", custom_val);
+            console.log((ddbg()), "customized tile: ", custom_val);
         }
         return custom_val;
     }
@@ -6701,7 +6691,6 @@ function queryHub(device, pname) {
                 const host = hub.hubendpt + "/doquery";
                 const header = {"Content-Type": "application/json"};
                 const nvpreq = {"access_token": hub.hubaccess, "swid": swid, "swtype": swtype};
-                // var nvpreq = `access_token=${hub.hubaccess}&swid=${swid}&swtype=${swtype}`;
                 curl_call(host, header, nvpreq, false, "POST")
                 .then(res => {
                     getQueryResponse(res);
@@ -6722,7 +6711,7 @@ function queryHub(device, pname) {
                     getNodeQueryResponse(res);
                 })
                 .catch(reason => {
-                    console.log( (ddbg()), reason);
+                    console.error( (ddbg()), reason);
                     reject(reason);        
                 });
 
@@ -6731,7 +6720,6 @@ function queryHub(device, pname) {
             }
 
         }).catch(reason => {
-            console.log( (ddbg()), reason);
             reject(reason);
         });
         
@@ -6740,20 +6728,20 @@ function queryHub(device, pname) {
 
             // handle offline case
             if ( typeof body === "string" && body.startsWith("No response") ) {
-                console.warn( (ddbg()), "Hub offline...");
-                reject("");
-            }
+                reject("Hub offline");
 
-            if ( typeof body==="object" || !body ) {
+            } else if ( typeof body==="string" ) {
                 pvalue = body;
-            } else {
-                console.error( (ddbg()), "unexpected Query result. body: ", body);
-                reject("unexpected Query result");
-            }
 
-            // deal with presence tiles
-            if ( pvalue["presence"]==="not present" || pvalue["presence"]==="not_present" ) {
-                pvalue["presence"] = "absent";
+            } else if ( typeof body==="object" ) {
+                pvalue = body;
+                // deal with presence tiles
+                if ( array_key_exists("presence", pvalue) && (pvalue["presence"]==="not present" || pvalue["presence"]==="not_present")  ) {
+                    pvalue["presence"] = "absent";
+                }
+
+            } else {
+                reject("unexpected Query result");
             }
             resolve(pvalue);
         }
@@ -6772,7 +6760,7 @@ function queryHub(device, pname) {
                         }
                     }
                 } catch(e) { 
-                    console.log( (ddbg()), e);
+                    console.error( (ddbg()), e);
                     reject(e);
                 }
             });
@@ -6938,33 +6926,28 @@ function doAction(userid, hubindex, tileid, uid, swid, swtype, swval, swattr, su
     // first check for a command
     if ( linkval && command) {
 
-        if ( command==="POST" || command==="PUT" ) {
-            // var posturl = linkval;
-            var hosturl = url.parse(linkval);
-            var posturl = hosturl.origin + hosturl.pathname;
-            var parmobj = hosturl.searchParams;
-            curl_call(posturl, null, parmobj, false, command)
-            .then(res => {
-                urlCallback(res);
-                msg = "success - command: " + command + " call: " + posturl + " parmobj: " + parmobj;
+        if  ( command==="POST" || command==="GET" ) {
+            const hosturl = new URL(linkval);
+            const posturl = hosturl.href;
+            const parmobj = hosturl.searchParams;
+            msg = curl_call(posturl, null, parmobj, false, command)
+            .then( res => {
+                return urlCallback(userid, swid, swtype, subid, res, command);
             })
-            .catch(reason => {
-                console.error((ddbg()), reason);
-                msg = "error - " + reason;
+            .catch( error => {
+                console.error( (ddbg()), "error on " + command + " call: ", error, " userid=",userid, " swid=",swid, " swtype=",swtype, " subid=",subid);
             });
 
-        } else if ( command==="GET" ) {
-            hosturl = url.parse(linkval);
-            posturl = hosturl.href;
-            parmobj = hosturl.searchParams;
-            curl_call(posturl, null, parmobj, false, command)
-            .then(res => {
-                urlCallback(res);
-                msg = "success - command: " + command + " call: " + posturl + " parmobj: " + parmobj;
+        } else if ( command==="PUT" ) {
+            const hosturlp = new URL(linkval);
+            const posturlp = hosturlp.href;
+            const parmobjp = hosturlp.searchParams;
+            msg = curl_call(posturlp, null, parmobjp, false, command)
+            .then( res => {
+                return res;
             })
-            .catch(reason => {
-                console.error((ddbg()), reason);
-                msg = "error - " + reason;
+            .catch( error => {
+                console.error( (ddbg()), "error on PUT call: ", error);
             });
 
         } else if ( command==="TEXT" ) {
@@ -7000,28 +6983,30 @@ function doAction(userid, hubindex, tileid, uid, swid, swtype, swval, swattr, su
                 return results;
             })
             .catch(reason => {
-                console.log( (ddbg()), reason);
+                console.error( (ddbg()), reason);
                 return "error - something went wrong with LIST command";
             });
         } else if ( command==="RULE" ) {
             if ( !GLB.dbinfo.enablerules ) {
                 msg = "warning - rules are disabled.";
             } else {
-                var configkey = "user_" + swid;
-                linkval = linkval.toString();
-                // msg = "success - manually running RULE " + configkey + " " + linkval;
+                
+                // I can simplify this because I now have the actual rule to run in the linkval variable
+                // var configkey = "user_" + swid;
                 msg = Promise.all( [
+                    new Promise( function (resolve) { resolve({userid: userid, swtype: swtype, linkval: linkval}); }),
                     mydb.getRows("devices", "*", "userid = "+userid),  
-                    mydb.getRows("hubs", "*", "userid = "+userid),
-                    mydb.getRow("configs","*","userid = "+userid+" AND configkey='"+configkey+"'")
+                    mydb.getRows("hubs", "*", "userid = "+userid)
                 ] )
                 .then(results => {
                     var pvalue;
                     var devices = {};
                     var hubs = {};
-                    var dbdevices = results[0];
-                    var dbhubs = results[1];
-                    var configrow = results[2];
+                    const userid = results[0].userid;
+                    const swtype = results[0].swtype;
+                    const therule = results[0].linkval;
+                    var dbdevices = results[1];
+                    var dbhubs = results[2];
 
                     dbdevices.forEach(device => {
                         const luid = device.uid;
@@ -7034,41 +7019,26 @@ function doAction(userid, hubindex, tileid, uid, swid, swtype, swval, swattr, su
                             }
                         }
                     });
-                    for ( var ahub in dbhubs ) {
-                        var id = dbhubs[ahub].id;
+                    for ( const ahub in dbhubs ) {
+                        const id = dbhubs[ahub].id;
                         hubs[id] = dbhubs[ahub];
                     }
 
-                    if ( configrow && pvalue ) {
-                        var lines = JSON.parse(configrow.configval);
-                        if ( is_array(lines) ) {
-                            lines.forEach(function(rule) {
-                                if ( rule[0]==="RULE" && rule[2]===linkval) {
-                                    const regsplit = /[,;]/;
-                                    var therule = rule[1];
-                                    var testcommands = therule.split(regsplit);
-                                    var istart = 0;
-                                    if ( testcommands[0].trim().startsWith("if") ) {
-                                        istart = 1;
-                                    }
-                                    execRules(userid, "callHub", swtype, istart, testcommands, pvalue, hubs, devices);
-                                }
-                            });
-                            return "success - rule manually executed: " + configkey + " = " + linkval + ": " + configrow.configval;
-                        } else {
-                            throw "error - rule not found for id = " + swid
-                        }
-                    } else {
-                        throw "error - rule not found for id = " + swid
+                    const regsplit = /[,;]/;
+                    var testcommands = therule.split(regsplit);
+                    var istart = 0;
+                    if ( testcommands[0].trim().startsWith("if") ) {
+                        istart = 1;
                     }
-                }).catch(reason => { console.log( (ddbg()), reason ); } );
+                    execRules(userid, "callHub", swtype, istart, testcommands, pvalue, hubs, devices);
+                    return testcommands;
+                }).catch(reason => { 
+                    console.warn( (ddbg()), reason );
+                });
             }
         }
 
     } else {
-        // if ( !isNaN(parseInt(swval))) {
-        //     swval = parseInt(swval);
-        // }
         if ( DEBUG1 ) {
             console.log( (ddbg()), `callHub: userid: ${userid}, hubindex: ${hubindex}, tileid: ${tileid}`, 
                                    `swid: ${swid}, swtype: ${swtype}, swval: ${swval}, swattr: ${swattr}, subid: ${subid}`, " type: ", (typeof swval) );
@@ -7076,27 +7046,50 @@ function doAction(userid, hubindex, tileid, uid, swid, swtype, swval, swattr, su
         msg = callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, hint, null, false);
     }
     return msg;
+}
 
-    function urlCallback(body) {
-        if ( DEBUG13 ) {
-            console.log( (ddbg()), "URL callback returned: ", body );
-        }
+function urlCallback(userid, swid, swtype, subid, body, command) {
+    if ( DEBUG13 ) {
+        console.log( (ddbg()), "URL callback returned: ", body );
+    }
+    var pvalue = {};
 
-        if ( !subid.startsWith("_") && typeof body === "object" ) {
-            try {
-                var webresponse = body;
-                for (var key in webresponse) {
-                    if ( typeof webresponse[key] === "object" ) {
-                        webresponse[key] = JSON.stringify(webresponse[key]);
-                    }
-                    pushClient(userid, swid, swtype, subid, webresponse);
+    // if a string is returned then just push it as is
+    if ( typeof body === "string" ) {
+        pvalue[subid] = body;
+    
+    // if an object is returned then push each field separately
+    // but keep track of whether our trigger subid was replaced
+    } else if ( typeof body === "object" ) {
+        try {
+            let subidfound = false;
+            for (var key in body) {
+                if ( typeof body[key] !== "object" ) {
+                    pvalue[key] = body[key];
+                    subidfound = (key === subid) ? true : subidfound;
                 }
-            } catch(e) {
-                console.warn((ddbg()), e);
             }
+            // if our trigger subid was not found then set it to value field if there was one and if not, set it back to default command::subid
+            if ( !subidfound ) {
+                if ( array_key_exists("value", body) && typeof body["value"] !== "object" ) {
+                    pvalue[subid] = body["value"];
+                    delete pvalue["value"];
+                } else {
+                    pvalue[subid] = command + "::" + subid;
+                }
+            }
+
+        } catch(e) {
+            console.warn((ddbg()), e);
+            pvalue[subid] = command + "::" + subid;
         }
+    } else {
+        pvalue[subid] = command + "::" + subid; 
     }
 
+    // push new values to all clients to get an immediate onscreen response
+    pushClient(userid, swid, swtype, subid, pvalue);
+    return pvalue;
 }
 
 function doQuery(userid, tileid, pname) {
@@ -7116,12 +7109,11 @@ function doQuery(userid, tileid, pname) {
                 console.log( (ddbg()), "queryHub results: ", pvalue);
             }
 
-            // store results back in DB if it isn't a clock or a controller
-            if ( swtype !== "clock" && swtype!=="control" ) {
-                var pvaluestr = encodeURI2(pvalue);
+            // store results back in DB if it isn't a clock or a controller and if we got a valid object
+            if ( typeof pvalue==="object" && swtype !== "clock" && swtype!=="control" ) {
+                const pvaluestr = encodeURI2(pvalue);
                 mydb.updateRow("devices", {id: device.id, pvalue: pvaluestr}, conditions, true)
                 .then( result => {
-                    // var firstsubid = Object.keys(pvalue)[0];
                     if ( DEBUG5 ) {
                         console.log( (ddbg()), "doQuery updated device: ", pvalue, " pvalstr: ", pvaluestr, " swid:", swid, 
                                                 " swtype:", swtype, " result: ", result);
@@ -7129,7 +7121,7 @@ function doQuery(userid, tileid, pname) {
                 })
                 .catch(reason => {
                     if ( reason ) {
-                        console.log( (ddbg()), reason);
+                        console.error( (ddbg()), reason);
                     }
                 });
             }
@@ -7137,7 +7129,7 @@ function doQuery(userid, tileid, pname) {
         })
         .catch(reason => {
             if ( reason ) {
-                console.log( (ddbg()), reason);
+                console.error( (ddbg()), reason);
             }
         });
         
@@ -7245,7 +7237,7 @@ function setPosition(userid, swtype, thingid, swattr) {
 }
 
 // userid, swid, swtype, rname, hubid, hubindex, roomid, startpos
-function addThing(userid, pname, bid, thingtype, panel, hubid, hubindex, roomid, pos) {
+function addThing(userid, pname, bid, thingtype, panel, hubindex, roomid, pos) {
 
     // first get the max order number of the tiles in this room
     var promiseResult = mydb.getRows("configs", "*", "userid = "+userid)
@@ -9139,7 +9131,6 @@ function apiCall(user, body, protocol, res) {
     var uid = body["uid"] || 0;
     var command = body["command"] || "";
     var linkval = body["linkval"] || "";
-    var hubid = body["hubid"] || "auto";
     var thingid = body["thingid"] || 0;
     var roomid = body["roomid"] || 0;
     var hubindex = body["hubindex"] || 0;
@@ -9177,7 +9168,7 @@ function apiCall(user, body, protocol, res) {
     var multicall = "";
 
     if ( (api==="action" || api==="doaction") && tileid && tileid.indexOf(",") !== -1 ) {
-        var multicall = "tileid";
+        multicall = "tileid";
         if ( !tileid.startsWith("(") ) {
             tileid = "(" + tileid;
         }
@@ -9185,9 +9176,9 @@ function apiCall(user, body, protocol, res) {
             tileid = tileid + ")";
         }
     } else if ( (api==="action" || api==="doaction") && uid && uid.indexOf(",") !== -1 ) {
-        var multicall = "uid";
+        multicall = "uid";
         if ( !uid.startsWith("(") ) {
-            uid = "(" + tileid;
+            uid = "(" + uid;
         }
         if ( !uid.endsWith(")") ) {
             uid = uid + ")";
@@ -9223,7 +9214,7 @@ function apiCall(user, body, protocol, res) {
                     result = "called doAction " + devices.length + " times in a multihub action";
                 } else {
                     if ( DEBUG8 ) {
-                        console.log( (ddbg()), "doaction: hubid: ", hubid, " swid: ", swid, " swval: ", swval, " swattr: ", swattr, " subid: ", subid, " tileid: ", tileid, " hint: ", hint);
+                        console.log( (ddbg()), "doaction: swid: ", swid, " swval: ", swval, " swattr: ", swattr, " subid: ", subid, " tileid: ", tileid, " hint: ", hint);
                     }
                     if ( uid && (!swid || !swtype || !hubindex) ) {
                         try {
@@ -9367,7 +9358,7 @@ function apiCall(user, body, protocol, res) {
             case "addthing":
                 if ( protocol==="POST" ) {
                     var startpos = swattr;
-                    result = addThing(userid, pname, swid, swtype, roomname, hubid, hubindex, roomid, startpos);
+                    result = addThing(userid, pname, swid, swtype, roomname, hubindex, roomid, startpos);
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
                 }
@@ -9750,10 +9741,10 @@ function apiCall(user, body, protocol, res) {
                                 if ( configoptions && is_object(configoptions) ) {
                                     row.pvalue = getCustomTile(userid, configoptions, row.pvalue, row.id);
                                     row.pvalue = getFileName(userid, pname, row.pvalue, row.devicetype, configoptions);
-                                    const hubid = row.hubid;
+                                    const ahubindex = row.hubid;
                                     let hubname = "None";
                                     hubs.forEach(hub => {
-                                        if ( hub.id === hubid ) {
+                                        if ( hub.id === ahubindex ) {
                                             hubname = hub.hubname;
                                         }
                                     });
@@ -10024,17 +10015,17 @@ function apiCall(user, body, protocol, res) {
                 }
                 break;
 
-            case "hubrefresh":
-                result = mydb.getRow("hubs","*","userid = "+userid + " AND hubid = '" + hubid +"'")
-                .then(hub => {
-                    if ( !hub ) throw "Hub not found for hubid = " + hubid;
-                    return hub;
-                })
-                .catch(reason => {
-                    console.log( (ddbg()), reason );
-                    return null;
-                });
-                break;
+            // case "hubrefresh":
+            //     result = mydb.getRow("hubs","*","userid = "+userid + " AND id = '" + hubindex +"'")
+            //     .then(hub => {
+            //         if ( !hub ) throw "Hub not found for hubindex = " + hubindex;
+            //         return hub;
+            //     })
+            //     .catch(reason => {
+            //         console.log( (ddbg()), reason );
+            //         return null;
+            //     });
+            //     break;
 
             // this api call starts the hub authorization process
             // the actual redirection to the first auth site is done in js file
@@ -10055,8 +10046,7 @@ function apiCall(user, body, protocol, res) {
                     // useraccess is always used for the access token now
                     // userendpt is the password for ISY hubs and the AppID for Hubitat
                     // the actual endpt is determined from these values
-                    var userAccess = body.useraccess;
-                    var appID = body.userendpt;
+                    const appID = body.userendpt;
                     hub["useraccess"] = body.useraccess;
                     hub["userendpt"] = appID;
                     hub["hubrefresh"] = "";
@@ -10157,8 +10147,8 @@ function apiCall(user, body, protocol, res) {
             case "hubdelete":
                 if ( protocol === "POST" ) {
                     result = Promise.all([
-                        mydb.deleteRow("hubs", "userid = "+userid+" AND id = " + swid),
-                        mydb.deleteRow("devices", "userid = "+userid+" AND hubid = " + swid),
+                        mydb.deleteRow("hubs", "userid = "+userid+" AND id = " + hubindex),
+                        mydb.deleteRow("devices", "userid = "+userid+" AND hubid = " + hubindex),
                         mydb.updateRow("users", {defhub: "-1"}, "id = " + userid)
                     ])
                     .then(results => {
@@ -10171,7 +10161,7 @@ function apiCall(user, body, protocol, res) {
                     })
                     .catch( reason => {
                         console.log( (ddbg()), reason);
-                        return "error - could not remove hub with ID = " + hubid + " errcode: " + reason;
+                        return "error - could not remove hub with hubindex = " + hubindex + " errcode: " + reason;
                     });
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";

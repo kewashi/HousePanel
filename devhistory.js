@@ -1,4 +1,5 @@
 const devhistory = `
+3.5.6   01/01/2026 enabled GET and POST to insert results into tiles and major code cleanup
 3.5.5   12/28/2025 revamp options page and include simpler weather widget option
 3.5.4   12/26/2025 fix bug in power change detection skip logic
 3.5.3   12/10/2025 fix colorTemperature command bug and minor code cleanup

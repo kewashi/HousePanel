@@ -527,6 +527,14 @@ div.thead {
 div.scrollvtable, div.listtable {
     overflow-y: auto;
 }
+div.listheader {
+    display: block;
+    font-size: 24px;
+    font-weight: bold;
+    text-align: center;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
 @media only screen and (orientation: landscape) {
     div.scrollvtable, div.listtable {
         /*max-height: 400px;*/
@@ -2049,10 +2057,6 @@ div.control-thing div.overlay.refresh {
     display: block;
 }
 
-div.rule {
-    cursor: pointer;
-}
-
 /* by default turn off all history displays */
 div.overlay.event_1, div.overlay.event_2, div.overlay.event_3, div.overlay.event_4,
 div.overlay.password, div.overlay.tamper, div.overlay.readonly {
@@ -2207,7 +2211,8 @@ div.overlay.Evening div.location.Evening {
     display: none;
 }
 div.rule {
-    display: none;
+    cursor: pointer;
+    color: rgba(250, 250, 250, 0.8);
 }
 div.thing div.overlay div.arrow-up,
 div.thing div.overlay div.arrow-dn {
