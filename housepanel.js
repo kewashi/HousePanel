@@ -1405,40 +1405,24 @@ function setupColors() {
                 var hint = $(tile).attr("hint");
                 var pname = cm_Globals.options.pname;
 
-                var usertile =  $("#sb-"+thingid+"-"+subid);
-                var command = "";
-                var linktype = thetype;
-                var linkval = "";
-                var linkbid = bid;
-                var linkhub = hubindex;
-                var realsubid = subid;
-                var linkuid = 0;
-    
-                if ( usertile && usertile.attr("command") ) {
-                    command = usertile.attr("command");    // command type
-                    linkval = usertile.attr("linkval");
-                    linkbid = usertile.attr("linkbid");
-                    linkhub = usertile.attr("linkhub");
-                    linktype = usertile.attr("linktype");
-                    realsubid = usertile.attr("subid");
-                    linkuid = usertile.attr("linkuid");
-                }
-                if ( typeof linkval === "string" && 
-                     (linkval.startsWith("GET::") || linkval.startsWith("POST::") || 
-                      linkval.startsWith("PUT::") || linkval.startsWith("LINK::") || linkval.startsWith("LIST::") ||
-                      linkval.startsWith("RULE::") || linkval.startsWith("URL::")) )
-                {
-                    var jcolon = linkval.indexOf("::");
-                    command = linkval.substring(0, jcolon);
-                    linkval = linkval.substring(jcolon+2);
-                } else {
-                    command = "";
-                    linkval = "";
-                }
-                console.log("setupColors: userid= ", userid, " thingid= ", thingid, " tileid= ", tileid, " hint= ", hint,
-                " command= ", command, " bid= ", bid, " uid= ", uid, " linkbid= ", linkbid, " linkuid= ", linkuid, " hubindex= ", hubindex, " linkhub= ", linkhub,
-                " type= ", thetype, " linktype= ", linktype, " subid= ", subid, " value= ", hslstr, 
-                " linkval= ", linkval, " attr=", hexval, " hpcode: ", cm_Globals.options.hpcode);
+                const linkinfo = handleLinks(subid, uid, bid);
+                var command = linkinfo[0];
+                var linkval = linkinfo[1];
+                var realsubid = linkinfo[2];
+                var linkuid = linkinfo[3];
+
+                const linkedtile = cm_Globals.devices[linkuid];
+                var linkhub = linkedtile["hubid"];
+                var linkbid = linkedtile["deviceid"];
+                var linktype = linkedtile["devicetype"];
+                var hint = linkedtile["hint"];
+                // console.log("setupColors: userid= ", userid, " thingid= ", thingid, " tileid= ", tileid, " hint= ", hint,
+                // " command= ", command, " bid= ", bid, " uid= ", uid, " linkbid= ", linkbid, " linkuid= ", linkuid, " hubindex= ", hubindex, " linkhub= ", linkhub,
+                // " type= ", thetype, " linktype= ", linktype, " realsubid= ", realsubid, " value= ", hslstr, 
+                // " linkval= ", linkval, " attr=", hexval, " hpcode: ", cm_Globals.options.hpcode);
+                const commandval = command ? command : "Action";
+                console.log(`Color ${commandval}: User[${userid}], bid[${linkbid}], subid[${realsubid}], color[${linkval}], hsl value[${hslstr}], hex[${hexval}]`);
+
 
                 $.post(cm_Globals.returnURL, 
                        {api: "doaction", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: hslstr, hint: hint,
@@ -1467,39 +1451,24 @@ function hpsliders(evt, ui) {
     var tileid = $(tile).attr("tile");
     var hint = $(tile).attr("hint");
     var pname = cm_Globals.options.pname;
+
+    const linkinfo = handleLinks(subid, uid, bid);
+    var command = linkinfo[0];
+    var linkval = linkinfo[1];
+    var realsubid = linkinfo[2];
+    var linkuid = linkinfo[3];
+
+    const linkedtile = cm_Globals.devices[linkuid];
+    var linkhub = linkedtile["hubid"];
+    var linkbid = linkedtile["deviceid"];
+    var linktype = linkedtile["devicetype"];
+    var hint = linkedtile["hint"];
+
+    // console.log("Slider action: command= ", command, " uid= ", uid, " bid= ", bid, " linkbid= ", linkbid, " linkuid= ", linkuid, " hub= ", linkhub, " type= ", 
+    //              linktype, " subid= ", realsubid, " hint= ", hint, " value= ", thevalue, " linkval= ", linkval, " hpcode: ", cm_Globals.options.hpcode);
+    const commandval = command ? command : "Action";
+    console.log(`Slider ${commandval}: User[${userid}], bid[${linkbid}], subid[${realsubid}], value[${thevalue}], attr[${subid}], linkval[${linkval}]`);
     
-    var usertile =  $("#sb-"+thingid+"-"+subid);
-    var command = "";
-    var linktype = thetype;
-    var linkval = thevalue;
-    var linkbid = bid;
-    var realsubid = subid;
-    var linkhub = hubindex;
-    var linkuid = 0;
-
-    if ( usertile && usertile.attr("command") ) {
-        command = usertile.attr("command");    // command type
-        linkval = usertile.attr("linkval");
-        linkbid = usertile.attr("linkbid");
-        linkhub = usertile.attr("linkhub");
-        linktype = usertile.attr("linktype");
-        realsubid = usertile.attr("subid");
-        linkuid = usertile.attr("linkuid");
-        hint = usertile.attr("hint");
-    }
-
-    if ( typeof linkval === "string" && 
-        (linkval.startsWith("GET::") || linkval.startsWith("POST::") || 
-         linkval.startsWith("PUT::") || 
-         linkval.startsWith("RULE::") || linkval.startsWith("URL::")) )
-    {
-        var jcolon = linkval.indexOf("::");
-        command = linkval.substring(0, jcolon);
-        linkval = linkval.substring(jcolon+2);
-    }
-
-    console.log("Slider action: command= ", command, " uid= ", uid, " bid= ", bid, " linkbid= ", linkbid, " linkuid= ", linkuid, " hub= ", linkhub, " type= ", 
-                 linktype, " subid= ", realsubid, " hint= ", hint, " value= ", thevalue, " linkval= ", linkval, " hpcode: ", cm_Globals.options.hpcode);
     $.post(cm_Globals.returnURL, 
         {api: "doaction", userid: userid, pname: pname, id: linkbid, uid: uid, thingid: thingid, type: linktype, value: thevalue, attr: subid, hint: hint,
         subid: realsubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode},
@@ -3485,6 +3454,10 @@ function processKeyVal(targetid, aid, key, value) {
     var oldvalue = $(targetid).html();
     var isclock = false;
 
+    if ( !key || !targetid ) {
+        return isclock;
+    }
+
     // swap out blanks from old value and value
     if ( oldvalue && typeof oldvalue === "string" ) {
         oldvalue = oldvalue.trim();
@@ -3884,10 +3857,10 @@ function setupPage() {
         var thingname = $("#s-"+aid).html();
         var targetid = '#a-'+aid+'-'+subid;
         if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
-            var slen = subid.length;
+            const slen = subid.length;
             targetid = '#a-'+aid+'-'+subid.substring(0,slen-3);
         }
-        var thevalue = $(targetid).html();
+        var thevalue = $(targetid) ? $(targetid).html() : "";
         
         // handle special control type tiles that perform javascript actions
         // if we are not in operate mode only do this if click is on operate
@@ -3970,10 +3943,10 @@ function setupPage() {
         } else if ( subid === "_setMotion") {
             processClickWithValue(that, thingname, ro, subid, thetype, {"": ["active","inactive"]});
 
-        } else if ( subid === "thermostatMode" || subid==="_setThermostatMode") {
+        } else if ( subid.startsWith("thermostatMode") || subid==="_setThermostatMode") {
             processClickWithValue(that, thingname, ro, "_setThermostatMode", thetype, {"": ["heat","cool","auto","off"]});
 
-        } else if ( subid === "thermostatFanMode" || subid==="_setThermostatFanMode") {
+        } else if ( subid.startsWith("thermostatFanMode") || subid==="_setThermostatFanMode") {
             processClickWithValue(that, thingname, ro, "_setThermostatFanMode", thetype, {"": ["auto","on","circulate"]});
 
         } else if ( subid === "_setChirp") {
@@ -3985,7 +3958,15 @@ function setupPage() {
         } else if ( subid === "_startLevelChange") {
             processClickWithValue(that, thingname, ro, subid, thetype, {"Direction": ["up","down"]});
 
-        } else if ( subid === "themode" ) {
+        } else if ( (subid.startsWith("heatingSetpoint") && !subid.endsWith("-up") && !subid.endsWith("-dn")) || subid === "_setHeatingSetpoint") {
+            thevalue = $("#a-"+aid+"-heatingSetpoint").html();
+            processClickWithValue(that, thingname, ro, "_setHeatingSetpoint", thetype, thevalue, 1 );
+
+        } else if ( (subid.startsWith("coolingSetpoint") && !subid.endsWith("-up") && !subid.endsWith("-dn")) || subid === "_setCoolingSetpoint") {
+            thevalue = $("#a-"+aid+"-coolingSetpoint").html();
+            processClickWithValue(that, thingname, ro, "_setCoolingSetpoint", thetype, thevalue, 1 );
+
+        } else if ( subid.startsWith("themode") ) {
             var arrmodes = [];
             $("div.mode-thing").find("div.overlay > div.mode").each( function(index) {
                 var sid = $(this).attr("subid");
@@ -4031,7 +4012,7 @@ function setupPage() {
 
         // handle commands that have parameters required
         // this is signalled by the value set otherwise the command value is the command string name
-        } else if ( subid.startsWith("_") && isNumeric(thevalue) ) {
+        } else if ( subid.startsWith("_") && !subid.startsWith("_set") && isNumeric(thevalue) ) {
             var numParams = parseInt(thevalue);
             if ( isNaN(numParams) ) { numParams = 0; }
             processClickWithValue(that, thingname, ro, subid, thetype, "", numParams);
@@ -4039,15 +4020,17 @@ function setupPage() {
         } else if ( pn > 0 ) {
             processClickWithValue(that, thingname, ro, subid, thetype, "", pn);
 
-        // items that require one parameter
-        } else if ( subid==="color" || 
+        // special items that require one parameter that don't have pn set
+        } else if ( (subid!=="colorName" && subid.startsWith("color")) || 
                     (subid.startsWith("Int_") && !subid.endsWith("-up") && !subid.endsWith("-dn") )|| 
-                    (subid.startsWith("State_") && !subid.endsWith("-up") && !subid.endsWith("-dn") ) ||
-                    subid==="heatingSetpoint" || subid==="coolingSetpoint" || subid==="_docmd" ||
-                    subid==="_setHeatingSetpoint" || subid==="_setCoolingSetpoint" ||
-                    subid==="ecoHeatPoint" || subid==="ecoCoolPoint" ||
+                    (subid.startsWith("State_") && !subid.endsWith("-up") && !subid.endsWith("-dn") ) || 
+                    subid==="_docmd" ||
+                    subid.startsWith("ecoHeatPoint") || subid.startsWith("ecoCoolPoint") ||
                     (thetype==="variables" && subid!=="name" && !thevalue.startsWith("RULE::") && !thevalue.startsWith("LIST::")) || 
-                    subid==="hue" || subid==="saturation" ) {
+                    (subid!=="hue-up" && subid!=="hue-dn" && subid.startsWith("hue")) || 
+                    (subid!=="saturation-up" && subid!=="saturation-dn" && subid.startsWith("saturation")) 
+                  ) 
+        {
             processClickWithValue(that, thingname, ro, subid, thetype, thevalue, 1);
             
         } else {
@@ -4137,6 +4120,7 @@ function checkPassword(tile, thingname, pw, ro, thevalue, subid, yesaction) {
 // this new flexibility allowed me to remove the process List function
 function processClickWithValue(that, thingname, ro, subid, thetype, thevalues, numParams=0) {
 
+    // alert("subid " + subid + " thevalues: " + JSON.stringify(thevalues) + " numParams: " + numParams);
     if ( typeof thevalues === "object" ) {
         var prefixes = Object.keys(thevalues);
         numParams = prefixes.length;
@@ -4267,62 +4251,31 @@ function addOnoff(targetid, subid, thevalue) {
     return thevalue;
 }
 
-// the aid value is now exactly equal to thingid -- both are the index key in the DB
-// for the main things table that holds the index keys for devices shown on pages
-// tileid below is the index in the devices table to the absolute device information
-function processClick(that, thingname, ro, thevalue, theattr = true, subid  = null) {
-    var taid = $(that).attr("aid");
-    if ( theattr===true ) {
-        theattr = $(that).attr("class");
-    } else if ( theattr===false ) {
-        theattr = "";
-    }
-    if ( !subid ) {
-        subid = $(that).attr("subid");
-    }
-
-    var realsubid = subid;
-    var tile = '#t-'+taid;
-    var thetype = $(tile).attr("type");
-    var linktype = thetype;
-    var linkval = "";
-    var command = $(tile).attr("command") || "";
-    var bid = $(tile).attr("bid");
-    var uid = $(tile).attr("uid");
-    var linkbid = bid;
-    var linkhub = $(tile).attr("hubindex");
-    var userid = cm_Globals.options.userid;
-    var thingid = $(tile).attr("thingid");
-    var tileid = $(tile).attr("tile");
-    var hubtype = $(tile).attr('hubtype') || "";
-    var pname = cm_Globals.options.pname;
-    var targetid;
-    if ( !subid ) {
-        return;
-    }
-
-    // setup for target being a command, rule, or link override
+function handleLinks(subid, uid, bid) {
     const usrbid = `user_${bid}`;
+    let command = "";
+    let linkval = "";
+    let realsubid = subid;
+    let linkuid = uid;
+
+    // modify the subid to check if an up/down version was clicked
+    var linkvalupdown = subid;
+    if ( subid.endsWith("-dn") || subid.endsWith("-up") ) {
+        linkvalupdown = subid.substring(0, subid.length-3);       
+    }
+
     if ( cm_Globals.options.rules && cm_Globals.options.rules[usrbid] ) {
         var linkrules = cm_Globals.options.rules[usrbid];
         linkrules.forEach( rule => {
             // parse out the link components and get the real tile being activated
             // moved this here to avoid using the old sidecar feature sb-xx
-            if ( rule[0] === "LINK" && rule[2] === subid ) {
+            if ( rule[0] === "LINK" && rule[2] === linkvalupdown  ) {
                 linkval = rule[1];
                 const jpos = linkval.indexOf("::");
-                const linkuid = linkval.substring(0, jpos);
+                linkuid = linkval.substring(0, jpos);
                 realsubid = linkval.substring(jpos+2);
-                const linkedtile = cm_Globals.devices[linkuid];
-                linkhub = linkedtile["hubid"];
-                linkbid = linkedtile["deviceid"];
-                linktype = linkedtile["devicetype"];
-                hint = linkedtile["hint"];
-                if ( subid.endsWith("-dn") || subid.endsWith("-up") ) {
-                    realsubid += subid.substring(subid.length-3);
-                }
                 command = "LINK";
-            } else if ( rule[0] === "RULE" && rule[2] === subid ) {
+            } else if ( rule[0] === "RULE" && rule[2] === linkvalupdown ) {
                 linkval = rule[1];
                 command = "RULE";
             } else if ( (rule[0] === "GET" || rule[0]==="POST" || rule[0]==="PUT" || rule[0]==="URL") && rule[2] === subid ) {
@@ -4339,9 +4292,58 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
             }
         });
     }
+    return [command, linkval, realsubid, linkuid];
+}
 
+// the aid value is now exactly equal to thingid -- both are the index key in the DB
+// for the main things table that holds the index keys for devices shown on pages
+// tileid below is the index in the devices table to the absolute device information
+function processClick(that, thingname, ro, thevalue, theattr = true, subid  = null) {
+    const taid = $(that).attr("aid");
+    if ( theattr===true ) {
+        theattr = $(that).attr("class");
+    } else if ( theattr===false ) {
+        theattr = "";
+    }
+
+    if ( !subid ) {
+        subid = $(that).attr("subid");
+        if ( !subid ) {
+            return;
+        }
+    }
+
+    const userid = cm_Globals.options.userid;
+    const pname = cm_Globals.options.pname;
+    const tile = '#t-'+taid;
+
+    var thetype = $(tile).attr("type");
+    var bid = $(tile).attr("bid");
+    var uid = $(tile).attr("uid");
+
+    var thingid = $(tile).attr("thingid");
+    var tileid = $(tile).attr("tile");
+    var hubtype = $(tile).attr('hubtype') || "";
+    var targetid;
+
+    const linkinfo = handleLinks(subid, uid, bid);
+    var command = linkinfo[0];
+    var linkval = linkinfo[1];
+    var realsubid = linkinfo[2];
+    var linkuid = linkinfo[3];
+
+    const linkedtile = cm_Globals.devices[linkuid];
+    var linkhub = linkedtile["hubid"];
+    var linkbid = linkedtile["deviceid"];
+    var linktype = linkedtile["devicetype"];
+    var hint = linkedtile["hint"];
+
+    // for up/down buttons adjust the subid to the real one
     if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
-        var slen = subid.length;
+        const slen = subid.length;
+        if (command && !realsubid.endsWith("-up") && !realsubid.endsWith("-dn") ) {
+            realsubid = realsubid + subid.substring(slen-3);
+        }
         targetid = '#a-'+thingid+'-'+subid.substring(0,slen-3);
     } else {
         if ( subid==="thingname" ) {
@@ -4351,6 +4353,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         }
     }
 
+    // console.log("targetid: " + targetid + " subid: " + subid + " realsubid: " + realsubid + " command: " + command + " linkval: " + linkval);
     // var thevalue = $(targetid).html();
 
     // if this is an edit field then do nothing
@@ -4372,27 +4375,6 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
     
     // handle special URL command that opens a new window to user provided URL
     if ( command === "URL" ) {
-        // var userkey = "user_" + bid;
-        // for (var key in cm_Globals.options.rules ) {
-
-        //     if ( key === userkey ) {
-        //         var rules = cm_Globals.options.rules[key];
-        //         rules.forEach(rule => {
-        //             if ( rule[0]==="URL" && rule[2]===subid ) {
-        //                 var userval = rule[1];
-        //                 try {
-        //                     if ( !userval || !userval.startsWith("http") ) {
-        //                         throw "URL value is empty";
-        //                     }
-        //                     window.open(userval,'_blank');
-        //                 } catch(e) {
-        //                     console.error("user provided URL failed to open: ", e);
-        //                 }
-        //             }
-
-        //         });
-        //     }
-        // }
         if ( !linkval || !linkval.startsWith("http") ) {
             console.error("user provided URL value is empty or invalid");
             return;
@@ -4417,7 +4399,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
             subid.startsWith("presence") || subid.startsWith("motion") || subid.startsWith("contact") || subid==="status_" || subid==="status" || subid==="deviceType" || subid==="localExec" ||
             subid.startsWith("time") || subid.startsWith("date") || subid==="tzone" || subid==="weekday" || subid==="name" || subid.startsWith("skin") || subid==="thermostatOperatingState" ||
             subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" || subid==="numberOfButtons" || subid==="humidity" ||
-            subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") || subid==="illuminance" || 
+            subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") || subid==="illuminance" || subid==="ecoMode" ||
             subid==="colorMode" || subid==="colorName" ||
             (subid.startsWith("label")) || (subid.startsWith("text"))
         );
@@ -4472,18 +4454,18 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         var panel = $(tile).attr("panel");
         thevalue = addOnoff(targetid, subid, thevalue);
         $('div[panel="' + panel + '"] div.overlay.switch div').each(function() {
-            var taid = $(this).attr("aid");
-            var tile = '#t-'+taid;
-            var thetype = $(tile).attr("type");
-            var bid = $(tile).attr("bid");
-            var linkhub = $(tile).attr("hubindex");
-            var thingid = $(tile).attr("thingid");
-            var tileid = $(tile).attr("tile");
-            var uid = $(tile).attr("uid");
+            const taid = $(this).attr("aid");
+            const tile = '#t-'+taid;
+            const thetype = $(tile).attr("type");
+            const bid = $(tile).attr("bid");
+            const linkhub = $(tile).attr("hubindex");
+            const thingid = $(tile).attr("thingid");
+            const tileid = $(tile).attr("tile");
+            const uid = $(tile).attr("uid");
             var roomid = $("#panel-"+panel).attr("roomid");
 
             // force use of command mode by setting attr to blank
-            theattr = "";
+            const theattr = "";
             if ( thevalue ) {
                 $.post(cm_Globals.returnURL, 
                     {api: ajaxcall, userid: userid, pname: pname, id: bid, thingid: thingid, tileid: tileid, uid: uid, type: thetype, value: thevalue, roomid: roomid, hint: hint,
@@ -4492,16 +4474,16 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         });
 
     } else if ( ispassive ) {
-        var msg = "";
+        let msg = "";
         msg += "thingname = " + thingname + "<br>";
         msg += "type = " + thetype + "<br>";
         msg += "hubtype = " + hubtype + "<br>";
         msg += "hubindex = " + linkhub + "<br>";
-        msg += "dev id = " + bid + "<br>";
+        msg += "dev id = " + linkbid + "<br>";
         msg += "thing id = " + thingid + "<br>";
         msg += "sql id = " + tileid + "<br>";
-        msg += "scr id = " + uid + "<br>";
-        if ( hint && hint !== hubtype ) {
+        msg += "uid = " + linkuid + "<br>";
+        if ( hint ) {
             msg += "hint = "+hint + "<br>";
         }
         msg += "<hr>";
@@ -4688,9 +4670,11 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
                                 $("#resetList").off("tap");
                                 closeModal("listview");
                             });
-                         }
+                        } else {
+                            console.log("Action result: ", presult);
+                        }
                     } else {
-                        console.log("Action result: ", presult);
+                        console.warn("Action failed with status: ", pstatus);
                     }
                 }
             }, "json"

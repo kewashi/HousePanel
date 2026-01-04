@@ -510,7 +510,7 @@ function loadLinkItem(uid, allowuser, defvalue) {
     // first load the native items
     for ( var tkey in thevalue ) {
         var tval = thevalue[tkey];
-        console.log("loadLinkItem: checking key " + tkey + " with value: ", tval);
+        // console.log("loadLinkItem: checking key " + tkey + " with value: ", tval);
 
         // skip if this item was replaced by a custom field handled below
         var iscustom = false;
@@ -818,26 +818,26 @@ function initCustomActions() {
         var customType = $(this).val();
         loadRightPanel(customType, null, null);        
         showPreview();
-        event.stopPropagation;
+        event.stopPropagation();
     });
     
     $("#cm_addButton").off("tap");
     $("#cm_addButton").on("tap", function(event) {
         var subid = $("#cm_userfield").val();
-        if ( cm_Globals.natives.includes(subid) || subid.startsWith("_") ) {
+        if ( cm_Globals.natives.includes(subid) || (subid.startsWith("_") || subid.endsWith("-up") || subid.endsWith("-dn")) ) {
             var pos = {top: 375, left: 380, zindex: 9999, background: "red", color: "white", position: "absolute"};
             var tilename = $("#cm_subheader").html();
             var repname = $("#cm_addButton").html();
             // below we use a modal that is inside a modal so we have to save the old op mode value and restore it
             var oldsave = saveOpmode;
-            if ( repname === "Add" && subid.startsWith("_") ) {
-                // alert("You cannot add a field that begins with an underscore. That is reserved for existing commands");                
-                createModal("modalremove","You cannot add field: " + subid + " to tile: " + tilename + " linked to a User Field Name that begins with an underscore. Underscore fields are reserved for existing commands.", "table.cm_table", "Dismiss", pos), function() {
+            if ( repname === "Add" && (subid.startsWith("_") || subid.endsWith("-up") || subid.endsWith("-dn")) ) {
+                createModal("modalremove","You cannot add field: " + subid + " to tile: " + tilename + " linked to a User Field Name that begins with an underscore or ends with -up or -dn. Fields with names like this are reserved for special handling.", "table.cm_table", "Dismiss", pos), function() {
                     closeModal("modalremove");
                     saveOpmode = oldsave;
                     priorOpmode = "Modal";
                 };
             } else {
+                // user is replacing one of the special fields so warn them
                 var fieldcommand = subid.startsWith("_") ? "command: " : "field: ";
                 createModal("modalremove","You are replacing an existing " + fieldcommand + subid + " in tile: " + tilename + ".  Are you sure?", "table.cm_table", true, pos, function(ui) {
                     var clk = $(ui).attr("name");
@@ -852,14 +852,14 @@ function initCustomActions() {
         } else {
             applyCustomField("addcustom", subid);
         }
-        event.stopPropagation;
+        event.stopPropagation();
     });
     
     $("#cm_delButton").off("tap");
     $("#cm_delButton").on("tap", function(event) {
         
         if ( $(this).hasClass("disabled") ) {
-            event.stopPropagation;
+            event.stopPropagation();
             return;
         }
         var pos = {top: 375, left: 380, zindex: 9999, background: "red", color: "white", position: "absolute"};
@@ -875,7 +875,7 @@ function initCustomActions() {
             saveOpmode = oldsave;
             priorOpmode = "Modal";
         });
-        event.stopPropagation;
+        event.stopPropagation();
     });
     
     $("#cm_text").on("change", function(event) {
@@ -947,7 +947,7 @@ function initExistingFields() {
     $("#cm_upfield").off('click');
     $("#cm_upfield").on('click', function(event) {
         if ( $(this).hasClass("disabled") ) {
-            event.stopPropagation;
+            event.stopPropagation();
             return;
         }
         var tileid = cm_Globals.tileid;
@@ -990,7 +990,7 @@ function initExistingFields() {
     $("#cm_dnfield").off('click');
     $("#cm_dnfield").on('click', function(event) {
         if ( $(this).hasClass("disabled") ) {
-            event.stopPropagation;
+            event.stopPropagation();
             return;
         }
         var tileid = cm_Globals.tileid;
