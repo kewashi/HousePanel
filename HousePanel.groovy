@@ -179,9 +179,10 @@ def mainPage() {
             // vdesc += spanSmBld("Hubname: ", sCLRBLUE) + spanSmBr("${state.hubname}" )
             // vdesc += spanSmBld("Local Endpt: ", sCLRBLUE) + spanSmBr("${state.endpt}" )
             // vdesc += spanSmBld("Cloud Endpt: ", sCLRBLUE) + spanSmBr("${state.cloudendpt}" )
-            vdesc += spanSmBld("callback IP 1: ", sCLRBLUE) + spanSmBr("${settings.webSocketHost}:${settings.webSocketPort}" )
-            vdesc += spanSmBld("callback IP 2: ", sCLRBLUE) + spanSmBr("${settings.webSocketHost2}:${settings.webSocketPort2}" )
-            vdesc += spanSmBld("callback IP 3: ", sCLRBLUE) + spanSmBr("${settings.webSocketHost3}:${settings.webSocketPort3}" )
+            vdesc += spanSmBld("callback IP 1: ", sCLRBLUE) + spanSmBr("${settings.webHostIP}:${settings.webHostPort}" )
+            vdesc += spanSmBld("callback IP 2: ", sCLRBLUE) + spanSmBr("${settings.webHostIP2}:${settings.webHostPort2}" )
+            vdesc += spanSmBld("callback IP 3: ", sCLRBLUE) + spanSmBr("${settings.webHostIP3}:${settings.webHostPort3}" )
+            // vdesc += spanSmBld("Local Websocket Port: ", sCLRBLUE) + spanSmBr("${settings.localPort}" )
             vdesc += htmlLine(sCLRBLUE, 600)
             vdesc += inputFooter("Tap to update App Preferences...", sCLRBLUE, false)
             href 'settingsPage', title: spanSmBld('App Preferences'), description: vdesc
@@ -200,8 +201,9 @@ def mainPage() {
             paragraph vdesc
 
             paragraph inputFooter("Enter User ID and HPCODE below then push the buton to send hub registration parameters to the HousePanel server. These are displayed on the Hub Authorization page.", sCLRBLUE, false)
-            input (name: "userid", type: "text", multiple: false, title: "User ID:", required: false, defaultValue: "0")
+            input (name: "userid", type: "number", multiple: false, title: "User ID:", required: false, defaultValue: 0)
             input (name: "hpcode", type: "text", multiple: false, title: "HPCODE:", required: false, defaultValue: "")
+            input (name: "usecloud", type: "bool", multiple: false, title: "Use Cloud?", required: false, defaultValue: false)
             input(name: 'pushdata', type: 'button', multiple: false, title: 'Push Data', required: false)
 
             paragraph inputFooter(" ", sCLRBLUE, false)
@@ -225,19 +227,24 @@ def settingsPage() {
             input (name: "powerskip", type: "float", multiple: false, title: "Power Skip (0 ... 1.0)", required: false, defaultValue: 0.15)
             // paragraph "Enable Pistons? You must have WebCore installed for this to work. Beta feature for Hubitat hubs."
             // input (name: "usepistons", type: "bool", multiple: false, title: "Use Pistons?", required: false, defaultValue: false)
-            paragraph "Specify these parameters to enable your panel to stay in sync with things when they change in your home. " +
-                      "Beta web-hosted users must keep the default which points to my server where the beta is hosted. " +
-                      "Users hosting their own instance must change this to point to their local IP where it is hosted. "
-            input "webSocketHost", "text", title: "Host IP", defaultValue: "https://housepanel.net", required: true
-            input "webSocketPort", "text", title: "Port", defaultValue: "8680", required: true
-            paragraph "The Alternate 2nd and 3rd Host IP and Port values/ranges are used to send hub pushes to additional installations of HousePanel. " +
-                    "If left as 0 additional hub pushes will not occur. Only use this if you are hosting two or three versions of HP " +
-                    "that need to stay in sync with this smart home hub. This app also supports the ISY Hubitat Node Server, and for that case " +
-                    "you should set one of these to the port used there. Otherwise, these settings are mostly used for development debugging and can be safely left as 0"
-            input "webSocketHost2", "text", title: "2nd Host IP", defaultValue: "0", required: false
-            input "webSocketPort2", "text", title: "2nd Port or Range", defaultValue: "0", required: false
-            input "webSocketHost3", "text", title: "3rd Host IP", defaultValue: "0", required: false
-            input "webSocketPort3", "text", title: "3rd Port or Range", defaultValue: "0", required: false
+            paragraph "Specify at least the first Host IP and Port set of parameters to enable your panel to stay in sync with things when they change in your home. " +
+                      "These parameters are used to communicate between your Hubitat hub and your HousePanel installation. " +
+                      "Users must change the Host IP to match the IP of the machine where HousePanel is hosted. "
+            input "webHostIP", "text", title: "Host IP", defaultValue: "192.168.1.50", required: true
+            input "webHostPort", "text", title: "Port", defaultValue: "8580", required: true
+            paragraph "The Alternate 2nd and 3rd Host IP and Port values/ranges are completely optional. They are used to send hub pushes to additional installations of HousePanel. " +
+                    "If left as 0 additional hub pushes will not occur. Only use this if you are hosting two or three versions of HousePanel on different machines. " +
+                    "This app also supports the ISY Hubitat Node Server, and for that case you should set one of these to the IP and Port to match that of your ISY Node Server. " + 
+                    "Otherwise, these settings can be safely ignored."
+            input "webHostIP2", "text", title: "2nd Host IP", defaultValue: "0", required: false
+            input "webHostPort2", "text", title: "2nd Port or Range", defaultValue: "0", required: false
+            input "webHostIP3", "text", title: "3rd Host IP", defaultValue: "0", required: false
+            input "webHostPort3", "text", title: "3rd Port or Range", defaultValue: "0", required: false
+            // paragraph "The Websocket port provided below is used locally to pass information between your HousePanel app " +
+            //           "and all web clients, such as browsers and tablets. The default is usually fine, but if that port is in use on your local network " +
+            //           "you must change it to an unused port value.  The port specified and the next 9 must be available. All web clients will need to be reloaded after this is changed."
+            // input "localPort", "text", title: "Local Websocket Port", defaultValue: "8340", required: false
+
             input (
                 name: "configLogLevel",
                 title: "IDE Live Logging Level:\nMessages with this level and higher will be logged to the IDE.",
@@ -251,21 +258,6 @@ def settingsPage() {
 
     }
 }
-
-// def newHubPage() {
-//     return dynamicPage(name: 'newHubPage', nextPage: sBLANK, title: sBLANK, install: false, uninstall: false) {
-
-//         appInfoSect()
-
-//         section("Push New Hub Information") {
-//             paragraph "Enter your User ID number here. This is displayed on the Hub Authorization page, and in the upper right corner of the main display. "
-//             input (name: "userid", type: "text", multiple: false, title: "User ID:", required: false, defaultValue: "0")
-
-//             input(name: 'pushdata', type: 'button', multiple: false, title: 'Push Data', required: false)
-//         }
-
-//     }
-// }
 
 def deviceSelectPage() {
     return dynamicPage(name: 'deviceSelectPage', title: sBLANK, install: false, uninstall: false) {
@@ -349,11 +341,12 @@ def appButtonHandler(String buttonName) {
 
     if ( buttonName == "pushdata" ) {
         def devtype = "Hubitat"
+        def usecloud = settings?.usecloud ?: false
         def userid = settings?.userid ?: 0
         def hpcode = settings?.hpcode ?: ""
         def subid = app.id
         Map value = ["accesstoken": state.accessToken, "appid": app.id, "hubname": state.hubname, "hubid": state.hubid,
-                     "cloudendpt": state.cloudendpt, "localendpt": state.endpt, "hubtimer": "0", "hpcode": hpcode]
+                     "cloudendpt": state.cloudendpt, "localendpt": state.endpt, "hubtimer": "0", "hpcode": hpcode, "usecloud": usecloud]
         logger("Pushing data: ${value}", "info")
         postHubAll("authupd", "", userid, subid, devtype, value)
     }
@@ -375,19 +368,19 @@ def initialize() {
     // reset variable usage
     removeAllInUseGlobalVar()
 
-    state.directIP = settings?.webSocketHost ?: "0"
+    state.directIP = settings?.webHostIP ?: "0"
     state.directIP = state.directIP.trim()
-    state.directPort = settings?.webSocketPort ?: "0"
+    state.directPort = settings?.webHostPort ?: "0"
     state.directPort = state.directPort.trim()
 
-    state.directIP2 = settings?.webSocketHost2 ?: "0"
+    state.directIP2 = settings?.webHostIP2 ?: "0"
     state.directIP2 = state.directIP2.trim()
-    state.directPort2 = settings?.webSocketPort2 ?: "0"
+    state.directPort2 = settings?.webHostPort2 ?: "0"
     state.directPort2 = state.directPort2.trim()
 
-    state.directIP3 = settings?.webSocketHost3 ?: "0"
+    state.directIP3 = settings?.webHostIP3 ?: "0"
     state.directIP3 = state.directIP3.trim()
-    state.directPort3 = settings?.webSocketPort3 ?: "0"
+    state.directPort3 = settings?.webHostPort3 ?: "0"
     state.directPort3 = state.directPort3.trim()
 
     state.weatherzip = settings.weatherzip ?: "94070"
@@ -395,6 +388,7 @@ def initialize() {
     state.ambientapi = settings.ambientapi ?: ""
     state.ambientappkey = settings.ambientappkey ?: ""
     state.powerskip = settings.powerskip ?: 0.15
+    // state.localPort = settings.localPort ?: "8340"
 
     state.prefix = settings?.hubprefix ?: getPrefix()
     state.powervals = [:]
@@ -408,10 +402,12 @@ def initialize() {
     
     def pattern = ~/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/
     def portpatt = ~/\d{3,}-?(\d{3,})?/
+    Map hubdata = [accesstoken: state.accessToken, appid: app.id, hubname: state.hubname, hubid: state.hubid,
+                   cloudendpt: state.cloudendpt, localendpt: state.endpt, hubtimer: "0", usecloud: state.usecloud]
 
     // report and send to servers name=hubname, id=app.id, type=Hubitat, value=array(accessToken, endpt, cloudendpt) 
     if ( (state.directIP.startsWith("http") || state.directIP ==~ pattern) && state.directPort ==~ portpatt ) {
-        postHubRange(state.directIP, state.directPort, "initialize", state.hubname, app.id, "", "Hubitat", [state.accessToken, state.endpt, state.cloudendpt])
+        postHubRange(state.directIP, state.directPort, "initialize", state.hubname, app.id, "", "Hubitat", hubdata)
         logger("state changes will be posted to HP at IP: ${state.directIP}:${state.directPort} ", "info")
 
     } else {
@@ -419,14 +415,14 @@ def initialize() {
     }
 
     if ( (state.directIP2.startsWith("http") || state.directIP2 ==~ pattern) && state.directPort2 ==~ portpatt ) {
-        postHubRange(state.directIP2, state.directPort2, "initialize", state.hubname, app.id, "", "Hubitat", [state.accessToken, state.endpt, state.cloudendpt])
+        postHubRange(state.directIP2, state.directPort2, "initialize", state.hubname, app.id, "", "Hubitat", hubdata)
         logger("state changes will also be posted to HP at: ${state.directIP2}:${state.directPort2} ", "info")
     } else {
         state.directIP2 = "0"
     }
 
     if ( (state.directIP3.startsWith("http") || state.directIP3 ==~ pattern) && state.directPort3 ==~ portpatt ) {
-        postHubRange(state.directIP3, state.directPort3, "initialize", state.hubname, app.id, "", "Hubitat", [state.accessToken, state.endpt, state.cloudendpt])
+        postHubRange(state.directIP3, state.directPort3, "initialize", state.hubname, app.id, "", "Hubitat", hubdata)
         logger("state changes will also be posted to HP at: ${state.directIP3}:${state.directPort3} ", "info")
     } else {
         state.directIP3 = "0"
@@ -438,10 +434,8 @@ def initialize() {
         logger("No User ID configured, cannot push configuration to HousePanel server", "warn")
         return
     } else {
-        Map configs = ["accesstoken": state.accessToken, "appid": app.id, "hubname": state.hubname, "hubid": state.hubid,
-                    "cloudendpt": state.cloudendpt, "localendpt": state.endpt, "hubtimer": "0", "hpcode": settings.hpcode,
-                    "ambientappkey": state.ambientappkey, "ambientapi": state.ambientapi, 
-                    "weatherapi": state.weatherapi, "weatherzip": state.weatherzip, "loglevel": state.loggingLevelIDE]
+        Map configs = ["ambientappkey": state.ambientappkey, "ambientapi": state.ambientapi,
+                       "weatherapi": state.weatherapi, "weatherzip": state.weatherzip, "loglevel": state.loggingLevelIDE]
         postHubAll("config", "", userid, "config", "Hubitat", configs)
     }
 
@@ -814,6 +808,8 @@ def getWeather(swid, item=null) {
                 resp["time"] = respdata["time"]
                 def loc = respraw["location"]
                 resp["location"] = loc["name"]
+                resp["latitude"] = loc["lat"]
+                resp["longitude"] = loc["lon"]
             } else {
                 resp["error"] = respcode
             }
@@ -821,7 +817,7 @@ def getWeather(swid, item=null) {
             logger("weather response code: ${respcode} value: ${resp}", "debug")
         }
     } else {
-        resp["subname"] = "API code or Zipcode not set"
+        resp["subname"] = "API or Zipcode not set"
     }
     resp["name"] = "Weather"
     // def resp = getDevice(myweathers, swid, item)

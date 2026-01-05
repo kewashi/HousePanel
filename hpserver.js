@@ -1222,6 +1222,7 @@ function getDevices(hub) {
         var hubType = hub.hubtype;
         var hubAccess  = hub.hubaccess;
         var hubEndpt = hub.hubendpt;
+        var uidmax = 0;
 
         if ( !is_object(hub) ) {
             reject("error - hub object not provided to getDevices call");
@@ -1241,7 +1242,16 @@ function getDevices(hub) {
 
         // retrieve all things from Hubitat
         } else if ( hubType==="Hubitat" ) {
-            getGroovyDevices();
+            getGroovyDevices()
+            .then(body => {
+                getAmbientDevices(body)
+                .then(ambdevices => {
+                    hubInfoCallback(ambdevices);
+                });
+            })
+            .catch(reason => {
+                console.error( (ddbg()), reason );
+            });
 
         // retrieve all things from ISY
         } else if ( hubType==="ISY" ) {
@@ -1261,7 +1271,6 @@ function getDevices(hub) {
         // clocks will be updated with current time and images will be updated
         function getDefaultDevices() {
             var dclock, aclock;
-            var uidmax;
             var mydevices = {};
     
             var dclock = getClock("clockdigital");
@@ -1360,80 +1369,99 @@ function getDevices(hub) {
             // first get the max ID number and the first free ID number
             // and make available to the callback from hubitat hub getallthings call
             // note that query returns an object with the result in the value of the single pair
-            var uidmax;
-            var mydevices = {};
-
-            // this will return next gap but I don't use this because it is too slow so I live with gaps and big ID's since uid will be small
-            // also we would need to find the next gap for each device after the device updatd which would be painfully slow
+            // the commented code will return next gap but I don't use this because it is too slow so I live with gaps and big ID's since uid will be small
+            // also we would need to find the next gap for each device after the device updated which would be painfully slow
             // mydb.query(`select c.id + 1 from devices c left join devices cfree on cfree.id = c.id + 1 where (cfree.id is null or cfree.id = ${idp1}) and c.userid = 2 order by c.id limit 1;`)
-            mydb.query("select max(uid) from devices where userid = " + userid)
+            return mydb.query("select max(uid) from devices where userid = " + userid)
             .then(res => {
                 uidmax = Object.values(res)[0];
                 if ( DEBUG1 ) {
                     console.log((ddbg()), "Groovy Devices - uidmax: ", uidmax);
                 }
                 return curl_call(hubEndpt + "/getallthings", header, params, false, "POST");
-            })
-            .then(body => {
+            });
+        }
 
-                // patch in Ambient Weather here if there is an App key and an API key
-                if ( GLB.dbinfo.ambientappkey && GLB.dbinfo.ambientapi && GLB.dbinfo.ambientapi!=="notyet" ) {
-                    const AmbientWeatherApi = require("ambient-weather-api");
-                    const api = new AmbientWeatherApi({
-                        apiKey: GLB.dbinfo.ambientapi,
-                        applicationKey: GLB.dbinfo.ambientappkey
-                    });
-                    body = api.userDevices()
+        function getAmbientDevices(hubdevices) {
+
+            // patch in Ambient Weather here if there is an App key and an API key
+            if ( GLB.dbinfo.ambientappkey && GLB.dbinfo.ambientapi && GLB.dbinfo.ambientapi!=="notyet" ) {
+                const AmbientWeatherApi = require("ambient-weather-api");
+                const api = new AmbientWeatherApi({
+                    apiKey: GLB.dbinfo.ambientapi,
+                    applicationKey: GLB.dbinfo.ambientappkey
+                });
+
+                return new Promise( function(resolve, reject) {
+                    api.userDevices()
                     .then( devices => {
-
                         // add a tile for each ambient weather device
+                        let num = 0;
                         devices.forEach( device => {
                             let newdevice = {};
                             newdevice.type = "weather";
-                            newdevice.id = device.macAddress;
+                            newdevice.id = device.macAddress.replace(/:/g, "").toLowerCase();
                             newdevice.name = device.info.name;
                             newdevice.hint = "AmbientWeather";
-                            newdevice.refresh = 300;
-                            newdevice.data = {};
-                            return api.deviceData(device.macAddress, {limit: 1})
+                            newdevice.value = {};
+                            
+                            api.deviceData(device.macAddress, {limit: 1})
                             .then( devicedata => {
                                 // for now we capture all fields, later we may want to filter some out
-                                for ( var key in devicedata[0] ) {
-                                    newdevice.data[key] = devicedata[0][key];
+                                for ( let key in devicedata[0] ) {
+                                    let dataval = devicedata[0][key];
+                                    if ( key === "dateutc" || key==="date" || key==="lastRain" ) {
+                                        // convert this to a human readable date and time
+                                        let d = new Date(dataval);
+                                        dataval = d.toLocaleString();
+                                    // change temp field name to temperature
+                                    } else if ( key === "tempf" ) {
+                                        key = "temperature";
+                                    // change battery fields to display good or bad based on 1 or 0 value
+                                    } else if ( key.startsWith("batt") ) {
+                                        if ( dataval === 1 || dataval === "1" ) {
+                                            dataval = "good";
+                                        } else if ( dataval === 0 || dataval === "0" ) {
+                                            dataval = "low";
+                                        } else {
+                                            dataval = "unknown";
+                                        }
+                                        key = "battery" + key.substring(5);
+                                    }
+                                    newdevice.value[key] = dataval;
                                 }
-                                console.log( (ddbg()), "adding Ambient Weather device: ", newdevice);
-                                body.push(newdevice);
-                                return body;
+                                hubdevices.push(newdevice);
+                                num++;
+                                if (num >= devices.length ) {
+                                    if ( DEBUG7 ) {
+                                        console.log( (ddbg()), "finished retrieving Ambient Weather devices. Total devices: ", num, " devices added to hubdevices array");
+                                    }
+                                    resolve(hubdevices);
+                                }
                             })
                             .catch( reason => {
                                 console.error( (ddbg()), "error retrieving ambient weather data for device: ", device.macAddress, " reason: ", reason);
+                                reject(reason);
                             });
                         });
-                        return body;
+                    })
+                    .catch( reason => {
+                        console.error( (ddbg()), "error retrieving ambient weather devices. reason: ", reason);
+                        reject(reason);
                     });
-                    return body;
-                } else {
-                    return body;
-                }
-            })
-            .then(body => {
-                hubInfoCallback(body);
-            })
-            .catch(reason => {
-                console.error( (ddbg()), reason );
-            });
-
-            return;
+                });
+            } else {
+                return new Promise( (resolve, reject) => {
+                    console.warn( (ddbg()), "Ambient Weather API keys not found. Ambient Weather devices will not be added.");
+                    resolve(hubdevices);
+                });
+            }
+        }
+        
 
             // callback for loading Hubitat devices
             function hubInfoCallback(jsonbody) {
-                // try {
-                //     var jsonbody = JSON.parse(body);
-                // } catch (e) {
-                //     console.log( (ddbg()), "error translating devices. body: ", body, " error: ", e);
-                //     reject(errMsg);
-                //     return;
-                // }
+                var mydevices = {};
 
                 // configure returned array with the "id"
                 if (jsonbody && is_array(jsonbody) ) {
@@ -1447,7 +1475,7 @@ function getDevices(hub) {
                         var deviceid = content["id"];
                         var origname = content["name"] || "";
                         var pvalue = content["value"];
-                        var hint = hubType;
+                        var hint = content["hint"] ? content["hint"] : hubType;
                         var refresh = "never";
 
                         if ( !pvalue ) {
@@ -1564,8 +1592,7 @@ function getDevices(hub) {
                     // an error occurred with this hub
                     reject(errMsg);
                 }
-            }
-        }
+            }  
 
         // rewrote this to first remove devices and then remove tiles that are stranded
         // this version uses db queries which is much faster than what was here before
@@ -1629,7 +1656,6 @@ function getDevices(hub) {
             }
 
             var currentDevices = [];
-            var uidmax;
             mydb.query("select max(uid) from devices where userid = " + userid)
             .then(res => {
                 uidmax = Object.values(res)[0];
@@ -5135,7 +5161,7 @@ function getCustomTile(userid, configoptions, custom_val, bid) {
 // this little gem makes sure items are in the proper order
 function setValOrder(val) {
     const order = { "_": 190, "_number_":70, 
-                   "name": 1, "subname": 2, "battery": 2, "color": 3, "switch": 6, "momentary": 7, "presence": 7, "presence_type": 8,
+                   "name": 1, "subname": 2, "color": 3, "switch": 6, "momentary": 7, "presence": 7, "presence_type": 8,
                    "contact": 9, "door": 8, "garage":8, "motion": 9, "themode": 10,
                    "make": 11, "modelName":12, "modelYear": 13, "vehiclecolor": 14, "nickName": 15,
                    "temperature": 41, "feelsLike":42, "temperatureApparent":42, "weatherCode":43, "weatherIcon":44, "forecastIcon":45,
@@ -10660,13 +10686,13 @@ GLB.dbinfo = {
     "dbpassword": "housepanel",
     "dbtype": "sqlite",
     "port": "8580",
-    "websocketport": "8380",
+    "websocketport": "8340",
     "allownewuser" : ["all"],
-    "service": "none"
+    "service": "none",
+    "enablerules": true,
+    "donate": true
 };
 GLB.dbinfo.hubs = { Hubitat: "Hubitat", ISY: "ISY" };
-GLB.dbinfo.donate = true;
-GLB.dbinfo.enablerules = true;
 
 // this object will be used to replace anything with a user choice
 GLB.dbinfo.subs = {};
@@ -11137,62 +11163,52 @@ if ( app && applistening ) {
 
                     hubs.forEach(hub => {
 
-                        userid = hub.userid;
-
                         if ( DEBUG1 ) {
                             console.log( (ddbg()), "init request - hub: ", hub);
                         }
-
+                        
                         // handle Hubitat hub update pushes
+                        userid = hub.userid;
                         var updhub = false;
-                        if ( req.body['change_type'] === "Hubitat" ) {
+                        if ( req.body['change_type'] === "Hubitat" && req.body['change_value'] && is_object(req.body['change_value']) ) {
+
+                            // this is the mapping of vallarray from the groovy app
+                            // Map value = ["accesstoken": state.accessToken, "appid": app.id, "hubname": state.hubname, "hubid": state.hubid,
+                            //              "cloudendpt": state.cloudendpt, "localendpt": state.endpt, "hubtimer": "0", "hpcode": hpcode, "usecloud": usecloud]
+                            const valarray = req.body['change_value'];
 
                             // init sends hub name in the change_name field
-                            if ( req.body['change_name'] ) {
-                                updhub = updhub || (hub.hubname !== req.body['change_name']);
-                                hub.hubname = req.body['change_name'];
+                            if ( valarray.hubname ) {
+                                updhub = updhub || (hub.hubname !== valarray.hubname);
+                                hub.hubname = valarray.hubname;
                             }
 
                             // init sends the AppID as the id in change_device field
                             // note - the userendpt field is now used to store the App ID only
-                            if ( req.body['change_device'] ) {
-                                updhub = updhub || (hub.userendpt !== req.body['change_device']);
-                                hub.userendpt = req.body['change_device'].toString();
-                                var appID = hub.userendpt;
-
-                                // set default endpt based on AppID
-                                // this will almost always be overwritten below
-                                if ( hub.hubhost ) {
-                                    if ( GLB.returnURL.startsWith("https://housepanel.net") ) {
-                                        hub.hubendpt = hub.hubhost + "/apps/" + appID;
-                                    } else {
-                                        hub.hubendpt = hub.hubhost + "/apps/api/" + appID;
-                                    }
-                                }
+                            if ( valarray.appid  ) {
+                                updhub = updhub || (hub.userendpt !== valarray.appid);
+                                hub.userendpt = valarray.appid.toString();
                             }
 
-                            // init sends the Access Token, endpt, and cloudendpt in the value as an array
-                            if ( req.body['change_value'] ) {
-                                var valarray = req.body['change_value'];
-                                
-                                updhub = updhub || (hub.hubaccess !== valarray[0]);
-                                hub.hubaccess = valarray[0];
+                            // update access token
+                            updhub = updhub || (hub.hubaccess !== valarray.accesstoken);
+                            hub.hubaccess = valarray.accesstoken;
 
-                                // if we're pointing to my hosted server, use the cloud end point
-                                if ( GLB.returnURL.startsWith("https://housepanel.net") || hub.hubendpt.startsWith("https://housepanel.net") ) {
-                                    updhub = updhub || (hub.hubendpt !== valarray[2]);
-                                    hub.hubendpt = valarray[2];
-                                } else {
-                                    updhub = updhub || (hub.hubendpt !== valarray[1]);
-                                    hub.hubendpt = valarray[1];
-                                }
-
-                                // determine the hostname from the endpt
-                                var iloc = hub.hubendpt.indexOf("/apps");
-                                var newhost = hub.hubendpt.substring(0, iloc);
-                                updhub = updhub || (hub.hubhost !== newhost);
-                                hub.hubhost = newhost;
+                            // set default endpt based on usecloud boolean
+                            if ( valarray.usecloud === true || valarray.cloudendpt === "true" ) {
+                                updhub = updhub || (hub.hubendpt !== valarray.cloudendpt);
+                                hub.hubendpt = valarray.cloudendpt;
+                            } else {
+                                updhub = updhub || (hub.hubendpt !== valarray.localendpt);
+                                hub.hubendpt = valarray.localendpt;
                             }
+
+                            // determine the hostname from the endpt
+                            var iloc = hub.hubendpt.indexOf("/apps");
+                            var newhost = hub.hubendpt.substring(0, iloc);
+
+                            updhub = updhub || (hub.hubhost !== newhost);
+                            hub.hubhost = newhost;
                         }
 
                         // update the hub and push data to the auth page using a forced reload
@@ -11255,16 +11271,28 @@ if ( app && applistening ) {
             // use this to push new data to the config page
             const userid = req.body["change_device"];
             const configvals = req.body["change_value"];
+            let configupdated = false;
             for (var key in configvals) {
+                configupdated = configupdated || (GLB.dbinfo[key] !== configvals[key]);
                 GLB.dbinfo[key] = configvals[key];
+
+                // inform user that they need to restart their clients if websocketport changed and save in global variable
+                // disabled for now because it requires a server restart to take effect
+                // if ( key==="websocketport" ) {
+                //     clients = [];
+                //     GLB.webSocketServerPort = parseInt(GLB.dbinfo["websocketport"]);
+                //     console.log( (ddbg()), "WebSocket Port change detected. Please restart your HousePanel clients to connect to the new port: ", configvals[key]);
+                // }
             }
 
             // now write the updated config values to the housepanel.cfg file
-            try {
-                var configname = GLB.homedir + "/housepanel.cfg";
-                fs.writeFileSync(configname, JSON.stringify(GLB.dbinfo, null, 4), "utf8");
-            } catch (e) {
-                console.error( (ddbg()), "Error writing housepanel.cfg file: ", e);
+            if ( configupdated ) {
+                try {
+                    var configname = GLB.homedir + "/housepanel.cfg";
+                    fs.writeFileSync(configname, JSON.stringify(GLB.dbinfo, null, 4), "utf8");
+                } catch (e) {
+                    console.error( (ddbg()), "Error writing housepanel.cfg file: ", e);
+                }
             }
 
             if ( DEBUG17 ) {
