@@ -17,7 +17,8 @@
     "twilio": "^4.11.1",
     "url": "^0.11.0",
     "websocket": "^1.0.28",
-    "xml2js": "^0.5.0"
+    "xml2js": "^0.5.0",
+    "ambient-weather-api": "github:kewashi/ambient-weather-api"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",

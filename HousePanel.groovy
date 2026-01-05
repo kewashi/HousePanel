@@ -169,8 +169,11 @@ def mainPage() {
             String vdesc = sBLANK
 
             vdesc += spanSmBld("Hub Prefix: ", sCLRBLUE) + spanSmBr("${settings.hubprefix}" )
+            vdesc += spanSmBld("Ambient Weather Application key: ", sCLRBLUE) + spanSmBr("${settings.ambientappkey}" )
+            vdesc += spanSmBld("Ambient Weather API key: ", sCLRBLUE) + spanSmBr("${settings.ambientapi}" )
             vdesc += spanSmBld("Weather Tomorrow.io API key: ", sCLRBLUE) + spanSmBr("${settings.weatherapi}" )
             vdesc += spanSmBld("Weather ZipCode: ", sCLRBLUE) + spanSmBr("${settings.weatherzip}" )
+            vdesc += spanSmBld("Power skip value: ", sCLRBLUE) + spanSmBr("${settings.powerskip}" )
             // vdesc += spanSmBld("accessToken: ", sCLRBLUE) + spanSmBr("${state.accessToken}" )
             // vdesc += spanSmBld("App ID: ", sCLRBLUE) + spanSmBr("${app.id}" )
             // vdesc += spanSmBld("Hubname: ", sCLRBLUE) + spanSmBr("${state.hubname}" )
@@ -215,8 +218,11 @@ def settingsPage() {
         section("HousePanel Configuration") {
             paragraph "Select a prefix to uniquely identify certain tiles for this hub. This only matters if you are using more than one hub. The prefix for each hub must be unique. "
             input (name: "hubprefix", type: "text", multiple: false, title: "Hub Prefix:", required: false, defaultValue: "h_")
+            input (name: "ambientappkey", type: "text", multiple: false, title: "Ambient Application key", required: false, defaultValue: "7aeab49a6fa5462fa8ddd52c049b4201984f0f14e9d5476e8cb3e5e4ca233bc7")
+            input (name: "ambientapi", type: "text", multiple: false, title: "Ambient Weather API key", required: false, defaultValue: "")
             input (name: "weatherapi", type: "text", multiple: false, title: "Tomorrow.io API key", required: false, defaultValue: "")
             input (name: "weatherzip", type: "text", multiple: false, title: "Zip Code for Weather", required: false, defaultValue: "10001")
+            input (name: "powerskip", type: "float", multiple: false, title: "Power Skip (0 ... 1.0)", required: false, defaultValue: 0.15)
             // paragraph "Enable Pistons? You must have WebCore installed for this to work. Beta feature for Hubitat hubs."
             // input (name: "usepistons", type: "bool", multiple: false, title: "Use Pistons?", required: false, defaultValue: false)
             paragraph "Specify these parameters to enable your panel to stay in sync with things when they change in your home. " +
@@ -349,9 +355,7 @@ def appButtonHandler(String buttonName) {
         Map value = ["accesstoken": state.accessToken, "appid": app.id, "hubname": state.hubname, "hubid": state.hubid,
                      "cloudendpt": state.cloudendpt, "localendpt": state.endpt, "hubtimer": "0", "hpcode": hpcode]
         logger("Pushing data: ${value}", "info")
-        postHubRange(state.directIP, state.directPort, "authupd", "", userid, subid, devtype, value)
-        postHubRange(state.directIP2, state.directPort2, "authupd", "", userid, subid, devtype, value)
-        postHubRange(state.directIP3, state.directPort3, "authupd", "", userid, subid, devtype, value)
+        postHubAll("authupd", "", userid, subid, devtype, value)
     }
 }
 
@@ -388,6 +392,9 @@ def initialize() {
 
     state.weatherzip = settings.weatherzip ?: "94070"
     state.weatherapi = settings.weatherapi ?: ""
+    state.ambientapi = settings.ambientapi ?: ""
+    state.ambientappkey = settings.ambientappkey ?: ""
+    state.powerskip = settings.powerskip ?: 0.15
 
     state.prefix = settings?.hubprefix ?: getPrefix()
     state.powervals = [:]
@@ -403,7 +410,6 @@ def initialize() {
     def portpatt = ~/\d{3,}-?(\d{3,})?/
 
     // report and send to servers name=hubname, id=app.id, type=Hubitat, value=array(accessToken, endpt, cloudendpt) 
-    // def postHubRange(ip, port, msgtype, name, id, subid, type, value) {
     if ( (state.directIP.startsWith("http") || state.directIP ==~ pattern) && state.directPort ==~ portpatt ) {
         postHubRange(state.directIP, state.directPort, "initialize", state.hubname, app.id, "", "Hubitat", [state.accessToken, state.endpt, state.cloudendpt])
         logger("state changes will be posted to HP at IP: ${state.directIP}:${state.directPort} ", "info")
@@ -426,11 +432,24 @@ def initialize() {
         state.directIP3 = "0"
     }
 
-    // register callbacks if one of the two is available
+    // push configured variables to HousePanel
+    def userid = settings?.userid ?: 0
+    if ( userid == 0 ) {
+        logger("No User ID configured, cannot push configuration to HousePanel server", "warn")
+        return
+    } else {
+        Map configs = ["accesstoken": state.accessToken, "appid": app.id, "hubname": state.hubname, "hubid": state.hubid,
+                    "cloudendpt": state.cloudendpt, "localendpt": state.endpt, "hubtimer": "0", "hpcode": settings.hpcode,
+                    "ambientappkey": state.ambientappkey, "ambientapi": state.ambientapi, 
+                    "weatherapi": state.weatherapi, "weatherzip": state.weatherzip, "loglevel": state.loggingLevelIDE]
+        postHubAll("config", "", userid, "config", "Hubitat", configs)
+    }
+
+    // register callbacks if one is available
     if ( state.directIP!="0" || state.directIP2!="0" || state.directIP3!="0" ) {
         registerAll()
     } else {
-        logger("state changes will not be posted to HP because no server IP was provided", "info")
+        logger("state changes will not be posted to HP because no server IP was provided", "warn")
     }
 }
 
@@ -2615,9 +2634,7 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
         if ( subid.startsWith("_") ) {
             def value = cmd ?: subid.substring(1)
             resp.put(subid, value)
-            postHubRange(state.directIP, state.directPort, "update", newname, swid, subid, devtype, value)
-            postHubRange(state.directIP2, state.directPort2, "update", newname, swid, subid, devtype, value)
-            postHubRange(state.directIP3, state.directPort3, "update", newname, swid, subid, devtype, value)
+            postHubUpdate(newname, swid, subid, devtype, value)
             logger("thing update: ${newname} id ${swid} type ${devtype} by changing ${subid} to ${value}", "debug")
         }
     }
@@ -3250,7 +3267,12 @@ def changeHandler(evt) {
 
     // handle power changes to skip if not changed by at least 15%
     // this value was set by trial and error for my particular plug
-    if ( subid=="power" ) {
+    if ( subid=="power" && state.powerskip >= 1.0 ) {
+        skip = true
+    } else if ( subid=="power" && state.powerskip <= 0.0 ) {
+        // no skip
+        state.powervals[deviceid] = value.toFloat()
+    } else if ( subid=="power" ) {
         try {
             def oldpower = state.powervals[deviceid] ?: 0.0
             oldpower = oldpower.toFloat()
@@ -3261,7 +3283,7 @@ def changeHandler(evt) {
                 skip = false
             } else {
                 delta = Math.abs(newpower - oldpower) / oldpower 
-                skip = (delta < 0.15)
+                skip = (delta < state.powerskip)
             }
             if ( !skip ) {
                 state.powervals[deviceid] = newpower
@@ -3315,29 +3337,21 @@ def changeHandler(evt) {
             // and the object logic using a Map is now generic and not specific to color arrays
             // def colorarray = [h100, s, v, color, colorMode]
             Map colorarray = [hue: h100, saturation: s, level: v, color: color, colorMode: cmode]
-            postHubRange(state.directIP, state.directPort, "update", deviceName, deviceid, subid, devtype, colorarray)
-            postHubRange(state.directIP2, state.directPort2, "update", deviceName, deviceid, subid, devtype, colorarray)
-            postHubRange(state.directIP3, state.directPort3, "update", deviceName, deviceid, subid, devtype, colorarray)
+            postHubUpdate(deviceName, deviceid, subid, devtype, colorarray)
             logger("color update: ${deviceName} id ${deviceid} type ${devtype} changed to ${color} by changing ${subid} to ${value}, h100: ${h100}, h: ${h}, s: ${s}, v: ${v}, mode: ${cmode} ", "info") 
         } else if ( devtype=="music" && subid=="trackData" ) {
             def newvalue = jsonslurper.parseText(value)
             newvalue = translateObjects(newvalue, musicmap)
-            postHubRange(state.directIP, state.directPort, "update", deviceName, deviceid, subid, devtype, newvalue)
-            postHubRange(state.directIP2, state.directPort2, "update", deviceName, deviceid, subid, devtype, newvalue)
-            postHubRange(state.directIP3, state.directPort3, "update", deviceName, deviceid, subid, devtype, newvalue)
+            postHubUpdate(deviceName, deviceid, subid, devtype, newvalue)
             logger("thing update: ${deviceName} id ${deviceid} type ${devtype} by changing ${subid} to ${newvalue}", "info")
         } else if ( devtype=="audio" && subid=="trackData" ) {
             def newvalue = jsonslurper.parseText(value)
-            newvalue = translateObjects(newvalue, audiomap)            
-            postHubRange(state.directIP, state.directPort, "update", deviceName, deviceid, subid, devtype, newvalue)
-            postHubRange(state.directIP2, state.directPort2, "update", deviceName, deviceid, subid, devtype, newvalue)
-            postHubRange(state.directIP3, state.directPort3, "update", deviceName, deviceid, subid, devtype, newvalue)
+            newvalue = translateObjects(newvalue, audiomap)
+            postHubUpdate(deviceName, deviceid, subid, devtype, newvalue)
             logger("thing update: ${deviceName} id ${deviceid} type ${devtype} by changing ${subid} to ${newvalue}", "info")
         } else {
             // make the original attribute change
-            postHubRange(state.directIP, state.directPort, "update", deviceName, deviceid, subid, devtype, value)
-            postHubRange(state.directIP2, state.directPort2, "update", deviceName, deviceid, subid, devtype, value)
-            postHubRange(state.directIP3, state.directPort3, "update", deviceName, deviceid, subid, devtype, value)
+            postHubUpdate(deviceName, deviceid, subid, devtype, value)
             logger("thing update: ${deviceName} id ${deviceid} type ${devtype} by changing ${subid} to ${value}", "info")
         }
 
@@ -3352,9 +3366,7 @@ def modeChangeHandler(evt) {
     def subid = evt?.name
     def modeid = "${state.prefix}mode"
     if (themode && deviceName) {
-        postHubRange(state.directIP, state.directPort, "update", deviceName, modeid, "themode", "mode", themode)
-        postHubRange(state.directIP2, state.directPort2, "update", deviceName, modeid, "themode", "mode", themode)
-        postHubRange(state.directIP3, state.directPort3, "update", deviceName, modeid, "themode", "mode", themode)
+        postHubUpdate(deviceName, modeid, "themode", "mode", themode)
         logger("New mode= ${themode} with subid= ${subid},  id= ${modeid}, name= ${deviceName} to HousePanel clients", "info")
     }
 }
@@ -3367,9 +3379,7 @@ def hsmStatusHandler(evt) {
     def subid = evt?.name
     def modeid = "${state.prefix}hsm"
     if (themode && deviceName) {
-        postHubRange(state.directIP, state.directPort, "update", deviceName, modeid, "state", "hsm", themode)
-        postHubRange(state.directIP2, state.directPort2, "update", deviceName, modeid, "state", "hsm", themode)
-        postHubRange(state.directIP3, state.directPort3, "update", deviceName, modeid, "state", "hsm", themode)
+        postHubUpdate(deviceName, modeid, "state", "hsm", themode)
         logger("New hsm= ${themode} with subid= ${subid}, id= ${modeid}, and name= ${deviceName} to HousePanel clients", "info")
     }
 }
@@ -3384,9 +3394,7 @@ def variableHandler(evt) {
     if ( varname && varname.startsWith("variable:") ) {
         // name returned as "variable:name" so we get everything after the :
         varname = varname.substring(9)
-        postHubRange(state.directIP, state.directPort, "update", "Variables", vid, varname, "variable", theval)
-        postHubRange(state.directIP2, state.directPort2, "update", "Variables", vid, varname, "variable", theval)
-        postHubRange(state.directIP3, state.directPort3, "update", "Variables", vid, varname, "variable", theval)
+        postHubUpdate("Variables", vid, varname, "variable", theval)
         logger("Variable changed, name= ${varname}, val= ${theval}", "info")
     }
 }
@@ -3422,6 +3430,16 @@ def postHub(ip, port, msgtype, name, id, subid, type, value, isfirst) {
             // sendHubCommand(result)
         }
     }
+}
+
+def postHubUpdate(name, id, subid, type, value) {
+    postHubAll("update", name, id, subid, type, value)
+}
+
+def postHubAll(msgtype, name, id, subid, type, value) {
+    postHubRange(state.directIP, state.directPort, msgtype, name, id, subid, type, value)
+    postHubRange(state.directIP2, state.directPort2, msgtype, name, id, subid, type, value)
+    postHubRange(state.directIP3, state.directPort3, msgtype, name, id, subid, type, value)
 }
 
 def postHubRange(ip, port, msgtype, name, id, subid, type, value) {

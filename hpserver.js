@@ -15,7 +15,7 @@ const DEBUG6 = false;               // tile adds and position moves
 const DEBUG7 = false;               // hub responses
 const DEBUG8 = false;               // API calls
 const DEBUG9 =  false;              // ISY webSocket success
-const DEBUG10 = false;              // unused tag - previously sibling
+const DEBUG10 = false;              // customize post call debugs
 const DEBUG11 = false;              // rules and lists
 const DEBUG12 = false;              // hub push updates
 const DEBUG13 = false;              // URL callbacks
@@ -23,10 +23,9 @@ const DEBUG14 = false;              // tile link details
 const DEBUG15 = false;              // new user and forgot password
 const DEBUG16 = false;              // writing, custom names, and image deletes
 const DEBUG17 = false;              // push client
-const DEBUG22 = false;              // login info
-const DEBUG23 = false;              // customize post call debugs
-const DEBUGcurl = false;            // detailed inspection
-const DEBUGisy = false;             // ISY debug info
+const DEBUG18 = false;              // detailed curl inspection
+const DEBUG19 = false;              // ISY debug info
+const DEBUG20 = false;              // login info
 const DEBUGtmp = true;              // used to debug anything temporarily using ||
 
 // websocket and http servers
@@ -55,6 +54,9 @@ var devhistory = require("./devhistory.js");
 const { json } = require('stream/consumers');
 const { config } = require('process');
 const { type } = require('os');
+
+// support for Ambient Weather API
+const AmbientWeatherApi = require("ambient-weather-api");
 
 // global variables are all part of GLB object
 var GLB = {};
@@ -838,7 +840,7 @@ function _curl(host, headers, nvpstr, calltype, callback) {
         }
         var myURL = new URL(host);
         var path = myURL.pathname;
-        if ( DEBUGcurl ) {
+        if ( DEBUG18 ) {
             console.log( (ddbg()),"myURL: ", myURL );
         }
 
@@ -861,7 +863,7 @@ function _curl(host, headers, nvpstr, calltype, callback) {
             }
         }
 
-        if ( DEBUGcurl ) {
+        if ( DEBUG18 ) {
             console.log((ddbg()), "_curl buffer: ", formbuff, " path: ", path);
         }
 
@@ -891,7 +893,7 @@ function _curl(host, headers, nvpstr, calltype, callback) {
             opts.auth = myURL.auth;
         }
         // get the request
-        if ( DEBUGcurl ) {
+        if ( DEBUG18 ) {
             console.log((ddbg()), "_curl opts: ", opts);
         }
         var totalbody = "";
@@ -925,7 +927,7 @@ function _curl(host, headers, nvpstr, calltype, callback) {
             var statusMsg = res.statusMessage;
             res.on("data", (body) => {
                 totalbody+= body;
-                if ( DEBUGcurl ) {
+                if ( DEBUG18 ) {
                     console.log((ddbg()), "_curl debug: body: ", body, " totalbody: ", totalbody);
                 }
             });
@@ -938,7 +940,7 @@ function _curl(host, headers, nvpstr, calltype, callback) {
                         callback(statusCode, null);
                     }
                 }
-                if ( DEBUGcurl ) {
+                if ( DEBUG18 ) {
                     console.log((ddbg()), "end of _curl message. status: ", statusCode, statusMsg, " body: ", totalbody);
                 }
             });
@@ -977,7 +979,7 @@ function curl_call(host, headertype, nvpstr, formdata, calltype, callback = null
                 console.error( (ddbg()), "curl call error: ", err);
                 reject(err);
             } else {
-                if ( DEBUGcurl ) {
+                if ( DEBUG18 ) {
                     console.log((ddbg()), "curl_call resolved, body: ", body, " \n res: ", res);
                 }
 
@@ -1373,6 +1375,48 @@ function getDevices(hub) {
                 return curl_call(hubEndpt + "/getallthings", header, params, false, "POST");
             })
             .then(body => {
+
+                // patch in Ambient Weather here if there is an App key and an API key
+                if ( GLB.dbinfo.ambientappkey && GLB.dbinfo.ambientapi && GLB.dbinfo.ambientapi!=="notyet" ) {
+                    const AmbientWeatherApi = require("ambient-weather-api");
+                    const api = new AmbientWeatherApi({
+                        apiKey: GLB.dbinfo.ambientapi,
+                        applicationKey: GLB.dbinfo.ambientappkey
+                    });
+                    body = api.userDevices()
+                    .then( devices => {
+
+                        // add a tile for each ambient weather device
+                        devices.forEach( device => {
+                            let newdevice = {};
+                            newdevice.type = "weather";
+                            newdevice.id = device.macAddress;
+                            newdevice.name = device.info.name;
+                            newdevice.hint = "AmbientWeather";
+                            newdevice.refresh = 300;
+                            newdevice.data = {};
+                            return api.deviceData(device.macAddress, {limit: 1})
+                            .then( devicedata => {
+                                // for now we capture all fields, later we may want to filter some out
+                                for ( var key in devicedata[0] ) {
+                                    newdevice.data[key] = devicedata[0][key];
+                                }
+                                console.log( (ddbg()), "adding Ambient Weather device: ", newdevice);
+                                body.push(newdevice);
+                                return body;
+                            })
+                            .catch( reason => {
+                                console.error( (ddbg()), "error retrieving ambient weather data for device: ", device.macAddress, " reason: ", reason);
+                            });
+                        });
+                        return body;
+                    });
+                    return body;
+                } else {
+                    return body;
+                }
+            })
+            .then(body => {
                 hubInfoCallback(body);
             })
             .catch(reason => {
@@ -1580,7 +1624,7 @@ function getDevices(hub) {
             var mydevices = {};
             var variables = {name: "ISY Variables", "status_": "ACTIVE"};
 
-            if ( DEBUGisy ) {
+            if ( DEBUG19 ) {
                 console.log( (ddbg()), "ISY hub call: ", access_token, hubEndpt, stheader);
             }
 
@@ -1709,7 +1753,7 @@ function getDevices(hub) {
                 if ( stage ) {
                     done[ stage ] = true;
                 }
-                if ( DEBUGisy ) {
+                if ( DEBUG19 ) {
                     console.log( (ddbg()), "stage: ", stage, " flag: ", flag, " done: ", done);
                 }
 
@@ -1728,7 +1772,7 @@ function getDevices(hub) {
             }
 
             function getISY_Defs( result, vartype ) {
-                if (DEBUGisy && result) {
+                if (DEBUG19 && result) {
                     console.log( (ddbg()), vartype + " variables defs: ", UTIL.inspect(result, false, null, false) );
                 }
                 try {
@@ -1762,7 +1806,7 @@ function getDevices(hub) {
             }
                
             function getISY_Vars(result, vartype) {
-                if (DEBUGisy && result) {
+                if (DEBUG19 && result) {
                     console.log( (ddbg()), vartype + "variables: ", UTIL.inspect(result, false, null, false) );
                 }
                 const vartypes = ["", "Int", "State"];    
@@ -1807,7 +1851,7 @@ function getDevices(hub) {
     
             // get programs and setup program tiles much like how Piston tiles are done in HE
             function getAllProgs(result) {
-                if ( DEBUGisy && result ) {
+                if ( DEBUG19 && result ) {
                     console.log( (ddbg()), "programs: ", UTIL.inspect(result, false, null, false) );
                 }
                 var thetype = "isy";
@@ -1844,7 +1888,7 @@ function getDevices(hub) {
                     var isfolder = proginfo.folder;
                     // if we have a folder don't add it
                     if ( isfolder==="true" ) {
-                        if ( DEBUGisy ) {
+                        if ( DEBUG19 ) {
                             console.log( (ddbg()), "Program ", prog.name, " is a folder. id: ", proginfo.id, " Status: ", proginfo.status);
                         }
                         // n++;
@@ -1853,7 +1897,7 @@ function getDevices(hub) {
                         // }
                     // create tile for programs that are not folders
                     } else {
-                        if ( DEBUGisy ) {
+                        if ( DEBUG19 ) {
                             console.log( (ddbg()), "Program ", prog.name, " id: ", proginfo.id, " Status: ", proginfo.status, " Last run: ", prog.lastRunTime );
                         }
                         const progid = "prog_" + proginfo.id;
@@ -2168,7 +2212,7 @@ function getDevices(hub) {
             
             function getStatusInfo(result) {
                 try {
-                    if ( DEBUGisy ) {
+                    if ( DEBUG19 ) {
                         console.log( (ddbg()), "node details: ", UTIL.inspect(result, false, null, false) );
                     }
                     if ( !result || !result.nodes ) {
@@ -2310,7 +2354,7 @@ function translateIsy(devicetype, value, isyid, val, formatted, uom, prec, subid
     if ( setuom ) {
         newvalue["uom_" + isyid] = uom;
     }
-    if ( DEBUGisy ) {
+    if ( DEBUG19 ) {
         console.log( (ddbg()), "translate: type: ", devicetype, " isyid: ", isyid, " val: ", val, " formatted: ", formatted, " uom: ", uom, " prec: ", prec, " value: ", value);
     }
 
@@ -2391,7 +2435,7 @@ function setIsyFields(nodeid, device, props) {
             // devicetype, value, obj.id, obj.value, obj.formatted, obj.uom, obj.prec, setuom
             value = translateIsy(devicetype, value, obj.id, obj.value, obj.formatted, obj.uom, obj.prec, false, true);
         });        
-        if ( DEBUGisy ) {
+        if ( DEBUG19 ) {
             console.log( (ddbg()), "in setIsyFields - node: ", nodeid, " device: ", device, " value: ", value, " props: ", props);
         }
     }
@@ -3334,7 +3378,7 @@ function doLogin(body, res) {
         phash = pw_hash(body["panelpword"]);
     }
 
-    if ( DEBUG22 ) {
+    if ( DEBUG20 ) {
         console.log( (ddbg()), "dologin: uname= ", uname, " pword= ", uhash, " pname= ", pname, " panelpword= ", phash, " pnumber= ", pnumber, " body: ", body);
     }
 
@@ -4188,6 +4232,7 @@ function getWeatherIcon(num, weathertype) {
     return iconstr;
 }
 
+// TODO - update this to handle special translations for Ambient Weather
 function translateWeather(pvalue) {
     if ( !pvalue || typeof pvalue!=="object" ) {
         console.log( (ddbg()), "invalid weather data - object expected but not found");
@@ -6241,7 +6286,7 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
 
 function pushClient(userid, swid, swtype, subid, body) {
     // send the new results to all clients
-    var entry = {};
+    let entry = {};
     entry["userid"] = userid;
     entry["id"] = swid;
     entry["type"] = swtype;
@@ -6261,14 +6306,14 @@ function pushClient(userid, swid, swtype, subid, body) {
         
     // save the result to push to all clients
     entry["value"] = pvalue;
-
-    if ( DEBUG17 ) {
-        console.log( (ddbg()), "pushClient: ", jsonshow(entry), "\n userid: ", userid," clients: <<", clients[userid], ">>" );
-    }
-
+    
     // do a push to each client for this user if ready
     if ( clients[userid] ) {
-        for (var i=0; i < clients[userid].length; i++) {
+        if ( DEBUG17 ) {
+            console.log( (ddbg()), "pushClient: ", jsonshow(entry));
+            // console.log( (ddbg()), "userid: ", userid," clients:", jsonshow(clients[userid]) );
+        }
+        for (let i=0; i < clients[userid].length; i++) {
             clients[userid][i].sendUTF(JSON.stringify(entry));
         }
     }
@@ -6643,7 +6688,7 @@ function callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, h
     // I don't need to use this because the ISY pushes a webSocket that I use
     // to do the same thing in the processIsyMessage function so we just report the result in a debug
     function getNodeResponse(body) {
-        if ( DEBUGisy ) {
+        if ( DEBUG19 ) {
             console.log( (ddbg()),"getNodeResponse: ", body);
         }
     }
@@ -8645,6 +8690,14 @@ function getMainPage(user, configoptions, hubs, req, res) {
         tc += hidden("emailid", useremail, "emailid");
         tc += hidden("hpcode", hpcode, "hpcode");
         tc += hidden("apiSecret", GLB.apiSecret);
+
+        // pass all debug flags to browser
+        const dbgflags = {debug1: DEBUG1, debug2: DEBUG2, debug3: DEBUG3, debug4: DEBUG4, debug5: DEBUG5,
+                          debug6: DEBUG6, debug7: DEBUG7, debug8: DEBUG8, debug9: DEBUG9, debug10: DEBUG10,
+                          debug11: DEBUG11, debug12: DEBUG12, debug13: DEBUG13, debug14: DEBUG14, debug15: DEBUG15,
+                          debug16: DEBUG16, debug17: DEBUG17, debug18: DEBUG18, debug19: DEBUG19, debug20: DEBUG20
+        };
+        tc += hidden("dbgflags", JSON.stringify(dbgflags), "dbgflags");
         tc += "</form>";
 
         // var hubpick = getConfigItem(configoptions, "hubpick");
@@ -8971,7 +9024,7 @@ function updCustom(userid, tileid, swid, swval, oldsubid, subid, swtype, rules) 
         mydb.updateRow("configs", rulerow, "userid = "+userid+" AND configkey = '"+configkey+"'")
         .then(res => {
             var str = "Updated " + goodrules.length + " customizations for id: " + swid + ", and user: " + userid;
-            if ( DEBUG23 ) {
+            if ( DEBUG10 ) {
                 console.log((ddbg()), str, "rules: \n", goodrules, " rulerow: ", rulerow);
             }
 
@@ -9029,7 +9082,7 @@ function updCustom(userid, tileid, swid, swval, oldsubid, subid, swtype, rules) 
                 mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${swid}' AND subid = '${oldsubid}'`)
                 .then(res2 => {
                     var numListDel = res2.getAffectedItemsCount();
-                    if ( DEBUG23 ) {
+                    if ( DEBUG10 ) {
                         console.log( (ddbg()), `Deleted ${numListDel} LIST rows for deviceid=${swid} and subid=${oldsubid}`);
                     }
                 })
@@ -10876,7 +10929,7 @@ if ( app && applistening ) {
         getUserName(req)
         .then(results => {
 
-            if ( DEBUG22 ) {
+            if ( DEBUG20 ) {
                 console.log( (ddbg()), "username results: ", results);
             }
 
@@ -11197,14 +11250,37 @@ if ( app && applistening ) {
             }
             res.end();
 
+        // handle config events from Hubitat here
+        } else if ( req.body['msgtype'] === "config" ) {
+            // use this to push new data to the config page
+            const userid = req.body["change_device"];
+            const configvals = req.body["change_value"];
+            for (var key in configvals) {
+                GLB.dbinfo[key] = configvals[key];
+            }
+
+            // now write the updated config values to the housepanel.cfg file
+            try {
+                var configname = GLB.homedir + "/housepanel.cfg";
+                fs.writeFileSync(configname, JSON.stringify(GLB.dbinfo, null, 4), "utf8");
+            } catch (e) {
+                console.error( (ddbg()), "Error writing housepanel.cfg file: ", e);
+            }
+
+            if ( DEBUG17 ) {
+                console.log( (ddbg()), "Received hub configuration data for user ", userid, ": ", jsonshow(configvals) );
+            }
+            res.send("New hub configuration received and processed");
+            res.end();
+
         // this is where we receive the push from groovy to populate a new hub
         // we send it to the browser of the userid specified
         } else if ( req.body['msgtype'] === "authupd" ) {
             // use this to push new data to the auth page
-            userid = req.body["change_device"];
-            var swtype = req.body["change_type"];
-            var subid = req.body["change_attribute"];
-            var pvalue = req.body["change_value"];
+            const userid = req.body["change_device"];
+            const swtype = req.body["change_type"];
+            const subid = req.body["change_attribute"];
+            const pvalue = req.body["change_value"];
             pushClient(userid, "authupd", swtype, subid, pvalue);
             res.send("New hub auth information received and processed");
             res.end();
@@ -11212,7 +11288,7 @@ if ( app && applistening ) {
         // handle msg events from Hubitat here
         // these message can now only come from Hubitat since ST groovy is gone
         } else if ( req.body['msgtype'] === "update" ) {
-            if ( DEBUG12 ) {
+            if ( DEBUG12 || DEBUG17 ) {
                 console.log( (ddbg()), "Received update msg from hub: ", req.body["hubid"], " msg: ", req.body);
             }
             hubid = req.body['hubid'];

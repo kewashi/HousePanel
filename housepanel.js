@@ -326,6 +326,16 @@ $(document).ready(function() {
         $("#tabs").tabs();
         var tabcount = $("#roomtabs > li.ui-tabs-tab").length;
 
+        // grab debug flags from hidden inputs
+        var dbgflags = $("input[name='dbgflags']").val();
+        if ( dbgflags ) {
+            dbgflags = JSON.parse(dbgflags);
+        } else {
+            dbgflags = {};
+        }
+        cm_Globals.dbgflags = dbgflags;
+        console.log("debug flags: ", dbgflags);
+
         $(document).on("keydown",function(e) {
             if ( priorOpmode === "Modal" ) {
                 return;
@@ -925,6 +935,10 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                 blackout = (blackout === "true") || (blackout === true) ? true : false;
             } else {
                 blackout = false;
+            }
+            
+            if ( cm_Globals.dbgflags && cm_Globals.dbgflags["debug17"] ) {
+                console.log("webSocket message received: ", presult);
             }
 
             // reload page if signalled from server
