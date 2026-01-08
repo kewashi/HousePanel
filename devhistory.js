@@ -1,4 +1,5 @@
 const devhistory = `
+3.5.9   01/10/2026 Complete rewrite of websocket handling to be mroe robust and support multiple clients on any device
 3.5.8   01/05/2026 Added support for Ambient Weather stations using their API. This includes a new device type that captures all the data from the station. 
 3.5.7   01/03/2026 fix bug in thermostat setpoint and up/down link click handling and minor code cleanup
 3.5.6   01/01/2026 enabled GET and POST to insert results into tiles and major code cleanup

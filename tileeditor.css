@@ -1736,6 +1736,7 @@ div.overlay.battery div.battery, div.overlay.battery2 div.battery2, div.overlay.
     display: block;
     position: absolute;
     float: right;
+    top: 15px;
     right: 2px;
     width: 32px;
     height: 6px;
@@ -2339,4 +2340,19 @@ div.variables.vardef {
 input.cboxcustom {
     margin-left: 2px;
     margin-right: 10px;
+}
+
+div.thing.contact-thing div.overlay.name div.name, div.thing.motion-thing div.overlay.name div.name {
+    margin-left: 10px;
+    width: 70%;
+}
+
+div.clientinfo {
+    margin-left: 5px;
+    color: rgb(10, 10, 10);
+    font-weight: normal;
+}
+div.activeclient {
+    color: rgb(10, 10, 200);
+    font-weight: bold;
 }

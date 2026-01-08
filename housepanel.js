@@ -223,7 +223,6 @@ function getOptions(pagename) {
                     cm_Globals.options["rules"] = presult[0];
                     cm_Globals.options["config"] = presult[1];
                     cm_Globals.options["mode"] = presult[2];
-                    // console.log("options:", cm_Globals.options);
                 } else {
                     throw "error - failure reading custom options and rules from database for user = " + userid;
                 }
@@ -282,10 +281,10 @@ function getHubs() {
                 if (pstatus==="success" ) {
                     cm_Globals.hubs = presult;
                     cm_Globals.hubs.forEach(hub => {
-                        // setup all special tiles not tied to hubs to refresh as user given slow rate
+
+                        // if there is a hubtimer code that will be used to refresh this hub's devices
                         let hubtimer = parseInt(hub.hubtimer, 10) * 1000;
-                        if ( hubtimer > 0 &&  hub.hubtype !== "None" && hub.hubid !== "-1" ) {
-                            // if there is a hubtimer code that will be used to refresh this hub's devices
+                        if ( hubtimer > 0 && pagename === "main" ) {
                             setupTimer("hub", hubtimer, hub);
                         }
                     });
@@ -304,16 +303,15 @@ function getHubs() {
 $(document).ready(function() {
     // set the global return URL value
     try {
-        cm_Globals.returnURL = $("input[name='returnURL']").val();
-        cm_Globals.port = $("input[name='webDisplayPort']").val();
-        if ( !cm_Globals.returnURL ) {
-            throw "Return URL not defined by host page. Using default.";
-        }
+        cm_Globals.protocol = window.location.protocol;
+        cm_Globals.returnURL = `${cm_Globals.protocol}//${window.location.host}`;
+        cm_Globals.port = window.location.port;
     } catch(e) {
-        console.warn(e);
-        cm_Globals.returnURL = "http://localhost:8580";
-        cm_Globals.port = "8580";
+        console.error(e);
+        alert("Fatal Error - Cannot display HousePanel because something went wrong in determining your server's host and port. Please check your installation and try again.");
+        return;
     }
+    // console.log("returnURL: ", cm_Globals.returnURL, " port: ", cm_Globals.port);
 
     try {
         pagename = $("input[name='pagename']").val();
@@ -334,7 +332,6 @@ $(document).ready(function() {
             dbgflags = {};
         }
         cm_Globals.dbgflags = dbgflags;
-        console.log("debug flags: ", dbgflags);
 
         $(document).on("keydown",function(e) {
             if ( priorOpmode === "Modal" ) {
@@ -533,7 +530,7 @@ $(document).ready(function() {
                     $("#emailid").focus();
                     alert(msg);
                 } else {
-                    $("#mobilid").focus();
+                    $("#mobileid").focus();
                 }
             }
         });
@@ -573,25 +570,6 @@ $(document).ready(function() {
             evt.stopPropagation();
             execForgotPassword();
         });
-
-        // $("#pword").on("keydown",function(evt) {
-        //     evt.stopPropagation();
-        //     if ( evt.which===13 ){
-        //         $("#pname").val("default");
-        //         $("#pname").focus();
-        //     }
-        // });
-
-        $("#pword").on("keydown",function(evt) {
-            if ( evt.which===13 ){
-                evt.stopPropagation();
-                $("#pnumber").focus();
-            }
-        });
-
-        // cm_Globals.apiSecret = $("input[name='apiSecret']").val();
-    // }  else {
-    //     cm_Globals.apiSecret = "";
     }
     cm_Globals.apiSecret = $("input[name='apiSecret']").val() || "";
 
@@ -612,6 +590,7 @@ $(document).ready(function() {
     } else if ( pagename==="info" ) {
 
         getOptions(pagename);
+        initWebsocket();
 
         $("button.infobutton").on('click', function() {
             window.location.href = cm_Globals.returnURL;
@@ -683,14 +662,16 @@ $(document).ready(function() {
                     dorules = false;
                 }
                 if ( clk==="okay" ) {
-                    console.log("new: ", newid, newval, newsubid, doall, " old: ", idedit, valedit, subidedit);
                     if ( newsubid !== subidedit || newval !== valedit || newid !== idedit ) {
                         $.post(cm_Globals.returnURL, 
                             {api: "editrules", userid: cm_Globals.options.userid, id: idedit, newid: newid, type: typeedit, doall: doall, dorules: dorules,
                              value: valedit, newval: newval, subid: subidedit, newsubid: newsubid, hpcode: cm_Globals.options.hpcode},
                             function (presult, pstatus) {
                                 if ( pstatus==="success" ) {
-                                    console.log(`Updated rule: Custom ID: ${idedit} to ${newid} Field: ${subidedit} to ${newsubid} Value: ${newval} Result: ${presult}`);
+
+                                    if ( cm_Globals.dbgflags["debug11"] ) {
+                                        console.log(`Updated rule: Custom ID: ${idedit} to ${newid} Field: ${subidedit} to ${newsubid} Value: ${newval} Result: ${presult}`);
+                                    }
 
                                     // now update the screen with the new values
                                     $(`#trid_${trid} > td.thingid`).html(newid);
@@ -701,11 +682,9 @@ $(document).ready(function() {
                                 }
                             }
                         );                    
-                    } else {
-                        console.log("No changes made, nothing done.");
                     }
                 }
-                console.log("Values: ", clk, newid, newval, newsubid, doall);
+                // console.log("Values: ", clk, newid, newval, newsubid, doall);
                 closeModal("modalexec");
             });
         });
@@ -732,7 +711,9 @@ $(document).ready(function() {
                             value: valedit, subid: subidedit, hpcode: cm_Globals.options.hpcode},
                         function (presult, pstatus) {
                             if ( pstatus==="success" ) {
-                                console.log(`Custom ID: ${idedit} Field: ${subidedit} Value: ${valedit} Deleted`);
+                                if ( cm_Globals.dbgflags["debug10"] ) {
+                                    console.log(`Custom ID: ${idedit} Field: ${subidedit} Value: ${valedit} Deleted`);
+                                }
 
                                 // now update the screen by deleting this row
                                 $(`#trid_${trid}`).remove();
@@ -861,23 +842,13 @@ function checkLogin() {
 function initWebsocket() {
     try {
         var userid = $("#userid").val();
-        var webSocketUrl = $("input[name='webSocketUrl']").val();
-        var webSocketPort = parseInt($("input[name='webSocketServerPort']").val());
+        const webSocketPort = parseInt($("input[name='webSocketServerPort']").val());
+        const wsScheme = (location.protocol === "https:") ? "wss:" : "ws:";
+        const wsHost   = location.hostname;   // localhost OR 192.168.x.x OR name
+        const webSocketUrl = `${wsScheme}//${wsHost}:${webSocketPort}`;
 
         if ( userid && webSocketUrl ) {
-
-            // get the port from the panel name cookie
-            var pname = getCookie("pname");
-            if ( pname.substring(1,2)!==":" ) {
-                pname = "1:" + pname;
-            }
-            var portnum = pname.substring(0,1);
-            var wsport = webSocketPort + parseInt(portnum);
-            webSocketUrl += ":" + wsport;
-            if ( $("#infoport") ) {
-                $("#infoport").html("#"+portnum);
-            }
-            setupWebsocket(userid, wsport, webSocketUrl);
+            setupWebsocket(userid, webSocketUrl);
         }
     } catch(err) {
         console.error( "error - could not initialize websocket. err: ", err);
@@ -886,7 +857,7 @@ function initWebsocket() {
 
 // new routine to set up and handle websockets
 // only need to do this once - I have no clue why it was done the other way before
-function setupWebsocket(userid, wsport, webSocketUrl) {
+function setupWebsocket(userid, webSocketUrl) {
     var wsSocket = null;
 
     try {
@@ -897,12 +868,12 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
     }
     
     // upon opening a new socket notify user and do nothing else
+    // this is a required handshake to register this socket with the server so it can send messages to it
     wsSocket.onopen = function() {
-        console.log("webSocket connection opened for: ", webSocketUrl);
-
+        console.log("webSocket connection opened for webSocketUrl: ", webSocketUrl);
         function sendUser() {
             if ( wsSocket.readyState === wsSocket.OPEN ) {
-                wsSocket.send(userid.toString() + "|" + wsport);
+                wsSocket.send(userid.toString());
             }
         }
         sendUser();
@@ -912,8 +883,8 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
         console.error("webSocket error: ", evt, " webSocketUrl: ", webSocketUrl);
     };
     
-    wsSocket.onclose = function() {
-        console.log("webSocket connection closed for: ", webSocketUrl);
+    wsSocket.onclose = function(evt) {
+        console.log("webSocket connection closed for webSocketUrl: ", webSocketUrl, " with code: ", evt.code, " for reason: ", evt.reason, " clean? ", evt.wasClean);
     };
 
     // received a message from housepanel-push or hpserver.js
@@ -1007,6 +978,22 @@ function setupWebsocket(userid, wsport, webSocketUrl) {
                     $("#inp_hubid").val(pvalue.hubid);
                     $("#inp_hubtimer").val(pvalue.hubtimer || "0");
                 }
+
+            } else if ( bid==="websocket" ) {
+                if ( thetype==="closed" ) {
+                    console.warn("webSocket to the server closed unexpectedly for connection id: ", subid, " for user: ", userid);
+                } else if ( thetype==="opened" ) {
+                    const connId = subid || "unknown";
+                    console.log("webSocket to the server successfully opened for connection id: ", connId, " for user: ", userid);
+
+                    // show on user's panel
+                    if ( pagename==="main" ) {                       
+                        $("#infoport").html("#"+connId);
+                    }
+                    if ( pagename==="info" ) {
+                        $("div.clientinfo[id='"+connId+"']").addClass("activeclient");
+                    }
+                }                    
 
             } else if ( bid && thetype && pvalue && typeof pvalue==="object" ) {
 
@@ -1485,10 +1472,7 @@ function hpsliders(evt, ui) {
     
     $.post(cm_Globals.returnURL, 
         {api: "doaction", userid: userid, pname: pname, id: linkbid, uid: uid, thingid: thingid, type: linktype, value: thevalue, attr: subid, hint: hint,
-        subid: realsubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode},
-        function (presult, pstatus) {
-            console.log(">>>> pstatus: ", pstatus, " presult: ", presult);
-        }, "json"
+        subid: realsubid, hubindex: linkhub, tileid: tileid, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode}, null, "json"
     );
 }
 
@@ -2239,7 +2223,6 @@ function execButton(buttonid) {
                 if ( typeof presult === "object" && presult.result === "logout" ) {
                     window.location.href = cm_Globals.returnURL + "/logout?pname=" + presult.pname;
                 } else {
-                    console.log("redirecting to main page. presult: ", presult);
                     window.location.href = cm_Globals.returnURL;
                 }
             }
@@ -2252,7 +2235,6 @@ function execButton(buttonid) {
                 alert("Parameter options page failed to save properly");
                 window.location.href = cm_Globals.returnURL;
             } else {
-                console.log("params save result: ", presult);
                 if ( typeof presult === "object" && presult.result === "logout" ) {
                     window.location.href = cm_Globals.returnURL + "/logout?pname=" + presult.pname;
                 } else {
@@ -2436,26 +2418,6 @@ function execButton(buttonid) {
     } else if ( buttonid==="snap" && priorOpmode==="Operate" ) {
         // $("#mode_Snap").prop("checked");
         cm_Globals.snap =  ! cm_Globals.snap;
-
-    // } else if ( buttonid=="polldevices" && priorOpmode==="Operate" ) {
-    //     try {
-    //         //.         tile. bid.  thingid. type
-    //         // refreshTile("1021", "2168", "330", "switchlevel");
-    //         // refreshTile("127", "469", "18", "garage");
-    //         // refreshTile("127", "469", "138", "garage");
-    //         // just do the post and nothing else since the post call pushClient to refresh the tiles
-    //         const numpolled = $("div[hubtype='Hubitat']").length;
-    //         $("div[hubtype='Hubitat']").each( function() {
-    //             const tileid = $(this).attr("tile");
-    //             const bid = $(this).attr("bid");
-    //             const thingid = $(this).attr("thingid");
-    //             const thetype = $(this).attr("type");
-    //             refreshTile(tileid, bid, thingid, thetype);
-    //         });
-    //         console.log(`Polling ${numpolled} devices.`);
-    //     } catch(err) {
-    //         console.error ("Polling error", err.message);
-    //     }
 
     } else if ( buttonid==="refreshpage" && priorOpmode==="Operate" ) {
         var pstyle = "position: absolute; background-color: blue; color: white; font-weight: bold; font-size: 24px; left: 350px; top: 300px; width: 600px; height: 100px; margin-left: 50px; margin-top: 50px;";
@@ -2703,6 +2665,40 @@ function setupButtons() {
         $("#newthingcount").on('click',function(evt) {
             $("#newthingcount").html(mainhubmsg);
         });
+
+        // handle hub updates, which calls API to read devices from the hub or to update the tiles from the null hub
+        $("input.hubupdate").on("click", function(evt) {
+            var hubId = $("input[name='hubid']").val();
+            var hub = findHub(hubId, "hubid");
+            try {
+                var formData = formToObject("hubform");
+            } catch(err) {
+                evt.stopPropagation(); 
+                alert("Something went wrong when trying to update the devices for your hub...\n" + err.message);
+                return;
+            }
+
+            formData["api"] = "hubupdate";
+            formData.hubtype = $("select[name='hubtype']").val();
+            // tell user we are updating hub...
+            $("#newthingcount").html("Updating hub: " + formData.hubname).fadeTo(400, 0.1 ).fadeTo(400, 1.0).fadeTo(400, 0.1 ).fadeTo(400, 1).fadeTo(400, 0.1 ).fadeTo(400, 1).fadeTo(400, 0.1 ).fadeTo(400, 1).fadeTo(400, 0.1 ).fadeTo(400, 1);
+            $.post(cm_Globals.returnURL, formData,  function(presult, pstatus) {
+                if ( pstatus==="success" && typeof presult==="object" ) {
+                    $("#newthingcount").html("Hub " + presult.hubName + " of type (" + presult.hubType+") updated " + presult.numdevices + " devices");
+                    setTimeout(function() {
+                        returnMainPage();
+                    }, 3000);
+                } else {
+                    if (typeof presult==="string" ) {
+                        $("#newthingcount").html(presult);
+                    } else {
+                        $("#newthingcount").html("Something went wrong with hub update request");
+                    }
+                    console.error("hub update error: ", presult);
+                }
+            });
+            evt.stopPropagation();
+        });
         
         // handle auth submissions - modified to only do manual auth flow
         // TODO - error check for fields properly filled out
@@ -2723,20 +2719,20 @@ function setupButtons() {
             // others return a request to start an OATH redirection flow
             formData["api"] = "hubauth";
             formData.hubtype = $("select[name='hubtype']").val();
-            console.log("globals: ", cm_Globals, " formData: ", formData);
-            $.post(cm_Globals.returnURL, formData,  function(presult, pstatus) {
+                $.post(cm_Globals.returnURL, formData,  function(presult, pstatus) {
 
                 if ( pstatus==="success" && typeof presult==="object" && presult.action && presult.action === "things" ) {
-                    var obj = presult;
-                    $("#newthingcount").html("Hub " + obj.hubName + " of type (" + obj.hubType+") authorized " + obj.numdevices + " devices");
-
+                    $("#newthingcount").html("Hub " + presult.hubName + " of type (" + presult.hubType+") authorized " + presult.numdevices + " devices");
+                    setTimeout(function() {
+                        returnMainPage();
+                    }, 3000);
                 } else {
                     if (typeof presult==="string" ) {
                         $("#newthingcount").html(presult);
                     } else {
                         $("#newthingcount").html("Something went wrong with hub auth request");
-                        console.error("hub auth error: ", presult);
                     }
+                    console.error("hub auth error: ", presult);
                 }
             });
             evt.stopPropagation();
@@ -2814,7 +2810,7 @@ function setupAuthHub(hubId, userid) {
         $("input[name='hubname']").prop("disabled", false).val("");
         $("input[name='useraccess']").val("");
         $("input[name='userendpt']").val("");
-        $("input[name='hubid']").val("Hubitat_new");
+        $("input[name='hubid']").val("Hubitat_new").prop("disabled", false);
         $("input[name='hubtimer']").val("0");
         $("input.hubauth").removeClass("hidden");
         $("input.hubdel").addClass("hidden");
@@ -2823,13 +2819,14 @@ function setupAuthHub(hubId, userid) {
     // this is for the blank hub for default devices
     } else if ( hubId==="-1" ) {
         newhubmsg = "This \"hub\" is reserved for things not associated with a real hub. It cannot be altered, removed, or authorized. " +
-                    "You can change the Refresh timer before returning to main page to change how often special tiles get updated.";
+                    "You can change the Refresh timer and press Update Hub to change how frequently special tiles get updated.";
         $("#hubdiv").hide();
         $("#hideaccess_hub").hide();
-        $("select[name='hubtype']").prop("disabled", true).val("None");
-        $("input[name='hubhost']").prop("disabled", true).val("None");
         $("input[name='hubname']").prop("disabled", true).val("None");
-        $("input[name='hubid']").val("-1");
+        $("input[name='hubid']").val("-1").prop("disabled", true);
+        $("input[name='hubhost']").prop("disabled", true).val("None");
+        $("input[name='hubtimer']").val(hub.hubtimer).prop("disabled", false);
+        $("select[name='hubtype']").prop("disabled", true).val("None");
         $("input.hubauth").addClass("hidden");
         $("input.hubdel").addClass("hidden");
 
@@ -2840,9 +2837,9 @@ function setupAuthHub(hubId, userid) {
             // replace all the values
             $("input[name='hubindex']").val(hub.id);
             $("input[name='hubname']").val(hub.hubname);
-            $("input[name='hubid']").val(hub.hubid);
+            $("input[name='hubid']").val(hub.hubid).prop("disabled", false);
             $("input[name='hubhost']").val(hub.hubhost);
-            $("input[name='hubtimer']").val(hub.hubtimer);
+            $("input[name='hubtimer']").val(hub.hubtimer).prop("disabled", false);
             $("input[name='useraccess']").val(hub.useraccess);
             $("input[name='userendpt']").val(hub.userendpt);
             $("select[name='hubtype']").val(hub.hubtype);
@@ -3197,7 +3194,6 @@ function setupFilters() {
    // set up option box clicks
    // fixed bug that forgot to click on the saved hub from cookies
     var pickedhub = getCookie("defaultHub");
-    // console.log("pickedhub = ", pickedhub);
     if ( !pickedhub || pickedhub==="undefined" )  {
         pickedhub = "-1";
         setCookie("defaultHub", "-1");
@@ -3235,7 +3231,7 @@ function setupFilters() {
         // reset all filters using hub setting
         $('input[name="useroptions[]"]').each(updateClick);
     });
-    $(`input[value="${pickedhub}"]`).prop('selected',true);
+    $(`input[value="${pickedhub}"]`).prop('checked',true);
 
     $("div#thingfilters").on("click", function() {
         var filter = $("#filterup");
@@ -3602,28 +3598,29 @@ function processKeyVal(targetid, aid, key, value) {
     return isclock;
 }
 
-function refreshTile(tileid, bid, thingid, thetype) {
-    var pname = cm_Globals.options.pname;
-    if ( !tileid || !bid || !thingid || !thetype ) {
-        return;
-    }
+// rewrote this to call server only once for a given hub and then refresh all tiles
+function updateHubTiles(hubid) {
 
-    try {
-        $.post(cm_Globals.returnURL, 
-            {api: "doquery", userid: cm_Globals.options.userid, pname: pname, id: bid, thingid: thingid, tileid: tileid, 
-                             type: thetype, hpcode: cm_Globals.options.hpcode},
-            function (presult, pstatus) {
-                if ( pstatus==="success" && presult && typeof presult==="object" ) {
-                    updateTile(thingid, presult);
-                    updateLink(bid, presult);
-                } else {
-                    console.warn(`Could not refresh tile ${tileid} ${thingid} ${thetype} presult: `, presult);
+    // replace old approach with a new api call that returns all updated devices
+    $.post(cm_Globals.returnURL, 
+                {api: "refreshhub", userid: cm_Globals.options.userid, pname: cm_Globals.options.pname, 
+                id: hubid, hpcode: cm_Globals.options.hpcode},
+        function (presult, pstatus) {
+            if ( pstatus==="success" && presult && typeof presult==="object" ) {
+                // loop through the returned object and update all the tiles that were changed for this hub
+                for (let bid in presult) {
+                    $('div.panel div.thing[bid="'+bid+'"]').each(function() {
+                        const thingid = $(this).attr("thingid");
+                        // console.log("updating clock tile ", thingid, " with time ", clockdevice);
+                        updateTile(thingid, presult[bid].pvalue);
+                    });
+                    updateLink(bid, presult[bid].pvalue);
                 }
-            }, 
-        "json");
-    } catch(e) {
-        console.error(e);
-     }
+            } else {
+                console.warn(`Could not update hub with hubid = ${hubid}.  Request returned: `, presult);
+            }
+        }, "json"
+    );
 }
 
 // refresh tiles on this page when switching to it
@@ -3781,16 +3778,11 @@ function setupTimer(timertype, timerval, hub) {
             try {
                 // just do the post and nothing else since the post call pushClient to refresh the tiles
                 var hubid = that[2];
-                $("div[hub='" + hubid +"']").each( function() {
-                    const tileid = $(this).attr("tile");
-                    const bid = $(this).attr("bid");
-                    const thingid = $(this).attr("thingid");
-                    const thetype = $(this).attr("type");
-                    refreshTile(tileid, bid, thingid, thetype);
-                });
 
+                // replace old approach with a new api call that returns all updated devices
+                updateHubTiles(hubid);
             } catch(err) {
-                console.error ("Polling error", err.message);
+                console.error ("Polling error in setupTimer for hub: ", hub, " error: ", err);
             }
         }
 

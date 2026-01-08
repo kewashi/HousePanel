@@ -22,7 +22,7 @@ const DEBUG13 = false;              // URL callbacks
 const DEBUG14 = false;              // tile link details
 const DEBUG15 = false;              // new user and forgot password
 const DEBUG16 = false;              // writing, custom names, and image deletes
-const DEBUG17 = false;              // push client
+const DEBUG17 = false;              // websocket and push client
 const DEBUG18 = false;              // detailed curl inspection
 const DEBUG19 = false;              // ISY debug info
 const DEBUG20 = false;              // login info
@@ -57,6 +57,9 @@ const { type } = require('os');
 
 // support for Ambient Weather API
 const AmbientWeatherApi = require("ambient-weather-api");
+
+// ISY websocket clients
+var wsclient = {};
 
 // global variables are all part of GLB object
 var GLB = {};
@@ -292,9 +295,6 @@ GLB.trigger2 = [
     "illuminanceMeasurement", "smokeDetector", "valve", "waterSensor", "tvChannel"
 ];
 
-// list of currently connected clients (users)
-var clients = {};
-
 // server variables
 var app;
 var applistening = false;
@@ -444,7 +444,11 @@ function getRandomInt(min, max) {
 }
 
 function jsonshow(obj) {
-    return UTIL.inspect(obj, false, null, false);
+    if ( typeof obj === "object" ) {
+        return UTIL.inspect(obj, false, null, false);
+    } else {
+        return obj;
+    }
 }
 
 // trying to not use encoding - but we have to replace single quotes to avoid messing up the DB
@@ -627,6 +631,8 @@ function getConfigItem(configoptions, tag) {
 async function getUserName(req) {
     var uhash = getCookie(req, "uname");
     var phash = getCookie(req, "pname");
+
+    // this will honor the old style of storing the hash with a leading pnumber: but will also work with just the hash value
     if ( phash && phash.substr(1,1) === ":" ) {
         phash = phash.substr(2);
     }
@@ -661,7 +667,7 @@ async function getUserName(req) {
                                                    "For security purposes, all API calls will use hpcode="+permcode);
                         })
                         .catch( reason => {
-                            console.log( (ddbg()), reason);
+                            console.error( (ddbg()), "error updating user hpcode: ", reason);
                         });
                     }
                     break;
@@ -671,7 +677,7 @@ async function getUserName(req) {
         return therow;
     })
     .catch(reason => {
-        console.log( (ddbg()), "user not found, returning null. reason: ", reason);
+        console.error( (ddbg()), "user not found, returning null. reason: ", reason);
         return null;
     });
     return result;
@@ -763,10 +769,10 @@ function writeCustomCss(userid, pname, str) {
         try {
             fs.writeFileSync(fname, fixstr, {encoding: "utf8", flag: opts});
         } catch (e) {
-            console.log( (ddbg()), e);
+            console.error( (ddbg()), "error writing custom CSS file: ", e);
         }
     } else {
-        console.log( (ddbg()), "custom CSS file not saved to file:", fname);
+        console.error( (ddbg()), "custom CSS file not saved to file:", fname);
     }
 }
 
@@ -818,7 +824,7 @@ function sendEmail(emailname, msg, addinfo = "") {
         // send the email
         transporter.sendMail(message, function(err, info) {
             if ( err ) {
-                console.log( (ddbg()), "error sending email to: ", emailname, " error: ", err);
+                console.warn( (ddbg()), "error sending email to: ", emailname, " error: ", err);
             } else {
                 console.log( (ddbg()), "email successfully sent to: ", emailname, " response: ", info.response);
             }
@@ -1138,10 +1144,9 @@ function removeHublessDevices(userid) {
             mydb.getRows("devices","id,userid,hubid,deviceid,name,devicetype", "userid = "+userid+" AND hubid NOT IN " + idstr)
             .then(devices => {
                 if ( devices && devices.length ) {
-                    console.log( (ddbg()), "Removing " + devices.length + " dead devices");
-                    console.log( (ddbg()), "Dead devices to delete: ", jsonshow(devices) );
-                } else {
-                    console.log( (ddbg()), "No dead devices to delete");
+                    if ( DEBUG2 ) {
+                        console.log( (ddbg()), "Removing " + devices.length + " dead devices");
+                    }
                 }
             })
             .catch(reason => {
@@ -1175,24 +1180,15 @@ function removeDeadThings(userid) {
         });
         var idstr = "(" + idarr.join(",") + ")";
 
-        if ( DEBUG2 ) {
-            mydb.getRows("things","*", "userid = "+userid+" AND tileid NOT IN " + idstr)
-            .then(things => {
-                if ( things && things.length ) {
-                    console.log( (ddbg()), "Dead things to delete: ", jsonshow(things) );
-                } else {
-                    console.log( (ddbg()), "No dead tiles to delete");
-                }
-            });
-        }
-
         // use query to remove all tiles that do not have a corresponding device in the DB
         // this will remove it from all rooms and panels
         return mydb.deleteRow("things",`userid = ${userid} AND tileid NOT IN ${idstr}`)
         .then(res => {
             var numdeltiles = res.getAffectedItemsCount();
             if ( numdeltiles > 0 ) {
-                console.log( (ddbg()), `removed ${numdeltiles} things that are no longer authorized`);
+                if ( DEBUG2 ) {
+                    console.log( (ddbg()), `removed ${numdeltiles} things that are no longer authorized`);
+                }
             }
             return numdeltiles;
         })
@@ -1262,7 +1258,7 @@ function getDevices(hub) {
             }
 
         } else {
-            console.log( (ddbg()), "error - attempt to read an unknown hub type= ", hubType);
+            console.error( (ddbg()), "error - attempt to read an unknown hub type= ", hubType);
             reject("error - attempt to read an unknown hub type= " + hubType);
         }
 
@@ -1287,6 +1283,7 @@ function getDevices(hub) {
                     console.log((ddbg()), "Default Devices - uidmax: ", uidmax);
                 }
                 return mydb.getRows("devices", "*", "userid = "+userid + " AND (devicetype = 'clock' OR devicetype = 'control' or hint = 'special')")
+                // think this should use hubid = hubindex
             })
             .then( rows => {
                 if ( rows ) {
@@ -1332,26 +1329,13 @@ function getDevices(hub) {
                             }
                         }
                     });
-                    // Promise.all([
-                    //     mydb.updateRow("devices", mydevices["clockdigital"], "userid = "+userid+" AND hubid = "+hubindex+" AND devicetype = 'clock' AND deviceid = 'clockdigital'", true),
-                    //     mydb.updateRow("devices", mydevices["clockanalog"], "userid = "+userid+" AND hubid = "+hubindex+" AND devicetype = 'clock' AND deviceid = 'clockanalog'", true),
-                    //     mydb.updateRow("devices", mydevices["control_1"], "userid = "+userid+" AND hubid = "+hubindex+" AND devicetype = 'control' AND deviceid = 'control_1'", true)
-                    // ])
-                    // .then( ()=> {
-                    //     resolve(mydevices);
-                    // })
-                    // .catch( reason => {
-                    //     console.warn( (ddbg()), "error - something is wrong with clock or control devices. ", reason);
-                    //     resolve(mydevices);
-                    // });
-
                 } else {
                     reject("error - no default devices found in the database");
                 }
                 return mydevices;
             })
             .catch (reason => {
-                console.log( (ddbg()), reason);
+                console.error( (ddbg()), "error attempting to read default devices: ", reason);
                 reject(reason);
             });
         }
@@ -1605,10 +1589,8 @@ function getDevices(hub) {
             if ( DEBUG2 ) {
                 mydb.getRows("devices","id, hubid, deviceid, name, devicetype, hint", "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid NOT IN " + indev)
                 .then(devices => {
-                    if ( devices && devices.length ) {
+                    if ( devices && devices.length && DEBUG2 ) {
                         console.log( (ddbg()), "Dead node and duplicate devices to delete: ", jsonshow(devices) );
-                    } else {
-                        console.log( (ddbg()), "No dead node or duplicate devices to delete");
                     }
                 });
             }
@@ -1652,7 +1634,7 @@ function getDevices(hub) {
             var variables = {name: "ISY Variables", "status_": "ACTIVE"};
 
             if ( DEBUG19 ) {
-                console.log( (ddbg()), "ISY hub call: ", access_token, hubEndpt, stheader);
+                console.log((ddbg()), "ISY hub call: ", access_token, hubEndpt, stheader);
             }
 
             var currentDevices = [];
@@ -2527,16 +2509,16 @@ function getLoginPage(req, userid, pname, emailname, mobile, hostname) {
     // tc+= "<input id=\"pname\" tabindex=\"4\" name=\"pname\" size=\"60\" type=\"text\" value=\"" + pname + "\"/>"; 
     // tc+= "</div>";
     tc+= hidden("pname","default","pname");
-    var currentport = getCookie(req, "pname") || "1:default";
-    if ( currentport.substr(1,1)!==":" ) {
-        currentport = "1";
-    } else {
-        currentport = currentport.substr(0,1);
-    }
-    tc+= "<div class='loginline'>";
-    tc+= "<label for=\"pnumber\" class=\"startupinp\">Panel # (1 .. 9, must be unique): </label><br>";
-    tc+= "<input id=\"pnumber\" tabindex=\"5\" name=\"pnumber\" type='number' min='1' max='9' step='1' value='" + currentport + "'>"; 
-    tc+= "</div>";
+    // var currentport = getCookie(req, "pname") || "1:default";
+    // if ( currentport.substr(1,1)!==":" ) {
+    //     currentport = "1";
+    // } else {
+    //     currentport = currentport.substr(0,1);
+    // }
+    // tc+= "<div class='loginline'>";
+    // tc+= "<label for=\"pnumber\" class=\"startupinp\">Panel # (1 .. 9, must be unique): </label><br>";
+    // tc+= "<input id=\"pnumber\" tabindex=\"5\" name=\"pnumber\" type='number' min='1' max='9' step='1' value='" + currentport + "'>"; 
+    // tc+= "</div>";
     
     // tc+= "<div class='loginline'>";
     // tc+= "<label for=\"panelpword\" class=\"startupinp\">Panel Password: </label><br>";
@@ -2669,7 +2651,6 @@ function createUser(body) {
 
     return checkUser(emailname)
     .then( res => {
-        console.log( (ddbg()), "createUser result: ", res);
         return addNewUser(emailname, username, mobile, pword);
     })
     .then( newuser => {
@@ -2763,14 +2744,14 @@ function createUser(body) {
                 console.log( (ddbg()), "For security purposes, all API calls will use hpcode="+permcode);
             })
             .catch( reason => {
-                console.log( (ddbg()), reason);
+                console.error( (ddbg()), "error updating hpcode:", reason);
             });
         }, delay);
 
         return newuser;
     })
     .catch(reason => {
-        console.log( (ddbg()), reason );
+        console.error( (ddbg()), "error creating new user:", reason );
         return reason;
     });
 }
@@ -2815,18 +2796,11 @@ function getNewCode(seed="") {
     var len = logincode.length;
     var mid = len / 2;
     var thecode = logincode.substring(0,1) + logincode.substring(mid,mid+1) + logincode.substring(len-4);
-    // console.log("seed = ", seed, " thecode=", thecode);
     return thecode;
 }
 
 function addNewUser(emailname, username, mobile, pword) {
     // create confirmation code
-    // var d = new Date();
-    // var time = d.toLocaleTimeString();
-    // var logincode = pw_hash(mobile + time).toUpperCase();
-    // var len = logincode.length;
-    // var mid = len / 2;
-    // var thecode = logincode.substring(0,1) + logincode.substring(mid,mid+1) + logincode.substring(len-4);
     var thecode = getNewCode();
 
     // create new user but set type to 0 until we get validation
@@ -2853,11 +2827,11 @@ function addNewUser(emailname, username, mobile, pword) {
             newuser.hpcode = permcode;
             mydb.updateRow("users",{usertype: usertype, hpcode: permcode}, "id = " + userid)
             .then(()=> {
-                var msg = "Account validation disabled. For security purposes, all API calls will use hpcode="+permcode;
+                var msg = "For security purposes all API calls must use hpcode="+permcode;
                 console.log( (ddbg()), msg );
             })
             .catch(reason => {
-                console.log( (ddbg()), reason );
+                console.error( (ddbg()), "error updating new user: ", reason );
             });
         } else {
             usertype = 0;
@@ -2867,7 +2841,7 @@ function addNewUser(emailname, username, mobile, pword) {
         return newuser;
     })
     .catch(reason => {
-        console.log( (ddbg()), reason );
+        console.error( (ddbg()), "error creating new user:", reason );
         return reason;
     });
 }
@@ -2968,7 +2942,7 @@ function makeDefaultHub(userid) {
             resolve(nullhub);
         })
         .catch(reason => {
-            console.log( (ddbg()), reason);
+            console.error( (ddbg()), "error creating default hub:", reason);
             reject(reason);
         });
     });
@@ -3022,7 +2996,7 @@ function makeDefaultDevices(userid, hubid) {
             resolve(theclocks);
         })
         .catch(reason => {
-            console.log( (ddbg()), reason);
+            console.error( (ddbg()), "error attempting to create default devices: ", reason);
             reject(reason);
         });
     });
@@ -3061,13 +3035,13 @@ function makeNewRooms(userid, pname, password, skin, defaultrooms) {
                     }
                 })
                 .catch( reason => {
-                    console.log( (ddbg()), reason );
+                    console.error( (ddbg()), "error creating default rooms: ", reason );
                     reject(reason);
                 });
             }
         })
         .catch( reason => {
-            console.log( (ddbg()), reason );
+            console.error( (ddbg()), "error creating default panel: ", reason );
             reject(reason);
         });
     });
@@ -3250,13 +3224,13 @@ function forgotPassword(body) {
                     }
                 })
                 .catch( reason => {
-                    console.log( (ddbg()), reason);
+                    console.error( (ddbg()), "error updating hpcode:", reason);
                 });
             }, delay);
             return row;
         })
         .catch( reason => {
-            console.log( (ddbg()), reason);
+            console.error( (ddbg()), "error occurred when requesting password reset:", reason);
             return "error - problem occurred when requesting password reset. Check logs.";
         });
     });
@@ -3296,7 +3270,7 @@ function validateUser(body) {
                 return row;
             })
             .catch( reason => {
-                console.log( (ddbg()), reason);
+                console.error( (ddbg()), "error validating user:", reason);
                 return "error - problem validating user";
             });
         } else {
@@ -3304,7 +3278,7 @@ function validateUser(body) {
         }
     })
     .catch(reason => {
-        console.log( (ddbg()), reason );
+        console.error( (ddbg()), "error validating user:", reason);
         return "error - problem with DB in when validating user = " + userid;
     });
 }
@@ -3356,15 +3330,16 @@ function updatePassword(body) {
                         }
                     })
                     .catch(reason => {
-                        console.log( (ddbg()), reason );
-                        return "error - problem with DB in password reset for user = " + userid;
+                        msg = "error - problem with DB in password reset for user = " + userid;
+                        console.error( (ddbg()), msg, " reason: ", reason);
+                        return msg;
                     });                    
                 } else {
                     return "error - problem updating user password for user = " + userid;
                 }
             })
             .catch(reason => {
-                console.log( (ddbg()), reason );
+                console.error( (ddbg()), "error updating user password:", reason );
                 return "error - problem with DB in password reset for user = " + userid;
             });                    
         } else {
@@ -3372,7 +3347,7 @@ function updatePassword(body) {
         }
     })
     .catch(reason => {
-        console.log( (ddbg()), reason );
+        console.error( (ddbg()), "error resetting password:", reason );
         return "error - problem with DB in password reset for user = " + userid;
     });
 }
@@ -3385,17 +3360,8 @@ function doLogin(body, res) {
     var uhash = pw_hash(body["pword"]);
 
     // get the panel number here
-    var pnumber = body["pnumber"];
-    if ( !pnumber ) {
-        pnumber = "1";
-    } else {
-        pnumber = parseInt(pnumber);
-        if ( isNaN(pnumber) || pnumber < 1 || pnumber > 9 ) {
-            pnumber = 1;
-        }
-        pnumber = pnumber.toString();
-    }
-
+    // this was disabled because we no longer need it for multiple panels
+    // because I fixed the websocket code to work with only one port now
     if ( !body["pname"] ) {
         var pname = "";
         var phash = "";
@@ -3405,7 +3371,7 @@ function doLogin(body, res) {
     }
 
     if ( DEBUG20 ) {
-        console.log( (ddbg()), "dologin: uname= ", uname, " pword= ", uhash, " pname= ", pname, " panelpword= ", phash, " pnumber= ", pnumber, " body: ", body);
+        console.log( (ddbg()), "dologin: uname= ", uname, " pword= ", uhash, " pname= ", pname, " panelpword= ", phash, " body: ", body);
     }
 
     // query for panel name given with password and username or email with password
@@ -3437,10 +3403,11 @@ function doLogin(body, res) {
             setCookie(res, "uname", pw_hash(uname));
 
             // we take on the panel number to the start of the panel name in the cookie so we always have it
-            setCookie(res, "pname", pnumber + ":" + pw_hash(pname));
+            // setCookie(res, "pname", pnumber + ":" + pw_hash(pname));
+            setCookie(res, "pname", pw_hash(pname));
             if ( DEBUG3 ) {
                 console.log((ddbg()), therow);
-                console.log((ddbg()), "Successful login. userid: ", userid, " Username: ", uname, " on panel #"+pnumber);
+                console.log((ddbg()), "Successful login. userid: ", userid, " Username: ", uname);
             }
 
             // lets make sure there is a null hub for this user
@@ -3455,20 +3422,21 @@ function doLogin(body, res) {
                     makeDefaultFolder(userid, pname);
                 })
                 .catch(reason => {
-                    console.log( (ddbg()), reason );
+                    console.error( (ddbg()), "error updating null hub:", reason );
                 });
             
             }
         } else {
             delCookie(res, "uname");
             delCookie(res, "pname");
-            console.log( (ddbg()), "Failed login attempt. Username: ", uname, " Panelname: ", pname, " fields: ", fields, " conditions: ", conditions);
+            console.warn( (ddbg()), "Failed login attempt. Username: ", uname, " Panelname: ", pname, " fields: ", fields, " conditions: ", conditions);
             therow = "error - invalid username or password";
         }
         return therow;
     }).catch(reason => {
-        console.log( (ddbg()), reason);
-        return reason;
+        const msg = "error - failed to read panel from database. You may have a corrupt database.";
+        console.error( (ddbg()), msg, "reason: ", reason);
+        return msg;
     });
 }
 
@@ -3502,7 +3470,7 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
         return getauthcontents(configoptions, hubs, hub, numdev);
     })
     .catch(reason => {
-        console.log( (ddbg()), reason );
+        console.error((ddbg()), "error getting devices for auth page:", reason );
         return "error - something went wrong trying to display auth page";
     });
 
@@ -3687,12 +3655,13 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
         $tc += "<div><label for='inp_hubid' class=\"startupinp\">Hub ID: </label>";
         $tc += "<input id='inp_hubid' class=\"startupinp\" name=\"hubid\" size=\"80\" type=\"text\" value=\"" + hub["hubid"] + "\"/></div>"; 
 
-        $tc += "<div><label for='inp_hubtimer' class=\"startupinp\">Refresh Timer: </label>";
+        $tc += "<div><label for='inp_hubtimer' class=\"startupinp\">Refresh Timer (seconds): </label>";
         $tc += "<input id='inp_hubtimer' class=\"startupinp\" name=\"hubtimer\" size=\"10\" type=\"text\" value=\"" + hub["hubtimer"] + "\"/></div>"; 
 
         $tc += "<input class=\"hidden\" name=\"hubrefresh\" type=\"hidden\" value=\"" + hub["hubrefresh"] + "\"/>"; 
         
         $tc += "<div class=\"buttonrow\">";
+        $tc += "<input class=\"authbutton hubupdate" + "\" value=\"Update Hub\" type=\"button\" />";
         $tc += "<input class=\"authbutton hubauth" + authclass + "\" value=\"Authorize Hub\" type=\"button\" />";
         $tc += "<input class=\"authbutton hubdel" + hubclass + "\" value=\"Remove Hub\" type=\"button\" />";
         $tc += "</div>";
@@ -3896,7 +3865,8 @@ function processName(thingname, thingtype) {
     try {
         thingname = thingname.replace(pattern,"");
     } catch(e) {
-        console.log( (ddbg()), thingname, "error: ", e);
+        console.error( (ddbg()), thingname, "error: ", e);
+        return;
     }
 
     // get rid of 's and split along white space
@@ -5264,7 +5234,6 @@ function processHubMessage(userid, hubmsg, newST) {
     // that was also used in the old housepanel.push app
     var subid = hubmsg['change_attribute'];
     var hubmsgid = hubmsg['change_device'].toString();
-    var change_type = hubmsg["change_type"];
     if ( DEBUG12 ) {
         console.log( (ddbg()), "processHubMessage - userid: ", userid, " hubmsg: ", hubmsg);
     }
@@ -5283,10 +5252,9 @@ function processHubMessage(userid, hubmsg, newST) {
     }
 
     // update all devices from our list belonging to this user
-    // the root device values are updated in the DB which causes all instances to update when pushClient is called below
+    // the root device values are updated in the DB which causes all instances to update when this is called
     // all links are handled by code in the js updateTile function
     // var devid = null;
-
     if ( hubmsgid.indexOf("%") !== -1 ) {
         var conditions = "userid = " + userid + " AND deviceid LIKE '" + hubmsgid+"'";
     } else {
@@ -5346,7 +5314,8 @@ function processHubMessage(userid, hubmsg, newST) {
                 }
             })
             .catch( reason => {
-                console.log( (ddbg()), reason);
+                console.error( (ddbg()), "processHubMessage - DB update error: ", reason);
+                return;
             });
 
             // if we request resetting upon a mode change, do it here, even if there are no rules set for the mode tile
@@ -5364,12 +5333,12 @@ function processHubMessage(userid, hubmsg, newST) {
         return devices;
     })
     .catch(reason => {
-        console.log( (ddbg()), "processHubMessage - DB error: ", reason);
+        console.error( (ddbg()), "processHubMessage - DB error: ", reason);
     });
 }
 
 // this function handles processing of all websocket calls from ISY
-// used to keep clients in sync with the status of ISY operation
+// used to keep wsclients in sync with the status of ISY operation
 // because ISY hubs are local, this function must be invoked locally
 function processIsyXMLMessage(userid, isymsg) {
     xml2js(isymsg, function(err, result) {
@@ -5437,7 +5406,7 @@ function processIsyMessage(userid, jsondata) {
                         uom = obj["uom"] || 0;
                         prec = obj["prec"] || 0;
                     } catch (e) {
-                        console.log( (ddbg()), "warning - processIsyMessage failed: ", e);
+                        console.warn( (ddbg()), "warning - processIsyMessage failed: ", e);
                         return;
                     }
                     
@@ -5454,7 +5423,7 @@ function processIsyMessage(userid, jsondata) {
                         }
                     })
                     .catch( reason => {
-                        console.log( (ddbg()), reason);
+                        console.error( (ddbg()), "ISY device update error: ", reason);
                     });
 
                     // handle global text substitutions
@@ -5471,7 +5440,7 @@ function processIsyMessage(userid, jsondata) {
 
 
             }).catch(reason => {
-                console.log( (ddbg()), "processIsyMessage - ", reason);
+                console.error( (ddbg()), "error with processIsyMessage, reason: ", reason);
             });
 
         // set variable changes events
@@ -5530,7 +5499,7 @@ function processIsyMessage(userid, jsondata) {
                             }
                         })
                         .catch( reason => {
-                            console.log( (ddbg()), reason);
+                            console.error( (ddbg()), "ISY device update error: ", reason);
                         });
 
                         // handle global text substitutions
@@ -5545,12 +5514,12 @@ function processIsyMessage(userid, jsondata) {
                         processRules(userid, device.uid, bid, devtype, subid, pvalue, true, "processMsg");
                     }
                 } catch (e) {
-                    console.log( (ddbg()), "warning - var // processIsyMessage: ", e, device);
+                    console.warn( (ddbg()), "warning - var // processIsyMessage: ", e, device);
                     return;
                 }
             })
             .catch(reason => {
-                console.log( (ddbg()), "processIsyMessage - ", reason);
+                console.error( (ddbg()), "error in processIsyMessage: ", reason);
             });
 
         // handle program changes events
@@ -5621,7 +5590,7 @@ function processIsyMessage(userid, jsondata) {
                         }
                     })
                     .catch( reason => {
-                        console.log( (ddbg()), reason);
+                        console.error( (ddbg()), "ISY device update error: ", reason);
                     });            
 
                     // handle global text substitutions
@@ -5635,11 +5604,11 @@ function processIsyMessage(userid, jsondata) {
                     pushClient(userid, bid, devtype, "lastRunTime", pvalue);
                     processRules(userid, device.uid, bid, devtype, subid, pvalue, true, "processMsg");
                 } catch(e) {
-                    console.log( (ddbg()), "warning - program // processIsyMessage: ", e, device);
+                    console.warn( (ddbg()), "warning - ISY program failure in processIsyMessage: ", e, device);
                     return;
                 }
             }).catch(reason => {
-                console.log( (ddbg()), "processIsyMessage - ", reason);
+                console.error( (ddbg()), "error in processIsyMessage: ", reason);
             });
 
         }
@@ -5770,12 +5739,12 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
                 }
             })
             .catch(reason => {
-                console.error( (ddbg()), reason);
+                console.error( (ddbg()), "processLists error: ", reason);
             });
         }
     })
     .catch(reason => {
-        console.log( (ddbg()), "processLists error: ", reason);
+        console.error( (ddbg()), "processLists error: ", reason);
     });
 
     // this populates all lists being tracked with new information upon changes
@@ -5853,7 +5822,7 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
                                 }
                             })
                             .catch(reason => {
-                                console.log( (ddbg()), reason);
+                                console.error( (ddbg()), "LIST update error: ", reason);
                             });
                         }
                     }
@@ -6291,14 +6260,14 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
                                 try {
                                     callHub(userid, hub.id, tileid, rswid, rswtype, rvalue, rswattr, rsubid, rhint, true);
                                 } catch (e) {
-                                    console.log( (ddbg()), "error calling hub from rule for userid: ", userid, " hub.id, rswid,rswtype,rvalue,rsattr,rsubid,rhint: ", hub.id, rswid, rswtype, rvalue, rswattr, rsubid, rhint, " error: ", e);
+                                    console.warn( (ddbg()), "error calling hub from rule for userid: ", userid, " hub.id, rswid,rswtype,rvalue,rsattr,rsubid,rhint: ", hub.id, rswid, rswtype, rvalue, rswattr, rsubid, rhint, " error: ", e);
                                 }
                             }, delay);
                         } else {
                             try {
                                 callHub(userid, hub.id, tileid, rswid, rswtype, rvalue, rswattr, rsubid, rhint, true);
                             } catch (e) {
-                                console.log( (ddbg()), "error calling hub from rule for userid: ", userid, " hub.id, rswid,rswtype,rvalue,rsattr,rsubid,rhint: ", hub.id, rswid, rswtype, rvalue, rswattr, rsubid, rhint, " error: ", e);
+                                console.warn( (ddbg()), "error calling hub from rule for userid: ", userid, " hub.id, rswid,rswtype,rvalue,rsattr,rsubid,rhint: ", hub.id, rswid, rswtype, rvalue, rswattr, rsubid, rhint, " error: ", e);
                             }
                         }
                     }
@@ -6332,16 +6301,29 @@ function pushClient(userid, swid, swtype, subid, body) {
         
     // save the result to push to all clients
     entry["value"] = pvalue;
-    
-    // do a push to each client for this user if ready
-    if ( clients[userid] ) {
-        if ( DEBUG17 ) {
-            console.log( (ddbg()), "pushClient: ", jsonshow(entry));
-            // console.log( (ddbg()), "userid: ", userid," clients:", jsonshow(clients[userid]) );
+
+    // for websocket type pushes, only push to the specified client tied to this subid which is the client id in this case
+    if ( swid === "websocket" ) {
+        let c = clients[subid];
+        if ( c && c.conn ) {
+            if ( DEBUG17 ) {
+                console.log( (ddbg()), "push: ", jsonshow(entry), " to client #"+c.id, " userid: ", c.userid, " at url: ", c.browserurl, " established: ", new Date(c.established).toLocaleString() );
+            }
+            c.conn.sendUTF(JSON.stringify(entry));
         }
-        for (let i=0; i < clients[userid].length; i++) {
-            clients[userid][i].sendUTF(JSON.stringify(entry));
-        }
+    } else {
+        // push to all clients that match this userid
+        // if there are multiple users on the same hub this will only update the screen for the user tied to this event
+        // however, the other users will get an event oo so they will be handled
+        var userclients = Object.values(clients).filter(c => c.userid === userid);
+        userclients.forEach( c => {
+            if ( c && c.conn ) {
+                if ( DEBUG17 ) {
+                    console.log( (ddbg()), "push: ", jsonshow(entry), " to client #"+c.id, " userid: ", c.userid, " at url: ", c.browserurl, " established: ", new Date(c.established).toLocaleString() );
+                }
+                c.conn.sendUTF(JSON.stringify(entry));
+            }
+        });
     }
 }
 
@@ -6387,13 +6369,12 @@ function callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, h
                     return pvalue;
                 })
                 .catch(reason => {
-                    console.log( (ddbg()), "***warning***", reason );
+                    console.warn( (ddbg()), "***warning*** error retrieving devices for rule execution. reason: ", reason );
                 });
             })
             .catch(reason => {
-                console.log( (ddbg()), "***warning***", reason );
+                console.warn( (ddbg()), "***warning*** error retrieving devices for rule execution. reason: ", reason );
             });
-            // return "success - " + subid + " reset to " + newval;
         }
 
         // this function calls the Groovy hub api
@@ -6598,7 +6579,7 @@ function callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, h
                 return result;
             })
             .catch(reason => {
-                console.log( (ddbg()), "callHub ISY - failed to get device: ", reason, "\n swid: ", swid, " subid: ", subid);
+                console.error( (ddbg()), "callHub ISY - failed to get device: ", reason, "\n swid: ", swid, " subid: ", subid);
                 result = "error - callHub ISY - failed to get device: " + swid;
             });
         };
@@ -6668,21 +6649,18 @@ function callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, h
                         }
                     })
                     .catch( reason => {
-                        console.log( (ddbg()), reason);
+                        console.error( (ddbg()), "Error updating device in DB: ", reason);
                     });
 
                     pushClient(userid, swid, swtype, subid, newpvalue);
                     ndev++;    
                 });
-            }).catch(reason => { console.log( (ddbg()), reason ); } );
+            }).catch(reason => { console.error( (ddbg()), "Error retrieving devices for rule execution: ", reason ); } );
         } else {
 
             if ( typeof resolve === "function" ) {
                 resolve(pvalue);
             }
-
-            // push new values to all clients to get an immediate onscreen response
-            // pushClient(userid, swid, swtype, subid, pvalue);
             if ( DEBUG1 ) {
                 console.log( (ddbg()),"Hub call result: swid:", swid," swtype:", swtype," subid:", subid," pvalue:", pvalue);
             }
@@ -6718,127 +6696,6 @@ function callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, h
             console.log( (ddbg()),"getNodeResponse: ", body);
         }
     }
-}
-
-function queryHub(device, pname) {
-
-    const userid = device.userid;
-    const hubindex = device.hubid;
-    const swid = device.deviceid;
-    const swtype = device.devicetype;
-
-    var promise = new Promise( function(resolve, reject) {
-
-        Promise.all([
-            mydb.getRows("configs","*","userid = "+userid),
-            mydb.getRow("hubs","*","id = " + hubindex)
-        ])
-        .then(results => {
-            const configoptions = results[0];
-            const hub = results[1];
-            const hubid = hub["hubid"];
-            if ( hubid==="-1" || hub.hubtype==="None" ) {
-
-                // clockdigital
-                var pvalue;
-                if ( swtype==="clock") {
-                    pvalue = getClock(swid);
-
-                    // delete everything except the time fields
-                    delete pvalue.skin;
-                    delete pvalue.tzone;
-                    delete pvalue["fmt_date"];
-                    delete pvalue["fmt_time"];
-                } else if ( swtype==="control" ) {
-                    pvalue = getController();
-                } else {
-                    pvalue = decodeURI2(device.pvalue);
-                    pvalue = getCustomTile(userid, configoptions, pvalue, swid);
-                    pvalue = getFileName(userid, pname, pvalue, swtype, configoptions);
-                }
-                resolve(pvalue);
-
-            } else if ( hub.hubtype==="Hubitat" ) {
-                const host = hub.hubendpt + "/doquery";
-                const header = {"Content-Type": "application/json"};
-                const nvpreq = {"access_token": hub.hubaccess, "swid": swid, "swtype": swtype};
-                curl_call(host, header, nvpreq, false, "POST")
-                .then(res => {
-                    getQueryResponse(res);
-                })
-                .catch(reason => {
-                    console.error((ddbg()), reason);
-                    reject(reason);
-                });
-
-            } else if ( hub.hubtype==="ISY" ) {
-                const host = hub.hubendpt + "/nodes/" + swid;
-                const access_token  = hub.hubaccess;
-                const buff = Buffer.from(access_token);
-                const base64 = buff.toString('base64');
-                const header = {"Authorization": "Basic " + base64};
-                curl_call(host, header, false, false, "GET")
-                .then(res => {
-                    getNodeQueryResponse(res);
-                })
-                .catch(reason => {
-                    console.error( (ddbg()), reason);
-                    reject(reason);        
-                });
-
-            } else {
-                reject("query hub for type = [" + hub.hubtype + "] is not supported");
-            }
-
-        }).catch(reason => {
-            reject(reason);
-        });
-        
-        function getQueryResponse(body) {
-            var pvalue;
-
-            // handle offline case
-            if ( typeof body === "string" && body.startsWith("No response") ) {
-                reject("Hub offline");
-
-            } else if ( typeof body==="string" ) {
-                pvalue = body;
-
-            } else if ( typeof body==="object" ) {
-                pvalue = body;
-                // deal with presence tiles
-                if ( array_key_exists("presence", pvalue) && (pvalue["presence"]==="not present" || pvalue["presence"]==="not_present")  ) {
-                    pvalue["presence"] = "absent";
-                }
-
-            } else {
-                reject("unexpected Query result");
-            }
-            resolve(pvalue);
-        }
-
-        function getNodeQueryResponse(body) {
-            xml2js(body, function(xmlerr, result) {
-                try {
-                    if ( is_object(result) && is_object(result.nodeInfo) && result.nodeInfo.node ) {
-                        var nodeid = result.nodeInfo.node[0]["address"];
-                        if ( nodeid ) {
-                            var props = result.nodeInfo.properties[0].property;
-                            var pvalue = setIsyFields(nodeid, device, props);
-                            resolve(pvalue);
-                        } else {
-                            throw "nodeid invalid while trying to read node from ISY hub";
-                        }
-                    }
-                } catch(e) { 
-                    console.error( (ddbg()), e);
-                    reject(e);
-                }
-            });
-       }
-
-    });
-    return promise;
 }
 
 function translateAudio(pvalue, specialkey, audiomap) {
@@ -6904,7 +6761,7 @@ function translateAudio(pvalue, specialkey, audiomap) {
             }
         }
     } catch(jerr) {
-        console.log( (ddbg()), jerr);
+        console.warn( (ddbg()), "Error in translateAudio: ", jerr);
     }
     return pvalue;
 }
@@ -7022,39 +6879,19 @@ function doAction(userid, hubindex, tileid, uid, swid, swtype, swval, swattr, su
             });
 
         } else if ( command==="TEXT" ) {
-            msg = mydb.getRow("devices", "*", "userid = "+userid + " AND deviceid = '"+swid+"'")
-            .then(device => {
-                if ( device ) {
-                    var pvalue =decodeURI2(device.pvalue);
-                    if ( pvalue ) {
-                        pushClient(userid, swid, swtype, subid, pvalue);
-                        processRules(userid, device.uid, swid, swtype, subid, pvalue, true, "doAction");
-                        msg = pvalue;
-                    } else {
-                        msg = "error - null object returned when decoding TEXT command";
-                    }
-                } else {
-                    msg = "error - invalid object value in TEXT command";
-                }
-                return msg;
-            })
-            .catch( reason => {
-                console.log( (ddbg()), reason);
-                return "error - something went wrong with TEXT command";
-            });
+            msg = "warning - TEXT command is deprecated and will be removed in a future release. Please use POST, PUT, or GET instead to invoke a command.";
 
         } else if ( command==="LINK" ) {
             // processLink(linkval);
             msg = callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, hint, null, false);
         
         } else if ( command==="LIST" ) {
-            // console.log( (ddbg()), "LINK not yet implemented... swid: ", swid, "swtype: ", swtype, "swval: ", swval, "swattr: ", swattr, "subid: ", subid);
             msg = mydb.getRows("lists","ltime, lvalue",`userid = ${userid} AND deviceid = '${swid}' AND subid = '${subid}'`)
             .then(results => {
                 return results;
             })
             .catch(reason => {
-                console.error( (ddbg()), reason);
+                console.error( (ddbg()), "LIST update error: ", reason);
                 return "error - something went wrong with LIST command";
             });
         } else if ( command==="RULE" ) {
@@ -7104,7 +6941,7 @@ function doAction(userid, hubindex, tileid, uid, swid, swtype, swval, swattr, su
                     execRules(userid, "callHub", swtype, istart, testcommands, pvalue, hubs, devices);
                     return testcommands;
                 }).catch(reason => { 
-                    console.warn( (ddbg()), reason );
+                    console.error( (ddbg()), "Error executing rules: ", reason );
                 });
             }
         }
@@ -7163,54 +7000,6 @@ function urlCallback(userid, swid, swtype, subid, body, command) {
     return pvalue;
 }
 
-function doQuery(userid, tileid, pname) {
-    var result;
-    var conditions = "userid = " + userid + " AND id = "+tileid;
-    result = mydb.getRow("devices","*", conditions)
-    .then(device => {
-        
-        if ( !device ) throw "error - invalid device: id = " + tileid;
-        var swid = device.deviceid;
-        var swtype = device.devicetype;
-    
-        // query the hub to return the value of the tile as an object
-        return queryHub(device, pname)
-        .then(pvalue => {
-            if ( DEBUG5 ) {
-                console.log( (ddbg()), "queryHub results: ", pvalue);
-            }
-
-            // store results back in DB if it isn't a clock or a controller and if we got a valid object
-            if ( typeof pvalue==="object" && swtype !== "clock" && swtype!=="control" ) {
-                const pvaluestr = encodeURI2(pvalue);
-                mydb.updateRow("devices", {id: device.id, pvalue: pvaluestr}, conditions, true)
-                .then( result => {
-                    if ( DEBUG5 ) {
-                        console.log( (ddbg()), "doQuery updated device: ", pvalue, " pvalstr: ", pvaluestr, " swid:", swid, 
-                                                " swtype:", swtype, " result: ", result);
-                    }
-                })
-                .catch(reason => {
-                    if ( reason ) {
-                        console.error( (ddbg()), reason);
-                    }
-                });
-            }
-            return pvalue;
-        })
-        .catch(reason => {
-            if ( reason ) {
-                console.error( (ddbg()), reason);
-            }
-        });
-        
-    }).catch(reason => {
-        console.log( (ddbg()), reason);
-        return null;
-    });
-    return result;
-}
-
 function setOrder(userid, swtype, swval) {
     var result;
     var promiseArray = [];
@@ -7238,7 +7027,7 @@ function setOrder(userid, swtype, swval) {
             return "success - updated order of " + num + " " + swtype + " for user: " + userid;
         })
         .catch( reason => {
-            console.log( (ddbg()), reason);
+            console.error( (ddbg()), "Error in reorder request: ", reason);
             return "error - something went wrong in reorder request for " + swtype;
         });
     } else {
@@ -7287,21 +7076,21 @@ function setPosition(userid, swtype, thingid, swattr) {
                     }
                     return tileloc;
                 } else {
-                    console.log( (ddbg()), "error - failed to update position for tile: ", thingid, " to permanent position: ", top, left, zindex, postype);
+                    console.error( (ddbg()), "error - failed to update position for tile: ", thingid, " to permanent position: ", top, left, zindex, postype);
                     return "error - failed up to update position for tile: " + thingid;
                 }
             })
             .catch( reason => {
-                console.log( (ddbg()), reason);
-                return "error - something went wrong";
+                console.error( (ddbg()), "error updating position: ", reason);
+                return "error - something went wrong updating position for tile: " + thingid;
             });
         } else {
-            console.log( (ddbg()), "error - could not find tile: ", thingid, " to move to position: ", top, left, zindex, postype);
+            console.warn( (ddbg()), "error - could not find tile: ", thingid, " to move to position: ", top, left, zindex, postype);
             return "error - could not find tile: " + thingid;
         }
     }).catch(reason => {
-        console.log( (ddbg()), reason);
-        return "error - something went wrong";
+        console.error( (ddbg()), "error in setPosition: ", reason);
+        return "error - something went wrong in setPosition for tile: " + thingid;
     });
 
     return pr;
@@ -7324,7 +7113,7 @@ function addThing(userid, pname, bid, thingtype, panel, hubindex, roomid, pos) {
             return [configoptions, maxtorder]
         })
         .catch(reason => {
-            console.log( (ddbg()), reason );
+            console.warn( (ddbg()), "Error attempting to add a thing. Reason: ", reason );
             return [configoptions, 1];
         });
     })
@@ -7369,19 +7158,19 @@ function addThing(userid, pname, bid, thingtype, panel, hubindex, roomid, pos) {
                                             hubtype: hubtype, hint: hint, refresh: refresh, value: pvalue};
                             var thing = makeThing(userid, pname, configoptions, tileid, thesensor, panel, pos.top, pos.left, pos["z-index"], "", false, null);
                             if ( DEBUG6 ) {
-                                console.log( (ddbg()), "added tile #",tileid," (thingid = ",thingid,") of type: ",thingtype," to page: ",panel,
-                                                    " deviceid: ", bid, " hubid: ", hubid, " hubindex: ", hubindex);
+                                console.log((ddbg()), "added tile #",tileid," (thingid = ",thingid,") of type: ",thingtype," to page: ",panel,
+                                                      " deviceid: ", bid, " hubid: ", hubid, " hubindex: ", hubindex);
                             }
                             return thing;
                         } else {
                             var errmsg = "error - could not create a new device of type " + thingtype + " on page " + panel;
-                            console.log( (ddbg()), "addThing - ", errmsg);
+                            console.error((ddbg()), "error attempting to addThing: ", errmsg);
                             return errmsg;
                         }
                     })
                     .catch(reason => {
-                        console.log( (ddbg()), "addThing - ", reason);
-                        return "error - something went wrong";
+                        console.error( (ddbg()), "error attempting to addThing: ", reason);
+                        return "error - something went wrong attempting to add a thing of type " + thingtype + " on page " + panel;
                     });
         
                 } else {
@@ -7392,8 +7181,8 @@ function addThing(userid, pname, bid, thingtype, panel, hubindex, roomid, pos) {
                 return "error - could not find device of type " + thingtype + " in your list of authenticated devices";
             }
         }).catch(reason => {
-            console.log( (ddbg()), "addThing - ", reason);
-            return "error - something went wrong";
+            console.error( (ddbg()), "error attempting to addThing: ", reason);
+            return "error - something went wrong in attempting to add a thing of type " + thingtype;
         });
 
     });
@@ -7504,12 +7293,14 @@ function addPage(userid, panelid ) {
             return newroom;
         })
         .catch( () => {
-            console.log( (ddbg()), "New room created: ", newroom, " but no clock was added");
+            if ( DEBUG6 ) {
+                console.log( (ddbg()), "New room created: ", newroom, " but no clock was added");
+            }
             return newroom;
         });
     }).catch(reason => {
-        console.log( (ddbg()), "addPage - ", reason);
-        return "error - " + reason;
+        console.error( (ddbg()), "error adding room: ", newroom, " reason: ", reason);
+        return "error adding a room. Reason: " + reason;
     });
 
 }
@@ -7517,13 +7308,14 @@ function addPage(userid, panelid ) {
 function getInfoPage(user, configoptions, hubs, req) {
  
     // get the port number
-    var currentport = getCookie(req, "pname");
-    if ( typeof currentport!=="string" || currentport.substring(1,2)!==":" ) {
-        currentport = "Unknown";
-    } else {
-        currentport = GLB.webSocketServerPort + parseInt(currentport.substring(0,1));
-        currentport = currentport.toString();
-    }
+    // var currentport = getCookie(req, "pname");
+    // if ( typeof currentport!=="string" || currentport.substring(1,2)!==":" ) {
+    //     currentport = "Unknown";
+    // } else {
+    //     currentport = GLB.webSocketServerPort + parseInt(currentport.substring(0,1));
+    //     currentport = currentport.toString();
+    // }
+    var currentport = GLB.webSocketServerPort;
 
     var userid = user["users_id"];
     var useremail = user["users_email"];
@@ -7544,8 +7336,9 @@ function getInfoPage(user, configoptions, hubs, req) {
     .then(devices => {
         return getinfocontents(userid, pname, currentport, configoptions, hubs, devices);
     }).catch(reason => {
-        console.log( (ddbg()), "getInfoPage - ", reason);
-        return "something went wrong";
+        const msg = reason ? reason.toString() :"something went wrong trying to get your information page";
+        console.error( (ddbg()), "getInfoPage - ", msg);
+        return msg;
     });
 
     function getinfocontents(userid, pname, currentport, configoptions, hubs, devices) {
@@ -7576,6 +7369,7 @@ function getInfoPage(user, configoptions, hubs, req) {
         $tc += "<form>";
         $tc += hidden("userid", userid, "userid");
         $tc += hidden("pname", pname);
+        $tc += hidden("webSocketServerPort", GLB.webSocketServerPort);
         $tc += hidden("emailid", useremail, "emailid");
         $tc += hidden("skinid", skin, "skinid");
         $tc += hidden("returnURL", GLB.returnURL);
@@ -7596,8 +7390,8 @@ function getInfoPage(user, configoptions, hubs, req) {
         $tc += "<div class='bold'>User ID: " + userid + "</div>";
         $tc += "<div class='bold'>Username: " + uname + "</div>";
         $tc += "<div class='bold'>User email: " + useremail + "</div>";
-        $tc += "<div class='bold'>Displaying panel: " + pname + "</div>";
-        $tc += "<div class='bold'>Client on port: " + currentport + "</div>";
+        // $tc += "<div class='bold'>Displaying panel: " + pname + "</div>";
+        // $tc += "<div class='bold'>WebSocket port: " + currentport + "</div>";
         // $tc += "<div class='bold'>Skin folder = " + skin + "</div>";
         $tc += "<div class='bold'>" + numhubs + " Hubs authorized</div><br>";
         
@@ -7617,23 +7411,19 @@ function getInfoPage(user, configoptions, hubs, req) {
 
         $tc += "</div>";
 
-        if ( clients[userid] && clients[userid].length > 0 ) {
-            var str = "<p>Currently connected to " + clients[userid].length + " clients.</p>";
-            str = str + "<br><hr><br>";
-            for (var i=0; i < clients[userid].length; i++) {
-                var j = i+1;
-                var port = clients[userid][i].socket.server["_connectionKey"];
-                var lenport = port.length;
-                port = port.substring(lenport-4);
-                if ( port === currentport ) {
-                    str = str + "<strong>Client #" + j + " host= " + clients[userid][i].socket.remoteAddress + ":" + port + "</strong><br>";
-                } else {
-                    str = str + "Client #" + j + " host= " + clients[userid][i].socket.remoteAddress + ":" + port + "<br>";
-                }
-            }
-            str = str + "<br><hr><br>";
-            $tc +=  str;
-        }
+        let userclients = Object.values(clients).filter( c => c.userid === userid );
+        var str = "<div class='infosum'><div class='bold'>Client Connection Details</div>"
+        const ctext = userclients.length === 1 ? "client" : "clients";
+        str += "<div class='bold'>Currently connected to " + userclients.length + " " + ctext + "</div>";
+        str += "<hr>";
+        userclients.forEach( c => {
+            const cpos = c.wsport.lastIndexOf(":");
+            let port = cpos === -1 ? c.wsport : c.wsport.substring(cpos+1); 
+            str = str + `<div class="clientinfo" id="${c.id}">Client ID: ${c.id} host: ${c.browserurl} port: ${port}</div>`;
+        });
+        str = str + "</div>";
+
+        $tc +=  str;
 
         // Section 1 - show dev history
         $tc += "<button id=\"listhistory\" class=\"bluebutton showhistory\">Show Dev Log</button>";
@@ -8142,8 +7932,8 @@ function getDevicesPage(user, configoptions, hubs, req) {
         }
     })
     .catch(reason => {
-        console.log( (ddbg()), "getParamsPage - ", reason);
-        return "something went wrong";
+        console.error( (ddbg()), "Something went wrong in getDevicesPage: ", reason);
+        return ;
     });
 
     function renderDeviceRoomSection(hubpick, rooms, devices, things, hubs, useroptions) {
@@ -8307,7 +8097,7 @@ function processParams(userid, panelid, optarray) {
         return doProcessOptions(optarray, configoptions, hubzero, specials);
     })
     .catch(reason => {
-        console.log( (ddbg()), reason);
+        console.error( (ddbg()), "error processing user parameter options: ", reason);
         return reason;
     });
 
@@ -8425,8 +8215,7 @@ function processDevices(userid, panelid, optarray) {
     userid = parseInt(userid);
     panelid = parseInt(panelid);
     if ( DEBUG4 ) {
-        console.log( (ddbg()), "userid: ", userid, " panelid: ", panelid);
-        console.log( (ddbg()), "optarray: ", jsonshow(optarray) );
+        console.log((ddbg()), "userid: ", userid, " panelid: ", panelid, "optarray: ", jsonshow(optarray) );
     }
 
     // get the hub filters and process them first
@@ -8448,15 +8237,15 @@ function processDevices(userid, panelid, optarray) {
         return doProcessOptions(optarray, hubzero, rooms, things);
     })
     .catch(reason => {
-        console.log( (ddbg()), reason);
+        console.warn( (ddbg()), "error retrieving hubs, rooms, and things from the database: ", reason);
         return reason;
     });
 
     function doProcessOptions(optarray, hubzero, rooms, things) {
         if (DEBUG4) {
-            console.log( (ddbg()), jsonshow(hubzero) );
-            console.log( (ddbg()), jsonshow(rooms) );
-            console.log( (ddbg()), jsonshow(things) );
+            console.log( (ddbg()), "hubzero: " + jsonshow(hubzero) );
+            console.log( (ddbg()), "rooms: " + jsonshow(rooms) );
+            console.log( (ddbg()), "things: " + jsonshow(things) );
         }
         
         var roomnames = {};
@@ -8605,7 +8394,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
         res.end();
     })
     .catch(reason => {
-        console.log( (ddbg()), reason);
+        console.error( (ddbg()), "problem loading main page. reason: ", reason);
         var tc = getErrorPage();
         res.send(tc);
         res.end();
@@ -8664,12 +8453,6 @@ function getMainPage(user, configoptions, hubs, req, res) {
                     thingsarray.push(thing);
                 }
             });
-            // console.log("things for room: ", roomname, ": ", thingsarray);
-
-            // show all room with whatever index number assuming unique
-            // var pagecontent = "<div class='error' id=\"" + roomname + "-tab\">"
-            //                   + "Test Page #" + i + " for Room: " + roomname + " order: " + rorder
-            //                   + "</div>";
             var pagecontent = getNewPage(userid, pname, configoptions, roomid, roomname, rorder, thingsarray, alldevices);
             tc = tc + pagecontent;
         };
@@ -8795,7 +8578,7 @@ async function updSpecials(userid, hubindex, stype, newcount, specials) {
              })
             .catch(reason => {
                 i = newcount;
-                console.log( (ddbg()), reason );
+                console.warn( (ddbg()), "error adding special tile to database. device: ", device, "reason: ", reason );
             });
         }
     
@@ -8812,7 +8595,7 @@ async function updSpecials(userid, hubindex, stype, newcount, specials) {
             })
             .catch(reason => {
                 i = numnow;
-                console.log( (ddbg()), reason );
+                console.error( (ddbg()), "error updating special tile type: ", stype, "reason: ", reason );
             });
         }
     }
@@ -8835,7 +8618,7 @@ function updateNames(userid, thingid, type, tileid, newname) {
             return ans;
         })
         .catch( reason => {
-            console.log( (ddbg()), reason);
+            console.warn( (ddbg()), "error updating room name: ", reason);
         });
 
     // the thingid parameter is the tileid for tile name updates
@@ -8851,7 +8634,7 @@ function updateNames(userid, thingid, type, tileid, newname) {
             return ans;
         })
         .catch( reason => {
-            console.log( (ddbg()), reason);
+            console.error((ddbg()), "error updating name: ", reason);
         });
     }
     return result;
@@ -8909,7 +8692,7 @@ function getIcons(userid, pname, skin, icondir, category) {
         });
     } else {
         $tc = false;
-        console.log( (ddbg()), "Invalid directory: ", activedir, " in getIcons");
+        console.error( (ddbg()), "Invalid directory: ", activedir, " in getIcons");
     }
     return $tc;
 }
@@ -9062,8 +8845,8 @@ function updCustom(userid, tileid, swid, swval, oldsubid, subid, swtype, rules) 
                 mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${swid}' AND subid = '${oldsubid}'`)
                 .then(res2 => {
                     var numListDel = res2.getAffectedItemsCount();
-                    if ( numListDel > 0 ) {
-                        console.log((ddbg()), "Removed " + numListDel + " items from old LIST for subid = " + oldsubid);
+                    if ( numListDel > 0 && DEBUG12) {
+                        console.log((ddbg()), "removed " + numListDel + " items from old LIST for subid = " + oldsubid);
                     }
                 })
                 .then( ()=> {
@@ -9109,7 +8892,7 @@ function updCustom(userid, tileid, swid, swval, oldsubid, subid, swtype, rules) 
                 .then(res2 => {
                     var numListDel = res2.getAffectedItemsCount();
                     if ( DEBUG10 ) {
-                        console.log( (ddbg()), `Deleted ${numListDel} LIST rows for deviceid=${swid} and subid=${oldsubid}`);
+                        console.log( (ddbg()), `deleted ${numListDel} LIST rows for deviceid=${swid} and subid=${oldsubid}`);
                     }
                 })
                 .catch(reason => {
@@ -9168,10 +8951,6 @@ function getHubObj(hub) {
             .then(mydevices => {
                 var ndev = Object.keys(mydevices).length;
                 result.numdevices = ndev;
-
-                if ( DEBUG2 ) {
-                    console.log( (ddbg()), result );
-                }
 
                 // reactivate websocket here if we reauthorized an ISY hub
                 if ( hubType==="ISY" && EMULATEHUB!==true ) {
@@ -9235,9 +9014,8 @@ function apiCall(user, body, protocol, res) {
         skin = body["skin"] || "skin_housepanel";
     }
 
-    // console.log((ddbg()),"apiCall - userid: ", userid, " api: ", api);
     if ( !userid ) {
-        console.log( (ddbg()), "*** error *** user not authorized for API call. api: ", api, " body: ", body);
+        console.error( (ddbg()), "*** error *** user not authorized for API call. api: ", api, " body: ", body);
         return "error - HousePanel is not authorized for this user to make an API call";
     }
     
@@ -9293,7 +9071,7 @@ function apiCall(user, body, protocol, res) {
                     result = "called doAction " + devices.length + " times in a multihub action";
                 } else {
                     if ( DEBUG8 ) {
-                        console.log( (ddbg()), "doaction: swid: ", swid, " swval: ", swval, " swattr: ", swattr, " subid: ", subid, " tileid: ", tileid, " hint: ", hint);
+                        console.log((ddbg()), "doaction: swid: ", swid, " swval: ", swval, " swattr: ", swattr, " subid: ", subid, " tileid: ", tileid, " hint: ", hint);
                     }
                     if ( uid && (!swid || !swtype || !hubindex) ) {
                         try {
@@ -9326,11 +9104,6 @@ function apiCall(user, body, protocol, res) {
                 }
                 break;
                 
-            case "doquery":
-            case "query":
-                result = doQuery(userid, tileid, pname);
-                break;
-
             case "status":
                 result = {version: GLB.HPVERSION, userid: userid, email: useremail, uname: uname, panel: pname, skin: skin};
                 break;
@@ -9506,7 +9279,7 @@ function apiCall(user, body, protocol, res) {
                                     })
                                     .catch(reason => {
                                         console.error( (ddbg()), reason );
-                                        resolve("Error attempting to refresh hubs for userid = " + userid);
+                                        resolve("error attempting to refresh hubs for userid = " + userid);
                                     })
 
                                 }
@@ -9515,7 +9288,7 @@ function apiCall(user, body, protocol, res) {
                         }
                     })
                     .catch(reason => {
-                        console.log( (ddbg()), reason);
+                        console.error( (ddbg()), "error attempting to refresh page: ", reason);
                         return reason;
                     });
                     
@@ -9772,7 +9545,7 @@ function apiCall(user, body, protocol, res) {
                     }
                 })
                 .catch(reason => {
-                    console.log( (ddbg()), reason );
+                    console.error( (ddbg()), "Something went wrong getting a mode. Reason: ", reason );
                     return "Unknown";
                 });
                 break;
@@ -9794,8 +9567,8 @@ function apiCall(user, body, protocol, res) {
                     return row;
                 })
                 .catch(reason => {
-                    console.log( (ddbg()), "apiCall - getdevice: ", reason);
-                    result = "Something went wrong";
+                    console.error( (ddbg()), "apiCall - getdevice: ", reason);
+                    result = "Something went wrong in the getdevice API call.";
                 });
                 break;
 
@@ -9835,7 +9608,7 @@ function apiCall(user, body, protocol, res) {
                         return devices;
                     })
                     .catch(reason => {
-                        console.log( (ddbg()), "apiCall - getdevices: ", reason);
+                        console.error((ddbg()), "apiCall - getdevices: ", reason);
                     });
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
@@ -9850,7 +9623,7 @@ function apiCall(user, body, protocol, res) {
                     .then(things => {
                         return things;
                     }).catch(reason => {
-                        console.log( (ddbg()), reason);
+                        console.warn((ddbg()), "error attempting to get things: ", reason);
                         return null;
                     });
                 } else {
@@ -9896,7 +9669,7 @@ function apiCall(user, body, protocol, res) {
                             }
                         })
                         .catch(reason => {
-                            console.log( (ddbg()), reason );
+                            console.warn( (ddbg()), "Clipboard load error: ", reason );
                             return [];
                         });
                     } else {
@@ -9966,7 +9739,7 @@ function apiCall(user, body, protocol, res) {
                     delCookie(res, "pname");
                     return "Account for user #" + userid + ", Username: " + uname + ", Email: " + useremail + " successfully removed.";
                 }).catch(reason => {
-                    var str = "Error trying to remove account for user #" + userid + ", Username: " + uname + ", Email: " + useremail
+                    var str = "error trying to remove account for user #" + userid + ", Username: " + uname + ", Email: " + useremail
                     console.error( (ddbg()), str, "\n", reason );
                     return str;
                 });
@@ -10012,7 +9785,7 @@ function apiCall(user, body, protocol, res) {
                     return pvalue;
                 })
                 .catch(reason => {
-                    console.log( (ddbg()), reason );
+                    console.warn( (ddbg()), "warning: something went wrong with dorules: ", reason );
                     return "Something went wrong with dorules.";
                 });
                 break;
@@ -10027,7 +9800,7 @@ function apiCall(user, body, protocol, res) {
                         return `Deleted ${numListDel} LIST rows for deviceid=${swid} and subid=${subid}`;
                     })
                     .catch(reason => {
-                        console.log( (ddbg()), reason);
+                        console.error((ddbg()), "error attempting to reset list: ", reason);
                     });
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
@@ -10050,61 +9823,14 @@ function apiCall(user, body, protocol, res) {
                 result = mydb.updateRow("users", usrobj, "id = "+userid)
                 .then( ()=> {
                     var msg = `successfully set default hub to ${swval}`;
-                    if ( DEBUG7 ) {
-                        console.log((ddbg()), msg);
-                    }
                     return msg;
                 })
                 .catch(reason => {
-                    var msg = `unable to set default hub to ${swval}`;
-                    console.warn((ddbg()), msg, "\n reason: ", reason);
+                    var msg = `Unable to set default hub to ${swval}`;
+                    console.warn((ddbg()), msg, " reason: ", reason);
                     return msg;
                 });
                 break;
-
-            // this isn't used, but it is here to return the next port available to connect
-            case "getwsport":
-
-                if ( protocol==="POST" ) {
-                    var wsmin = GLB.webSocketServerPort + 1;
-                    var wsmax = GLB.webSocketServerPort + 10;
-                    var wsport;
-                    var usedports = [];
-                    if ( clients[userid] ) {
-                        clients[userid].forEach(function(client) {
-                            wsport = client.socket.server["_connectionKey"];
-                            var ipos = wsport.lastIndexOf(":");
-                            wsport = parseInt(wsport.substr(ipos+1));
-                            usedports.push(wsport);
-                        });
-                    }
-                    if ( usedports.length ) {
-                        for (var iport=wsmin; iport < wsmax; iport++) {
-                            if ( usedports.includes(iport)===false ) {
-                                wsport = iport;
-                                break;
-                            }
-                        }
-                    } else {
-                        wsport = wsmin;
-                    }
-                    result = {port: wsport, used: usedports};
-                } else {
-                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-                }
-                break;
-
-            // case "hubrefresh":
-            //     result = mydb.getRow("hubs","*","userid = "+userid + " AND id = '" + hubindex +"'")
-            //     .then(hub => {
-            //         if ( !hub ) throw "Hub not found for hubindex = " + hubindex;
-            //         return hub;
-            //     })
-            //     .catch(reason => {
-            //         console.log( (ddbg()), reason );
-            //         return null;
-            //     });
-            //     break;
 
             // this api call starts the hub authorization process
             // the actual redirection to the first auth site is done in js file
@@ -10206,16 +9932,14 @@ function apiCall(user, body, protocol, res) {
                         })
                         .then(ahub => {
                             if ( DEBUG2 ) {
-                                console.log( (ddbg()), "authhub: ", ahub );
+                                console.log((ddbg()), "authhub: ", ahub );
                             }
                             // update the hub that was added above
                             return getHubObj(ahub);
                         })
                         .catch(reason => {
-                            console.log( (ddbg()), reason);
-                            return "error - something went wrong in hubauth";
-                            // res.send("error - something went wrong in hubauth");
-                            // res.end();
+                            console.error((ddbg()), "error attempting to authorize a hub: ", reason);
+                            return "error - something went wrong when attempting to authorize a hub. Please try again.";
                         });
                     }
                 } else {
@@ -10239,8 +9963,8 @@ function apiCall(user, body, protocol, res) {
                         return "Removed " + numHubDel + " hubs and " + numDevDel + " devices";
                     })
                     .catch( reason => {
-                        console.log( (ddbg()), reason);
-                        return "error - could not remove hub with hubindex = " + hubindex + " errcode: " + reason;
+                        console.error((ddbg()), "error attempting to remove hub: ", reason);
+                        return "error - could not remove hub with hubindex = " + hubindex;
                     });
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
@@ -10298,7 +10022,7 @@ function apiCall(user, body, protocol, res) {
                     return clock;
                 })
                 .catch(reason => {
-                    console.warn((ddbg()), reason);
+                    console.warn((ddbg()), "Problem encountered attempting to update the clock: ", reason);
                     return null;
                 });
                 break;
@@ -10309,8 +10033,8 @@ function apiCall(user, body, protocol, res) {
             case "reauth":
             case "logout":
             case "trackupdate":
-                    var result = "error - [" + api + "] API call is no longer supported. Try loading browser with: " + GLB.returnURL + "/" + api;
-                    console.log( (ddbg()), result);
+                    var result = "error - [" + api + "] API call is no longer supported";
+                    console.warn((ddbg()), result);
                     break;
 
             case "reload":
@@ -10343,10 +10067,9 @@ function resetList(userid, timing) {
                             mydb.deleteRow("lists",`userid = ${userid} AND deviceid = '${deviceid}' AND subid = '${subid}'`)
                             .then( res2=> {
                                 var numListDel = res2.getAffectedItemsCount();
-                                console.log( (ddbg()), `Deleted ${numListDel} rows for LIST associated with deviceid=${deviceid} and subid=${subid} based on criteria=${timing}`);
                             })
                             .catch(reason => {
-                                console.log( (ddbg()), reason );
+                                console.error( (ddbg()), "error attempting to reset list: ", reason );
                             });
                         }
                     }
@@ -10355,13 +10078,28 @@ function resetList(userid, timing) {
         }
     })
     .catch(reason => {
-        console.log( (ddbg()), reason );
+        console.warn( (ddbg()), "Could not reset list for user: ", userid, " reason: ", reason );
     })
+}
+
+// hpserver to client communication
+var clients = {};
+const freeConnIds = [];
+let nextConnId = 1; 
+
+function allocConnId() {
+  return freeConnIds.length ? freeConnIds.pop() : nextConnId++;
+}
+
+function freeConnId(id) {
+  if (Number.isInteger(id) && id > 0) freeConnIds.push(id);
 }
 
 // setup socket between server and all user browsers
 function setupBrowserSocket() {
     // var wsServer;
+    var wsServer;
+    const wsport = GLB.webSocketServerPort;
 
     // create the HTTP server for handling sockets
     // support insecure and secure sockets to deal with ISY which is insecure
@@ -10371,31 +10109,23 @@ function setupBrowserSocket() {
         var cabundle = fs.readFileSync("housepanel_server.ca");
         var credentials = {key: key, cert: crt, ca: cabundle};
         GLB.insecure = false;
-        for ( var isrv=1; isrv<10; isrv++) {
-            var server = https.createServer(credentials, function() {});
-            var wsServer = new webSocketServer({httpServer: server});
-            var wsport = GLB.webSocketServerPort + isrv;
-            console.log( (ddbg()), "Secure webSocket Server is listening on port: ", wsport);
-            wsServers.push( wsServer );
-            server.listen(wsport, function() {} );
-        }
+        const server = https.createServer(credentials, function() {});
+        wsServer = new webSocketServer({httpServer: server});
+        console.log( (ddbg()), "Secure webSocket Server is listening on port: ", wsport);
+        server.listen(wsport, "0.0.0.0", function() {} );
     } else {
         GLB.insecure = true;
-        for ( var isrv=1; isrv<10; isrv++) {
-            var server = http.createServer(function() {});
-            var wsServer = new webSocketServer({httpServer: server});
-            var wsport = GLB.webSocketServerPort + isrv;
-            console.log( (ddbg()), "Insecure webSocket Server is listening on port: ", wsport);
-            wsServers.push( wsServer );
-            server.listen(wsport, function() {} );
-        }
+        const server = http.createServer(function() {});
+        wsServer = new webSocketServer({httpServer: server});
+        console.log( (ddbg()), "Insecure webSocket Server is listening on port: ", wsport);
+        server.listen(wsport, "0.0.0.0", function() {} );
     }
 
     // This function handles new connections, messages from connections, and closed connections
     // changed this logic to use multiple servers with only one client per server for any given user
-    for ( var i=0; i < wsServers.length; i++ ) {
+    // for ( var i=0; i < wsServers.length; i++ ) {
 
-        var wsServer = wsServers[i];
+        // var wsServer = wsServers[i];
 
         wsServer.on('request', function(wsrequest) {
             console.log( (ddbg()), 'Requesting websocket connection: ', wsrequest.requestedProtocols );
@@ -10404,94 +10134,90 @@ function setupBrowserSocket() {
             }
         });
 
-        // wsServer.on('message', function(wsrequest) {
-        //     console.log( (ddbg()), 'websocket msg data: ', wsrequest.data );
-        // });
-
         wsServer.on('connect', function(connection) {
-            console.log( (ddbg()), 'Connecting websocket. Address: ', connection.socket.remoteAddress );   // connection.remoteAddresses,
-            // console.log( (ddbg()), 'Connection details: ', connection );   // connection.remoteAddresses,
+            console.log( (ddbg()), "Connecting websocket, protocol: ", connection.protocol, " Address: " , connection.socket.remoteAddress );
 
             // shut down any existing connections to same remote host
             var browserurl = connection.socket.remoteAddress;
             var wsport = connection.socket.server["_connectionKey"];
-            var userport = 0;
+
+            const connId = allocConnId();
+            connection.connId = connId;
+            console.log( (ddbg()), "New connection from url: ", browserurl, " port: ", wsport, " assigned connId: ", connId );
+
+            // add a timer to report no connection message after 10 seconds if we don't get a message from the browser with the userid
+            const connectTimer = setTimeout(function() {
+                console.warn( (ddbg()), "No message received from browser at ", browserurl, " port: ", wsport, " after 5 seconds. Closing connection.");
+                connection.close();
+            }, 5000);
 
             // wait for message from browser telling us what user id this is
             connection.on("message", function(msg) {
                 if ( msg.type==="utf8" ) {
-                    var userandport = msg.utf8Data.split("|");
-                    var userid = parseInt(userandport[0]);
-                    userport = parseInt(userandport[1]);
+                    var userid = parseInt(msg.utf8Data, 10);
 
-                    // create this user's list of pages if not there
-                    if ( !clients[userid] ) {
-                        clients[userid] = [];
-                    }
-
-                    // save the userid in the connection object
+                    // add this connection to our clients object with the userid and browser info
+                    // we will use this to send updates to the browser and also to identify which user is connected from which browser 
                     connection.userid = userid;
+                    clients[connId] = {
+                        index: 0,
+                        id: connId, 
+                        userid: userid,
+                        conn: connection,
+                        browserurl: browserurl,
+                        wsport: wsport,
+                        established: Date.now()
+                    };
 
-                    // now that we know the userid and the URL of the browser, remove old ones and register this client
-                    var i = 0;
-                    while ( i < clients[userid].length ) {
-                        var oldhost = clients[userid][i].socket.remoteAddress;
-                        var oldport = clients[userid][i].socket.server["_connectionKey"];
-                        if ( oldhost===browserurl && oldport===wsport ) {
-                            clients[userid].splice(i, 1);
-                        } else {
-                            i++;
-                        }
-                    }
+                    // renumber this user's clients from 1 to n where n is the number of clients for this user - this is used for logging and identifying old vs new connections
+                    let userConnCount = Object.keys(clients).filter(key => clients[key].userid === userid).length;
+                    // for (const key in clients) {
+                    //     if (clients[key].userid === userid) {
+                    //         userConnCount++;
+                    //         clients[key].index = userConnCount;
+                    //     }
+                    // }
+                    console.log( (ddbg()), "Registered connection for user: ", userid," ConnId: ", connId, "of", userConnCount, "total connections for this user" );
 
-                    // add the new client
-                    var index = clients[userid].push(connection) - 1;
-                    clients[userid].forEach(function(client, i) {
-                        var clientUrl = client.socket.remoteAddress;
-                        var clientPort = client.socket.server["_connectionKey"];
-                        var str = "User #"+userid;
-                        var istr = (i+1).toString();
-                        if ( i===index ) {
-                            str += " New Connection #"+istr;
-                        } else {
-                            str += " Old Connection #"+istr;
-                        }
-                        console.log( (ddbg()), str, "from host:", clientUrl, "port:", clientPort);
+                    // now send the connId for this connection back to the browser
+                    pushClient(userid, "websocket", "opened", connId, {"connId": connId, "established": clients[connId].established} );
 
-                        // if ( clientUrl === "::1" ) {
-                        //     EMULATEHUB = true;
-                        //     console.log( (ddbg()), "Local testing mode enabled. ISY hubs ignored...");
-                        // }
-                    });
+                    // clear the timer since we got a message from the browser and we know the userid now
+                    clearTimeout(connectTimer);
+                }
+            });
+
+            connection.on("error", function(err) {
+                console.log( (ddbg()), "Connection dropped. Browser most likely closed or went away.");
+                if ( DEBUG17) {
+                    console.log( (ddbg()), "Connection drop details: ", err);
                 }
             });
         
             // user disconnected - remove just one client that match this socket
             connection.on('close', function(reason, description) {
-                var host = connection.socket.remoteAddress;
-                var port = connection.socket.server["_connectionKey"];
-                var userid = connection.userid;
+                const connId = connection.connId;
+                const host = connection.socket.remoteAddress;
+                const port = connection.socket.server["_connectionKey"];
+                const userid = connection.userid;
+                console.log( (ddbg()), "Client at url: ", host, " port: ", port, " user: ", userid, " disconnected. for reason: ", reason, " description: ", description);
 
-                console.log( (ddbg()), "Peer: ", host, " disconnected. for: ", reason, description, " user: ", userid, " connection: ", connection.socket.server["_connectionKey"]);
+                pushClient(userid, "websocket", "closed", connId );
 
-                // remove clients that match this host
-                var i = 0;
-                if ( clients && userid && clients[userid] ) {
-                    while ( i < clients[userid].length ) {
-                        var oldhost = clients[userid][i].socket.remoteAddress;
-                        var oldport = clients[userid][i].socket.server["_connectionKey"];
-                        if ( oldhost===host && oldport===port ) {
-                            clients[userid].splice(i, 1);
-                        } else {
-                            i++;
-                        }
-                    }
+                // remove the client from the clients object
+                if ( connId ) {
+                    freeConnId(connId);
+                }
+                if ( connId && clients[connId] ) {
+                    console.log( (ddbg()), "Removed connection for user: ", userid, " client id: ", connId, " browserurl: ", clients[connId].browserurl, 
+                                            " port: ", clients[connId].wsport, " established: ", new Date(clients[connId].established).toLocaleString() );
+                    delete clients[connId];
+                } else {
+                    console.warn( (ddbg()), "Could not find client to remove for user: ", userid, " host: ", host, " port: ", port);
                 }
             });
-
         });
-    }
-    
+    // }
 }
 
 function setupISYSocket() {
@@ -10544,7 +10270,7 @@ function setupISYSocket() {
 
                 wsone.connect(wshost, "ISYSUB", origin, header, opts);
                 wsone.on("connectFailed", function(err) {
-                    console.log( (ddbg()), "Connection failure to ISY socket: ", err.toString(), " wshost:", wshost, " header:", header);
+                    console.warn( (ddbg()), "Connection failure to ISY socket: ", err.toString(), " wshost:", wshost, " header:", header);
                 });
             
                 wsone.on("connect", function(connection) {
@@ -10559,7 +10285,7 @@ function setupISYSocket() {
                     });
                 
                     connection.on("error", function(err) {
-                        console.log( (ddbg()), "Connection error to ISY socket: ", err);
+                        console.warn( (ddbg()), "Connection dropped to ISY socket: ", err);
                     });
                 
                     connection.on("close", function(reasonCode, description) {
@@ -10570,7 +10296,7 @@ function setupISYSocket() {
             }
         });
     }).catch(reason => {
-        console.log( (ddbg()), "ISY socket setup failure: ", reason);
+        console.error( (ddbg()), "ISY socket setup failure: ", reason);
     });
 }
 
@@ -10663,11 +10389,11 @@ function buildDatabaseTable(tableindex) {
 
     ];
     mydb.query(tableData[tableindex])
-    .then(results => {
-        console.log( (ddbg()), results );
+    .then( reason => {
+        console.log( (ddbg()), "HousePanel database tables created or verified successfully");
     })
     .catch(reason => {
-        console.log( (ddbg()), reason );
+        console.error( (ddbg()), "error building database tables: ", reason );
     })
 }
 
@@ -10686,7 +10412,7 @@ GLB.dbinfo = {
     "dbpassword": "housepanel",
     "dbtype": "sqlite",
     "port": "8580",
-    "websocketport": "8340",
+    "websocketport": "10430",
     "allownewuser" : ["all"],
     "service": "none",
     "enablerules": true,
@@ -10718,14 +10444,9 @@ if ( GLB.dbinfo["twilio_sid"] && GLB.dbinfo["twilio_token"] && GLB.dbinfo["twili
 
 GLB.port = parseInt(GLB.dbinfo["port"]);
 GLB.webSocketServerPort = parseInt(GLB.dbinfo["websocketport"]);
-console.log( (ddbg()), "Supported hub types: ", GLB.dbinfo.hubs);
 
 var port = GLB.port;
 GLB.newcss = {};
-
-var wsServers = [];
-var clients = [];
-var wsclient = {};
 
 // start our main server
 var httpServer;
@@ -10754,7 +10475,7 @@ try {
                 console.log( (ddbg()), "HousePanel secure server is running at location: ", dir, " on port: ", port);
             });
         } catch (e) {
-            console.log( (ddbg(), "Error attempting to start secure server", e));
+            console.warn( (ddbg()), "error attempting to start secure server. Falling back to using an insecure server. Warning msg: ", e);
             httpsServer = null;
             credentials = null;
             httpServer = http.createServer(app);
@@ -10774,7 +10495,7 @@ try {
     applistening = true;
     
 } catch (e) {
-    console.log( (ddbg()), "HousePanel server could not be started at location: ", dir, " on port: ", port);
+    console.error( (ddbg()), "HousePanel server could not be started at location: ", dir, " on port: ", port);
     app = null;
     applistening = false;
 }
@@ -10803,8 +10524,6 @@ if ( app && applistening ) {
             
         for (let i in tables) {
             if ( dbtables.includes(tables[i]) ) {
-                // console.log( (ddbg()), "Table", tables[i], " successfully found");
-
                 // check configs for updating schema to include new configtype column
                 if ( tables[i] === "configs" ) {
                     mydb.getRows("pragma_table_info('configs')")
@@ -10813,22 +10532,20 @@ if ( app && applistening ) {
                         rows.forEach(row => {
                             ctcol = ctcol || (row.name === "configtype"); 
                         });
-                        // console.log( (ddbg()), "configtype column exist: ", ctcol);
-                        // update if missing configtype
                         if ( ctcol===false ) {
                             addedtables++;
                             const qstr1 = "ALTER TABLE configs ADD COLUMN configtype INTEGER DEFAULT 1";
                             const qstr2 = "update configs set configtype = 0 where configkey = 'useroptions' OR configkey not like 'user%'";
                             mydb.query(qstr1)
                             .then(res => {
-                                console.log( (ddbg()), "Added configtype column to configs table. res:", res);
+                                console.log( (ddbg()), "Added configtype column to configs table");
                                 mydb.query(qstr2)
                                 .then(res => {
-                                    console.log( (ddbg()), "Updated types for configtype column to configs table. res:", res);
+                                    console.log( (ddbg()), "Updated types for configtype column to configs table");
                                 });
                             })
                             .catch(reason => {
-                                console.log( (ddbg()), reason);
+                                console.error( (ddbg()), "error updating the schema of the configs table: ", reason);
                             })
                         }
                     });
@@ -10846,10 +10563,10 @@ if ( app && applistening ) {
                             mydb.query("ALTER TABLE devices ADD COLUMN uid INTEGER DEFAULT 0")
                             .then(res => {
                                 addedtables++;
-                                console.log( (ddbg()), "Added uid column to devices table");
+                                console.log( (ddbg()), "Updated the schema of the devices table by adding uid column");
                             })
                             .catch(reason => {
-                                console.log( (ddbg()), reason);
+                                console.warn( (ddbg()), "error updating the schema of the devices table: ", reason);
                             })
                         }
                     });
@@ -10875,7 +10592,7 @@ if ( app && applistening ) {
         }, addedtables * 3000);
     })
     .catch(reason => {
-        console.log( (ddbg()), reason);
+        console.error( (ddbg()), "error updating database: ", reason);
         exit(1);
     });
 
@@ -10938,7 +10655,7 @@ if ( app && applistening ) {
                     res.send(result);
                     res.end();
                 }).catch(reason => {
-                    console.log( (ddbg()), reason);
+                    console.error( (ddbg()), "User activation failed: ", reason);
                     var result = getLoginPage(req, 0, "", "", "", hostname);
                     res.send(result);
                     res.end();
@@ -10960,9 +10677,7 @@ if ( app && applistening ) {
             }
 
             if ( !results || !results["users_id"] ) {
-                if ( DEBUG3 ) {
-                    console.log( (ddbg()), "login rejected for user: ", results);
-                }
+                console.warn( (ddbg()), "login rejected for user: ", results);
                 var result = getLoginPage(req, 0, "", "", "", hostname);
                 res.send(result);
                 res.end();
@@ -11107,7 +10822,7 @@ if ( app && applistening ) {
             }
 
         }).catch(reason => {
-            console.log( (ddbg()),"Startup error: ", reason);
+            console.error( (ddbg()),"HousePanel startup error: ", reason);
             var result = getLoginPage(req, 0, "", "", "", hostname);
             res.send(result);
             res.end();
@@ -11115,7 +10830,8 @@ if ( app && applistening ) {
     });
     
     app.put('*', function(req, res) {
-        console.log( (ddbg()), "PUT api calls are not supported. Use POST instead. Requested put: ", req.path);
+        console.warn( (ddbg()), "PUT api calls are not supported. Use POST instead. Requested put: ", req.path);
+        res.send("PUT api calls are not supported. Use POST instead.");
         res.end();
     });
 
@@ -11145,10 +10861,6 @@ if ( app && applistening ) {
         // handle initialize events from Hubitat here
         if ( req.path==="/" && req.body['msgtype'] === "initialize" ) {
             hubid = req.body['hubid'] || null;
-            if ( DEBUG1 ) {
-                console.log( (ddbg()), "init request - req.body: ", req.body);
-            }
-
             if ( hubid ) {
                 // update the devices of all hubs matching this hubid regardless of the user
                 // each user's hub should have a unique hubid so this works fine
@@ -11163,10 +10875,6 @@ if ( app && applistening ) {
 
                     hubs.forEach(hub => {
 
-                        if ( DEBUG1 ) {
-                            console.log( (ddbg()), "init request - hub: ", hub);
-                        }
-                        
                         // handle Hubitat hub update pushes
                         userid = hub.userid;
                         var updhub = false;
@@ -11219,7 +10927,7 @@ if ( app && applistening ) {
                             })
                             .then(numremoved => {
                                 if ( DEBUG1 ) {
-                                    console.log( (ddbg()), "Removed ", numremoved," devicdes");
+                                    console.log( (ddbg()), "Removed ", numremoved," devices");
                                 }
                                 if ( numremoved > 0 ) {
                                     pushClient(userid, "reload", "all", "/");
@@ -11232,7 +10940,7 @@ if ( app && applistening ) {
                             removeHublessDevices(userid)
                             .then(numremoved => {
                                 if ( DEBUG1 ) {
-                                    console.log( (ddbg()), "Removed ", numremoved," devicdes");
+                                    console.log( (ddbg()), "Removed ", numremoved," devices");
                                 }
                                 return getDevices(hub)
                             })
@@ -11275,14 +10983,6 @@ if ( app && applistening ) {
             for (var key in configvals) {
                 configupdated = configupdated || (GLB.dbinfo[key] !== configvals[key]);
                 GLB.dbinfo[key] = configvals[key];
-
-                // inform user that they need to restart their clients if websocketport changed and save in global variable
-                // disabled for now because it requires a server restart to take effect
-                // if ( key==="websocketport" ) {
-                //     clients = [];
-                //     GLB.webSocketServerPort = parseInt(GLB.dbinfo["websocketport"]);
-                //     console.log( (ddbg()), "WebSocket Port change detected. Please restart your HousePanel clients to connect to the new port: ", configvals[key]);
-                // }
             }
 
             // now write the updated config values to the housepanel.cfg file
@@ -11291,7 +10991,7 @@ if ( app && applistening ) {
                     var configname = GLB.homedir + "/housepanel.cfg";
                     fs.writeFileSync(configname, JSON.stringify(GLB.dbinfo, null, 4), "utf8");
                 } catch (e) {
-                    console.error( (ddbg()), "Error writing housepanel.cfg file: ", e);
+                    console.error( (ddbg()), "error writing housepanel.cfg file: ", e);
                 }
             }
 
@@ -11316,8 +11016,8 @@ if ( app && applistening ) {
         // handle msg events from Hubitat here
         // these message can now only come from Hubitat since ST groovy is gone
         } else if ( req.body['msgtype'] === "update" ) {
-            if ( DEBUG12 || DEBUG17 ) {
-                console.log( (ddbg()), "Received update msg from hub: ", req.body["hubid"], " msg: ", req.body);
+            if ( DEBUG12 ) {
+                console.log( (ddbg()), "Received update msg from hub: ", req.body["hubid"], " msg: ", jsonshow(req.body));
             }
             hubid = req.body['hubid'];
             if ( hubid && hubid!=="-1" ) {
@@ -11329,7 +11029,7 @@ if ( app && applistening ) {
                         });
                     }
                 }).catch(reason => {
-                    console.log( (ddbg()), "Hubitat hub msg event error: ", reason);
+                    console.warn( (ddbg()), "Hubitat hub retrieval error: ", reason);
                 });
             }
             res.send("Hub msg received and processed");
@@ -11347,9 +11047,7 @@ if ( app && applistening ) {
                     result = doLogin(req.body, res);
                     break;
                 case "forgotpw":
-                    console.log("body: ", req.body);
                     result = forgotPassword(req.body);
-                    console.log("result: ", result);
                     break;
                 case "createuser":
                     result = createUser(req.body);
@@ -11358,16 +11056,14 @@ if ( app && applistening ) {
                     result = validateUser(req.body);
                     break;
                 case "updatepassword":
-                    console.log("body: ", req.body);
                     result = updatePassword(req.body);
-                    console.log("result: ", result);
                     break;
             }
             try{
                 if ( result && typeof result === "object" && result.then && typeof result.then === "function" ) {
                     result.then(obj => {
                         if ( DEBUG1 ) {
-                            console.log( (ddbg()), "login function promise returned: ", req.body["api"], " = ", obj );
+                            console.log( (ddbg()), "login function promise returned for api: ", req.body["api"] );
                         }
                         res.json(obj);
                         res.end();
@@ -11385,12 +11081,12 @@ if ( app && applistening ) {
                     res.json(result);
                     res.end();
                 } else {
-                    console.log( (ddbg()), "Invalid login request: ", result);
-                    res.send("Invalid HousePanel login-related request - check logs");
+                    console.error( (ddbg()), "Invalid login request: ", result);
+                    res.send("Invalid HousePanel login-related request");
                     res.end();
                 };
             } catch(e) {
-                console.error("Error processing reset password: ", e);
+                console.error("error processing reset password: ", e);
                 res.send("Fatal error in password reset");
                 res.end();
             }
@@ -11451,7 +11147,7 @@ if ( app && applistening ) {
                         res.json(result);
                         res.end();
                     } else {
-                        console.log( (ddbg()), "Invalid POST: ", result);
+                        console.warn( (ddbg()), "Invalid POST: ", result);
                         res.send("Invalid HousePanel POST request - check logs");
                         res.end();
                     };
@@ -11461,14 +11157,14 @@ if ( app && applistening ) {
                 }
             })
             .catch(reason => {
-                console.log( (ddbg()), "API Call [" + api + "] failed for User = " + userid + ". Security violation possible for hpcode = " + hpcode );
+                console.warn( (ddbg()), "API Call [" + api + "] failed for User = " + userid + ". Security violation possible for hpcode = " + hpcode, " reason: ", reason );
                 res.send("POST error on api call. Check Logs for detailed error messages");
                 res.end();
             });
 
         // handle unknown requests
         } else {
-            console.log( (ddbg()), "HousePanel unknown POST to path: ", req.path, " body:", req.body);
+            console.warn( (ddbg()), "HousePanel received an unknown POST with path: ", req.path, " body:", req.body);
             res.send("unknown message sent to HousePanel");
             res.end();
         }
