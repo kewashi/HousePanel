@@ -376,6 +376,9 @@ $(document).ready(function() {
                     case "E":
                         execButton("edit");
                         break;
+                    case "G":
+                        execButton("logout");
+                        break;
                     case "P":
                         execButton("operate");
                         break;
@@ -1721,7 +1724,6 @@ function setupDraggable() {
 
     function thingDraggable(thing, snap, container) {
         var snapgrid = false;
-    
         if ( snap ) {
             snapgrid = [20, 20];
         }
@@ -1782,27 +1784,35 @@ function setupDraggable() {
                 $(thing).css(startPos);
                 cm_Globals.edited = true;
 
-                delEditLink();
-                addEditLink();
-                setupDraggable();
-                        
                 // now post back to housepanel to save the position
                 // also send the dragthing object to get panel name and tile pid index
                 $.post(cm_Globals.returnURL, 
                     {api: "setposition", userid: cm_Globals.options.userid, pname: cm_Globals.options.pname, 
-                     id: bid, type: thingtype, attr: startPos, tileid: tileid, uid: uid, thingid: thingid, hpcode: cm_Globals.options.hpcode}
-                );
+                     id: bid, type: thingtype, attr: startPos, tileid: tileid, uid: uid, thingid: thingid, hpcode: cm_Globals.options.hpcode},
+                    function (presult, pstatus) {
+                        console.log("setposition result: ", presult);
+                        // delEditLink();
+                        // addEditLink();
+                        // setupDraggable();                        
+                    });
             }
         });
 
         thing.resizable({
             distance: 5,
-            containment: "document",
+            revert: "invalid",
+            grid: snapgrid,
+            containment: container,    
             maxHeight: 600,
             maxWidth: 900,
             grid: snapgrid,
             autoHide: true,
-            handles: {'se': '.ui-resizable-se'},
+            handles: {'se': '.ui-resizable-se', 'e': '.ui-resizable-e', 's': '.ui-resizable-s'},
+            start: function(evt, ui) {
+                startPos.left = parseInt($(evt.target).position().left);
+                startPos.top  = parseInt($(evt.target).position().top);
+                console.log("Resizing tile, left: ", startPos.left, " top: ", startPos.top);
+            },
             stop: function(evt, ui) {
                 cm_Globals.edited = true;
                 var thing = evt.target;
@@ -2437,6 +2447,19 @@ function execButton(buttonid) {
     } else if ( (buttonid==="showid" || buttonid==="userauth" || buttonid==="showoptions" || buttonid==="editdevices") && priorOpmode==="Operate" ) {
         reload(buttonid); // window.location.href = cm_Globals.returnURL + "/" + buttonid;
 
+    } else if ( buttonid==="logout" ) {
+        const emailname = $("#emailname").html();
+        const pos = {top: 40, left: 820};
+        createModal("modalexec","Log out user: "+ emailname + "<br/>Are you sure?", "body" , true, pos, function(ui, content) {
+            const clk = $(ui).attr("name");
+            if ( clk==="okay" ) {
+                window.location.href = cm_Globals.returnURL + "/logout";
+            } else {
+                closeModal("modalexec");
+            }
+        });
+
+
     // default is to call main node app with the id as a path
     } else {
         if ( priorOpmode!=="Operate") {
@@ -2874,7 +2897,9 @@ function addEditLink() {
         var cmzdiv = "<div class=\"cmzlink\" taid=" + $(this).attr("id") + ">" + $(this).attr("uid")  + "</div>";
         var deldiv = "<div class=\"dellink\" taid=" + $(this).attr("id") + "> </div>";
         var sizediv = "<div class=\"sizelink ui-resizable-handle ui-resizable-se\"> </div>";
-        $(this).append(cmzdiv).append(editdiv).append(deldiv).append(sizediv);
+        var sizediv2 = "<div class=\"sizelink ui-resizable-handle ui-resizable-e\"> </div>";
+        var sizediv3 = "<div class=\"sizelink ui-resizable-handle ui-resizable-s\"> </div>";
+        $(this).append(cmzdiv).append(editdiv).append(deldiv).append(sizediv).append(sizediv2).append(sizediv3);
     });
     $("div.panel > div.thing[style*='absolute']").each(function() {
         var resetdiv = "<div class=\"rstlink\" taid=" + $(this).attr("id") + ">R</div>";

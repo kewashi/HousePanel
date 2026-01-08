@@ -3398,12 +3398,12 @@ function doLogin(body, res) {
             var userid = therow["users_id"];
             var usertype = therow["users_usertype"];
 
+            // store the username as a hash
             uname = therow["users_email"];
-            pname = therow["panels_pname"];
             setCookie(res, "uname", pw_hash(uname));
-
-            // we take on the panel number to the start of the panel name in the cookie so we always have it
-            // setCookie(res, "pname", pnumber + ":" + pw_hash(pname));
+            
+            // store the panel name as a hash
+            pname = therow["panels_pname"];
             setCookie(res, "pname", pw_hash(pname));
             if ( DEBUG3 ) {
                 console.log((ddbg()), therow);
@@ -10092,7 +10092,11 @@ function allocConnId() {
 }
 
 function freeConnId(id) {
-  if (Number.isInteger(id) && id > 0) freeConnIds.push(id);
+    // guard against invalid ids and duplicates
+    // only add back to free list if it's a positive integer and not already in the free list
+    if (Number.isInteger(id) && id > 0 && !freeConnIds.includes(id)) {
+        freeConnIds.push(id);
+    }
 }
 
 // setup socket between server and all user browsers
@@ -10131,6 +10135,9 @@ function setupBrowserSocket() {
             console.log( (ddbg()), 'Requesting websocket connection: ', wsrequest.requestedProtocols );
             if ( wsrequest.requestedProtocols[0] === "housepanel" ) {
                 wsrequest.accept("housepanel", wsrequest.origin); 
+            } else {
+                console.warn( (ddbg()), "Websocket connection rejected due to invalid protocol. Requested protocols: ", wsrequest.requestedProtocols);
+                wsrequest.reject(403, "Invalid protocol. Must use 'housepanel' protocol to connect.");
             }
         });
 
@@ -10145,7 +10152,7 @@ function setupBrowserSocket() {
             connection.connId = connId;
             console.log( (ddbg()), "New connection from url: ", browserurl, " port: ", wsport, " assigned connId: ", connId );
 
-            // add a timer to report no connection message after 10 seconds if we don't get a message from the browser with the userid
+            // add a timer to report no connection message after 5 seconds if we don't get a message from the browser with the userid
             const connectTimer = setTimeout(function() {
                 console.warn( (ddbg()), "No message received from browser at ", browserurl, " port: ", wsport, " after 5 seconds. Closing connection.");
                 connection.close();
@@ -10160,7 +10167,6 @@ function setupBrowserSocket() {
                     // we will use this to send updates to the browser and also to identify which user is connected from which browser 
                     connection.userid = userid;
                     clients[connId] = {
-                        index: 0,
                         id: connId, 
                         userid: userid,
                         conn: connection,
@@ -10171,12 +10177,6 @@ function setupBrowserSocket() {
 
                     // renumber this user's clients from 1 to n where n is the number of clients for this user - this is used for logging and identifying old vs new connections
                     let userConnCount = Object.keys(clients).filter(key => clients[key].userid === userid).length;
-                    // for (const key in clients) {
-                    //     if (clients[key].userid === userid) {
-                    //         userConnCount++;
-                    //         clients[key].index = userConnCount;
-                    //     }
-                    // }
                     console.log( (ddbg()), "Registered connection for user: ", userid," ConnId: ", connId, "of", userConnCount, "total connections for this user" );
 
                     // now send the connId for this connection back to the browser

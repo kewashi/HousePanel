@@ -1075,20 +1075,27 @@ div.rstlink {
     top: 50px;
     right: 0px;
 }
-div.sizelink {
-    bottom: -12px;
+div.ui-resizable-handle {
     width: 24px;
     height: 24px;
-    right: -12px;
-    background-image: url("media/resize.png");
-    filter: invert(1);
     background-size: 18px;
-    background-color: white;
 }
-div.ui-resizeable-se {
-    background-image: url("media/resize.png");
+div.ui-resizable-handle.ui-resizable-se {
+    bottom: -12px;
+    right: -12px;
     filter: invert(1);
-    background-size: 32px;
+    background-color: white;
+    background-image: url("media/resize.png");
+}
+div.ui-resizable-handle.ui-resizable-s {
+    bottom: -12px;
+    left: 40%;
+    background-image: url("media/uparrow.png");
+}
+div.ui-resizable-handle.ui-resizable-e {
+    top: 50%;
+    right: -12px;
+    background-image: url("media/rightarrow.png");
 }
 div.addpage {
     font-size: 14px;
