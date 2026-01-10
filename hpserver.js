@@ -3628,8 +3628,8 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
         } else {
             $tc += "<div id=\"hubdiv\" class=\"startupinp disabled\">";
         }
-        $tc += "<label class=\"startupinp\">Hub Type: </label>";
-        $tc += "<select disabled name=\"hubtype\" class=\"hubtypeinp\">";
+        $tc += "<label for='inp_hubtype' class=\"startupinp\">Hub Type: </label>";
+        $tc += "<select id='inp_hubtype' disabled name=\"hubtype\" class=\"hubtypeinp\">";
         for (var ht in allhubtypes) {
             if ( ht === hubType ) {
                 $tc += "<option value=\"" + ht + "\" selected>" + allhubtypes[ht] + "</option>";
@@ -6956,11 +6956,28 @@ function doAction(userid, hubindex, tileid, uid, swid, swtype, swval, swattr, su
     return msg;
 }
 
+function recurseKeys(pvalue, prefix, val) {
+    if ( typeof val !== "object" ) {
+        pvalue[prefix] = val;
+        return pvalue;
+    } else {
+        for ( var key in val ) {
+            var subval = val[key];
+            var newkey = prefix ? prefix + "_" + key.toString() : key.toString();
+            // var subresult = recurseKeys(newkey, subval);
+            // result[newkey] = Object.assign(result, subresult);
+            pvalue = recurseKeys(pvalue, newkey, subval);
+        }
+        return pvalue;
+    }
+}
+
 function urlCallback(userid, swid, swtype, subid, body, command) {
     if ( DEBUG13 ) {
         console.log( (ddbg()), "URL callback returned: ", body );
     }
     var pvalue = {};
+    pvalue[subid] = command + "::" + subid; 
 
     // if a string is returned then just push it as is
     if ( typeof body === "string" ) {
@@ -6972,27 +6989,22 @@ function urlCallback(userid, swid, swtype, subid, body, command) {
         try {
             let subidfound = false;
             for (var key in body) {
-                if ( typeof body[key] !== "object" ) {
-                    pvalue[key] = body[key];
-                    subidfound = (key === subid) ? true : subidfound;
-                }
+                subidfound = (key === subid) || subidfound;
             }
-            // if our trigger subid was not found then set it to value field if there was one and if not, set it back to default command::subid
-            if ( !subidfound ) {
-                if ( array_key_exists("value", body) && typeof body["value"] !== "object" ) {
-                    pvalue[subid] = body["value"];
-                    delete pvalue["value"];
-                } else {
-                    pvalue[subid] = command + "::" + subid;
-                }
+            // if our trigger subid was not found then set it to value field if there was one and if not
+            // these values will only show up from the push if the fields are present
+            // users can create the fields by creating custom TEXT fields in the tile to force them to show up
+            if ( subidfound ) {
+                pvalue = recurseKeys(pvalue, subid, body[subid]);
+            } else if ( !subidfound && array_key_exists("value", body) ) {
+                pvalue = recurseKeys(pvalue, "value", body["value"]);
+            } else {
+                pvalue = recurseKeys(pvalue, "", body);
             }
 
         } catch(e) {
-            console.warn((ddbg()), e);
-            pvalue[subid] = command + "::" + subid;
+            console.warn((ddbg()), "Error in urlCallback after invoking a custom ", command," command: ", e);
         }
-    } else {
-        pvalue[subid] = command + "::" + subid; 
     }
 
     // push new values to all clients to get an immediate onscreen response
@@ -10880,7 +10892,7 @@ if ( app && applistening ) {
                         var updhub = false;
                         if ( req.body['change_type'] === "Hubitat" && req.body['change_value'] && is_object(req.body['change_value']) ) {
 
-                            // this is the mapping of vallarray from the groovy app
+                            // this is the mapping of valarray from the groovy app
                             // Map value = ["accesstoken": state.accessToken, "appid": app.id, "hubname": state.hubname, "hubid": state.hubid,
                             //              "cloudendpt": state.cloudendpt, "localendpt": state.endpt, "hubtimer": "0", "hpcode": hpcode, "usecloud": usecloud]
                             const valarray = req.body['change_value'];

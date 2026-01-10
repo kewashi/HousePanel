@@ -110,7 +110,7 @@ div.greeting p {
 div.greetingopts {
     margin-left: 10px;
     margin-bottom: 20px;
-    width: 1200px;
+    width: 1020px;
 }
 div.greetingopts div {
     margin-top: 6px;
@@ -119,7 +119,7 @@ div.greetingopts div {
 div.greetingopts div.hubopt {
     margin-top: 0px;
     margin-bottom: 0px;
-    width: 1200px;
+    width: 1020px;
     padding-top: 20px;
     padding-bottom: 20px;
     border: 2px solid black;
@@ -133,8 +133,8 @@ div.inlinebutton {
     cursor: pointer;
 }
 #newthingcount {
-    width: 1200px;
-    height: 70px;
+    width: 1020px;
+    height: 95px;
     border: 2px solid black;
     border-bottom: none;
     background-color: #eeeeee;
@@ -210,7 +210,7 @@ div.greetingopts div.authhub {
     margin-top: 0px;
     border: 2px solid black;
     background-color: rgba(240, 240, 220, 1);
-    width: 1200px;
+    width: 1020px;
 }
 
 div.loginline {

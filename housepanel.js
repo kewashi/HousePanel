@@ -2848,7 +2848,7 @@ function setupAuthHub(hubId, userid) {
         $("input[name='hubname']").prop("disabled", true).val("None");
         $("input[name='hubid']").val("-1").prop("disabled", true);
         $("input[name='hubhost']").prop("disabled", true).val("None");
-        $("input[name='hubtimer']").val(hub.hubtimer).prop("disabled", false);
+        $("input[name='hubtimer']").prop("disabled", false);
         $("select[name='hubtype']").prop("disabled", true).val("None");
         $("input.hubauth").addClass("hidden");
         $("input.hubdel").addClass("hidden");
@@ -2868,9 +2868,13 @@ function setupAuthHub(hubId, userid) {
             $("select[name='hubtype']").val(hub.hubtype);
         }
         
-        newhubmsg = "Re-authorize or delete the " + hub.hubname + " (" + hub.hubtype + ") hub/account here. " +
-                    "You can do this by staying here and updating the settings in the HousePanel groovy app, or update the fields manually. " +
-                    "You can also change the Refresh Timer value to change how often devices on this hub are polled to update. (0 = never)";
+        newhubmsg = "Re-authorize or delete the " + hub.hubname + " (" + hub.hubtype + ") hub/account here. ";
+        if ( hub.hubtype === "Hubitat" ) {
+            newhubmsg += "You can update the Host, Access, and Endpoint values by keeping this window open and pressing the \"Push Data\" button in the HousePanel app in Hubitat, or update the fields manually. ";
+        } else {
+            newhubmsg += "Please ensure the Host, Access, and Endpoint values are set correctly to re-authorize this hub. ";
+        }
+        newhubmsg += "You can also change the Refresh Timer value to change how often devices on this hub are polled to update. (0 = never)";
         $("#hubdiv").show();
         $("#hideaccess_hub").show();
         $("select[name='hubtype']").prop("disabled", true);
