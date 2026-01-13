@@ -2911,9 +2911,9 @@ async function makeNewConfig(userid) {
 function addConfigItem(userid, key, value) {
     var promise = new Promise(function(resolve, reject) {
         if ( typeof value !== "object" ) {
-            var updval = {userid, userid, configkey: key, configval: value, configtype: 0};
+            var updval = {userid: userid, configkey: key, configval: value, configtype: 0};
         } else {
-            updval = {userid, userid, configkey: key, configval: JSON.stringify(value), configtype: 0};
+            updval = {userid: userid, configkey: key, configval: JSON.stringify(value), configtype: 0};
         }
         // mydb.addRow("configs", updval)
         mydb.updateRow("configs", updval, `userid = ${userid} AND configkey = '${key}'`)
@@ -8209,8 +8209,8 @@ function processParams(userid, panelid, optarray) {
             } else {
                 configstr = configoptions[key];
             }
-            var config = {userid: userid, configkey: key, configval: configstr};
-            mydb.updateRow("configs", config,"userid = "+userid+" AND configkey = '"+key+"'")
+            const config = {userid: userid, configkey: key, configval: configstr, configtype: 0};
+            mydb.updateRow("configs", config, "userid = "+userid+" AND configkey = '"+key+"'")
             .then( () => {
             })
             .catch( reason => {
@@ -8541,12 +8541,12 @@ function clone(obj) {
 
 function saveFilters(userid, useroptions, huboptpick) {
     if ( useroptions && is_array(useroptions) ) {
-        var updval = {configkey: 'usroptions', configval: JSON.stringify(useroptions)};
+        var updval = {userid: userid, configkey: 'usroptions', configval: JSON.stringify(useroptions), configtype: 0};
         mydb.updateRow("configs", updval, "userid = " + userid + " AND configkey = 'usroptions'");
     }
 
     if ( huboptpick ) {
-        var updhub = {configkey: 'hubpick', configval: huboptpick};    
+        var updhub = {userid: userid, configkey: 'hubpick', configval: huboptpick, configtype: 0};
         mydb.updateRow("configs", updhub, "userid = " + userid + " AND configkey = 'hubpick'");
     }
 }
@@ -9177,15 +9177,15 @@ function apiCall(user, body, protocol, res) {
                             luid = dev["devices_uid"];
                             alldevices[luid] = dev;
                         });
-                        // var device = alldevices[uid];
-                        // var pvalue = decodeURI2(device.pvalue);
                         var linkdev = alldevices[uid];
-                        var device = JSON.parse(decodeURI(swval));
-                        var pvalue = device.pvalue;
-
+                        try {
+                            var device = JSON.parse(decodeURI(swval));
+                        } catch(e) {
+                            var device = {name: "Unknown", devicetype: "unknown", hint: "", refresh: "never", pvalue: ""};
+                        }
                         var thesensor = {id: swid, name: device.name, thingid: -1, uid: uid, roomid: 0, 
                                          type: device.devicetype, hubnum: linkdev["hubs_hubid"], hubindex: device.hubid, hubtype: linkdev["hubs_hubtype"], 
-                                         hint: device.hint, refresh: device.refresh, value: pvalue};
+                                         hint: device.hint, refresh: device.refresh, value: device.pvalue};
                         var customname = swattr;
                         return makeThing(userid, pname, configoptions, tileid, thesensor, roomname, 0, 0, 999, customname, "te_wysiwyg", alldevices);
                     }).catch(reason => {

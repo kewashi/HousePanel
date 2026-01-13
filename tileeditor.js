@@ -73,20 +73,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, uid, bid, thi
     } else if ( htmlcontent ) {
         htmlcontent = "<div class=\"" + thingclass + "\" id='te_wysiwyg'>" + htmlcontent + "</div>";
     } else {
-        // put placeholder and populate after Ajax finishes retrieving true content
-        // this is actually no longer used but left code here in case I want to use it later
-        htmlcontent = "<div id='error'>Edit dialog cannot be displayed</div>";
-        htmlcontent = "<div class=\"" + thingclass + "\" id='te_wysiwyg'>" + htmlcontent + "</div>";
-
-        jqxhr = $.post(returnURL, 
-            {api: "wysiwyg", userid: userid, thingid: thingid, id: bid, type: str_type, tileid: thingindex, uid: uid, value: "", attr: "", hpcode: cm_Globals.options.hpcode},
-            function (presult, pstatus) {
-                if (pstatus==="success" ) {
-                    htmlcontent = presult;
-                }
-            }
-        );
-
+        htmlcontent = "<div id='error' class='error'>Edit dialog cannot be displayed</div>";
     }
     dialog_html += "</div>";
     

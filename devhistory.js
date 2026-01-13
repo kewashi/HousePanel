@@ -1,4 +1,5 @@
 const devhistory = `
+3.5.12  01/13/2026 Fix bug for updating configuration settings
 3.5.11  01/10/2026 Fix bug hub auth setup screen and improve object support for GET and POST custom fields
 3.5.10  01/08/2026 Fix obscure bug in on screen tile editing, missing logout menu handling, add South and East resizing
 3.5.9   01/07/2026 Complete rewrite of websocket handling to be mroe robust and support multiple clients on any device
