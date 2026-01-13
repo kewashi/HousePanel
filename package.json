@@ -5,6 +5,7 @@
   "main": "hpserver.js",
   "dependencies": {
     "@mysql/xdevapi": "8.0.22",
+    "ambient-weather-api": "github:kewashi/ambient-weather-api",
     "binascii": "^0.0.2",
     "chart.js": "^4.4.1",
     "cookie-parser": "^1.4.5",
@@ -12,13 +13,13 @@
     "multer": "^1.4.5-lts.1",
     "mysql": "github:mysqljs/mysql",
     "nodemailer": "^6.4.17",
+    "react": "^19.2.3",
     "request": "^2.88.0",
     "sqlite3": "^5.1.4",
     "twilio": "^4.11.1",
     "url": "^0.11.0",
     "websocket": "^1.0.28",
-    "xml2js": "^0.5.0",
-    "ambient-weather-api": "github:kewashi/ambient-weather-api"
+    "xml2js": "^0.5.0"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",

@@ -29,7 +29,7 @@ public static String handle() { return "HousePanel" }
     STATICALLY DEFINED VARIABLES
     inpired by Tonesto7 homebridge2 app
 ***********************************************/
-@Field static final String appVersionFLD  = '3.4.5'
+@Field static final String appVersionFLD  = '3.5.11'
 @Field static final String sNULL          = (String) null
 @Field static final String sBLANK         = ''
 @Field static final String sLINEBR        = '<br>'
@@ -174,21 +174,19 @@ def mainPage() {
             vdesc += spanSmBld("Weather Tomorrow.io API key: ", sCLRBLUE) + spanSmBr("${settings.weatherapi}" )
             vdesc += spanSmBld("Weather ZipCode: ", sCLRBLUE) + spanSmBr("${settings.weatherzip}" )
             vdesc += spanSmBld("Power skip value: ", sCLRBLUE) + spanSmBr("${settings.powerskip}" )
-            // vdesc += spanSmBld("accessToken: ", sCLRBLUE) + spanSmBr("${state.accessToken}" )
-            // vdesc += spanSmBld("App ID: ", sCLRBLUE) + spanSmBr("${app.id}" )
-            // vdesc += spanSmBld("Hubname: ", sCLRBLUE) + spanSmBr("${state.hubname}" )
-            // vdesc += spanSmBld("Local Endpt: ", sCLRBLUE) + spanSmBr("${state.endpt}" )
-            // vdesc += spanSmBld("Cloud Endpt: ", sCLRBLUE) + spanSmBr("${state.cloudendpt}" )
             vdesc += spanSmBld("callback IP 1: ", sCLRBLUE) + spanSmBr("${settings.webHostIP}:${settings.webHostPort}" )
             vdesc += spanSmBld("callback IP 2: ", sCLRBLUE) + spanSmBr("${settings.webHostIP2}:${settings.webHostPort2}" )
             vdesc += spanSmBld("callback IP 3: ", sCLRBLUE) + spanSmBr("${settings.webHostIP3}:${settings.webHostPort3}" )
-            // vdesc += spanSmBld("Local Websocket Port: ", sCLRBLUE) + spanSmBr("${settings.localPort}" )
+
+            vdesc += spanSmBld("Userid: ", sCLRBLUE) + spanSmBr("${settings.userid}" )
+            vdesc += spanSmBld("Using Cloud? ", sCLRBLUE) + spanSmBr("${settings.usecloud}" )
+
             vdesc += htmlLine(sCLRBLUE, 600)
             vdesc += inputFooter("Tap to update App Preferences...", sCLRBLUE, false)
             href 'settingsPage', title: spanSmBld('App Preferences'), description: vdesc
         }
 
-        section(sectHead('New Hub Setup:')) {
+        section(sectHead('Hub Information:')) {
 
             String vdesc = sBLANK
             vdesc += spanSmBld("accessToken: ", sCLRBLUE) + spanSmBr("${state.accessToken}" )
@@ -200,12 +198,10 @@ def mainPage() {
             vdesc += htmlLine(sCLRBLUE, 600)
             paragraph vdesc
 
-            paragraph inputFooter("Enter User ID and HPCODE below then push the buton to send hub registration parameters to the HousePanel server. These are displayed on the Hub Authorization page.", sCLRBLUE, false)
-            input (name: "userid", type: "number", multiple: false, title: "User ID:", required: false, defaultValue: 0)
-            input (name: "hpcode", type: "text", multiple: false, title: "HPCODE:", required: false, defaultValue: "")
-            input (name: "usecloud", type: "bool", multiple: false, title: "Use Cloud?", required: false, defaultValue: false)
-            input(name: 'pushdata', type: 'button', multiple: false, title: 'Push Data', required: false)
-
+            // paragraph inputFooter("Enter User ID and HPCODE below then push the buton to send hub registration parameters to the HousePanel server. These are displayed on the Hub Authorization page.", sCLRBLUE, false)
+            // input (name: "userid", type: "number", multiple: false, title: "User ID:", required: false, defaultValue: 0)
+            // input (name: "hpcode", type: "text", multiple: false, title: "HPCODE:", required: false, defaultValue: "")
+            // input(name: 'pushdata', type: 'button', multiple: false, title: 'Push Data', required: false)
             paragraph inputFooter(" ", sCLRBLUE, false)
             label title: spanSmBld('Label this Instance (optional)'), description: 'Rename this App', defaultValue: app?.name, required: false
         }
@@ -217,33 +213,50 @@ def settingsPage() {
 
         appInfoSect()
 
-        section("HousePanel Configuration") {
-            paragraph "Select a prefix to uniquely identify certain tiles for this hub. This only matters if you are using more than one hub. The prefix for each hub must be unique. "
+        section("HousePanel Configuration Options") {
+            String vdesc
+            vdesc = spanSmBld("Select a prefix to uniquely identify certain tiles for this hub. This only matters if you are using more than one hub. The prefix for each hub must be unique. ")
+            paragraph vdesc
             input (name: "hubprefix", type: "text", multiple: false, title: "Hub Prefix:", required: false, defaultValue: "h_")
+
+            vdesc = spanSmBld("The Ambient Weather API and Application keys are used to pull in weather data from the Ambient Weather service. If you have an Ambient Weather station then you can use these keys to pull in your station data. If you don't have a station but want to pull in weather data for your location then you can use these keys with the free tier of the Ambient Weather API which allows pulling in data for any location based on zip code. If you don't care about weather data or want to use a different service for weather data then these can be safely ignored.")            
+            paragraph vdesc
             input (name: "ambientappkey", type: "text", multiple: false, title: "Ambient Application key", required: false, defaultValue: "7aeab49a6fa5462fa8ddd52c049b4201984f0f14e9d5476e8cb3e5e4ca233bc7")
             input (name: "ambientapi", type: "text", multiple: false, title: "Ambient Weather API key", required: false, defaultValue: "")
+
+            vdesc = spanSmBld("The Tomorrow.io API key is used to pull in weather data from the Tomorrow.io service. If you have a Tomorrow.io account then you can use this key to pull in weather data for your location. If you don't care about weather data or want to use a different service for weather data then this can be safely ignored.")
+            paragraph vdesc
             input (name: "weatherapi", type: "text", multiple: false, title: "Tomorrow.io API key", required: false, defaultValue: "")
-            input (name: "weatherzip", type: "text", multiple: false, title: "Zip Code for Weather", required: false, defaultValue: "10001")
+            input (name: "weatherzip", type: "text", multiple: false, title: "Zip Code for Weather", required: false, defaultValue: "")
+
+            vdesc = spanSmBld("The Power Skip value is used to filter out power readings from devices that are below a certain threshold. This is useful for filtering out noise from power meters and other devices that may report small power readings when they are actually off. The value should be between 0 and 1, where 0 means no filtering and 1 means all readings are filtered out. A good starting point is around 0.15, but you may need to adjust this based on your specific devices and setup.")
+            paragraph vdesc
             input (name: "powerskip", type: "float", multiple: false, title: "Power Skip (0 ... 1.0)", required: false, defaultValue: 0.15)
+
+            vdesc = spanSmBld("Provide userid from the HousePanel login. This is only needed if multiple users with different hubs exist" +
+                               "and you want to ensure hub pushes are sent to the correct user. If only one user exists or if all users share the same hubs then this can be left as 0." )
+            paragraph vdesc
+            input (name: "userid", type: "number", multiple: false, title: "User ID:", required: false, defaultValue: 0)
+            input (name: "usecloud", type: "bool", multiple: false, title: "Use Cloud?", required: false, defaultValue: false)
+
             // paragraph "Enable Pistons? You must have WebCore installed for this to work. Beta feature for Hubitat hubs."
             // input (name: "usepistons", type: "bool", multiple: false, title: "Use Pistons?", required: false, defaultValue: false)
-            paragraph "Specify at least the first Host IP and Port set of parameters to enable your panel to stay in sync with things when they change in your home. " +
+            vdesc =  spanSmBld("Specify at least the first Host IP and Port set of parameters to enable your panel to stay in sync with things when they change in your home. " +
                       "These parameters are used to communicate between your Hubitat hub and your HousePanel installation. " +
-                      "Users must change the Host IP to match the IP of the machine where HousePanel is hosted. "
+                      "Users must change the Host IP to match the IP of the machine where HousePanel is hosted. ")
+            paragraph vdesc;
             input "webHostIP", "text", title: "Host IP", defaultValue: "192.168.1.50", required: true
             input "webHostPort", "text", title: "Port", defaultValue: "8580", required: true
-            paragraph "The Alternate 2nd and 3rd Host IP and Port values/ranges are completely optional. They are used to send hub pushes to additional installations of HousePanel. " +
+
+            vdesc =  spanSmBld("The Alternate 2nd and 3rd Host IP and Port values/ranges are completely optional. They are used to send hub pushes to additional installations of HousePanel. " +
                     "If left as 0 additional hub pushes will not occur. Only use this if you are hosting two or three versions of HousePanel on different machines. " +
                     "This app also supports the ISY Hubitat Node Server, and for that case you should set one of these to the IP and Port to match that of your ISY Node Server. " + 
-                    "Otherwise, these settings can be safely ignored."
+                    "Otherwise, these settings can be safely ignored.")
+            paragraph vdesc;
             input "webHostIP2", "text", title: "2nd Host IP", defaultValue: "0", required: false
             input "webHostPort2", "text", title: "2nd Port or Range", defaultValue: "0", required: false
             input "webHostIP3", "text", title: "3rd Host IP", defaultValue: "0", required: false
             input "webHostPort3", "text", title: "3rd Port or Range", defaultValue: "0", required: false
-            // paragraph "The Websocket port provided below is used locally to pass information between your HousePanel app " +
-            //           "and all web clients, such as browsers and tablets. The default is usually fine, but if that port is in use on your local network " +
-            //           "you must change it to an unused port value.  The port specified and the next 9 must be available. All web clients will need to be reloaded after this is changed."
-            // input "localPort", "text", title: "Local Websocket Port", defaultValue: "8340", required: false
 
             input (
                 name: "configLogLevel",
@@ -337,20 +350,20 @@ def variablesPage() {
     }
 }
 
-def appButtonHandler(String buttonName) {
+// def appButtonHandler(String buttonName) {
 
-    if ( buttonName == "pushdata" ) {
-        def devtype = "Hubitat"
-        def usecloud = settings?.usecloud ?: false
-        def userid = settings?.userid ?: 0
-        def hpcode = settings?.hpcode ?: ""
-        def subid = app.id
-        Map value = ["accesstoken": state.accessToken, "appid": app.id, "hubname": state.hubname, "hubid": state.hubid,
-                     "cloudendpt": state.cloudendpt, "localendpt": state.endpt, "hubtimer": "0", "hpcode": hpcode, "usecloud": usecloud]
-        logger("Pushing data: ${value}", "info")
-        postHubAll("authupd", "", userid, subid, devtype, value)
-    }
-}
+//     if ( buttonName == "pushdata" ) {
+//         def devtype = "Hubitat"
+//         def usecloud = settings?.usecloud ?: false
+//         def userid = settings?.userid ?: 0
+//         def hpcode = settings?.hpcode ?: ""
+//         def subid = app.id
+//         Map value = ["accesstoken": state.accessToken, "appid": app.id, "hubname": state.hubname, "hubid": state.hubid,
+//                      "cloudendpt": state.cloudendpt, "localendpt": state.endpt, "hubtimer": state.hubtimer, "hpcode": state.hpcode, "usecloud": state.usecloud]
+//         logger("Pushing data: ${value}", "info")
+//         postHubAll("authupd", "", userid, subid, devtype, value)
+//     }
+// }
 
 def installed() {
     initialize()
@@ -383,16 +396,18 @@ def initialize() {
     state.directPort3 = settings?.webHostPort3 ?: "0"
     state.directPort3 = state.directPort3.trim()
 
-    state.weatherzip = settings.weatherzip ?: "94070"
+    state.weatherzip = settings.weatherzip ?: ""
     state.weatherapi = settings.weatherapi ?: ""
     state.ambientapi = settings.ambientapi ?: ""
     state.ambientappkey = settings.ambientappkey ?: ""
     state.powerskip = settings.powerskip ?: 0.15
-    // state.localPort = settings.localPort ?: "8340"
 
     state.prefix = settings?.hubprefix ?: getPrefix()
     state.powervals = [:]
-
+    state.usecloud = settings?.usecloud ?: false
+    state.hubtimer = settings?.hubtimer ?: 0
+    state.userid = settings?.userid ?: 0
+    state.usecloud = settings?.usecloud ?: false
     configureHub();
     if ( state.usepistons ) {
         webCoRE_init()
@@ -403,7 +418,7 @@ def initialize() {
     def pattern = ~/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/
     def portpatt = ~/\d{3,}-?(\d{3,})?/
     Map hubdata = [accesstoken: state.accessToken, appid: app.id, hubname: state.hubname, hubid: state.hubid,
-                   cloudendpt: state.cloudendpt, localendpt: state.endpt, hubtimer: "0", usecloud: state.usecloud]
+                   cloudendpt: state.cloudendpt, localendpt: state.endpt, hubtimer: state.hubtimer, usecloud: state.usecloud]
 
     // report and send to servers name=hubname, id=app.id, type=Hubitat, value=array(accessToken, endpt, cloudendpt) 
     if ( (state.directIP.startsWith("http") || state.directIP ==~ pattern) && state.directPort ==~ portpatt ) {
@@ -429,15 +444,12 @@ def initialize() {
     }
 
     // push configured variables to HousePanel
-    def userid = settings?.userid ?: 0
-    if ( userid == 0 ) {
-        logger("No User ID configured, cannot push configuration to HousePanel server", "warn")
-        return
-    } else {
-        Map configs = ["ambientappkey": state.ambientappkey, "ambientapi": state.ambientapi,
-                       "weatherapi": state.weatherapi, "weatherzip": state.weatherzip, "loglevel": state.loggingLevelIDE]
-        postHubAll("config", "", userid, "config", "Hubitat", configs)
-    }
+    // this now replaces any need to push variables separately since they will be included in the config push and the HP server will know which ones are in use based on the settings
+    // these should really be part of the hub config and be hub specific - that's a TODO
+    Map configs = ["ambientappkey": state.ambientappkey, "ambientapi": state.ambientapi,
+                   "weatherapi": state.weatherapi, "weatherzip": state.weatherzip, 
+                   "loglevel": state.loggingLevelIDE, "powerskip": state.powerskip]
+    postHubAll("config", "", state.userid, "config", "Hubitat", configs)
 
     // register callbacks if one is available
     if ( state.directIP!="0" || state.directIP2!="0" || state.directIP3!="0" ) {
@@ -1053,7 +1065,10 @@ def getAllThings() {
     resp = getActuators(resp)
     resp = getPowers(resp)
     resp = getVariables(resp)
-    resp = getWeathers(resp)
+
+    if ( state.weatherapi && state.weatherzip ) {
+        resp = getWeathers(resp)
+    }
 
     // optionally include pistons based on user option
     if (state.usepistons) {
@@ -1388,6 +1403,7 @@ def getHubInfo() {
                   accessToken: state.accessToken,
                   endpt: state.endpt,
                   cloudendpt: state.cloudendpt,
+                  usecloud: state.usecloud,
                   hubtype: "Hubitat" ]
     return resp
 }

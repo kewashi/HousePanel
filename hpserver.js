@@ -57,6 +57,7 @@ const { type } = require('os');
 
 // support for Ambient Weather API
 const AmbientWeatherApi = require("ambient-weather-api");
+const { act } = require('react');
 
 // ISY websocket clients
 var wsclient = {};
@@ -702,6 +703,12 @@ function getTypes() {
         });
     }
 
+    if ( array_key_exists("Harmony", GLB.dbinfo.hubs) ) {
+        if ( !thingtypes.includes("harmony") ) {
+            thingtypes.push("harmony");
+        }
+    }
+
     if ( array_key_exists("ISY", GLB.dbinfo.hubs) ) {
         if ( !thingtypes.includes("isy") ) {
             thingtypes.push("isy");
@@ -1051,7 +1058,7 @@ function getHubInfo(hub) {
         if ( hub.hubtype==="Hubitat" ) {
             var nvpreq = {"access_token": access_token};
             // var nvpreq = "access_token="+access_token;
-            var header = {
+            const header = {
                 "Content-Type": "application/json"
             };
             curl_call(hubEndpt + "/gethubinfo", header, nvpreq, false, "POST")
@@ -1062,13 +1069,24 @@ function getHubInfo(hub) {
                 reject(reason);
             })
 
+        // set hubid to hub slug for harmony hubs and use the user provided name since the hub API doesn't return a hub name
+        } else if ( hub.hubtype==="Harmony" ) {
+            if ( !hub.hubname ) {
+                hub.hubname = hub.hubaccess;
+            }
+            hub.hubid = hub.hubaccess;
+            updateHub(hub);
+
         // this branch is for ISY and other hubs that don't need to get their name via a hub call
-        } else {
+        } else if ( hub.hubtype==="ISY" ) {
             if ( hub.hubid=== hub.hubtype + "_new" ) {
                 var rstr = getRandomInt(1001, 9999);
                 hub.hubid = hub.hubtype + rstr.toString();
             }
             updateHub(hub);
+
+        } else {
+            reject("unsupported hub type: " + hub.hubtype);
         }
 
         // this saves hubid in the user table and updates or adds the hub to the hub table
@@ -1116,7 +1134,7 @@ function getHubInfo(hub) {
             }
 
             if ( DEBUG2 ) {
-                console.log((ddbg()), "hub info returned: ", jsonbody);
+                console.log((ddbg()), "Hubitat hub info returned: ", jsonshow(jsonbody));
             }
             
             // now update the placeholders with the real hub name and ID
@@ -1212,13 +1230,13 @@ function getDevices(hub) {
     // the support functions below for reading devices will resolve or reject the promise returned to the caller
     var promise = new Promise( function(resolve, reject) {
         
-        var hubindex = hub.id;
-        var userid = hub.userid;
-        var hubid = hub.hubid;
-        var hubType = hub.hubtype;
-        var hubAccess  = hub.hubaccess;
-        var hubEndpt = hub.hubendpt;
-        var uidmax = 0;
+        const hubindex = hub.id;
+        const userid = hub.userid;
+        const hubid = hub.hubid;
+        const hubType = hub.hubtype;
+        const hubAccess  = hub.hubaccess;
+        const hubEndpt = hub.hubendpt;
+        let uidmax = 0;
 
         if ( !is_object(hub) ) {
             reject("error - hub object not provided to getDevices call");
@@ -1244,6 +1262,15 @@ function getDevices(hub) {
                 .then(ambdevices => {
                     hubInfoCallback(ambdevices);
                 });
+            })
+            .catch(reason => {
+                console.error( (ddbg()), reason );
+            });
+
+        } else if ( hubType==="Harmony" ) {
+            getHarmonyDevices()
+            .then(body => {
+                hubInfoCallback(body);
             })
             .catch(reason => {
                 console.error( (ddbg()), reason );
@@ -1346,7 +1373,7 @@ function getDevices(hub) {
 
             var params = {"access_token": hubAccess};
             // var params = "access_token="+hubAccess;
-            var header = {
+            const header = {
                 "Content-Type": "application/json"
             };
 
@@ -1441,142 +1468,239 @@ function getDevices(hub) {
                 });
             }
         }
-        
 
-            // callback for loading Hubitat devices
-            function hubInfoCallback(jsonbody) {
-                var mydevices = {};
+        function getHarmonyDevices() {
+            var harmonyDevices = [];
+            var done = {activities: false, devices: false};
+            const header = {
+                "Content-Type": "application/json"
+            };
 
-                // configure returned array with the "id"
-                if (jsonbody && is_array(jsonbody) ) {
-                    var devicecnt = 0;
-                    var numdevices = jsonbody.length;
-                    var currentDevices = [];
+            return new Promise( (resolve, reject) => {
 
-                    // now add them one at a time until we have them all
-                    jsonbody.forEach(function(content) {
-                        var thetype = content["type"];
-                        var deviceid = content["id"];
-                        var origname = content["name"] || "";
-                        var pvalue = content["value"];
-                        var hint = content["hint"] ? content["hint"] : hubType;
-                        var refresh = "never";
-
-                        if ( !pvalue ) {
-                            console.warn((ddbg()),"Something went wrong loading Hubitat device: ", content);
-                            pvalue = {};
-                            // reject("error - no value returned for device named: " + origname);
-                            // return;
-                        }
-                        
-                        // if a name isn't there use master name
-                        if ( !pvalue.name && !origname ) {
-                            origname = "unknown";
-                            pvalue.name = origname;
-                        } else if ( !pvalue.name ) {
-                            pvalue.name = origname;
-                        } else if (!origname ) {
-                            origname = pvalue.name;
-                        }
-                        origname = origname.replace(/'/g, "");
-                        
-                        // deal with presence tiles
-                        if ( pvalue["presence"]==="not present" || pvalue["presence"]==="not_present" ) {
-                            pvalue["presence"] = "absent";
-                        }
-
-                        // remove ignored items from pvalue
-                        for (var field in pvalue) {
-                            if ( GLB.ignoredAttributes.includes(field) || field.startsWith("supportedWasher") ) {
-                                delete pvalue[field];
-                            }
-                        }
-
-                        // add counter and duration for things with switch, contact, presence, motion, or lock
-                        if ( array_key_exists("switch",pvalue)  ||
-                            array_key_exists("contact",pvalue) ||
-                            array_key_exists("presence",pvalue) ||
-                            array_key_exists("motion",pvalue) ||
-                            array_key_exists("lock",pvalue) ) 
-                        {
-                            pvalue.count = "0";
-                            pvalue.duration = "0.0";
-                            pvalue.deltaT = 0;
-                            if ( (array_key_exists("switch",pvalue) && pvalue.switch==="on") ||
-                                (array_key_exists("contact",pvalue) && pvalue.contact==="open") ||
-                                (array_key_exists("presence",pvalue) && pvalue.presence==="present") ||
-                                (array_key_exists("motion",pvalue) && pvalue.motion==="active") ||
-                                (array_key_exists("lock",pvalue) && pvalue.lock==="unlocked") 
-                            ) {
-                                var d = new Date();
-                                pvalue.deltaT = d.getTime();                            
-                            }
-                        }
-
-                        // handle weather tiles and any that comes as an object
-                        // we handle music tile translation now on the groovy side to support ISY node servers
-                        if ( thetype==="weather" ) {
-                            pvalue = translateWeather(pvalue);
-                        } else {
-                            pvalue = translateObjects(pvalue, 2);
-                        }
-
-                        // make the device to store or update
-                        var pvalstr = encodeURI2(pvalue);
-                        var device = {userid: userid, hubid: hubindex, deviceid: deviceid, name: origname, 
-                                      devicetype: thetype, hint: hint, refresh: refresh, pvalue: pvalstr};
-
-                        // check if this is a device update or adding a new device
-                        // if device exists and uid is zero, update this record to include a new uid field
-                        mydb.getRow("devices", "id,uid", `userid = ${userid} AND hubid = ${hubindex} AND devicetype = '${thetype}' AND deviceid = '${deviceid}'`)
-                        .then(resp => {
-                            if ( resp ) {
-                                device.id = resp.id;
-                                // get the visual id and update if old database version
-                                if ( resp.uid === 0 ) {
-                                    uidmax++;
-                                    device.uid = uidmax;
-                                } else {
-                                    device.uid = resp.uid;
+                // let's add a device for each activity
+                curl_call(hubEndpt + "/activities", header, null, false, "GET")
+                .then(activities => {
+                    if ( activities && activities.activities ) {
+                        let m = 0;
+                        activities.activities.forEach(harmonyActivity => {
+                            let activity = {
+                                type: "harmony",
+                                id: harmonyActivity.id,
+                                name: harmonyActivity.label,
+                                hint: "Harmony",
+                                value: {name: harmonyActivity.label, slug: harmonyActivity.slug, isAVActivity: harmonyActivity.isAVActivity}
+                            };
+                            
+                            // now get all the commands for this activity
+                            curl_call(`${hubEndpt}/activities/${harmonyActivity.slug}/commands`, header, null, false, "GET")
+                            .then(commands => {
+                                m++;
+                                commands.commands.forEach(command => {
+                                    activity.value["_" + command.slug] = command.slug;
+                                });
+                                harmonyDevices.push(activity);
+                                if ( m >= activities.activities.length ) {
+                                    checkDone("activities");
                                 }
-                                return mydb.updateRow("devices", device, `id = ${device.id} AND userid = ${userid}`, true);
-                            } else {
+
+                            })
+                            .catch(reason => {
+                                console.error( (ddbg()), "error retrieving commands for Harmony activity: ", harmonyActivity.slug, " reason: ", reason);
+                                reject(reason);
+                            });
+                        });
+                    } else {
+                        console.warn((ddbg()), "No activities found for this Harmony hub.");
+                        checkDone("activities");
+                    }
+                });
+
+                // let's add a device for each device
+                curl_call(hubEndpt + "/devices", header, null, false, "GET")
+                .then(devices => {
+                    if ( devices && devices.devices ) {
+                        let n = 0;
+                        devices.devices.forEach(harmonyDevice => {
+                            let device = {
+                                type: "harmony",
+                                id: harmonyDevice.id,
+                                name: harmonyDevice.label,
+                                hint: "Harmony",
+                                value: {name: harmonyDevice.label, slug: harmonyDevice.slug}
+                            };
+
+                            // now get all the commands for this device
+                            curl_call(`${hubEndpt}/devices/${harmonyDevice.slug}/commands`, header, null, false, "GET")
+                            .then(commands => {
+                                n++;
+                                commands.commands.forEach(command => {
+                                    device.value["_" + command.slug] = command.slug;
+                                });
+                                harmonyDevices.push(device);
+                                if ( n >= devices.devices.length ) {
+                                    checkDone("devices");
+                                }
+                            })
+                            .catch(reason => {
+                                console.error( (ddbg()), "error retrieving commands for Harmony device: ", harmonyDevice.slug, " reason: ", reason);
+                                reject(reason);
+                            });
+                        });
+
+                    } else {
+                        console.warn((ddbg()), "No devices found for this Harmony hub.");
+                        checkDone("devices");
+                    }
+                });
+
+                function checkDone(service) {
+                    done[service] = true;
+                    if ( done.activities && done.devices ) {
+                        if ( DEBUG7 ) {
+                            console.log( (ddbg()), "finished retrieving Harmony devices and activities. Total devices: ", harmonyDevices.length);
+                        }
+                        resolve(harmonyDevices);
+                    }
+                }
+            });
+        }
+
+        // callback for loading Hubitat devices
+        function hubInfoCallback(jsonbody) {
+            var mydevices = {};
+
+            // configure returned array with the "id"
+            if (jsonbody && is_array(jsonbody) ) {
+                var devicecnt = 0;
+                var numdevices = jsonbody.length;
+                var currentDevices = [];
+
+                // now add them one at a time until we have them all
+                jsonbody.forEach(function(content) {
+                    var thetype = content["type"];
+                    var deviceid = content["id"];
+                    var origname = content["name"] || "";
+                    var pvalue = content["value"];
+                    var hint = content["hint"] ? content["hint"] : hubType;
+                    var refresh = "never";
+
+                    if ( !pvalue ) {
+                        console.warn((ddbg()),"Something went wrong loading Hubitat device: ", content);
+                        pvalue = {};
+                        // reject("error - no value returned for device named: " + origname);
+                        // return;
+                    }
+                    
+                    // if a name isn't there use master name
+                    if ( !pvalue.name && !origname ) {
+                        origname = "unknown";
+                        pvalue.name = origname;
+                    } else if ( !pvalue.name ) {
+                        pvalue.name = origname;
+                    } else if (!origname ) {
+                        origname = pvalue.name;
+                    }
+                    origname = origname.replace(/'/g, "");
+                    
+                    // deal with presence tiles
+                    if ( pvalue["presence"]==="not present" || pvalue["presence"]==="not_present" ) {
+                        pvalue["presence"] = "absent";
+                    }
+
+                    // remove ignored items from pvalue
+                    for (var field in pvalue) {
+                        if ( GLB.ignoredAttributes.includes(field) || field.startsWith("supportedWasher") ) {
+                            delete pvalue[field];
+                        }
+                    }
+
+                    // add counter and duration for things with switch, contact, presence, motion, or lock
+                    if ( array_key_exists("switch",pvalue)  ||
+                        array_key_exists("contact",pvalue) ||
+                        array_key_exists("presence",pvalue) ||
+                        array_key_exists("motion",pvalue) ||
+                        array_key_exists("lock",pvalue) ) 
+                    {
+                        pvalue.count = "0";
+                        pvalue.duration = "0.0";
+                        pvalue.deltaT = 0;
+                        if ( (array_key_exists("switch",pvalue) && pvalue.switch==="on") ||
+                            (array_key_exists("contact",pvalue) && pvalue.contact==="open") ||
+                            (array_key_exists("presence",pvalue) && pvalue.presence==="present") ||
+                            (array_key_exists("motion",pvalue) && pvalue.motion==="active") ||
+                            (array_key_exists("lock",pvalue) && pvalue.lock==="unlocked") 
+                        ) {
+                            var d = new Date();
+                            pvalue.deltaT = d.getTime();                            
+                        }
+                    }
+
+                    // handle weather tiles and any that comes as an object
+                    // we handle music tile translation now on the groovy side to support ISY node servers
+                    if ( thetype==="weather" ) {
+                        pvalue = translateWeather(pvalue);
+                    } else {
+                        pvalue = translateObjects(pvalue, 2);
+                    }
+
+                    // make the device to store or update
+                    var pvalstr = encodeURI2(pvalue);
+                    var device = {userid: userid, hubid: hubindex, deviceid: deviceid, name: origname, 
+                                    devicetype: thetype, hint: hint, refresh: refresh, pvalue: pvalstr};
+
+                    // check if this is a device update or adding a new device
+                    // if device exists and uid is zero, update this record to include a new uid field
+                    mydb.getRow("devices", "id,uid", `userid = ${userid} AND hubid = ${hubindex} AND devicetype = '${thetype}' AND deviceid = '${deviceid}'`)
+                    .then(resp => {
+                        if ( resp ) {
+                            device.id = resp.id;
+                            // get the visual id and update if old database version
+                            if ( resp.uid === 0 ) {
                                 uidmax++;
                                 device.uid = uidmax;
-                                return mydb.addRow("devices", device);
+                            } else {
+                                device.uid = resp.uid;
                             }
-                        })
-                        .then(res => {
+                            return mydb.updateRow("devices", device, `id = ${device.id} AND userid = ${userid}`, true);
+                        } else {
+                            uidmax++;
+                            device.uid = uidmax;
+                            return mydb.addRow("devices", device);
+                        }
+                    })
+                    .then(res => {
 
-                            mydevices[deviceid] = device;
-                            const devstr = "'" + deviceid + "'";
-                            if ( !currentDevices.includes(devstr) ) {
-                                currentDevices.push(devstr);
-                            }
+                        mydevices[deviceid] = device;
+                        const devstr = "'" + deviceid + "'";
+                        if ( !currentDevices.includes(devstr) ) {
+                            currentDevices.push(devstr);
+                        }
 
-                            devicecnt++;
-                            // check if this is our last one and return array of devices
-                            if ( devicecnt >= numdevices ) {
-                                removeDeadNodes(userid, hubindex, currentDevices)
-                                .then( () => {
-                                    resolve(mydevices);
-                                })
-                                .catch(reason => {
-                                    console.warn( (ddbg()), reason );
-                                    resolve(mydevices);
-                                });
-                            }                    
-                        })
-                        .catch( reason => {
-                            console.error( (ddbg()), reason );
-                        });
+                        devicecnt++;
+                        // check if this is our last one and return array of devices
+                        if ( devicecnt >= numdevices ) {
+                            removeDeadNodes(userid, hubindex, currentDevices)
+                            .then( () => {
+                                resolve(mydevices);
+                            })
+                            .catch(reason => {
+                                console.warn( (ddbg()), reason );
+                                resolve(mydevices);
+                            });
+                        }                    
+                    })
+                    .catch( reason => {
+                        console.error( (ddbg()), reason );
                     });
+                });
 
-                } else {
-                    // an error occurred with this hub
-                    reject(errMsg);
-                }
-            }  
+            } else {
+                // an error occurred with this hub
+                console.error( (ddbg()), "Something went wrong getting devices from this hub. jsonbody: ", jsonbody );
+                reject("Something went wrong getting devices from this hub.");
+            }
+        }  
 
         // rewrote this to first remove devices and then remove tiles that are stranded
         // this version uses db queries which is much faster than what was here before
@@ -1615,13 +1739,18 @@ function getDevices(hub) {
         // function for loading ISY hub devices
         function getIsyDevices() {
 
-            var hubindex = hub.id;
-            var userid = hub.userid;
-            var hubEndpt = hub.hubendpt;
-            var access_token  = hub.hubaccess;
+            // var hubindex = hub.id;
+            // var userid = hub.userid;
+            // var hubid = hub.hubid;
+            // var hubType = hub.hubtype;
+            // var hubAccess  = hub.hubaccess;
+            // var hubEndpt = hub.hubendpt;
+            // var uidmax = 0;
+
+            // var hubAccess  = hub.hubaccess;
         
-            const errMsg = "error retrieving devices from ISY hub with accessToken = " + access_token;
-            var buff = Buffer.from(access_token);
+            const errMsg = "error retrieving devices from ISY hub with accessToken = " + hubAccess;
+            var buff = Buffer.from(hubAccess);
             var base64 = buff.toString('base64');
             var stheader = {"Authorization": "Basic " + base64};
             // var vardefs = {};
@@ -1634,7 +1763,7 @@ function getDevices(hub) {
             var variables = {name: "ISY Variables", "status_": "ACTIVE"};
 
             if ( DEBUG19 ) {
-                console.log((ddbg()), "ISY hub call: ", access_token, hubEndpt, stheader);
+                console.log((ddbg()), "ISY hub call: ", hubAccess, hubEndpt, stheader);
             }
 
             var currentDevices = [];
@@ -2932,7 +3061,7 @@ function makeDefaultHub(userid) {
     // make a default hub for this user
     var promise = new Promise(function(resolve, reject) {
         var nullhub = {userid: userid, hubid: "-1", hubhost: "None", hubtype: "None", hubname: "None", 
-            clientid: "", clientsecret: "", hubaccess: "", hubendpt: "", hubrefresh: "", 
+            clientid: "", clientsecret: "", hubaccess: "", hubendpt: "", 
             useraccess: "", userendpt: "", hubtimer: "0" };
 
         // add a blank hub for this new user - if this fails defhub will be set to error to flag an issue
@@ -3415,7 +3544,7 @@ function doLogin(body, res) {
             // if we are a new user not mapped to an existing then make the default hub stuff
             if ( userid === usertype ) {
                 var nullhub = {userid: userid, hubid: "-1", hubhost: "None", hubtype: "None", hubname: "None", 
-                    clientid: "", clientsecret: "", hubaccess: "", hubendpt: "", hubrefresh: "", 
+                    clientid: "", clientsecret: "", hubaccess: "", hubendpt: "",
                     useraccess: "", userendpt: "", hubtimer: "0" };
                 mydb.updateRow("hubs",nullhub,"userid = " + userid + " AND hubid = '-1'")
                 .then( () => {
@@ -3545,16 +3674,16 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
         
         // add a new blank hub at the end for adding new ones
         // note: the type must be "New" because js uses this to do stuff
-        // hubId must be a unique name and can be anything
-        var newhub = {id: 0, userid: userid, hubid: "new", hubhost: "https://oauth.cloud.hubitat.com", hubtype: "New",
+        var newhub = {id: 0, userid: userid, hubid: "new", hubhost: "http://192.168.xxx.yyy", hubtype: "New",
                       hubname: "", clientid: "", clientsecret: "",
-                      hubaccess: "", hubendpt: "", hubrefresh: "", 
+                      hubaccess: "", hubendpt: "", 
                       useraccess: "", userendpt: "", hubtimer: 0};
         authhubs.push(newhub);
 
         // determine how many things are in the default hub
-        var ntc= "Hub " + hub.hubname + " (" + hub.hubtype + ") is authorized with " + numdev + " devices";
-        $tc += "<div id=\"newthingcount\">" + ntc + "</div>";
+        $tc += "<div id=\"newthingcount\"></div>";
+        // const ntc= "Hub " + hub.hubname + " (" + hub.hubtype + ") is authorized with " + numdev + " devices";
+        // $tc += "<div id=\"currentcount\">" + ntc + "</div>";
 
         $tc += getHubPanels(authhubs, defhub);
         $tc += "<div id=\"authmessage\"></div>";
@@ -3600,12 +3729,6 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
         var hubindex = hub.id;
         var hubclass = "";
         var authclass = "";
-        if ( hubId==="-1" || hubId==="new" ) {
-            hubclass = " hidden";
-        }
-        if ( hubId==="-1" ) {
-            authclass = " hidden";
-        }
 
         // rewrote this to only create a single web interface
         // this changes dynamically when new hubs are selected
@@ -3645,9 +3768,12 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
         $tc += "<div id=\"hideaccess_hub\">";
         $tc += "<div><label for='inp_access' id=\"labelAccess\" class=\"startupinp\">Access Token: </label>";
         $tc += "<input id='inp_access' class=\"startupinp\" name=\"useraccess\" size=\"80\" type=\"text\" value=\"" + hub["useraccess"] + "\"/></div>"; 
-        $tc += "<div><label for='inp_endpt' id=\"labelEndpt\" class=\"startupinp\">App IO: </label>";
+        $tc += "<div><label for='inp_endpt' id=\"labelEndpt\" class=\"startupinp\">App ID: </label>";
         $tc += "<input id='inp_endpt' class=\"startupinp\" name=\"userendpt\" size=\"80\" type=\"text\" value=\"" + hub["userendpt"] + "\"/></div>"; 
         $tc += "</div>";
+
+        // placeholder for Harmony hub info
+        $tc += "<div id=\"whichhubdiv\" class=\"startupinp\"></div>";
 
         $tc += "<div><label for='inp_hubname' class=\"startupinp\">Hub Name: </label>";
         $tc += "<input id='inp_hubname' class=\"startupinp\" name=\"hubname\" size=\"80\" type=\"text\" value=\"" + hub["hubname"] + "\"/></div>"; 
@@ -3657,13 +3783,11 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
 
         $tc += "<div><label for='inp_hubtimer' class=\"startupinp\">Refresh Timer (seconds): </label>";
         $tc += "<input id='inp_hubtimer' class=\"startupinp\" name=\"hubtimer\" size=\"10\" type=\"text\" value=\"" + hub["hubtimer"] + "\"/></div>"; 
-
-        $tc += "<input class=\"hidden\" name=\"hubrefresh\" type=\"hidden\" value=\"" + hub["hubrefresh"] + "\"/>"; 
         
         $tc += "<div class=\"buttonrow\">";
-        $tc += "<input class=\"authbutton hubupdate" + "\" value=\"Update Hub\" type=\"button\" />";
-        $tc += "<input class=\"authbutton hubauth" + authclass + "\" value=\"Authorize Hub\" type=\"button\" />";
-        $tc += "<input class=\"authbutton hubdel" + hubclass + "\" value=\"Remove Hub\" type=\"button\" />";
+        $tc += "<input class=\"authbutton hubupdate\" value=\"Update Hub\" type=\"button\" />";
+        $tc += "<input class=\"authbutton hubauth\" value=\"Authorize Hub\" type=\"button\" />";
+        $tc += "<input class=\"authbutton hubdel\" value=\"Remove Hub\" type=\"button\" />";
         $tc += "</div>";
         
         $tc += "</form>";
@@ -6380,8 +6504,8 @@ function callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, h
         // this function calls the Groovy hub api
         // if a user accesstoken is provided then we use it without a bearer token
         if ( hub.hubtype==="Hubitat" ) {
-            var host = hubEndpt + "/doaction";
-            var header = {"Content-Type": "application/json"};
+            const host = hubEndpt + "/doaction";
+            const header = {"Content-Type": "application/json"};
             var nvpreq = {"access_token": access_token, "swid": swid, "swattr": swattr, "swvalue": swval, "swtype": swtype};
             // var nvpreq = `access_token=${access_token}&swid=${swid}&swattr=${swattr}&swvalue=${swval}&swtype=${swtype}`;
 
@@ -6421,7 +6545,7 @@ function callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, h
             hubEndpt = hub.hubendpt;
             var buff = Buffer.from(access_token);
             var base64 = buff.toString('base64');
-            var isyheader = {"Authorization": "Basic " + base64};
+            const isyheader = {"Authorization": "Basic " + base64};
             var cmd;
     
             // fix up isy devices
@@ -7341,7 +7465,7 @@ function getInfoPage(user, configoptions, hubs, req) {
     "devices.name as devices_name, devices.devicetype as devices_devicetype, devices.hint as devices_hint, " +
     "devices.refresh as devices_refresh, devices.pvalue as devices_pvalue, " +
     "hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubhost as hubs_hubhost, hubs.hubtype as hubs_hubtype, hubs.hubname as hubs_hubname, " +
-    "hubs.clientid as hubs_clientid, hubs.clientsecret as hubs_clientsecret, hubs.hubaccess as hubs_hubaccess, hubs.hubrefresh as hubs_hubrefresh, " +
+    "hubs.clientid as hubs_clientid, hubs.clientsecret as hubs_clientsecret, hubs.hubaccess as hubs_hubaccess, " +
     "hubs.useraccess as hubs_useraccess, hubs.userendpt as hubs_userendpt, hubs.hubtimer as hubs_hubtimer";
     
     return mydb.getRows("devices", fields, "devices.userid = " + userid + " GROUP BY devices.deviceid", joinstr, "hubs.id, devices.name")
@@ -7917,7 +8041,7 @@ function getDevicesPage(user, configoptions, hubs, req) {
         "devices.name as devices_name, devices.devicetype as devices_devicetype, devices.hint as devices_hint, " +
         "devices.refresh as devices_refresh, devices.pvalue as devices_pvalue, " +
         "hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubhost as hubs_hubhost, hubs.hubtype as hubs_hubtype, hubs.hubname as hubs_hubname, " +
-        "hubs.clientid as hubs_clientid, hubs.clientsecret as hubs_clientsecret, hubs.hubaccess as hubs_hubaccess, hubs.hubrefresh as hubs_hubrefresh, " +
+        "hubs.clientid as hubs_clientid, hubs.clientsecret as hubs_clientsecret, hubs.hubaccess as hubs_hubaccess, " +
         "hubs.useraccess as hubs_useraccess, hubs.userendpt as hubs_userendpt, hubs.hubtimer as hubs_hubtimer";
     var joinstr1 = mydb.getJoinStr("things","tileid","devices","id");
     var joinstr2 = mydb.getJoinStr("things","roomid","rooms","id");
@@ -8360,7 +8484,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
         "devices.name as devices_name, devices.devicetype as devices_devicetype, devices.hint as devices_hint, devices.hubid as devices_hubid, " +
         "devices.refresh as devices_refresh, devices.pvalue as devices_pvalue, " +
         "hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubhost as hubs_hubhost, hubs.hubname as hubs_hubname, " +
-        "hubs.clientid as hubs_clientid, hubs.clientsecret as hubs_clientsecret, hubs.hubaccess as hubs_hubaccess, hubs.hubrefresh as hubs_hubrefresh, " +
+        "hubs.clientid as hubs_clientid, hubs.clientsecret as hubs_clientsecret, hubs.hubaccess as hubs_hubaccess, " +
         "hubs.useraccess as hubs_useraccess, hubs.userendpt as hubs_userendpt, hubs.hubtimer as hubs_hubtimer";
 
     var joinstr1 = mydb.getJoinStr("things","tileid","devices","id");
@@ -8374,7 +8498,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
     "devices.name as devices_name, devices.devicetype as devices_devicetype, devices.hint as devices_hint, " +
     "devices.refresh as devices_refresh, devices.pvalue as devices_pvalue, " +
     "hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubhost as hubs_hubhost, hubs.hubname as hubs_hubname, hubs.hubtype as hubs_hubtype, " +
-    "hubs.clientid as hubs_clientid, hubs.clientsecret as hubs_clientsecret, hubs.hubaccess as hubs_hubaccess, hubs.hubrefresh as hubs_hubrefresh, " +
+    "hubs.clientid as hubs_clientid, hubs.clientsecret as hubs_clientsecret, hubs.hubaccess as hubs_hubaccess, " +
     "hubs.useraccess as hubs_useraccess, hubs.userendpt as hubs_userendpt, hubs.hubtimer as hubs_hubtimer, " +
     "rooms.id as rooms_id, rooms.panelid as rooms_panelid, rooms.rname as rooms_rname, rooms.rorder as rooms_rorder";
     
@@ -8536,7 +8660,12 @@ function getMainPage(user, configoptions, hubs, req, res) {
 }
 
 function clone(obj) {
-    return JSON.parse(JSON.stringify(obj));
+    // Use structuredClone if available (Node.js 17+), otherwise fall back to JSON parse
+    if (typeof structuredClone === 'function') {
+        return structuredClone(obj);
+    } else {
+        return JSON.parse(JSON.stringify(obj));
+    }
 }
 
 function saveFilters(userid, useroptions, huboptpick) {
@@ -8950,8 +9079,8 @@ function getHubObj(hub) {
 
             // for ISY and HE we can go right to getting hub details and devices
             // this meets up with the js later by pushing hub info back to reauth page
-            // determine what to retun to browser to hold callback info for hub auth flow
-            var result = {action: "things", hubType: hubType, hubName: hubName, numdevices: 0};
+            // determine what to return to browser to hold callback info for hub auth flow
+            let result = {action: "things", hubType: hubType, hubName: hubName, numdevices: 0};
 
             if (EMULATEHUB===true && hubType==="ISY") {
                 resolve(result);
@@ -8976,6 +9105,8 @@ function getHubObj(hub) {
         } else {
             if ( hubType === "ISY" ) {
                 var msg = "Hub username and password must both be provided to register an ISY hub";
+            } else if ( hubType === "Harmony" ) {
+                msg = "A valid Harmony hub name must be provided to register a Harmony hub";
             } else {
                 msg = "Access Token and App ID are both required to register a Hubitat hub";
             }
@@ -9162,7 +9293,7 @@ function apiCall(user, body, protocol, res) {
                         "devices.name as devices_name, devices.devicetype as devices_devicetype, devices.hint as devices_hint, devices.hubid as devices_hubid, " +
                         "devices.refresh as devices_refresh, devices.pvalue as devices_pvalue, " +
                         "hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubhost as hubs_hubhost, hubs.hubname as hubs_hubname, hubs.hubtype as hubs_hubtype, " +
-                        "hubs.clientid as hubs_clientid, hubs.clientsecret as hubs_clientsecret, hubs.hubaccess as hubs_hubaccess, hubs.hubrefresh as hubs_hubrefresh, " +
+                        "hubs.clientid as hubs_clientid, hubs.clientsecret as hubs_clientsecret, hubs.hubaccess as hubs_hubaccess, " +
                         "hubs.useraccess as hubs_useraccess, hubs.userendpt as hubs_userendpt, hubs.hubtimer as hubs_hubtimer";
                     var result = Promise.all([
                         mydb.getRows("configs", "*", "userid = "+userid),
@@ -9844,6 +9975,22 @@ function apiCall(user, body, protocol, res) {
                 });
                 break;
 
+            case "getharmonyhubs":
+                // host, headertype, nvpstr, formdata, calltype, callback = null
+                result = curl_call(swval, null, null, null, "GET")
+                .then(res => {
+                    if ( typeof res!=="object" || !res["hubs"] ) {
+                        console.error((ddbg()), "error attempting to get harmony hubs: invalid response: ", res);
+                        return null;
+                    }
+                    // success will return an array of hub slug names
+                    return res["hubs"];
+                }).catch(reason => {
+                    console.error((ddbg()), "error attempting to get harmony hubs: ", reason);
+                    return null;
+                });
+                break;
+
             // this api call starts the hub authorization process
             // the actual redirection to the first auth site is done in js file
             case "hubauth":
@@ -9866,7 +10013,6 @@ function apiCall(user, body, protocol, res) {
                     const appID = body.userendpt;
                     hub["useraccess"] = body.useraccess;
                     hub["userendpt"] = appID;
-                    hub["hubrefresh"] = "";
 
                     // make a random hubid if this hub doesn't exist - this will be replaced if a Hubitat hub
                     var hubid = body.hubid;
@@ -9916,6 +10062,16 @@ function apiCall(user, body, protocol, res) {
                         } else {
                             hub.hubendpt = hub.hubhost + "/apps/api/" + appID;
                         }
+
+                    } else if ( hub.hubtype==="Harmony" ) {
+                        // make sure we start with http and only insecure is supported for Harmony hubs
+                        if ( !hub.hubhost.toLowerCase().startsWith("http") ) {
+                            hub.hubhost = "http://" + hub.hubhost;
+                        }
+                        // the hub slub is stored in the hubaccess field for harmony hubs since there is no user access or endpoint info needed
+                        // in the js file we let the user pick from the available hubs and store it in this field
+                        hub.hubaccess = hub.useraccess;
+                        hub.hubendpt = hub.hubhost + "/hubs/" + hub.hubaccess;
 
                     } else {
                         // set an error result to skip auth steps
@@ -10269,8 +10425,8 @@ function setupISYSocket() {
                 var access_token = hub.hubaccess;
                 var buff = Buffer.from(access_token);
                 var base64 = buff.toString('base64');
-                var origin = "com.universal-devices.websockets.isy";
-                var header = {"Authorization": "Basic " + base64, "Sec-WebSocket-Protocol": "ISYSUB",  
+                const origin = "com.universal-devices.websockets.isy";
+                const header = {"Authorization": "Basic " + base64, "Sec-WebSocket-Protocol": "ISYSUB",  
                                 "Sec-WebSocket-Version": "13", "Origin": origin};
                 wshost = wshost + "/rest/subscribe";
                 var opts = {rejectUnauthorized: false};
@@ -10345,7 +10501,6 @@ function buildDatabaseTable(tableindex) {
             clientsecret TEXT NULL,
             hubaccess TEXT NULL,
             hubendpt TEXT NULL,
-            hubrefresh TEXT '',
             useraccess TEXT '',
             userendpt TEXT '',
             hubtimer TEXT '0'
@@ -10430,7 +10585,7 @@ GLB.dbinfo = {
     "enablerules": true,
     "donate": true
 };
-GLB.dbinfo.hubs = { Hubitat: "Hubitat", ISY: "ISY" };
+GLB.dbinfo.hubs = { Hubitat: "Hubitat", Harmony: "Harmony", ISY: "ISY" };
 
 // this object will be used to replace anything with a user choice
 GLB.dbinfo.subs = {};
@@ -10580,6 +10735,27 @@ if ( app && applistening ) {
                             .catch(reason => {
                                 console.warn( (ddbg()), "error updating the schema of the devices table: ", reason);
                             })
+                        }
+                    });
+                }
+
+                // update hubs table if needed to remove the refresh column
+                if ( tables[i] === "hubs" ) {
+                    mydb.getRows("pragma_table_info('hubs')")
+                    .then(rows => {
+                        var refreshcol = false;
+                        rows.forEach(row => {
+                            refreshcol = refreshcol || (row.name === "hubrefresh");
+                        });
+                        if ( refreshcol === true ) {
+                            mydb.query("ALTER TABLE hubs DROP COLUMN hubrefresh")
+                            .then(res => {
+                                addedtables++;
+                                console.log( (ddbg()), "Updated the schema of the hubs table by dropping hubrefresh column");
+                            })
+                            .catch(reason => {
+                                console.warn( (ddbg()), "error updating the schema of the hubs table by dropping hubrefresh column: ", reason);
+                            });
                         }
                     });
                 }
@@ -10923,6 +11099,12 @@ if ( app && applistening ) {
                                 hub.hubendpt = valarray.localendpt;
                             }
 
+                            // set the hub timer
+                            if ( valarray.hubtimer ) {
+                                updhub = updhub || (hub.hubtimer !== valarray.hubtimer);
+                                hub.hubtimer = valarray.hubtimer;
+                            }
+
                             // determine the hostname from the endpt
                             var iloc = hub.hubendpt.indexOf("/apps");
                             var newhost = hub.hubendpt.substring(0, iloc);
@@ -10989,7 +11171,6 @@ if ( app && applistening ) {
         // handle config events from Hubitat here
         } else if ( req.body['msgtype'] === "config" ) {
             // use this to push new data to the config page
-            const userid = req.body["change_device"];
             const configvals = req.body["change_value"];
             let configupdated = false;
             for (var key in configvals) {
@@ -11008,22 +11189,22 @@ if ( app && applistening ) {
             }
 
             if ( DEBUG17 ) {
-                console.log( (ddbg()), "Received hub configuration data for user ", userid, ": ", jsonshow(configvals) );
+                console.log( (ddbg()), "Received hub configuration data: ", jsonshow(configvals) );
             }
             res.send("New hub configuration received and processed");
             res.end();
 
         // this is where we receive the push from groovy to populate a new hub
         // we send it to the browser of the userid specified
-        } else if ( req.body['msgtype'] === "authupd" ) {
-            // use this to push new data to the auth page
-            const userid = req.body["change_device"];
-            const swtype = req.body["change_type"];
-            const subid = req.body["change_attribute"];
-            const pvalue = req.body["change_value"];
-            pushClient(userid, "authupd", swtype, subid, pvalue);
-            res.send("New hub auth information received and processed");
-            res.end();
+        // } else if ( req.body['msgtype'] === "authupd" ) {
+        //     // use this to push new data to the auth page
+        //     const userid = req.body["change_device"];
+        //     const swtype = req.body["change_type"];
+        //     const subid = req.body["change_attribute"];
+        //     const pvalue = req.body["change_value"];
+        //     pushClient(userid, "authupd", swtype, subid, pvalue);
+        //     res.send("New hub auth information received and processed");
+        //     res.end();
 
         // handle msg events from Hubitat here
         // these message can now only come from Hubitat since ST groovy is gone
