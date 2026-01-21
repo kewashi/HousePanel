@@ -24,6 +24,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, uid, bid, thi
     et_Globals.userid = userid;
     et_Globals.thingid = thingid;
     et_Globals.uid = uid;
+    et_Globals.insubmenu = false;
 
     if ( str_type==="page" ) {
         et_Globals.wholetarget = getCssRuleTarget(str_type, "panel", pagename, "thistile");
@@ -86,6 +87,10 @@ function editTile(userid, thingid, pagename, str_type, thingindex, uid, bid, thi
         createModal("modaledit", dialog_html, "body", true, pos, 
             // function invoked upon leaving the dialog
             function(ui, content) {
+                if ( et_Globals.insubmenu ) {
+                    return;
+                }
+
                 $("document").off("keydown");
                 // $("body").off("keypress");
                 var clk = $(ui).attr("name");
@@ -101,6 +106,7 @@ function editTile(userid, thingid, pagename, str_type, thingindex, uid, bid, thi
             function() {
 
                 // load the clipboard
+                et_Globals.insubmenu = false;
                 $.post(cm_Globals.returnURL,
                     {api: "clipboard", userid: userid, type: str_type, tile: thingindex, value: "", attr: "load", hpcode: cm_Globals.options.hpcode},
                     function (presult, pstatus) {
@@ -121,6 +127,9 @@ function editTile(userid, thingid, pagename, str_type, thingindex, uid, bid, thi
                 }
 
                 $(document).on("keydown",function(e) {
+                    if ( et_Globals.insubmenu ) {
+                        return;
+                    }
                     // console.log(e.which, typeof e.which);
                     if ( e.which===13  ){
                         saveTileEdit(et_Globals.userid, str_type, thingindex);
@@ -750,22 +759,63 @@ function initDialogBinds(str_type, thingindex) {
     });
     
     // resets the entire tile now like it was designed to do
+    $("#editCustom").off('click');
+    $("#editCustom").on('click', function (event) {
+        var str_type = $("#tileDialog").attr("str_type");
+        var thingindex = $("#tileDialog").attr("thingindex");
+        var subid = $("#subidTarget").html();
+        var pos = {top: event.pageY - 350, left: event.pageX + 150};
+        var scopemap = scopeMap(str_type);
+        var scope = $("#scopeEffect").val();
+        var msg = `<div class='editheader'>Enter custom CSS formatting</div>`;
+        msg += "<input type='text' id='customFormatText' style='width:400px;' placeholder='Enter custom CSS formatting here' /><br />";
+        msg += (subid==="wholetile" || subid==="panel") ? `Custom CSS will apply to ${scopemap[scope]}?` : `Custom CSS will apply only to <b>${subid}</b> elements on <b>${scopemap[scope]}</b>?`;
+        msg += "<br />Note: Multiple CSS rules can be added. Each rule must end with a semicolon (;)<br />Example: <b><small><em>color: red; font-size: 20px;</em></small></b>";
+        createModal("customtag", msg, "body", true, pos, function(ui, content) {
+            var clk = $(ui).attr("name");
+            if ( clk==="okay" ) {
+                var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
+                event.stopPropagation();
+                const addtext = $("#customFormatText").val();
+                console.log("Adding custom CSS rule: ", addtext, " to target: ", cssRuleTarget);
+
+                // check for valid input expected by CSS
+                // this check does not prevent the user from entering invalid CSS properties or values
+                if ( addtext.indexOf(":") !== -1 && addtext.indexOf(";") !== -1 ) {
+                    addCSSRule(cssRuleTarget, addtext);
+                } else {
+                    alert("Invalid CSS formatting entered. Please ensure entry is in format: \"field: value; field2: value2;\" that includes at least one ':' and one ';' character.");
+                }
+            }
+            et_Globals.insubmenu = false;
+            closeModal("customtag");
+        }, function() {
+            et_Globals.insubmenu = true;
+            $("#customtag").draggable();
+        });
+    });
+    
+    // resets the entire tile now like it was designed to do
     $("#editReset").off('click');
     $("#editReset").on('click', function (event) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
         var subid = $("#subidTarget").html();
-        var pos = {top: event.pageY - 50, left: event.pageX + 50};
+        var pos = {top: event.pageY - 350, left: event.pageX + 150};
         var scopemap = scopeMap(str_type);
         var scope = $("#scopeEffect").val();
         var msg = (subid==="wholetile" || subid==="panel") ? `Reset everything on ${scopemap[scope]}?` : `Reset only ${subid} elements on ${scopemap[scope]}?`;
         createModal("picksubid", msg, "body", true, pos, function(ui, content) {
             var clk = $(ui).attr("name");
-            closeModal("picksubid");
             if ( clk==="okay" ) {
                 event.stopPropagation();
                 resetCSSRules(str_type, thingindex, subid);
             }
+            et_Globals.insubmenu = false;
+            closeModal("picksubid");
+        }, function() {
+            et_Globals.insubmenu = true;
+            $("#picksubid").draggable();
         });
     });
     
@@ -798,7 +848,11 @@ function initDialogBinds(str_type, thingindex) {
                 et_Globals.clipboard = rules;
                 saveClipboard(et_Globals.userid, str_type, thingindex, rules);
             }   
+            et_Globals.insubmenu = false;
             closeModal("popupinfo");
+        }, function() {
+            et_Globals.insubmenu = true;
+            $("#popupinfo").draggable();
         });
     });
     
@@ -1933,6 +1987,7 @@ function getResetButton() {
         "<button class='tebutton' id='editReset'>Reset</button>" + 
         "<button class='tebutton' id='editCopy'>Copy</button>" +
         "<button class='tebutton' id='editPaste'>Paste</button>" +
+        "<button class='tebutton' id='editCustom'>Custom</button>" +
     "</div>";
     return resetbutton;
 }
@@ -2737,14 +2792,20 @@ function uploadImage() {
             $("#uplButtons").removeClass("hidden");
             $("#iconSrc").prop("disabled", false);
             $("#noIcon").prop("disabled", false);    
+            et_Globals.insubmenu = false;
             closeModal("modalupl");
         },
         function() {
+
+            et_Globals.insubmenu = true;
+            $("#modalupl").draggable();
+
             $("#uplcancel").on("click", function(e) {
                 console.log("closing");
                 $("#uplButtons").removeClass("hidden");
                 $("#iconSrc").prop("disabled", false);
                 $("#noIcon").prop("disabled", false);    
+                et_Globals.insubmenu = false;
                 closeModal("modalupl");
             });
             
@@ -2757,11 +2818,14 @@ function uploadImage() {
                     var thefile = imageInput.files[0];
                     console.log("Image selected to upload: ", thefile);
                 } else {
-                    console.log("No file was selected to upload");
+                    console.warn("No file was selected to upload");
                     $("#uplButtons").removeClass("hidden");
                     $("#iconSrc").prop("disabled", false);
                     $("#noIcon").prop("disabled", false);
+
+                    et_Globals.insubmenu = false;
                     closeModal("modalupl");
+                    return;
                 }
 
                 // get the form and submit via ajax
@@ -2779,15 +2843,20 @@ function uploadImage() {
                         $("#uplButtons").removeClass("hidden");
                         $("#iconSrc").prop("disabled", false);
                         $("#noIcon").prop("disabled", false);
-                        closeModal("modalupl");
-                        getIcons();	
+
                         console.log("File: ", presult.filename," uploaded successfully to: ", presult.path);
+                        getIcons();	
+                        et_Globals.insubmenu = false;
+                        closeModal("modalupl");
                     },
                     error: function(presult) {
                         $("#uplButtons").removeClass("hidden");
                         $("#iconSrc").prop("disabled", false);
                         $("#noIcon").prop("disabled", false);
+                        
                         console.error("File upload failed: ", presult);
+                        getIcons();	
+                        et_Globals.insubmenu = false;
                         closeModal("modalupl");
                     }
                 });

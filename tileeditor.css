@@ -1750,7 +1750,7 @@ div.overlay.battery div.battery, div.overlay.battery2 div.battery2, div.overlay.
     float: right;
     top: 15px;
     right: 2px;
-    width: 32px;
+    width: 20px;
     height: 6px;
     border: 1px solid #fff;
     border-radius: 2px;

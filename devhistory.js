@@ -1,4 +1,5 @@
 const devhistory = `
+3.5.14  01/20/2026 Added new feature to enable any adhoc user custom styling in the tile editor
 3.5.13  01/12/2026 Added support for Harmony hubs via the Maddox Api and cleaned up hub auth logic
 3.5.12  01/13/2026 Fix bug for updating configuration settings
 3.5.11  01/10/2026 Fix bug hub auth setup screen and improve object support for GET and POST custom fields
