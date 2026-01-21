@@ -232,8 +232,6 @@ function getOptions(pagename) {
                 blackout = (blackout === "true") || (blackout === true) ? true : false;
                 if ( pagename==="main" && ((priorOpmode === "Sleep" || 
                         cm_Globals.options["mode"]==="Night" || 
-                        // cm_Globals.options["mode"]==="Day" || 
-                        // cm_Globals.options["mode"]==="Evening" || 
                         cm_Globals.options["mode"]==="Away" ) && blackout) ) {
                     priorOpmode = "Sleep";
                     execButton("blackout");
@@ -311,7 +309,6 @@ $(document).ready(function() {
         alert("Fatal Error - Cannot display HousePanel because something went wrong in determining your server's host and port. Please check your installation and try again.");
         return;
     }
-    // console.log("returnURL: ", cm_Globals.returnURL, " port: ", cm_Globals.port);
 
     try {
         pagename = $("input[name='pagename']").val();
@@ -533,7 +530,6 @@ $(document).ready(function() {
                 var msg = checkInpval("username", unameval, unamere);
                 if ( msg ) {
                     $("#emailid").focus();
-                    alert(msg);
                 } else {
                     $("#mobileid").focus();
                 }
@@ -689,7 +685,6 @@ $(document).ready(function() {
                         );                    
                     }
                 }
-                // console.log("Values: ", clk, newid, newval, newsubid, doall);
                 closeModal("modalexec");
             });
         });
@@ -730,8 +725,6 @@ $(document).ready(function() {
                 }
                 closeModal("modalexec");
             });
-            // var trid = $(this).attr("trid");
-            // alert("trid = " + trid);
         });
 
     }
@@ -838,7 +831,6 @@ function checkLogin() {
     var msg = checkInpval("password", pwordval, pwordre);
     if ( pwordval!=="" && msg ) {
         $("#pword").focus();
-        alert(msg);
         return false;
     }
     return true;
@@ -933,7 +925,6 @@ function setupWebsocket(userid, webSocketUrl) {
                             subid = "/" + subid;
                         }
                         reloadpage =  cm_Globals.returnURL + subid;
-                        // alert("reloading to: " + reloadpage);
                         window.location.href = reloadpage;
                     }
                 }
@@ -1432,7 +1423,7 @@ function setupColors() {
                 var hint = $(tile).attr("hint");
                 var pname = cm_Globals.options.pname;
 
-                const linkinfo = handleLinks(subid, uid, bid);
+                const linkinfo = handleLinks(subid, uid, bid, thingid);
                 var command = linkinfo[0];
                 var linkval = linkinfo[1];
                 var realsubid = linkinfo[2];
@@ -1443,13 +1434,14 @@ function setupColors() {
                 var linkbid = linkedtile["deviceid"];
                 var linktype = linkedtile["devicetype"];
                 var hint = linkedtile["hint"];
-                // console.log("setupColors: userid= ", userid, " thingid= ", thingid, " tileid= ", tileid, " hint= ", hint,
-                // " command= ", command, " bid= ", bid, " uid= ", uid, " linkbid= ", linkbid, " linkuid= ", linkuid, " hubindex= ", hubindex, " linkhub= ", linkhub,
-                // " type= ", thetype, " linktype= ", linktype, " realsubid= ", realsubid, " value= ", hslstr, 
-                // " linkval= ", linkval, " attr=", hexval, " hpcode: ", cm_Globals.options.hpcode);
+                if ( cm_Globals.dbgflags["debug14"] ) {
+                    console.log("setupColors: userid= ", userid, " thingid= ", thingid, " tileid= ", tileid, " hint= ", hint,
+                    " command= ", command, " bid= ", bid, " uid= ", uid, " linkbid= ", linkbid, " linkuid= ", linkuid, " hubindex= ", hubindex, " linkhub= ", linkhub,
+                    " type= ", thetype, " linktype= ", linktype, " realsubid= ", realsubid, " value= ", hslstr, 
+                    " linkval= ", linkval, " attr=", hexval, " hpcode: ", cm_Globals.options.hpcode);
+                }
                 const commandval = command ? command : "Action";
                 console.log(`Color ${commandval}: User[${userid}], bid[${linkbid}], subid[${realsubid}], color[${linkval}], hsl value[${hslstr}], hex[${hexval}]`);
-
 
                 $.post(cm_Globals.returnURL, 
                        {api: "doaction", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: hslstr, hint: hint,
@@ -1479,7 +1471,7 @@ function hpsliders(evt, ui) {
     var hint = $(tile).attr("hint");
     var pname = cm_Globals.options.pname;
 
-    const linkinfo = handleLinks(subid, uid, bid);
+    const linkinfo = handleLinks(subid, uid, bid, thingid);
     var command = linkinfo[0];
     var linkval = linkinfo[1];
     var realsubid = linkinfo[2];
@@ -1491,8 +1483,10 @@ function hpsliders(evt, ui) {
     var linktype = linkedtile["devicetype"];
     var hint = linkedtile["hint"];
 
-    // console.log("Slider action: command= ", command, " uid= ", uid, " bid= ", bid, " linkbid= ", linkbid, " linkuid= ", linkuid, " hub= ", linkhub, " type= ", 
-    //              linktype, " subid= ", realsubid, " hint= ", hint, " value= ", thevalue, " linkval= ", linkval, " hpcode: ", cm_Globals.options.hpcode);
+    if ( cm_Globals.dbgflags["debug1"] ) {
+        console.log("Slider action: command= ", command, " uid= ", uid, " bid= ", bid, " linkbid= ", linkbid, " linkuid= ", linkuid, " hub= ", linkhub, " type= ", 
+                    linktype, " subid= ", realsubid, " hint= ", hint, " value= ", thevalue, " linkval= ", linkval, " hpcode: ", cm_Globals.options.hpcode);
+    }
     const commandval = command ? command : "Action";
     console.log(`Slider ${commandval}: User[${userid}], bid[${linkbid}], subid[${realsubid}], value[${thevalue}], attr[${subid}], linkval[${linkval}]`);
     
@@ -1790,8 +1784,9 @@ function setupDraggable() {
                 var thingid = $(thing).attr("thingid");
                 var bid = $(thing).attr("bid");
                 var uid = $(thing).attr("uid");
-                var thingtype = $(thing).attr("type");0
+                var thingtype = $(thing).attr("type");
                 $(thing).css("z-index", startPos["z-index"] );
+                console.log("Dragged thing: ", thingtype, " tileid: ", tileid, " left: ", startPos.left, " top: ", startPos.top, " bid: ", bid, "uid: ", uid );
 
                 // revert back to relative if we dragged outside panel to top
                 // remove this because we now have a reset button and we might want to place stuff on the edges
@@ -1814,9 +1809,6 @@ function setupDraggable() {
                      id: bid, type: thingtype, attr: startPos, tileid: tileid, uid: uid, thingid: thingid, hpcode: cm_Globals.options.hpcode},
                     function (presult, pstatus) {
                         console.log("setposition result: ", presult);
-                        // delEditLink();
-                        // addEditLink();
-                        // setupDraggable();                        
                     });
             }
         });
@@ -1830,17 +1822,19 @@ function setupDraggable() {
             maxWidth: 900,
             grid: snapgrid,
             autoHide: true,
-            handles: {'se': '.ui-resizable-se', 'e': '.ui-resizable-e', 's': '.ui-resizable-s'},
+            // handles: {'se': '.ui-resizable-se', 'e': '.ui-resizable-e', 's': '.ui-resizable-s'},
             start: function(evt, ui) {
                 startPos.left = parseInt($(evt.target).position().left);
                 startPos.top  = parseInt($(evt.target).position().top);
-                console.log("Resizing tile, left: ", startPos.left, " top: ", startPos.top);
+                if ( cm_Globals.dbgflags["debug1"] ) {
+                    console.log("Resizing tile, left: ", startPos.left, " top: ", startPos.top);
+                }
             },
             stop: function(evt, ui) {
                 cm_Globals.edited = true;
                 var thing = evt.target;
                 var tileid = $(thing).attr("tile");
-                var thingtype = $(thing).attr("type");0
+                var thingtype = $(thing).attr("type");
                 var newsize = ui.size;                
                 var target = getCssRuleTarget(thingtype, 'wholetile', tileid, "thistile");
                 var rule = "width: " + newsize.width.toString() + "px; " +
@@ -1914,7 +1908,8 @@ function setupDraggable() {
                                     {api: "addthing", userid: userid, pname: pname, id: bid, type: thingtype, value: panel, roomname: panel, panelid: panelid, 
                                      attr: startPos, hubindex: hubindex, roomid: roomid, pname: pname, tileid: 0, hpcode: cm_Globals.options.hpcode},
                                     function (presult, pstatus) {
-                                        if (pstatus==="success" && !presult.startsWith("error") ) {
+                                        if (pstatus==="success" && typeof presult==="string" && !presult.startsWith("error") ) {
+                                            console.log("Added new tile to room: ", panel, " type: ", thingtype, " id: " , bid);
                                             $("div.panel-"+panel).append(presult);
                                             var newthing = $("div.panel-"+panel+" div.thing").last();
                                             $(newthing).css( startPos );
@@ -2005,6 +2000,13 @@ function rehomeTiles() {
             function (presult, pstatus) {
                 if ( pstatus!=="success" ) {
                     console.error("status: ", pstatus, " result: ", presult);
+                //     var newthing = $("div.panel-"+panel+" div.thing").last();
+                //     $(newthing).css( startPos );
+                //     thingDraggable( newthing, cm_Globals.snap, "parent" );
+                //     setupPage();
+
+                // } else {
+                //     console.log("Tile rehomed: bid=", bid, " tileid=", tileid, " presult=", presult);
                 }
             }
         );
@@ -2075,7 +2077,6 @@ function execForgotPassword() {
     if ( emailname.length < 5 || emailname.indexOf("@") < 1 || emailname.indexOf(".")===-1 ) {
         alert("Email [" + emailname + "] is not valid. Enter a valid email to request a password reset.");
     } else {
-        // alert("email: " + emailname + " mobile: " + mobile);
         $.post(cm_Globals.returnURL, 
             {api: "forgotpw", email: emailname, mobile: mobile, apiSecret: cm_Globals.apiSecret},
             function(presult, pstatus) {
@@ -2352,9 +2353,6 @@ function execButton(buttonid) {
         // and if this fails fall back to the same simple black screen
         } else {
             var pname = cm_Globals.options.pname;
-
-            // alert("phototimer = " + phototimer + " pname = " + pname);
-
             $.post(cm_Globals.returnURL, 
                 {api: "getphotos", userid: cm_Globals.options.userid, pname: pname, hpcode: cm_Globals.options.hpcode}, 
                 function(presult, pstatus) {
@@ -2461,8 +2459,8 @@ function execButton(buttonid) {
                 closeModal("modalpopup");
                 createModal("modalpopup", presult, "body", false, {style: rstyle});
                 setTimeout(function() {
-                    reload(); // window.location.href = cm_Globals.returnURL;
-                },4000);
+                    reload();
+                },5000);
             },2000);
         });
     
@@ -2581,7 +2579,6 @@ function setupButtons() {
                 var clk = $(ui).attr("name");
                 closeModal("modalhub");
                 if ( clk==="okay" ) {
-                    alert("Removing panel: " + pname);
                     $.post(cm_Globals.returnURL, 
                         {api: "delpanel", userid: cm_Globals.options.userid, pname: pname, hpcode: cm_Globals.options.hpcode}
                     );
@@ -2595,7 +2592,6 @@ function setupButtons() {
                 var clk = $(ui).attr("name");
                 closeModal("modalhub");
                 if ( clk==="okay" ) {
-                    alert("Using panel: " + pname);
                     $.post(cm_Globals.returnURL, 
                         {api: "usepanel", userid: cm_Globals.options.userid, pname: pname, hpcode: cm_Globals.options.hpcode}
                     );
@@ -2858,16 +2854,15 @@ function setupAuthHub(hubId, userid) {
     // handle new hubs - user sets type and the Hubitat groovy app or HubitatController python app fills out the rest of the fields
     if ( hubId==="new" ) {
         $("#hubdiv").show();
-        newhubmsg = "New hubs can be added using this form. Hubitat hubs are generated automatically so defining them here is not advised. " + 
-                    "This is used to add ISY or Harmony hubs to your panel. For this to work you must provide hub information manually.";
+        newhubmsg = "New hubs can be added using this form. Hubitat hubs are generated automatically so defining them here is not advised.";
         $("#hubdiv").show();
         $("#hideaccess_hub").show();
-        $("select[name='hubtype']").val("ISY").prop("disabled", false);
+        $("select[name='hubtype']").val("Hubitat").prop("disabled", false);
         $("input[name='hubhost']").val("http://192.168.x.y").prop("disabled", false);
         $("input[name='hubname']").val("").prop("disabled", false);
         $("input[name='useraccess']").val("");
         $("input[name='userendpt']").val("");
-        $("input[name='hubid']").val("ISY_new").prop("disabled", false);
+        $("input[name='hubid']").val("Hubitat_new").prop("disabled", false);
         $("input[name='hubtimer']").val("0");
         $("#newthingcount").html(newhubmsg);
 
@@ -3310,7 +3305,6 @@ function setupFilters() {
         // get the id of the hub type we just picked
         pickedhub = $(this).val();
         var pickid = $(this).attr("id");
-        // console.log("pickedhub = ", pickedhub, pickid);
         if ( pickedhub && pickedhub!== "undefined" ) {
             setCookie("defaultHub", pickedhub);
         }
@@ -3410,7 +3404,6 @@ function setupCustomCount() {
         // remove excess if we are going down
         if ( newcnt>0 && newcnt < currentcnt ) {
             for ( var j= newcnt; j < currentcnt; j++ ) {
-                // alert("j = "+j+" custom = " + customs[j].attr("type") );
                 customs[j].detach();
             }
         }
@@ -3531,7 +3524,9 @@ function updateLink(bid, pvalue) {
                 realsubid = $(this).attr("realsubid");
                 value = pvalue[realsubid];
                 linktargetid = `#a-${aid}-${subid}`;
-                // console.log("updating linked tile for bid:", bid, " aid: ", aid, " realsubid:", realsubid, " value:", value, " linktargetid:", linktargetid);
+                if ( cm_Globals.dbgflags["debug14"] ) {
+                    console.log("updating linked tile for bid:", bid, " aid: ", aid, " realsubid:", realsubid, " value:", value, " linktargetid:", linktargetid);
+                }
                 isclock = isclock || processKeyVal(linktargetid, aid, realsubid, value);
             });
             // if we updated a clock skin render it on the page
@@ -3699,7 +3694,6 @@ function updateHubTiles(hubid) {
                 for (let bid in presult) {
                     $('div.panel div.thing[bid="'+bid+'"]').each(function() {
                         const thingid = $(this).attr("thingid");
-                        // console.log("updating clock tile ", thingid, " with time ", clockdevice);
                         updateTile(thingid, presult[bid].pvalue);
                     });
                     updateLink(bid, presult[bid].pvalue);
@@ -3841,7 +3835,6 @@ function clockUpdater(whichclock, forceget) {
         // update all the clock tiles for this type
         $('div.panel div.thing[bid="'+clocktype+'"]').each(function() {
             var thingid = $(this).attr("thingid");
-            // console.log("updating clock tile ", thingid, " with time ", clockdevice);
             updateTile(thingid, updobj);
         });
         updateLink(clocktype, updobj);
@@ -3950,9 +3943,13 @@ function setupPage() {
         var thetype = $(that).attr("type");
         var thingname = $("#s-"+aid).html();
         var targetid = '#a-'+aid+'-'+subid;
-        if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
+        if ( (subid.endsWith("-up") && $(targetid).hasClass("arrow-up")) || 
+              (subid.endsWith("-dn") && $(targetid).hasClass("arrow-down")) ) {
             const slen = subid.length;
-            targetid = '#a-'+aid+'-'+subid.substring(0,slen-3);
+            let newtargetid = '#a-'+aid+'-'+subid.substring(0,slen-3);
+            if ( $(newtargetid) && $(newtargetid).html()!=="undefined" ) {
+                targetid = newtargetid;
+            }            
         }
         var thevalue = $(targetid) ? $(targetid).html() : "";
         
@@ -4214,7 +4211,9 @@ function checkPassword(tile, thingname, pw, ro, thevalue, subid, yesaction) {
 // this new flexibility allowed me to remove the process List function
 function processClickWithValue(that, thingname, ro, subid, thetype, thevalues, numParams=0) {
 
-    // alert("subid " + subid + " thevalues: " + JSON.stringify(thevalues) + " numParams: " + numParams);
+    if ( cm_Globals.dbgflags[1] ) {
+        console.log("processClickWithValue: subid=", subid, " thevalues=", thevalues, " numParams=", numParams);
+    }
     if ( typeof thevalues === "object" ) {
         var prefixes = Object.keys(thevalues);
         numParams = prefixes.length;
@@ -4345,7 +4344,7 @@ function addOnoff(targetid, subid, thevalue) {
     return thevalue;
 }
 
-function handleLinks(subid, uid, bid) {
+function handleLinks(subid, uid, bid, thingid) {
     const usrbid = `user_${bid}`;
     let command = "";
     let linkval = "";
@@ -4354,7 +4353,9 @@ function handleLinks(subid, uid, bid) {
 
     // modify the subid to check if an up/down version was clicked
     var linkvalupdown = subid;
-    if ( subid.endsWith("-dn") || subid.endsWith("-up") ) {
+    const targetid = '#a-'+thingid+'-'+subid;
+    if ( (subid.endsWith("-up") && $(targetid).hasClass("arrow-up")) || 
+         (subid.endsWith("-dn") && $(targetid).hasClass("arrow-down")) ) {
         linkvalupdown = subid.substring(0, subid.length-3);       
     }
 
@@ -4375,7 +4376,6 @@ function handleLinks(subid, uid, bid) {
             } else if ( (rule[0] === "GET" || rule[0]==="POST" || rule[0]==="PUT" || rule[0]==="URL") && rule[2] === subid ) {
                 linkval = rule[1];
                 command = rule[0];
-                // alert("link command found: " + command + " value: " + linkval);
             } else if ( rule[0] === "LIST" && rule[2] === subid ) {
                 linkval = rule[1];
                 command = "LIST";
@@ -4407,6 +4407,9 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         }
     }
 
+    if ( cm_Globals.dbgflags["debug1"] ) {
+        console.log("processClick: thingname: " + thingname + " subid: " + subid + " thevalue: " + thevalue + " ro: " + ro + " theattr: " + theattr);
+    }
     const userid = cm_Globals.options.userid;
     const pname = cm_Globals.options.pname;
     const tile = '#t-'+taid;
@@ -4420,7 +4423,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
     var hubtype = $(tile).attr('hubtype') || "";
     var targetid;
 
-    const linkinfo = handleLinks(subid, uid, bid);
+    const linkinfo = handleLinks(subid, uid, bid, thingid);
     var command = linkinfo[0];
     var linkval = linkinfo[1];
     var realsubid = linkinfo[2];
@@ -4433,22 +4436,17 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
     var hint = linkedtile["hint"];
 
     // for up/down buttons adjust the subid to the real one
-    if ( subid.endsWith("-up") || subid.endsWith("-dn") ) {
+    var targetid = '#a-'+thingid+'-'+subid;
+    if ( subid==="thingname" ) {
+            targetid = "#s-"+thingid;
+    } else if ( (subid.endsWith("-up") && $(targetid).hasClass("arrow-up")) || 
+                (subid.endsWith("-dn") && $(targetid).hasClass("arrow-down")) ) {
         const slen = subid.length;
         if (command && !realsubid.endsWith("-up") && !realsubid.endsWith("-dn") ) {
             realsubid = realsubid + subid.substring(slen-3);
         }
         targetid = '#a-'+thingid+'-'+subid.substring(0,slen-3);
-    } else {
-        if ( subid==="thingname" ) {
-            targetid = "#s-"+thingid;
-        } else {
-            targetid = '#a-'+thingid+'-'+subid;
-        }
     }
-
-    // console.log("targetid: " + targetid + " subid: " + subid + " realsubid: " + realsubid + " command: " + command + " linkval: " + linkval);
-    // var thevalue = $(targetid).html();
 
     // if this is an edit field then do nothing
     if ( thevalue && typeof thevalue==="string" && (thevalue.startsWith("<input type=\"text\"") || thevalue.startsWith("<input type=\"number\"") ) ) {
@@ -4526,6 +4524,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
                 attr: subid, subid: realsubid, hubindex: linkhub, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode},
             function(presult, pstatus) {
                 if (pstatus==="success") {
+                    console.log(thetype, "Action result: ", presult);
                     if (thetype==="piston") {
                         $(targetid).addClass("firing");
                         $(targetid).html("firing");
@@ -4563,7 +4562,12 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
             if ( thevalue ) {
                 $.post(cm_Globals.returnURL, 
                     {api: ajaxcall, userid: userid, pname: pname, id: bid, thingid: thingid, tileid: tileid, uid: uid, type: thetype, value: thevalue, roomid: roomid, hint: hint,
-                     attr: theattr, subid: "switch", hubindex: linkhub, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode} );
+                     attr: theattr, subid: "switch", hubindex: linkhub, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode}, 
+                function(presult, pstatus) {
+                    if (pstatus==="success") {
+                        console.log(subid, "Action result: ", presult);
+                    };
+                });
             }
         });
 
@@ -4610,11 +4614,11 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
 
     } else {
         // invert value for lights since we want them to do opposite of state
-        // this isn't needed for ST or HE but I put this here for ISY
+        // this isn't needed for HE but I put this here for ISY
         // in ST and HE the inversion is handled in the groovy code on attr
         // and the value is ignored unless attr is blank which it won't be here
         // but for ISY we pass the value directly to the hub so must be right
-        // however, I still inverted the ST and HE values to support future update
+        // however, I still inverted the HE values to support future update
         // where I might just look at thevalue for these hubs types as it should be
         // the attr action was a terrible workaround put in a much earlier version
         if ( subid.startsWith("switch") && (thevalue==="on" || thevalue==="off")  ) {
@@ -4647,11 +4651,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
             thevalue = $(targetvol).attr("value");
         }
 
-        // disable prior complex logging and now log a simpler one line entry
-        // console.log("userid= ", userid, " thingid= ", thingid, " tileid= ", tileid, " hint= ", hint,
-        //             " command= ", command, " bid= ", bid, " linkbid= ", linkbid, " linkhub= ", linkhub,
-        //             " type= ", thetype, " linktype= ", linktype, " subid= ", subid, " realsubid= ", realsubid, " value= ", thevalue, " type: ", (typeof thevalue),
-        //             " linkval= ", linkval, " attr=", theattr, " hpcode=", cm_Globals.options.hpcode);
+        // provide a simple one line log of the action
         const logval = linkval ? linkval : thevalue;
         const commandval = command ? command : "Action";
         console.log(`${commandval}: User[${userid}], ${thingname}, subid[${realsubid}] = ${logval}`);
@@ -4666,110 +4666,109 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
                                 attr: theattr, subid: realsubid, hubindex: linkhub, tileid: tileid, command: command, 
                                 linkval: linkval, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
-                if (pstatus==="success") {
-                    if ( presult && typeof presult === "object" ) {
+                if ( pstatus==="success" && typeof presult === "object" ) {
 
-                        // display a table or graph is this is a LIST command
-                        if ( command==="LIST" ) {
-                            const n = linkval.indexOf("::");
-                            const swid = linkval.substring(0, n);
-                            var attrname = linkval.substring(n+2);
-                            const n2 = attrname.indexOf("::");
-                            if ( n2!== -1 ) {
-                                attrname = attrname.substring(0, n2);
-                            }
-
-                            var dispTable = "";
-                            var timedata = [];
-                            var valuedata = [];
-                            const linkeddevice = cm_Globals.devices[swid];
-
-                            dispTable+= `<div class='listheader'>History for device: ${linkeddevice.name}</div><div class='listheader'>Attribute: ${attrname}</div><br>`;
-                            dispTable+= `<div class='listtable'><table class='listtable'><tr class='head'><td>Time</td><td>${attrname}</td></tr>`;
-                            var ltotal = 0.0;
-                            var ncount = 0;
-                            var nstate = 0;
-                            var statetype = "";
-                            presult.forEach(obj => {
-                                if ( !isNaN(parseFloat(obj.lvalue)) ) {
-                                    timedata.push(obj.ltime);
-                                    ltotal+= parseFloat(obj.lvalue);
-                                    valuedata.push(obj.lvalue);
-                                    ncount++;
-                                    dispTable+= `<tr class='content'><td>${obj.ltime}</td><td>${obj.lvalue}</td></tr>`;
-                                } else if ( obj.lvalue==="on" || obj.lvalue==="open" || obj.lvalue==="active" || obj.lvalue==="present"  ) {
-                                    timedata.push(obj.ltime);
-                                    nstate++;
-                                    statetype = obj.lvalue;
-                                    valuedata.push(nstate);
-                                    dispTable+= `<tr class='content'><td>${obj.ltime}</td><td>${obj.lvalue}</td></tr>`;
-                                } else if ( obj.lvalue==="off" || obj.lvalue==="closed" || obj.lvalue==="inactive" || obj.lvalue==="absent"  ) {
-                                    dispTable+= `<tr class='content'><td>${obj.ltime}</td><td>${obj.lvalue}</td></tr>`;
-                                }
-                            });
-                            if ( nstate > 0 ) {
-                                dispTable+= `<tr class='foot'><td>Activation total for state: ${statetype}</td><td>${nstate}</td></tr>`;
-                            }
-                            if ( ncount > 1 ) {
-                                if ( linktype === "variables" ) {
-                                    dispTable+= `<tr class='foot'><td>Sum of Values</td><td>${ltotal}</td></tr>`;
-                                }
-                                var avg = Math.round( (ltotal / ncount) * 100.0 ) / 100.0;
-                                dispTable+= `<tr class='foot'><td>Average ${attrname}</td><td>${avg}</td></tr>`;
-                            }
-                            dispTable+= "</table></div>";
-
-                            dispTable+= `<div class="canvasplot"><canvas id="theplot"><canvas></div>`;
-                            
-                            if ( Object.keys(presult).length > 0 ) {
-                                dispTable+= "<div class = 'listbuttons'>";
-                                dispTable+= "<button id='resetList' class='cm_button'>Reset</button>";
-                                dispTable+= "</div>";
-                            }
-
-                            // show a bar graph of the data
-                            if ( statetype !== "" ) {
-                                attrname = attrname + ` (${statetype} activations)`;
-                            }
-
-                            var pos = {top: 80, left: 200, "max-width": 1200, "max-height": 600, border: "4px solid black", background: "white"};
-                            createModal("listview", dispTable, "body", "Close", pos, null, function() {
-                                $("#listview").draggable();
-                            });
-
-                            (async function() {
-                                var plotobj = {
-                                    type: 'bar',
-                                    data: {
-                                        labels: timedata,
-                                        datasets: [
-                                            {
-                                                label: attrname,
-                                                data: valuedata
-                                            }
-                                        ]
-                                    }
-                                }
-                                new Chart(document.getElementById('theplot'), plotobj);
-                            })();
-
-                            // handle the reset button
-                            // note that we pass the original subid not the realsubid even though they are the same here for now
-                            $("#resetList").on("tap", function(evt) {
-                                $.post(cm_Globals.returnURL, 
-                                    {api: "resetlist", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, 
-                                            value: thevalue, hint: hint, attr: theattr, subid: subid, hubindex: linkhub, 
-                                            tileid: tileid, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode}
-                                );
-                                $("#resetList").off("tap");
-                                closeModal("listview");
-                            });
-                        } else {
-                            console.log("Action result: ", presult);
+                    // display a table or graph is this is a LIST command
+                    if ( command==="LIST" ) {
+                        const n = linkval.indexOf("::");
+                        const swid = linkval.substring(0, n);
+                        var attrname = linkval.substring(n+2);
+                        const n2 = attrname.indexOf("::");
+                        if ( n2!== -1 ) {
+                            attrname = attrname.substring(0, n2);
                         }
+
+                        var dispTable = "";
+                        var timedata = [];
+                        var valuedata = [];
+                        const linkeddevice = cm_Globals.devices[swid];
+
+                        dispTable+= `<div class='listheader'>History for device: ${linkeddevice.name}</div><div class='listheader'>Attribute: ${attrname}</div><br>`;
+                        dispTable+= `<div class='listtable'><table class='listtable'><tr class='head'><td>Time</td><td>${attrname}</td></tr>`;
+                        var ltotal = 0.0;
+                        var ncount = 0;
+                        var nstate = 0;
+                        var statetype = "";
+                        presult.forEach(obj => {
+                            if ( !isNaN(parseFloat(obj.lvalue)) ) {
+                                timedata.push(obj.ltime);
+                                ltotal+= parseFloat(obj.lvalue);
+                                valuedata.push(obj.lvalue);
+                                ncount++;
+                                dispTable+= `<tr class='content'><td>${obj.ltime}</td><td>${obj.lvalue}</td></tr>`;
+                            } else if ( obj.lvalue==="on" || obj.lvalue==="open" || obj.lvalue==="active" || obj.lvalue==="present"  ) {
+                                timedata.push(obj.ltime);
+                                nstate++;
+                                statetype = obj.lvalue;
+                                valuedata.push(nstate);
+                                dispTable+= `<tr class='content'><td>${obj.ltime}</td><td>${obj.lvalue}</td></tr>`;
+                            } else if ( obj.lvalue==="off" || obj.lvalue==="closed" || obj.lvalue==="inactive" || obj.lvalue==="absent"  ) {
+                                dispTable+= `<tr class='content'><td>${obj.ltime}</td><td>${obj.lvalue}</td></tr>`;
+                            }
+                        });
+                        if ( nstate > 0 ) {
+                            dispTable+= `<tr class='foot'><td>Activation total for state: ${statetype}</td><td>${nstate}</td></tr>`;
+                        }
+                        if ( ncount > 1 ) {
+                            if ( linktype === "variables" ) {
+                                dispTable+= `<tr class='foot'><td>Sum of Values</td><td>${ltotal}</td></tr>`;
+                            }
+                            var avg = Math.round( (ltotal / ncount) * 100.0 ) / 100.0;
+                            dispTable+= `<tr class='foot'><td>Average ${attrname}</td><td>${avg}</td></tr>`;
+                        }
+                        dispTable+= "</table></div>";
+
+                        dispTable+= `<div class="canvasplot"><canvas id="theplot"><canvas></div>`;
+                        
+                        if ( Object.keys(presult).length > 0 ) {
+                            dispTable+= "<div class = 'listbuttons'>";
+                            dispTable+= "<button id='resetList' class='cm_button'>Reset</button>";
+                            dispTable+= "</div>";
+                        }
+
+                        // show a bar graph of the data
+                        if ( statetype !== "" ) {
+                            attrname = attrname + ` (${statetype} activations)`;
+                        }
+
+                        var pos = {top: 80, left: 200, "max-width": 1200, "max-height": 600, border: "4px solid black", background: "white"};
+                        createModal("listview", dispTable, "body", "Close", pos, null, function() {
+                            $("#listview").draggable();
+                        });
+
+                        (async function() {
+                            var plotobj = {
+                                type: 'bar',
+                                data: {
+                                    labels: timedata,
+                                    datasets: [
+                                        {
+                                            label: attrname,
+                                            data: valuedata
+                                        }
+                                    ]
+                                }
+                            }
+                            new Chart(document.getElementById('theplot'), plotobj);
+                        })();
+
+                        // handle the reset button
+                        // note that we pass the original subid not the realsubid even though they are the same here for now
+                        $("#resetList").on("tap", function(evt) {
+                            $.post(cm_Globals.returnURL, 
+                                {api: "resetlist", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, 
+                                        value: thevalue, hint: hint, attr: theattr, subid: subid, hubindex: linkhub, 
+                                        tileid: tileid, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode}
+                            );
+                            $("#resetList").off("tap");
+                            closeModal("listview");
+                        });
                     } else {
-                        console.warn("Action failed with status: ", pstatus);
+                        console.log("Action result: ", presult);
                     }
+                } else {
+                    const errmsg = pstatus==="success" ? "" : "Request failed with status: " + pstatus;
+                    console.warn(errmsg, "Action result: ", presult);
                 }
             }, "json"
         );

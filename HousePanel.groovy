@@ -29,15 +29,14 @@ public static String handle() { return "HousePanel" }
     STATICALLY DEFINED VARIABLES
     inpired by Tonesto7 homebridge2 app
 ***********************************************/
-@Field static final String appVersionFLD  = '3.5.11'
+@Field static final String appVersionFLD  = '3.5.13'
 @Field static final String sNULL          = (String) null
 @Field static final String sBLANK         = ''
 @Field static final String sLINEBR        = '<br>'
 @Field static final String sSMALL         = 'small'
-@Field static final String sCLRBLUE       = '#2784D9'
-@Field static final String sCLRRED        = 'red'
-@Field static final String sCLRGRY        = 'gray'
-@Field static final String sCLRGRN        = 'green'
+@Field static final String sCLRBLUE       = '#3360ff'
+@Field static final String sCLRRED        = '#ff6033'
+@Field static final String sCLRGRY        = '#999999'
 
 /**********************************************
     APP HELPER FUNCTIONS
@@ -90,8 +89,10 @@ mappings {
 
 def appInfoSect() {
     Boolean isNote = false
+    def verinfo = getVersion()
     String tStr = spanSmBld('HousePanel Version:', sCLRGRY) + spanSmBr(" ${appVersionFLD}", sCLRGRY)
-    section (sectH3TS((String)app.name, tStr, getAppImg('hpicon3x.png'), 'blue')) {
+    String serverStr = spanSmBld('Latest Version on GitHub:', sCLRGRY) + spanSmBr(" ${verinfo.version}", sCLRGRY)
+    section (sectH3TS((String)app.name, " ${tStr} ${serverStr}", getAppImg('hpicon3x.png'), 'blue')) {
         paragraph htmlLine(sCLRGRY)
     }
 }
@@ -350,21 +351,6 @@ def variablesPage() {
     }
 }
 
-// def appButtonHandler(String buttonName) {
-
-//     if ( buttonName == "pushdata" ) {
-//         def devtype = "Hubitat"
-//         def usecloud = settings?.usecloud ?: false
-//         def userid = settings?.userid ?: 0
-//         def hpcode = settings?.hpcode ?: ""
-//         def subid = app.id
-//         Map value = ["accesstoken": state.accessToken, "appid": app.id, "hubname": state.hubname, "hubid": state.hubid,
-//                      "cloudendpt": state.cloudendpt, "localendpt": state.endpt, "hubtimer": state.hubtimer, "hpcode": state.hpcode, "usecloud": state.usecloud]
-//         logger("Pushing data: ${value}", "info")
-//         postHubAll("authupd", "", userid, subid, devtype, value)
-//     }
-// }
-
 def installed() {
     initialize()
 }
@@ -407,7 +393,6 @@ def initialize() {
     state.usecloud = settings?.usecloud ?: false
     state.hubtimer = settings?.hubtimer ?: 0
     state.userid = settings?.userid ?: 0
-    state.usecloud = settings?.usecloud ?: false
     configureHub();
     if ( state.usepistons ) {
         webCoRE_init()
@@ -445,7 +430,7 @@ def initialize() {
 
     // push configured variables to HousePanel
     // this now replaces any need to push variables separately since they will be included in the config push and the HP server will know which ones are in use based on the settings
-    // these should really be part of the hub config and be hub specific - that's a TODO
+    // these should really be part of the hub config and be hub specific
     Map configs = ["ambientappkey": state.ambientappkey, "ambientapi": state.ambientapi,
                    "weatherapi": state.weatherapi, "weatherzip": state.weatherzip, 
                    "loglevel": state.loggingLevelIDE, "powerskip": state.powerskip]
@@ -457,6 +442,32 @@ def initialize() {
     } else {
         logger("state changes will not be posted to HP because no server IP was provided", "warn")
     }
+}
+
+def getVersion() {
+    def version = appVersionFLD  // Fallback
+    def logmessage = ""
+    try {
+        def params = [
+            uri: "https://raw.githubusercontent.com/kewashi/HousePanel/master/devhistory.js",
+            contentType: "text/plain"
+        ]
+        httpGet(params) { resp ->
+            if (resp.success && resp.data) {
+                def content = resp.data.text
+                // Extract version from first line like "3.5.13  01/12/2026..."
+                def matcher = content =~ /(\d+\.\d+\.\d+)\s+(.*)$/
+                if (matcher.find()) {
+                    version = matcher.group(1)
+                    logmessage = matcher.group(2)
+                    logger("Latest HousePanel version on GitHub: ${version} ${logmessage}", "info")
+                }
+            }
+        }
+    } catch (Exception e) {
+        logger("Could not retrieve version from GitHub, using fallback: ${e.message}", "warn")
+    }
+    return [version: version, message: logmessage]
 }
 
 private String getPrefix() {

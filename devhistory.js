@@ -1,5 +1,5 @@
 const devhistory = `
-3.5.13  01/12/2026 Added support for Harmony hubs via the Maddox Api and cleaned up hub auth screen and logic
+3.5.13  01/12/2026 Added support for Harmony hubs via the Maddox Api and cleaned up hub auth logic
 3.5.12  01/13/2026 Fix bug for updating configuration settings
 3.5.11  01/10/2026 Fix bug hub auth setup screen and improve object support for GET and POST custom fields
 3.5.10  01/08/2026 Fix obscure bug in on screen tile editing, missing logout menu handling, add South and East resizing
@@ -143,7 +143,8 @@ const devhistory = `
 3.004   Updated configurator to work with DB
 3.003   Another working alpha with tileeditor and more working
 3.002   Working alpha of new DB with new login screen
-3.001   First version of Database version with New ST support`;
+3.001   First version of Database version with New ST support
+`;
 
 const oldhistory2 = `
 2.418   fix rule infinite loop for ISY progs that made webSockets fail
@@ -698,6 +699,8 @@ const oldhistory1 = `
 0.1        Implement new architecture for files to support sortable jQuery
 0.0        Initial release
 `;
+const version = devhistory.substring(1,9).trim();
+
+// export the version and the narrative of the history
+exports.VERSION = version;
 exports.DEV = devhistory;
-exports.DEVOLD1 = oldhistory1;
-exports.DEVOLD2 = oldhistory2;

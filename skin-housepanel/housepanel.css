@@ -137,6 +137,12 @@ div.contact.door {
     cursor: default;
 }
 
+/* overlays */
+div.overlay {
+    width: 100%;
+    display: block;
+}
+
 /* this section is for specific thing icons and texts */
 /* the transparency is set to near zero so text doesn't show */
 div.overlay.contact div.contact.open {
@@ -247,6 +253,53 @@ div.overlay.allon div.allon.on, div.overlay.alloff div.alloff.on {
 div.overlay.alloff div.alloff.off, div.overlay.allon div.allon.off {
     background-image: url('icons/switchoff.png');
 }
+
+/* use switches for Harmony activities and hub status */
+div.overlay.switch div.switch.harmonyactivity, div.overlay.switch div.switch.harmonyhub {
+    background-image: url('icons/switchoff.png');
+    background-size: 90px; height: 90px;
+}
+div.overlay.switch div.switch.harmonyactivity.off, div.overlay.switch div.switch.harmonyhub.off {
+    background-image: url('icons/switchoff.png');
+}
+div.overlay.switch div.switch.harmonyactivity.on, div.overlay.switch div.switch.harmonyhub.on {
+    background-image: url('icons/switchon.png');
+}
+div.thing.harmonydevice-thing div.overlay div.harmonydevice {
+    display: none;
+}
+
+/* show some common fields and hide everything else */
+div.thing.harmonydevice-thing div.overlay.name div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._mute div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._play div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._pause div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._stop div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._cancel div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._menu div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._back div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._home div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._return div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._select div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._volume-up div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._volume-down div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._direction-down div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._direction-up div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._direction-left div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._direction-right div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._skip-backward div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._skip-forward div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._guide div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._info div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._power-off div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._channel-down div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._channel-up div.harmonydevice,
+div.thing.harmonydevice-thing div.overlay._power-on div.harmonydevice
+{
+    display: block;
+}
+
+/* window shade styling */
 div.overlay.windowShade div.windowShade.open {
     background-image: url('icons/shades_open.png');
     background-size: 80px; height: 80px;

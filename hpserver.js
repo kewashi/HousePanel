@@ -19,7 +19,7 @@ const DEBUG10 = false;              // customize post call debugs
 const DEBUG11 = false;              // rules and lists
 const DEBUG12 = false;              // hub push updates
 const DEBUG13 = false;              // URL callbacks
-const DEBUG14 = false;              // tile link details
+const DEBUG14 = false;              // tile link details and colors
 const DEBUG15 = false;              // new user and forgot password
 const DEBUG16 = false;              // writing, custom names, and image deletes
 const DEBUG17 = false;              // websocket and push client
@@ -65,8 +65,7 @@ var wsclient = {};
 // global variables are all part of GLB object
 var GLB = {};
 
-GLB.devhistory = devhistory.DEV;
-GLB.HPVERSION = GLB.devhistory.substring(1,9).trim();
+GLB.HPVERSION = devhistory.VERSION;
 GLB.APPNAME = 'HousePanel V' + GLB.HPVERSION;
 
 // set a secret that changes every day - API calls must match this value
@@ -703,9 +702,16 @@ function getTypes() {
         });
     }
 
+    // add harmony specific types
     if ( array_key_exists("Harmony", GLB.dbinfo.hubs) ) {
-        if ( !thingtypes.includes("harmony") ) {
-            thingtypes.push("harmony");
+        if ( !thingtypes.includes("harmonyhub") ) {
+            thingtypes.push("harmonyhub");
+        }
+        if ( !thingtypes.includes("harmonydevice") ) {
+            thingtypes.push("harmonydevice");
+        }
+        if ( !thingtypes.includes("harmonyactivity") ) {
+            thingtypes.push("harmonyactivity");
         }
     }
 
@@ -966,7 +972,7 @@ function _curl(host, headers, nvpstr, calltype, callback) {
 function curl_call(host, headertype, nvpstr, formdata, calltype, callback = null) {
     var promise = new Promise(function(resolve, reject) {
         var opts = {url: host, rejectUnauthorized: false};
-        if ( calltype!=="GET" && calltype!=="POST" ) {
+        if ( calltype!=="GET" && calltype!=="POST" && calltype!=="PUT" ) {
             reject("invalid calltype " + calltype);
             return;
         }
@@ -1007,6 +1013,8 @@ function curl_call(host, headertype, nvpstr, formdata, calltype, callback = null
                 var jsonbody;
                 if ( typeof body==="object" || !body ) {
                     resolve(body);
+                } else if ( typeof body==="string" && body.startsWith("<html") ) {
+                    resolve(body);
                 } else if ( typeof body==="string" && (body.startsWith("{") || body.startsWith("[")) ) {
                     try {
                         jsonbody = JSON.parse(body);
@@ -1014,7 +1022,7 @@ function curl_call(host, headertype, nvpstr, formdata, calltype, callback = null
                         jsonbody = body;
                     }
                     resolve(jsonbody);
-                } else if ( typeof body==="string"  && body.startsWith("<") ) {
+                } else if ( typeof body==="string" && body.startsWith("<?xml") ) {
                     xml2js(body, function(xmlerr, result) {
                         if ( xmlerr ) {
                             reject(xmlerr);
@@ -1074,14 +1082,18 @@ function getHubInfo(hub) {
             if ( !hub.hubname ) {
                 hub.hubname = hub.hubaccess;
             }
-            hub.hubid = hub.hubaccess;
+            if ( hub.hubid=== hub.hubtype + "_new" || hub.hubid===hub.hubaccess ) {
+                var rstr = getRandomInt(100001, 999999);
+                hub.hubid = "har_" + rstr.toString();
+            }
+            // hub.hubid = hub.hubaccess;
             updateHub(hub);
 
         // this branch is for ISY and other hubs that don't need to get their name via a hub call
         } else if ( hub.hubtype==="ISY" ) {
             if ( hub.hubid=== hub.hubtype + "_new" ) {
-                var rstr = getRandomInt(1001, 9999);
-                hub.hubid = hub.hubtype + rstr.toString();
+                var rstr = getRandomInt(100001, 999999);
+                hub.hubid = "isy_" + rstr.toString();
             }
             updateHub(hub);
 
@@ -1228,7 +1240,7 @@ function getDevices(hub) {
     }
 
     // the support functions below for reading devices will resolve or reject the promise returned to the caller
-    var promise = new Promise( function(resolve, reject) {
+    var promise = new Promise( async function(resolve, reject) {
         
         const hubindex = hub.id;
         const userid = hub.userid;
@@ -1236,7 +1248,14 @@ function getDevices(hub) {
         const hubType = hub.hubtype;
         const hubAccess  = hub.hubaccess;
         const hubEndpt = hub.hubendpt;
-        let uidmax = 0;
+        const hubname = hub.hubname;
+
+        // get the max ui up front for all hub types here so we don't do it in each routine
+        let uidmax = await mydb.query("select max(uid) from devices where userid = " + userid)
+            .then(res => {
+                const num = Object.values(res)[0];
+                return num;
+            });
 
         if ( !is_object(hub) ) {
             reject("error - hub object not provided to getDevices call");
@@ -1247,7 +1266,7 @@ function getDevices(hub) {
             console.log( (ddbg()), "error - hubid not found in DB. hub: ", hub);
             reject("error - hubid not proviced");
 
-        } else if ( hubid === "-1" ) {
+        } else if ( hubid === "-1" || hubType==="None" ) {
             getDefaultDevices();
 
         } else if ( !hubAccess || !hubEndpt ) {
@@ -1258,10 +1277,18 @@ function getDevices(hub) {
         } else if ( hubType==="Hubitat" ) {
             getGroovyDevices()
             .then(body => {
-                getAmbientDevices(body)
-                .then(ambdevices => {
-                    hubInfoCallback(ambdevices);
-                });
+                return body;
+            })
+            .then(body => {
+                return getAmbientDevices(body);
+            })
+            .then(async body => {
+                let hubitatDevices = await hubInfoCallback(body);
+                if ( typeof hubitatDevices === "string" ) {
+                    reject(hubitatDevices);
+                } else {
+                    resolve(hubitatDevices);
+                }
             })
             .catch(reason => {
                 console.error( (ddbg()), reason );
@@ -1269,8 +1296,21 @@ function getDevices(hub) {
 
         } else if ( hubType==="Harmony" ) {
             getHarmonyDevices()
-            .then(body => {
-                hubInfoCallback(body);
+            .then(async body => {
+                let harmonyDevices = await hubInfoCallback(body);
+                if ( typeof harmonyDevices === "string" ) {
+                    reject(harmonyDevices);
+                } else {
+                    for (var deviceid in harmonyDevices) {
+                        const device = harmonyDevices[deviceid];
+                        let value = decodeURI2(device.pvalue);
+                        pushClient(userid, deviceid, device.devicetype, "", value);
+                    }
+                    if ( DEBUG12 ) {
+                        console.log( (ddbg()), "Harmony devices retrieved and sent to client: ", Object.keys(harmonyDevices).length);
+                    }
+                    resolve(harmonyDevices);
+                }
             })
             .catch(reason => {
                 console.error( (ddbg()), reason );
@@ -1292,10 +1332,8 @@ function getDevices(hub) {
         // this retrieves the devices not tied to a hub
         // all of these are already in the database and don't need changing
         // clocks will be updated with current time and images will be updated
-        function getDefaultDevices() {
-            var dclock, aclock;
+        async function getDefaultDevices() {
             var mydevices = {};
-    
             var dclock = getClock("clockdigital");
             dclock = encodeURI2(dclock);
             var aclock = getClock("clockanalog");
@@ -1303,68 +1341,46 @@ function getDevices(hub) {
             var acontrol = getController();
             acontrol = encodeURI2(acontrol);
 
-            return mydb.query("select max(uid) from devices where userid = " + userid)
-            .then(res => {
-                uidmax = Object.values(res)[0];
-                if ( DEBUG1 ) {
-                    console.log((ddbg()), "Default Devices - uidmax: ", uidmax);
-                }
-                return mydb.getRows("devices", "*", "userid = "+userid + " AND (devicetype = 'clock' OR devicetype = 'control' or hint = 'special')")
-                // think this should use hubid = hubindex
-            })
-            .then( rows => {
-                if ( rows ) {
-                    var updrow;
-                    var n = 0;
-                    var rowcount = rows.length;
-                    rows.forEach(device => {
-                        updrow = false;
-                        if ( device.deviceid === "clockdigital" ) {
-                            device.pvalue = dclock;
-                            updrow = true;
-                        } else if ( device.deviceid === "clockanalog" ) {
-                            device.pvalue = aclock;
-                            updrow = true;
-                        } else if ( device.deviceid === "control_1" ) {
-                            device.pvalue = acontrol;
-                            updrow = true;
-                        }
-                        if ( device.uid === 0 ) {
-                            uidmax++;
-                            device.uid = uidmax;
-                            updrow = true;
-                        }
-                        mydevices[device.deviceid] = device;
+            // think this should use hubid = hubindex
+            // we do, so no longer need to check device type. just get all devices tied to this None type hub
+            let rows = await mydb.getRows("devices", "*", `userid = ${+userid} AND hubid = ${hubindex}`);
 
-                        // update the row and count down to being done
-                        if ( updrow ) {
-                            mydb.updateRow("devices", device, "userid = "+userid+" AND id = " + device.id, true)
-                            .then(res => {
-                                n++;
-                                if ( n >= rowcount ) {
-                                    resolve(mydevices);
-                                }    
-                            })
-                            .catch( reason => {
-                                console.error( (ddbg()), "error - something went wrong updating non-hub devices such as clock and control devices. ", reason);
-                                reject(reason);
-                            });
-                        } else {
-                            n++;
-                            if ( n >= rowcount ) {
-                                resolve(mydevices);
-                            }
-                        }
-                    });
-                } else {
-                    reject("error - no default devices found in the database");
-                }
-                return mydevices;
-            })
-            .catch (reason => {
-                console.error( (ddbg()), "error attempting to read default devices: ", reason);
-                reject(reason);
-            });
+            if ( rows ) {
+                let updrow = false;
+                rows.forEach(device => {
+                    updrow = false;
+                    if ( device.deviceid === "clockdigital" ) {
+                        device.pvalue = dclock;
+                        updrow = true;
+                    } else if ( device.deviceid === "clockanalog" ) {
+                        device.pvalue = aclock;
+                        updrow = true;
+                    } else if ( device.deviceid === "control_1" ) {
+                        device.pvalue = acontrol;
+                        updrow = true;
+                    }
+                    if ( device.uid === 0 ) {
+                        uidmax++;
+                        device.uid = uidmax;
+                        updrow = true;
+                    }
+                    mydevices[device.deviceid] = device;
+
+                    // update the row and count down to being done
+                    if ( updrow ) {
+                        mydb.updateRow("devices", device, "userid = "+userid+" AND id = " + device.id, true)
+                        .then(res => {
+                        })
+                        .catch( reason => {
+                            console.error( (ddbg()), "error - something went wrong updating clock and control devices. ", reason);
+                            reject(reason);
+                        });
+                    }
+                });
+                resolve(mydevices);
+            } else {
+                reject("error - no default devices found in the database");
+            }
         }
 
         // Hubitat call to Groovy API
@@ -1376,21 +1392,7 @@ function getDevices(hub) {
             const header = {
                 "Content-Type": "application/json"
             };
-
-            // first get the max ID number and the first free ID number
-            // and make available to the callback from hubitat hub getallthings call
-            // note that query returns an object with the result in the value of the single pair
-            // the commented code will return next gap but I don't use this because it is too slow so I live with gaps and big ID's since uid will be small
-            // also we would need to find the next gap for each device after the device updated which would be painfully slow
-            // mydb.query(`select c.id + 1 from devices c left join devices cfree on cfree.id = c.id + 1 where (cfree.id is null or cfree.id = ${idp1}) and c.userid = 2 order by c.id limit 1;`)
-            return mydb.query("select max(uid) from devices where userid = " + userid)
-            .then(res => {
-                uidmax = Object.values(res)[0];
-                if ( DEBUG1 ) {
-                    console.log((ddbg()), "Groovy Devices - uidmax: ", uidmax);
-                }
-                return curl_call(hubEndpt + "/getallthings", header, params, false, "POST");
-            });
+            return curl_call(hubEndpt + "/getallthings", header, params, false, "POST");
         }
 
         function getAmbientDevices(hubdevices) {
@@ -1470,99 +1472,144 @@ function getDevices(hub) {
         }
 
         function getHarmonyDevices() {
-            var harmonyDevices = [];
-            var done = {activities: false, devices: false};
-            const header = {
-                "Content-Type": "application/json"
-            };
+            
+            return new Promise( async function(resolve, reject) {
+                
+                let harmonyDevices = [];
+                var done = {activities: false, devices: false, hub: false};
 
-            return new Promise( (resolve, reject) => {
+                function checkDone(which) {
+                    done[which] = true;
+                    if ( done.activities && done.devices && done.hub ) {
 
-                // let's add a device for each activity
-                curl_call(hubEndpt + "/activities", header, null, false, "GET")
-                .then(activities => {
-                    if ( activities && activities.activities ) {
-                        let m = 0;
-                        activities.activities.forEach(harmonyActivity => {
-                            let activity = {
-                                type: "harmony",
-                                id: harmonyActivity.id,
-                                name: harmonyActivity.label,
-                                hint: "Harmony",
-                                value: {name: harmonyActivity.label, slug: harmonyActivity.slug, isAVActivity: harmonyActivity.isAVActivity}
-                            };
-                            
-                            // now get all the commands for this activity
-                            curl_call(`${hubEndpt}/activities/${harmonyActivity.slug}/commands`, header, null, false, "GET")
-                            .then(commands => {
-                                m++;
-                                commands.commands.forEach(command => {
-                                    activity.value["_" + command.slug] = command.slug;
-                                });
-                                harmonyDevices.push(activity);
-                                if ( m >= activities.activities.length ) {
-                                    checkDone("activities");
+                        // set the activities states based on the current activity reported by the hubdevice
+                        const hubdevice = harmonyDevices.find( device => device.type === "harmonyhub" && device.id === hubAccess );
+                        if ( hubdevice && hubdevice.value && hubdevice.value.current_activity ) {
+                            let currentActivity = hubdevice.value.current_activity;
+                            harmonyDevices.forEach( device => {
+                                if ( device.type === "harmonyactivity" ) {
+                                    if ( device.hint === currentActivity ) {
+                                        device.value.switch = "on";
+                                    } else {
+                                        device.value.switch = "off";
+                                    }
                                 }
-
-                            })
-                            .catch(reason => {
-                                console.error( (ddbg()), "error retrieving commands for Harmony activity: ", harmonyActivity.slug, " reason: ", reason);
-                                reject(reason);
                             });
-                        });
-                    } else {
-                        console.warn((ddbg()), "No activities found for this Harmony hub.");
-                        checkDone("activities");
-                    }
-                });
-
-                // let's add a device for each device
-                curl_call(hubEndpt + "/devices", header, null, false, "GET")
-                .then(devices => {
-                    if ( devices && devices.devices ) {
-                        let n = 0;
-                        devices.devices.forEach(harmonyDevice => {
-                            let device = {
-                                type: "harmony",
-                                id: harmonyDevice.id,
-                                name: harmonyDevice.label,
-                                hint: "Harmony",
-                                value: {name: harmonyDevice.label, slug: harmonyDevice.slug}
-                            };
-
-                            // now get all the commands for this device
-                            curl_call(`${hubEndpt}/devices/${harmonyDevice.slug}/commands`, header, null, false, "GET")
-                            .then(commands => {
-                                n++;
-                                commands.commands.forEach(command => {
-                                    device.value["_" + command.slug] = command.slug;
-                                });
-                                harmonyDevices.push(device);
-                                if ( n >= devices.devices.length ) {
-                                    checkDone("devices");
-                                }
-                            })
-                            .catch(reason => {
-                                console.error( (ddbg()), "error retrieving commands for Harmony device: ", harmonyDevice.slug, " reason: ", reason);
-                                reject(reason);
-                            });
-                        });
-
-                    } else {
-                        console.warn((ddbg()), "No devices found for this Harmony hub.");
-                        checkDone("devices");
-                    }
-                });
-
-                function checkDone(service) {
-                    done[service] = true;
-                    if ( done.activities && done.devices ) {
-                        if ( DEBUG7 ) {
-                            console.log( (ddbg()), "finished retrieving Harmony devices and activities. Total devices: ", harmonyDevices.length);
-                        }
+                        }                        
                         resolve(harmonyDevices);
                     }
                 }
+
+                const header = {"Content-Type": "application/json"};
+
+                // add a device for the hub itself
+                // the hub slug is stored in the hubaccess field and the user provided name is used for the device name since the hub API doesn't return a hub name
+                // we save the current activity in the hint and the switch is on when the hub is on and off when the hub is off. 
+                // The current activity is also saved in the value so it displayes on the dashboard and can be used in rules and links
+                let hubdevice = {
+                    type: "harmonyhub",
+                    id: hubAccess,
+                    name: hubname,
+                    hint: "unknown",
+                    value: {name: hubname, switch: "off", "_off": "off", current_activity: null, lastactivity: null}
+                };
+                const existinghub = await mydb.getRow("devices", "*", `userid = ${userid} AND hubid = ${hubindex} AND deviceid = '${hubAccess}'`)
+                if ( existinghub ) {
+                    hubdevice.value = decodeURI2(existinghub.pvalue);
+                    hubdevice.value.name = hubname;
+                    hubdevice.hint = existinghub.hint ? existinghub.hint : "unknown";
+                }
+
+                // get hub information to add to the hub device
+                const hubinfstr = `${hubEndpt}/status`;
+                // console.log( (ddbg()), "getting information for Harmony hub using endpoint: ", hubinfstr);
+
+                let hubinfo = await curl_call(hubinfstr, header, null, false, "GET");
+                if ( hubinfo && typeof hubinfo === "object" && hubinfo["current_activity"] && hubinfo["current_activity"]["slug"] ) {
+                    if ( DEBUG7 ) {
+                        console.log( (ddbg()), "Harmony hub information returned: ", hubinfo);
+                    }
+                    hubdevice.value["switch"] = hubinfo["off"]==true ? "off" : "on";
+                    hubdevice.hint = hubinfo["current_activity"]["slug"];
+                    hubdevice.value["current_activity"] = hubinfo["current_activity"]["slug"];
+                    if ( hubinfo["current_activity"]["slug"] !== "poweroff" || hubdevice.value["lastactivity"] === null ) {
+                        hubdevice.value["lastactivity"] = hubinfo["current_activity"]["slug"];
+                    }
+                } else {
+                    console.warn( (ddbg()), "no status information was retrieved for Harmony hub: ", hubname);
+                }
+
+                harmonyDevices.push(hubdevice);
+                checkDone("hub");
+
+                // add a device for each activity - saving the slug name in the hint
+                // activities can return commands but they are ignored by Harmony so we skip adding them to the device since they can't be used.
+                // instead the call to the activity will turn that activity on
+                // nothing else really matters so we make a device with a switch to monitor on/off status of the activity
+                // we skip activities that are not AV activities, which should be the Off functionality
+                let activities = await curl_call(hubEndpt + "/activities", header, null, false, "GET");
+                if ( activities && activities.activities ) {
+                    let n = 0;
+                    activities.activities.forEach(async function(harmonyActivity) {
+                        if ( harmonyActivity.isAVActivity ) {
+                            let activity = {
+                                type: "harmonyactivity",
+                                id: harmonyActivity.id,
+                                name: harmonyActivity.label,
+                                hint: harmonyActivity.slug,
+                                value: {name: harmonyActivity.label, switch: "off", "_on": "on", "_off": "off"}
+                            };
+                            harmonyDevices.push(activity);
+                        }
+                        n++;
+                        if ( n >= activities.activities.length ) {
+                            checkDone("activities");
+                        }                        
+                    });                    
+                } else {
+                    console.warn((ddbg()), "No activities found for this Harmony hub.");
+                    checkDone("activities");
+                }
+
+                // let's add a device for each Harmony device - saving the slug name in the hint
+                // each device gets a switch attribute to monitor on/off status of the device
+                // the commands for the device are added as additional fields to the value with an underscore prefix
+                let devices = await curl_call(hubEndpt + "/devices", header, null, false, "GET");
+
+                if ( devices && devices.devices ) {
+                    let m = 0;
+                    devices.devices.forEach(async function(harmonyDevice) {
+                        let device = {
+                            type: "harmonydevice",
+                            id: harmonyDevice.id,
+                            name: harmonyDevice.label,
+                            hint: harmonyDevice.slug,
+                            value: {name: harmonyDevice.label}
+                        };
+
+                        const comstr = `${hubEndpt}/devices/${harmonyDevice.slug}/commands`;
+                        // console.log( (ddbg()), "getting commands for Harmony device using endpoint: ", comstr);
+
+                        // now get all the commands for this device
+                        let commands = await curl_call(comstr, header, null, false, "GET");
+                        if ( commands && commands.commands ) {
+                            commands.commands.forEach(command => {
+                                device.value["_" + command.slug] = command.slug;
+                            });
+                        } else {
+                            console.warn( (ddbg()), "error retrieving commands for Harmony device: ", harmonyDevice.label);
+                        }
+                        harmonyDevices.push(device);
+                        m++;
+                        if ( m >= devices.devices.length ) {
+                            checkDone("devices");
+                        }
+                    });
+                } else {
+                    console.warn( (ddbg()), "No devices found for this Harmony hub.");
+                    checkDone("devices");
+                }
+
             });
         }
 
@@ -1572,133 +1619,126 @@ function getDevices(hub) {
 
             // configure returned array with the "id"
             if (jsonbody && is_array(jsonbody) ) {
-                var devicecnt = 0;
-                var numdevices = jsonbody.length;
-                var currentDevices = [];
+                let devicecnt = 0;
+                let numdevices = jsonbody.length;
+                let currentDevices = [];
 
-                // now add them one at a time until we have them all
-                jsonbody.forEach(function(content) {
-                    var thetype = content["type"];
-                    var deviceid = content["id"];
-                    var origname = content["name"] || "";
-                    var pvalue = content["value"];
-                    var hint = content["hint"] ? content["hint"] : hubType;
-                    var refresh = "never";
+                return mydb.getRows("devices", "id,deviceid,uid", `userid = ${userid} AND hubid = ${hubindex}`)
+                .then(async function(existingDevices) {
 
-                    if ( !pvalue ) {
-                        console.warn((ddbg()),"Something went wrong loading Hubitat device: ", content);
-                        pvalue = {};
-                        // reject("error - no value returned for device named: " + origname);
-                        // return;
-                    }
-                    
-                    // if a name isn't there use master name
-                    if ( !pvalue.name && !origname ) {
-                        origname = "unknown";
-                        pvalue.name = origname;
-                    } else if ( !pvalue.name ) {
-                        pvalue.name = origname;
-                    } else if (!origname ) {
-                        origname = pvalue.name;
-                    }
-                    origname = origname.replace(/'/g, "");
-                    
-                    // deal with presence tiles
-                    if ( pvalue["presence"]==="not present" || pvalue["presence"]==="not_present" ) {
-                        pvalue["presence"] = "absent";
-                    }
-
-                    // remove ignored items from pvalue
-                    for (var field in pvalue) {
-                        if ( GLB.ignoredAttributes.includes(field) || field.startsWith("supportedWasher") ) {
-                            delete pvalue[field];
+                    // now add them one at a time until we have them all
+                    // jsonbody.forEach(async function(content) {
+                    for ( let i=0; i<jsonbody.length; i++ ) {
+                        let content = jsonbody[i];
+                        let thetype = content["type"];
+                        let deviceid = content["id"];
+                        let origname = content["name"] || "";
+                        let pvalue = content["value"];
+                        let hint = content["hint"] ? content["hint"] : hubType;
+                        let refresh = "never";
+                        if ( !pvalue ) {
+                            pvalue = {};
                         }
-                    }
-
-                    // add counter and duration for things with switch, contact, presence, motion, or lock
-                    if ( array_key_exists("switch",pvalue)  ||
-                        array_key_exists("contact",pvalue) ||
-                        array_key_exists("presence",pvalue) ||
-                        array_key_exists("motion",pvalue) ||
-                        array_key_exists("lock",pvalue) ) 
-                    {
-                        pvalue.count = "0";
-                        pvalue.duration = "0.0";
-                        pvalue.deltaT = 0;
-                        if ( (array_key_exists("switch",pvalue) && pvalue.switch==="on") ||
-                            (array_key_exists("contact",pvalue) && pvalue.contact==="open") ||
-                            (array_key_exists("presence",pvalue) && pvalue.presence==="present") ||
-                            (array_key_exists("motion",pvalue) && pvalue.motion==="active") ||
-                            (array_key_exists("lock",pvalue) && pvalue.lock==="unlocked") 
-                        ) {
-                            var d = new Date();
-                            pvalue.deltaT = d.getTime();                            
+                        
+                        // if a name isn't there use master name
+                        if ( !pvalue.name && !origname ) {
+                            origname = "unknown";
+                            pvalue.name = origname;
+                        } else if ( !pvalue.name ) {
+                            pvalue.name = origname;
+                        } else if (!origname ) {
+                            origname = pvalue.name;
                         }
-                    }
+                        origname = origname.replace(/'/g, "");
+                        
+                        // deal with presence tiles
+                        if ( pvalue["presence"]==="not present" || pvalue["presence"]==="not_present" ) {
+                            pvalue["presence"] = "absent";
+                        }
 
-                    // handle weather tiles and any that comes as an object
-                    // we handle music tile translation now on the groovy side to support ISY node servers
-                    if ( thetype==="weather" ) {
-                        pvalue = translateWeather(pvalue);
-                    } else {
-                        pvalue = translateObjects(pvalue, 2);
-                    }
+                        // remove ignored items from pvalue
+                        for (var field in pvalue) {
+                            if ( GLB.ignoredAttributes.includes(field) || field.startsWith("supportedWasher") ) {
+                                delete pvalue[field];
+                            }
+                        }
 
-                    // make the device to store or update
-                    var pvalstr = encodeURI2(pvalue);
-                    var device = {userid: userid, hubid: hubindex, deviceid: deviceid, name: origname, 
-                                    devicetype: thetype, hint: hint, refresh: refresh, pvalue: pvalstr};
+                        // add counter and duration for things with switch, contact, presence, motion, or lock
+                        if ( array_key_exists("switch",pvalue)  ||
+                            array_key_exists("contact",pvalue) ||
+                            array_key_exists("presence",pvalue) ||
+                            array_key_exists("motion",pvalue) ||
+                            array_key_exists("lock",pvalue) ) 
+                        {
+                            pvalue.count = "0";
+                            pvalue.duration = "0.0";
+                            pvalue.deltaT = 0;
+                            if ( (array_key_exists("switch",pvalue) && pvalue.switch==="on") ||
+                                (array_key_exists("contact",pvalue) && pvalue.contact==="open") ||
+                                (array_key_exists("presence",pvalue) && pvalue.presence==="present") ||
+                                (array_key_exists("motion",pvalue) && pvalue.motion==="active") ||
+                                (array_key_exists("lock",pvalue) && pvalue.lock==="unlocked") 
+                            ) {
+                                var d = new Date();
+                                pvalue.deltaT = d.getTime();                            
+                            }
+                        }
 
-                    // check if this is a device update or adding a new device
-                    // if device exists and uid is zero, update this record to include a new uid field
-                    mydb.getRow("devices", "id,uid", `userid = ${userid} AND hubid = ${hubindex} AND devicetype = '${thetype}' AND deviceid = '${deviceid}'`)
-                    .then(resp => {
-                        if ( resp ) {
-                            device.id = resp.id;
+                        // handle weather tiles and any that comes as an object
+                        // we handle music tile translation now on the groovy side to support ISY node servers
+                        if ( thetype==="weather" ) {
+                            pvalue = translateWeather(pvalue);
+                        } else {
+                            pvalue = translateObjects(pvalue, 2);
+                        }
+
+                        // make the device to store or update
+                        let pvalstr = encodeURI2(pvalue);
+                        let device = {userid: userid, hubid: hubindex, deviceid: deviceid, name: origname, 
+                                      devicetype: thetype, hint: hint, refresh: refresh, pvalue: pvalstr};
+
+                        // check if this is a device update or adding a new device
+                        // if device exists and uid is zero, update this record to include a new uid field
+                        let existingDevice = existingDevices.find( d => d.deviceid === deviceid );
+                        if ( existingDevice ) {
+                            device.id = existingDevice.id;
                             // get the visual id and update if old database version
-                            if ( resp.uid === 0 ) {
+                            if ( existingDevice.uid === 0 ) {
                                 uidmax++;
                                 device.uid = uidmax;
                             } else {
-                                device.uid = resp.uid;
+                                device.uid = existingDevice.uid;
                             }
-                            return mydb.updateRow("devices", device, `id = ${device.id} AND userid = ${userid}`, true);
+                            await mydb.updateRow("devices", device, `id = ${device.id} AND userid = ${userid}`, true);
                         } else {
                             uidmax++;
                             device.uid = uidmax;
-                            return mydb.addRow("devices", device);
+                            await mydb.addRow("devices", device);
                         }
-                    })
-                    .then(res => {
 
                         mydevices[deviceid] = device;
                         const devstr = "'" + deviceid + "'";
                         if ( !currentDevices.includes(devstr) ) {
                             currentDevices.push(devstr);
                         }
-
                         devicecnt++;
+
                         // check if this is our last one and return array of devices
                         if ( devicecnt >= numdevices ) {
-                            removeDeadNodes(userid, hubindex, currentDevices)
-                            .then( () => {
-                                resolve(mydevices);
-                            })
-                            .catch(reason => {
-                                console.warn( (ddbg()), reason );
-                                resolve(mydevices);
-                            });
-                        }                    
-                    })
-                    .catch( reason => {
-                        console.error( (ddbg()), reason );
-                    });
+                            removeDeadNodes(userid, hubindex, currentDevices);
+                            return mydevices;
+                        }
+                    }
+                })
+                .catch(reason => {
+                    console.error( (ddbg()), "Something went wrong getting devices from this hub. reason: ", reason );
+                    return("Something went wrong getting devices from this hub.");
                 });
 
             } else {
                 // an error occurred with this hub
                 console.error( (ddbg()), "Something went wrong getting devices from this hub. jsonbody: ", jsonbody );
-                reject("Something went wrong getting devices from this hub.");
+                return("Something went wrong getting devices from this hub.");
             }
         }  
 
@@ -1709,17 +1749,7 @@ function getDevices(hub) {
 
             // remove all devices that are tied to the queried hub but not returned by the query
             var indev = "(" + currentDevices.join(",") + ")";
-
-            if ( DEBUG2 ) {
-                mydb.getRows("devices","id, hubid, deviceid, name, devicetype, hint", "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid NOT IN " + indev)
-                .then(devices => {
-                    if ( devices && devices.length && DEBUG2 ) {
-                        console.log( (ddbg()), "Dead node and duplicate devices to delete: ", jsonshow(devices) );
-                    }
-                });
-            }
-
-            return mydb.deleteRow("devices","userid = "+userid+" AND hubid = "+hubindex+" AND deviceid NOT IN " + indev)
+            mydb.deleteRow("devices","userid = "+userid+" AND hubid = "+hubindex+" AND deviceid NOT IN " + indev)
             .then( results => {
                 var numdeldevices = results.getAffectedItemsCount();
                 if ( numdeldevices === null ) {
@@ -1728,11 +1758,9 @@ function getDevices(hub) {
                 if ( DEBUG2 && numdeldevices ) {
                     console.log( (ddbg()), "Removed ", numdeldevices, " dead node and duplicate devices." );
                 }
-                return numdeldevices;
             })
             .catch(reason => {
                 console.warn( (ddbg()), reason );
-                return 0;
             });
         }
 
@@ -1745,7 +1773,6 @@ function getDevices(hub) {
             // var hubType = hub.hubtype;
             // var hubAccess  = hub.hubaccess;
             // var hubEndpt = hub.hubendpt;
-            // var uidmax = 0;
 
             // var hubAccess  = hub.hubaccess;
         
@@ -1767,19 +1794,13 @@ function getDevices(hub) {
             }
 
             var currentDevices = [];
-            mydb.query("select max(uid) from devices where userid = " + userid)
-            .then(res => {
-                uidmax = Object.values(res)[0];
-                if ( DEBUG1 ) {
-                    console.log((ddbg()), "results (max): ", res);
-                }
-                return Promise.all([
-                    curl_call(hubEndpt + "/vars/definitions/1", stheader, false, false, "GET"),
-                    curl_call(hubEndpt + "/vars/definitions/2", stheader, false, false, "GET"),
-                    curl_call(hubEndpt + "/vars/get/1", stheader, false, false, "GET"),
-                    curl_call(hubEndpt + "/vars/get/2", stheader, false, false, "GET")
-                ]);
-            })
+
+            return Promise.all([
+                curl_call(hubEndpt + "/vars/definitions/1", stheader, false, false, "GET"),
+                curl_call(hubEndpt + "/vars/definitions/2", stheader, false, false, "GET"),
+                curl_call(hubEndpt + "/vars/get/1", stheader, false, false, "GET"),
+                curl_call(hubEndpt + "/vars/get/2", stheader, false, false, "GET")
+            ])
             .then(results => {
                 getISY_Defs(results[0], "Int");
                 getISY_Defs(results[1], "State");
@@ -1798,7 +1819,6 @@ function getDevices(hub) {
             })
             .then(results => {
                 getStatusInfo(results);
-                // resolve (mydevices);
             })
             .catch(reason => {
                 console.error( (ddbg()), reason );
@@ -2392,6 +2412,7 @@ function getDevices(hub) {
                 }
             }
         }
+        // end of getISYdevices
 
     // end of the getDevices promise function to return to caller
     });
@@ -2926,6 +2947,70 @@ function getNewCode(seed="") {
     var mid = len / 2;
     var thecode = logincode.substring(0,1) + logincode.substring(mid,mid+1) + logincode.substring(len-4);
     return thecode;
+}
+
+// Check GitHub for newer version and notify if upgrade is available
+function checkForUpdates() {
+    const githubUrl = "https://raw.githubusercontent.com/kewashi/HousePanel/master/devhistory.js";
+    
+    return new Promise((resolve, reject) => {
+        https.get(githubUrl, (res) => {
+            let data = '';
+            
+            res.on('data', (chunk) => {
+                data += chunk;
+            });
+            
+            res.on('end', () => {
+                try {
+                    // Extract version from first line like "3.5.13  01/12/2026..."
+                    const match = data.match(/^(\d+\.\d+\.\d+)\s+(.*)$/m);
+                    if (match) {
+                        const githubVersion = match[1];
+                        const versionInfo = match[2];
+                        const currentVersion = GLB.HPVERSION;
+                        
+                        // Compare versions
+                        const needsUpdate = compareVersions(githubVersion, currentVersion);
+                        
+                        resolve({
+                            current: currentVersion,
+                            latest: githubVersion,
+                            needsUpdate: needsUpdate,
+                            info: versionInfo,
+                            message: needsUpdate ? 
+                                `Update available: V${githubVersion} (current: V${currentVersion})` :
+                                `You are running the latest version: V${currentVersion}`
+                        });
+                    } else {
+                        reject("Could not parse version from GitHub");
+                    }
+                } catch (e) {
+                    reject(`Error parsing GitHub response: ${e.message}`);
+                }
+            });
+        }).on('error', (err) => {
+            reject(`Error fetching from GitHub: ${err.message}`);
+        });
+    });
+}
+
+// Compare two version strings (e.g., "3.5.13" vs "3.5.12")
+// Returns true if v1 is newer than v2
+function compareVersions(v1, v2) {
+    const parts1 = v1.split('.').map(Number);
+    const parts2 = v2.split('.').map(Number);
+
+    // handle major version number separately and the remainder as a float for easier comparison
+    if (parts1[0] > parts2[0]) return true;
+
+    const dotpos1 = v1.indexOf('.');
+    const dotpos2 = v2.indexOf('.');
+    const rem1 = dotpos1 >= 0 ? parseFloat(v1.substring(dotpos1+1)) : 0;
+    const rem2 = dotpos2 >= 0 ? parseFloat(v2.substring(dotpos2+1)) : 0;
+    if (rem1 > rem2) return true;
+    
+    return false; // versions are equal
 }
 
 function addNewUser(emailname, username, mobile, pword) {
@@ -3771,9 +3856,6 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
         $tc += "<div><label for='inp_endpt' id=\"labelEndpt\" class=\"startupinp\">App ID: </label>";
         $tc += "<input id='inp_endpt' class=\"startupinp\" name=\"userendpt\" size=\"80\" type=\"text\" value=\"" + hub["userendpt"] + "\"/></div>"; 
         $tc += "</div>";
-
-        // placeholder for Harmony hub info
-        $tc += "<div id=\"whichhubdiv\" class=\"startupinp\"></div>";
 
         $tc += "<div><label for='inp_hubname' class=\"startupinp\">Hub Name: </label>";
         $tc += "<input id='inp_hubname' class=\"startupinp\" name=\"hubname\" size=\"80\" type=\"text\" value=\"" + hub["hubname"] + "\"/></div>"; 
@@ -5124,7 +5206,7 @@ function getCustomName(defbase, cnum) {
 // for RULE it is the rule logic used in the rule engine to perform instructions
 // for TEXT it is just a text string to display that 
 // for LIST it is linkid::realsubid::frequency where frequency is how often to reset the list
-// different things happen when these calltypes are used as shown in the doAction() function in hubserver.js
+// different things happen when these calltypes are used as shown in the doAction function in hubserver.js
 // the value returned here is processed by the putElement() function to create the proper on screen element
 function getCustomTile(userid, configoptions, custom_val, bid) {
 
@@ -6471,33 +6553,36 @@ function callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, h
             console.log( (ddbg()), "callHub: access_token: ", access_token, " hubEndpt: ", hubEndpt, " swval: ", swval, " subid: ", subid, " swtype: ", swtype, " attr: ", swattr, " hub: ", hub, " tileid: ", tileid);
         }
 
-        // reset count if clicked on regardless of hub type
+        // reset count if clicked on count, duration, or deltaT regardless of hub type
         if ( subid==="count" || subid==="duration" || subid==="deltaT" ) {
-            var newval = "0";
-            if ( subid==="deltaT" ) {
-                var d = new Date();
-                newval = d.getTime();                            
-            }
+            const d = new Date();
+            const newval = {"count": 0, "deltaT": d.getTime(), "duration": 0};
 
             // get counter from DB and update if it is there
             return mydb.getRow("devices", "*", "userid = " + userid + " AND hubid = "+hubindex+" AND deviceid = '"+swid+"'")
             .then(subdevice => {
                 var pvalue = decodeURI2(subdevice.pvalue);
-                pvalue[subid] = newval;
-                subdevice.pvalue = encodeURI2(pvalue);
-                return mydb.updateRow("devices", subdevice, "userid = " + userid + " AND id = "+subdevice.id, true)
-                .then( () => {
-                    var body = {};
-                    body[subid] = newval;
-                    getHubResponse(body, hub);
-                    return pvalue;
-                })
-                .catch(reason => {
-                    console.warn( (ddbg()), "***warning*** error retrieving devices for rule execution. reason: ", reason );
-                });
+                if ( pvalue["count"] ) {
+                    for(var key in newval) {
+                        pvalue[key] = newval[key];
+                    }
+                    subdevice.pvalue = encodeURI2(pvalue);
+                    return mydb.updateRow("devices", subdevice, "userid = " + userid + " AND id = "+subdevice.id, true)
+                    .then( () => {
+                        getHubResponse(newval, hub);
+                        return newval;
+                    })
+                    .catch(reason => {
+                        console.warn( (ddbg()), "***warning*** error retrieving devices for counter update. reason: ", reason );
+                        return "error retrieving devices for counter update. reason: " + reason;
+                    });
+                } else {
+                    return "This tile does not have a counter to reset.";
+                }
             })
             .catch(reason => {
-                console.warn( (ddbg()), "***warning*** error retrieving devices for rule execution. reason: ", reason );
+                console.warn( (ddbg()), "***warning*** error retrieving devices for counter update. reason: ", reason );
+                return "error retrieving devices for counter update. reason: " + reason;
             });
         }
 
@@ -6535,6 +6620,91 @@ function callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, h
                 });
             });
             return promise;
+
+        // handle clicks on Harmony hub commands
+        // this is a bit different because we have to send the command in a specific format to the hub as a POST
+        // a successfall call returns a simple json with message: "ok" but it is not used for anything at this point
+        } else if ( hub.hubtype==="Harmony" ) {
+            const host = hubEndpt;
+            const header = {"Content-Type": "application/json"};
+            const devslug = hint;
+
+            // handled device commands, these are sent directly to the device and do not update activities
+            if ( swtype ==="harmonydevice" ) {
+                if ( subid.startsWith("_") ) {
+                    const commandslug = subid.substring(1);
+                    // devices do a simple command call without updating activities
+                    const endhost = `${host}/devices/${devslug}/commands/${commandslug}`;
+                    return harmonyPostCommand(endhost, header, devslug, false, false);
+                } else {
+                    console.warn( (ddbg()), "unrecognized Harmony command: ", subid, " for device: ", devslug);
+                    return "unrecognized Harmony command: " + subid;
+                }
+
+            // handle hub off and on command
+            } else if ( swtype === "harmonyhub" ) {
+                if ( subid==="switch" && swval==="off" ) {
+                    const endhost = `${host}/off`;
+                    return curl_call(endhost, header, false, false, "PUT")
+                    .then(body => {
+                        if ( typeof body === "object" && body.message && body.message==="ok" ) {
+                            // update all the harmony devices tied to this hub but wait a while to do it because the hub takes a second or two to update the activity status 
+                            // and we want to get the new activity and device status after the hub has updated it
+                            // this is a bit of a hack but it is because there is no way to know which activities were switched off when this one was switched on
+                            setTimeout( function() {
+                                mydb.getRow("hubs","*","userid = "+userid+" AND id = " + hubindex)
+                                .then(async hub => {
+                                    let harmonyDevices = await getDevices(hub);
+                                    if ( DEBUG8 ) {
+                                        console.log( (ddbg()), "harmony activity updated devices: ", harmonyDevices);
+                                    }
+                                });
+                            }, 3000);
+                        } else {
+                            console.warn( (ddbg()), "unexpected response from Harmony hub: ", body);
+                        }
+                        return body;
+                    })
+                    .catch(reason => {
+                        console.error( (ddbg()), reason);
+                        return reason;
+                    });
+
+                // if we turn on the harmony hub switch then activate the last activity that was active
+                // we store that in the harmonyhub device pvalue as lastactivity and we just call that activity again
+                } else if ( subid==="switch" && swval==="on" ) {
+                    return mydb.getRow("devices","*","userid = "+userid+" AND hubid = "+hubindex+" AND devicetype = 'harmonyhub'")
+                    .then(hubdevice => {
+                        let pvalue = decodeURI2(hubdevice.pvalue);
+                        const lastactivity = pvalue["lastactivity"];
+                        const endhost = `${host}/activities/${lastactivity}`;
+                        return harmonyPostCommand(endhost, header, lastactivity, true, false);
+                    })
+                    .catch(reason => {
+                        console.error( (ddbg()), reason);
+                        return reason;
+                    });
+
+                } else {
+                    console.warn( (ddbg()), "unrecognized Harmony hub command: ", subid);
+                    return "unrecognized Harmony hub command: " + subid + " with value: " + swval;
+                }
+
+            } else if ( swtype ==="harmonyactivity" && (subid==="_on" || subid==="_off" || subid==="switch")  ) {
+                if ( subid==="_on" || (subid==="switch" && swval==="on") ) {
+                    const endhost = `${host}/activities/${devslug}`;
+                    return harmonyPostCommand(endhost, header, devslug, true, false);
+                } else if ( subid==="_off" || (subid==="switch" && swval==="off") ) {
+                    const endhost = `${host}/activities/poweroff`;
+                    return harmonyPostCommand(endhost, header, devslug, true, false);
+                } else {
+                    console.warn( (ddbg()), "unrecognized Harmony activity command: ", subid, " for activity: ", devslug);
+                    return "unrecognized Harmony activity command: " + subid + " for activity: " + devslug + " with value: " + swval;
+                }
+            } else {
+                console.error( (ddbg()), "error - unrecognized Harmony swtype: ", swtype);
+                return "error - unrecognized Harmony device type: " + swtype;
+            }
 
         // this module below is the equivalent of the HE groovy app
         // for ISY where the logic for handling actions is provided
@@ -6706,17 +6876,51 @@ function callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, h
                 console.error( (ddbg()), "callHub ISY - failed to get device: ", reason, "\n swid: ", swid, " subid: ", subid);
                 result = "error - callHub ISY - failed to get device: " + swid;
             });
-        };
+        } else {
+            result = "error - hub type: " + hub.hubtype + " not supported";
+        }
         return result;
     })
     .catch(reason => {
         console.error( (ddbg()), "callHub - failed to get hubs: ", reason);
-        return null;
+        return "error - callHub failed to get hubs. Check server logs for details.";
     });
 
     // --------------------- end of callHub commands ------------------------------
     // supporting sub-functions are below
     // ----------------------------------------------------------------------------
+
+    function harmonyPostCommand(endhost, header, devslug, updatelast = true, updatelastactivity = true) {
+        if ( DEBUG8 ) {
+            console.log( (ddbg()), "harmonyPostCommand: subid: ", subid, " endhost: ", endhost, " devslug: ", devslug, " updatelast: ", updatelast);
+        }
+        return curl_call(endhost, header, false, false, "POST")
+        .then(body => {
+            if ( DEBUG7 ) {
+                console.log( (ddbg()), "Harmony hub curl response:", body);
+            }
+            if ( typeof body === "object" && body.message && body.message==="ok" && updatelast ) {
+                // command was successful so we now update the activities to set the switch status
+                // and save the last active activity to the hub pvalue so we can turn it back on with the hub switch
+                // we delay this a bit to make sure the hub has updated the activity status before we pull it back down
+                setTimeout( function() {
+                    mydb.getRow("hubs","*","userid = "+userid+" AND id = " + hubindex)
+                    .then(async hub => {
+                        let harmonyDevices = await getDevices(hub);
+                        if ( DEBUG7 ) {
+                            console.log( (ddbg()), "harmonyPostCommand activity updated devices: ", harmonyDevices);
+                        }
+                    });
+                }, 3000);
+            }
+            return body;
+        })
+        .catch(reason => {
+            console.error( (ddbg()), reason);
+            return reason;
+        });
+
+    }
 
     function getHubResponse(body, hub, resolve, reject) {
         // update all clients - this is actually not needed if your server is accessible to websocket updates
@@ -7477,11 +7681,11 @@ function getInfoPage(user, configoptions, hubs, req) {
         return msg;
     });
 
-    function getinfocontents(userid, pname, currentport, configoptions, hubs, devices) {
+    async function getinfocontents(userid, pname, currentport, configoptions, hubs, devices) {
         
         var $tc = "";
         $tc += getHeader(userid, null, skin, true);
-        $tc += "<h3>" + GLB.APPNAME + " Information Display</h3>";
+        $tc += "<h3>" + GLB.APPNAME + " Information</h3>";
 
         if ( GLB.dbinfo.donate===true ) {
             $tc += "<div class=\"donate\">";
@@ -7522,6 +7726,13 @@ function getInfoPage(user, configoptions, hubs, req) {
         // $tc += hidden("configsid", JSON.stringify(configs), "configsid");
         $tc += "</form>";
         $tc += "<div class=\"infosum\">";
+        const updateinfo = await checkForUpdates();
+        if ( typeof updateinfo === "object"  ) {
+            $tc += "<div class='bold'>" + updateinfo.message + "</div>";
+            if ( updateinfo.updateavailable ) {
+                $tc += "<div class='bold'>To update, pull the latest from https://github.com/housepanel/HousePanel </div>";
+            }
+        }
         $tc += "<div class='bold'>Site url = " + GLB.returnURL + "</div>";
         $tc += "<div class='bold'>User ID: " + userid + "</div>";
         $tc += "<div class='bold'>Username: " + uname + "</div>";
@@ -7538,7 +7749,7 @@ function getInfoPage(user, configoptions, hubs, req) {
                 $tc += "<hr />";
                 $tc += "<div class='bold'>Hub ID #" + num + "</div>";
                 for ( var hubattr in hub ) {
-                    if ( hub[hubattr]!=="" ) {
+                    if ( hub[hubattr]!=="" && hub[hubattr]!==null && hub[hubattr]!==undefined && hubattr!=="hubrefresh" ) {
                         $tc += "<div class='wrap'>" + hubattr + " = " + hub[hubattr] + "</div>";
                     }
                 }
@@ -7564,7 +7775,7 @@ function getInfoPage(user, configoptions, hubs, req) {
         // Section 1 - show dev history
         $tc += "<button id=\"listhistory\" class=\"bluebutton showhistory\">Show Dev Log</button>";
         $tc += "<div id=\"showhistory\" class=\"infopage hidden\">";
-        $tc += "<pre>" + GLB.devhistory + "</pre>";
+        $tc += "<pre>" + devhistory.DEV + "</pre>";
         $tc += "</div>";
 
         // Section 2 - show customizations
@@ -9410,7 +9621,11 @@ function apiCall(user, body, protocol, res) {
                                     .then(mydevices => {
                                         n++;
                                         var num = Object.keys(mydevices).length;
-                                        strmsg+= hub.hubname + " refreshed " + num + " devices";
+                                        if ( hub.hubname === "None" ) {
+                                            strmsg+= "Refreshed " + num + " hubless devices";
+                                        } else {
+                                            strmsg+= hub.hubname + " refreshed " + num + " devices";
+                                        }
                                         if ( n < numhubs ) {
                                             strmsg+= "<br>";
                                             hubrecurse(n, hubs[n]);
@@ -10017,16 +10232,9 @@ function apiCall(user, body, protocol, res) {
                     // make a random hubid if this hub doesn't exist - this will be replaced if a Hubitat hub
                     var hubid = body.hubid;
                     if ( hubid==="" || hubid==="new" ) {
-                        // var rstr = getRandomInt(1001, 9999);
-                        // hubid = hub.hubtype + rstr.toString();
                         hubid = hub.hubtype + "_new";
                     }
                     hub["hubid"] = hubid;
-
-                    // if no name given, give it one but know that it will be overwritten if OAUTH flow occurs
-                    if ( hub.hubname.trim()==="" ) {
-                        hub.hubname = hub.hubtype + " Home";
-                    }
 
                     // if ISY hub, clean up host info
                     if ( hub.hubtype==="ISY" ) {
@@ -10035,7 +10243,11 @@ function apiCall(user, body, protocol, res) {
                         if ( !hub.hubhost.toLowerCase().startsWith("http") ) {
                             hub.hubhost = "https://" + hub.hubhost;
                         }
-                        // check for a user port and if missing use default 8443 port
+
+                        // strip any trailing slashes from the host
+                        hub.hubhost = hub.hubhost.replace(/\/+$/, "");
+
+                        // check for a user port and if missing use default ISY 8443 port
                         if (hub.hubhost.indexOf(":", 8) === -1 ) {
                             hub.hubhost = hub.hubhost + ":8443";
                         }
@@ -10068,6 +10280,15 @@ function apiCall(user, body, protocol, res) {
                         if ( !hub.hubhost.toLowerCase().startsWith("http") ) {
                             hub.hubhost = "http://" + hub.hubhost;
                         }
+
+                        // strip any trailing slashes from the host
+                        hub.hubhost = hub.hubhost.replace(/\/+$/, "");
+
+                        // check for a user port and if missing use default Harmony 8282 port
+                        if (hub.hubhost.indexOf(":", 8) === -1 ) {
+                            hub.hubhost = hub.hubhost + ":8282";
+                        }
+
                         // the hub slub is stored in the hubaccess field for harmony hubs since there is no user access or endpoint info needed
                         // in the js file we let the user pick from the available hubs and store it in this field
                         hub.hubaccess = hub.useraccess;
@@ -10075,7 +10296,7 @@ function apiCall(user, body, protocol, res) {
 
                     } else {
                         // set an error result to skip auth steps
-                        result = "error - invalide hub type: " + hub.hubtype + " in hubauth. Only ISY and Hubitat hubs are supported.";
+                        result = "error - invalid hub type: " + hub.hubtype + " in hubauth. This hub type is not supported.";
                         console.error((ddbg()), "Invalid hub: ", hub);
                     }
 
@@ -10087,10 +10308,19 @@ function apiCall(user, body, protocol, res) {
                             if ( row ) {
                                 hub.id = row.id;
                                 hub.hubid = row.hubid;
-                                hub.hubname = row.hubname;
+                                if ( hub.hubname.trim()==="" ) {
+                                    hub.hubname = row.hubname;
+                                }
                                 return hub;
                             } else {
                                 // add a placeholder hub that we update later in updateHub function
+                                if ( hub.hubname.trim()==="" ) {
+                                    hub.hubname = hub.hubtype + " Home";
+                                }
+                                // if ( hub.hubtype === "ISY" && hub.hubid==="ISY_new" ) {
+                                //     let rstr = getRandomInt(1001, 9999);
+                                //     hub.hubid = hub.hubtype + rstr.toString();
+                                // }
                                 return mydb.addRow("hubs", hub, "userid = " + userid)
                                 .then(res => {
                                     hub.id = res.getImpactedId();
@@ -10585,7 +10815,11 @@ GLB.dbinfo = {
     "enablerules": true,
     "donate": true
 };
-GLB.dbinfo.hubs = { Hubitat: "Hubitat", Harmony: "Harmony", ISY: "ISY" };
+
+// the default is to only allow Hubitat and ISY hubs for now
+// until I finish, test, and fine tune the new Harmony integration -- brave users can still use it by setting it in the config file
+// this is just a list of supported hubs that shows up in the UI and is used to validate hub types when authorizing hubs
+GLB.dbinfo.hubs = { Hubitat: "Hubitat", ISY: "ISY" };
 
 // this object will be used to replace anything with a user choice
 GLB.dbinfo.subs = {};
@@ -10740,25 +10974,25 @@ if ( app && applistening ) {
                 }
 
                 // update hubs table if needed to remove the refresh column
-                if ( tables[i] === "hubs" ) {
-                    mydb.getRows("pragma_table_info('hubs')")
-                    .then(rows => {
-                        var refreshcol = false;
-                        rows.forEach(row => {
-                            refreshcol = refreshcol || (row.name === "hubrefresh");
-                        });
-                        if ( refreshcol === true ) {
-                            mydb.query("ALTER TABLE hubs DROP COLUMN hubrefresh")
-                            .then(res => {
-                                addedtables++;
-                                console.log( (ddbg()), "Updated the schema of the hubs table by dropping hubrefresh column");
-                            })
-                            .catch(reason => {
-                                console.warn( (ddbg()), "error updating the schema of the hubs table by dropping hubrefresh column: ", reason);
-                            });
-                        }
-                    });
-                }
+                // if ( tables[i] === "hubs" ) {
+                //     mydb.getRows("pragma_table_info('hubs')")
+                //     .then(rows => {
+                //         var refreshcol = false;
+                //         rows.forEach(row => {
+                //             refreshcol = refreshcol || (row.name === "hubrefresh");
+                //         });
+                //         if ( refreshcol === true ) {
+                //             mydb.query("ALTER TABLE hubs DROP COLUMN hubrefresh")
+                //             .then(res => {
+                //                 addedtables++;
+                //                 console.log( (ddbg()), "Updated the schema of the hubs table by dropping hubrefresh column");
+                //             })
+                //             .catch(reason => {
+                //                 console.warn( (ddbg()), "error updating the schema of the hubs table by dropping hubrefresh column: ", reason);
+                //             });
+                //         }
+                //     });
+                // }
 
             } else {
                 console.log( (ddbg()), "Table", tables[i], " not found. Building it now");
@@ -11021,6 +11255,16 @@ if ( app && applistening ) {
         console.warn( (ddbg()), "PUT api calls are not supported. Use POST instead. Requested put: ", req.path);
         res.send("PUT api calls are not supported. Use POST instead.");
         res.end();
+    });
+
+    // *********************************************************************************************
+    // POST endpoint to return version information for Groovy app synchronization
+    // *********************************************************************************************
+    app.post("/version", function (req, res) {
+        res.json({ 
+            version: GLB.HPVERSION,
+            appname: GLB.APPNAME
+        });
     });
 
     // *********************************************************************************************

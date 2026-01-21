@@ -325,7 +325,7 @@ select.startupinp.pickhub {
 }
 
 div#catalog {
-    width: 410px;
+    width: 460px;
     display: block;
     position: absolute;
     top: 0px;
@@ -335,6 +335,12 @@ div#catalog {
     
     /* set z-index above all tiles but below dragged tiles set to 999 */
     z-index: 500;
+}
+
+div#catalog table.useroptions tr {
+    padding: 0px;
+    border: none;
+    font-weight: normal;
 }
 
 .ui-widget.ui-widget-content {
@@ -435,6 +441,10 @@ div.skinoption, .kioskoption, div.filteroption, td label.optname {
     margin-left: 8px;
     margin-bottom: 2px;
     color: #000000;
+}
+
+td label.optname{
+    font-weight: normal;
 }
 
 div.skinoption input {
@@ -1700,11 +1710,6 @@ div.overlay.RGB, div.overlay.colorName {
     display: none;
 }
 
-/* overlays */
-div.overlay {
-    width: 100%;
-    display: block;
-}
 /* put level sliders on bottom */
 div.thing div.overlay.level, div.thing div.overlay.position, div.thing div.overlay.colorTemperature {
     position: absolute;
