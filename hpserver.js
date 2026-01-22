@@ -4928,9 +4928,9 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
              realsubid==="heatingSetpoint" || realsubid==="coolingSetpoint" ) 
         {
             $tc += "<div class=\"overlay " + tkey + " " + subtype + " v_" + kindex + "\">";
-            $tc += aidi + " subid=\"" + tkey + "-dn\" title=\"" + tkey + " down\" class=\"" + thingtype + " arrow-dn " + tkey + "-dn " + pkindex + "\"></div>";
-            $tc += aidi + pn + bidtag + commandtag + realtag + " subid=\"" + tkey + "\" title=\"" + thingtype + " " + tkey + "\" class=\"" + thingtype + " arrow-it " + tkeyshow + pkindex + "\"" + " id=\"" + wwx + aitkey + "\">" + tval + "</div>";
-            $tc += aidi + " subid=\"" + tkey + "-up\" title=\"" + tkey + " up\" class=\"" + thingtype + " arrow-up " + tkey + "-up " + pkindex + "\"></div>";
+            $tc += aidi + " subid=\"" + tkey + "-dn\" title=\"" + tkey + " down\" class=\"" + thingtype + " arrow-dn " + tkey + "-dn " + pkindex + "\" id=\"" + wwx + aitkey + "-dn\"></div>";
+            $tc += aidi + pn + bidtag + commandtag + realtag + " subid=\"" + tkey + "\" title=\"" + thingtype + " " + tkey + "\" class=\"" + thingtype + " arrow-it " + tkeyshow + pkindex + "\" id=\"" + wwx + aitkey + "\">" + tval + "</div>";
+            $tc += aidi + " subid=\"" + tkey + "-up\" title=\"" + tkey + " up\" class=\"" + thingtype + " arrow-up " + tkey + "-up " + pkindex + "\" id=\"" + wwx + aitkey + "-up\"></div>";
             $tc += "</div>";
 
         // process analog clocks signalled by use of a skin with a valid name other than digital

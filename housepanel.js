@@ -3944,12 +3944,12 @@ function setupPage() {
         var thingname = $("#s-"+aid).html();
         var targetid = '#a-'+aid+'-'+subid;
         if ( (subid.endsWith("-up") && $(targetid).hasClass("arrow-up")) || 
-              (subid.endsWith("-dn") && $(targetid).hasClass("arrow-down")) ) {
+              (subid.endsWith("-dn") && $(targetid).hasClass("arrow-dn")) ) {
             const slen = subid.length;
             let newtargetid = '#a-'+aid+'-'+subid.substring(0,slen-3);
             if ( $(newtargetid) && $(newtargetid).html()!=="undefined" ) {
                 targetid = newtargetid;
-            }            
+            }
         }
         var thevalue = $(targetid) ? $(targetid).html() : "";
         
@@ -4355,7 +4355,7 @@ function handleLinks(subid, uid, bid, thingid) {
     var linkvalupdown = subid;
     const targetid = '#a-'+thingid+'-'+subid;
     if ( (subid.endsWith("-up") && $(targetid).hasClass("arrow-up")) || 
-         (subid.endsWith("-dn") && $(targetid).hasClass("arrow-down")) ) {
+         (subid.endsWith("-dn") && $(targetid).hasClass("arrow-dn")) ) {
         linkvalupdown = subid.substring(0, subid.length-3);       
     }
 
@@ -4440,7 +4440,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
     if ( subid==="thingname" ) {
             targetid = "#s-"+thingid;
     } else if ( (subid.endsWith("-up") && $(targetid).hasClass("arrow-up")) || 
-                (subid.endsWith("-dn") && $(targetid).hasClass("arrow-down")) ) {
+                (subid.endsWith("-dn") && $(targetid).hasClass("arrow-dn")) ) {
         const slen = subid.length;
         if (command && !realsubid.endsWith("-up") && !realsubid.endsWith("-dn") ) {
             realsubid = realsubid + subid.substring(slen-3);
