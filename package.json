@@ -1,6 +1,6 @@
 {
   "name": "housepanel",
-  "version": "3.4.7",
+  "version": "3.5.14",
   "description": "HousePanel Node Server",
   "main": "hpserver.js",
   "dependencies": {
@@ -13,6 +13,7 @@
     "multer": "^1.4.5-lts.1",
     "mysql": "github:mysqljs/mysql",
     "nodemailer": "^6.4.17",
+    "openmeteo": "^1.2.3",
     "react": "^19.2.3",
     "request": "^2.88.0",
     "sqlite3": "^5.1.4",

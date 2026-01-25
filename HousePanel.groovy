@@ -29,7 +29,7 @@ public static String handle() { return "HousePanel" }
     STATICALLY DEFINED VARIABLES
     inpired by Tonesto7 homebridge2 app
 ***********************************************/
-@Field static final String appVersionFLD  = '3.5.14'
+@Field static final String appVersionFLD  = '3.5.16'
 @Field static final String sNULL          = (String) null
 @Field static final String sBLANK         = ''
 @Field static final String sLINEBR        = '<br>'
@@ -37,6 +37,7 @@ public static String handle() { return "HousePanel" }
 @Field static final String sCLRBLUE       = '#3360ff'
 @Field static final String sCLRRED        = '#ff6033'
 @Field static final String sCLRGRY        = '#999999'
+@Field static final String sBLACK         = '#000000'
 
 /**********************************************
     APP HELPER FUNCTIONS
@@ -136,7 +137,6 @@ def mainPage() {
             desc += mythermostats ? spanSmBld("Thermostat${mythermostats.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mythermostats.size()})") : sBLANK
             desc += mytemperatures ? spanSmBld("Temperature${mytemperatures.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mytemperatures.size()})") : sBLANK
             desc += myilluminances ? spanSmBld("Illuminance${myilluminances.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${myilluminances.size()})") : sBLANK
-            // desc += myweathers ? spanSmBld("Weather${myweathers.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${myweathers.size()})") : sBLANK
             desc += mywaters ? spanSmBld("Water${mywaters.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mywaters.size()})") : sBLANK
             desc += myvalves ? spanSmBld("Valve${myvalves.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${myvalves.size()})") : sBLANK
             desc += mysmokes ? spanSmBld("Smoke${mysmokes.size() > 1 ? 's' : sBLANK}") + spanSmBr(" (${mysmokes.size()})") : sBLANK
@@ -170,10 +170,10 @@ def mainPage() {
             String vdesc = sBLANK
 
             vdesc += spanSmBld("Hub Prefix: ", sCLRBLUE) + spanSmBr("${settings.hubprefix}" )
-            vdesc += spanSmBld("Ambient Weather Application key: ", sCLRBLUE) + spanSmBr("${settings.ambientappkey}" )
-            vdesc += spanSmBld("Ambient Weather API key: ", sCLRBLUE) + spanSmBr("${settings.ambientapi}" )
-            vdesc += spanSmBld("Weather Tomorrow.io API key: ", sCLRBLUE) + spanSmBr("${settings.weatherapi}" )
-            vdesc += spanSmBld("Weather ZipCode: ", sCLRBLUE) + spanSmBr("${settings.weatherzip}" )
+            // vdesc += spanSmBld("Ambient Weather Application key: ", sCLRBLUE) + spanSmBr("${settings.ambientappkey}" )
+            // vdesc += spanSmBld("Ambient Weather API key: ", sCLRBLUE) + spanSmBr("${settings.ambientapikeykeykey}" )
+            // vdesc += spanSmBld("Weather Tomorrow.io API key: ", sCLRBLUE) + spanSmBr("${settings.tomorrowapi}" )
+            // vdesc += spanSmBld("Weather ZipCode: ", sCLRBLUE) + spanSmBr("${settings.zipcode}" )
             vdesc += spanSmBld("Power skip value: ", sCLRBLUE) + spanSmBr("${settings.powerskip}" )
             vdesc += spanSmBld("callback IP 1: ", sCLRBLUE) + spanSmBr("${settings.webHostIP}:${settings.webHostPort}" )
             vdesc += spanSmBld("callback IP 2: ", sCLRBLUE) + spanSmBr("${settings.webHostIP2}:${settings.webHostPort2}" )
@@ -216,19 +216,23 @@ def settingsPage() {
 
         section("HousePanel Configuration Options") {
             String vdesc
-            vdesc = spanSmBld("Select a prefix to uniquely identify certain tiles for this hub. This only matters if you are using more than one hub. The prefix for each hub must be unique. ")
+
+            vdesc = "Note: settings for weather devices are now provided in the main GUI since the supported weather services are not Hubitat dependent."            
+            paragraph spanSmBldBr("Configure the settings for your HousePanel installation here. ", sBLACK) + spanSm(vdesc, sCLRBLUE)
+
+            vdesc = spanSmBld("Select a prefix to uniquely identify hsm, mode, and variable tiles for this hub. This only matters if you are using more than one hub. The prefix for each hub must be unique. ")
             paragraph vdesc
             input (name: "hubprefix", type: "text", multiple: false, title: "Hub Prefix:", required: false, defaultValue: "h_")
 
-            vdesc = spanSmBld("The Ambient Weather API and Application keys are used to pull in weather data from the Ambient Weather service. If you have an Ambient Weather station then you can use these keys to pull in your station data. If you don't have a station but want to pull in weather data for your location then you can use these keys with the free tier of the Ambient Weather API which allows pulling in data for any location based on zip code. If you don't care about weather data or want to use a different service for weather data then these can be safely ignored.")            
-            paragraph vdesc
-            input (name: "ambientappkey", type: "text", multiple: false, title: "Ambient Application key", required: false, defaultValue: "7aeab49a6fa5462fa8ddd52c049b4201984f0f14e9d5476e8cb3e5e4ca233bc7")
-            input (name: "ambientapi", type: "text", multiple: false, title: "Ambient Weather API key", required: false, defaultValue: "")
+            // vdesc = spanSmBld("The Ambient Weather API and Application keys are used to pull in weather data from the Ambient Weather service. If you have an Ambient Weather station then you can use these keys to pull in your station data. If you don't have a station but want to pull in weather data for your location then you can use these keys with the free tier of the Ambient Weather API which allows pulling in data for any location based on zip code. If you don't care about weather data or want to use a different service for weather data then these can be safely ignored.")            
+            // paragraph vdesc
+            // input (name: "ambientappkey", type: "text", multiple: false, title: "Ambient Application key", required: false, defaultValue: "7aeab49a6fa5462fa8ddd52c049b4201984f0f14e9d5476e8cb3e5e4ca233bc7")
+            // input (name: "ambientapikey", type: "text", multiple: false, title: "Ambient Weather API key", required: false, defaultValue: "")
 
-            vdesc = spanSmBld("The Tomorrow.io API key is used to pull in weather data from the Tomorrow.io service. If you have a Tomorrow.io account then you can use this key to pull in weather data for your location. If you don't care about weather data or want to use a different service for weather data then this can be safely ignored.")
-            paragraph vdesc
-            input (name: "weatherapi", type: "text", multiple: false, title: "Tomorrow.io API key", required: false, defaultValue: "")
-            input (name: "weatherzip", type: "text", multiple: false, title: "Zip Code for Weather", required: false, defaultValue: "")
+            // vdesc = spanSmBld("The Tomorrow.io API key is used to pull in weather data from the Tomorrow.io service. If you have a Tomorrow.io account then you can use this key to pull in weather data for your location. If you don't care about weather data or want to use a different service for weather data then this can be safely ignored.")
+            // paragraph vdesc
+            // input (name: "tomorrowapi", type: "text", multiple: false, title: "Tomorrow.io API key", required: false, defaultValue: "")
+            // input (name: "zipcode", type: "text", multiple: false, title: "Zip Code for Weather", required: false, defaultValue: "")
 
             vdesc = spanSmBld("The Power Skip value is used to filter out power readings from devices that are below a certain threshold. This is useful for filtering out noise from power meters and other devices that may report small power readings when they are actually off. The value should be between 0 and 1, where 0 means no filtering and 1 means all readings are filtered out. A good starting point is around 0.15, but you may need to adjust this based on your specific devices and setup.")
             paragraph vdesc
@@ -306,8 +310,6 @@ def deviceSelectPage() {
                 input "mythermostats", "capability.thermostat", hideWhenEmpty: true, multiple: true, required: false, title: "Thermostats"
                 input "mytemperatures", "capability.temperatureMeasurement", hideWhenEmpty: true, multiple: true, required: false, title: "Temperature Measures"
                 input "myilluminances", "capability.illuminanceMeasurement", hideWhenEmpty: true, multiple: true, required: false, title: "Illuminance Measurements"
-                // input "myweathers", "device.smartweatherStationTile", hideWhenEmpty: true, multiple: true, required: false, title: "Weather tile"
-                // input "myaccuweathers", "device.accuweatherDevice", hideWhenEmpty: true, multiple: true, required: false, title: "AccuWeather tile"
         }
         section (sectHead("Water, Sprinklers and Detectors","sprinkler-on.png")) {
                 input "mywaters", "capability.waterSensor", hideWhenEmpty: true, multiple: true, required: false, title: "Water Sensors"
@@ -382,12 +384,12 @@ def initialize() {
     state.directPort3 = settings?.webHostPort3 ?: "0"
     state.directPort3 = state.directPort3.trim()
 
-    state.weatherzip = settings.weatherzip ?: ""
-    state.weatherapi = settings.weatherapi ?: ""
-    state.ambientapi = settings.ambientapi ?: ""
-    state.ambientappkey = settings.ambientappkey ?: ""
-    state.powerskip = settings.powerskip ?: 0.15
+    // state.zipcode = settings.zipcode ?: ""
+    // state.tomorrowapi = settings.tomorrowapi ?: ""
+    // state.ambientapikey = settings.ambientapikey ?: ""
+    // state.ambientappkey = settings.ambientappkey ?: ""
 
+    state.powerskip = settings.powerskip ?: 0.15
     state.prefix = settings?.hubprefix ?: getPrefix()
     state.powervals = [:]
     state.usecloud = settings?.usecloud ?: false
@@ -431,10 +433,10 @@ def initialize() {
     // push configured variables to HousePanel
     // this now replaces any need to push variables separately since they will be included in the config push and the HP server will know which ones are in use based on the settings
     // these should really be part of the hub config and be hub specific
-    Map configs = ["ambientappkey": state.ambientappkey, "ambientapi": state.ambientapi,
-                   "weatherapi": state.weatherapi, "weatherzip": state.weatherzip, 
-                   "loglevel": state.loggingLevelIDE, "powerskip": state.powerskip]
-    postHubAll("config", "", state.userid, "config", "Hubitat", configs)
+    // Map configs = ["ambientappkey": state.ambientappkey, "ambientapikey": state.ambientapikey,
+    //                "tomorrowapi": state.tomorrowapi, "zipcode": state.zipcode, 
+    //                "loglevel": state.loggingLevelIDE, "powerskip": state.powerskip]
+    // postHubAll("config", "", state.userid, "config", "Hubitat", configs)
 
     // register callbacks if one is available
     if ( state.directIP!="0" || state.directIP2!="0" || state.directIP3!="0" ) {
@@ -805,48 +807,6 @@ def getTemperature(swid, item=null) {
     return resp
 }
 
-// the weather tile was changed to use tomorrow.io instead of the builtin Hubitat device
-// mainly because the builtin device does not seem to work reliably and cannot be customized
-// for now I just return the realtime info but later I could do much more including maps
-// var obj = [data:
-//     [ time:2023-07-15T23:27:00Z, 
-//       values:[cloudBase:0.64, cloudCeiling:0.64, cloudCover:69, dewPoint:76.44, freezingRainIntensity:0, humidity:63, precipitationProbability:0, pressureSurfaceLevel:29.24, rainIntensity:0, sleetIntensity:0, snowIntensity:0, temperature:90.5, temperatureApparent:102.72, uvHealthConcern:0, uvIndex:1, visibility:9.94, weatherCode:1102, windDirection:60.19, windGust:9.23, windSpeed:1.4]
-//     ], 
-//     location:[lat:33.21465301513672, lon:-97.13809204101562, name:Denton, Denton County, Texas, 76201, United States, type:postcode]
-// ];
-def getWeather(swid, item=null) {
-    def host = "https://api.tomorrow.io/v4/weather/realtime"
-    def resp = [:]
-    if ( state.weatherapi && state.weatherzip ) {
-        def nvpstr = "location=${state.weatherzip}&units=imperial&apikey=${state.weatherapi}"
-        host = "${host}?${nvpstr}"
-        httpGet(host) {getresp ->
-            def respcode = getresp.getStatus()
-            if ( respcode == 200 ) {
-                def respraw = getresp.getData()
-                def respdata = respraw["data"]
-                resp = respdata["values"]
-                resp["temperature"] = Math.round(resp["temperature"])
-                resp["temperatureApparent"] = Math.round(resp["temperatureApparent"])
-                resp["time"] = respdata["time"]
-                def loc = respraw["location"]
-                resp["location"] = loc["name"]
-                resp["latitude"] = loc["lat"]
-                resp["longitude"] = loc["lon"]
-            } else {
-                resp["error"] = respcode
-            }
-            resp["subname"] = "Powered by Tomorrow.io"
-            logger("weather response code: ${respcode} value: ${resp}", "debug")
-        }
-    } else {
-        resp["subname"] = "API or Zipcode not set"
-    }
-    resp["name"] = "Weather"
-    // def resp = getDevice(myweathers, swid, item)
-    return resp
-}
-
 def getOther(swid, item=null) {
     getThing(myothers, swid, item)
 }
@@ -1076,10 +1036,6 @@ def getAllThings() {
     resp = getActuators(resp)
     resp = getPowers(resp)
     resp = getVariables(resp)
-
-    if ( state.weatherapi && state.weatherzip ) {
-        resp = getWeathers(resp)
-    }
 
     // optionally include pistons based on user option
     if (state.usepistons) {
@@ -1393,19 +1349,6 @@ def getActuators(resp) {
     } catch (e) { logger(e, "error") }
     return resp
 }
-def getWeathers(resp) {
-    def vals = ["weather"]
-    try {
-        vals.each {
-            def wid = "${state.prefix}${it}"
-            def val = getWeather(wid)
-            resp << [name: val.name, id: wid, value: val, type: "weather"]
-        }
-    } catch (e) {
-        log.debug e
-    }
-    return resp
-}
 
 def getHubInfo() {
     def resp =  [ sitename: location.getName(),
@@ -1433,8 +1376,6 @@ def autoType(swid) {
     else if ( mythermostats?.find{it.id.toInteger() == swid} ) { swtype = "thermostat" }
     else if ( mypresences?.find{it.id.toInteger() == swid } ) { swtype= "presence" }
     else if ( mybeds?.find{it.id.toInteger() == swid } ) { swtype= "sleep" }
-    else if ( myweathers?.find{it.id.toInteger() == swid } ) { swtype= "weather" }
-    // else if ( myaccuweathers?.find{it.id.toInteger() == swid } ) { swtype= "weather" }
     else if ( mymotions?.find{it.id.toInteger() == swid && (it.hasAttribute("presence_type") || it.hasAttribute("roomActivity")) } ) { swtype = "aqaramotion" }
     else if ( mymotions?.find{it.id.toInteger() == swid && !it.hasAttribute("presence_type") && !it.hasAttribute("roomActivity") } ) { swtype = "motion" }
     else if ( mydoors?.find{it.id.toInteger() == swid } ) { swtype= "door" }
@@ -1453,6 +1394,7 @@ def autoType(swid) {
     else if ( myactuators?.find{it.id.toInteger() == swid } ) { swtype= "actuator" }
     else if ( swid=="${state.prefix}hsm" ) { swtype= "hsm" }
     else if ( swid=="${state.prefix}mode" ) { swtype= "mode" }
+    else if ( swid=="${state.prefix}variables" ) { swtype= "variables" }
     else if ( state.usepistons && webCoRE_list().find{it.id.toInteger() == swid} ) { swtype= "piston" }
     else { swtype = "" }
     
@@ -1716,9 +1658,9 @@ def doQuery() {
         cmdresult = getTemperature(swid)
         break
         
-    case "weather" :
-        cmdresult = getWeather(swid)
-        break
+    // case "weather" :
+    //     cmdresult = getWeather(swid)
+    //     break
         
     case "other" :
     	cmdresult = getOther(swid)

@@ -766,24 +766,15 @@ $(document).ready(function() {
         cancelPagemove();
         initWebsocket();
 
-        // run initial clock updater forcing read
-        // moved this to the delay below to make time formats work
-        // clockUpdater("clockdigital", true);
-        // clockUpdater("clockanalog", true);
-
-        // update times on the clocks every second 
+        // update times on the clocks every second for display purposes
         setInterval( function() { 
-            clockUpdater("clockdigital", false);
-            clockUpdater("clockanalog", false);
+            clockUpdater(false);
         }, 1000);
 
-        // run clockdigital and clockanalog once every minute for rules
-        setInterval( function() 
-            { 
-                clockUpdater("clockdigital", true);
-                clockUpdater("clockanalog", true);
-            }, 60000
-        );
+        // update clocks every minute on the server for rules and db update purposes
+        setInterval( function() { 
+            clockUpdater(true);
+        }, 60000);
 
         // finally we wait a moment then setup page clicks
         // and display the clocks with the proper user defined fields if provided
@@ -793,9 +784,7 @@ $(document).ready(function() {
                 setupPage(); 
                 setupSliders();
                 setupColors();
-                clockUpdater("clockdigital", true);
-                clockUpdater("clockanalog", true);
-            }, 200);
+            }, 500);
         }
     }
 
@@ -3575,21 +3564,11 @@ function processKeyVal(targetid, aid, key, value) {
     } else if ( key.startsWith("_") ) {
         value = key.substring(1);
 
-    // handle weather icons that were not converted
-    } else if ( key==="weatherCode" && !isNaN(+value)  ) {
+    // handle weather icons that returned numbers that were not converted
+    } else if ( !isNaN(+value) && (key==="weatherCode" || key==="weatherIcon" || key==="forecastIcon" || key==="weather_code") ) {
+        let weathercode = parseInt(value);
         $.post(cm_Globals.returnURL, 
-            {api: "weathericon", userid: cm_Globals.options.userid, type: "tomorrowio", value: value, hpcode: cm_Globals.options.hpcode},
-            function (presult, pstatus) {
-                if ( pstatus==="success" ) {
-                    $(targetid).html(presult);
-                }
-            }
-        );
-        return isclock;
-
-    } else if ( (key==="weatherIcon" || key==="forecastIcon") && !isNaN(+value) ) {
-        $.post(cm_Globals.returnURL, 
-            {api: "weathericon", userid: cm_Globals.options.userid, type: "hubitat", value: value, hpcode: cm_Globals.options.hpcode},
+            {api: "weathericon", userid: cm_Globals.options.userid, type: key, value: weathercode, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
                 if ( pstatus==="success" ) {
                     $(targetid).html(presult);
@@ -3782,63 +3761,70 @@ function getFormattedTime(fmttime, tz) {
     return timestr;
 }
 
-function clockUpdater(whichclock, forceget) {
+function clockUpdater(updateDatabase) {
 
-    if ( whichclock !=="clockdigital" && whichclock !=="clockanalog" ) {
+    if ( !cm_Globals.devices ) {
         return;
     }
-    // get the global clock devices if not previously set
-    if ( cm_Globals[whichclock] && !forceget ) {
-        updateClock(whichclock, cm_Globals[whichclock]);
-
-    } else if ( forceget && cm_Globals.options && cm_Globals.options.rules ) {
-
-        var tile = $("div.panel div.thing[bid='"+whichclock+"']");
-        if ( tile ) {
-            var thingid = $(tile).attr("thingid");
-            var tileid = $(tile).attr("tile");
-        } else {
-            return;
-        }
     
-        var userid = cm_Globals.options.userid;
-        if ( !userid ) { userid = 1; }
+    // get the global clock devices if not previously set
+    if ( cm_Globals.options && cm_Globals.options.userid && cm_Globals.options.rules && cm_Globals.options.hpcode ) {
+
         var pname = cm_Globals.options.pname;
         if ( !pname ) { pname = "default"; }
+        
+        let clocktiles = $("div.panel div.clock-thing[type='clock']");
+        clocktiles.each( function() {
+            var thingid = $(this).attr("thingid");
+            var tileid = $(this).attr("tile");
+            let uid = $(this).attr("uid");
+            let bid = $(this).attr("bid");
+            let that = this;
+            if ( updateDatabase ) {
+                // use server to update and retrieve the latest clock device info
+                // we no longer need to pass the config options since we do that on the server now
+                $.post(cm_Globals.returnURL, 
+                    {api: "getclock", userid: cm_Globals.options.userid, pname: pname, id: bid, thingid: thingid, tileid: tileid, 
+                                      type: "clock", hpcode: cm_Globals.options.hpcode},
+                    function (presult, pstatus) {
+                        if ( pstatus==="success" && presult && typeof presult==="object" ) {
+                            // let clockdevice = presult;
+                            // clockdevice.time = getFormattedTime(clockdevice.fmt_time, clockdevice.tzone);
 
-        // make a mini configoptions object for just clocks
-        var clockoptions = [];
-        var opt1 = {userid: userid, configkey: "user_clockdigital", configval: cm_Globals.options.rules["user_clockdigital"]};
-        var opt2 = {userid: userid, configkey: "user_clockanalog", configval: cm_Globals.options.rules["user_clockanalog"]};
-        clockoptions.push(opt1);
-        clockoptions.push(opt2);
-
-        $.post(cm_Globals.returnURL, 
-            {api: "getclock", userid: userid, pname: pname, id: whichclock, thingid: thingid, tileid: tileid, 
-                                  type: "clock", attr: clockoptions, hpcode: cm_Globals.options.hpcode},
-            function (presult, pstatus) {
-                if ( pstatus==="success" && presult && typeof presult==="object" ) {
-                    cm_Globals[whichclock] = presult;
-                    updateClock(whichclock, presult);
-                }
-            }, "json"
-        );
+                            // use the js version of time reformatter just to ensure consistency
+                            // also skip any LINK field since we don't have the LINK machinery here on the js side of things
+                            presult.time = getFormattedTime(presult.fmt_time, presult.tzone);
+                            cm_Globals.devices[uid].pvalue = presult;
+                            let clockdevice = presult;
+                            for (let key in presult) {
+                                let value = presult[key];
+                                if ( typeof value === "string" && value.startsWith("LINK::") ) {
+                                    delete(clockdevice[key]);
+                                }
+                            }
+                            updateClock(bid, that, clockdevice);
+                        } else {
+                            console.error("Could not update clock with uid = " + uid + ".  Request returned: ", presult);
+                        }
+                    }, "json"
+                );
+            } else {
+                // just update the time field from existing device info
+                let clockdevice = cm_Globals.devices[uid].pvalue;
+                clockdevice.time = getFormattedTime(clockdevice.fmt_time, clockdevice.tzone);
+                let timeobj = {time: cm_Globals.devices[uid].pvalue.time};
+                updateClock(bid, that, timeobj);
+            }
+        });
     }
 
-    function updateClock(clocktype, clockdevice) {
-        // we have to do this to get real-time secones display
-        clockdevice.time = getFormattedTime(clockdevice.fmt_time, clockdevice.tzone);
-
-        // only update the time elements
-        var updobj = {time: clockdevice.time};
-
-        // update all the clock tiles for this type
+    // update all the clock tiles for this device
+    function updateClock(clocktype, that, clockdevice) {
         $('div.panel div.thing[bid="'+clocktype+'"]').each(function() {
-            var thingid = $(this).attr("thingid");
-            updateTile(thingid, updobj);
+            var thingid = $(that).attr("thingid");
+            updateTile(thingid, clockdevice);
         });
-        updateLink(clocktype, updobj);
-
+        updateLink(clocktype, clockdevice);
     }
 
 }
@@ -4681,7 +4667,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
                         var dispTable = "";
                         var timedata = [];
                         var valuedata = [];
-                        const linkeddevice = cm_Globals.devices[swid];
+                        const linkeddevice = cm_Globals.devices[linkuid];
 
                         dispTable+= `<div class='listheader'>History for device: ${linkeddevice.name}</div><div class='listheader'>Attribute: ${attrname}</div><br>`;
                         dispTable+= `<div class='listtable'><table class='listtable'><tr class='head'><td>Time</td><td>${attrname}</td></tr>`;

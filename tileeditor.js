@@ -515,37 +515,36 @@ function setupIcons(category) {
 
 }
 
-function checkboxHandler(idselect, onaction, offaction, overlay, isreset) {
+function checkboxHandler(idselect, onaction, offaction, overlay, isreset = false) {
     $(idselect).off('change');
     $(idselect).on("change",function() {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
         var subid = $("#subidTarget").html();
+
         var cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
-        var overlayTarget;
-        if ( overlay ) {
-            overlayTarget = getCssRuleTarget(str_type, subid, thingindex, "overlay");
-        }
-        // var overlayTarget = "div.overlay." + subid + ".v_" + thingindex;
+        var cssOverlayTarget = getCssRuleTarget(str_type, subid, thingindex, "overlay");
+        // var cssOverlayTarget = "div.overlay." + subid + ".v_" + thingindex;
+
         if($(idselect).is(':checked')){
-            if ( typeof onaction === "function" ) {
-                onaction = onaction();
+            // if we're activating overlay, we turn off the non-overlay actions and turn on the overlay actions
+            if ( overlay ) {
+                onaction.forEach(function(act) {
+                    addCSSRule(cssOverlayTarget, act, isreset);
+                });
+            // if not overlay, just do the on actions on the target
+            } else {
+                onaction.forEach(function(act) {
+                    addCSSRule(cssRuleTarget, act, isreset);
+                });
             }
-            onaction.forEach(function(act) {
-                if (overlay && overlayTarget) {
-                    addCSSRule(overlayTarget, act, isreset);
-                }
-                addCSSRule(cssRuleTarget, act, isreset);
-            });
         } else {
-            if ( typeof offaction === "function" ) {
-                offaction = offaction();
-            }
             offaction.forEach(function(act) {
-                if (overlay && overlayTarget) {
-                    addCSSRule(overlayTarget, act, isreset);
+                if (overlay ) {
+                    addCSSRule(cssOverlayTarget, act, isreset);
+                } else {
+                    addCSSRule(cssRuleTarget, act, isreset);
                 }
-                addCSSRule(cssRuleTarget, act, isreset);
             });
         }
     });
@@ -629,13 +628,13 @@ function initDialogBinds(str_type, thingindex) {
 
     // set up all the check boxes
 
-    // function checkboxHandler(idselect, onaction, offaction, overlay, isreset) {
-    checkboxHandler("#invertIcon",["filter: invert(1);"],["filter: invert(0);"], false, false);
+    // function checkboxHandler(idselect, onaction, offaction, overlay, isreset = false) {
+    checkboxHandler("#invertIcon",["filter: invert(1);"],["filter: invert(0);"], false);
     checkboxHandler("#absPlace",["position: absolute;","margin-left: 0px;","margin-top: 0px;","margin-right: 0px;","margin-bottom: 0px;","top: 0px;","left: 0px;","right: 0px;","bottom: 0px;"],
-                                ["position: relative;","margin-left: 0px;","margin-top: 0px;","margin-right: 0px;","margin-bottom: 0px;","top: 0px;","left: 0px;","right: 0px;","bottom: 0px;"], false, false);
-    checkboxHandler("#inlineOpt",["display: inline-block;"], ["display: block;"], true, false);
-    checkboxHandler("#isHidden", ["display: none;"], ["display: block;"], true, false);
+                                ["position: relative;","margin-left: 0px;","margin-top: 0px;","margin-right: 0px;","margin-bottom: 0px;","top: 0px;","left: 0px;","right: 0px;","bottom: 0px;"], false);
+    // checkboxHandler("#isHidden", ["display: none;"], ["display: block;"], true);
 
+    // border style handling
     $("#borderType").off('change');
     $("#borderType").on('change', function (event) {
         var str_type = $("#tileDialog").attr("str_type");
@@ -653,7 +652,7 @@ function initDialogBinds(str_type, thingindex) {
                 addCSSRule(cssRuleTarget, borderstyle);
             }
         }
-        event.stopPropagation;
+        event.stopPropagation();
     });
     
     // font size handling
@@ -666,7 +665,7 @@ function initDialogBinds(str_type, thingindex) {
         var fontsize = $(this).val();
         var fontstr= "font-size: " + fontsize;
         addCSSRule(cssRuleTarget, fontstr);
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     $("#editEffect").off('change');
@@ -683,7 +682,7 @@ function initDialogBinds(str_type, thingindex) {
         }
         editEffect = priorEffect + editEffect;
         addCSSRule(cssRuleTarget, editEffect);
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     $("#fontEffect").off('change');
@@ -718,7 +717,7 @@ function initDialogBinds(str_type, thingindex) {
             fontstr+= "font-weight: normal; ";
         }
         addCSSRule(cssRuleTarget, fontstr);
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     // alignment handling
@@ -731,7 +730,22 @@ function initDialogBinds(str_type, thingindex) {
         var aligneffect = $(this).val();
         var fontstr= "text-align: " + aligneffect;
         addCSSRule(cssRuleTarget, fontstr);
-        event.stopPropagation;
+        event.stopPropagation();
+    });
+
+    // alignment handling uses the overlay target
+    $("#inlineEffect").off('change', "input");
+    $("#inlineEffect").on('change', "input", function (event) {
+        var str_type = $("#tileDialog").attr("str_type");
+        var thingindex = $("#tileDialog").attr("thingindex");
+        var subid = $("#subidTarget").html();
+        const overlayTarget = getCssRuleTarget(str_type, subid, thingindex, "overlay");
+        const cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
+        var inlineffect = $(this).val();
+        const fontstr= "display: " + inlineffect;
+        addCSSRule(overlayTarget, fontstr);
+        addCSSRule(cssRuleTarget, "display: inherit;");
+        event.stopPropagation();
     });
     
     $("#iconleft").off('change');
@@ -743,7 +757,7 @@ function initDialogBinds(str_type, thingindex) {
         var aligneffect = $(this).val();
         var fontstr= "background-position-x: " + aligneffect + "%";
         addCSSRule(cssRuleTarget, fontstr);
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     $("#icontop").off('change');
@@ -755,7 +769,7 @@ function initDialogBinds(str_type, thingindex) {
         var aligneffect = $(this).val();
         var fontstr= "background-position-y: " + aligneffect + "%";
         addCSSRule(cssRuleTarget, fontstr);
-        event.stopPropagation;
+        event.stopPropagation();
     });
     
     // resets the entire tile now like it was designed to do
@@ -767,9 +781,10 @@ function initDialogBinds(str_type, thingindex) {
         var pos = {top: event.pageY - 350, left: event.pageX + 150};
         var scopemap = scopeMap(str_type);
         var scope = $("#scopeEffect").val();
+        const scopestr = scopemap[scope].substring(0,scopemap[scope].length-1);
         var msg = `<div class='editheader'>Enter custom CSS formatting</div>`;
         msg += "<input type='text' id='customFormatText' style='width:400px;' placeholder='Enter custom CSS formatting here' /><br />";
-        msg += (subid==="wholetile" || subid==="panel") ? `Custom CSS will apply to ${scopemap[scope]}?` : `Custom CSS will apply only to <b>${subid}</b> elements on <b>${scopemap[scope]}</b>?`;
+        msg += (subid==="wholetile" || subid==="panel") ? `Custom CSS will apply to ${scopemap[scope]}?` : `Custom CSS will apply only to <b>${subid}</b> elements on <b>${scopestr}</b>?`;
         msg += "<br />Note: Multiple CSS rules can be added. Each rule must end with a semicolon (;)<br />Example: <b><small><em>color: red; font-size: 20px;</em></small></b>";
         createModal("customtag", msg, "body", true, pos, function(ui, content) {
             var clk = $(ui).attr("name");
@@ -804,7 +819,8 @@ function initDialogBinds(str_type, thingindex) {
         var pos = {top: event.pageY - 350, left: event.pageX + 150};
         var scopemap = scopeMap(str_type);
         var scope = $("#scopeEffect").val();
-        var msg = (subid==="wholetile" || subid==="panel") ? `Reset everything on ${scopemap[scope]}?` : `Reset only ${subid} elements on ${scopemap[scope]}?`;
+        const scopestr = scopemap[scope].substring(0,scopemap[scope].length-1);
+        var msg = (subid==="wholetile" || subid==="panel") ? `Reset everything on ${scopemap[scope]}?` : `Reset only ${subid} elements on ${scopestr}?`;
         createModal("picksubid", msg, "body", true, pos, function(ui, content) {
             var clk = $(ui).attr("name");
             if ( clk==="okay" ) {
@@ -826,7 +842,7 @@ function initDialogBinds(str_type, thingindex) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
         var rules = copyCSSRule(str_type, thingindex);
-        event.stopPropagation;
+        event.stopPropagation();
 
         // show what was copied
         var pstyle = "position: absolute; border: 6px black solid; background-color: white; color: black; font-size: 14px; left: 330px; top: 75px; width: 600px; height: auto; padding: 10px;";
@@ -864,7 +880,7 @@ function initDialogBinds(str_type, thingindex) {
         if ( DEBUGte ) {
             console.log("rules pasted: ", rules);
         }
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     $('#noIcon').off('change');
@@ -889,13 +905,13 @@ function initDialogBinds(str_type, thingindex) {
     $("#processName").off("click");
     $("#processName").on("click", function (event) {
         updateNames(et_Globals.userid, et_Globals.thingid, str_type, thingindex);
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     $("#iconSrc").off('change');
     $("#iconSrc").on('change', function (event) {
         getIcons();	
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     $("#imgmanage").off("click");
@@ -909,7 +925,7 @@ function initDialogBinds(str_type, thingindex) {
             var num = $(this).attr("num");
             $(this).before('<input type="checkbox" num="'+num+'" class="delCheckbox" />')
         });
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     $("#imgcancel").off("click");
@@ -921,7 +937,7 @@ function initDialogBinds(str_type, thingindex) {
         $("div.iconcat input.delCheckbox").each(function() {
             $(this).remove();
         });
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     $("#imgdelete").off("click");
@@ -936,7 +952,7 @@ function initDialogBinds(str_type, thingindex) {
                 imagestodel.push($(this).next().attr("src"));
             }
         });
-        event.stopPropagation;
+        event.stopPropagation();
 
         // now remove them from the disk
         if ( imagestodel.length > 0 ) {
@@ -950,7 +966,7 @@ function initDialogBinds(str_type, thingindex) {
         $("#iconSrc").prop("disabled", true);
         $("#noIcon").prop("disabled", true);
         uploadImage();
-        event.stopPropagation;
+        event.stopPropagation();
     });
     
     $("#bgSize").off('change');
@@ -959,7 +975,7 @@ function initDialogBinds(str_type, thingindex) {
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
         updateSize(str_type, subid, thingindex);
-        event.stopPropagation;
+        event.stopPropagation();
     });
     
     $("#autoBgSize").off('change');
@@ -974,7 +990,7 @@ function initDialogBinds(str_type, thingindex) {
             $("#bgSize").prop("disabled", false);
         }
         updateSize(str_type, subid, thingindex);
-        event.stopPropagation;
+        event.stopPropagation();
     });
     
     $("#bgRepeat").off('change');
@@ -984,7 +1000,7 @@ function initDialogBinds(str_type, thingindex) {
         var thingindex = $("#tileDialog").attr("thingindex");
         var rule = "background-repeat: " + $("#bgRepeat").val() + ";";
         addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     // set overall tile height
@@ -1000,7 +1016,7 @@ function initDialogBinds(str_type, thingindex) {
         } else {
             addCSSRule(getCssRuleTarget(str_type, 'wholetile', thingindex), rule);
         }
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     // set overall tile width and header and overlay for all subitems
@@ -1015,7 +1031,7 @@ function initDialogBinds(str_type, thingindex) {
         } else {
             addCSSRule(getCssRuleTarget(str_type, 'wholetile', thingindex), rule);
         }
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     // set float options
@@ -1028,7 +1044,7 @@ function initDialogBinds(str_type, thingindex) {
         if ( str_type!=="page" ) {
             addCSSRule(getCssRuleTarget(str_type, 'wholetile', thingindex), rule);
         }
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     // set overall tile width and header and overlay for all subitems
@@ -1056,7 +1072,7 @@ function initDialogBinds(str_type, thingindex) {
         } else {
             addCSSRule(getCssRuleTarget(str_type, 'wholetile', thingindex), rule);
         }
-        event.stopPropagation;
+        event.stopPropagation();
     });
     
     $("#autoTileWidth").off('change');
@@ -1087,7 +1103,7 @@ function initDialogBinds(str_type, thingindex) {
         } else {
             addCSSRule(getCssRuleTarget(str_type, 'wholetile', thingindex), rule);
         }
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     // set overall tile width and header and overlay for all subitems
@@ -1106,7 +1122,7 @@ function initDialogBinds(str_type, thingindex) {
             }
             addCSSRule(target, rule);
         }
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     // set overall tile width and header and overlay for all subitems
@@ -1127,7 +1143,7 @@ function initDialogBinds(str_type, thingindex) {
             addCSSRule(target, rule);
 
         }
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     // set the item height
@@ -1165,7 +1181,7 @@ function initDialogBinds(str_type, thingindex) {
         if ( subid !== "wholetile" ) {
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         }
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     // set the item width
@@ -1230,7 +1246,7 @@ function initDialogBinds(str_type, thingindex) {
                 }
             }
         }
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     // set margin top for selected item
@@ -1258,7 +1274,7 @@ function initDialogBinds(str_type, thingindex) {
             }
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         }
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     // set margin bottom for selected item
@@ -1287,7 +1303,7 @@ function initDialogBinds(str_type, thingindex) {
             }
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         }
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     // set top padding for selected item
@@ -1304,7 +1320,7 @@ function initDialogBinds(str_type, thingindex) {
         }
         var rule = "padding-top: " + newsize;
         addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     // set bottom padding for selected item
@@ -1321,7 +1337,7 @@ function initDialogBinds(str_type, thingindex) {
         }
         var rule = "padding-bottom: " + newsize;
         addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     // set left margin for selected item
@@ -1349,7 +1365,7 @@ function initDialogBinds(str_type, thingindex) {
             }
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         }
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     // set right margin for selected item
@@ -1378,7 +1394,7 @@ function initDialogBinds(str_type, thingindex) {
             }
             addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
         }
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     // set left padding for selected item
@@ -1395,7 +1411,7 @@ function initDialogBinds(str_type, thingindex) {
         }
         var rule = "padding-left: " + newsize;
         addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     // set right padding for selected item
@@ -1412,7 +1428,7 @@ function initDialogBinds(str_type, thingindex) {
         }
         var rule = "padding-right: " + newsize;
         addCSSRule(getCssRuleTarget(str_type, subid, thingindex), rule);
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     function txtModify(before_after) {
@@ -1437,14 +1453,14 @@ function initDialogBinds(str_type, thingindex) {
     $("#beforeText").off('change');
     $("#beforeText").on('change', function(event) {
         txtModify("before");
-        event.stopPropagation;
+        event.stopPropagation();
     });
 
     // set padding for selected item
     $("#afterText").off('change');
     $("#afterText").on('change', function(event) {
         txtModify("after");
-        event.stopPropagation;
+        event.stopPropagation();
     });
     
 }
@@ -2016,10 +2032,10 @@ function initColor(str_type, subid, thingindex, uid) {
     }
     $("#editheader").html(newtitle);
 
-    // selected background color
-    // TODO - generalize this
+    // get the target selector
     var scope = $("#scopeEffect").val();
     var target = getCssRuleTarget(str_type, subid, thingindex, scope);
+    const overlayTarget = getCssRuleTarget(str_type, subid, thingindex, "overlay");
 
     // use the wysiwyg tile if we are styling tabs
     // if ( str_type==="page" ) {
@@ -2347,11 +2363,21 @@ function initColor(str_type, subid, thingindex, uid) {
         align+= '<input id="alignright" type="radio" name="align" value="right"><label for="alignright">Right</label>';
         align += "</div></div>";
 
-        var ishidden = "<div class='editSection_input'><input type='checkbox' id='isHidden'><label class=\"iconChecks\" for=\"isHidden\">Hide Element?</label></div>";
+        // var ishidden = "<div class='editSection_input'><input type='checkbox' id='isHidden'><label class=\"iconChecks\" for=\"isHidden\">Hide Element?</label></div>";
+        const ishidden = "";
 
         var inverted = "<div class='editSection_input'><input type='checkbox' id='invertIcon'><label class=\"iconChecks\" for=\"invertIcon\">Invert Element?</label></div>";
         inverted += "<div class='editSection_input'><input type='checkbox' id='absPlace'><label class=\"iconChecks\" for=\"absPlace\">Absolute Loc?</label></div>";
-        inverted += "<div class='editSection_input'><input type='checkbox' id='inlineOpt'><label class=\"iconChecks\" for=\"inlineOpt\">Inline?</label></div>";
+
+        // inverted += "<div class='editSection_input'><input type='checkbox' id='inlineOpt'><label class=\"iconChecks\" for=\"inlineOpt\">Inline?</label></div>";
+        var inlineopts = "";
+        inlineopts += "<div id='inlineEffect'><div class='editSection_input'>";
+        inlineopts+= '<input id="inline1" type="radio" name="inlineOpt" value="inline"><label for="inline1">Inline</label>';
+        inlineopts+= '<input id="inline2" type="radio" name="inlineOpt" value="inline-block" checked><label for="inline2">Inline-Block</label><br>';
+        inlineopts+= '<input id="inline3" type="radio" name="inlineOpt" value="block"><label for="inline3">Block</label>';
+        inlineopts+= '<input id="inline4" type="radio" name="inlineOpt" value="inherit"><label for="inline4">Inherit</label>';
+        inlineopts+= '<input id="inline5" type="radio" name="inlineOpt" value="none"><label for="inline5">Hidden</label>';
+        inlineopts += "</div></div>";
 
         var border = "<div class='editSection_input'><label for='borderType'>Border Type</label>";
         border += "<select name=\"borderType\" id=\"borderType\" class=\"ddlDialog\">";
@@ -2397,7 +2423,7 @@ function initColor(str_type, subid, thingindex, uid) {
         var resetbutton = getResetButton();
 
         // insert the color blocks
-        $("#colorpicker").html(dh + iconback + ceffect + iconfore + brcolor + border + fe + align + ishidden + inverted + resetbutton);
+        $("#colorpicker").html(dh + "<div id=\"colorsettings\">" + iconback + ceffect + iconfore + brcolor + border + fe + "</div>" + align + inlineopts + ishidden + inverted + resetbutton);
 
         // turn on minicolor for each one
         $('#colorpicker .colorset').each( function() {
@@ -2527,29 +2553,28 @@ function initColor(str_type, subid, thingindex, uid) {
     }
 
     // set initial hidden status
-    if ( subid==="wholetile" ) {
-        $("#isHidden").prop("checked", false);
-        $("#isHidden").prop("disabled", true);
-        $("#isHidden").css("background-color","gray");
-    } else {
-        $("#isHidden").prop("disabled", false);
-        $("#isHidden").css("background-color","white");
-        var ishdefault = getCssRuleTarget(str_type, subid, thingindex, "overlay");
-        var ishdefault2 = getCssRuleTarget(str_type, subid, thingindex);
-        var ishidden = ($(ishdefault).css("display")==="none");
-        ishidden = ishidden || ($(ishdefault2).css("display")==="none");
+    // if ( subid==="wholetile" ) {
+    //     $("#isHidden").prop("checked", false);
+    //     $("#isHidden").prop("disabled", true);
+    // } else {
+    //     $("#isHidden").prop("disabled", false);
+    //     $("#isHidden").css("background-color","white");
+    //     var ishdefault = getCssRuleTarget(str_type, subid, thingindex, "overlay");
+    //     var ishdefault2 = getCssRuleTarget(str_type, subid, thingindex);
+    //     var ishidden = ($(ishdefault).css("display")==="none");
+    //     ishidden = ishidden || ($(ishdefault2).css("display")==="none");
 
-        // check all the other variations of this subid if we are still not sure if hidden
-        if ( !ishidden ) {
-            var ish = getish(str_type, thingindex, subid);
-            ish.forEach(function(ishdefault3) {
-                if (  $(ishdefault3) && $(ishdefault3).css("display")==="none" ) {
-                    ishidden= true;
-                }
-            });
-        }
-        $("#isHidden").prop("checked", ishidden);
-    }
+    //     // check all the other variations of this subid if we are still not sure if hidden
+    //     if ( !ishidden ) {
+    //         var ish = getish(str_type, thingindex, subid);
+    //         ish.forEach(function(ishdefault3) {
+    //             if (  $(ishdefault3) && $(ishdefault3).css("display")==="none" ) {
+    //                 ishidden= true;
+    //             }
+    //         });
+    //     }
+    //     $("#isHidden").prop("checked", ishidden);
+    // }
     
     // set the initial invert check box
     if ( $(target).css("filter") && $(target).css("filter").includes("invert(1)") ) {
@@ -2566,10 +2591,27 @@ function initColor(str_type, subid, thingindex, uid) {
     }
 
     // set the initial inline check box
-    if ( $(target).css("display") && $(target).css("display").includes("inline") ) {
-        $("#inlineOpt").prop("checked",true);
+    // if ( $(target).css("display") && $(target).css("display").includes("inline") ) {
+    //     $("#inlineOpt").prop("checked",true);
+    // } else {
+    //     $("#inlineOpt").prop("checked",false);
+    // }
+    // inline settings are on the overlay target
+    if ( $(overlayTarget).css("display") && !$(overlayTarget).css("display").includes("none") ) {
+        var displayval = $(overlayTarget).css("display");
+        if ( displayval==="inline" ) {
+            $("#inline1").prop("checked",true);
+        } else if ( displayval==="inline-block" ) {
+            $("#inline2").prop("checked",true);
+        } else if ( displayval==="block" ) {
+            $("#inline3").prop("checked",true);
+        } else if ( displayval==="hidden" ) {
+            $("#inline5").prop("checked",true);
+        } else {
+            $("#inline4").prop("checked",true);
+        }
     } else {
-        $("#inlineOpt").prop("checked",false);
+        $("#inline4").prop("checked",true);
     }
     
     // set the initial icon none check box
@@ -2708,7 +2750,7 @@ function getIconCategories(iCategory) {
                   "Doors","Electronics","Entertainment","Food_Dining","Fridge","Harmony","Health_Wellness","Home",
                   "Illuminance","Indicators","Kids","Lighting","Lights","Locks","Motion","Nest","Office","Outdoor",
                   "Particulate","People","Presence","Quirky","Samsung","Seasonal_Fall","Seasonal_Winter","Secondary",
-                  "Security","Shields","Sonos","Switches","Tesla","Thermostat","Transportation","Unknown","Valves",
+                  "Security","Shields","Sonos","Switches","Tesla","Thermostat","tomorrowio","Transportation","Unknown","Valves",
                   "Vents","Weather"];
     // arrCat = specialCat.concat(arrCat);
                   

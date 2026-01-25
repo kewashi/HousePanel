@@ -452,7 +452,9 @@ div.skinoption input {
 }
 div.filteroption {
     margin-top: 18px;
+    width: auto;
 }
+
 div#thingfilters {
     margin-top: 20px;
     padding: 5px;
@@ -1184,7 +1186,6 @@ input.delCheckbox {
 }
 
 #editicon {
-    display: inline;
     margin: 0px 5px 5px 5px;  /* top, right, bottom, left */
     float: left;
     width: 255px;
@@ -1194,7 +1195,6 @@ input.delCheckbox {
     background-color: rgba(170, 170, 170, 1);
 }
 #colorpicker, #editSection {
-    display: inline;
     float: left;
     text-align: left;
     margin: 10px;
@@ -1863,19 +1863,23 @@ iframe body {
     margin: 0px;
 }
 
-div.weather-thing div.overlay {
+/* this is what makes the real feel show next to temperature */
+div.weather-thing div.overlay.temperature, div.weather-thing div.overlay.feelsLike,
+div.weather-thing div.overlay.temperatureApparent, div.weather-thing div.overlay.realFeel {
     display: inline;
 }
+
 div.overlay.weatherIcon div.weatherIcon, 
 div.overlay.forecastIcon div.forecastIcon,
-div.overlay.weatherCode div.weatherCode {
+div.overlay.weatherCode div.weatherCode,
+div.overlay.weather_code div.weather_code {
     background-position-y: 8px;
-    width: 80px;
+    width: auto;
     height: 74px;
     padding-top: 6px;
     margin-left: 8px; margin-right: 8px;
-    color: rgb(150, 150, 150);
-    background-size: 80px;
+    color: rgba(150, 150, 150, 0.1);
+    background-size: 60px;
 }
 
 div.weather.forecastToday, div.weather.forecastTonight, div.weather.forecastTomorrow {
@@ -2367,4 +2371,70 @@ div.clientinfo {
 div.activeclient {
     color: rgb(10, 10, 200);
     font-weight: bold;
+}
+
+div.overlay.longitude, div.overlay.latitude {
+    display: none;
+}
+
+table.forcasttable {
+    border: 3px solid white;
+    border-collapse: collapse;
+    width: 90%;
+    margin-left: 5%;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+table.forcasttable td {
+    padding-left: 5px; padding-right: 5px;
+    font-size: 12px;
+    text-align: center;
+    border: 1px solid white;
+}
+table.forcasttable tr.head {
+    background-color: #eeeeee;
+    color: black;
+    text-align: center;
+}
+table.forcasttable th {
+    font-size: 14px;
+    padding-left: 5px; padding-right: 5px;
+    text-align: left;
+    border: 1px solid black;
+}
+table.forcasttable td.forcastlabel {
+    font-size: 14px;
+    padding-left: 2px; padding-right: 2px;
+    text-align: left; width: auto;
+}
+table.forcasttable th.weatherdate {
+    font-size: 12px;
+    text-align: center;
+}
+
+table.weatherapiopts {
+    width: 90%;
+    margin-left: 10px;
+}
+
+table.weatherapiopts td.weatheroption, table.weatherapiopts td.weatherval {
+    padding-left: 5px; padding-right: 5px;
+    font-size: 14px;
+    text-align: left;
+    width: auto;
+}
+
+table.weatherapiopts td.weatheroption {
+    text-align: right;
+    width: 200px;
+}
+
+table.weatherapiopts tr {
+    line-height: 1.5em;
+    border-bottom: #000000 1px solid;
+}
+
+div.thing.weather-thing.meteo {
+    width: 600px;
 }

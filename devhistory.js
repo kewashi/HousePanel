@@ -1,4 +1,6 @@
 const devhistory = `
+3.5.16  01/24/2026 Major updates to tile editor to support meteo weather and inline settings
+3.5.15  01/23/2026 Add OpenMeteo weather, move all weathers to default hub, support multiple clocks, and fix bug in handling of clock updating 
 3.5.14  01/20/2026 Added new feature to enable any adhoc user custom styling in the tile editor
 3.5.13  01/12/2026 Added support for Harmony hubs via the Maddox Api and cleaned up hub auth logic
 3.5.12  01/13/2026 Fix bug for updating configuration settings

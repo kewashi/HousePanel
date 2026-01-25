@@ -544,7 +544,6 @@ div.overlay.realFeel div.realFeel,
 div.overlay.DEWPT div.DEWPT,
 div.overlay.feelsLike div.feelsLike
 {
-    display: inline-block;
     background-color: #006666;
     color: #ffffee;
     border: 2px solid white;
@@ -682,6 +681,7 @@ div.thing.weather-thing {
 
 div.overlay.temperature div.weather.temperature, 
 div.overlay.feelsLike div.weather.feelsLike,
+div.overlay.temperatureApparent div.weather.temperatureApparent,
 div.overlay.realFeel div.weather.realFeel {
     display: inline-block;
     width: 118px;
@@ -691,22 +691,29 @@ div.overlay.realFeel div.weather.realFeel {
     box-shadow: 5px 4px 15px black;
     cursor: default;
     text-align: center;
-    height: 70px;
-    width: 70px;
+    height: 75px;
+    width: 75px;
     margin-left: 10px;
     margin-right: 10px;
     border-radius: 50%;
     font-size: 28px;
-    line-height: 55px;
-    -webkit-border-radius: 50%;
-    -moz-border-radius: 50%;
+    line-height: 60px;
+    vertical-align: top;
 }
 div.overlay.switch div.isy.climacell.switch {
     display: none;
 }
-div.overlay.feelsLike div.feelsLike::before {
+div.overlay.feelsLike div.feelsLike::before,
+div.overlay.realFeel div.realFeel::before,
+div.overlay.temperatureApparent div.temperatureApparent::before {
     content: "~ ";
     font-size: 8pt;
+}
+div.overlay.temperature div.temperature::after,
+div.overlay.feelsLike div.feelsLike::after,
+div.overlay.realFeel div.realFeel::after,
+div.overlay.temperatureApparent div.temperatureApparent::after {
+    content: "°";
 }
 div.overlay.humidity div.humidity::before {
     content: "Humidity: ";

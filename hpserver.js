@@ -58,6 +58,8 @@ const { type } = require('os');
 // support for Ambient Weather API
 const AmbientWeatherApi = require("ambient-weather-api");
 const { act } = require('react');
+const OpenMeteoApi = require('openmeteo');
+const { time } = require('console');
 
 // ISY websocket clients
 var wsclient = {};
@@ -689,12 +691,12 @@ function getTypes() {
     // all sessions have these types
     var hubtypes = Object.keys(GLB.mainISYMap);
     var blanktypes = ["blank", "custom", "frame", "image", "piston",
-                      "video", "control", "variables", "clock"];
+                      "video", "control", "variables", "clock", "weather"];
     var thingtypes = hubtypes.concat(blanktypes);
 
     // add hubitat specific types
     if ( array_key_exists("Hubitat", GLB.dbinfo.hubs) ) {
-        var hetypes = ["hsm","piston","music","audio","weather","actuator","other"];
+        var hetypes = ["hsm","piston","music","audio","actuator","other"];
         hetypes.forEach( key => {
             if ( !thingtypes.includes(key) ) {
                 thingtypes.push(key);
@@ -1045,10 +1047,65 @@ function curl_call(host, headertype, nvpstr, formdata, calltype, callback = null
     return promise;
 }
 
+// relocated this function in the code to here to be near other authentication functions
+// this function now uses promises to return results when done
+function authenthicateHub(hub) {
+    var promise = new Promise(function(resolve, reject) {
+
+        if ( !hub || typeof hub!=="object" ) {
+            reject("Something went wrong with authorizing a hub");
+            return;
+        }
+
+        
+        // check for required info based on hub type
+        if ( hub.hubaccess && hub.hubendpt ) {
+            const hubName = hub["hubname"];
+            const hubType = hub["hubtype"];
+            
+            // for all hubs we now go right to getting hub details and devices with an access token
+            // this meets up with the js later by pushing hub info back to reauth page
+            // determine what to return to browser to hold callback info for hub auth flow
+            let result = {action: "things", hubType: hubType, hubName: hubName, numdevices: 0};
+
+            if (EMULATEHUB===true && hubType==="ISY") {
+                resolve(result);
+                return;
+            }
+
+            // now read the hub and fill in the right info
+            getHubDevices(hub)
+            .then(mydevices => {
+                var ndev = Object.keys(mydevices).length;
+                result.numdevices = ndev;
+
+                // reactivate websocket here if we reauthorized an ISY hub
+                if ( hubType==="ISY" && EMULATEHUB!==true ) {
+                    setupISYSocket();
+                }
+                resolve(result);
+            })
+            .catch(reason => {
+                reject(reason);
+            });
+        } else {
+            if ( hubType === "ISY" ) {
+                var msg = "Hub username and password must both be provided to register an ISY hub";
+            } else if ( hubType === "Harmony" ) {
+                msg = "A valid Harmony hub name must be provided to register a Harmony hub";
+            } else {
+                msg = "Access Token and App ID are both required to register a Hubitat hub";
+            }
+            reject(msg);
+        }
+    });
+    return promise;
+}
+
 // rewrote this function to use promises and return actual results when it is done
 // this way hub authorizations work and return number of devices properly
 // now we use this to return all info about the hub including accessToken info
-function getHubInfo(hub) {
+function getHubDevices(hub) {
     if ( DEBUG2 ) {
         console.log( (ddbg()), "hub: ", hub);
     }
@@ -1087,7 +1144,7 @@ function getHubInfo(hub) {
                 hub.hubid = "har_" + rstr.toString();
             }
             // hub.hubid = hub.hubaccess;
-            updateHub(hub);
+            updateHubDevices(hub);
 
         // this branch is for ISY and other hubs that don't need to get their name via a hub call
         } else if ( hub.hubtype==="ISY" ) {
@@ -1095,7 +1152,7 @@ function getHubInfo(hub) {
                 var rstr = getRandomInt(100001, 999999);
                 hub.hubid = "isy_" + rstr.toString();
             }
-            updateHub(hub);
+            updateHubDevices(hub);
 
         } else {
             reject("unsupported hub type: " + hub.hubtype);
@@ -1103,7 +1160,7 @@ function getHubInfo(hub) {
 
         // this saves hubid in the user table and updates or adds the hub to the hub table
         // and then calls routine to retreive devices from the hub and return them in an array
-        function updateHub(hub) {
+        function updateHubDevices(hub) {
 
             Promise.all([
                 mydb.updateRow("users",{defhub: hub.hubid}, "id = " + userid, true),
@@ -1129,6 +1186,9 @@ function getHubInfo(hub) {
                 if ( body["sitename"] ) {
                     hubName = body["sitename"];
                 } else {
+                    if ( !hubName || hubName.length===0 ) {
+                        hubName = "Hubitat Hub";
+                    }
                     console.warn( (ddbg()), "warning - Hub name is not defined so using the user provided name: ", hubName);
                 }
 
@@ -1153,7 +1213,7 @@ function getHubInfo(hub) {
             // we now get even more info back from the hub but we don't need it
             hub.hubname  = hubName;
             hub.hubid = hubId;
-            updateHub(hub);
+            updateHubDevices(hub);
         }
     
     });
@@ -1233,6 +1293,11 @@ function removeDeadThings(userid) {
     });
 }
 
+function getHublessTypes() {
+    return {"clockdigital":1,"clockanalog":1,"control":1,"image":1,"video":1,"frame":4,"blank":1,"custom":4,"weather":0};
+}
+
+
 // rewrote this to use a promise to return the actual array of devices or a reject with a message
 function getDevices(hub) {
     if ( DEBUG1 ) {
@@ -1266,12 +1331,52 @@ function getDevices(hub) {
             console.log( (ddbg()), "error - hubid not found in DB. hub: ", hub);
             reject("error - hubid not proviced");
 
+        // moved the weather devices over to the hubless hub section
         } else if ( hubid === "-1" || hubType==="None" ) {
-            getDefaultDevices();
+            getDefaultDevices()
+            .then( async results => {
+                let body = results[0];
+                let configs = results[1];
+                const ambientapikey = getConfigItem(configs, "ambientapikey");
+                const ambientappkey = getConfigItem(configs, "ambientappkey");
+                if ( ambientapikey && ambientappkey ) {
+                    body = await getAmbientDevices(body, ambientapikey, ambientappkey);
+                    return [body, configs];
+                } else {
+                    return [body, configs];
+                }
+            })
+            .then( async results => {
+                let body = results[0];
+                let configs = results[1];
+                const zipcode = getConfigItem(configs, "zipcode");
+                if ( zipcode ) {
+                    body = await getOpenMeteoDevice(body, zipcode);
+                    return [body, configs];
+                } else {
+                    return [body, configs];
+                }
+            })
+            .then( results => {
+                let body = results[0];
+                let configs = results[1];
+                const tomorrowapi = getConfigItem(configs, "tomorrowapi");
+                const zipcode = getConfigItem(configs, "zipcode");
 
-        } else if ( !hubAccess || !hubEndpt ) {
-            console.error( (ddbg()), "error - hub has not been authorized. hub: ", hub);
-            reject("error - hub has not been authorized");
+                if ( tomorrowapi && zipcode ) {
+                    return getTomorrowIODevice(body, tomorrowapi, zipcode);
+                } else {
+                    return body;
+                }
+            })
+            .then(async body => {
+                let defaultDevices = await hubInfoCallback(body);
+                resolve(defaultDevices);
+            })
+            .catch(reason => {
+                console.error( (ddbg()), reason );
+                resolve([]);
+            });
 
         // retrieve all things from Hubitat
         } else if ( hubType==="Hubitat" ) {
@@ -1279,28 +1384,20 @@ function getDevices(hub) {
             .then(body => {
                 return body;
             })
-            .then(body => {
-                return getAmbientDevices(body);
-            })
             .then(async body => {
                 let hubitatDevices = await hubInfoCallback(body);
-                if ( typeof hubitatDevices === "string" ) {
-                    reject(hubitatDevices);
-                } else {
-                    resolve(hubitatDevices);
-                }
+                resolve(hubitatDevices);
             })
             .catch(reason => {
                 console.error( (ddbg()), reason );
+                resolve([]);
             });
 
         } else if ( hubType==="Harmony" ) {
             getHarmonyDevices()
             .then(async body => {
                 let harmonyDevices = await hubInfoCallback(body);
-                if ( typeof harmonyDevices === "string" ) {
-                    reject(harmonyDevices);
-                } else {
+                if ( typeof harmonyDevices === "object" ) {
                     for (var deviceid in harmonyDevices) {
                         const device = harmonyDevices[deviceid];
                         let value = decodeURI2(device.pvalue);
@@ -1310,77 +1407,97 @@ function getDevices(hub) {
                         console.log( (ddbg()), "Harmony devices retrieved and sent to client: ", Object.keys(harmonyDevices).length);
                     }
                     resolve(harmonyDevices);
+                } else {
+                    resolve([]);
                 }
             })
             .catch(reason => {
                 console.error( (ddbg()), reason );
+                resolve([]);
             });
 
         // retrieve all things from ISY
         } else if ( hubType==="ISY" ) {
             if ( EMULATEHUB===true ) {
-                resolve("Emulating ISY hub for local testing");
+                // resolve("Emulating ISY hub for local testing");
+                resolve([]);
             } else {
                 getIsyDevices();
             }
 
         } else {
             console.error( (ddbg()), "error - attempt to read an unknown hub type= ", hubType);
-            reject("error - attempt to read an unknown hub type= " + hubType);
+            resolve([]);
         }
 
-        // this retrieves the devices not tied to a hub
-        // all of these are already in the database and don't need changing
-        // clocks will be updated with current time and images will be updated
-        async function getDefaultDevices() {
-            var mydevices = {};
-            var dclock = getClock("clockdigital");
-            dclock = encodeURI2(dclock);
-            var aclock = getClock("clockanalog");
-            aclock = encodeURI2(aclock);
-            var acontrol = getController();
-            acontrol = encodeURI2(acontrol);
+        // rewrote this to create the default devices if they don't exist
+        // and now the hub callback does the updating of the database just like it does for Hubitat devices       
+        function getDefaultDevices() {
+            let hubdevices = [];
 
-            // think this should use hubid = hubindex
-            // we do, so no longer need to check device type. just get all devices tied to this None type hub
-            let rows = await mydb.getRows("devices", "*", `userid = ${+userid} AND hubid = ${hubindex}`);
+            return new Promise( async function(resolve, reject) {
+                let configs = await mydb.getRows("configs", "*", `userid = ${+userid} AND configtype = 0`);
+                const specialtiles = getConfigItem(configs, "specialtiles") || {};
 
-            if ( rows ) {
-                let updrow = false;
-                rows.forEach(device => {
-                    updrow = false;
-                    if ( device.deviceid === "clockdigital" ) {
-                        device.pvalue = dclock;
-                        updrow = true;
-                    } else if ( device.deviceid === "clockanalog" ) {
-                        device.pvalue = aclock;
-                        updrow = true;
-                    } else if ( device.deviceid === "control_1" ) {
-                        device.pvalue = acontrol;
-                        updrow = true;
-                    }
-                    if ( device.uid === 0 ) {
-                        uidmax++;
-                        device.uid = uidmax;
-                        updrow = true;
-                    }
-                    mydevices[device.deviceid] = device;
+                // handle special case where clocks and control are missing
+                // this only happens for legacy databases that weren't set up with these as hubless devices
+                // that will be fixed the first time they do an options page edit
+                if ( !specialtiles["clockdigital"] ) {
+                    specialtiles["clockdigital"] = 1;
+                }
+                if ( !specialtiles["clockanalog"] ) {
+                    specialtiles["clockanalog"] = 1;
+                }
+                if ( !specialtiles["control"] ) {
+                    specialtiles["control"] = 1;
+                }
 
-                    // update the row and count down to being done
-                    if ( updrow ) {
-                        mydb.updateRow("devices", device, "userid = "+userid+" AND id = " + device.id, true)
-                        .then(res => {
-                        })
-                        .catch( reason => {
-                            console.error( (ddbg()), "error - something went wrong updating clock and control devices. ", reason);
-                            reject(reason);
-                        });
+                let specials = Object.keys(getHublessTypes());
+                var pvalue;
+                var devicename;
+                specials.forEach( devtype => {
+                    const numtiles = parseInt(specialtiles[devtype] ? specialtiles[devtype] : 0 );
+                    for ( let i=1; i<=numtiles; i++ ) {
+                        let deviceid = devtype + i.toString();
+                        let devicetype = devtype.toLowerCase();
+                        let hint = "special";
+                        if ( devtype==="clockdigital" || devtype==="clockanalog" ) {
+                            deviceid = devtype;
+                            if ( i > 1 ) {
+                                deviceid += i.toString();
+                            }
+                            pvalue = getClock(deviceid);
+                            devicetype = "clock";
+                            hint = "clock";
+                            devicename = pvalue.name;
+                        } else if ( devtype==="control" ) {
+                            pvalue = getController();
+                            hint = "controller";
+                            devicename = pvalue.name;
+                        // for reasons I don't remember or understand I used an underscore in the custom device ID
+                        } else if ( devtype==="custom" ) {
+                            devicename = devtype.substring(0,1).toUpperCase() + devtype.substring(1) + i.toString();
+                            deviceid = "custom" + i.toString();
+                            pvalue = {name: devicename, width: 180, height: 210};
+                        // skip weather here since it is handled separately
+                        } else if ( devtype==="weather" ) {
+                            continue;
+                        // handle all the other special types here by including a default size and empty value
+                        // the content element is blank here because it is filled in later using the customizer info
+                        } else {
+                            devicename = devtype.substring(0,1).toUpperCase() + devtype.substring(1) + i.toString();
+                            deviceid = devtype + i.toString();
+                            pvalue = {name: devicename, width: 360, height: 230};
+                            pvalue[devtype] = "";
+                        }
+
+                        // make an object similar to how Hubitat devices are structured
+                        let device = {type: devicetype, id: deviceid, name: devicename, hint: hint, value: pvalue};
+                        hubdevices.push(device);
                     }
                 });
-                resolve(mydevices);
-            } else {
-                reject("error - no default devices found in the database");
-            }
+                resolve([hubdevices, configs]);
+            });
         }
 
         // Hubitat call to Groovy API
@@ -1395,80 +1512,309 @@ function getDevices(hub) {
             return curl_call(hubEndpt + "/getallthings", header, params, false, "POST");
         }
 
-        function getAmbientDevices(hubdevices) {
+        function getAmbientDevices(hubdevices, ambientapikey, ambientappkey) {
 
-            // patch in Ambient Weather here if there is an App key and an API key
-            if ( GLB.dbinfo.ambientappkey && GLB.dbinfo.ambientapi && GLB.dbinfo.ambientapi!=="notyet" ) {
-                const AmbientWeatherApi = require("ambient-weather-api");
-                const api = new AmbientWeatherApi({
-                    apiKey: GLB.dbinfo.ambientapi,
-                    applicationKey: GLB.dbinfo.ambientappkey
-                });
+            // patch in Ambient Weather here
+            const api = new AmbientWeatherApi({
+                apiKey: ambientapikey,
+                applicationKey: ambientappkey
+            });
 
-                return new Promise( function(resolve, reject) {
-                    api.userDevices()
-                    .then( devices => {
-                        // add a tile for each ambient weather device
-                        let num = 0;
-                        devices.forEach( device => {
-                            let newdevice = {};
-                            newdevice.type = "weather";
-                            newdevice.id = device.macAddress.replace(/:/g, "").toLowerCase();
-                            newdevice.name = device.info.name;
-                            newdevice.hint = "AmbientWeather";
-                            newdevice.value = {};
-                            
-                            api.deviceData(device.macAddress, {limit: 1})
-                            .then( devicedata => {
-                                // for now we capture all fields, later we may want to filter some out
-                                for ( let key in devicedata[0] ) {
-                                    let dataval = devicedata[0][key];
-                                    if ( key === "dateutc" || key==="date" || key==="lastRain" ) {
-                                        // convert this to a human readable date and time
-                                        let d = new Date(dataval);
-                                        dataval = d.toLocaleString();
-                                    // change temp field name to temperature
-                                    } else if ( key === "tempf" ) {
-                                        key = "temperature";
-                                    // change battery fields to display good or bad based on 1 or 0 value
-                                    } else if ( key.startsWith("batt") ) {
-                                        if ( dataval === 1 || dataval === "1" ) {
-                                            dataval = "good";
-                                        } else if ( dataval === 0 || dataval === "0" ) {
-                                            dataval = "low";
-                                        } else {
-                                            dataval = "unknown";
-                                        }
-                                        key = "battery" + key.substring(5);
+            return new Promise( function(resolve, reject) {
+                api.userDevices()
+                .then( devices => {
+                    // add a tile for each ambient weather device
+                    let num = 0;
+                    devices.forEach( device => {
+                        let newdevice = {};
+                        newdevice.type = "weather";
+                        newdevice.id = device.macAddress.replace(/:/g, "").toLowerCase();
+                        newdevice.name = device.info.name;
+                        newdevice.hint = "AmbientWeather";
+                        newdevice.value = {};
+                        
+                        api.deviceData(device.macAddress, {limit: 1})
+                        .then( devicedata => {
+                            // for now we capture all fields, later we may want to filter some out
+                            for ( let key in devicedata[0] ) {
+                                let dataval = devicedata[0][key];
+                                if ( key === "dateutc" || key==="date" || key==="lastRain" ) {
+                                    // convert this to a human readable date and time
+                                    let d = new Date(dataval);
+                                    dataval = d.toLocaleString();
+                                // change temp field name to temperature
+                                } else if ( key === "tempf" ) {
+                                    key = "temperature";
+                                // change battery fields to display good or bad based on 1 or 0 value
+                                } else if ( key.startsWith("batt") ) {
+                                    if ( dataval === 1 || dataval === "1" ) {
+                                        dataval = "good";
+                                    } else if ( dataval === 0 || dataval === "0" ) {
+                                        dataval = "low";
+                                    } else {
+                                        dataval = "unknown";
                                     }
-                                    newdevice.value[key] = dataval;
+                                    key = "battery" + key.substring(5);
                                 }
-                                hubdevices.push(newdevice);
-                                num++;
-                                if (num >= devices.length ) {
-                                    if ( DEBUG7 ) {
-                                        console.log( (ddbg()), "finished retrieving Ambient Weather devices. Total devices: ", num, " devices added to hubdevices array");
-                                    }
-                                    resolve(hubdevices);
+                                newdevice.value[key] = dataval;
+                            }
+                            hubdevices.push(newdevice);
+                            num++;
+                            if (num >= devices.length ) {
+                                if ( DEBUG7 ) {
+                                    console.log( (ddbg()), "finished retrieving Ambient Weather devices. Total devices: ", num, " devices added to hubdevices array");
                                 }
-                            })
-                            .catch( reason => {
-                                console.error( (ddbg()), "error retrieving ambient weather data for device: ", device.macAddress, " reason: ", reason);
-                                reject(reason);
-                            });
+                                resolve(hubdevices);
+                            }
+                        })
+                        .catch( reason => {
+                            console.error( (ddbg()), "error retrieving ambient weather data for device: ", device.macAddress, " reason: ", reason);
+                            resolve(hubdevices);
                         });
-                    })
-                    .catch( reason => {
-                        console.error( (ddbg()), "error retrieving ambient weather devices. reason: ", reason);
-                        reject(reason);
                     });
-                });
-            } else {
-                return new Promise( (resolve, reject) => {
-                    console.warn( (ddbg()), "Ambient Weather API keys not found. Ambient Weather devices will not be added.");
+                })
+                .catch( reason => {
+                    console.error( (ddbg()), "error retrieving ambient weather devices. reason: ", reason);
                     resolve(hubdevices);
                 });
+            });
+        }
+
+        function getOpenMeteoDevice(hubdevices, zipcode) {
+
+            function roundval(val, places = 1) {
+                let mult = Math.pow(10, places);
+                return Math.round(val * mult) / mult;
             }
+
+            return new Promise( async function(resolve, reject) {
+
+                // first get the longitude and latitude using the OpenCage Geocoding API if we only have a zip code
+                const geocodingUrl = "https://geocoding-api.open-meteo.com/v1/search";
+                const params = {
+                    name: zipcode,
+                    count: 1,
+                    language: "en",
+                    format: "json"
+                };
+                var openMeteoLat;
+                var openMeteoLon;
+                var weatherCity;
+                const header = {"Content-Type": "application/json"};
+                const queryString = Object.keys(params).map(key => `${key}=${params[key]}`).join("&");
+                const response = await curl_call(`${geocodingUrl}?${queryString}`, header, null, false, "GET")
+                .catch( reason => {
+                    console.error( (ddbg()), "error retrieving geocoding info from OpenMeteo for zip: ", zipcode, " reason: ", reason);
+                    resolve(hubdevices);
+                });
+
+                if ( response && typeof response === "object" && response.results && response.results.length > 0 ) {
+                    openMeteoLat = response.results[0].latitude;
+                    openMeteoLon = response.results[0].longitude;
+                    weatherCity = response.results[0].name;
+                } else {
+                    console.error( (ddbg()), "invalid geocoding info retrieved from OpenMeteo for zip: ", zipcode);
+                    resolve(hubdevices);
+                }
+
+                try {
+                    const params = {
+                        latitude: openMeteoLat,
+                        longitude: openMeteoLon,
+                        daily: ["weather_code", "temperature_2m_max", "temperature_2m_min", "apparent_temperature_max", "apparent_temperature_min", "uv_index_max", "precipitation_sum", "precipitation_probability_max"],
+                        current: ["temperature_2m", "relative_humidity_2m", "apparent_temperature", "wind_speed_10m", "wind_direction_10m", "precipitation", "rain", "weather_code", "cloud_cover", "pressure_msl", "showers", "wind_gusts_10m", "surface_pressure"],
+                        timezone: "America/Los_Angeles",
+                        wind_speed_unit: "mph",
+                        temperature_unit: "fahrenheit",
+                        precipitation_unit: "inch"
+                    };
+
+                    // const feathWeatherApi = OpenMeteoApi
+
+                    const url = "https://api.open-meteo.com/v1/forecast";
+                    const responses = await OpenMeteoApi.fetchWeatherApi(url, params);
+                    const response = responses[0];
+                    const current = response.current();
+                    const daily = response.daily();
+
+                    const latitude = response.latitude();
+                    const longitude = response.longitude();
+                    const elevation = response.elevation();
+                    // const utcOffsetSeconds = response.utcOffsetSeconds();
+                    // since we use locale strings below we set this to zero and let the locale string handle the timezone
+                    const utcOffsetSeconds = 0;
+
+                    let newdevice = {};
+                    newdevice.type = "weather";
+                    newdevice.id = "openmeteo";
+                    newdevice.name = "Open Meteo Weather";
+                    newdevice.hint = "OpenMeteo";
+                    const timestr = new Date((Number(current.time()) + utcOffsetSeconds) * 1000).toLocaleString();
+                    newdevice.value = {
+                        city: weatherCity ? weatherCity : "Unknown",
+                        time: timestr,
+                        temperature: roundval(current.variables(0).value()),
+                        feelsLike: roundval(current.variables(2).value()),
+                        weather_code: current.variables(7).value(),
+                        relative_humidity_2m: roundval(current.variables(1).value()),
+                        // apparent_temperature: roundval(current.variables(2).value()),
+                        wind_speed_10m: roundval(current.variables(3).value()),
+                        wind_direction_10m: roundval(current.variables(4).value()),
+                        precipitation: roundval(current.variables(5).value()),
+                        rain: roundval(current.variables(6).value()),
+                        cloud_cover: roundval(current.variables(8).value()),
+                        pressure_msl: roundval(current.variables(9).value()),
+                        showers: roundval(current.variables(10).value()),
+                        wind_gusts_10m: roundval(current.variables(11).value()),
+                        surface_pressure: roundval(current.variables(12).value()),
+                        elevation: elevation,
+                        latitude: roundval(latitude, 4),
+                        longitude: roundval(longitude, 4)
+                    };
+
+                    // Build forecast data arrays
+                    let forecastData = {
+                        dates: [],
+                        weather_code: [],
+                        temperature_2m_max: [],
+                        temperature_2m_min: [],
+                        feelsLike_max: [],
+                        feelsLike_min: [],
+                        uv_index_max: [],
+                        precipitation_sum: [],
+                        precipitation_probability_max: []
+                    };
+
+                    let numdays = (Number(daily.timeEnd()) - Number(daily.time())) / daily.interval();
+                    for ( let day = 0; day < numdays; day++ ) {
+                        let thedate = new Date((Number(daily.time()) + day * daily.interval() + utcOffsetSeconds) * 1000);
+                        forecastData.dates.push(thedate.toLocaleDateString());
+                        forecastData.weather_code.push(daily.variables(0).valuesArray()[day]);
+                        forecastData.temperature_2m_max.push(roundval(daily.variables(1).valuesArray()[day]));
+                        forecastData.temperature_2m_min.push(roundval(daily.variables(2).valuesArray()[day]));
+                        forecastData.feelsLike_max.push(roundval(daily.variables(3).valuesArray()[day]));
+                        forecastData.feelsLike_min.push(roundval(daily.variables(4).valuesArray()[day]));
+                        forecastData.uv_index_max.push(roundval(daily.variables(5).valuesArray()[day]));
+                        forecastData.precipitation_sum.push(roundval(daily.variables(6).valuesArray()[day]));
+                        forecastData.precipitation_probability_max.push(roundval(daily.variables(7).valuesArray()[day]));
+                    }
+
+                    // Build HTML table
+                    let forecastTable = '<table class="forcasttable">';
+                    forecastTable += '<tr class="head"><th class="forecastlabel">Forecast</th>';
+                    for (let i = 0; i < forecastData.dates.length; i++) {
+                        forecastTable += `<th class="weatherdate">${forecastData.dates[i]}</th>`;
+                    }
+                    forecastTable += '</tr>';
+
+                    // Data rows
+                    const rows = [
+                        { label: 'Weather Code', key: 'weather_code' },
+                        { label: 'Temp Max', key: 'temperature_2m_max' },
+                        { label: 'Temp Min', key: 'temperature_2m_min' },
+                        { label: 'Like Max', key: 'feelsLike_max' },
+                        { label: 'Like Min', key: 'feelsLike_min' },
+                        { label: 'UV Index', key: 'uv_index_max' },
+                        { label: 'Precip', key: 'precipitation_sum' },
+                        { label: 'Precip Prob.', key: 'precipitation_probability_max' }
+                    ];
+                    rows.forEach(row => {
+                        forecastTable += `<tr><td class="forcastlabel">${row.label}</td>`;
+                        for (let i = 0; i < forecastData[row.key].length; i++) {
+                            if ( row.key === "weather_code" ) {
+                                forecastTable += `<td>${getWeatherIcon(forecastData[row.key][i],"weather_code", 40, 40)}</td>`;
+                            } else {
+                                forecastTable += `<td>${forecastData[row.key][i]}</td>`;
+                            }
+                        }
+                        forecastTable += '</tr>';
+                    });
+                    forecastTable += '</table>';
+
+                    // Store the table in a single property
+                    newdevice.value.forecast = forecastTable;
+
+                    if ( DEBUG7 || DEBUGtmp ) {
+                        console.log( (ddbg()), "Open Meteo weather device retrieved: ", newdevice);
+                    }
+                    
+                    hubdevices.push(newdevice);
+                    resolve(hubdevices);
+                } catch (reason) {
+                    console.error( (ddbg()), "error retrieving Open Meteo weather device. reason: ", reason);
+                    resolve(hubdevices);
+                }
+            });
+        }
+
+        function getTomorrowIODevice(hubdevices, apikey, zipcode) {
+            const host = "https://api.tomorrow.io/v4/weather/realtime";
+            
+            return new Promise( async function(resolve, reject) {
+                
+                // Check if we have the required API key and location
+                if ( !apikey  || !zipcode ) {
+                    if ( DEBUG7 ) {
+                        console.log( (ddbg()), "Tomorrow.io API key or zipcode not configured");
+                    }
+                    resolve(hubdevices);
+                    return;
+                }
+
+                try {
+                    const params = {
+                        location: zipcode,
+                        units: "imperial",
+                        apikey: apikey
+                    };
+
+                    const nvpstr = Object.keys(params).map(key => `${key}=${params[key]}`).join("&");
+                    const url = `${host}?${nvpstr}`;
+                    const header = {"Content-Type": "application/json"};
+
+                    let weatherData = await curl_call(url, header, null, false, "GET");
+                    
+                    if ( weatherData && weatherData.data && weatherData.data.values ) {
+                        let newdevice = {};
+                        newdevice.type = "weather";
+                        newdevice.id = "tomorrowio";
+                        newdevice.name = "Tomorrow IO Weather";
+                        newdevice.hint = "TomorrowIO";
+                        newdevice.value = weatherData.data.values;
+                        
+                        // Round temperature values
+                        newdevice.value.temperature = Math.round(newdevice.value.temperature);
+                        newdevice.value.temperatureApparent = Math.round(newdevice.value.temperatureApparent);
+                        
+                        // Add time from the data response
+                        newdevice.value.time = weatherData.data.time;
+                        
+                        // Add location information
+                        if ( weatherData.location ) {
+                            newdevice.value.location = weatherData.location.name;
+                            newdevice.value.latitude = weatherData.location.lat;
+                            newdevice.value.longitude = weatherData.location.lon;
+                        }
+                        
+                        // Add subname
+                        newdevice.value.subname = "Powered by Tomorrow.io";
+                        newdevice.value.name = "Tomorrow IO Weather";
+
+                        if ( DEBUG7 ) {
+                            console.log( (ddbg()), "Tomorrow.io weather device retrieved: ", newdevice);
+                        }
+                        
+                        hubdevices.push(newdevice);
+                        resolve(hubdevices);
+                    } else {
+                        console.warn( (ddbg()), "Tomorrow.io API returned unexpected data");
+                        resolve(hubdevices);
+                    }
+                } catch (reason) {
+                    console.error( (ddbg()), "error retrieving Tomorrow.io weather device. reason: ", reason);
+                    resolve(hubdevices);
+                }
+            });
         }
 
         function getHarmonyDevices() {
@@ -1915,7 +2261,6 @@ function getDevices(hub) {
                 }
 
                 if ( done["variables"] && done["programs"] && done["nodes"] && done["groups"] && done["states"] ) {
-                    // resolve(mydevices);
                     removeDeadNodes(userid, hubindex, currentDevices)
                     .then( () => {
                         resolve(mydevices);
@@ -2600,19 +2945,6 @@ function setIsyFields(nodeid, device, props) {
     return value;
 }
 
-function getSpecials(configoptions) {
-
-    var spobj = getConfigItem(configoptions, "specialtiles");
-    var obj = decodeURI2(spobj);
-
-    // fix the old logic that used to store this info for getFile
-    if ( !obj ) {
-        obj = {"video": 4, "frame": 4, "image": 4, "blank": 4, "custom": 8};
-    }
-
-    return obj;
-}
-
 // this sends control over to doLogin upon return
 function getLoginPage(req, userid, pname, emailname, mobile, hostname) {
     var tc = "";
@@ -2640,7 +2972,7 @@ function getLoginPage(req, userid, pname, emailname, mobile, hostname) {
     tc+= "</div>";
     
     tc+= "<div class='loginline'>";
-    tc+= "<label for=\"mobileid\" class=\"startupinp\">Mobile (or any >6 digit number): </label><br>";
+    tc+= "<label for=\"mobileid\" class=\"startupinp\">Mobile (or the 6+ digit<br>secret number you provided):</label><br>";
     tc+= "<input id=\"mobileid\" tabindex=\"2\" name=\"mobile\" size=\"60\" type=\"text\" value=\"" + mobile + "\"/>"; 
     tc+= "</div>";
     
@@ -2731,9 +3063,8 @@ function getLoginPage(req, userid, pname, emailname, mobile, hostname) {
 
     if ( !GLB.dbinfo.allownewuser || GLB.dbinfo.allownewuser==="false" || GLB.dbinfo.allownewuser.includes("none") ) {
         tc+= "<div class='loginline'>";
-        tc+= "Sorry, but HousePanel is no longer available for new public users. You can still use the \"freeware\" ";
-        tc+= "version of HousePanel by downloading the files onto your own server or rPI. Instructions for how ";
-        tc+= "to do this and where to find the files are available at <a href=\"https://www.housepanel.net\" target=\"_blank\">https://www.housepanel.net</a>";
+        tc+= "Sorry, but this installment of HousePanel does not support adding new user accounts. To add a new user account, the administrator ";
+        tc+= "must create it manually. Contact them to request being added.";
         tc+= "</div>";
     } else {
 
@@ -2743,7 +3074,7 @@ function getLoginPage(req, userid, pname, emailname, mobile, hostname) {
         tc+= "</div>";
 
         tc+= "<div class='loginline'>";
-        tc+= "<label for=\"newmobileid\" class=\"startupinp\">Mobile (or any >6 digit number): </label><br>";
+        tc+= "<label for=\"newmobileid\" class=\"startupinp\">Mobile (or any >6 digit number):<br><i>(This must be given when logging in)</i></label><br>";
         tc+= "<input id=\"newmobileid\" tabindex=\"2\" name=\"newmobile\" size=\"60\" type=\"text\" value=\"\"/>"; 
         tc+= "</div>";
 
@@ -2792,7 +3123,6 @@ function createUser(body) {
     var pname = "default";
     var mobile = body.mobile;
     var pword = body.pword;
-    var userid;
 
     // change username to email if none given
     if ( !username ) {
@@ -2809,7 +3139,7 @@ function createUser(body) {
             console.log( (ddbg()), "newuser: ", newuser );
         }
         if ( !newuser || !newuser.id ) throw "error creating new user";
-        userid = newuser.id;
+        const userid = newuser.id;
 
         // the first promise below is to just return newuser since we don't need to get it from the db again
         return Promise.all( [
@@ -2822,11 +3152,11 @@ function createUser(body) {
     .then(results => {
 
         // get all the results from the promise check
-        var newuser = results[0];
-        var configs = results[1];
-        var panel = results[2][0];
-        var rooms = results[2][1];
-        var defhub = results[3];
+        const newuser = results[0];
+        const configs = results[1];
+        const panel = results[2][0];
+        const rooms = results[2][1];
+        const defhub = results[3];
 
         if ( DEBUG15 ) {
             console.log( (ddbg()), "new user: ", newuser);
@@ -2837,40 +3167,37 @@ function createUser(body) {
         }
 
         // if new user object isn't valid then we have a problem
-        if ( !configs || !panel || !rooms || !defhub ) { 
+        if ( !newuser || !configs || !panel || !rooms || !defhub ) { 
             throw "error - encountered a problem adding a new user to HousePanel with email = " + emailname; 
         }
+        return results;
+    })
+    .then( async results => {
 
-        var userid = panel.userid;
-        var hubid = defhub.id;
+        const newuser = results[0];
+        const userid = newuser.id;
+        const defhub = results[3];
+        const devices = await getDevices(defhub);
 
-        // set new user if no validation is used
-        if ( GLB.dbinfo.service!=="twilio" && GLB.dbinfo.service!=="email" && GLB.dbinfo.service!=="both"  ) {
-            newuser.usertype = userid;
-        }         
+        if ( !devices ) {
+            throw "error - problem creating default devices for new user with email = " + emailname;
+        }
+        results.push(devices);
+        if ( DEBUG15 ) {
+            console.log( (ddbg()), "default devices created for userid: ", userid, " devices: ", jsonshow(devices));       
+        }
+    
+        // all went well so make a new folder for this user
+        makeDefaultFolder(userid, pname);
+        return results;
+    })
+    .then( results => {
 
-        // create the default devices
-        makeDefaultDevices(userid, hubid, configs)
-        .then( result => {
-            if ( DEBUG15 ) {
-                console.log( (ddbg()), "default devices created for userid: ", userid, " hubid: ", hubid, " result: ", result);       
-            }
-
-            // all went well so make a new folder for this user
-            makeDefaultFolder(userid, pname);
-        }).catch(reason => {
-            throw reason;
-        })
-
-        // get the confirmation code from the new user
-        let thecode = newuser.hpcode;
-
-        // var d = new Date();
-        // var time = d.toLocaleTimeString();
-        // var logincode = pw_hash(mobile + time).toUpperCase();
-        // var len = logincode.length;
-        // var mid = len / 2;
-        // var thecode = logincode.substring(0,1) + logincode.substring(mid,mid+1) + logincode.substring(len-4);
+        const newuser = results[0];
+        const userid = newuser.id;
+        const emailname = newuser.email;
+        const mobile = newuser.mobile;
+        const thecode = newuser.hpcode;
         let msg = "HousePanel confirmation code: " + thecode;
 
         // write confirmation to console and email and/or text it to user
@@ -2902,7 +3229,7 @@ function createUser(body) {
     })
     .catch(reason => {
         console.error( (ddbg()), "error creating new user:", reason );
-        return reason;
+        return null;
     });
 }
 
@@ -3022,7 +3349,7 @@ function addNewUser(emailname, username, mobile, pword) {
     // if it is set to zero here then we will later set it to its own id mapping to a real new user
     var newuser = {email: emailname, uname: username, mobile: mobile, password: pw_hash(pword), usertype: 0, defhub: "", hpcode: thecode };
     return mydb.addRow("users", newuser)
-    .then(result => {
+    .then(async result => {
         if ( !result ) { 
             throw "error - encountered a problem adding a new user to HousePanel with email = " + emailname; 
         }
@@ -3039,7 +3366,7 @@ function addNewUser(emailname, username, mobile, pword) {
             var usertype = userid;
             var permcode = getNewCode(emailname);
             newuser.hpcode = permcode;
-            mydb.updateRow("users",{usertype: usertype, hpcode: permcode}, "id = " + userid)
+            await mydb.updateRow("users",{usertype: usertype, hpcode: permcode}, "id = " + userid)
             .then(()=> {
                 var msg = "For security purposes all API calls must use hpcode="+permcode;
                 console.log( (ddbg()), msg );
@@ -3093,10 +3420,10 @@ function makeDefaultFolder(userid, pname) {
 
 async function makeNewConfig(userid) {
 
-    var d = new Date();
-    var timesig = GLB.HPVERSION + " @ " + d.getTime();
-    var specials = {video:4, frame:4, image:4, blank:4, custom:8};
-    var useroptions = getTypes();
+    const d = new Date();
+    const timesig = GLB.HPVERSION + " @ " + d.getTime();
+    const specials = getHublessTypes();
+    const useroptions = getTypes();
 
     var configs = [];
     configs.push( await addConfigItem(userid, "time", timesig) );
@@ -3105,15 +3432,13 @@ async function makeNewConfig(userid) {
     configs.push( await addConfigItem(userid, "blackout", "false") );
     configs.push( await addConfigItem(userid, "rules", "true") );
     configs.push( await addConfigItem(userid, "phototimer","0") );
-    configs.push( await addConfigItem(userid, "fast_timer","0") );            // unused at present
-    configs.push( await addConfigItem(userid, "slow_timer","0") );            // unused at present
     configs.push( await addConfigItem(userid, "fcastcity", "san-carlos") );   // (userid, "fcastcity") || "ann-arbor" );
     configs.push( await addConfigItem(userid, "fcastregion","San Carlos") );  // (userid, "fcastregion","Ann Arbor") );
     configs.push( await addConfigItem(userid, "fcastcode","37d51n122d26") );  // (userid, "fcastcode","42d28n83d74") );
     configs.push( await addConfigItem(userid, "accucity","san-carlos") );     // (userid, "accucity","ann-arbor-mi") );
     configs.push( await addConfigItem(userid, "accuregion","us") );           // (userid, "accuregion","us") );
     configs.push( await addConfigItem(userid, "accucode", "337226") );        // (userid, "accucode", "329380") );
-    configs.push( await addConfigItem(userid, "hubpick", "all") );
+    configs.push( await addConfigItem(userid, "hubpick", "-1") );
     configs.push( await addConfigItem(userid, "useroptions", useroptions) );
     configs.push( await addConfigItem(userid, "specialtiles", specials) );
     if ( DEBUG15 ) {
@@ -3163,62 +3488,8 @@ function makeDefaultHub(userid) {
     return promise;
 }
 
-function makeDefaultDevices(userid, hubid) {
-    // make a default hub for this user
-    var specials = {video:4, frame:4, image:4, blank:4, custom:8};
-
-    var promise = new Promise(function(resolve, reject) {
-        var dclock;
-        var aclock;
-        var acontrol;
-
-        var clock = getClock("clockdigital");
-        var clockname = clock.name;
-        clock = encodeURI2(clock);
-        dclock = {userid: userid, hubid: hubid, deviceid: "clockdigital", name: clockname,
-                  devicetype: "clock", hint: "clock", refresh: "never", pvalue:  clock};
-        mydb.addRow("devices", dclock)
-        .then( row => {
-            dclock.id = row.getAutoIncrementValue();
-
-            var clock = getClock("clockanalog");
-            var clockname = clock.name;
-            clock = encodeURI2(clock);
-            aclock = {userid: userid, hubid: hubid, deviceid: "clockanalog", name: clockname,
-                      devicetype: "clock", hint: "clock", refresh: "never", pvalue:  clock};
-            return mydb.addRow("devices", aclock);
-        })
-        .then( row => {
-            aclock.id = row.getAutoIncrementValue();
-
-            var controlval = getController();
-            controlval = encodeURI2(controlval);
-            acontrol = {userid: userid, hubid: hubid, deviceid: "control_1", "name": "Controller",
-                        devicetype: "control", hint: "controller", refresh: "never", pvalue: controlval};
-            return mydb.addRow("devices", acontrol);
-        })
-        .then( row => {
-            acontrol.id = row.getAutoIncrementValue();
-            return  [dclock, aclock, acontrol];
-        })
-        .then(theclocks => {
-            // now make the special tiles
-            for ( var stype in specials ) {
-                var newcount = specials[stype];
-                updSpecials(userid, hubid, stype, newcount, null);
-            }          
-            resolve(theclocks);
-        })
-        .catch(reason => {
-            console.error( (ddbg()), "error attempting to create default devices: ", reason);
-            reject(reason);
-        });
-    });
-    return promise;
-}
-
 function getController() {
-    var controlval = {"name": "Controller", "showoptions": "Options", "editdevices": "Edit Devices", "refreshpage": "Refresh",
+    const controlval = {"name": "Controller", "showoptions": "Options", "editdevices": "Edit Devices", "refreshpage": "Refresh",
     "c__userauth": "Hub Auth","showid": "Show Info","toggletabs": "Toggle Tabs", "showdoc": "Documentation",
     "blackout": "Blackout","operate": "Operate","reorder": "Reorder","edit": "Edit"};
     return controlval;
@@ -4104,16 +4375,11 @@ function processName(thingname, thingtype) {
 // returns proper html to display an image, video, frame, or custom
 // if some other type is requested it returns a div of requested size and skips search
 // searches in main folder and media subfolder for file name
-function getFileName(userid, pname, thingvalue, thingtype, configoptions) {
+function getFileName(userid, pname, thingvalue, thingtype) {
 
-    // do nothing if this isn't a special tile
-    if ( !configoptions ) {
-        return thingvalue;
-    }
-
-    // only process this for special tiles that read files
-    var specialtiles = getSpecials(configoptions);
-    if ( !array_key_exists(thingtype, specialtiles) ) {
+    // only process these types of tiles
+    const supportedtiles = ["image","video","frame","custom","blank"];
+    if ( !supportedtiles.includes(thingtype) ) {
         return thingvalue;
     }
 
@@ -4382,15 +4648,14 @@ function writeWeatherWidget(userid, weatherwidget, framenum) {
     fs.writeFileSync(fname, weatherwidget, {encoding: "utf8", flag:"w"});
 }
 
-function getWeatherIcon(num, weathertype) {
+function getWeatherIcon(num, weathericon, width=80, height=80) {
     var iconimg;
     var iconstr;
     var numstr = num.toString();
-    if ( weathertype==="accuWeather" ) {
-        num = numstr + ".svg";
-        iconimg = "https://accuweather.com/images/weathericons/" + num;
-        iconstr = "<img src=\"" + iconimg + "\" alt=\"" + num + "\" width=\"80\" height=\"80\">";
-    } else if ( weathertype==="tomorrowio" ) {
+    if ( weathericon==="accuweather" ) {
+        iconimg = "https://accuweather.com/images/weathericons/" + numstr + ".svg";
+        iconstr = "<img src=\"" + iconimg + "\" alt=\"" + numstr + "\" width=\"" + width + "\" height=\"" + height + "\">";
+    } else if ( weathericon==="weatherCode" ) {
         iconimg = "media/tomorrowio/na.png";
         var description = "unknown";
         const files = fs.readdirSync("media/tomorrowio");
@@ -4410,108 +4675,59 @@ function getWeatherIcon(num, weathertype) {
                 break;
             }
         }
-        iconstr = "<img src=\"" + iconimg + "\" alt=\"" + description + "\" width=\"80\" height=\"80\">";
+        iconstr = "<img src=\"" + iconimg + "\" alt=\"" + description + "\" width=\"" + width + "\" height=\"" + height + "\">";
 
-    } else if ( weathertype==="hubitat") {
+    } else if ( weathericon==="weatherIcon" || weathericon==="forecastIcon" ) {
 
         if ( typeof num === "string" && num.startsWith("<img") ) {
             iconstr = num;
         } else if ( num==="na" || (typeof num === "string" && num.startsWith("weather")) ) {
             iconimg = "media/weather/" + num + ".png";
-            iconstr = "<img src=\"" + iconimg + "\" alt=\"" + num + "\" width=\"80\" height=\"80\">";
+            iconstr = "<img src=\"" + iconimg + "\" alt=\"" + num + "\" width=\"" + width + "\" height=\"" + height + "\">";
         } else {
             num = num.toString();
             if ( num.length < 2 ) {
                 num = "0" + num;
             }
             iconimg = "media/weather/" + num + ".png";
-            iconstr = "<img src=\"" + iconimg + "\" alt=\"" + num + "\" width=\"80\" height=\"80\">";
+            iconstr = "<img src=\"" + iconimg + "\" alt=\"" + num + "\" width=\"" + width + "\" height=\"" + height + "\">";
         }
+    } else if ( weathericon==="weather_code") {
+        const iconMap = {0: "32", 1: "34", 2: "34", 3: "37", 45: "11", 48: "29", 48: "33", 51: "09", 53: "11", 55: "12",
+            56: "08", 57: "06", 61: "09", 63: "11", 65: "12", 66: "08", 67: "10", 71: "13", 73: "14", 75: "16", 77: "41", 
+            80: "09", 81: "12", 82: "40", 85: "13", 86: "14", 95: "03", 96: "04", 99: "47"};
+        let iconNum = iconMap[num];
+        if ( !iconNum ) {
+            iconNum = "32";
+        }
+        iconimg = "media/weather/" + iconNum + ".png";
+        iconstr = "<img src=\"" + iconimg + "\" alt=\"" + num + "\" width=\"" + width + "\" height=\"" + height + "\">";
+        
     } else {
         iconimg = "media/weather/na.png";
-        iconstr = "<img src=\"" + iconimg + "\" alt=\"na\" width=\"80\" height=\"80\">";
+        iconstr = "<img src=\"" + iconimg + "\" alt=\"na\" width=\"" + width + "\" height=\"" + height + "\">";
     }
     return iconstr;
 }
 
-// TODO - update this to handle special translations for Ambient Weather
 function translateWeather(pvalue) {
     if ( !pvalue || typeof pvalue!=="object" ) {
-        console.log( (ddbg()), "invalid weather data - object expected but not found");
-    } else if ( pvalue.weatherIcon && pvalue.forecastIcon ) {
-        pvalue["weatherIcon"] = getWeatherIcon(pvalue.weatherIcon,"hubitat");
-        pvalue["forecastIcon"] = getWeatherIcon(pvalue.forecastIcon,"hubitat");
-    } else if ( pvalue.weatherCode ) {
-        pvalue["weatherCode"] = getWeatherIcon(pvalue.weatherCode, "tomorrowio");
-    } else if ( pvalue.realFeel ) {
-        pvalue = translateAccuWeather(pvalue);
+        console.warn( (ddbg()), "Invalid weather data in translateWeather.");
+    } else {
+        if ( typeof pvalue["weatherIcon"] !== "undefined" ) {
+            pvalue["weatherIcon"] = getWeatherIcon(pvalue["weatherIcon"],"weatherIcon");
+        }
+        if ( typeof pvalue["forecastIcon"] !== "undefined" ) {
+            pvalue["forecastIcon"] = getWeatherIcon(pvalue["forecastIcon"],"forecastIcon");
+        }
+        if ( typeof pvalue["weatherCode"] !== "undefined" ) {
+            pvalue["weatherCode"] = getWeatherIcon(pvalue["weatherCode"], "weatherCode");
+        }
+        if ( typeof pvalue["weather_code"] !== "undefined" ) {
+            pvalue["weather_code"] = getWeatherIcon(pvalue["weather_code"], "weather_code");
+        }
     }
     return pvalue;
-}
-
-function translateAccuWeather(pvalue) {
-    // the rest of this function fixes up the accuWeather tile
-    var newvalue = {};
-    newvalue.name = "Weather";
-    newvalue.temperature = pvalue.temperature;
-    newvalue.realFeel = pvalue.realFeel;
-    newvalue.weatherIcon = getWeatherIcon(pvalue.weatherIcon, "accuWeather");
-    if ( newvalue.weatherIcon===false ) {
-        delete newvalue.weatherIcon;
-    }
-
-    // fix the summary string to work with the web
-    var summaryStr = pvalue.summary;
-    var forecastStr = "";
-    if ( typeof summaryStr === "string" ) {
-        newvalue.summary = summaryStr.replace(/\n/g, "<br/>");
-    }
-
-    // make the visual forcast block
-    try {
-        var forecast = JSON.parse(pvalue.forecast);
-    } catch(e) {
-        if ( typeof pvalue.forecast === "string" ) {
-            forecastStr = pvalue.forecast.replace(/\n/g, "<br/>");
-        }
-        forecast = null;
-    }
-    if ( forecast ) {
-        forecastStr = "<table class='accuweather'>";
-        forecastStr += "<tr>";
-        forecastStr += "<th class='hr'>Time</th>";
-        forecastStr += "<th class='temperature'>Temp</th>";
-        forecastStr += "<th class='precipitation'>Icon</th>";
-        forecastStr += "</tr>";
-
-        var hr = 1;
-        var thishr = hr.toString().trim()+"hr"
-        while ( hr <= 3 && typeof forecast[thishr] === "object" ) {
-            forecastStr += "<tr>";
-            // see if we have icons and times
-            if (pvalue["time"+thishr]) {
-                var words = pvalue["time"+thishr].split("\n");
-                var timestr = words[1].substr(0,3) + " " + words[2];
-                forecastStr += "<td class='hr'>" + timestr + "</td>";
-            } else {
-                forecastStr += "<td class='hr'>" + hr + " Hr</td>";
-            }
-            forecastStr += "<td class='temperature'>" + forecast[thishr].temperature + "</td>";
-            // forecastStr += "<td class='realFeel'>" + forecast[thishr].realFeel + "</td>";
-            if (pvalue["icon"+thishr]) {
-                forecastStr += "<td class='weatherIcon'>" + getWeatherIcon(pvalue["icon"+thishr], true) + "</td>";
-            } else {
-                forecastStr += "<td class='weatherIcon'>" + getWeatherIcon("na") + "</td>";
-            }
-            forecastStr += "</tr>";
-
-            hr++;
-            thishr = hr.toString()+"hr";
-        }
-        forecastStr += "</table>";
-    }
-    newvalue.forecast = forecastStr;
-    return newvalue;
 }
 
 // removes dup words from a string
@@ -4537,16 +4753,26 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
     let bid = thesensor["id"];
     const wwx = wysiwyg ? "x_" : "";
 
+    // set type to hint if one is given
+    // this is to support ISY nodes that all register as ISY types
+    // so we can figure out what type of tile this is closest to
+    var hubnum = thesensor["hubnum"];
+    var hubindex = thesensor["hubindex"];
+    var thingid = thesensor.thingid;
+    var hubtype = thesensor.hubtype || "None";
+    var hint = thesensor["hint"] || hubtype;
+    var uid = thesensor.uid;
+
     // set custom name provided by tile editor
     // this is overruled by any name provided in the tile customizer
     if ( customname && array_key_exists("name", thesensor.value) ) { 
         thesensor.value["name"] = customname.trim();
     }
-
+    
     // add in customizations here
     if ( configoptions && is_object(configoptions) ) {
-        thesensor.value = getCustomTile(userid, configoptions, thesensor.value, bid);
-        thesensor.value = getFileName(userid, pname, thesensor.value, thingtype, configoptions);
+        thesensor.value = getCustomTile(userid, configoptions, thesensor.value, bid, hint);
+        thesensor.value = getFileName(userid, pname, thesensor.value, thingtype);
     }
     
     if ( !wysiwyg || wysiwyg!=="pe_wysiwyg" ) {
@@ -4555,19 +4781,8 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
 
     var thingvalue = thesensor.value;
         
-    // set type to hint if one is given
-    // this is to support ISY nodes that all register as ISY types
-    // so we can figure out what type of tile this is closest to
-    // this also is used to include the hub type in the tile
-    var hint = thesensor["hint"] || "";
-    var hubnum = thesensor["hubnum"] || "-1";
-    var hubindex = thesensor["hubindex"];
-    var refresh = "";
-    var thingid = thesensor.thingid;
-    var hubtype = thesensor.hubtype || "None";
-    var uid = thesensor.uid;
-
     // use override if there
+    var refresh = "";
     if ( array_key_exists("refresh", thesensor) && thesensor.refresh ) {
         refresh = thesensor["refresh"];
     }
@@ -4608,22 +4823,14 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
     // added uid which is a unique id for just this user to get to the device quickly
     // that way devices[userid, uid] can be used to get to devices[id] and avoid huge pointer numbers in the GUI
     // $tc = "<div id=\""+idtag+"\" thingid=\""+thingid+"\" aid=\""+cnt+"\" uid=\""+uid+"\" hub=\""+hubnum+"\" hubindex=\""+hubindex+"\"  hubtype=\""+hubtype+"\" tile=\""+kindex+"\" bid=\""+bid+"\" type=\""+thingtype+"\"";
-    $tc = "<div id=\""+idtag+"\" thingid=\""+thingid+"\" uid=\""+uid+"\" hub=\""+hubnum+"\" hubindex=\""+hubindex+"\"  hubtype=\""+hubtype+"\" tile=\""+kindex+"\" bid=\""+bid+"\" type=\""+thingtype+"\"";
+    $tc = "<div id=\""+idtag+"\" thingid=\""+thingid+"\" uid=\""+uid+"\" hub=\""+hubnum+"\" hubindex=\""+hubindex+"\"  hubtype=\""+hubtype+"\" tile=\""+kindex+"\" bid=\""+bid+"\" type=\""+thingtype+"\" hint=\""+hint+"\"";
     
     // set up the class setting
-    var classstr = "thing " + thingtype+"-thing" + subtype;
-    if ( hint ) {
-        $tc += " hint=\""+hint+"\"";
-    }
-    classstr += " p_"+kindex;
-
-    // add the panel name to the class
-    // this allows styling to be page dependent or applied everywhere
-    classstr = panelname + " " + classstr;
+    var classstr = panelname + " thing " + thingtype+"-thing" + subtype + " p_"+kindex;
     classstr = uniqueWords(classstr);
 
     $tc += " panel=\""+panelname+"\" class=\""+classstr+"\"";
-    if ( refresh!=="never" && refresh!=="" ) {
+    if ( refresh && refresh!=="never" ) {
         $tc += " refresh=\""+refresh+"\"";
     }
     var pos = "absolute";
@@ -4748,6 +4955,7 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
         let linkid = "";
         let linkhub = "";
         let linkval = tval ? tval : "";
+        let linkhint = hint;
         let helperval = linkval.toString();
         try {
             const ipos = helperval.indexOf("::");
@@ -4789,7 +4997,7 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
                     linkid = linkdev["devices_id"];
                     linkbid = linkdev["devices_deviceid"];
                     linkhub = linkdev["devices_hubid"];
-                    hint = linkdev["devices_hint"];
+                    linkhint = linkdev["devices_hint"];
                     linktileval = decodeURI2(linkdev["devices_pvalue"]);
 
                     // put linked val through the customization
@@ -4797,8 +5005,8 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
                     // the customtile call here can only be a time or a date field
                     // because we don't present custom fields when links are defined in the customizer
                     // so this call is only here to properly format times and dates that are linked
-                    linktileval = getCustomTile(userid, configoptions, linktileval, linkbid);
-                    linktileval = getFileName(userid, pname, linktileval, linktype, configoptions);
+                    linktileval = getCustomTile(userid, configoptions, linktileval, linkbid, linkhint);
+                    linktileval = getFileName(userid, pname, linktileval, linktype);
                     if ( array_key_exists(realsubid, linktileval) ) {
                         tval = linktileval[realsubid];
                     } else {
@@ -5164,7 +5372,7 @@ function getClock(clockid) {
     // set up all defaults here - can change with customizer
     var clockname = "Digital Clock";
     var clockskin = "";
-    if ( clockid==="clockanalog" ) {
+    if ( clockid.startsWith("clockanalog") ) {
         clockname = "Analog Clock";
         clockskin = "CoolClock:housePanel:80";
     }
@@ -5208,7 +5416,7 @@ function getCustomName(defbase, cnum) {
 // for LIST it is linkid::realsubid::frequency where frequency is how often to reset the list
 // different things happen when these calltypes are used as shown in the doAction function in hubserver.js
 // the value returned here is processed by the putElement() function to create the proper on screen element
-function getCustomTile(userid, configoptions, custom_val, bid) {
+function getCustomTile(userid, configoptions, custom_val, bid, hint) {
 
     const configkey = "user_" + bid;
     let updated_val = clone(custom_val);
@@ -5336,11 +5544,11 @@ function getCustomTile(userid, configoptions, custom_val, bid) {
 
 // this little gem makes sure items are in the proper order
 function setValOrder(val) {
-    const order = { "_": 190, "_number_":70, 
+    const order = { "_": 190, "_number_":70, "time": 31, "date": 32, "date":33, "weekday":34, "month":35, "year":36, "tzone":37, "fmt_time":101, "fmt_date":102,
                    "name": 1, "subname": 2, "color": 3, "switch": 6, "momentary": 7, "presence": 7, "presence_type": 8,
-                   "contact": 9, "door": 8, "garage":8, "motion": 9, "themode": 10,
+                   "contact": 9, "door": 8, "garage":8, "motion": 9, "themode": 40,
                    "make": 11, "modelName":12, "modelYear": 13, "vehiclecolor": 14, "nickName": 15,
-                   "temperature": 41, "feelsLike":42, "temperatureApparent":42, "weatherCode":43, "weatherIcon":44, "forecastIcon":45,
+                   "city": 30, "temperature": 41, "feelsLike":42, "temperatureApparent":42, "realFeel":42, "weatherCode":43, "weather_code":43, "weatherIcon":44, "forecastIcon":45,
                    "coolingSetpoint": 51, "heatingSetpoint": 52, "thermostatMode": 53, "thermostatFanMode": 54, 
                    "thermostat": 55, "thermostatSetpoint": 56, "thermostatOperatingState": 57, "humidity": 58,
                    "mileage": 21, "longitude": 22, "latitude": 23, "distanceToEmpty": 24, "fuelLevel_value": 25,
@@ -8096,8 +8304,6 @@ function getParamsPage(user, configoptions, req) {
     var panelid = user["panels_id"];
     var hostname = req.headers.host;
     var webSocketUrl = getSocketUrl(hostname);
-    var fast_timer = getConfigItem(configoptions, "fast_timer") || "0";
-    var slow_timer = getConfigItem(configoptions, "slow_timer") || "0";
     var $kioskoptions = getConfigItem(configoptions, "kiosk") || "false";
     var blackout = getConfigItem(configoptions, "blackout") || "false";
     var $ruleoptions = getConfigItem(configoptions, "rules") || "true";
@@ -8109,7 +8315,21 @@ function getParamsPage(user, configoptions, req) {
     var accucity = getConfigItem(configoptions, "accucity") || "sa-carlos";
     var accuregion = getConfigItem(configoptions, "accuregion") || "us";
     var accucode = getConfigItem(configoptions, "accucode") || "337226";
-    var specialtiles = getConfigItem(configoptions, "specialtiles");
+    var specialtiles = getConfigItem(configoptions, "specialtiles") || {};
+    var tomorrowapi = getConfigItem(configoptions, "tomorrowapi") || GLB.dbinfo.tomorrowapi || "";
+    var ambientappkey = getConfigItem(configoptions, "ambientappkey") || GLB.dbinfo.ambientappkey || "";
+    var ambientapikey = getConfigItem(configoptions, "ambientapikey") || GLB.dbinfo.ambientapikey || "";
+    var zipcode = getConfigItem(configoptions, "zipcode") || GLB.dbinfo.zipcode || "94070";
+
+    if ( !specialtiles["clockdigital"] ) {
+        specialtiles["clockdigital"] = 1;
+    }
+    if ( !specialtiles["clockanalog"] ) {
+        specialtiles["clockanalog"] = 1;
+    }
+    if ( !specialtiles["control"] ) {
+        specialtiles["control"] = 1;
+    }
 
     var $tc = "";
     $tc += getHeader(userid, null, null, true);
@@ -8148,9 +8368,6 @@ function getParamsPage(user, configoptions, req) {
     $tc += hidden("hpcode", hpcode, "hpcode");
     $tc += hidden("apiSecret", GLB.apiSecret);
 
-    $tc += hidden("fast_timer", "0");
-    $tc += hidden("slow_timer", "0");
-
     // // users can update their username here
     $tc += "<div class=\"filteroption\">";
     $tc += " Username: ";
@@ -8173,7 +8390,7 @@ function getParamsPage(user, configoptions, req) {
     $tc += "</div>";
 
     $tc += "<div class=\"filteroption\">";
-    $tc += "Weather City Selection Option 1:<br>Specify WeatherWidget.io or AccuWeather city or both<br/><br/>";
+    $tc += "Weather Option 1:<br>Legacy WeatherWidget.io or Legacy AccuWeather city (or both)<br/><br/>";
     $tc += "<table>";
     $tc += "<tr>";
     $tc += "<td style=\"width:15%; text-align:right\"><label for=\"fcastcityid\" class=\"kioskoption\">WeatherWidget City: </label>";
@@ -8184,7 +8401,7 @@ function getParamsPage(user, configoptions, req) {
     $tc += "<td style=\"width:15%; text-align:right\"><label for=\"fcastcodeid\" class=\"kioskoption\">Forecast Code: </label></td>";
     $tc += "<td style=\"width:15%\"><input id=\"fcastcodeid\" size=\"20\" type=\"text\" name=\"fcastcode\"  value=\"" + fcastcode + "\"/></td>";
     $tc += "</tr>";
-
+    
     $tc += "<tr>";
     $tc += "<td style=\"width:15%; text-align:right\"><label for=\"accucityid\" class=\"kioskoption\">Accuweather City: </label>";
     $tc += "<br><span class='typeopt'>(see: <a href=\"https://www.accuweather.com\" target=\"_blank\">AccuWeather.com</a>)</span></td>";
@@ -8193,10 +8410,38 @@ function getParamsPage(user, configoptions, req) {
     $tc += "<td style=\"width:15%\"><input id=\"accuregionid\" size=\"20\" type=\"text\" name=\"accuregion\"  value=\"" + accuregion + "\"/></td>";
     $tc += "<td style=\"width:15%; text-align:right\"><label for=\"accucodeid\" class=\"kioskoption\">AccuWeather Code: </label></td>";
     $tc += "<td style=\"width:15%\"><input id=\"accucodeid\" size=\"20\" type=\"text\" name=\"accucode\"  value=\"" + accucode + "\"/></td>";
-    $tc += "</tr></table></div>";
+    $tc += "</tr>";
+    $tc += "</tr><tr><td colspan=\"6\"><span class='typeopt'>note: AccuWeather no longer supports this widget but it will work if you have valid codes. Find codes by loading an AccuWeather page and inspecting it in your browser</span></td></tr>";
+    $tc += "</table></div>";
 
+    $tc += `<br/><div>
+            <div class="filteroption">Weather Option 2:<br>Weather API Services: Tomorrow IO, Ambient Weather, and Open Meteo</div><br/>
+            <table class="weatherapiopts">
+            <tr>
+            <td class="weatheroption"><label for="tomorrowapi">TomorrowIO Api Key:<br>
+            <span class='typeopt'>(see: <a href="https://weather.tomorrow.io/" target=\"_blank\">TomorrowIO API</a>)</span></label></td>
+            <td class="weatherval"><input id="tomorrowapi" size="50" type="text" name="tomorrowapi"  value="${tomorrowapi}"/></td>
+            </tr>
+
+            <tr>
+            <td class="weatheroption"><label for="ambientappkey">Ambient Application Key:<br>
+            <span class='typeopt'>(see: <a href="https://ambientweather.docs.apiary.io" target=\"_blank\">Open Ambient API</a>)</span></label></td>
+            <td class="weatherval"><input id="ambientappkey" size="70" type="text" name="ambientappkey"  value="${ambientappkey}"/></td>
+            </tr>
+
+            <tr>
+            <td class="weatheroption"><label for="ambientapikey">Ambient API Key:<br></label></td>
+            <td class="weatherval"><input id="ambientapikey" size="70" type="text" name="ambientapikey"  value="${ambientapikey}"/></td>
+            </tr>
+
+            <tr>
+            <td class="weatheroption"><label for="zipcodeid">Zip Code: </label></td>
+            <td class="weatherval"><input id="zipcodeid" size="10" type="text" name="zipcode"  value="${zipcode}"/></td>
+            </tr>
+            </table></div>`;
+            
     $tc += `<br/><div class="filteroption">
-            Weather City Selection Option 2:<br>Paste entire code block of your weather widget of choice into any Frame tile
+            Weather Option 3:<br>Paste entire code block of your weather widget of choice into any Frame tile
             <br><span class='typeopt'>(Frame number of 1 or 2 will replace the frame file generated from the above settings)</span><br><br>   
             <table><tr>
             <td>
@@ -8204,7 +8449,7 @@ function getParamsPage(user, configoptions, req) {
             </td>
             <td>
                 <label for="widgetcodepanelid" class="optioninp">Which Frame: </label>
-                <input id="widgetcodepanelid" name="widgetcodepanelid" type="number" min="0" max="20" step="1" value="0" />
+                <input id="widgetcodepanelid" name="widgetcodepanelid" type="number" min="0" max="20" step="1" value="1" />
             </td>
             </tr></table>
             </div>`;
@@ -8212,12 +8457,18 @@ function getParamsPage(user, configoptions, req) {
             
     $tc += "<div class=\"filteroption\">";
     $tc += "Specify number of special tiles:<br/>";
-    for (var $stype in specialtiles) {
-        var $customcnt = parseInt(specialtiles[$stype]);
-        if ( isNaN($customcnt) ) { $customcnt = 0; }
-        var $stypeid = "cnt_" + $stype;
-        $tc+= "<div><label for=\"$stypeid\" class=\"optioninp\"> " + $stype +  " tiles: </label>";
-        $tc+= "<input class=\"optionnuminp\" id=\"" + $stypeid + "\" name=\"" + $stypeid + "\" size=\"10\" type=\"number\"  min='1' max='20' step='1' value=\"" + $customcnt + "\" /></div>";
+    for (var stype in specialtiles) {
+
+        // handle weather tile separately
+        if ( stype === "weather" ) {
+            $tc+ hidden("cnt_weather", specialtiles[stype]);
+        } else {
+            const customcnt = parseInt(specialtiles[stype]);
+            if ( isNaN(customcnt) ) { customcnt = 0; }
+            const stypeid = "cnt_" + stype;
+            $tc+= "<div><label for=\"" + stypeid + "\" class=\"optioninp\"> " + stype +  " devices: </label>";
+            $tc+= "<input class=\"optionnuminp\" id=\"" + stypeid + "\" name=\"" + stypeid + "\" size=\"10\" type=\"number\"  min='0' max='99' step='1' value=\"" + customcnt + "\" /></div>";
+        }
     }
     $tc+= "</div>";
 
@@ -8421,13 +8672,11 @@ function processParams(userid, panelid, optarray) {
 
     return Promise.all([
         mydb.getRow("hubs","*","userid = "+userid+" AND hubid = '-1'"),
-        mydb.getRows("devices","*","userid = "+userid+" AND hint='special'"),
         mydb.getRows("configs","*","userid = "+userid+" AND configtype=0")
     ])
     .then(results => {
         var hubzero = results[0];
-        var specials = results[1];
-        var configs = results[2];
+        var configs = results[1];
         var configoptions = {};
         if ( configs ) {
             configs.forEach(function(item) {
@@ -8441,35 +8690,30 @@ function processParams(userid, panelid, optarray) {
                 configoptions[key] = parseval;
             });
         }
-        return doProcessOptions(optarray, configoptions, hubzero, specials);
+        return doProcessOptions(optarray, configoptions, hubzero);
     })
     .catch(reason => {
         console.error( (ddbg()), "error processing user parameter options: ", reason);
         return reason;
     });
 
-    function doProcessOptions(optarray, configoptions, hubzero, specials  ) {
-        var specialtiles = configoptions["specialtiles"];
-
+    async function doProcessOptions(optarray, configoptions, hubzero) {
+        var specialtiles = clone(configoptions["specialtiles"]);
         configoptions["kiosk"] = "false";
         configoptions["rules"] = "false";
         configoptions["blackout"] = "false";
-        var newName = "";
-        var accucity = "";
-        var accuregion = "";
-        var accucode = "";
-        var fcastcity = "";
-        var fcastregion = "";
-        var fcastcode = "";
+        var newUsername = "";
         var weatherwidget = "";
         var frameid = 0;
+        var specialsupdated = false;
 
         for (var key in optarray) {
             var val = optarray[key];
             if ( typeof val === "string" ) val = val.trim();
 
             //skip the returns from the submit button and the flag
-            if (key==="options" || key==="editdevices" || key==="api" || key==="useajax"  || key==="userid" || key==="panelid" || key==="webSocketUrl" || key==="returnURL" || key==="hpcode" || key==="apiSecret" ||
+            if (key==="options" || key==="editdevices" || key==="api" || key==="useajax"  || key==="userid" || key==="panelid" || key==="webSocketUrl" || 
+                key==="returnURL" || key==="hpcode" || key==="apiSecret" || key==="emailid" ||
                 key==="webSocketServerPort" || key==="webDisplayPort" || key==="pagename" || key==="pathname" || key==="userpanel" || key==="pname" || key==="uname" || key==="panelPw2" ) {
                 continue;
 
@@ -8477,8 +8721,7 @@ function processParams(userid, panelid, optarray) {
                 // the \D ensures we start with a non-numerica character
                 // and the \S ensures we have at least 2 non-white space characters following
                 if ( val && val.match(/^\D\S{2,}$/) ) {
-                    newName = val;
-                    mydb.updateRow("users",{uname: newName},"id = " + userid);
+                    mydb.updateRow("users",{uname: val},"id = " + userid);
                 }
             } else if ( key==="kiosk") {
                 configoptions["kiosk"] = "true";
@@ -8486,51 +8729,40 @@ function processParams(userid, panelid, optarray) {
                 configoptions["rules"] = "true";
             } else if ( key==="blackout") {
                 configoptions["blackout"] = "true";
-            } else if ( key==="phototimer" ) {
-                configoptions["phototimer"] = val;
-            } else if ( key==="fcastcity" ) {
-                fcastcity = val;
-                configoptions["fcastcity"] = val;
-            } else if ( key==="fcastregion" ) {
-                fcastregion = val;
-                configoptions["fcastregion"] = val;
-            } else if ( key==="fcastcode" ) {
-                fcastcode = val;
-                configoptions["fcastcode"] = val;
-            } else if ( key==="accucity" ) {
-                accucity = val;
-                configoptions["accucity"] = val;
-            } else if ( key==="accuregion" ) {
-                accuregion = val;
-                configoptions["accuregion"] = val;
-            } else if ( key==="accucode" ) {
-                accucode = val;
-                configoptions["accucode"] = val;
             } else if ( key==="widgetcode" ) {
                 weatherwidget = val;
             } else if ( key==="widgetcodepanelid" ) {
                 frameid = parseInt(val);
             
-            // handle user selected special tile count
+            // handle user selected special device count
             } else if ( key.substring(0,4)==="cnt_" ) {
-                var stype = key.substring(4);
-                if ( array_key_exists(stype, specialtiles) ) {
-                    var oldcount = specialtiles[stype];
-                    var newcount = parseInt(val);
-                    if ( isNaN(newcount) ) { newcount = oldcount; }
-                    specialtiles[stype] = newcount;
-                    configoptions["specialtiles"] = specialtiles;
-                    updSpecials(userid, hubzero["id"], stype, newcount, specials);
-                }            
+                let stype = key.substring(4);
+                let oldcount = specialtiles[stype];
+                let newcount = parseInt(val);
+                if ( !isNaN(newcount) && newcount!==oldcount ) {
+                    configoptions["specialtiles"][stype] = newcount;
+                    specialsupdated = true;
+                }
+            } else {
+                configoptions[key] = val;
+                specialsupdated = true;
+                // if ( typeof configoptions[key]===undefined ) {
+                //     specialsupdated = true;
+                // } else if ( val.toString() !== configoptions[key].toString() ) {
+                //     specialsupdated = true;
+                // }
             }
         }
         
         // handle the weather codes - write into this users folder
         if ( weatherwidget && weatherwidget.length > 4 && frameid > 0 ) {
             writeWeatherWidget(userid, weatherwidget, frameid);
-        } else {
-            writeForecastWidget(userid, fcastcity, fcastregion, fcastcode);
-            writeAccuWeather(userid, accucity, accuregion, accucode);
+        }
+        if ( configoptions["fcastcity"] && configoptions["fcastregion"] && configoptions["fcastcode"] ) {
+            writeForecastWidget(userid, configoptions["fcastcity"], configoptions["fcastregion"], configoptions["fcastcode"]);
+        }
+        if ( configoptions["accucity"] && configoptions["accuregion"] && configoptions["accucode"] ) {
+            writeAccuWeather(userid, configoptions["accucity"], configoptions["accuregion"], configoptions["accucode"]);
         }
         
         var d = new Date();
@@ -8545,13 +8777,18 @@ function processParams(userid, panelid, optarray) {
                 configstr = configoptions[key];
             }
             const config = {userid: userid, configkey: key, configval: configstr, configtype: 0};
-            mydb.updateRow("configs", config, "userid = "+userid+" AND configkey = '"+key+"'")
-            .then( () => {
-            })
+            await mydb.updateRow("configs", config, "userid = "+userid+" AND configkey = '"+key+"'")
             .catch( reason => {
-                console.warn( (ddbg()), reason);
+                console.warn( (ddbg()), "problem updating config key ", key, " for user ", userid, ": ", reason);
             });
         }
+
+        // if the special tiles were updated, make sure we reload the default hub to create or delete devices
+        if ( specialsupdated ) {
+            let hublessdevices = await getDevices(hubzero);
+            console.log( (ddbg()), "reloaded hubless devices for user ", userid, " devices: ", jsonshow(hublessdevices) );
+        }
+
         return configoptions;
     }
 }
@@ -9270,64 +9507,6 @@ function findHub(hubid, hubs) {
     return thehub;
 }
 
-function getHubObj(hub) {
-    var promise = new Promise(function(resolve, reject) {
-
-        if ( !hub || typeof hub!=="object" ) {
-            reject("Something went wrong with authorizing a hub");
-            return;
-        }
-
-        var hubName = hub["hubname"];
-        var hubType = hub["hubtype"];
-
-        // first handle user provided auth which only works for ISY and Hubitat
-        if ( hub.hubaccess && hub.hubendpt ) {
-            // get all new devices and update the options index array
-            // this forces page reload with all the new stuff
-            // notice the reference to /reauth in the call to get Devices
-            // this makes the final read redirect back to reauth page
-
-            // for ISY and HE we can go right to getting hub details and devices
-            // this meets up with the js later by pushing hub info back to reauth page
-            // determine what to return to browser to hold callback info for hub auth flow
-            let result = {action: "things", hubType: hubType, hubName: hubName, numdevices: 0};
-
-            if (EMULATEHUB===true && hubType==="ISY") {
-                resolve(result);
-                return;
-            }
-
-            // now read the hub and fill in the right info
-            getHubInfo(hub)
-            .then(mydevices => {
-                var ndev = Object.keys(mydevices).length;
-                result.numdevices = ndev;
-
-                // reactivate websocket here if we reauthorized an ISY hub
-                if ( hubType==="ISY" && EMULATEHUB!==true ) {
-                    setupISYSocket();
-                }
-                resolve(result);
-            })
-            .catch(reason => {
-                reject(reason);
-            });
-        } else {
-            if ( hubType === "ISY" ) {
-                var msg = "Hub username and password must both be provided to register an ISY hub";
-            } else if ( hubType === "Harmony" ) {
-                msg = "A valid Harmony hub name must be provided to register a Harmony hub";
-            } else {
-                msg = "Access Token and App ID are both required to register a Hubitat hub";
-            }
-            result = {action: "error", reason: msg};
-            resolve(result);
-        }
-    });
-    return promise;
-}
-
 function apiCall(user, body, protocol, res) { 
 
     if ( DEBUG8 ) {
@@ -9540,8 +9719,7 @@ function apiCall(user, body, protocol, res) {
                 break;
 
             case "weathericon":
-                var num = parseInt(swval);
-                result = getWeatherIcon(num, swtype);
+                result = getWeatherIcon(swval, swtype);
                 break;
 
             case "setorder":
@@ -9620,11 +9798,15 @@ function apiCall(user, body, protocol, res) {
                                     getDevices(hub)
                                     .then(mydevices => {
                                         n++;
-                                        var num = Object.keys(mydevices).length;
-                                        if ( hub.hubname === "None" ) {
-                                            strmsg+= "Refreshed " + num + " hubless devices";
+                                        if ( mydevices && typeof mydevices === "object" ) {
+                                            var num = Object.keys(mydevices).length;
+                                            if ( hub.hubname === "None" ) {
+                                                strmsg+= "Refreshed " + num + " hubless devices";
+                                            } else {
+                                                strmsg+= hub.hubname + " refreshed " + num + " devices";
+                                            }
                                         } else {
-                                            strmsg+= hub.hubname + " refreshed " + num + " devices";
+                                            strmsg+= "No devices refreshed for hub: " + hub.hubname;
                                         }
                                         if ( n < numhubs ) {
                                             strmsg+= "<br>";
@@ -9638,8 +9820,7 @@ function apiCall(user, body, protocol, res) {
                                     .catch(reason => {
                                         console.error( (ddbg()), reason );
                                         resolve("error attempting to refresh hubs for userid = " + userid);
-                                    })
-
+                                    });
                                 }
                             });
                             return promise;
@@ -9919,8 +10100,8 @@ function apiCall(user, body, protocol, res) {
                     var configoptions = results[1];
                     row.pvalue = decodeURI2(row.pvalue);
                     if ( configoptions && is_object(configoptions) ) {
-                        row.pvalue = getCustomTile(userid, configoptions, row.pvalue, row.id);
-                        row.pvalue = getFileName(userid, pname, row.pvalue, row.devicetype, configoptions);
+                        row.pvalue = getCustomTile(userid, configoptions, row.pvalue, row.id, row.hint);
+                        row.pvalue = getFileName(userid, pname, row.pvalue, row.devicetype);
                     }
                     return row;
                 })
@@ -9949,8 +10130,8 @@ function apiCall(user, body, protocol, res) {
                             rows.forEach(row => {
                                 row.pvalue = decodeURI2(row.pvalue);
                                 if ( configoptions && is_object(configoptions) ) {
-                                    row.pvalue = getCustomTile(userid, configoptions, row.pvalue, row.id);
-                                    row.pvalue = getFileName(userid, pname, row.pvalue, row.devicetype, configoptions);
+                                    row.pvalue = getCustomTile(userid, configoptions, row.pvalue, row.id, row.hint);
+                                    row.pvalue = getFileName(userid, pname, row.pvalue, row.devicetype);
                                     const ahubindex = row.hubid;
                                     let hubname = "None";
                                     hubs.forEach(hub => {
@@ -10333,7 +10514,7 @@ function apiCall(user, body, protocol, res) {
                                 console.log((ddbg()), "authhub: ", ahub );
                             }
                             // update the hub that was added above
-                            return getHubObj(ahub);
+                            return authenthicateHub(ahub);
                         })
                         .catch(reason => {
                             console.error((ddbg()), "error attempting to authorize a hub: ", reason);
@@ -10372,18 +10553,23 @@ function apiCall(user, body, protocol, res) {
             case "getclock":
                 var conditions = `userid=${userid} AND deviceid='${swid}'`;
                 var clock;
-                // result = mydb.getRow("devices", "*", conditions)
                 result = Promise.all([
                     mydb.getRow("devices","*", conditions),
                     mydb.getRows("configs","*", "userid = " + userid + " AND configtype=1")
                 ])
                 .then(rows => {
                     const device = rows[0];
+                    const savename = device.name;
                     const configoptions = rows[1];
                     if ( !device ) throw "Clock device not found for deviceid = " + swid;
                     clock = getClock(swid);
-                    clock = getCustomTile(userid, configoptions, clock, swid);
-                    clock = getFileName(userid, pname, clock, device.devicetype, configoptions);
+
+                    // add the original name back in before customizations
+                    clock.name = savename ? savename : clock.name;
+
+                    // process customizations
+                    clock = getCustomTile(userid, configoptions, clock, swid, device.hint);
+                    clock = getFileName(userid, pname, clock, device.devicetype);
                     
                     // handle rules and time format user fields
                     processRules(userid, device.uid, swid, "clock", "time", clock, false, "apiCall" );
@@ -10801,7 +10987,7 @@ function buildDatabaseTable(tableindex) {
 // get the home directory of the app
 GLB.homedir = __dirname;
 
-// default behavior is no new user validation
+// default behavior is no new user validation and all emails allowed
 GLB.dbinfo = {
     "dbhost": "localhost",
     "dbname": GLB.homedir+"/housepanel.db",
@@ -10813,6 +10999,8 @@ GLB.dbinfo = {
     "allownewuser" : ["all"],
     "service": "none",
     "enablerules": true,
+    "ambientappkey": "7aeab49a6fa5462fa8ddd52c049b4201984f0f14e9d5476e8cb3e5e4ca233bc7",
+    "subs": {},
     "donate": true
 };
 
@@ -10820,9 +11008,6 @@ GLB.dbinfo = {
 // until I finish, test, and fine tune the new Harmony integration -- brave users can still use it by setting it in the config file
 // this is just a list of supported hubs that shows up in the UI and is used to validate hub types when authorizing hubs
 GLB.dbinfo.hubs = { Hubitat: "Hubitat", ISY: "ISY" };
-
-// this object will be used to replace anything with a user choice
-GLB.dbinfo.subs = {};
 
 // read config file if one exists
 try {
@@ -11112,19 +11297,19 @@ if ( app && applistening ) {
                     mydb.getRows("configs", "*", "userid = "+userid),
                     mydb.getRows("hubs", "*", "userid = "+userid)
                 ])
-                .then(results => {
+                .then(async results => {
 
                     var configoptions = results[0];
                     var hubs = results[1];
 
                     // retrieve the configs
-                    var specials = getConfigItem(configoptions, "specialtiles");
                     var hptime = getConfigItem(configoptions, "time");
-                    if ( !specials || !hptime ) {
+                    if ( !hptime ) {
                         configoptions = makeNewConfig(userid);
                     }
-                    if ( !hubs ) {
-                        hubs = makeDefaultHub(userid)
+                    if ( !hubs || hubs.length === 0 ) {
+                        let defhub = await makeDefaultHub(userid);
+                        hubs = [defhub];
                     }
                     return [configoptions, hubs];
                 })
@@ -11398,12 +11583,14 @@ if ( app && applistening ) {
                             })
                             .catch(reason => {
                                 console.error( (ddbg()), reason);
+                                pushClient(userid, "reload", "all", "/");
                             });
                         }                                
                     });
                 })
                 .catch(reason => {
                     console.error( (ddbg()), "initialize hub error: ", reason);
+                    pushClient(userid, "reload", "all", "/");
                 });
 
                 res.send("hubid processed successfully");
