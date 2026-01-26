@@ -1,7 +1,7 @@
 /*
  * HousePanel
  *
- * Copyright > 2016 to 2020 by Kenneth Washington
+ * Copyright by Kenneth Washington
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at:
@@ -10,11 +10,11 @@
  *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
  * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
- * for the specfific language governing permissions and limitations under the License.
+ * for the specific language governing permissions and limitations under the License.
  *
  * This is a Hubitat app that works with the HousePanel smart dashboard platform
  * It also supports Hubitat NodeServer installations on the Universal Devices platform
- * Removed history info to keep it now in the devhistory.js file for diaplay in app
+ * Removed history info to keep it now in the devhistory.js file for display in app
  */
 
 import groovy.json.JsonOutput
@@ -27,9 +27,9 @@ public static String handle() { return "HousePanel" }
 
 /**********************************************
     STATICALLY DEFINED VARIABLES
-    inpired by Tonesto7 homebridge2 app
+    inspired by Tonesto7 homebridge2 app
 ***********************************************/
-@Field static final String appVersionFLD  = '3.5.16'
+@Field static final String appVersionFLD  = '3.5.17'
 @Field static final String sNULL          = (String) null
 @Field static final String sBLANK         = ''
 @Field static final String sLINEBR        = '<br>'
@@ -41,7 +41,7 @@ public static String handle() { return "HousePanel" }
 
 /**********************************************
     APP HELPER FUNCTIONS
-    inpired by Tonesto7 homebridge2 app
+    inspired by Tonesto7 homebridge2 app
 ***********************************************/
 static String getAppImg(String imgName) { return "https://housepanel.net/wp-content/uploads/${imgName}" }
 static String sectH3TS(String t, String st, String i = sNULL, String c=sCLRBLUE) { return "<h3 style='color:${c};font-weight: bold'>${i ? "<img src='${i}' width='48'> " : sBLANK} ${t?.replaceAll("\\n", sLINEBR)}</h3>${st ?: sBLANK}" }
@@ -199,10 +199,6 @@ def mainPage() {
             vdesc += htmlLine(sCLRBLUE, 600)
             paragraph vdesc
 
-            // paragraph inputFooter("Enter User ID and HPCODE below then push the buton to send hub registration parameters to the HousePanel server. These are displayed on the Hub Authorization page.", sCLRBLUE, false)
-            // input (name: "userid", type: "number", multiple: false, title: "User ID:", required: false, defaultValue: 0)
-            // input (name: "hpcode", type: "text", multiple: false, title: "HPCODE:", required: false, defaultValue: "")
-            // input(name: 'pushdata', type: 'button', multiple: false, title: 'Push Data', required: false)
             paragraph inputFooter(" ", sCLRBLUE, false)
             label title: spanSmBld('Label this Instance (optional)'), description: 'Rename this App', defaultValue: app?.name, required: false
         }
@@ -384,11 +380,6 @@ def initialize() {
     state.directPort3 = settings?.webHostPort3 ?: "0"
     state.directPort3 = state.directPort3.trim()
 
-    // state.zipcode = settings.zipcode ?: ""
-    // state.tomorrowapi = settings.tomorrowapi ?: ""
-    // state.ambientapikey = settings.ambientapikey ?: ""
-    // state.ambientappkey = settings.ambientappkey ?: ""
-
     state.powerskip = settings.powerskip ?: 0.15
     state.prefix = settings?.hubprefix ?: getPrefix()
     state.powervals = [:]
@@ -429,14 +420,6 @@ def initialize() {
     } else {
         state.directIP3 = "0"
     }
-
-    // push configured variables to HousePanel
-    // this now replaces any need to push variables separately since they will be included in the config push and the HP server will know which ones are in use based on the settings
-    // these should really be part of the hub config and be hub specific
-    // Map configs = ["ambientappkey": state.ambientappkey, "ambientapikey": state.ambientapikey,
-    //                "tomorrowapi": state.tomorrowapi, "zipcode": state.zipcode, 
-    //                "loglevel": state.loggingLevelIDE, "powerskip": state.powerskip]
-    // postHubAll("config", "", state.userid, "config", "Hubitat", configs)
 
     // register callbacks if one is available
     if ( state.directIP!="0" || state.directIP2!="0" || state.directIP3!="0" ) {
@@ -813,10 +796,11 @@ def getOther(swid, item=null) {
 
 def getPower(swid, item=null) {
     def resp = getThing(mypowers, swid, item)
+    def idstr = swid.toString()
     try {
-        state.powervals[swid] = resp.power.toFloat()
+        state.powervals[idstr] = resp.power.toFloat()
     } catch (e) {
-        state.powervals[swid] = 0.0
+        state.powervals[idstr] = 0.0
     }
     return resp
 }
@@ -906,14 +890,17 @@ def getDevice(mydevices, swid, item=null) {
 def ignoredAttributes() {
     // thanks to the authors of HomeBridge for this list
     def ignore = [
-        'DeviceWatch-DeviceStatus', 'DeviceWatch-Enroll', 'checkInterval', 'healthStatus', 'devTypeVer', 'dayPowerAvg', 'apiStatus', 'yearCost', 'yearUsage','monthUsage', 'monthEst', 'weekCost', 'todayUsage',
+        'DeviceWatch-DeviceStatus', 'DeviceWatch-Enroll', 'checkInterval', 'healthStatus', 'devTypeVer', 'dayPowerAvg', 'apiStatus', 
+        'yearCost', 'yearUsage','monthUsage', 'monthEst', 'weekCost', 'todayUsage',
         'supportedPlaybackCommands', 'groupPrimaryDeviceId', 'groupId', 'supportedTrackControlCommands', 'presets', 'released',
         'maxCodeLength', 'maxCodes', 'readingUpdated', 'maxEnergyReading', 'monthCost', 'maxPowerReading', 'minPowerReading', 'monthCost', 'weekUsage', 'minEnergyReading',
-        'codeReport', 'scanCodes', 'verticalAccuracy', 'horizontalAccuracyMetric', 'altitudeMetric', 'latitude', 'distanceMetric', 'closestPlaceDistanceMetric',
+        'codeReport', 'scanCodes', 'verticalAccuracy', 'horizontalAccuracyMetric', 'altitudeMetric', 'distanceMetric', 'closestPlaceDistanceMetric',
         'closestPlaceDistance', 'leavingPlace', 'currentPlace', 'codeChanged', 'codeLength', 'lockCodes', 'horizontalAccuracy', 'bearing', 'speedMetric',
-        'speed', 'verticalAccuracyMetric', 'altitude', 'indicatorStatus', 'todayCost', 'longitude', 'distance', 'previousPlace','closestPlace', 'places', 'minCodeLength',
+        'speed', 'verticalAccuracyMetric', 'altitude', 'indicatorStatus', 'todayCost', 'distance', 'previousPlace','closestPlace', 'places', 'minCodeLength',
         'arrivingAtPlace', 'lastUpdatedDt', 'firmware', 'firmware0', 'firmware1', 'lastEvent', 'lastActivity', 'groups',
-        'commStatus', 'bypassed', 'connectivity', 'tempScale', 'lqi', 'rssi', 'batteryVoltage', 'hubMeshDisabled', 'reachable'
+        'commStatus', 'bypassed', 'connectivity', 'tempScale', 'lqi', 'rssi', 'batteryVoltage', 'hubMeshDisabled', 'reachable',
+        'supportedPlaybackCommands','supportedTrackControlCommands','supportedButtonValues','supportedThermostatModes','supportedThermostatFanModes',
+        'dmv','di','pi','mnml','mnmn','mnpv','mnsl','icv','washerSpinLevel','mnmo','mnos','mnhw','mnfv','supportedCourses','washerCycle'
     ]
     return ignore
 }
@@ -3082,7 +3069,7 @@ def registerAll() {
     registerLocations()
 
     // register all the devices in time steps
-    def delaygap = 20
+    def delaygap = 100
     def delay = delaygap
     mydevices.each { item -> 
         if ( settings[item]?.size() > 0 ) {
@@ -3191,8 +3178,20 @@ def registerChangeHandler(devices) {
     devices?.each { device ->
         List theAtts = device?.supportedAttributes?.collect { it?.name as String }?.unique()
         logger("atts: ${theAtts}", "debug")
+
+        // check for a large number of attributes and limit to common ones
+        if ( theAtts?.size() > 15 ) {
+            def commonAtts = ["status", "switch", "level", "hue", "saturation", "color", "colorTemperature", "colorMode",
+                              "temperature", "humidity", "contact", "motion", "presence", "lock", "windowShade", "position",
+                              "battery", "power", "energy", "status", "statusMessage", "alarm",
+                              "smoke", "carbonMonoxide", "carbonDioxide",  "water", "illuminance",
+                              "thermostatMode", "heatingSetpoint", "coolingSetpoint", "thermostatOperatingState", "thermostatFanMode",
+                              "trackDescription", "currentArtist", "currentAlbum", "trackData", "mute", "volume"]
+            theAtts = theAtts.intersect(commonAtts)
+            logger("limiting attributes for device: ${device?.displayName} to common ones: ${theAtts}", "info")
+        }
+
         theAtts?.each {att ->
-            Boolean skipAtt = false
             if(!(ignoredAttributes().contains(att))) {
                 subscribe(device, att, "changeHandler")
                 logger("Registering ${device?.displayName}.${att}", "debug")
@@ -3229,32 +3228,40 @@ def changeHandler(evt) {
     def jsonslurper = new JsonSlurper()
     def delta = 0.0
     def devtype = autoType(deviceid)
+    deviceid = deviceid.toString()
+    def idint = deviceid.toInteger()
 
     // handle power changes to skip if not changed by at least 15%
     // this value was set by trial and error for my particular plug
-    if ( subid=="power" && state.powerskip >= 1.0 ) {
-        skip = true
-    } else if ( subid=="power" && state.powerskip <= 0.0 ) {
-        // no skip
-        state.powervals[deviceid] = value.toFloat()
-    } else if ( subid=="power" ) {
+    if ( subid == "power" ) {
         try {
-            def oldpower = state.powervals[deviceid] ?: 0.0
-            oldpower = oldpower.toFloat()
+            
+            def powerskip = state.powerskip ?: 0.0
+            powerskip = powerskip.toFloat()
+            def powerval = state.powervals[deviceid] ?: state.powervals[idint] ?: 0.0
+            powerval = powerval.toFloat()
             def newpower = value.toFloat()
-            if ( oldpower==0.0 && newpower < 1.0 ) {
+
+            if ( powerskip >= 1.0 ) {
                 skip = true
-            } else if ( oldpower==0.0 ) {
-                skip = false
+                logger("power change skipped for ${deviceName} due to 100% skip setting", "debug")
+            } else if ( powerskip <= 0.0 || powerval == 0.0 ) {
+                logger("power change not skipped for ${deviceName} newpower = ${value} prior: ${powerval}", "debug")
             } else {
-                delta = Math.abs(newpower - oldpower) / oldpower 
-                skip = (delta < state.powerskip)
+                logger("power change detected for ${deviceName} newpower = ${value} prior: ${powerval}", "debug")
+                if ( powerval==0.0 ) {
+                    skip = false
+                } else {
+                    delta = Math.abs(newpower - powerval) / powerval
+                    skip = (delta < powerskip)
+                }
             }
+
             if ( !skip ) {
                 state.powervals[deviceid] = newpower
-                logger("power change accepted for ${deviceName} oldpower = ${oldpower} newpower = ${newpower} delta = ${delta}", "info")
+                logger("power change accepted for ${deviceName} oldpower = ${powerval} newpower = ${newpower} delta = ${delta}", "debug")
             } else {
-                logger("power change skipped for ${deviceName} oldpower = ${oldpower} newpower = ${newpower} delta = ${delta}", "debug")
+                logger("power change skipped for ${deviceName} oldpower = ${powerval} newpower = ${newpower} delta = ${delta}", "debug")
             }
         } catch (e) {
             skip= false
@@ -3273,7 +3280,7 @@ def changeHandler(evt) {
             def v 
             def ct
             def color
-            def item = mybulbs?.find{it.id.toInteger() == deviceid.toInteger()}
+            def item = mybulbs?.find{it.id == deviceid}
             cmode = subid=="colorMode" ? value : item.currentValue("colorMode")
             if ( subid == "color" && value.substring(0,1)=="#") {
                 def r = value.substring(1,3)
@@ -3397,8 +3404,31 @@ def postHub(ip, port, msgtype, name, id, subid, type, value, isfirst) {
     }
 }
 
+def delayedPostAll(data) {
+    postHubAll("update", data.name, data.id, data.subid, data.type, data.value)
+    def lastUpdate = state.lastUpdate ?: [:]
+    lastUpdate[data.updateKey] = now()
+    state.lastUpdate = lastUpdate
+}
+    
 def postHubUpdate(name, id, subid, type, value) {
-    postHubAll("update", name, id, subid, type, value)
+    // Throttle updates to prevent excessive pending HTTP requests
+    def throttle = 100
+    def updateKey = "${id}_${subid}"
+    def lastUpdate = state.lastUpdate ?: [:]
+    def now = now()
+    def timeSinceLastUpdate = now - (lastUpdate[updateKey] ?: 0)
+
+    // Only post if at least 100ms has passed since last update for this device/attribute
+    if (timeSinceLastUpdate >= throttle) {
+        lastUpdate[updateKey] = now
+        state.lastUpdate = lastUpdate
+        postHubAll("update", name, id, subid, type, value)
+    } else {
+        // wait and retry after the remaining time
+        def delay = Math.ceil((throttle - timeSinceLastUpdate) / 1000.0)
+        runIn(delay, "delayedPostAll", [overwrite: true, data: [name: name, id: id, subid: subid, type: type, value: value, updateKey: updateKey]] )
+    }
 }
 
 def postHubAll(msgtype, name, id, subid, type, value) {

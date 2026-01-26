@@ -493,6 +493,10 @@ form {
     width: 100%;
 }
 
+form.options {
+    margin-left: 2px;
+}
+
 form.houseauth {
     display: inline;
     width: auto;

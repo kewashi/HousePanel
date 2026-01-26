@@ -274,16 +274,19 @@ function getHubs() {
 
         // read the hubs
         $.post(cm_Globals.returnURL, 
-            {api: "gethubs", userid: userid, pname: pname, id:"none", type:"none", hpcode: cm_Globals.options.hpcode},
+            {api: "gethubs", userid: userid, pname: pname, hpcode: cm_Globals.options.hpcode},
             function (presult, pstatus) {
-                if (pstatus==="success" ) {
+                if (pstatus==="success" && typeof presult === "object") {
                     cm_Globals.hubs = presult;
                     cm_Globals.hubs.forEach(hub => {
 
                         // if there is a hubtimer code that will be used to refresh this hub's devices
-                        let hubtimer = parseInt(hub.hubtimer, 10) * 1000;
-                        if ( hubtimer > 0 && pagename === "main" ) {
-                            setupTimer("hub", hubtimer, hub);
+                        let hubtimer = parseInt(hub.hubtimer, 10);
+                        if ( isNaN(hubtimer) ) {
+                            hubtimer = 0;
+                            console.warn("Invalid hub timer for hub:", hub.hubname, " hubid:", hub.hubid, " Provided non-integer value:", hub.hubtimer);
+                        } else if ( hubtimer > 10 && pagename === "main" ) {
+                            setupHubTimer(hubtimer, hub);
                         }
                     });
                 } else {
@@ -2710,38 +2713,11 @@ function setupButtons() {
             $("#newthingcount").html(mainhubmsg);
         });
 
-
         // handle hub updates, which calls API to read devices from the hub or to update the tiles from the null hub
         $("input.hubupdate").on("click", function(evt) {
-            var hubId = $("input[name='hubid']").val();
-            var hub = findHub(hubId, "hubid");
-            try {
-                var formData = formToObject("hubform");
-            } catch(err) {
-                evt.stopPropagation(); 
-                alert("Something went wrong when trying to update the devices for your hub...\n" + err.message);
-                return;
-            }
-
-            formData["api"] = "hubupdate";
-            formData.hubtype = $("select[name='hubtype']").val();
-            // tell user we are updating hub...
-            $("#newthingcount").html("Updating hub: " + formData.hubname).fadeTo(400, 0.1 ).fadeTo(400, 1.0).fadeTo(400, 0.1 ).fadeTo(400, 1).fadeTo(400, 0.1 ).fadeTo(400, 1).fadeTo(400, 0.1 ).fadeTo(400, 1).fadeTo(400, 0.1 ).fadeTo(400, 1);
-            $.post(cm_Globals.returnURL, formData,  function(presult, pstatus) {
-                if ( pstatus==="success" && typeof presult==="object" ) {
-                    $("#newthingcount").html("Hub " + presult.hubName + " of type (" + presult.hubType+") updated " + presult.numdevices + " devices");
-                    setTimeout(function() {
-                        returnMainPage();
-                    }, 3000);
-                } else {
-                    if (typeof presult==="string" ) {
-                        $("#newthingcount").html(presult);
-                    } else {
-                        $("#newthingcount").html("Something went wrong with hub update request");
-                    }
-                    console.error("hub update error: ", presult);
-                }
-            });
+            var hubid = $("input[name='hubid']").val();
+            let hubtimer = $("input[name='hubtimer']").val();
+            updateHubTiles(hubid, hubtimer);
             evt.stopPropagation();
         });
         
@@ -3457,6 +3433,11 @@ function updateTile(aid, presult) {
     for (var key in presult) {
         var value = presult[key];
         var targetid = '#a-'+aid+'-'+key;
+
+        // skip LINK and LIST values
+        if ( typeof value === "string" && ( value.startsWith("LINK:") || value.startsWith("LIST:") ) ) {
+            continue;
+        }
         
         // replace newlines with breaks for proper html rendering
         if ( typeof value==="string" && value.indexOf("\n")!==-1 ) {
@@ -3661,22 +3642,52 @@ function processKeyVal(targetid, aid, key, value) {
 }
 
 // rewrote this to call server only once for a given hub and then refresh all tiles
-function updateHubTiles(hubid) {
+function updateHubTiles(hubid, timerval) {
 
     // replace old approach with a new api call that returns all updated devices
+    // console.log("Updating hub tiles for hubid =", hubid, " timerval:", timerval);
     $.post(cm_Globals.returnURL, 
                 {api: "refreshhub", userid: cm_Globals.options.userid, pname: cm_Globals.options.pname, 
-                id: hubid, hpcode: cm_Globals.options.hpcode},
+                id: hubid, value: timerval, hpcode: cm_Globals.options.hpcode},
         function (presult, pstatus) {
             if ( pstatus==="success" && presult && typeof presult==="object" ) {
+                
                 // loop through the returned object and update all the tiles that were changed for this hub
-                for (let bid in presult) {
-                    $('div.panel div.thing[bid="'+bid+'"]').each(function() {
-                        const thingid = $(this).attr("thingid");
-                        updateTile(thingid, presult[bid].pvalue);
-                    });
-                    updateLink(bid, presult[bid].pvalue);
+                // the result is an array of device object
+                let devices = presult;
+                let numdevices = 0;
+                for (let uid in devices) {
+                    numdevices++;
+                    const device = devices[uid];
+                    const bid = device.deviceid;
+                    let pvalobj = device.pvalue;
+                
+                    // update the global devices object
+                    if ( cm_Globals.devices && cm_Globals.devices[uid] && cm_Globals.devices[uid].deviceid === bid ) {
+                        cm_Globals.devices[uid].pvalue = pvalobj;
+                    }
+
+                    // update all tiles on this page with this bid
+                    // however this skips LINK and LIST fields since those are handled separately
+                    if ( pagename === "main" ) {
+                        $('div.panel div.thing[bid="'+bid+'"]').each(function() {
+                            const thingid = $(this).attr("thingid");
+                            console.log("Updating tile for bid:", bid, " pvalobj:", pvalobj);
+                            updateTile(thingid, pvalobj);
+                        });
+                        updateLink(bid, pvalobj);
+                    }
                 }
+
+                if ( pagename === "auth" ) {
+                    $("#newthingcount").html("Hub updated " + numdevices + " devices");
+                }
+
+                // the code commented out above won't work until I fix updateTile to handle linkages properly
+                // this ensures that all customizations and linkages are properly handled
+                // console.log("Updating page to reflect hub updates for hubid =", hubid, " devices:", presult);
+                // window.location.reload();
+
             } else {
                 console.warn(`Could not update hub with hubid = ${hubid}.  Request returned: `, presult);
             }
@@ -3829,36 +3840,37 @@ function clockUpdater(updateDatabase) {
 
 }
 
-function setupTimer(timertype, timerval, hub) {
+function setupHubTimer(timerval, hub) {
 
     // we now pass the unique hubId value instead of numerical hub
     // since the number can now change when new hubs are added and deleted
     // this is the only reason we include hubid in each tile's attributes
-    if ( !hub || !timerval || timerval < 1000 ) {
+    if ( !hub || typeof hub !== "object" || !hub.hubid || !timerval ) {
         return;
     }
-    var updarray = [timertype, timerval, hub.hubid];
+    var updarray = [timerval, hub.hubid];
     updarray.myMethod = function() {
 
         var that = this;
         if ( priorOpmode === "Operate" || priorOpmode === "Sleep" ) {
             try {
                 // just do the post and nothing else since the post call pushClient to refresh the tiles
-                var hubid = that[2];
+                const hubid = that[1];
 
                 // replace old approach with a new api call that returns all updated devices
-                updateHubTiles(hubid);
+                updateHubTiles(hubid, timerval);
             } catch(err) {
-                console.error ("Polling error in setupTimer for hub: ", hub, " error: ", err);
+                console.error ("Polling error for hub: ", hub.hubname, " error: ", err);
             }
         }
 
         // repeat the method above indefinitely
-        setTimeout(function() {updarray.myMethod();}, that[1]);
+        const delayval = that[0] * 1000;
+        setTimeout(function() {updarray.myMethod();}, delayval);
     };
 
     // wait before doing first one
-    setTimeout(function() {updarray.myMethod();}, timerval);
+    setTimeout(function() {updarray.myMethod();}, timerval * 1000);
 }
 
 // setup clicking on the action portion of this thing

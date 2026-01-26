@@ -1,4 +1,5 @@
 const devhistory = `
+3.5.17  01/27/2026 Implemented hub refresh, fixed bug in power change detection logic, and throttled hub subscriptions to avoid errors and overloading
 3.5.16  01/24/2026 Major updates to tile editor to support meteo weather and inline settings
 3.5.15  01/23/2026 Add OpenMeteo weather, move all weathers to default hub, support multiple clocks, and fix bug in handling of clock updating 
 3.5.14  01/20/2026 Added new feature to enable any adhoc user custom styling in the tile editor
@@ -6,7 +7,7 @@ const devhistory = `
 3.5.12  01/13/2026 Fix bug for updating configuration settings
 3.5.11  01/10/2026 Fix bug hub auth setup screen and improve object support for GET and POST custom fields
 3.5.10  01/08/2026 Fix obscure bug in on screen tile editing, missing logout menu handling, add South and East resizing
-3.5.9   01/07/2026 Complete rewrite of websocket handling to be mroe robust and support multiple clients on any device
+3.5.9   01/07/2026 Complete rewrite of websocket handling to be more robust and support multiple clients on any device
 3.5.8   01/05/2026 Added support for Ambient Weather stations using their API. This includes a new device type that captures all the data from the station. 
 3.5.7   01/03/2026 fix bug in thermostat setpoint and up/down link click handling and minor code cleanup
 3.5.6   01/01/2026 enabled GET and POST to insert results into tiles and major code cleanup
@@ -15,7 +16,7 @@ const devhistory = `
 3.5.3   12/10/2025 fix colorTemperature command bug and minor code cleanup
 3.5.2   11/26/2025 fixed linked commands to show parameters and fix linked battery display
 3.5.1   Bugfix in customizer that skipped devices when added as different types
-3.4.9   Change time used in lists to clock to match user selected format and timezome
+3.4.9   Change time used in lists to clock to match user selected format and timezone
 3.4.8   Fix colorTemperature visual updates and re-enable PUT customs
 3.4.7   Minor tweak to Mode to capture all user modes in GUI
 3.4.6   Remove panel names from various screens

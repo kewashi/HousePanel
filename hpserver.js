@@ -1297,7 +1297,6 @@ function getHublessTypes() {
     return {"clockdigital":1,"clockanalog":1,"control":1,"image":1,"video":1,"frame":4,"blank":1,"custom":4,"weather":0};
 }
 
-
 // rewrote this to use a promise to return the actual array of devices or a reject with a message
 function getDevices(hub) {
     if ( DEBUG1 ) {
@@ -4143,7 +4142,7 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
         $tc += "<input id='inp_hubtimer' class=\"startupinp\" name=\"hubtimer\" size=\"10\" type=\"text\" value=\"" + hub["hubtimer"] + "\"/></div>"; 
         
         $tc += "<div class=\"buttonrow\">";
-        $tc += "<input class=\"authbutton hubupdate\" value=\"Update Hub\" type=\"button\" />";
+        $tc += "<input class=\"authbutton hubupdate\" value=\"Refresh Hub\" type=\"button\" />";
         $tc += "<input class=\"authbutton hubauth\" value=\"Authorize Hub\" type=\"button\" />";
         $tc += "<input class=\"authbutton hubdel\" value=\"Remove Hub\" type=\"button\" />";
         $tc += "</div>";
@@ -10058,14 +10057,23 @@ function apiCall(user, body, protocol, res) {
                 }
                 break;
             
-            // this returns just the rules list for a specific user and device swid
+            // this returns the array of hubs for this user
             case "gethubs":
                 result = mydb.getRows("hubs","*","userid = "+userid)
-                .then(row => {
+                .then(hubs => {
                     if ( DEBUG2 ) {
-                        console.log( (ddbg()),"hubs returned for user: ", userid, " hub: ", row );
+                        console.log( (ddbg()),"hubs returned for user: ", userid, " hub: ", hubs );
                     }
-                    return row;
+                    // check for valid hubtimer and set to zero if non integer provided
+                    if ( hubs && is_object(hubs) ) {
+                        hubs.forEach( hub => {
+                            if ( isNaN( parseInt(hub.hubtimer) ) ) {
+                                hub.hubtimer = "0";
+                                mydb.updateRow("hubs", hub, `userid=${userid} AND hubid='${hub.hubid}'`);
+                            }
+                        });
+                    }
+                    return hubs;
                 })
                 .catch(reason => {
                     return "error - no hubs found for user " + userid;
@@ -10109,6 +10117,57 @@ function apiCall(user, body, protocol, res) {
                     console.error( (ddbg()), "apiCall - getdevice: ", reason);
                     result = "Something went wrong in the getdevice API call.";
                 });
+                break;
+
+            case "refreshhub":
+                if ( protocol==="POST" ) {
+                    result = Promise.all([
+                        mydb.getRow("hubs","*","userid = "+userid+" AND hubid = '"+swid+"'"),
+                        mydb.getRows("configs","*", "userid = " + userid + " AND configtype=1")
+                    ])
+                    .then(results => {
+                        let hub = results[0];
+                        let configoptions = results[1];
+                        if ( hub ) {
+                            return getDevices(hub)
+                            .then(biddevices => {
+                                var devices = {};
+
+                                // fix up devices with customizations
+                                for(let bid in biddevices) {
+                                    let row = biddevices[bid];
+                                    row.pvalue = decodeURI2(row.pvalue);
+
+                                    // skip LINKS and LISTS here because links are handled with updateLink on the js side
+                                    // when a value that is linked is updated on its parent hub so we don't need to update links here
+                                    // but we do need to still load the customizations and file names
+                                    if ( configoptions && is_object(configoptions) ) {
+                                        row.pvalue = getCustomTile(userid, configoptions, row.pvalue, bid, row.hint);
+                                        row.pvalue = getFileName(userid, pname, row.pvalue, row.devicetype);
+                                    }
+                                    let uid = row.uid;
+                                    devices[uid] = row;
+                                }
+                                return devices;
+                            })
+                            .then(devices => {
+                                if ( swval !== hub.hubtimer ) {
+                                    hub.hubtimer = swval;
+                                    mydb.updateRow("hubs", hub, `userid=${userid} AND hubid='${swid}'`);
+                                }
+                                return devices;
+                            });
+                        } else {
+                            return "error - no hub with id: " + swid + " for user: " + userid;
+                        }
+                    })
+                    .catch(reason => {
+                        console.error( (ddbg()), "error attempting to refresh hub: ", reason);
+                        return "error attempting to refresh hub for user " + userid;
+                    });
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
                 break;
 
             // read and return devices tied to this user
