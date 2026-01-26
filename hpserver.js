@@ -1538,7 +1538,7 @@ function getDevices(hub) {
                             // for now we capture all fields, later we may want to filter some out
                             for ( let key in devicedata[0] ) {
                                 let dataval = devicedata[0][key];
-                                if ( key === "dateutc" || key==="date" || key==="lastRain" ) {
+                                if ( key==="date" || key==="lastRain" ) {
                                     // convert this to a human readable date and time
                                     let d = new Date(dataval);
                                     dataval = d.toLocaleString();
@@ -1786,8 +1786,13 @@ function getDevices(hub) {
                         newdevice.value.temperature = Math.round(newdevice.value.temperature);
                         newdevice.value.temperatureApparent = Math.round(newdevice.value.temperatureApparent);
                         
-                        // Add time from the data response
-                        newdevice.value.time = weatherData.data.time;
+                        // Add time from the data response in local format
+                        // newdevice.value.time = weatherData.data.time;
+                        if ( weatherData.data.time ) {
+                            let d = new Date(weatherData.data.time);
+                            newdevice.value.time = d.toLocaleString();
+                        }
+
                         
                         // Add location information
                         if ( weatherData.location ) {
@@ -4567,11 +4572,6 @@ function getFileName(userid, pname, thingvalue, thingtype) {
         console.log((ddbg()), "custom name for type: ", thingtype, " vn= ", $vn, " fn= ", fn, " v= ", $v, " media file= ", mediafile);
     }
     thingvalue[thingtype] = $v;
-
-    // TODO - figure out a better way to show large images
-    // if ( mediafile ) {
-    //     thingvalue["_media_"] = mediafile;
-    // }
     return thingvalue;
 }
 
@@ -5544,7 +5544,7 @@ function getCustomTile(userid, configoptions, custom_val, bid, hint) {
 
 // this little gem makes sure items are in the proper order
 function setValOrder(val) {
-    const order = { "_": 190, "_number_":70, "time": 31, "date": 32, "date":33, "weekday":34, "month":35, "year":36, "tzone":37, "fmt_time":101, "fmt_date":102,
+    const order = { "_": 190, "_number_":70, "time": 31, "date": 32, "date":33, "lastRain":39, "weekday":34, "month":35, "year":36, "tzone":37, "fmt_time":101, "fmt_date":102,
                    "name": 1, "subname": 2, "color": 3, "switch": 6, "momentary": 7, "presence": 7, "presence_type": 8,
                    "contact": 9, "door": 8, "garage":8, "motion": 9, "themode": 40,
                    "make": 11, "modelName":12, "modelYear": 13, "vehiclecolor": 14, "nickName": 15,

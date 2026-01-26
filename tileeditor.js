@@ -744,7 +744,7 @@ function initDialogBinds(str_type, thingindex) {
         var inlineffect = $(this).val();
         const fontstr= "display: " + inlineffect;
         addCSSRule(overlayTarget, fontstr);
-        addCSSRule(cssRuleTarget, "display: inline-block;");
+        addCSSRule(cssRuleTarget, "display: inline-block; vertical-align: middle;");
         event.stopPropagation();
     });
     

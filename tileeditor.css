@@ -1888,8 +1888,8 @@ div.weather.forecastToday, div.weather.forecastTonight, div.weather.forecastTomo
 
 /* weather styling */
 div.thing.weather-thing {
-    background-color: rgba(81, 103, 250, 0.75);
-    width: 240px;
+    background-color: rgba(8, 24, 148, 1.0);
+    width: 370px;
     text-align: center;
     height: auto;
 }
@@ -2437,4 +2437,8 @@ table.weatherapiopts tr {
 
 div.thing.weather-thing.meteo {
     width: 600px;
+}
+
+div.thing img {
+    vertical-align: middle;
 }
