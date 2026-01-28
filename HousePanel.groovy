@@ -513,6 +513,7 @@ def getSwitch(swid, item=null) {
 
 def getDimmer(swid, item=null) {
     def resp = getThing(mydimmers, swid, item)
+    resp.put("levelval", resp["level"] ?: 0)
     resp.put("_dim","dim")
     resp.put("_brighten","brighten")
     return resp
@@ -520,6 +521,7 @@ def getDimmer(swid, item=null) {
 
 def getBulb(swid, item=null) {
     def resp = getThing(mybulbs, swid, item)
+    resp.put("levelval", resp["level"] ?: 0)
     resp.put("_dim","dim")
     resp.put("_brighten","brighten")
     return resp
@@ -548,6 +550,7 @@ def getLock(swid, item=null) {
 def getShade(swid, item=null) {
     def resp = getThing(myshades, swid, item)
     // resp.put("_stop","stopPositionChange")
+    resp.put("levelval", resp["level"] ?: 0)
     resp.put("_raise","raise")
     resp.put("_lower","lower")
     return resp
@@ -961,6 +964,7 @@ def getThing(things, swid, item=null) {
             resp["hue"] = h
             resp["saturation"] = s
             resp["level"] = v
+            resp["levelval"] = v
 
             // set color based on mode
             def newcolor
@@ -2581,6 +2585,7 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
         if ( temperature && item.hasAttribute("colorTemperature") ) { resp.put("colorTemperature", temperature) }
         if ( newlevel && item.hasAttribute("level") ) { resp.put("level", newlevel) }
         if ( newlevel && item.hasAttribute("position") ) { resp.put("position", newlevel) }
+        if ( newlevel && item.hasAttribute("levelval") ) { resp.put("levelval", newlevel) }
 
         // do this so that user created TEXT fields using the customizer will return the custom command
         if ( subid.startsWith("_") ) {

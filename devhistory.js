@@ -1,4 +1,5 @@
 const devhistory = `
+3.5.18  01/28/2026 Added major new feature allowing dimmer light icons to dynamically change based on level
 3.5.17  01/27/2026 Implemented hub refresh, fixed bug in power change detection logic, and throttled hub subscriptions to avoid errors and overloading
 3.5.16  01/24/2026 Major updates to tile editor to support meteo weather and inline settings
 3.5.15  01/23/2026 Add OpenMeteo weather, move all weathers to default hub, support multiple clocks, and fix bug in handling of clock updating 

@@ -1401,7 +1401,7 @@ div.colorgroup {
 div.colorgroup label, div.colorgroup div.infomsg {
     color: white;
     width: auto;
-    display: block;
+    display: inline-block;
 }
 
 div.radiogroup {
@@ -1514,19 +1514,21 @@ div.thing div.overlay.color div.color {
 div.overlay.color .minicolors-theme-default.minicolors {
     z-index: 999;
 }
-.minicolors .minicolors-swatch.minicolors-input-swatch {
+div.minicolors span.minicolors-swatch.minicolors-sprite.minicolors-input-swatch {
   top: 2px;
-  left: 35px;
+  left: 15px;
   width: 24px;
   height: 24px;
   border-radius: 50%;
+  position: absolute;
   cursor: pointer;
 }
-.minicolors-swatch-color {
+span.minicolors-swatch-color {
   border-radius: 50%;
 }
 .minicolors-position-left .minicolors-panel {
     left: 60px;
+    z-index: 999;
 }
 
 .minicolors-theme-default .minicolors-input {
@@ -2445,4 +2447,14 @@ div.thing.weather-thing.meteo {
 
 div.thing img {
     vertical-align: middle;
+}
+
+div.thing div.overlay.level_val, div.thing div.overlay.position_val, div.thing div.overlay.colorTemperature_val,
+div.thing div.overlay.volume_val, div.thing div.overlay.onlevel_val     {
+    display: none;
+}
+div.overlay.level div.sliderval, #slider_754 {
+    font-size: 40px;
+    color: white;
+    display: none;
 }

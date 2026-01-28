@@ -1509,9 +1509,9 @@ function setupSliders() {
     // now set up all colorTemperature sliders
     $("div.overlay.colorTemperature >div.colorTemperature").slider({
         orientation: "horizontal",
-        min: 2000,
-        max: 7400,
-        step: 200,
+        min: 2700,
+        max: 6500,
+        step: 175,
         stop: function( evt, ui) {
             hpsliders(evt, ui);
         }
@@ -3179,8 +3179,6 @@ function delEditLink() {
     $("div.addpage").each(function() {
        $(this).remove();
     });
-    
-    // closeModal();
 }
 
 function showType(ischecked, theval, hubpick) {
@@ -3562,6 +3560,20 @@ function processKeyVal(targetid, aid, key, value) {
     } else if ( (key === "level" || key=== "onlevel" || key==="volume" || key==="groupVolume" || key==="position" || key==="colorTemperature") && $(targetid).slider ) {
         $(targetid).slider("value", value);
         $(targetid).attr("value",value);
+        let level = Math.round(value/10)*10;
+        let subtype = "L"+level.toString();
+        // swap the level target to the switch it controls
+        let switchid = targetid.replace(/-level$/,"-switch");
+        // remove old level classes
+        if ($(switchid) && $(switchid).html()) {
+            for ( let i=10; i<=100; i+=10 ) {
+                let oldsubtype = "L"+i.toString();
+                if ( $(switchid).hasClass(oldsubtype) ) {
+                    $(switchid).removeClass(oldsubtype);
+                }
+            }
+            $(switchid).addClass(subtype);
+        }
         value = false;
         oldvalue = false;
 
@@ -3924,11 +3936,11 @@ function setupPage() {
         } catch(e) {
             pn = 0;
         }
-        
+
         // avoid doing click if the target was the title bar
         // also skip sliders using class method to get all of them
         if ( ( typeof aid==="undefined" ) || 
-             ( $(this).hasClass("ui-slider") ) ||
+            //  ( $(this).hasClass("ui-slider") ) ||
              ( id && id.startsWith("s-") ) ) {
             return;
         }
@@ -4009,7 +4021,18 @@ function setupPage() {
         // uses a simple md5 hash to store user password - this is not strong security
         if ( pw!==false && typeof pw === "string" && pw!=="false" ) {
             checkPassword(that, thingname, pw, ro, thevalue, subid, processClick);
-        
+
+        // clicking on slider handle gives the option of setting a level
+        } else if ( $(this).hasClass("ui-slider") ) {
+            const curval = $(that).attr("value");
+            if ( subid==="level" || subid==="onlevel" || subid==="volume" || subid==="groupVolume" || subid==="position" ) {
+                processClickWithValue(that, thingname, ro, subid, thetype, {"Level": [curval, "0", "10","20","30","40","50","60","70","80","90","100"]} );
+            } else if ( subid==="colorTemperature" ) {
+                processClickWithValue(that, thingname, ro, subid, thetype, {"Color Temperature": [curval, "2700","3000","3500","4000","4500","5000","5500","6000","6500"]} );
+            } else {
+                return;
+            }
+
         // handle buttons by searching for sibling that has number of buttons listed
         // this won't be found if the button is a link so we just make user put in a number
         } else if ( subid==="_push" || subid==="_hold" || subid==="_doubleTap" || subid==="_release" ) {

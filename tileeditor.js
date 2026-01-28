@@ -26,6 +26,8 @@ function editTile(userid, thingid, pagename, str_type, thingindex, uid, bid, thi
     et_Globals.uid = uid;
     et_Globals.insubmenu = false;
 
+    DEBUGte = cm_Globals.dbgflags.debug13;
+
     if ( str_type==="page" ) {
         et_Globals.wholetarget = getCssRuleTarget(str_type, "panel", pagename, "thistile");
     } else {
@@ -130,18 +132,15 @@ function editTile(userid, thingid, pagename, str_type, thingindex, uid, bid, thi
                     if ( et_Globals.insubmenu ) {
                         return;
                     }
-                    // console.log(e.which, typeof e.which);
                     if ( e.which===13  ){
                         saveTileEdit(et_Globals.userid, str_type, thingindex);
                         et_Globals.tileCount = 0;
                         closeModal("modaledit");
-                        // $("#modalokay").trigger("click");
                     }
                     if ( e.which===27  ){
                         cancelTileEdit();
                         et_Globals.tileCount = 0;
                         closeModal("modaledit");
-                        // $("#modalcancel").trigger("click");
                     }
                 });
                 $("#modaledit").draggable();
@@ -186,6 +185,13 @@ function getOnOff(str_type, subid, val) {
         } else {
             onoff = ["on","off"];
         }
+        // add the various L levels for switchlevel and bulb types
+        if ( str_type==="switchlevel" || str_type==="bulb" ) {
+            for ( let lvl=10; lvl <= 100; lvl+=10 ) {
+                onoff.push("L" + lvl.toString());
+            }
+        }
+
     } else if ( subid.startsWith("ecoMode") ) {
         onoff = ["ON","OFF"];
     } else if ( subid.startsWith("momentary") ) {
@@ -272,6 +278,11 @@ function getOnOff(str_type, subid, val) {
     return onoff;
 }
 
+// function isNumber(value) {
+//     let num = parseInt(value, 10);
+//     return !isNaN(num);
+// }
+
 function getCssRuleTarget(str_type, subid, thingindex, userscope) {
 
     // get the scope to use
@@ -345,10 +356,8 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
     } else if ( overlay ) {
         target = getScope();
         
-        // handle music controls special case
-        if ( subid.startsWith("music-") ) {
-            target+= " div.overlay.music-controls";
-        } else if ( subid.endsWith("-dn") || subid.endsWith("-up") ) {
+        // handle up/down controls special case
+        if ( subid.endsWith("-dn") || subid.endsWith("-up") ) {
             target+= " div.overlay." + subid.substring(0,subid.length-3);
         } else {
             target+= " div.overlay." + subid;
@@ -371,16 +380,36 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
     // handle special case when whole tile is being requested
     } else if ( subid==="wholetile" ) {
         target = getScope();
+
+    // handle special case when color picker is being edited
+    // this sets the target to the minicolor span that controls what the picker looks like, which is a little circle by default
+    } else if ( subid==="colorpicker" || subid==="color" ) {
+        target = getScope();
+        target += " div.overlay.color";
+
+        // narrow down to this tile if requested
+        if (scope==="thistile" || scope==="thispage" ) {
+            target+= '.v_'+thingindex;
+        }
+
+        // add the specific target inside overlay for color picker
+        if ( subid==="color" ) {
+            target+= " div." + subid;
+            if ( scope==="thistile" || scope==="thispage" ) {
+                target+= '.p_'+thingindex;
+            }
+
+        } else {
+            target += " div.minicolors.minicolors-theme-default span.minicolors-swatch.minicolors-sprite.minicolors-input-swatch";
+        }
     
     // main handling of type with subid specific case
     // starts just like overlay but adds all the specific subid stuff
     } else {
         target = getScope();
         
-        // handle music controls special case
-        if ( subid.startsWith("music-") ) {
-            target+= " div.overlay.music-controls";
-        } else if ( subid.endsWith("-dn") || subid.endsWith("-up") ) {
+        // handle up/down controls special case
+        if ( subid.endsWith("-dn") || subid.endsWith("-up") ) {
             target+= " div.overlay." + subid.substring(0,subid.length-3);
         } else {
             target+= " div.overlay." + subid;
@@ -392,8 +421,9 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
         }
 
         // check for items with arrows around them or sliders so we just use overlap group for those
-        var skipdiv = $(target + " div."+subid+".p_"+thingindex);
-        var skiparrow = ( skipdiv && (skipdiv.hasClass("arrow-it") || skipdiv.hasClass("ui-slider")) );
+        // const skipdiv = $(target + " div."+subid+".p_"+thingindex);
+        // const skiparrow = ( skipdiv && (skipdiv.hasClass("arrow-it") || skipdiv.hasClass("ui-slider")) );
+        const skiparrow = false;
 
         // add the specific target inside overlay for things without arrows and non sliders
         // if ( subid!=="level" && subid!=="volume" && subid!=="onlevel" && subid!=="position" ) {
@@ -407,14 +437,20 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
         // get the on/off state
         // set the target to determine on/off status
         // we always use the very specific target to this tile
+        let on = "";
         if ( skiparrow || subid==="name" || subid==="track" || subid==="weekday" || subid.startsWith("music-") ||
              subid==="color" || subid==="level" || subid==="volume" || subid==="onlevel" || subid==="position" ||
              subid==="cool" || subid==="heat" || subid==="stream" ) {
             on = "";
         } else {
-            var on = $("#onoffTarget").html();
-            if ( on && !isNumeric(on) && (on.indexOf(" ") === -1) ) {
-                on = "."+on;
+            const htmlval = $("#onoffTarget").html();
+            on = htmlval;
+
+            // handle dimmer levels
+            if ( str_type==="switchlevel" && typeof htmlval === "string" && htmlval.startsWith("L") && isNumeric(htmlval.substring(1)) ) {
+                on = ".on." + htmlval;
+            } else if (htmlval && !isNumeric(htmlval) && (htmlval.indexOf(" ") === -1) ) {
+                on = "."+htmlval;
             } else {
                 on = "";
             }
@@ -437,7 +473,10 @@ function getCssRuleTarget(str_type, subid, thingindex, userscope) {
 }
 
 function toggleTile(target, str_type, subid, setvalue) {
-    var ostarget = target;
+    if ( DEBUGte ) {
+        console.log("toggleTile: target= "+target+" type= "+str_type+" subid= "+subid+" setvalue= "+setvalue);
+    }
+    var ostarget = null;
     var swval = $(target).html();
     $('#onoffTarget').html("");
     if ( swval ) {
@@ -476,8 +515,11 @@ function toggleTile(target, str_type, subid, setvalue) {
             if ( setvalue && (oldsub.toLowerCase() === swval.toLowerCase()) ) {
                 newsub = i+1;
                 if ( newsub >= onoff.length ) { newsub= 0; }
-                $(target).addClass( onoff[newsub] ); 
                 $(target).html( onoff[newsub] );
+                $(target).addClass( onoff[newsub] ); 
+                if ( typeof onoff[newsub] === "string" && onoff[newsub].startsWith("L") && isNumeric(onoff[newsub].substring(1)) ) {
+                    $(target).addClass( "on" ); 
+                }
                 if ( ostarget !== target ) {
                     $(ostarget).html( onoff[newsub] );
                 }
@@ -485,6 +527,9 @@ function toggleTile(target, str_type, subid, setvalue) {
                 break;
             }
         }
+    }
+    if ( DEBUGte ) {
+        console.log("toggleTile: final target class= "+$(target).attr("class")+" newsub= "+newsub + " onoff= "+onoff);
     }
 };
 
@@ -733,7 +778,7 @@ function initDialogBinds(str_type, thingindex) {
         event.stopPropagation();
     });
 
-    // alignment handling uses the overlay target
+    // alignment handling uses the overlay target and the sub target is set differently for different effects
     $("#inlineEffect").off('change', "input");
     $("#inlineEffect").on('change', "input", function (event) {
         var str_type = $("#tileDialog").attr("str_type");
@@ -741,10 +786,23 @@ function initDialogBinds(str_type, thingindex) {
         var subid = $("#subidTarget").html();
         const overlayTarget = getCssRuleTarget(str_type, subid, thingindex, "overlay");
         const cssRuleTarget = getCssRuleTarget(str_type, subid, thingindex);
-        var inlineffect = $(this).val();
-        const fontstr= "display: " + inlineffect;
-        addCSSRule(overlayTarget, fontstr);
-        addCSSRule(cssRuleTarget, "display: inline-block; vertical-align: middle;");
+        const inlineefect = $(this).val();
+        if ( DEBUGte ) {
+            console.log("inlineEffect: overlayTarget= "+overlayTarget+" cssRuleTarget= "+cssRuleTarget+" inlineefect= "+inlineefect);
+        }
+        if ( inlineefect === "none" ) {
+            addCSSRule(overlayTarget, "display: " + inlineefect);
+            addCSSRule(cssRuleTarget, "display: inline-block");
+            accCSSRule(cssRuleTarget, "vertical-align: middle");
+        } else if ( inlineefect === "inline" || inlineefect === "inline-block" ) {
+            addCSSRule(overlayTarget, "display: " + inlineefect);
+            addCSSRule(cssRuleTarget, "display: " + inlineefect);
+            accCSSRule(cssRuleTarget, "vertical-align: middle");
+        } else {
+            addCSSRule(overlayTarget, "display: " + inlineefect);
+            addCSSRule(cssRuleTarget, "display: " + inlineefect);
+            accCSSRule(cssRuleTarget, "vertical-align: middle");
+        }
         event.stopPropagation();
     });
     
@@ -1750,44 +1808,44 @@ function loadSubSelect(str_type, firstsub, thingindex) {
         }
 
         var subid;
+        var subdown;
+        var subup;
         $("#tileDisplay div."+str_type+"-thing  div.overlay").each(function(index) {
             var classes = $(this).attr("class");
             var words = classes.split(" ", 3);
             subid = words[1];
             if ( !subid ) return;
 
+            // handle up/down subs if applicable
             if ( $(this).children().length === 3 ) {
-                var subdown = $(this).children().eq(0).attr("subid");
-                var subup = $(this).children().eq(2).attr("subid");
+                subdown = $(this).children().eq(0).attr("subid");
+                subup = $(this).children().eq(2).attr("subid");
+                if ( !subdown || !subdown.toString().startsWith(subid) ) {
+                    subdown = false;
+                }
+                if ( !subup || !subup.toString().startsWith(subid) ) {
+                    subup = false;
+                }
             } else {
                 subdown = false;
                 subup = false;
             }
                
-            // handle music controls
-            if ( subid==="music-controls" ) {
-                var that = $(this);
-                that.children().each(function() {
-                    var musicsub = $(this).attr("subid");
-                    subcontent += "<option value='" + musicsub +"'";
-                    if ( musicsub === firstsub ) {
-                        subcontent += " selected";
-                    }
-                    subcontent += ">" + musicsub + "</option>";;
-                });
-            } else {
-                if ( subdown ) {
-                    subcontent += "<option value='" + subdown + "'>" + subdown + "</option>";
-                }
-                subcontent += "<option value='" + subid + "'";
-                if ( subid === firstsub ) {
-                    subcontent += " selected";
-                }
-                subcontent += ">" + subid + "</option>";;
-                if ( subup ) {
-                    subcontent += "<option value='" + subup + "'>" + subup + "</option>";
-                }
+            if ( subdown ) {
+                subcontent += "<option value='" + subdown + "'>" + subdown + "</option>";
+            }
+            subcontent += "<option value='" + subid + "'";
+            if ( subid === firstsub ) {
+                subcontent += " selected";
+            }
+            subcontent += ">" + subid + "</option>";
+            if ( subup ) {
+                subcontent += "<option value='" + subup + "'>" + subup + "</option>";
+            }
 
+            // add field for editing the color picker if applicable
+            if ( subid==="color" && str_type==="bulb" ) {
+                subcontent += "<option value='colorpicker'>Color Picker</option>";
             }
         });
     
@@ -2034,7 +2092,7 @@ function initColor(str_type, subid, thingindex, uid) {
 
     // get the target selector
     var scope = $("#scopeEffect").val();
-    var target = getCssRuleTarget(str_type, subid, thingindex, scope);
+    const target = getCssRuleTarget(str_type, subid, thingindex, scope);
     const overlayTarget = getCssRuleTarget(str_type, subid, thingindex, "overlay");
 
     // use the wysiwyg tile if we are styling tabs
@@ -2063,26 +2121,34 @@ function initColor(str_type, subid, thingindex, uid) {
     }
     et_Globals.priorIcon = $(target).css("background-image");
     
-    // set the active value
-    var onoffval = $("#onoffTarget").html();
-    if ( onoffval && !isNumeric(onoffval) && (onoffval.indexOf(" ") === -1) ) {
-        $(icontarget).addClass(onoffval);
-        $(icontarget).html(onoffval);
-    }
-        
-    // set the first onoff state
+    // clear all onoff states
     var onoff = getOnOff(str_type, subid, onoffval);
-    // $("#onoffTarget").html(onoff[0]);
-    
     $.each(onoff, function() {
         if ( this && $(icontarget).hasClass(this) ) {
             $(icontarget).removeClass(this);
         }
     });
-   
+        
+    // set the state that is on
+    var onoffval = $("#onoffTarget").html();
+
+    // special handling for switchlevel levels, we add both the L10 etc and also the "on" class
+    // and we set the html value to on instead of the L10 etc
+    // this works because in getCssRuleTarget we return both the Lxx and also the "on" class
+    // and in the main hpserver.js file the makeThing function uses the "on" class to determine on/off state
+    // if ( str_type==="switchlevel" && onoffval.startsWith("L") && isNumeric(onoffval.substring(1)) ) {
+    //     $(target).addClass(onoffval);
+    //     // $(target).addClass(onoffval);
+    //     $(target).html(onoffval);
+    //     // alert("Note: icontarget = " + target + " onoffval = " + onoffval + " with class(es) = " + $(target).attr("class") );
+    // } else if ( onoffval && !isNumeric(onoffval) && (onoffval.indexOf(" ") === -1) ) {
+    //     $(target).addClass(onoffval);
+    //     $(target).html(onoffval);
+    //     // alert("Note: Setting the state to '" + onoffval + "' applies the CSS class of the same name to this item.");
+    // }
+    
     // set the background size
     var iconsize = $(target).css("background-size");
-    
     if ( iconsize==="auto" || iconsize==="cover" ) {
         $("#autoBgSize").prop("checked", true);
         $("#bgSize").prop("disabled", true);
@@ -2229,6 +2295,17 @@ function initColor(str_type, subid, thingindex, uid) {
                   <input type="text" id="iconColor" caller="background" target="' + target + '" \
                   class="colorset" value="' + onstart + '"> \
                   </div>';
+
+    // add an option to set background colors to the bulb color if this is a bulb device
+    if ( str_type==="bulb" ) {
+        const colortarget = getCssRuleTarget(str_type, "colorName", thingindex);
+        const bulbcolor = $(colortarget).html();
+        iconback += '<div class="colorgroup"> \
+                      <input type="checkbox" id="bgBulbColor" caller="background" target="' + target + '" \
+                      class="colorchk" value="' + bulbcolor + '"> \
+                      <label class="iconCheck" for="bgBulbColor">Use Bulb Color</label> \
+                      </div>';
+    }
     
     if ( str_type==="page" && subid==="panel" ) {
         var ceffect = "<div class='colorgroup'><div class='infomsg'>Note: panels for pages cannot be styled. Only the names can be changed and the tab styled. To style the tab use tab or name fields.</div></div>";
@@ -2299,6 +2376,18 @@ function initColor(str_type, subid, thingindex, uid) {
                       caller="color" target="' + target + '" \
                       class="colorset" value="' + onstart + '"> \
                       </div>';
+
+
+    // add an option to set foreground colors to the bulb color if this is a bulb device
+    if ( str_type==="bulb" ) {
+        const colortarget = getCssRuleTarget(str_type, "colorName", thingindex);
+        const bulbcolor = $(colortarget).html();
+        iconfore += '<div class="colorgroup"> \
+                      <input type="checkbox" id="fgBulbColor" caller="color" target="' + target + '" \
+                      class="colorchk" value="' + bulbcolor + '"> \
+                      <label class="iconCheck" for="fgBulbColor">Use Bulb Color</label> \
+                      </div>';
+    }
 
         // get the default font
         var ffamily = $(target).css("font-family");
@@ -2455,6 +2544,35 @@ function initColor(str_type, subid, thingindex, uid) {
                     updateColor(strCaller, startTarget, str_type, subid, thingindex, strColor, target2);
                 }
             });
+
+            if ( str_type==="bulb" && strCaller==="background" && $("#bgBulbColor") ) {
+                $("#bgBulbColor").off("change");
+                $("#bgBulbColor").on("change", function() {
+                    if ( $(this).is(":checked") ) {
+                        // set to bulb color
+                        var bulbcolor = $(this).val();
+                        updateColor(strCaller, startTarget, str_type, subid, thingindex, bulbcolor, target2);
+                    } else {
+                        // set to the selected color
+                        var selcolor = $("#iconColor").val();
+                        updateColor(strCaller, startTarget, str_type, subid, thingindex, selcolor, target2);
+                    }
+                });
+            }
+            if ( str_type==="bulb" && strCaller==="color" && $("#fgBulbColor") ) {
+                $("#fgBulbColor").off("change");
+                $("#fgBulbColor").on("change", function() {
+                    if ( $(this).is(":checked") ) {
+                        // set to bulb color
+                        var bulbcolor = $(this).val();
+                        updateColor(strCaller, startTarget, str_type, subid, thingindex, bulbcolor, target2);
+                    } else {
+                        // set to the selected color
+                        var selcolor = $("#iconColor").val();
+                        updateColor(strCaller, startTarget, str_type, subid, thingindex, selcolor, target2);
+                    }
+                });
+            }
         });
     
     }
@@ -2552,29 +2670,49 @@ function initColor(str_type, subid, thingindex, uid) {
         $("#aligncenter").prop("checked", true);
     }
 
-    // set initial hidden status
-    // if ( subid==="wholetile" ) {
-    //     $("#isHidden").prop("checked", false);
-    //     $("#isHidden").prop("disabled", true);
-    // } else {
-    //     $("#isHidden").prop("disabled", false);
-    //     $("#isHidden").css("background-color","white");
-    //     var ishdefault = getCssRuleTarget(str_type, subid, thingindex, "overlay");
-    //     var ishdefault2 = getCssRuleTarget(str_type, subid, thingindex);
-    //     var ishidden = ($(ishdefault).css("display")==="none");
-    //     ishidden = ishidden || ($(ishdefault2).css("display")==="none");
+    // check for an initial hidden status
+    let ishidden = false;
+    const hideopt = "#inline5";
+    const inlineblock = "#inline2";
+    var displayval;
+    if ( subid==="wholetile" ) {
+        $(hideopt).prop("checked", false);
+        $(hideopt).prop("disabled", true);
+        displayval = "inline-block";
+    } else {
+        $(hideopt).prop("disabled", false);
+        ishidden = ($(overlayTarget).css("display")==="none") || ($(target).css("display")==="none")
 
-    //     // check all the other variations of this subid if we are still not sure if hidden
-    //     if ( !ishidden ) {
-    //         var ish = getish(str_type, thingindex, subid);
-    //         ish.forEach(function(ishdefault3) {
-    //             if (  $(ishdefault3) && $(ishdefault3).css("display")==="none" ) {
-    //                 ishidden= true;
-    //             }
-    //         });
-    //     }
-    //     $("#isHidden").prop("checked", ishidden);
+        // check all the other variations of this subid if we are still not sure if hidden
+        if ( !ishidden ) {
+            const ish = getish(str_type, thingindex, subid);
+            ish.forEach(function(ishdefault3) {
+                if (  $(ishdefault3) && $(ishdefault3).css("display")==="none" ) {
+                    ishidden= true;
+                }
+            });
+        }
+        // $("#isHidden").prop("checked", ishidden);
+        displayval = ishidden ? "hidden" : $(overlayTarget).css("display");
+    }
+    // set the initial inline check box
+    // if ( $(target).css("display") && $(target).css("display").includes("inline") ) {
+    //     $("#inlineOpt").prop("checked",true);
+    // } else {
+    //     $("#inlineOpt").prop("checked",false);
     // }
+    // inline settings are on the overlay target
+    if ( displayval==="inline" ) {
+        $("#inline1").prop("checked",true);
+    } else if ( displayval==="inline-block" ) {
+        $("#inline2").prop("checked",true);
+    } else if ( displayval==="block" ) {
+        $("#inline3").prop("checked",true);
+    } else if ( displayval==="hidden" ) {
+        $("#inline5").prop("checked",true);
+    } else {
+        $("#inline4").prop("checked",true);
+    }
     
     // set the initial invert check box
     if ( $(target).css("filter") && $(target).css("filter").includes("invert(1)") ) {
@@ -2590,30 +2728,6 @@ function initColor(str_type, subid, thingindex, uid) {
         $("#absPlace").prop("checked",false);
     }
 
-    // set the initial inline check box
-    // if ( $(target).css("display") && $(target).css("display").includes("inline") ) {
-    //     $("#inlineOpt").prop("checked",true);
-    // } else {
-    //     $("#inlineOpt").prop("checked",false);
-    // }
-    // inline settings are on the overlay target
-    if ( $(overlayTarget).css("display") && !$(overlayTarget).css("display").includes("none") ) {
-        var displayval = $(overlayTarget).css("display");
-        if ( displayval==="inline" ) {
-            $("#inline1").prop("checked",true);
-        } else if ( displayval==="inline-block" ) {
-            $("#inline2").prop("checked",true);
-        } else if ( displayval==="block" ) {
-            $("#inline3").prop("checked",true);
-        } else if ( displayval==="hidden" ) {
-            $("#inline5").prop("checked",true);
-        } else {
-            $("#inline4").prop("checked",true);
-        }
-    } else {
-        $("#inline4").prop("checked",true);
-    }
-    
     // set the initial icon none check box
     var isicon = $(target).css("background-image");
     if ( isicon === "none") {
@@ -3090,11 +3204,14 @@ function resetCSSRules(str_type, thingindex, onesubid){
                 // remove all the subs
                 var val = $(target1).html();
                 var onoff = getOnOff(str_type, subid, val);
-                if ( onoff && onoff.length > 0 ) {
+                if ( onoff && typeof onoff === "object" ) {
                     onoff.forEach( function(ison) {
                         if ( ison ) {
                             var subtarget = target1 + "." + ison;
                             numdel+= removeCSSRule(str_type, subtarget, thingindex);
+                            // if ( ison.startsWith("L") && isNumeric(ison.substring(1)) ) {
+                            //     numdel+= removeCSSRule(str_type, target1 + ".on", thingindex);
+                            // }
                         }
                     });
                 }
@@ -3180,7 +3297,6 @@ function copyCSSRule(str_type, thingindex, fixsubid){
     var sheet = document.getElementById('customtiles').sheet; // returns an Array-like StyleSheetList
 
     // loop through all the subid's
-    var targets = [];
     var subidmap = {};
 
     if ( fixsubid && fixsubid!=="wholetile" ) {
@@ -3199,6 +3315,12 @@ function copyCSSRule(str_type, thingindex, fixsubid){
                 var target = getCssRuleTarget(str_type, subid, thingindex, scope);
                 subidmap[target] = subid;
             });
+
+            // add Color Picker for bulb tiles
+            if ( str_type==="bulb" ) {
+                var target = getCssRuleTarget(str_type, "colorpicker", thingindex, scope);
+                subidmap[target] = "colorpicker";
+            }
 
             $(`#te_wysiwyg > div.overlay.v_${thingindex} div.p_${thingindex}`).each(function() {
                 var subid = $(this).attr("subid");
@@ -3271,7 +3393,12 @@ function pasteCSSRule(rules, str_type, thingindex, fixsubid){
             var subidtypes = ['wholetile','head','name'];
             subidtypes.forEach( function(subid) {
                 subids.push(subid);
-            });    
+            });
+
+            if ( str_type==="bulb" ) {
+                subids.push("colorpicker");
+            }
+
             $(`div.overlay.v_${thingindex} div.p_${thingindex}`).each(function() {
                 var subid = $(this).attr("subid");
                 if ( !subids.includes(subid) ) {

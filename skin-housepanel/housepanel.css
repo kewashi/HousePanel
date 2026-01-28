@@ -92,6 +92,7 @@ div.shm-thing div.overlay.state div.shm, div.hsm-thing div.overlay.state div.hsm
     font-size: 18pt;
     filter: invert(0);
 }
+
 /* heights for things with icons */
 div.overlay.switch div.switch, 
 div.overlay.switchlevel div.switch, 
@@ -146,12 +147,15 @@ div.overlay {
 /* the transparency is set to near zero so text doesn't show */
 div.overlay.contact div.contact.open {
     background-image: url('icons/opencontact.png');
+    background-size: 55px;
 }
 div.overlay.contact div.contact.closed, div.overlay.contact div.contact {
     background-image: url('icons/closecontact.png');
+    background-size: 55px;
 }
 div.overlay.contact div.contact.mat.open, div.overlay.contact div.contact.pressure.open {
     background-image: url('icons/matempty.png');
+    background-size: 55px;
 }
 div.overlay.contact div.contact.mat.closed, div.overlay.contact div.contact.pressure.closed, 
 div.overlay.contact div.contact.mat, div.overlay.contact div.contact.pressure {
@@ -163,15 +167,19 @@ div.overlay.contact div.contact.mat, div.overlay.contact div.contact.pressure {
 /* specific contact types one might find */
 div.overlay.door div.door.open, div.overlay.contact div.contact.door.open {
     background-image: url('icons/opendoor.png');
+    background-size: 55px;
 }
-div.door.closed, div.contact.door.closed {
+div.overlay.contact div.door.closed, div.overlay.contact div.contact.door.closed, div.overlay.contact div.door {
     background-image: url('icons/closedoor.png');
+    background-size: 55px;
 }
 div.overlay.water div.water.wet {
     background-image: url('icons/wet@2x.png');
+    background-size: 55px;
 }
 div.overlay.water div.water.dry, div.overlay.water div.water {
     background-image: url('icons/dry@2x.png');
+    background-size: 55px;
 }
 /* hide the contact part of garage doors that include an embedded contact sensor */
 div.garage-thing div.overlay.contact, div.door-thing.garage div.overlay.contact {
@@ -179,9 +187,11 @@ div.garage-thing div.overlay.contact, div.door-thing.garage div.overlay.contact 
 }
 div.overlay.contact div.contact.window.open {
     background-image: url('icons/openwindow.png');
+    background-size: 55px;
 }
-div.contact.window.closed, div.overlay.contact div.contact.window {
+div.overlay.contact div.contact.window.closed, div.overlay.contact div.contact.window {
     background-image: url('icons/closewindow.png');
+    background-size: 55px;
 }
 div.overlay.door div.door.garage.open {
     background-image: url('icons/garage-opened.png');
@@ -218,9 +228,11 @@ div.overlay.contact div.contact.garage.entry.closed, div.overlay.contact div.con
 /* motion styling */
 div.overlay.motion div.motion.inactive, div.overlay.motion div.motion {
     background-image: url('icons/stand.png');
+    background-size: 55px;
 }
 div.overlay.motion div.motion.active {
     background-image: url('icons/run.png');
+    background-size: 55px;
 }
 /* lock styling */
 div.overlay.lock div.lock.locked, div.overlay.lock div.lock {
@@ -251,6 +263,41 @@ div.overlay.allon div.allon.on, div.overlay.alloff div.alloff.on {
 }
 div.overlay.alloff div.alloff.off, div.overlay.allon div.allon.off {
     background-image: url('icons/switchoff.png');
+}
+
+/* variant of switch that includes levels */
+div.overlay.switch div.switch.off, div.overlay.switch div.switch {
+    background-image: url('icons/lampoff.png');
+}
+div.overlay.switch div.switch.L10.on {
+    background-image: url('icons/lampon_L10.png');
+}
+div.overlay.switch div.switch.L20.on {
+    background-image: url('icons/lampon_L20.png');
+}
+div.overlay.switch div.switch.L30.on {
+    background-image: url('icons/lampon_L30.png');
+}
+div.overlay.switch div.switch.L40.on {
+    background-image: url('icons/lampon_L40.png');
+}
+div.overlay.switch div.switch.L50.on {
+    background-image: url('icons/lampon_L50.png');
+}
+div.overlay.switch div.switch.L60.on {
+    background-image: url('icons/lampon_L60.png');
+}
+div.overlay.switch div.switch.L70.on {
+    background-image: url('icons/lampon_L70.png');
+}
+div.overlay.switch div.switch.L80.on {
+    background-image: url('icons/lampon_L80.png');
+}
+div.overlay.switch div.switch.L90.on {
+    background-image: url('icons/lampon_L90.png');
+}
+div.overlay.switch div.switch.L100.on {
+    background-image: url('icons/lampon_L100.png');
 }
 
 /* use switches for Harmony activities and hub status */
@@ -324,6 +371,10 @@ div.overlay.energy div.energy::after, div.overlay.switch div.energy::after {
 }
 div.overlay.power div.power::after, div.overlay.switch div.power::after {
     content: " (Watts)";
+}
+
+div.overlay.levelval div.levelval::after {
+    content: "%";
 }
 
 /* div.switchlevel.level, div.bulb.level, div.music.level, div.shade.level, div.music.groupVolume, div.audio.volume, div.audio.groupVolume, div.position {
@@ -655,8 +706,7 @@ div.audio-thing div.overlay.trackDescription div.trackDescription
     height: auto;
     width: auto;
     padding-top: 10px; padding-bottom: 10px;
-    border-bottom: none;
-    background-color: rgba(80, 80, 80, 0.7);
+    border: none;
 }
 div.overlay.status div.music.status, div.overlay.mute div.music.mute {
     height: 24px;
@@ -667,9 +717,11 @@ div.overlay.status div.music.status, div.overlay.mute div.music.mute {
 /* pistons */
 div.overlay.pistonName div.pistonName {
     background-image: url('icons/piston.png');
+    background-size: 55px;
 }
-div.overlay.pistonName div.pistonName.firing {
+div.overlay.pistonName div.pistonName.firing, div.overlay.pistonName div.pistonName {
     background-image: url('icons/pistonfiring.png');
+    background-size: 55px;
 }
 
 /* weather styling */
@@ -825,10 +877,10 @@ div.thing.frame-thing {
 }
 
 /* presence styling */
-div.presence.present, div.overlay.presence div.presence {
+div.overlay.presence div.presence.present {
     background-image: url('icons/boypresent.png');
 }
-div.presence.absent, div.presence.not_present {
+div.overlay.presence div.presence.absent, div.overlay.presence div.presence.not_present, div.overlay.presence div.presence {
     background-image: url('icons/boyabsent.png');
 }
 
@@ -851,33 +903,15 @@ div.switch-thing div.overlay.power {
     display: none;
 }
 
-/* smart switch on my rock fountain */
-div.switch.rock.on {
-    background-image: url('icons/rockon.png');
-}
-div.switch.rock.off {
-    background-image: url('icons/rockoff.png');
-}
-
 /* things to hide */
 div.overlay.healthStatus, div.overlay.deltaT, div.overlay.duration, div.overlay.count,
 div.overlay.numberOfButtons, div.overlay.pushed, div.overlay.held, div.overlay.doubleTapped,
 div.overlay._poll, div.overlay._componentOff, div.overlay._componentOn, div.overlay._componentRefresh,
 div.overlay._componentSetColor, div.overlay._componentSetColorTemperature, div.overlay._componentSetLevel,
 div.overlay._childRefresh, div.overlay._childOn, div.overlay._childOff, div.overlay._childSetLevel,
-div._startLevelChange, div._stopLevelChange, div.event_1, div.event_2, div.event_3, div.event_4,
-div.hubMeshDisabled
-{
+div.overlay._startLevelChange, div._stopLevelChange, div.overlay.event_1, div.overlay.event_2, div.overlay.event_3, div.overlay.event_4,
+div.overlay.hubMeshDisabled {
     display: none;
-}
-
-/* enable event reporting for some things */
-div.event_1 {
-    display: block;
-    font-size: 9pt;
-    width: 100%;
-    background-color: rgba(90,90,90,1);
-    font-style: italic;
 }
 
 /* changed to use name instead of thingname */
@@ -898,8 +932,8 @@ div.overlay.runThen div.runThen {
     height: 90px;
     filter: invert(0);
 }
-div.overlay.run div.run.clicked,
-div.overlay.runThen div.runThen.clicked {
+div.overlay.run div.run.clicked, div.overlay.run div.run,
+div.overlay.runThen div.runThen.clicked, div.overlay.runThen div.runThen {
     background-image: url('icons/pistonfiring.png');
     background-size: 55px;
     background-position-y: bottom;
@@ -907,36 +941,4 @@ div.overlay.runThen div.runThen.clicked {
     font-size: 18px;
     height: 90px;
     filter: invert(0);
-}
-
-/* hide the functions for EcoBee thermostats */
-div.thermostat.thermostatSetpoint,
-div.thermostat.supportedThermostatFanModes,
-div.thermostat.supportedThermostatModes_0,
-div.thermostat.supportedThermostatModes_1,
-div.thermostat.supportedThermostatModes_2,
-div.thermostat.supportedThermostatModes_3,
-div.thermostat.thermostatFanMode,
-div.thermostat.supportedThermostatFanModes_0,
-div.thermostat.supportedThermostatFanModes_1,
-div.thermostat.supportedThermostatFanModes_2,
-div.thermostat.supportedThermostatFanModes_3,
-div.thermostat._heat,
-div.thermostat._emergencyHeat,
-div.thermostat._cool,
-div.thermostat._auto,
-div.thermostat._fanOn,
-div.thermostat._fanAuto,
-div.thermostat._fanCirculate,
-div.thermostat._generateEvent,
-div.thermostat._switchMode,
-div.thermostat._switchFanMode,
-div.thermostat._lowerHeatingSetpoint,
-div.thermostat._raiseHeatingSetpoint,
-div.thermostat._lowerCoolSetpoint,
-div.thermostat._raiseCoolSetpoint,
-div.thermostat._resumeProgram,
-div.thermostat._off
-{
-    display: none;
 }

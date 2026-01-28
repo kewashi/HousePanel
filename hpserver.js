@@ -4,29 +4,8 @@
 process.title = 'hpserver';
 
 // debug options
-var EMULATEHUB = false;             // this emulates hub pushes and skips ISY sockets for local testing
-
-const DEBUG1 = false;               // basic debug info - file loading, hub loading
-const DEBUG2 = false;               // hub authorization
-const DEBUG3 = false;               // passwords
-const DEBUG4 = false;               // filters and options
-const DEBUG5 = false;               // hub node detail
-const DEBUG6 = false;               // tile adds and position moves
-const DEBUG7 = false;               // hub responses
-const DEBUG8 = false;               // API calls
-const DEBUG9 =  false;              // ISY webSocket success
-const DEBUG10 = false;              // customize post call debugs
-const DEBUG11 = false;              // rules and lists
-const DEBUG12 = false;              // hub push updates
-const DEBUG13 = false;              // URL callbacks
-const DEBUG14 = false;              // tile link details and colors
-const DEBUG15 = false;              // new user and forgot password
-const DEBUG16 = false;              // writing, custom names, and image deletes
-const DEBUG17 = false;              // websocket and push client
-const DEBUG18 = false;              // detailed curl inspection
-const DEBUG19 = false;              // ISY debug info
-const DEBUG20 = false;              // login info
-const DEBUGtmp = true;              // used to debug anything temporarily using ||
+var EMULATEHUB = false;          // this emulates hub pushes and skips ISY sockets for local testing
+const DEBUGtmp = true;           // used to debug anything temporarily using ||
 
 // websocket and http servers
 const webSocketServer = require('websocket').server;
@@ -46,7 +25,6 @@ const url = require('url');
 const nodemailer = require('nodemailer');
 const multer = require('multer');
 const PUSHDELAY = 500;                               // delay to allow things to settle on startup
-// const countrytime = require('countries-and-timezones');
 
 // load supporting modules
 var sqlclass = require("./mysqlclass");
@@ -1733,7 +1711,7 @@ function getDevices(hub) {
                     // Store the table in a single property
                     newdevice.value.forecast = forecastTable;
 
-                    if ( DEBUG7 || DEBUGtmp ) {
+                    if ( DEBUG7 ) {
                         console.log( (ddbg()), "Open Meteo weather device retrieved: ", newdevice);
                     }
                     
@@ -4339,7 +4317,7 @@ function getNewPage(userid, pname, configoptions, roomid, roomname, kroom, thing
 }
 
 // function to search for triggers in the name to include as classes to style
-function processName(thingname, thingtype) {
+function processName(thingname, thingtype, panelname) {
 
     // this is where we do a check for bad chars and remove them in names
     var pattern = /[,;!-\'\*\<\>\{\}]/g;
@@ -4354,6 +4332,7 @@ function processName(thingname, thingtype) {
     var subtype = "";
     var ignore2 = getTypes();
     ignore2.push("panel");
+    ignore2.push(panelname.toLowerCase());
 
     try {
         var lowname = thingname.toLowerCase();
@@ -4792,11 +4771,26 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
     // clean up any custom provided name and set the extra classes based on name
     var subtype = "";
     if ( array_key_exists("name", thingvalue) ) { 
-        var pnames = processName(thingvalue["name"], thingtype);
+        var pnames = processName(thingvalue["name"], thingtype, panelname);
         thingvalue["name"] = pnames[0];
         subtype = pnames[1];
     }
 
+    // for color things and dimmers with "level", add a subtype based on color if given and level if given
+    let switchextra = "";
+    if ( array_key_exists("colorName", thingvalue) ) {
+        var colorname = thingvalue["colorName"].trim();
+        subtype += " " + colorname;
+        switchextra += " " +colorname;
+    }
+    // include level rounded to the nearest 10
+    if ( array_key_exists("level", thingvalue) ) {
+        var level = parseInt(thingvalue["level"]);
+        level = Math.round(level/10)*10;
+        subtype += " L"+level.toString();
+        switchextra += " L"+level.toString();
+    }
+    
     // use the position provided
     postop= parseInt(postop);
     posleft = parseInt(posleft);
@@ -4825,7 +4819,7 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
     $tc = "<div id=\""+idtag+"\" thingid=\""+thingid+"\" uid=\""+uid+"\" hub=\""+hubnum+"\" hubindex=\""+hubindex+"\"  hubtype=\""+hubtype+"\" tile=\""+kindex+"\" bid=\""+bid+"\" type=\""+thingtype+"\" hint=\""+hint+"\"";
     
     // set up the class setting
-    var classstr = panelname + " thing " + thingtype+"-thing" + subtype + " p_"+kindex;
+    var classstr = panelname.toLowerCase() + " thing " + thingtype+"-thing" + subtype + " p_"+kindex;
     classstr = uniqueWords(classstr);
 
     $tc += " panel=\""+panelname+"\" class=\""+classstr+"\"";
@@ -4871,11 +4865,14 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
     // this includes a check for helper items created in tile customizer
     for ( var tkey in thingvalue ) {
         let tval = thingvalue[tkey];
-        let userSubtype = subtype;
+        // let userSubtype = subtype;
+        let userSubtype = "";
 
         // add operating state for thermostats
         if ( thingtype === "thermostat" && tkey==="temperature" && thingvalue["thermostatOperatingState"] ) {
             userSubtype = userSubtype + " " + thingvalue["thermostatOperatingState"];
+        } else if ( (thingtype==="switchlevel" || thingtype==="bulb") && tkey==="switch" ) {
+            userSubtype = userSubtype + " " + switchextra;
         }
 
         // check value for "json" strings
@@ -4917,12 +4914,12 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
                             // only print strings and non duplicates - don't descend more than 2 levels
                             // i should have written putElement as a recursive function call - this is to be done later
                             if ( jtkey2 && jtval2 && (typeof jtval2!=="object") && !array_key_exists(jtkey2, thingvalue) ) {
-                                $tc += putElement(kindex, cnt, bid, thingtype, jtval2, jtkey2, subtype, "", jtkey2, twidth, theight, "");
+                                $tc += putElement(kindex, cnt, bid, thingtype, jtval2, jtkey2, "", "", jtkey2, twidth, theight, "");
                                 j++;
                             }
                         }
                     } else {
-                        $tc += putElement(kindex, cnt, bid, thingtype, jtval, jtkey, subtype, "", jtkey, twidth, theight, "");
+                        $tc += putElement(kindex, cnt, bid, thingtype, jtval, jtkey, "", "", jtkey, twidth, theight, "");
                         j++;
                     }
                 }
@@ -5134,9 +5131,9 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
         if ( realsubid==="hue" || realsubid==="saturation" ||
              realsubid==="heatingSetpoint" || realsubid==="coolingSetpoint" ) 
         {
-            $tc += "<div class=\"overlay " + tkey + " " + subtype + " v_" + kindex + "\">";
+            $tc += "<div class=\"overlay " + tkey + " v_" + kindex + "\">";
             $tc += aidi + " subid=\"" + tkey + "-dn\" title=\"" + tkey + " down\" class=\"" + thingtype + " arrow-dn " + tkey + "-dn " + pkindex + "\" id=\"" + wwx + aitkey + "-dn\"></div>";
-            $tc += aidi + pn + bidtag + commandtag + realtag + " subid=\"" + tkey + "\" title=\"" + thingtype + " " + tkey + "\" class=\"" + thingtype + " arrow-it " + tkeyshow + pkindex + "\" id=\"" + wwx + aitkey + "\">" + tval + "</div>";
+            $tc += aidi + pn + bidtag + commandtag + realtag + " subid=\"" + tkey + "\" title=\"" + thingtype + " " + tkey + "\" class=\"" + thingtype + subtype + " arrow-it " + tkeyshow + pkindex + "\" id=\"" + wwx + aitkey + "\">" + tval + "</div>";
             $tc += aidi + " subid=\"" + tkey + "-up\" title=\"" + tkey + " up\" class=\"" + thingtype + " arrow-up " + tkey + "-up " + pkindex + "\" id=\"" + wwx + aitkey + "-up\"></div>";
             $tc += "</div>";
 
@@ -5215,8 +5212,10 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
                 $tc += "<div class=\"overlay "+tkey+" v_"+kindex+"\">";
             }
 
-            if ( tkey === "level" || tkey==="onlevel" || tkey==="colorTemperature" || tkey==="volume" || tkey==="position" ) {
-                $tc += aidi + pn + bidtag + commandtag + realtag + ttype + " subid=\"" + tkey+"\" value=\""+tval+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + wwx + aitkey + "\"></div>";
+            if ( tkey === "level" || tkey==="onlevel" || tkey==="colorTemperature" || tkey==="volume" || tkey==="groupVolume" || tkey==="position" ) {
+                // const slidertval = `<div id="slider_${bid}" class="slidervalue">${tval}</div>`;
+                // $tc += slidertval;
+                $tc += aidi + pn + bidtag + commandtag + realtag + ttype + " subid=\"" + tkey+"\" value=\""+tval+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + wwx + aitkey + "\">" + "" + "</div>";
             } else if ( typeof tkey==="string" && typeof tval==="string" && tkey.substring(0,8)==="_number_" && tval.substring(0,7)==="number_" ) {
                 var numval = tkey.substring(8);
                 $tc += aidi + pn + bidtag + commandtag + realtag + ttype + " subid=\"" + tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + "\" id=\"" + wwx + aitkey + "\">" + numval + "</div>";
@@ -5556,7 +5555,7 @@ function setValOrder(val) {
                    "_previousTrack": 21, "_pause": 22, "_play": 23, "_stop": 24, "_nextTrack": 25,
                    "_number_0":60, "_number_1":61, "_number_2":62, "_number_3":63, "_number_4":64, 
                    "_number_5":65, "_number_6":66, "_number_7":67, "_number_8":68, "_number_9":69,
-                   "onlevel": 150, "level": 151, "volume": 152, "colorTemperature": 153, "hue": 141, "saturation": 142, "position": 153,
+                   "onlevel": 150, "level": 151, "volume": 152, "groupVolume": 153, "colorTemperature": 154, "hue": 141, "saturation": 142, "position": 155,
                    "allon": 41, "alloff": 42, "count": 148, "duration": 149, "deltaT": 149,
                    "user_":191, "event_":200,
                 };
@@ -5694,6 +5693,7 @@ function processHubMessage(userid, hubmsg, newST) {
                 pvalue["hue"] = value[0];
                 pvalue["saturation"] = value[1];
                 pvalue["level"] = value[2];
+                pvalue["levelval"] = value[2];
                 pvalue["color"] = value[3];
             } else if ( is_object(value) ) {
                 for (var key in value) {
@@ -5701,6 +5701,9 @@ function processHubMessage(userid, hubmsg, newST) {
                 }
             } else {
                 pvalue[subid] = value;
+            }
+            if ( pvalue["level"] ) {
+                pvalue["levelval"] = pvalue["level"] || 0;
             }
 
             // increment the count if this is not the inverse of a turn on action
@@ -6645,7 +6648,7 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
                             rswattr= "colorTemperature";
                         } else if ( rsubid==="onlevel" ) {
                             rswattr= "onlevel";
-                        } else if ( rsubid==="volume" ) {
+                        } else if ( rsubid==="volume" || rsubid==="groupVolume" ) {
                             rswattr= "volume";
                         } else if ( rsubid==="position" ) {
                             rswattr= "position";
@@ -7508,9 +7511,6 @@ function recurseKeys(pvalue, prefix, val) {
 }
 
 function urlCallback(userid, swid, swtype, subid, body, command) {
-    if ( DEBUG13 ) {
-        console.log( (ddbg()), "URL callback returned: ", body );
-    }
     var pvalue = {};
     pvalue[subid] = command + "::" + subid; 
 
@@ -9084,12 +9084,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
         tc += hidden("apiSecret", GLB.apiSecret);
 
         // pass all debug flags to browser
-        const dbgflags = {debug1: DEBUG1, debug2: DEBUG2, debug3: DEBUG3, debug4: DEBUG4, debug5: DEBUG5,
-                          debug6: DEBUG6, debug7: DEBUG7, debug8: DEBUG8, debug9: DEBUG9, debug10: DEBUG10,
-                          debug11: DEBUG11, debug12: DEBUG12, debug13: DEBUG13, debug14: DEBUG14, debug15: DEBUG15,
-                          debug16: DEBUG16, debug17: DEBUG17, debug18: DEBUG18, debug19: DEBUG19, debug20: DEBUG20
-        };
-        tc += hidden("dbgflags", JSON.stringify(dbgflags), "dbgflags");
+        tc += hidden("dbgflags", JSON.stringify(GLB.dbinfo.dbgflags), "dbgflags");
         tc += "</form>";
 
         // var hubpick = getConfigItem(configoptions, "hubpick");
@@ -11076,6 +11071,29 @@ try {
         GLB.dbinfo[key] = newinfo[key];
     }
 } catch (e) {}
+
+// set up the old DEBUG variables for backward compatibility
+GLB.dbinfo.dbgflags = GLB.dbinfo.dbgflags || {};
+const DEBUG1 = GLB.dbinfo.dbgflags.debug1 || false;     // basic debug info - file loading, hub loading
+const DEBUG2 = GLB.dbinfo.dbgflags.debug2 || false;     // hub authorization and device loading
+const DEBUG3 = GLB.dbinfo.dbgflags.debug3 || false;     // passwords
+const DEBUG4 = GLB.dbinfo.dbgflags.debug4 || false;     // filters and options
+const DEBUG5 = GLB.dbinfo.dbgflags.debug5 || false;     // hub node detail
+const DEBUG6 = GLB.dbinfo.dbgflags.debug6 || false;     // tile adds and position moves
+const DEBUG7 = GLB.dbinfo.dbgflags.debug7 || false;     // hub responses
+const DEBUG8 = GLB.dbinfo.dbgflags.debug8 || false;     // API calls
+const DEBUG9 = GLB.dbinfo.dbgflags.debug9 || false;     // ISY webSocket success
+const DEBUG10 = GLB.dbinfo.dbgflags.debug10 || false;   // customize post call debugs
+const DEBUG11 = GLB.dbinfo.dbgflags.debug11 || false;   // rules and lists
+const DEBUG12 = GLB.dbinfo.dbgflags.debug12 || false;   // hub push updates
+const DEBUG13 = GLB.dbinfo.dbgflags.debug13 || false;   // Editor debugs
+const DEBUG14 = GLB.dbinfo.dbgflags.debug14 || false;   // tile link details and colors
+const DEBUG15 = GLB.dbinfo.dbgflags.debug15 || false;   // new user and forgot password
+const DEBUG16 = GLB.dbinfo.dbgflags.debug16 || false;   // writing, custom names, and image deletes
+const DEBUG17 = GLB.dbinfo.dbgflags.debug17 || false;   // websocket and push client
+const DEBUG18 = GLB.dbinfo.dbgflags.debug18 || false;   // detailed curl inspection
+const DEBUG19 = GLB.dbinfo.dbgflags.debug19 || false;   // ISY debug info
+const DEBUG20 = GLB.dbinfo.dbgflags.debug20 || false;   // login info
 
 if ( GLB.dbinfo["twilio_sid"] && GLB.dbinfo["twilio_token"] && GLB.dbinfo["twilio_service"] ) {
     var twilioSid =  GLB.dbinfo["twilio_sid"];
