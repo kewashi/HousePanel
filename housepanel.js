@@ -781,6 +781,9 @@ $(document).ready(function() {
             var buttonid = $(this).attr("id");
             var textname = $(this).text();
 
+            evt.preventDefault();
+            evt.stopPropagation();
+
             // do nothing for name field
             if ( textname === "name" ) {
                 return;
@@ -798,7 +801,6 @@ $(document).ready(function() {
                         } else {
                             execButton(buttonid);
                         }
-                        evt.stopPropagation();
                     }
                 });
             } else {
@@ -808,8 +810,6 @@ $(document).ready(function() {
                 } else {
                     execButton(buttonid);
                 }
-                evt.stopPropagation();
-
             }
         });
     }
@@ -2502,6 +2502,7 @@ function execButton(buttonid) {
     } else if ( buttonid==="devCancel" || buttonid==="paramsCancel" ) {
         // do nothing but reload the main page
         window.location.href = cm_Globals.returnURL;
+        return;
 
     } else if ( buttonid==="devReset") {
         // reset the forms on the options page to their starting values
