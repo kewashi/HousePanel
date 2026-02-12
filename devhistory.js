@@ -1,4 +1,6 @@
 const devhistory = `
+3.5.20  02/05/2026 New way of handling level percentages and command parameter count for commands
+3.5.19  02/02/2026 Bugfixes in copy/paste and in user account deletion and more code cleanup
 3.5.18  01/28/2026 Added major new feature allowing dimmer light icons to dynamically change based on level
 3.5.17  01/27/2026 Implemented hub refresh, fixed bug in power change detection logic, and throttled hub subscriptions to avoid errors and overloading
 3.5.16  01/24/2026 Major updates to tile editor to support meteo weather and inline settings

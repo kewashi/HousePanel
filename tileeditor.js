@@ -8,7 +8,6 @@
  * 
  */
 var DEBUGte = false;
-var et_Globals = {};
 et_Globals.savedSheet = "";
 et_Globals.priorIcon = "none";
 et_Globals.tileCount = 0;
@@ -793,15 +792,15 @@ function initDialogBinds(str_type, thingindex) {
         if ( inlineefect === "none" ) {
             addCSSRule(overlayTarget, "display: " + inlineefect);
             addCSSRule(cssRuleTarget, "display: inline-block");
-            accCSSRule(cssRuleTarget, "vertical-align: middle");
+            addCSSRule(cssRuleTarget, "vertical-align: middle");
         } else if ( inlineefect === "inline" || inlineefect === "inline-block" ) {
             addCSSRule(overlayTarget, "display: " + inlineefect);
             addCSSRule(cssRuleTarget, "display: " + inlineefect);
-            accCSSRule(cssRuleTarget, "vertical-align: middle");
+            addCSSRule(cssRuleTarget, "vertical-align: middle");
         } else {
             addCSSRule(overlayTarget, "display: " + inlineefect);
             addCSSRule(cssRuleTarget, "display: " + inlineefect);
-            accCSSRule(cssRuleTarget, "vertical-align: middle");
+            addCSSRule(cssRuleTarget, "vertical-align: middle");
         }
         event.stopPropagation();
     });
@@ -1020,10 +1019,8 @@ function initDialogBinds(str_type, thingindex) {
 
     $("#imgupload").off("click");
     $("#imgupload").on("click", function(event) {
-        $("#uplButtons").addClass("hidden");
-        $("#iconSrc").prop("disabled", true);
-        $("#noIcon").prop("disabled", true);
-        uploadImage();
+        const iCategory = $("#iconSrc").val();
+        uploadImage(et_Globals.userid, iCategory, editUploadStart, editUploadYes, editUploadNo, editUploadCancel);
         event.stopPropagation();
     });
     
@@ -1041,7 +1038,6 @@ function initDialogBinds(str_type, thingindex) {
         var subid = $("#subidTarget").html();
         var str_type = $("#tileDialog").attr("str_type");
         var thingindex = $("#tileDialog").attr("thingindex");
-       
         if ( $("#autoBgSize").is(":checked") ) {
             $("#bgSize").prop("disabled", true);
         } else {
@@ -2917,109 +2913,38 @@ function getIcons() {
     );
 }
 
-function uploadImage() {
-    var pos = {top: 100, left: 150, width: 300};
-    var iCategory = $("#iconSrc").val();
-    var catText = iCategory.replace(/_/g, ' ')
-    var userid = et_Globals.userid;
-    var pname = cm_Globals.options.pname;
-    var hpcode = cm_Globals.options.hpcode;
+function editUploadStart() {
+    $("#uplButtons").addClass("hidden");
+    $("#iconSrc").prop("disabled", true);
+    $("#noIcon").prop("disabled", true);
+    et_Globals.insubmenu = true;
+}
 
-    // make the form to submit the file
-    // the name attribute must match the name given in the multer instance of upload.single or upload.array
-    var htmlcontent =  "<div>";
-    htmlcontent += `<strong>Select file to upload to ${catText}:</strong><br><br>
-        <form action="#" class="upload" method="post" id="uploadImage" enctype="multipart/form-data">
-        <div>
-        <input type="file" id="imageInput" accept="image/*" name="uploaded_file" />
-        </div>
-        <input type="hidden" id="fuserid" name="userid" value="${userid}" />
-        <input type="hidden" id="fpanel" name="panel" value="${pname}" />
-        <input type="hidden" id="fhpcode" name="hpcode" value="${hpcode}" />
-        <input type="hidden" id="fcategory" name="category" value="${iCategory}" />
-        <br><br>
-        <input type="submit" name="upload" value="Upload" class="tebutton">
-        <input id="uplcancel" name="cancel" type="button" value="Cancel" class="tebutton">
-        </form>`;
-    htmlcontent+= "</div>";
+function editUploadYes(presult) {
+    console.log("File: ", presult.filename," uploaded successfully to: ", presult.path);
+    $("#uplButtons").removeClass("hidden");
+    $("#iconSrc").prop("disabled", false);
+    $("#noIcon").prop("disabled", false);
+    getIcons();
+    et_Globals.insubmenu = false;
+}
 
-    createModal("modalupl", htmlcontent, "body", false, pos,
-        function(ui) {
-            $("#uplButtons").removeClass("hidden");
-            $("#iconSrc").prop("disabled", false);
-            $("#noIcon").prop("disabled", false);    
-            et_Globals.insubmenu = false;
-            closeModal("modalupl");
-        },
-        function() {
+function editUploadNo(presult) {
+    if ( presult ) {
+       console.error("Error, upload failed: ", presult);
+    }
+    $("#uplButtons").removeClass("hidden");
+    $("#iconSrc").prop("disabled", false);
+    $("#noIcon").prop("disabled", false);
+    getIcons();
+    et_Globals.insubmenu = false;
+}
 
-            et_Globals.insubmenu = true;
-            $("#modalupl").draggable();
-
-            $("#uplcancel").on("click", function(e) {
-                console.log("closing");
-                $("#uplButtons").removeClass("hidden");
-                $("#iconSrc").prop("disabled", false);
-                $("#noIcon").prop("disabled", false);    
-                et_Globals.insubmenu = false;
-                closeModal("modalupl");
-            });
-            
-            $("form.upload").on("submit");
-            $("form.upload").on("submit", function(e) {
-                e.preventDefault();
-
-                var imageInput = $('#imageInput')[0];
-                if ( imageInput.files.length > 0 ) {
-                    var thefile = imageInput.files[0];
-                    console.log("Image selected to upload: ", thefile);
-                } else {
-                    console.warn("No file was selected to upload");
-                    $("#uplButtons").removeClass("hidden");
-                    $("#iconSrc").prop("disabled", false);
-                    $("#noIcon").prop("disabled", false);
-
-                    et_Globals.insubmenu = false;
-                    closeModal("modalupl");
-                    return;
-                }
-
-                // get the form and submit via ajax
-                var myform = new FormData($(this)[0]);
-                $.ajax({
-                    url: cm_Globals.returnURL+'/upload?userid='+userid+'&pname='+pname+'&category='+iCategory+'&hpcode='+hpcode, 
-                    type: 'POST',
-                    method: 'POST',
-                    dataType: 'json',
-                    data: myform,
-                    cache: false,
-                    processData: false,
-                    contentType: false,
-                    success: function (presult) {
-                        $("#uplButtons").removeClass("hidden");
-                        $("#iconSrc").prop("disabled", false);
-                        $("#noIcon").prop("disabled", false);
-
-                        console.log("File: ", presult.filename," uploaded successfully to: ", presult.path);
-                        getIcons();	
-                        et_Globals.insubmenu = false;
-                        closeModal("modalupl");
-                    },
-                    error: function(presult) {
-                        $("#uplButtons").removeClass("hidden");
-                        $("#iconSrc").prop("disabled", false);
-                        $("#noIcon").prop("disabled", false);
-                        
-                        console.error("File upload failed: ", presult);
-                        getIcons();	
-                        et_Globals.insubmenu = false;
-                        closeModal("modalupl");
-                    }
-                });
-            });
-
-        }
-    );
+function editUploadCancel() {
+    $("#uplButtons").removeClass("hidden");
+    $("#iconSrc").prop("disabled", false);
+    $("#noIcon").prop("disabled", false);    
+    et_Globals.insubmenu = false;
 }
 
 function delImages(files) {
@@ -3293,7 +3218,7 @@ function saveClipboard(userid, str_type, thingindex, rules) {
 }
 
 function copyCSSRule(str_type, thingindex, fixsubid){
-    var scope = $("#scopeEffect").val();
+    const scope = $("#scopeEffect").val();
     var sheet = document.getElementById('customtiles').sheet; // returns an Array-like StyleSheetList
 
     // loop through all the subid's
@@ -3342,9 +3267,10 @@ function copyCSSRule(str_type, thingindex, fixsubid){
                 
                 // get all the subs
                 } else {
+
                     var val = $(target).html();
                     var onoff = getOnOff(str_type, subid, val);
-                    if ( onoff && onoff.length > 0 ) {
+                    if ( onoff && typeof onoff === "object" && onoff.length > 0 ) {
                         onoff.forEach( function(rule) {
                             if ( rule ) {
                                 var subtarget = target + "." + rule;
@@ -3354,23 +3280,36 @@ function copyCSSRule(str_type, thingindex, fixsubid){
                             }
                         });
                     }
+
+                    // also copy pure instances of overlay
+                    const overlayTarget = getCssRuleTarget(str_type, subid, thingindex, "overlay");
+                    if ( typeof subidmap[overlayTarget] === "undefined" ) {
+                        subidmap[overlayTarget] = subid;
+                    }
+
+                    // now get all the other potential variations of this subid and copy them too
+                    const ish = getish(str_type, thingindex, subid);
+                    ish.forEach( function(target3) {
+                        if ( typeof subidmap[target3] === "undefined" ) {
+                            subidmap[target3] = subid;
+                        }
+                    });
+
+
                 }
             });
         }
-    }
-    
-    var targets = Object.keys(subidmap);
+    }  
+    const targets = Object.keys(subidmap);
 
+    // loop through all the css rules and find those that match the targets
     var myrules = [];
-    for (var i=sheet.cssRules.length; i--;) {
-        var current_style = sheet.cssRules[i];
-        var rule = current_style.style.cssText;
-        // if ( ( current_style.selectorText.indexOf("_"+thingindex) !== -1 ) && 
-        //      (targets.includes(current_style.selectorText) )  ) 
+    for (let i=sheet.cssRules.length; i--;) {
+        const current_style = sheet.cssRules[i];
+        const rule = current_style.style.cssText;
         if ( targets.includes(current_style.selectorText) ) {
-            var target = current_style.selectorText;
-            var subid = subidmap[target];
-            myrules.push({type: str_type, index: thingindex, subid: subid, target: target, rule: rule});
+            const target = current_style.selectorText;
+            myrules.push({type: str_type, index: thingindex, subid: subidmap[target], target: target, rule: rule});
         }
     }
     return myrules;

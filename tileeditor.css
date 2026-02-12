@@ -269,11 +269,11 @@ input.startupinp, input.optionnuminp {
 
 label.optioninp, select.optioninp, label.optioncbox {
     font-style: normal;
-    font-weight: normal;
+    font-weight: bold;
     font-size: 16px;
     margin-left: 0px;
-    margin-top: 10px;
-    width: 150px;
+    padding-top: 5px;
+    width: 180px;
     display: inline-block;
     text-align: right;
 }
@@ -302,18 +302,26 @@ input.optioninp {
 }
 
 input.optionnuminp {
-    left: 180px;
     width: 60px;
     margin-top: 9px;
+    margin-left: 5px;
 }
 
-form.filteroptions {
+form.filteroption {
     margin-bottom: 20px;
 }
 
 div.filteroption div {
     margin-bottom: 4px;
     display: block;
+}
+
+div.options div.filteroption {
+    margin-top: 20px;
+    margin-bottom: 10px;
+    padding-bottom: 20px;
+    margin-left: 10px;
+    border-bottom: 4px solid black;
 }
 
 select.startupinp {
@@ -768,13 +776,15 @@ div.buttons, form.buttons {
     display: inline;
 }
 input.submitbutton, input.resetbutton, input.authbutton, 
-div.restoretabs, div.formbutton, button.bluebutton {
+div.restoretabs, div.formbutton, button.bluebutton, button.formbutton {
     background-color: rgb(34, 110, 187);
     width: 150px; height: 50px; margin-left: 10px; margin-right: 30px;
-    cursor: pointer;    border: none;
+    cursor: pointer;
     color: #eeeeee;    text-align: center;    font-weight: normal;
-    border-bottom: 4px solid rgba(0, 0, 0, 0.8); 
-    border-right: 4px solid rgba(0, 0, 0, 0.8); 
+    border-top: 4px solid rgba(148, 147, 147, 1.0); 
+    border-left: 4px solid rgba(148, 147, 147, 1.0);
+    border-bottom: 4px solid rgba(0, 0, 0, 1.0); 
+    border-right: 4px solid rgba(0, 0, 0, 1.0); 
     font-size: 19px;
 }
 
@@ -783,6 +793,12 @@ div.loginline div.formbutton {
     padding-top: 30px; 
     font-size: 20px;
     background-color: rgb(34, 110, 187);
+}
+
+div.options button.formbutton {
+    width: 150px; height: 40px;
+    margin-top: 10px; 
+    font-size: 16px;
 }
 
 button.infobutton {
@@ -1264,6 +1280,14 @@ div.editSection_inline input {
     font-size: 15px;
     margin-top: 2px;
     margin-left: 2px;
+}
+
+.imgDialog {
+    font-size: 15px;
+    margin-top: 2px;
+    margin-left: 2px;
+    margin-right: 5px;
+    width: 300px;
 }
 
 #iconSrc option {
@@ -2456,5 +2480,56 @@ div.thing div.overlay.volume_val, div.thing div.overlay.onlevel_val     {
 div.overlay.level div.sliderval, #slider_754 {
     font-size: 40px;
     color: white;
+    display: none;
+}
+
+button.formbutton.delUser {
+    background-color: red;
+    color: white;
+}
+button.pickbutton {
+    background-color: #ebe8e8;
+    color: black;
+    padding-left: 8px; padding-right: 8px;
+    padding-top: 2px; padding-bottom: 2px;
+    border-top: 3px solid black;
+    border-left: 3px solid black;
+    border-right: 3px solid #666666;
+    border-bottom: 3px solid #666666;
+    display: inline-block;
+}
+input.imgDialog {
+    width: 60%;
+    display: inline-block;
+}
+
+div.imagepreview, div.videopreview, div.framepreview {
+    width: auto;
+    height: auto;
+    border-top: 3px solid black;
+    border-left: 3px solid black;
+    border-right: 3px solid #666666;
+    border-bottom: 3px solid #666666;
+    background-color: rgb(252, 252, 252);
+    padding: 5px;
+}
+
+div.thing div.overlay.url div.url {
+    display: none;
+}
+
+iframe {
+    border: none;
+}
+
+/* thermostat default styling */
+div.thing.thermostat-thing div.overlay._auto,
+div.thing.thermostat-thing div.overlay._cool,
+div.thing.thermostat-thing div.overlay._heat,
+div.thing.thermostat-thing div.overlay._fanOn,
+div.thing.thermostat-thing div.overlay._fanCirculate,
+div.thing.thermostat-thing div.overlay._fanAuto,
+div.thing.thermostat-thing div.overlay._emergencyHeat
+{
     display: none;
 }

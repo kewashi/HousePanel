@@ -266,37 +266,37 @@ div.overlay.alloff div.alloff.off, div.overlay.allon div.allon.off {
 }
 
 /* variant of switch that includes levels */
-div.overlay.switch div.switch.off, div.overlay.switch div.switch {
+div.thing.lamp div.overlay.switch div.switch.off, div.thing.lamp div.overlay.switch div.switch {
     background-image: url('icons/lampoff.png');
 }
-div.overlay.switch div.switch.L10.on {
+div.thing.lamp div.overlay.switch div.switch.L10.on {
     background-image: url('icons/lampon_L10.png');
 }
-div.overlay.switch div.switch.L20.on {
+div.thing.lamp div.overlay.switch div.switch.L20.on {
     background-image: url('icons/lampon_L20.png');
 }
-div.overlay.switch div.switch.L30.on {
+div.thing.lamp div.overlay.switch div.switch.L30.on {
     background-image: url('icons/lampon_L30.png');
 }
-div.overlay.switch div.switch.L40.on {
+div.thing.lamp div.overlay.switch div.switch.L40.on {
     background-image: url('icons/lampon_L40.png');
 }
-div.overlay.switch div.switch.L50.on {
+div.thing.lamp div.overlay.switch div.switch.L50.on {
     background-image: url('icons/lampon_L50.png');
 }
-div.overlay.switch div.switch.L60.on {
+div.thing.lamp div.overlay.switch div.switch.L60.on {
     background-image: url('icons/lampon_L60.png');
 }
-div.overlay.switch div.switch.L70.on {
+div.thing.lamp div.overlay.switch div.switch.L70.on {
     background-image: url('icons/lampon_L70.png');
 }
-div.overlay.switch div.switch.L80.on {
+div.thing.lamp div.overlay.switch div.switch.L80.on {
     background-image: url('icons/lampon_L80.png');
 }
-div.overlay.switch div.switch.L90.on {
+div.thing.lamp div.overlay.switch div.switch.L90.on {
     background-image: url('icons/lampon_L90.png');
 }
-div.overlay.switch div.switch.L100.on {
+div.thing.lamp div.overlay.switch div.switch.L100.on {
     background-image: url('icons/lampon_L100.png');
 }
 
@@ -373,7 +373,12 @@ div.overlay.power div.power::after, div.overlay.switch div.power::after {
     content: " (Watts)";
 }
 
-div.overlay.levelval div.levelval::after {
+div.overlay.levelval div.levelval {
+    display: none;
+}
+
+div.overlay._setLevel div._setLevel::after,
+div.overlay._setPosition div._setPosition::after {
     content: "%";
 }
 

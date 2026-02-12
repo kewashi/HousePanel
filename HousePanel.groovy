@@ -29,7 +29,7 @@ public static String handle() { return "HousePanel" }
     STATICALLY DEFINED VARIABLES
     inspired by Tonesto7 homebridge2 app
 ***********************************************/
-@Field static final String appVersionFLD  = '3.5.17'
+@Field static final String appVersionFLD  = '3.5.20'
 @Field static final String sNULL          = (String) null
 @Field static final String sBLANK         = ''
 @Field static final String sLINEBR        = '<br>'
@@ -513,7 +513,7 @@ def getSwitch(swid, item=null) {
 
 def getDimmer(swid, item=null) {
     def resp = getThing(mydimmers, swid, item)
-    resp.put("levelval", resp["level"] ?: 0)
+    // resp.put("levelval", resp["level"] ?: 0)
     resp.put("_dim","dim")
     resp.put("_brighten","brighten")
     return resp
@@ -521,7 +521,7 @@ def getDimmer(swid, item=null) {
 
 def getBulb(swid, item=null) {
     def resp = getThing(mybulbs, swid, item)
-    resp.put("levelval", resp["level"] ?: 0)
+    // resp.put("levelval", resp["level"] ?: 0)
     resp.put("_dim","dim")
     resp.put("_brighten","brighten")
     return resp
@@ -550,7 +550,7 @@ def getLock(swid, item=null) {
 def getShade(swid, item=null) {
     def resp = getThing(myshades, swid, item)
     // resp.put("_stop","stopPositionChange")
-    resp.put("levelval", resp["level"] ?: 0)
+    // resp.put("levelval", resp["level"] ?: 0)
     resp.put("_raise","raise")
     resp.put("_lower","lower")
     return resp
@@ -869,20 +869,29 @@ def getDevice(mydevices, swid, item=null) {
                 }
             }
     	
+            // updated this to return the number of parameters in the key of the command
+            // this allows HousePanel to know how many parameters to prompt for
             def reserved = ignoredCommands()
             item.getSupportedCommands().each { comm ->
                 try {
-                    def comname = comm?.toString()
-                    def nparms = comm?.parameters?.size
-                    if ( nparms == null ) { nparms = 0 }
-                    if ( nparms==0 && !reserved.contains(comname)) {
-                        resp.put("_"+comname, comname)
+                    def comname = comm.toString()
+                    def nparms = comm.parameters?.size?: 0
+
+                    // skip reserved commands
+                    if ( reserved.contains(comname) || nparms > 6 ) {
+                        logger("skipped command: ${comname} with ${nparms} parameters","debug")
                     } else {
-                        logger("Hubitat skipped command: ${comname} with ${nparms} parameters","trace")
+                        // now we embed the number of parameters in the command key
+                        // this allows HousePanel to know how many parameters to prompt for
+                        // and we consistently put the command name as the value
+                        def comkey = nparms == 0 ? "_${comname}" : "_${comname}#${nparms}"
+                        resp.put(comkey, comname)
                     }
                 } catch (ex) {
-                    logger("Attempt to read device command for ${swid} failed ${ex}", "error")
+                    logger("Attempt to read command for ${swid} failed ${ex}", "error")
                 }
+
+
             }
             resp = addStatus(resp, item)
         }
@@ -936,19 +945,22 @@ def getThing(things, swid, item=null) {
         }
 
         def reserved = ignoredCommands()
-        // we now return commands that have 4 or fewer parameters
-        // commands with more than 4 parameters are ignored
+        // we now return commands that have 6 or fewer parameters
+        // commands with more than 6 parameters are ignored
         item.getSupportedCommands().each { comm ->
             try {
                 def comname = comm.toString()
-                def nparms = comm.parameters?.size
-                if ( nparms == null ) { nparms = 0 }
-                if ( !nparms && !reserved.contains(comname)) {
-                    resp.put("_"+comname, comname)
-                } else if ( nparms <= 4 && !reserved.contains(comname)) {
-                    resp.put("_"+comname, nparms)
-                } else {
+                def nparms = comm.parameters?.size?: 0
+
+                // skip reserved commands
+                if ( reserved.contains(comname) || nparms > 6 ) {
                     logger("skipped command: ${comname} with ${nparms} parameters","debug")
+                } else {
+                    // now we embed the number of parameters in the command key
+                    // this allows HousePanel to know how many parameters to prompt for
+                    // and we consistently put the command name as the value
+                    def comkey = nparms == 0 ? "_${comname}" : "_${comname}#${nparms}"
+                    resp.put(comkey, comname)
                 }
             } catch (ex) {
                 logger("Attempt to read command for ${swid} failed ${ex}", "error")
@@ -964,7 +976,7 @@ def getThing(things, swid, item=null) {
             resp["hue"] = h
             resp["saturation"] = s
             resp["level"] = v
-            resp["levelval"] = v
+            // resp["levelval"] = v
 
             // set color based on mode
             def newcolor
@@ -2585,7 +2597,7 @@ def setGenericLight(mythings, devtype, swid, cmd, swattr, subid, item= null) {
         if ( temperature && item.hasAttribute("colorTemperature") ) { resp.put("colorTemperature", temperature) }
         if ( newlevel && item.hasAttribute("level") ) { resp.put("level", newlevel) }
         if ( newlevel && item.hasAttribute("position") ) { resp.put("position", newlevel) }
-        if ( newlevel && item.hasAttribute("levelval") ) { resp.put("levelval", newlevel) }
+        // if ( newlevel && item.hasAttribute("levelval") ) { resp.put("levelval", newlevel) }
 
         // do this so that user created TEXT fields using the customizer will return the custom command
         if ( subid.startsWith("_") ) {

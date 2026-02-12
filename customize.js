@@ -8,7 +8,8 @@
 // TODO - rewrite to not use global allthings and options arrays
 
 // globals used by this module
-cm_Globals.currentid = 1;
+cm_Globals.currentid = null;
+cm_Globals.firstuid = null;
 cm_Globals.id = null;
 cm_Globals.usertext = "";
 cm_Globals.reload = false;
@@ -45,14 +46,11 @@ function customizeTile(userid, tileid, uid, bid, thingid, str_type, panel) {
     }
     cm_Globals.customname = customname;
 
-    // first get all devices from the server for this user
-    // no longer need to do this because we have cm_Globals in the main program
-    for ( var id in cm_Globals.devices ) {
-        const val = cm_Globals.devices[id];
-        if ( val.deviceid === bid ) {
-            cm_Globals.currentid = val.uid;
-        }
-    };
+    // set the clock uid since it isn't always the first one
+    const devkeys = Object.keys(cm_Globals.devices);
+    cm_Globals.firstuid = devkeys[0];
+    cm_Globals.currentid = uid;
+
     checkDone("devices");
 
     // set the customization list
@@ -132,7 +130,7 @@ function customizeTile(userid, tileid, uid, bid, thingid, str_type, panel) {
                 } else {
                     try {
                         getDefaultSubids();
-                        var thing = cm_Globals.devices[cm_Globals.uid];
+                        const thing = cm_Globals.devices[cm_Globals.uid];
                         if ( !thing ) {
                             throw new Error("No device found for UID: " + cm_Globals.uid);
                         } else {
@@ -497,8 +495,7 @@ function loadUrlPanel() {
 // returns an options list and subid list of available fields of a given tile
 function loadLinkItem(uid, allowuser, defvalue) {
     try {
-        var thing = cm_Globals.devices[uid];
-        var thevalue = thing.pvalue;
+        var thevalue = cm_Globals.devices[uid].pvalue;
     } catch(e) {
         return null;
     }
@@ -511,6 +508,9 @@ function loadLinkItem(uid, allowuser, defvalue) {
     for ( var tkey in thevalue ) {
         var tval = thevalue[tkey];
         // console.log("loadLinkItem: checking key " + tkey + " with value: ", tval);
+
+        // remove the #n suffix from keys
+        tkey = tkey.replace(/#\d+$/, "");
 
         // skip if this item was replaced by a custom field handled below
         var iscustom = false;
@@ -590,8 +590,8 @@ function parseContent(customType, content, subid) {
     if ( customType==="LINK") {
         var n = content===null ? -1 : content.indexOf("::");
         if ( n=== -1 ) {
-            // uid = content==null ? cm_Globals.currentid : content;
-            uid = content===null ? 1 : content;
+            uid = content==null ? cm_Globals.firstuid : content;
+            // uid = content===null ? 1 : content;
             var pvalue = cm_Globals.devices[uid].pvalue;
 
             // set a default subid field based on legacy subid or popular real subids to target
@@ -665,7 +665,6 @@ function parseContent(customType, content, subid) {
             console.error("error - No device returned for the linked tile: #", uid);
             return;
         }
-        var bid = device.deviceid;
         
         // set the drop down list to the linked item
         $("#cm_link").prop("value", uid);
@@ -824,13 +823,28 @@ function initCustomActions() {
     $("#cm_addButton").off("tap");
     $("#cm_addButton").on("tap", function(event) {
         var subid = $("#cm_userfield").val();
-        if ( cm_Globals.natives.includes(subid) || (subid.startsWith("_") || subid.endsWith("-up") || subid.endsWith("-dn")) ) {
+
+        // only allow letters, numbers, and underscores in the subid name
+        if (!/^[a-zA-Z0-9_]+$/.test(subid)) {
+            var pos = {top: 375, left: 380, zindex: 9999, background: "red", color: "white", position: "absolute"};
+            var tilename = $("#cm_subheader").html();
+            var oldsave = saveOpmode;
+            createModal("modalremove","Invalid field name: " + subid + " in tile: " + tilename + ". Only letters, numbers, and underscores are allowed.", "table.cm_table", "Dismiss", pos), function() {
+                closeModal("modalremove");
+                saveOpmode = oldsave;
+                priorOpmode = "Modal";
+            };
+            event.stopPropagation();
+            return;
+        }
+
+        if ( cm_Globals.natives.includes(subid) || subid.startsWith("_") ) {
             var pos = {top: 375, left: 380, zindex: 9999, background: "red", color: "white", position: "absolute"};
             var tilename = $("#cm_subheader").html();
             var repname = $("#cm_addButton").html();
             // below we use a modal that is inside a modal so we have to save the old op mode value and restore it
             var oldsave = saveOpmode;
-            if ( repname === "Add" && (subid.startsWith("_") || subid.endsWith("-up") || subid.endsWith("-dn")) ) {
+            if ( repname === "Add" && subid.startsWith("_") ) {
                 createModal("modalremove","You cannot add field: " + subid + " to tile: " + tilename + " linked to a User Field Name that begins with an underscore or ends with -up or -dn. Fields with names like this are reserved for special handling.", "table.cm_table", "Dismiss", pos), function() {
                     closeModal("modalremove");
                     saveOpmode = oldsave;
@@ -838,7 +852,7 @@ function initCustomActions() {
                 };
             } else {
                 // user is replacing one of the special fields so warn them
-                var fieldcommand = subid.startsWith("_") ? "command: " : "field: ";
+                let fieldcommand = subid.startsWith("_") ? "command: " : "field: ";
                 createModal("modalremove","You are replacing an existing " + fieldcommand + subid + " in tile: " + tilename + ".  Are you sure?", "table.cm_table", true, pos, function(ui) {
                     var clk = $(ui).attr("name");
                     if ( clk==="okay" ) {
@@ -952,8 +966,7 @@ function initExistingFields() {
         }
         var tileid = cm_Globals.tileid;
         var uid = cm_Globals.uid;
-        var thing = cm_Globals.devices[uid]
-        var bid = thing.deviceid;
+        var bid = cm_Globals.devices[uid].deviceid;
         var subid = $("#cm_userfield").val();
         var item = $("#cm_builtinfields option[value='"+subid+"']");
         var itemnum = parseInt($(item).attr("order"));
@@ -995,8 +1008,7 @@ function initExistingFields() {
         }
         var tileid = cm_Globals.tileid;
         var uid = cm_Globals.uid;
-        var thing = cm_Globals.devices[uid]
-        var bid = thing.deviceid;
+        var bid = cm_Globals.devices[uid].deviceid;
         var ncount = $("#cm_builtinfields option[order]").length
         var subid = $("#cm_userfield").val();
         var item = $("#cm_builtinfields option[value='"+subid+"']");
@@ -1010,7 +1022,7 @@ function initExistingFields() {
 
             // update the master rule variable
             var save = cm_Globals.rules[itemnum];
-            cm_Globals.rules[itemnum] = cm_Globals.rules[itemnum-1]
+            cm_Globals.rules[itemnum] = cm_Globals.rules[itemnum-1];
             cm_Globals.rules[itemnum-1] = save;
 
             // send rules to server
@@ -1047,13 +1059,6 @@ function initExistingFields() {
 }
 
 function handleBuiltin(subid) {
-    // var idx = cm_Globals.thingidx;
-    // var allthings = cm_Globals.allthings;
-    // var thing = allthings[idx];
-    // var uid = cm_Globals.uid;
-    // var thing = cm_Globals.devices[uid]
-    // var value = thing.pvalue;
-
     var item = $("#cm_builtinfields option[value='"+subid+"']");
     var cmtype = $(item).attr("command");
     var iscustom = ( cmtype && cmtype.length );
@@ -1143,8 +1148,7 @@ function applyCustomField(action, subid) {
 
     var tileid = cm_Globals.tileid;
     var uid = cm_Globals.uid;
-    var thing = cm_Globals.devices[uid]
-    var bid = thing.deviceid;
+    var bid = cm_Globals.devices[uid].deviceid;
     var nreset = "d";
     var targetsubid = subid;
 
@@ -1293,6 +1297,7 @@ function showPreview() {
                 ruleval = ruleval + rule[1];
             } else if ( command === "TEXT" ) {
                 ruleval = rule[1];
+                console.log("TEXT ruleval: ", ruleval, "rulesubid: ", rulesubid);
             } else {
                 ruleval = ruleval + rulesubid;
             }

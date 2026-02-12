@@ -38,6 +38,7 @@ const AmbientWeatherApi = require("ambient-weather-api");
 const { act } = require('react');
 const OpenMeteoApi = require('openmeteo');
 const { time } = require('console');
+const { frame } = require('websocket');
 
 // ISY websocket clients
 var wsclient = {};
@@ -1272,7 +1273,7 @@ function removeDeadThings(userid) {
 }
 
 function getHublessTypes() {
-    return {"clockdigital":1,"clockanalog":1,"control":1,"image":1,"video":1,"frame":4,"blank":1,"custom":4,"weather":0};
+    return {"clockdigital":1,"clockanalog":1,"control":1,"image":1,"video":1,"frame":4,"blank":1,"custom":4};
 }
 
 // rewrote this to use a promise to return the actual array of devices or a reject with a message
@@ -1347,7 +1348,7 @@ function getDevices(hub) {
                 }
             })
             .then(async body => {
-                let defaultDevices = await hubInfoCallback(body);
+                let defaultDevices = await hublessDevicesCallback(body);
                 resolve(defaultDevices);
             })
             .catch(reason => {
@@ -1451,20 +1452,21 @@ function getDevices(hub) {
                             pvalue = getController();
                             hint = "controller";
                             devicename = pvalue.name;
-                        // for reasons I don't remember or understand I used an underscore in the custom device ID
-                        } else if ( devtype==="custom" ) {
-                            devicename = devtype.substring(0,1).toUpperCase() + devtype.substring(1) + i.toString();
-                            deviceid = "custom" + i.toString();
-                            pvalue = {name: devicename, width: 180, height: 210};
-                        // skip weather here since it is handled separately
-                        } else if ( devtype==="weather" ) {
-                            continue;
                         // handle all the other special types here by including a default size and empty value
-                        // the content element is blank here because it is filled in later using the customizer info
+                        // custom tiles and blanks have different default sizes
+                        // the contents will be overwritten if the special tile already exists
+                        // since our new paramsPage features creates the content with user provided names, widths, content
                         } else {
                             devicename = devtype.substring(0,1).toUpperCase() + devtype.substring(1) + i.toString();
                             deviceid = devtype + i.toString();
-                            pvalue = {name: devicename, width: 360, height: 230};
+                            if ( devtype==="custom" || devtype==="blank" ) {
+                                pvalue = {name: devicename, width: 180, height: 210};
+                            } else if ( devtype==="frame" ) {
+                                pvalue = {name: devicename, width: 360, height: 230, url: `user${userid}/${devicename}.html`};
+                            } else {
+                                pvalue = {name: devicename, width: 360, height: 230, url: ""};
+                                pvalue[devtype] = "";
+                            }
                             pvalue[devtype] = "";
                         }
 
@@ -1941,6 +1943,81 @@ function getDevices(hub) {
             });
         }
 
+        // callback for loading special devices including images, videos, frames, custom
+        // unlike the hubInfoCallback, this one grabs devices from the database and uses existing pvalues if they exist
+        function hublessDevicesCallback(jsonbody) {
+            let mydevices = {};
+
+            return mydb.getRows("devices", "*", `userid = ${userid} AND hubid = ${hubindex}`)
+            .then(async function(existingDevices) {
+
+                let devicecnt = 0;
+                let numdevices = jsonbody.length;
+                let currentDevices = [];
+                const refresh = "never";
+
+                for ( let i=0; i<numdevices; i++ ) {
+                    let content = jsonbody[i];
+                    let deviceid = content["id"];
+                    let thetype = content["type"];
+                    let origname = content["name"] || "";
+                    let pvalue = content["value"];
+                    let hint = content["hint"];
+
+                    // make the device to store or update
+                    let pvalstr = encodeURI2(pvalue);
+                    let device = {userid: userid, hubid: hubindex, deviceid: deviceid, name: origname, 
+                                  devicetype: thetype, hint: hint, refresh: refresh, pvalue: pvalstr};
+
+                    // check if this is a device update or adding a new device
+                    // if device exists and uid is zero, update this record to include a new uid field
+                    let existingDevice = existingDevices.find( d => d.deviceid === deviceid );
+
+                    // use DB for existing devices that are specials
+                    // and update the DB for all other existing devices
+                    // this will add dummy devices if we're adding to the list
+                    // and do nothing if the number of special devices is the same other than return the devices in the list
+                    // if fewer devices are requested the extra ones will be removed
+                    if ( existingDevice ) {
+                        // get the visual id and update if old database version
+                        if ( existingDevice.uid === 0 ) {
+                            uidmax++;
+                            device.uid = uidmax;
+                        } else {
+                            device.uid = existingDevice.uid;
+                        }
+                        if ( hint === "special" ) {
+                            device.pvalue = existingDevice.pvalue;
+                            device.name = existingDevice.name;
+                        } else {
+                            await mydb.updateRow("devices", device, `id = ${existingDevice.id} AND userid = ${userid}`, true);
+                        }
+                    } else {
+                        uidmax++;
+                        device.uid = uidmax;
+                        await mydb.addRow("devices", device);
+                    }
+
+                    mydevices[deviceid] = device;
+                    const devstr = "'" + deviceid + "'";
+                    if ( !currentDevices.includes(devstr) ) {
+                        currentDevices.push(devstr);
+                    }
+                    devicecnt++;
+
+                    // check if this is our last one and return array of devices
+                    if ( devicecnt >= numdevices ) {
+                        removeDeadNodes(userid, hubindex, currentDevices);
+                        return mydevices;
+                    }
+                };
+            })        
+            .catch(reason => {
+                console.error( (ddbg()), "Something went wrong getting the hubless devices. reason: ", reason );
+                return("Something went wrong getting the hubless devices.");
+            });
+        }
+
         // callback for loading Hubitat devices
         function hubInfoCallback(jsonbody) {
             var mydevices = {};
@@ -1950,6 +2027,7 @@ function getDevices(hub) {
                 let devicecnt = 0;
                 let numdevices = jsonbody.length;
                 let currentDevices = [];
+                const refresh = "never";
 
                 return mydb.getRows("devices", "id,deviceid,uid", `userid = ${userid} AND hubid = ${hubindex}`)
                 .then(async function(existingDevices) {
@@ -1963,7 +2041,6 @@ function getDevices(hub) {
                         let origname = content["name"] || "";
                         let pvalue = content["value"];
                         let hint = content["hint"] ? content["hint"] : hubType;
-                        let refresh = "never";
                         if ( !pvalue ) {
                             pvalue = {};
                         }
@@ -2943,6 +3020,7 @@ function getLoginPage(req, userid, pname, emailname, mobile, hostname) {
     tc+= hidden("webDisplayPort", GLB.port);
     tc+= hidden("api", "dologin");
     tc+= hidden("apiSecret", GLB.apiSecret);
+    tc+= hidden("dbgflags", JSON.stringify(GLB.dbinfo.dbgflags), "dbgflags");
     // tc+= hidden("userid", userid, "userid");
 
     tc+= "<div class='logingreeting'>";
@@ -2991,7 +3069,7 @@ function getLoginPage(req, userid, pname, emailname, mobile, hostname) {
     tc+= hidden("panelpword","","panelpword");
     
     tc+= "<div class='loginline'>";
-    tc+= '<div id="dologin" tabindex=\"7\" class="formbutton">Sign In</div>';
+    tc+= '<button id="dologin" tabindex=\"7\" class="formbutton">Sign In</button>';
     tc+= "</div>";
 
     // the forgot pw link only uses the email and mobile fields
@@ -3081,7 +3159,7 @@ function getLoginPage(req, userid, pname, emailname, mobile, hostname) {
         tc+= "</div><br>";
             
         tc+= "<div class='loginline'>";
-        tc+= '<div id="createuser" tabindex=\"6\" class="formbutton">Create Account</div>';
+        tc+= '<button id="createuser" tabindex=\"6\" class="formbutton">Create Account</button>';
         tc+= "</div>";
     }
 
@@ -3549,7 +3627,7 @@ function validateUserPage(user, thecode) {
     tc+= "</div>";
 
     tc+= "<div class='loginline'>";
-    tc+= '<div id="newuservalidate" class="formbutton">Validate User</div>';
+    tc+= '<button id="newuservalidate" class="formbutton">Validate User</button>';
     tc+= "</div>";
 
     tc+= "<div><a href=\"" + GLB.returnURL + "\">Click Here</a> to abort and log in with existing credentials.</div>";
@@ -3617,7 +3695,7 @@ function validatePasswordPage(user, thecode) {
     tc+= hidden("panelpword","","panelpword");
     
     tc+= "<div class='loginline'>";
-    tc+= '<div id="newpassword" class="formbutton">Save Credentials</div>';
+    tc+= '<button id="newpassword" class="formbutton">Save Credentials</button>';
     tc+= "</div>";
 
     tc+= "<br><hr>";
@@ -3926,17 +4004,11 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
     var skin = user["panels_skin"];
     var hub = findHub(defhub, hubs);
 
-    // this was replaced with a simple device query based on default hub index since hubs is already available
-    var result = mydb.getRows("devices","*","userid = " + userid + " AND hubid = " + hub.id + " GROUP BY deviceid")
-    .then(devices => {
-        if ( devices ) {
-            var numdev = devices.length;
-        } else {
-            numdev = 0;
-        }
+    var result = mydb.query(`SELECT COUNT(DISTINCT deviceid) as count FROM devices WHERE userid = ${userid} AND hubid = ${hub.id}`)
+    .then(rows => {
+        var numdev = (rows && rows.length > 0) ? rows[0].count : 0;
         return getauthcontents(configoptions, hubs, hub, numdev);
-    })
-    .catch(reason => {
+    })    .catch(reason => {
         console.error((ddbg()), "error getting devices for auth page:", reason );
         return "error - something went wrong trying to display auth page";
     });
@@ -3990,6 +4062,8 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
         $tc += hidden("skinid", skin, "skinid");
         $tc += hidden("hpcode", hpcode, "hpcode");
         $tc += hidden("apiSecret", GLB.apiSecret);
+        $tc += hidden("dbgflags", JSON.stringify(GLB.dbinfo.dbgflags), "dbgflags");
+
         var configs = {};
         for (var i in configoptions) {
             var key = configoptions[i].configkey;
@@ -4355,203 +4429,250 @@ function processName(thingname, thingtype, panelname) {
     return [thingname, subtype];
 }
 
-// returns proper html to display an image, video, frame, or custom
-// if some other type is requested it returns a div of requested size and skips search
-// searches in main folder and media subfolder for file name
-function getFileName(userid, pname, thingvalue, thingtype) {
+// this is a simplified version of the old getFileName function
+// that returns the src contents for images, videos, frames, custom, and blanks
+// using the width and height parameters and the url provided in the thingvalue
+function getSpecialContent(userid, thingtype, thingvalue) {
 
-    // only process these types of tiles
+    function getext(fname) {
+        var ipos = fname.lastIndexOf(".");
+        var ext = "";
+        if ( ipos !== -1 ) {
+            ext = fname.substr(ipos);
+        }
+        // if file has an extension then remove the dot
+        if ( ext.length && ext.substring(0,1)==="." ) {
+            ext = ext.substring(1);
+        }
+        ext = ext.toLowerCase();
+        return ext;
+    }
+
     const supportedtiles = ["image","video","frame","custom","blank"];
     if ( !supportedtiles.includes(thingtype) ) {
         return thingvalue;
     }
 
-    var fw = "auto";
-    var fh = "auto";
-    var fn = "";
+    let fw = "auto";
+    let fh = "auto";
 
-    // get the name, width, height to create
-    if ( array_key_exists("name", thingvalue) ) {
-        var fn = thingvalue["name"].trim();
-    }
-    if ( fn === "" ) {
-        fn = thingtype.substring(0,1).toUpperCase() + thingtype.substring(1);
-    }
-    thingvalue["name"] = fn;
     if ( array_key_exists("width", thingvalue) ) {
         fw = thingvalue["width"];
-    } else {
-        thingvalue["width"] = fw;
+        if ( typeof fw === "string" && fw.startsWith("TEXT::") ) {
+            fw = fw.substring(6);
+        } else if ( typeof fw === "string" && fw.indexOf("::") !== -1 ) {
+            fw = "auto";
+        } else if ( fw !== "auto" ) {
+            fw = parseInt(fw);
+            if ( isNaN(fw)) {
+                fw = "auto";
+            }
+        }
     }
 
     if ( array_key_exists("height", thingvalue) ) {
         fh = thingvalue["height"];
-    } else {
-        thingvalue["height"] = fh;
-    }
-
-    var grtypes;
-    switch (thingtype) {
-        case "image":
-            grtypes = [".jpg",".jpeg",".png",".gif"];
-            break;
-        case "video":
-            grtypes = [".mp4",".ogg"];
-            break;
-        case "frame":
-            grtypes = [".html",".htm"];
-            break;
-        case "custom":
-        case "blank":
-            grtypes = [".jpg",".jpeg",".png",".gif",".mp4",".ogg",".html",".htm"];
-            break;
-        // for blanks never load a file
-        // but we do set the name above
-        // below we set the tile size for blanks and others
-        default:
-            grtypes = null;
-            break;
-    }
-
-    // this block sets the file name to load based on extension requested
-    var $vn = "";
-    var $fext = "";
-
-    // the logged in user is irrelevant here so we scan all the skins until we find a match if needed
-    // moved logic to the code block below
-    // var skin = getSkin();
-    function getext(fname) {
-        var ipos = fname.lastIndexOf(".");
-        var ext = "";
-        if ( ipos !== "-1" ) {
-            ext = fname.substr(ipos);
-        }
-        return ext;
-    }
-
-    if ( grtypes ) {
-
-        // first check names without extensions
-        var folder = "user" + userid + "/";
-        var mediafolder = folder + pname + "/media/";
-        var skins = ["skin-housepanel", "skin-modern", "skin-legacyblue"];
-
-        if ( thingtype === "image" && fn.startsWith("http") ) {
-            $vn = fn;
-            $fext = "img";
-        } else if ( fn.startsWith("http")) {
-            $vn = fn;
-            $fext = getext(fn);
-        } else if (fs.existsSync(folder + fn) ) {
-            $vn = folder + fn;
-            $fext = getext(fn);
-        } else if (fs.existsSync(mediafolder + fn)) {
-            $vn = mediafolder + fn;
-            $fext = getext(fn);
-        } else {
-            for ( var i in skins ) {
-                var skin = skins[i];
-                if ( $vn==="" && fs.existsSync(skin + "/media/"+ fn)) {
-                    $vn = skin + "/media/" + fn;
-                    $fext = getext(fn);
-                }
-                if ( $vn==="" && fs.existsSync(skin + "/icons/"+ fn)) {
-                    $vn = skin + "/icons/" + fn;
-                    $fext = getext(fn);
-                }
+        if ( typeof fh === "string" && fh.startsWith("TEXT::") ) {
+            fh = fh.substring(6);
+        } else if ( typeof fh === "string" && fh.indexOf("::") !== -1 ) {
+            fh = "auto";
+        } else if ( fh !== "auto" ) {
+            fh = parseInt(fh);
+            if ( isNaN(fh)) {
+                fh = "auto";
             }
         }
-
-        if ( DEBUG16 ) {
-            console.log((ddbg()), "custom name debug: grtypes= ", grtypes, " fn= ", fn, " vn= ", $vn, " ext= ", $fext, " thingvalue: ", jsonshow(thingvalue));
-        }
-    
-        // next check names with extensions
-        if ( $vn==="" ) {
-            grtypes.forEach(function($ext) {
-                if ( $vn==="" && fs.existsSync(folder + fn + $ext) ) {
-                    $vn = folder + fn + $ext;
-                    $fext = $ext;
-                } else if ( $vn==="" && fs.existsSync(mediafolder + fn + $ext) ) {
-                    $vn = mediafolder + fn + $ext;
-                    $fext = $ext;
-                } else {
-                    for ( var i in skins ) {
-                        var skin = skins[i];
-                        if ( $vn==="" && fs.existsSync(skin + "/media/" + fn + $ext) ) {
-                            $vn = skin + "/media/" + fn + $ext;
-                            $fext = $ext;
-                        }
-                        if ( $vn==="" && fs.existsSync(skin + "/icons/" + fn + $ext) ) {
-                            $vn = skin + "/icons/" + fn + $ext;
-                            $fext = $ext;
-                        }
-                    }
-                }
-            });
-        }
     }
 
-    var $v = "";
-    var mediafile = "";
-
-    // process things if file was found
-    if ( $vn ) {
-
-        // if file has an extension then remove the dot
-        if ( $fext.length && $fext.substring(0,1)==="." ) {
-            $fext = $fext.substring(1);
+    let content = "";
+    if ( thingtype==="image" ) {
+        content= thingvalue.url ? `<img width="${fw}" height="${fh}" src="${thingvalue.url}">` : "";
+    } else if ( thingtype==="video" ) {
+        if ( thingvalue.url ) {
+            const fext = getext(thingvalue.url);
+            content= `<video width="${fw}" height="${fh}" controls><source src="${thingvalue.url}" type="video/${fext}">Video Not Supported</video>`;
+        } else {
+            content = "";
         }
-
-        switch ($fext) {
-            // image files
-            case "jpg":
-            case "jpeg":
-            case "png":
-            case "gif":
-            case "img":
-                $v= "<img width=\"" + fw + "\" height=\"" + fh + "\" src=\"" + $vn + "\">";
-                mediafile = $vn;
-                break;
-
-            // video files
-            case "mp4":
-            case "ogg":
-                $v= "<video width=\"" + fw + "\" height=\"" + fh + "\" autoplay>";
-                $v+= "<source src=\"" + $vn + "\" type=\"video/" + $fext + "\">";
-                $v+= "Video Not Supported</video>";
-
-                mediafile= $vn;
-                break;
-                
-            // render web pages in a web iframe
-            case "html":
-            case "htm":
-                $v = "<iframe width=\"" + fw + "\" height=\"" + fh + "\" src=\"" + $vn + "\" frameborder=\"0\"></iframe>";
-                mediafile= $vn;
-                break;
-
-            // otherwise show any web file referenced or a blank just like below
-            default:
-                if ( $vn.startsWith("http") || thingtype==="frame" ) {
-                    $v = "<iframe width=\"" + fw + "\" height=\"" + fh + "\" src=\"" + $vn + "\" frameborder=\"0\"></iframe>";
-                } else {
-                    $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\"></div>";
-                }
-                break;
+    } else if ( thingtype==="frame" ) {
+        if ( thingvalue.url ) {
+            content = `<iframe width="${fw}" height="${fh}" src="${thingvalue.url}"></iframe>`;
+        } else {
+            content = "";
         }
-    
-    // if file wasn't found just make an empty block of the requested size
-    } else {
-        $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\"></div>";
+    } else if ( thingtype==="blank" || thingtype==="custom" ) {
+        content = `<div style="width: ${fw}px; height: ${fh}px;"></div>`;
     }
-
-    if ( DEBUG16 ) {
-        console.log((ddbg()), "custom name for type: ", thingtype, " vn= ", $vn, " fn= ", fn, " v= ", $v, " media file= ", mediafile);
-    }
-    thingvalue[thingtype] = $v;
+    thingvalue[thingtype] = content;
     return thingvalue;
 }
+
+// depracated - this was the old function that searched for files and returned the html to display them
+// returns proper html to display an image, video, frame, or custom
+// if some other type is requested it returns a div of requested size and skips search
+// searches in main folder and media subfolder for file name
+// function getFileName(userid, pname, thingvalue, thingtype) {
+
+//     // only process these types of tiles
+//     const supportedtiles = ["image","video","frame","custom","blank"];
+//     if ( !supportedtiles.includes(thingtype) ) {
+//         return thingvalue;
+//     }
+
+//     var fw = "auto";
+//     var fh = "auto";
+//     var fn = "";
+
+//     function getext(fname) {
+//         var ipos = fname.lastIndexOf(".");
+//         var ext = "";
+//         if ( ipos !== -1 ) {
+//             ext = fname.substr(ipos);
+//         }
+//         // if file has an extension then remove the dot
+//         if ( ext.length && ext.substring(0,1)==="." ) {
+//             ext = ext.substring(1);
+//         }
+//         ext = ext.toLowerCase();
+//         return ext;
+//     }
+
+//     // get the name, width, height to create
+//     if ( array_key_exists("name", thingvalue) ) {
+//         fn = thingvalue["name"].trim();
+//     }
+//     if ( fn === "" ) {
+//         fn = thingtype.substring(0,1).toUpperCase() + thingtype.substring(1);
+//     } else if ( typeof fn === "string" && fn.startsWith("TEXT::") ) {
+//         fn = fn.substring(6);
+//     }
+
+//     if ( array_key_exists("width", thingvalue) ) {
+//         fw = thingvalue["width"];
+//         if ( typeof fw === "string" && fw.startsWith("TEXT::") ) {
+//             fw = fw.substring(6);
+//         } else if ( typeof fw === "string" && fw.indexOf("::") !== -1 ) {
+//             fw = "auto";
+//         } else if ( fw !== "auto" ) {
+//             fw = parseInt(fw);
+//             if ( isNaN(fw)) {
+//                 fw = "auto";
+//             }
+//         }
+//     // } else {
+//     //     thingvalue["width"] = fw;
+//     }
+
+//     if ( array_key_exists("height", thingvalue) ) {
+//         fh = thingvalue["height"];
+//         if ( typeof fh === "string" && fh.startsWith("TEXT::") ) {
+//             fh = fh.substring(6);
+//         } else if ( typeof fh === "string" && fh.indexOf("::") !== -1 ) {
+//             fh = "auto";
+//         } else if ( fh !== "auto" ) {
+//             fh = parseInt(fh);
+//             if ( isNaN(fh)) {
+//                 fh = "auto";
+//             }
+//         }
+//     // } else {
+//     //     thingvalue["height"] = fh;
+//     }
+
+//     // this block sets the file name to load based on extension requested
+//     var $vn = "";
+//     var $fext = "";
+//     var $v = "";
+
+//     // check if a name was specified, and if so use it, otherwise attempt to use the name to infer the content
+//     if ( typeof thingvalue[thingtype] === "string" && thingvalue[thingtype].trim()!=="" ) {
+//         $v = $vn;
+//     } else {
+
+//         // first check names without extensions
+//         const folder = "user" + userid + "/";
+//         const mediafolder = folder + pname + "/media/";
+//         const photofolder = folder + pname + "/photos/";
+
+//         if ( thingtype === "frame" && fn.startsWith("Frame")  ) {
+//             $vn = folder + fn + ".html";
+//             $fext = "html";
+//         } else if ( fn.startsWith("http")) {
+//             $vn = fn;
+//             $fext = getext(fn);
+//         } else if (fs.existsSync(folder + fn) ) {
+//             $vn = folder + fn;
+//             $fext = getext(fn);
+//         } else if (fs.existsSync(mediafolder + fn)) {
+//             $vn = mediafolder + fn;
+//             $fext = getext(fn);
+//         } else if (fs.existsSync(photofolder + fn)) {
+//             $vn = photofolder + fn;
+//             $fext = getext(fn);
+//         } else {
+//             $vn = "";
+//             $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\"></div>";
+//         }
+
+//         // process things if file was found
+//         if ( $vn ) {
+
+//             if ( thingtype==="image" ) {
+//                 $v= "<img width=\"" + fw + "\" height=\"" + fh + "\" src=\"" + $vn + "\">";
+//             } else if ( thingtype==="video" ) {
+//                 $v= "<video width=\"" + fw + "\" height=\"" + fh + "\" autoplay>";
+//                 $v+= "<source src=\"" + $vn + "\" type=\"video/" + $fext + "\">";
+//                 $v+= "Video Not Supported</video>";
+//             } else if ( thingtype==="frame" ) {
+//                 $v = "<iframe width=\"" + fw + "\" height=\"" + fh + "\" src=\"" + $vn + "\" frameborder=\"0\"></iframe>";
+//             } else if ( thingtype==="blank" ) {
+//                 $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\"></div>";
+
+//             // customs can be any of the supported types
+//             } else  {
+//                 switch ($fext) {
+//                     // image files
+//                     case "jpg":
+//                     case "jpeg":
+//                     case "png":
+//                     case "gif":
+//                     case "img":
+//                         $v= "<img width=\"" + fw + "\" height=\"" + fh + "\" src=\"" + $vn + "\">";
+//                         break;
+
+//                     // video files
+//                     case "mp4":
+//                     case "ogg":
+//                         $v= "<video width=\"" + fw + "\" height=\"" + fh + "\" autoplay>";
+//                         $v+= "<source src=\"" + $vn + "\" type=\"video/" + $fext + "\">";
+//                         $v+= "Video Not Supported</video>";
+//                         break;
+                        
+//                     // render web pages in a web iframe
+//                     case "html":
+//                     case "htm":
+//                         $v = "<iframe width=\"" + fw + "\" height=\"" + fh + "\" src=\"" + $vn + "\" frameborder=\"0\"></iframe>";
+//                         break;
+
+//                     // otherwise show any web file referenced or a blank just like below
+//                     default:
+//                         if ( $vn.startsWith("http") ) {
+//                             $v = "<iframe width=\"" + fw + "\" height=\"" + fh + "\" src=\"" + $vn + "\" frameborder=\"0\"></iframe>";
+//                         } else {
+//                             $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\"></div>";
+//                         }
+//                         break;
+//                 }
+//             }
+//         }
+//     }
+
+//     if ( DEBUG16 ) {
+//         console.log((ddbg()), "custom name for type: ", thingtype, " vn= ", $vn, " fn= ", fn, " v= ", $v);
+//     }
+//     thingvalue[thingtype] = $v;
+//     return thingvalue;
+// }
 
 // function to create frame2.html with AccuWeather for a city
 // the City Name, Country Code, and the Location Code from AccuWeather must be provided
@@ -4607,7 +4728,7 @@ function writeForecastWidget(userid, city, region, code) {
 }
 
 // offer an alternative to entering city codes by allowing entire code block copied from either AccuWeather or WeatherWidget.io
-function writeWeatherWidget(userid, weatherwidget, framenum) {
+function writeFrameWidget(userid, weatherwidget, framenum) {
     if ( !userid || !weatherwidget || !framenum ) {
         return;
     }
@@ -4618,12 +4739,21 @@ function writeWeatherWidget(userid, weatherwidget, framenum) {
     if ( ! (weatherwidget.toLowerCase().includes("<html") && weatherwidget.toLowerCase().includes("<body") &&
             weatherwidget.toLocaleLowerCase().startsWith("<!doctype") ) ) {
         weatherwidget = "<!DOCTYPE html>\n<html>\n<head>\n" +
-            "<title>Weather Widget</title>\n</head>\n<body>\n" +
+            `<title>Frame${framenum} Custom Widget</title>\n</head>\n<body>\n` +
             weatherwidget + "\n</body>\n</html>\n";
     }
     
     var fname = "user" + userid + "/Frame" + framenum + ".html";
     fs.writeFileSync(fname, weatherwidget, {encoding: "utf8", flag:"w"});
+}
+
+function readFrameWidget(userid, framenum) {
+    var fname = "user" + userid + "/Frame" + framenum + ".html";
+    if ( fs.existsSync(fname) ) {
+        return fs.readFileSync(fname, {encoding: "utf8"});
+    } else {
+        return "";
+    }
 }
 
 function getWeatherIcon(num, weathericon, width=80, height=80) {
@@ -4747,12 +4877,14 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
         thesensor.value["name"] = customname.trim();
     }
     
-    // add in customizations here
+    // add in customizations here, which also removes any _command#pn when there is a custom _command value in the key/val pairs of thesensor.value
     if ( configoptions && is_object(configoptions) ) {
-        thesensor.value = getCustomTile(userid, configoptions, thesensor.value, bid, hint);
-        thesensor.value = getFileName(userid, pname, thesensor.value, thingtype);
+        thesensor.value = getCustomTile(userid, configoptions, thesensor.value, bid, hint, true);
+        thesensor.value = getSpecialContent(userid, thingtype, thesensor.value);
+        // thesensor.value = getFileName(userid, pname, thesensor.value, thingtype);
     }
     
+    // don't reorder pages preview
     if ( !wysiwyg || wysiwyg!=="pe_wysiwyg" ) {
         thesensor.value = setValOrder(thesensor.value);
     }
@@ -4798,11 +4930,7 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
 
     // now swap out cnt for thingid since thingid is guaranteed to be unique
     var cnt = thingid;
-
-    var idtag = "t-" + thingid;
-    if ( wysiwyg ) {
-        idtag = wysiwyg;
-    }
+    var idtag = wysiwyg ? wysiwyg : "t-" + thingid;
 
     // set the custom name
     // limit to 132 visual columns but show all for special tiles and custom names
@@ -5001,8 +5129,10 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
                     // the customtile call here can only be a time or a date field
                     // because we don't present custom fields when links are defined in the customizer
                     // so this call is only here to properly format times and dates that are linked
-                    linktileval = getCustomTile(userid, configoptions, linktileval, linkbid, linkhint);
-                    linktileval = getFileName(userid, pname, linktileval, linktype);
+                    linktileval = getCustomTile(userid, configoptions, linktileval, linkbid, linkhint, true);
+                    linktileval = getSpecialContent(userid, linktype, linktileval);
+
+                    // linktileval = getFileName(userid, pname, linktileval, linktype);
                     if ( array_key_exists(realsubid, linktileval) ) {
                         tval = linktileval[realsubid];
                     } else {
@@ -5067,30 +5197,52 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
         }
 
         let $tc = "";
-        var aitkey = "a-" + i + "-" + tkey;
-        var pkindex = " p_" + kindex;
-        var aidi = `<div aid="${i}"`;
-        var ttype = ` type="${thingtype}"`;
-        var pn = ` pn="0"`;
+        const pkindex = " p_" + kindex;
+        const aidi = `<div aid="${i}"`;
+        const ttype = ` type="${thingtype}"`;
         const bidtag = " linkbid=" + bid;
         const commandtag = command ? ` command="${command}"` : "";
-        var n = 0;
+        let n = 0;
         
-        // fix the command subid for linked tiles by using the real subid instead of tkey
-        // if ( realsubid.startsWith("_") && tval!=="0" && tval!== realsubid.substring(1) ) {
-        if ( realsubid && realsubid.startsWith("_") && tval!=="0" ) {
-            n = parseInt(tval);
-            if ( isNaN(n) ) { n = 0; }
-            pn = ` pn="${n}"`
-            // tval = realsubid.substring(1)
-            tval = tkey;
-            if ( tkey.startsWith("_") ) {
-                tval = tkey.substring(1);
+        // fix the command subid for linked tiles by using the realsubid instead of tkey
+        // the _set commands have the value from the sibling key so we force pn to 1 for those
+        // future update will pass the real pn for commands after a # as such _setXxxx#pn
+        // commands with no parameters will skip this
+        if ( realsubid && realsubid.startsWith("_") ) {
+            let pnpos = realsubid.indexOf("#");
+            if ( pnpos !== -1 ) {
+                let pnstr = realsubid.substring(pnpos+1);
+                realsubid = realsubid.substring(0, pnpos);
+                n = parseInt(pnstr);
+                if ( isNaN(n) ) { n = 0; }
+            }
+        } 
+        
+        if ( tkey.startsWith("_") ) {
+            let pnpos = tkey.indexOf("#");
+            if ( pnpos !== -1 ) {
+                let pnstr = tkey.substring(pnpos+1);
+                tkey = tkey.substring(0, pnpos);
+                if ( n === 0 ) {
+                    n = parseInt(pnstr);
+                    if ( isNaN(n) ) { n = 0; }
+                }
             }
         }
 
+        // for commands that are _setXxxxx we look for a sibling key based on Xxxxx to get the actual value, in lowercase if there
+        if ( command==="" && tkey.length > 4 && tkey.startsWith("_set") ) {
+            let siblingkey = tkey.substring(4).toLowerCase();
+            if ( array_key_exists(siblingkey, thingvalue) ) {
+                tval = thingvalue[siblingkey];
+            }
+        }
+
+        const aitkey = "a-" + i + "-" + tkey;
+        const pn = ` pn="${n}"`;
+
         // handle global text substitutions
-        if ( array_key_exists(tval, GLB.dbinfo.subs) ) {
+        if ( command==="" && array_key_exists(tval, GLB.dbinfo.subs) ) {
             tval = GLB.dbinfo.subs[tval];
         }
 
@@ -5223,6 +5375,14 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
                 if ( command==="RULE" && subtype!=="rule" ) {
                     tkeyshow += " rule";
                 }
+
+                // check for tval entries that look like dates and convert to local format
+                if ( tval && typeof tval==="string" && tval.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.*$/) ) {
+                    var dateObj = new Date(tval);
+                    // tval = getFormattedDate("M d, Y", dateObj).date + " " + dateObj.toLocaleTimeString();
+                    tval = dateObj.toLocaleDateString() + " " + dateObj.toLocaleTimeString();
+                }
+
                 $tc += aidi + pn + bidtag + commandtag + realtag + ttype + "  subid=\""+tkey+"\" title=\""+tkey+"\" class=\"" + thingtype + subtype + tkeyshow + pkindex + extra + "\" id=\"" + wwx + aitkey + "\">" + tval + "</div>";
             }
             $tc += "</div>";
@@ -5414,7 +5574,7 @@ function getCustomName(defbase, cnum) {
 // for LIST it is linkid::realsubid::frequency where frequency is how often to reset the list
 // different things happen when these calltypes are used as shown in the doAction function in hubserver.js
 // the value returned here is processed by the putElement() function to create the proper on screen element
-function getCustomTile(userid, configoptions, custom_val, bid, hint) {
+function getCustomTile(userid, configoptions, custom_val, bid, hint, renderText = false) {
 
     const configkey = "user_" + bid;
     let updated_val = clone(custom_val);
@@ -5431,9 +5591,11 @@ function getCustomTile(userid, configoptions, custom_val, bid, hint) {
                     updated_val = processCustom(lines, updated_val);
                 }
             }
+
             break;
         }
     }
+
    
     if ( DEBUG14 ) {
         console.log( (ddbg()),"updated tile value: ", updated_val);
@@ -5483,10 +5645,20 @@ function getCustomTile(userid, configoptions, custom_val, bid, hint) {
                         custom_val[subid]= "LINK::" + content;
                     }
                 } else if ( calltype === "TEXT" ) {                           
-                    custom_val[subid] = content;
+                    custom_val[subid] = renderText ? "TEXT::" + content : content;
                 } else {
                     custom_val[subid] = calltype + "::" + subid;
                 }
+
+                // remove any _command#pn when there is a custom _command value in the key/val pairs of thesensor.value
+                let regmatch = new RegExp("^" + subid + "#\\d+$");
+                for ( var okey in custom_val ) {
+                    if ( okey!==subid && okey.match(regmatch) ) {
+                        delete custom_val[okey];
+                        break;
+                    }
+                }
+
             }
         });
 
@@ -5693,7 +5865,6 @@ function processHubMessage(userid, hubmsg, newST) {
                 pvalue["hue"] = value[0];
                 pvalue["saturation"] = value[1];
                 pvalue["level"] = value[2];
-                pvalue["levelval"] = value[2];
                 pvalue["color"] = value[3];
             } else if ( is_object(value) ) {
                 for (var key in value) {
@@ -5702,13 +5873,28 @@ function processHubMessage(userid, hubmsg, newST) {
             } else {
                 pvalue[subid] = value;
             }
-            if ( pvalue["level"] ) {
-                pvalue["levelval"] = pvalue["level"] || 0;
+
+            // if ( pvalue["level"] && typeof pvalue["levelval"]!=="undefined" ) {
+            //     pvalue["levelval"] = pvalue["level"] || 0;
+            // }
+
+            // for any _set command set the value to the corresponding value
+            for ( var pkey in pvalue ) {
+                if ( pkey.startsWith("_set") ) {
+                    let realkey = pkey.substring(4).toLowerCase();
+                    const pnpos = realkey.indexOf("#");
+                    if ( pnpos !== -1 ) {
+                        realkey = realkey.substring(0, pnpos);
+                    }
+                    if ( typeof pvalue[realkey] !== "undefined" ) {
+                        pvalue[pkey] = pvalue[realkey];
+                    }
+                }
             }
 
             // increment the count if this is not the inverse of a turn on action
             pvalue = updateTimeStamp(subid, pvalue);
-            var swtype = device.devicetype;
+            const swtype = device.devicetype;
 
             // handle special audio updates
             if ( swtype==="audio" || pvalue.audioTrackData ) {
@@ -5740,6 +5926,16 @@ function processHubMessage(userid, hubmsg, newST) {
                 if ( modemap.hasOwnProperty(newmode) ) {
                     var nreset = modemap[newmode];
                     resetList(userid, nreset);
+                }
+            }
+
+            // remove the keys with pn values tied to them for the screen updates
+            for ( var pkey in pvalue ) {
+                if ( pkey.startsWith("_") && pkey.indexOf("#") !== -1 ) {
+                    const pnpos = pkey.indexOf("#");
+                    let newkey = pkey.substring(0, pnpos);
+                    pvalue[newkey] = pvalue[pkey];
+                    delete pvalue[pkey];
                 }
             }
 
@@ -6178,17 +6374,6 @@ function processRules(userid, uid, bid, thetype, trigger, pvalueinput, dolists, 
         } else {
             today = d.toLocaleString();
         }
-
-        // for (var devuid in devices ) {
-        //     if ( devices[devuid].deviceid === "clockdigital" ) {
-        //         var tpvalue = devices[devuid].pvalue;
-        //         if ( typeof tpvalue === "string") {
-        //             tpvalue = decodeURI2(tpvalue);
-        //         }
-        //         today = getFormattedDate(tpvalue["fmt_date"], d).date + ", " + getFormattedTime(tpvalue["fmt_time"], d, tpvalue["tzone"]);
-        //         break;
-        //     }
-        // }
 
         // loop through all the configs and capture the invoking device so we know which one to attribute
         for (var i in configs) {
@@ -7923,6 +8108,8 @@ function getInfoPage(user, configoptions, hubs, req) {
         $tc += hidden("pagename", "info");
         $tc += hidden("hpcode", hpcode, "hpcode");
         $tc += hidden("apiSecret", GLB.apiSecret);
+        $tc += hidden("dbgflags", JSON.stringify(GLB.dbinfo.dbgflags), "dbgflags");
+
         var configs = {};
         for (var i in configoptions) {
             var key = configoptions[i].configkey;
@@ -8129,7 +8316,7 @@ function getInfoPage(user, configoptions, hubs, req) {
     }
 }
 
-function hubFilters(userid, hubpick, hubs, useroptions, pagename, ncols, isform) {
+function hubFilters(userid, hubpick, hubs, pname, useroptions, pagename, ncols, isform) {
 
     var thingtypes = getTypes();
     var $tc = "";
@@ -8139,6 +8326,7 @@ function hubFilters(userid, hubpick, hubs, useroptions, pagename, ncols, isform)
         $tc += hidden("pagename", pagename);
         $tc += hidden("returnURL", GLB.returnURL);
         $tc += hidden("apiSecret", GLB.apiSecret);
+        $tc += hidden("pname", pname);
     }
 
     // // if more than one hub then let user pick which one to show
@@ -8222,7 +8410,7 @@ function sortedSensors(sensors, one, two, three) {
     return sensors;
 }
 
-function getCatalog(userid, hubpick, hubs, useroptions, sensors) {
+function getCatalog(userid, hubpick, hubs, pname, useroptions, sensors) {
 
     if ( !hubpick ) {
         hubpick = "all";
@@ -8230,7 +8418,7 @@ function getCatalog(userid, hubpick, hubs, useroptions, sensors) {
     var $tc = "";
 
     $tc += "<div id=\"catalog\">";
-    $tc += hubFilters(userid, hubpick, hubs, useroptions, "main", 3, true);
+    $tc += hubFilters(userid, hubpick, hubs, pname, useroptions, "main", 3, true);
 
     $tc += "<div class='scrollvtable fshort'><table class=\"catalog\">";
 
@@ -8292,10 +8480,13 @@ function getSocketUrl(hostname) {
     return webSocketUrl;
 }
 
-function getParamsPage(user, configoptions, req) {
+// create the page where parameters can be set
+// I updated this function to use buttons to save parameters in each section instead of submitting the entire form at once
+async function getParamsPage(user, configoptions, req) {
 
     var userid = user["users_id"];
     var useremail = user["users_email"];
+    var mobile = user["users_mobile"];
     var uname = user["users_uname"];
     var hpcode = user["users_hpcode"];
     var pname = user["panels_pname"];
@@ -8330,6 +8521,12 @@ function getParamsPage(user, configoptions, req) {
         specialtiles["control"] = 1;
     }
 
+    var devices = await mydb.getRows("devices","*",`userid=${userid} AND hint="special"`);
+    var specialdevices = {};
+    for ( var i=0; i<devices.length; i++ ) {
+        specialdevices[devices[i].deviceid] = devices[i];
+    }
+
     var $tc = "";
     $tc += getHeader(userid, null, null, true);
 
@@ -8346,14 +8543,15 @@ function getParamsPage(user, configoptions, req) {
     }
 
     // this is the start of the options page
-    $tc += "<button class=\"bluebutton infobutton fixbottom\">Cancel and Return to HousePanel</button>";
+    $tc += "<button class=\"bluebutton infobutton fixbottom\">Done and Return to HousePanel</button>";
     $tc += "<h3>" + GLB.APPNAME + " Options</h3>";
     // $tc += "<h3>Email: " + useremail + "</h3>";
-    $tc += "<br><button id=\"delUser\" class=\"smallbutton\">Delete User</button>";
 
-    $tc += "<form id=\"paramspage\" class=\"options\" name=\"paramspage\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
+
+    // $tc += "<form id=\"paramspage\" class=\"options\" name=\"paramspage\" action=\"" + GLB.returnURL + "\"  method=\"POST\">";
+    // $tc += "<form id=\"paramspage\" class=\"options\" name=\"paramspage\" action=\"#\">";
     $tc += "<div class=\"options\">";
-
+    
     $tc += hidden("pagename", "options");
     $tc += hidden("returnURL", GLB.returnURL);
     $tc += hidden("webSocketUrl", webSocketUrl);
@@ -8366,119 +8564,244 @@ function getParamsPage(user, configoptions, req) {
     $tc += hidden("pname", pname);
     $tc += hidden("hpcode", hpcode, "hpcode");
     $tc += hidden("apiSecret", GLB.apiSecret);
-
-    // // users can update their username here
-    $tc += "<div class=\"filteroption\">";
-    $tc += " Username: ";
-    $tc += "<input id=\"newUsername\" class=\"optioninp\" name=\"newUsername\" size=\"20\" type=\"text\" value=\"" + uname + "\"/>"; 
-    $tc += "<span class='typeopt'>(Email: " + useremail + ")</span>";
-    $tc += "</div>";
-
-    $tc += "<div class=\"filteroption\">";
-    $tc += "<div><label for=\"kioskid\" class=\"optioncbox\">Kiosk Mode? </label>";    
-    var $kstr = ($kioskoptions===true || $kioskoptions==="true") ? " checked" : "";
-    $tc+= "<input class=\"optionchk\" id=\"kioskid\" type=\"checkbox\" name=\"kiosk\"  value=\"" + $kioskoptions + "\"" + $kstr + "/></div>";
-    $tc += "<div><label for=\"ruleid\" class=\"optioncbox\">Enable Rules? </label>";
-    $kstr = ($ruleoptions===true || $ruleoptions==="true") ? " checked" : "";
-    $tc += "<input class=\"optionchk\" id=\"ruleid\" type=\"checkbox\" name=\"rules\"  value=\"" + $ruleoptions + "\"" + $kstr + "/></div>";
-    $tc += "<div><label for=\"clrblackid\" class=\"optioncbox\">Night & Away Blackout? </label>";    
-    $kstr = (blackout===true || blackout==="true") ? " checked" : "";
-    $tc+= "<input class=\"optionchk\" id=\"clrblackid\" type=\"checkbox\" name=\"blackout\"  value=\"" + blackout + "\"" + $kstr + "/></div>";
-    $tc+= "<div><label for=\"photoid\" class=\"optioninp\">Photo timer (sec): </label>";
-    $tc+= "<input class=\"optioninp\" id=\"photoid\" name=\"phototimer\" type=\"number\"  min='0' max='300' step='5' value=\"" + phototimer + "\" /></div>";
-    $tc += "</div>";
-
-    $tc += "<div class=\"filteroption\">";
-    $tc += "Weather Option 1:<br>Legacy WeatherWidget.io or Legacy AccuWeather city (or both)<br/><br/>";
-    $tc += "<table>";
-    $tc += "<tr>";
-    $tc += "<td style=\"width:15%; text-align:right\"><label for=\"fcastcityid\" class=\"kioskoption\">WeatherWidget City: </label>";
-    $tc += "<br><span class='typeopt'>(see: <a href=\"https://weatherwidget.io\" target=\"_blank\">WeatherWidget.io</a>)</span></td>";
-    $tc += "<td style=\"width:20%\"><input id=\"fcastcityid\" size=\"30\" type=\"text\" name=\"fcastcity\"  value=\"" + fcastcity + "\" /></td>";
-    $tc += "<td style=\"width:20%; text-align:right\"><label for=\"fcastregionid\" class=\"kioskoption\">Forcast Region: </label></td>";
-    $tc += "<td style=\"width:15%\"><input id=\"fcastregionid\" size=\"20\" type=\"text\" name=\"fcastregion\"  value=\"" + fcastregion + "\"/></td>";
-    $tc += "<td style=\"width:15%; text-align:right\"><label for=\"fcastcodeid\" class=\"kioskoption\">Forecast Code: </label></td>";
-    $tc += "<td style=\"width:15%\"><input id=\"fcastcodeid\" size=\"20\" type=\"text\" name=\"fcastcode\"  value=\"" + fcastcode + "\"/></td>";
-    $tc += "</tr>";
+    $tc += hidden("dbgflags", JSON.stringify(GLB.dbinfo.dbgflags), "dbgflags");
+   
+    const blackstr = (blackout===true || blackout==="true") ? " checked" : "";
+    const kioskstr = ($kioskoptions===true || $kioskoptions==="true") ? " checked" : "";
+    const rulestr = ($ruleoptions===true || $ruleoptions==="true") ? " checked" : "";
     
-    $tc += "<tr>";
-    $tc += "<td style=\"width:15%; text-align:right\"><label for=\"accucityid\" class=\"kioskoption\">Accuweather City: </label>";
-    $tc += "<br><span class='typeopt'>(see: <a href=\"https://www.accuweather.com\" target=\"_blank\">AccuWeather.com</a>)</span></td>";
-    $tc += "<td style=\"width:20%\"><input id=\"accucityid\" size=\"30\" type=\"text\" name=\"accucity\"  value=\"" + accucity + "\" /></td>";
-    $tc += "<td style=\"width:20%; text-align:right\"><label for=\"accuregionid\" class=\"kioskoption\">Accuweather Region: </label></td>";
-    $tc += "<td style=\"width:15%\"><input id=\"accuregionid\" size=\"20\" type=\"text\" name=\"accuregion\"  value=\"" + accuregion + "\"/></td>";
-    $tc += "<td style=\"width:15%; text-align:right\"><label for=\"accucodeid\" class=\"kioskoption\">AccuWeather Code: </label></td>";
-    $tc += "<td style=\"width:15%\"><input id=\"accucodeid\" size=\"20\" type=\"text\" name=\"accucode\"  value=\"" + accucode + "\"/></td>";
-    $tc += "</tr>";
-    $tc += "</tr><tr><td colspan=\"6\"><span class='typeopt'>note: AccuWeather no longer supports this widget but it will work if you have valid codes. Find codes by loading an AccuWeather page and inspecting it in your browser</span></td></tr>";
-    $tc += "</table></div>";
+    $tc += `<br /><div class='filteroption'>
+            Click below to remove your account associated with email: ${useremail} and username: ${uname}
+            <br /><span class='typeopt'>(This action cannot be undone)</span>
+            <br /><button id="delUser" class="formbutton delUser">Delete Account</button>
+            </div>`;
 
-    $tc += `<br/><div>
-            <div class="filteroption">Weather Option 2:<br>Weather API Services: Tomorrow IO, Ambient Weather, and Open Meteo</div><br/>
-            <table class="weatherapiopts">
+    // each section has an id named the same as the button that saves it with "div" appended
+    $tc += `<div id="generaloptionsdiv" class="filteroption">
+            <h3>General Options</h3>
+            <table>
             <tr>
-            <td class="weatheroption"><label for="tomorrowapi">TomorrowIO Api Key:<br>
-            <span class='typeopt'>(see: <a href="https://weather.tomorrow.io/" target=\"_blank\">TomorrowIO API</a>)</span></label></td>
-            <td class="weatherval"><input id="tomorrowapi" size="50" type="text" name="tomorrowapi"  value="${tomorrowapi}"/></td>
+            <td><label for="newEmail" class="optioncbox">Email: </label></td>
+            <td><input id="newEmail" class="optioninp" name="newEmail" size="20" type="text" value="${useremail}"/></td>
             </tr>
-
             <tr>
-            <td class="weatheroption"><label for="ambientappkey">Ambient Application Key:<br>
-            <span class='typeopt'>(see: <a href="https://ambientweather.docs.apiary.io" target=\"_blank\">Open Ambient API</a>)</span></label></td>
-            <td class="weatherval"><input id="ambientappkey" size="70" type="text" name="ambientappkey"  value="${ambientappkey}"/></td>
+            <td><label for="newUsername" class="optioncbox">Username: </label></td>
+            <td><input id="newUsername" class="optioninp" name="newUsername" size="20" type="text" value="${uname}"/></td>
             </tr>
-
             <tr>
-            <td class="weatheroption"><label for="ambientapikey">Ambient API Key:<br></label></td>
-            <td class="weatherval"><input id="ambientapikey" size="70" type="text" name="ambientapikey"  value="${ambientapikey}"/></td>
+            <td><label for="newMobile" class="optioncbox">Mobile: </label></td>
+            <td><input id="newMobile" class="optioninp" name="newMobile" size="20" type="text" value="${mobile}"/></td>
             </tr>
-
             <tr>
-            <td class="weatheroption"><label for="zipcodeid">Zip Code: </label></td>
-            <td class="weatherval"><input id="zipcodeid" size="10" type="text" name="zipcode"  value="${zipcode}"/></td>
+            <td><label for="kioskid" class="optioncbox">Kiosk Mode? </label></td>
+            <td><input class="optionchk" id="kioskid" type="checkbox" name="kiosk"  value="${$kioskoptions}"${kioskstr}/></td>
             </tr>
-            </table></div>`;
+            <tr>
+            <td><label for="rulesid" class="optioncbox">Enable Rules? </label></td>
+            <td><input class="optionchk" id="rulesid" type="checkbox" name="rules"  value="${$ruleoptions}"${rulestr}/></td>
+            </tr>
+            <tr>
+            <td><label for="blackoutid" class="optioncbox">Night & Away Blackout? </label></td>
+            <td><input class="optionchk" id="blackoutid" type="checkbox" name="blackout"  value="${blackout}"${blackstr}/></td>
+            </tr>
+            <tr>
+            <td><label for="phototimerid" class="optioncbox">Photo timer (sec): </label></td>
+            <td><input class="optioninp" id="phototimerid" name="phototimer" type="number"  min='0' max='300' step='5' value="${phototimer}" /></td>
+            </tr>
+            </table>
             
-    $tc += `<br/><div class="filteroption">
-            Weather Option 3:<br>Paste entire code block of your weather widget of choice into any Frame tile
-            <br><span class='typeopt'>(Frame number of 1 or 2 will replace the frame file generated from the above settings)</span><br><br>   
+            <button id="generaloptions" class="formbutton">Save Changes</button>
+            </div>`;
+
+    $tc += `<br/>
+        <div id="weatheroptionsdiv" class="filteroption">
+        <h3>Weather API Services</h3>
+        <table class="weatherapiopts">
+        <tr>
+        <td class="weatheroption"><label for="tomorrowapi">TomorrowIO Api Key:<br>
+        <span class='typeopt'>(see: <a href="https://weather.tomorrow.io/" target=\"_blank\">TomorrowIO API</a>)</span></label></td>
+        <td class="weatherval"><input id="tomorrowapi" size="50" type="text" name="tomorrowapi"  value="${tomorrowapi}"/></td>
+        </tr>
+
+        <tr>
+        <td class="weatheroption"><label for="ambientappkey">Ambient Application Key:<br>
+        <span class='typeopt'>(see: <a href="https://ambientweather.docs.apiary.io" target=\"_blank\">Open Ambient API</a>)</span></label></td>
+        <td class="weatherval"><input id="ambientappkey" size="60" type="text" name="ambientappkey"  value="${ambientappkey}"/></td>
+        </tr>
+
+        <tr>
+        <td class="weatheroption"><label for="ambientapikey">Ambient API Key:<br></label></td>
+        <td class="weatherval"><input id="ambientapikey" size="60" type="text" name="ambientapikey"  value="${ambientapikey}"/></td>
+        </tr>
+
+        <tr>
+        <td class="weatheroption"><label for="zipcodeid">Zip Code: </label></td>
+        <td class="weatherval"><input id="zipcodeid" size="10" type="text" name="zipcode"  value="${zipcode}"/></td>
+        </tr>
+        </table>
+
+        <br/><table>
+        <tr><td colspan="6">Frame 1: Legacy WeatherWidget.io</td></tr>
+        <tr>
+        <td style="width:15%; text-align:right"><label for="fcastcityid" class="kioskoption">WeatherWidget City: </label>
+        <br><span class='typeopt'>(see: <a href="https://weatherwidget.io" target="_blank">WeatherWidget.io</a>)</span></td>
+        <td style="width:20%"><input id="fcastcityid" size="30" type="text" name="fcastcity"  value="${fcastcity}" /></td>
+        <td style="width:20%; text-align:right"><label for="fcastregionid" class="kioskoption">Forcast Region: </label></td>
+        <td style="width:15%"><input id="fcastregionid" size="20" type="text" name="fcastregion"  value="${fcastregion}"/></td>
+        <td style="width:15%; text-align:right"><label for="fcastcodeid" class="kioskoption">Forecast Code: </label></td>
+        <td style="width:15%"><input id="fcastcodeid" size="20" type="text" name="fcastcode"  value="${fcastcode}"/></td>
+        </tr>
+        
+        <tr><td colspan="6"><br/>Frame 2: Legacy AccuWeather city</td></tr>
+        <tr>
+        <td style="width:15%; text-align:right"><label for="accucityid" class="kioskoption">Accuweather City: </label>
+        <br><span class='typeopt'>(see: <a href="https://www.accuweather.com" target="_blank">AccuWeather.com</a>)</span></td>
+        <td style="width:20%"><input id="accucityid" size="30" type="text" name="accucity"  value="${accucity}" /></td>
+        <td style="width:20%; text-align:right"><label for="accuregionid" class="kioskoption">Accuweather Region: </label></td>
+        <td style="width:15%"><input id="accuregionid" size="20" type="text" name="accuregion"  value="${accuregion}"/></td>
+        <td style="width:15%; text-align:right"><label for="accucodeid" class="kioskoption">AccuWeather Code: </label></td>
+        <td style="width:15%"><input id="accucodeid" size="20" type="text" name="accucode"  value="${accucode}"/></td>
+        </tr>
+        <tr><td colspan="6"><span class='typeopt'>AccuWeather no longer supports this widget but it works if you have valid codes. Find codes by loading your city's AccuWeather page and inspecting it in your browser.</span>
+        <br/><span class='typeopt'>WeatherWidget and AccuWeather content will replace Frame 1 and Frame 2 contents, so don't update and save these fields if you have custom Frame content you want to keep.</span>
+        </td></tr>
+        </table>
+
+        <button id="weatheroptions" class="formbutton">Save Changes</button>            
+    </div>`;
+
+    $tc += "<br /><div id=\"specialoptionsdiv\" class=\"filteroption\">";
+    $tc += "<h3>Special Tiles</h3>";
+    $tc += "<span class=\"typeopt\">(Update these before entering other options below)</span>";
+    for (var stype in specialtiles) {
+        let customcnt = parseInt(specialtiles[stype]);
+        if ( isNaN(customcnt) ) { customcnt = 0; }
+        const stypeid = "cnt_" + stype;
+        $tc+= "<div><label for=\"" + stypeid + "\" class=\"optioninp\"> " + stype +  " devices: </label>";
+        $tc+= "<input class=\"optionnuminp\" id=\"" + stypeid + "\" name=\"" + stypeid + "\" size=\"10\" type=\"number\"  min='0' max='99' step='1' value=\"" + customcnt + "\" /></div>";
+    }
+    $tc += "<button id=\"specialoptions\" class=\"formbutton\">Save Changes</button>";
+    $tc+= "</div>";
+
+            
+    $tc += "<br /><div id=\"frameoptionsdiv\" class=\"filteroption\">";            
+    $tc += `<h3>Frame Contents</h3>
+            Paste entire code block into any Frame tile
+            <br><span class="typeopt">(Frame 1 and Frame 2 will replace the WeatherWidget and AccuWeather content referenced above)</span><br><br>`;
+    $tc += `<table><tr><td><select id="whichframe" name="whichframe" class="ddlDialog">`;
+            let nframes = parseInt(specialtiles["frame"]);
+            var defsize = {name: "Frame1", width: 360, height: 230};
+            for ( var i=1; i<=nframes; i++ ) {
+                let frameid = "frame" + i;
+                let device = specialdevices[frameid];
+                let pvalue = device ? JSON.parse(device.pvalue) : defsize;
+                let width = pvalue.width;
+                let height = pvalue.height;
+                let name = pvalue.name;
+                if ( i==1 ) {
+                    defsize = {name: name, width: width, height: height};
+                }
+                $tc += `<option deviceid="${device.id}" value="${i}">Frame ${i}</option>`;
+            }
+    $tc += `</select></td></tr>
+            <tr><td>
+            <textarea id="framecontent" name="framecontent" rows="8" cols="100" placeholder="Paste your Frame html content here..."></textarea>
+            </td></tr>
+            <tr><td><div id="framepreview" class="framepreview"></div></td></tr>
+            <tr><td><label for="framenameid">Frame Name: </label><input id="framenameid" name="framename" type="text" size="30" value="${defsize.name}" /></td></tr>
+            <tr><td>
+            <input id="frameurlid" name="frameurl" type="hidden" value="" />
+            <label for="framewidthid">Width: </label><input id="framewidthid" name="framewidth" type="text" size="10" value="${defsize.width}" />
+            <label for="frameheightid">Height: </label><input id="frameheightid" name="frameheight" type="text" size="10" value="${defsize.height}" />
+            </td></tr>
+            </table>
+            <br/>
+            <input type="hidden" id="frameid" name="frameid" value="" />
+            <button id="frameoptions" class="formbutton">Save Frame</button></div>`;
+
+    $tc += `<br /><div id="imageoptionsdiv" class="filteroption">
+            <h3>Image Options</h3>
             <table><tr>
-            <td>
-                <textarea id="widgetcodeid" name="widgetcode" rows="6" cols="80" placeholder="Paste your weather widget code here..."></textarea>
-            </td>
-            <td>
-                <label for="widgetcodepanelid" class="optioninp">Which Frame: </label>
-                <input id="widgetcodepanelid" name="widgetcodepanelid" type="number" min="0" max="20" step="1" value="1" />
-            </td>
-            </tr></table>
+            <td><br/><label for="whichimage">Which Image?</label>
+            <select id="whichimage" name="whichimage" class="ddlDialog">`;
+            let nimages = parseInt(specialtiles["image"]);
+            defsize = {name: "Image1", width: 360, height: 230};
+            for ( var i=1; i<=nimages; i++ ) {
+                let imageid = "image" + i;  
+                let device = specialdevices[imageid];
+                let pvalue = device ? JSON.parse(device.pvalue) : defsize;
+                let width = pvalue.width;
+                let height = pvalue.height;
+                let name = pvalue.name;
+                if ( i==1 ) {
+                    defsize = {name: name, width: width, height: height};
+                }
+                $tc += `<option deviceid="${device.id}" value="${i}">Image ${i}</option>`;
+            }
+    $tc += `</select></td></tr>`;
+
+    $tc += `<tr><td><div id='imagepreview' class='imagepreview'></div></td></tr>
+            <tr><td><label for="imagenameid">Image Name: </label><input id="imagenameid" name="imagename" type="text" size="30" value="${defsize.name}" /></td></tr>
+            <tr><td>
+            <label for="imageurlid">Image URL: </label>
+            <input class="imgDialog" id="imageurlid" name="imageurl" type="text" size="60" value="" />
+            <button id="pickimage" name="image" class="pickbutton">Pick Image</button>      
+            </td></tr>
+            <tr><td>
+            <label for="imagewidthid">Width: </label><input id="imagewidthid" name="imagewidth" type="text" size="10" value="${defsize.width}" />
+            <label for="imageheightid">Height: </label><input id="imageheightid" name="imageheight" type="text" size="10" value="${defsize.height}" />
+            </td></tr>
+            </table>
+            <br />
+            <input type="hidden" id="imageid" name="imageid" value="" />
+            <button id="imageoptions" class="formbutton">Save Image</button>
+            </div>`;
+
+    $tc += `<br /><div id="videooptionsdiv" class="filteroption">
+            <h3>Video Options</h3>
+            <table><tr>
+            <td><br/><label for="whichvideo">Which Video?</label>
+            <select id="whichvideo" name="whichvideo" class="ddlDialog">`;
+            let nvideos = parseInt(specialtiles["video"]);
+            defsize = {name: "Video1", width: 360, height: 230};
+            for ( var i=1; i<=nvideos; i++ ) {
+                let videoid = "video" + i;
+                let device = specialdevices[videoid];
+                let pvalue = device ? JSON.parse(device.pvalue) : defsize;
+                let width = pvalue.width;
+                let height = pvalue.height;
+                let name = pvalue.name;
+                if ( i==1 ) {
+                    defsize = {name: name, width: width, height: height};
+                }
+                $tc += `<option deviceid="${device.id}" value="${i}">Video ${i}</option>`;
+            }
+    $tc += `</select></td></tr>`;
+
+            
+    $tc += `<tr><td><div id="videopreview" class="videopreview"></div></td></tr>
+            <tr><td><label for="videonameid">Video Name: </label><input id="videonameid" name="videoname" type="text" size="30" value="${defsize.name}" /></td></tr>
+            <tr><td>
+            <label for="videourlid">Video URL: </label>
+            <input class="imgDialog" id="videourlid" name="videourl" type="text" size="80" value="" />
+            <button id="pickvideo" name="video" class="pickbutton">Pick Video</button>
+            </td></tr>
+            <tr><td>
+            <label for="videowidthid">Width: </label><input id="videowidthid" name="videowidth" type="text" size="10" value="${defsize.width}" />
+            <label for="videoheightid">Height: </label><input id="videoheightid" name="videoheight" type="text" size="10" value="${defsize.height}" />
+            </td></tr>
+            </table>
+            <br />
+            <input type="hidden" id="videoid" name="videoid" value="" />
+            <button id="videooptions" class="formbutton">Save Video</button>
             </div>`;
             
-            
-    $tc += "<div class=\"filteroption\">";
-    $tc += "Specify number of special tiles:<br/>";
-    for (var stype in specialtiles) {
-
-        // handle weather tile separately
-        if ( stype === "weather" ) {
-            $tc+ hidden("cnt_weather", specialtiles[stype]);
-        } else {
-            const customcnt = parseInt(specialtiles[stype]);
-            if ( isNaN(customcnt) ) { customcnt = 0; }
-            const stypeid = "cnt_" + stype;
-            $tc+= "<div><label for=\"" + stypeid + "\" class=\"optioninp\"> " + stype +  " devices: </label>";
-            $tc+= "<input class=\"optionnuminp\" id=\"" + stypeid + "\" name=\"" + stypeid + "\" size=\"10\" type=\"number\"  min='0' max='99' step='1' value=\"" + customcnt + "\" /></div>";
-        }
-    }
-    $tc+= "</div>";
-
     // end of the options page
-    $tc+= "</div>";
+    $tc+= "</div><br /><br />";
 
-    $tc +='<div id="paramsSave" class="formbutton">Save</div>';
-    $tc +='<div id="paramsReset" class="formbutton">Reset</div>';
-    $tc +='<div id="paramsCancel" class="formbutton">Cancel</div><br>';
+    $tc +='<button id="optionsdone" class="formbutton">Done</button><br>';
     $tc+= "</div>";
-    $tc+= "</form>";
+    // $tc+= "</form>";
 
 
     $tc+= getFooter();
@@ -8556,13 +8879,14 @@ function getDevicesPage(user, configoptions, hubs, req) {
         $tc += hidden("hpcode", hpcode, "hpcode");
         $tc += hidden("apiSecret", GLB.apiSecret);
         $tc += hidden("hubpick", hubpick);
+        $tc += hidden("dbgflags", JSON.stringify(GLB.dbinfo.dbgflags), "dbgflags");
 
         $tc += "<div class='greeting'>Select which hubs and types of things to show in the table below." +
                " This might be useful if you have a large number of things and/or multiple hubs so you can select ." +
                " just the things here that you care about. Note that all things remain active even if they are not shown." +
                " Note also for ISY hubs, all things are of type \"isy\" so you will not be able to select by type for that hub." +
                "</div>";
-        $tc += hubFilters(userid, hubpick, hubs, useroptions, "options", 8, false);
+        $tc += hubFilters(userid, hubpick, hubs, pname, useroptions, "options", 8, false);
 
         // now display the table of all the rooms and thing options
         $tc += "<table class=\"headoptions\"><thead>";
@@ -8646,9 +8970,9 @@ function getDevicesPage(user, configoptions, hubs, req) {
         $tc+= "</tbody></table>";
         $tc+= "</div>";
         $tc+= "<div class=\"buttonopts\">";
-        $tc +='<div id="devSave" class="formbutton">Save</div>';
-        $tc +='<div id="devReset" class="formbutton">Reset</div>';
-        $tc +='<div id="devCancel" class="formbutton">Cancel</div><br>';
+        $tc +='<button id="devSave" class="formbutton">Save</button>';
+        $tc +='<button id="devReset" class="formbutton">Reset</button>';
+        $tc +='<button id="devCancel" class="formbutton">Cancel</button><br>';
         $tc+= "</div>";
         $tc+= "</form>";
         $tc += getFooter();
@@ -8658,138 +8982,98 @@ function getDevicesPage(user, configoptions, hubs, req) {
 
 }
 
-// process user options page
-function processParams(userid, panelid, optarray) {
-
-    // first get the configurations and things and then call routine to update them
-    userid = parseInt(userid);
-    panelid = parseInt(panelid);
-    if ( DEBUG4 ) {
-        console.log( (ddbg()), "userid: ", userid, " panelid: ", panelid);
-        console.log( (ddbg()), "optarray: ", jsonshow(optarray) );
-    }
-
+// this function processes the general options updates - email, username, mobile, weather api options, and special tile counts
+function processGeneralOptions(userid, api, devoptions) {
     return Promise.all([
-        mydb.getRow("hubs","*","userid = "+userid+" AND hubid = '-1'"),
-        mydb.getRows("configs","*","userid = "+userid+" AND configtype=0")
+        mydb.getRow("users","*", `id = ${userid}`),
+        mydb.getRows("configs","*", `userid = ${userid} AND configtype=0`),
+        mydb.getRow("hubs","*", `userid = ${userid} AND hubid = '-1'`)
     ])
-    .then(results => {
-        var hubzero = results[0];
-        var configs = results[1];
-        var configoptions = {};
-        if ( configs ) {
-            configs.forEach(function(item) {
-                var key = item.configkey;
-                var val = item.configval;
-                try {
-                    var parseval = JSON.parse(val);
-                } catch (e) {
-                    parseval = val;
-                }
-                configoptions[key] = parseval;
-            });
-        }
-        return doProcessOptions(optarray, configoptions, hubzero);
-    })
-    .catch(reason => {
-        console.error( (ddbg()), "error processing user parameter options: ", reason);
-        return reason;
-    });
-
-    async function doProcessOptions(optarray, configoptions, hubzero) {
-        var specialtiles = clone(configoptions["specialtiles"]);
-        configoptions["kiosk"] = "false";
-        configoptions["rules"] = "false";
-        configoptions["blackout"] = "false";
-        var newUsername = "";
-        var weatherwidget = "";
-        var frameid = 0;
+    .then(async resarray => {
+        var updobjs = {};
+        var user = resarray[0];
+        var configs = resarray[1];
+        var hubzero = resarray[2];
         var specialsupdated = false;
-
-        for (var key in optarray) {
-            var val = optarray[key];
-            if ( typeof val === "string" ) val = val.trim();
-
-            //skip the returns from the submit button and the flag
-            if (key==="options" || key==="editdevices" || key==="api" || key==="useajax"  || key==="userid" || key==="panelid" || key==="webSocketUrl" || 
-                key==="returnURL" || key==="hpcode" || key==="apiSecret" || key==="emailid" ||
-                key==="webSocketServerPort" || key==="webDisplayPort" || key==="pagename" || key==="pathname" || key==="userpanel" || key==="pname" || key==="uname" || key==="panelPw2" ) {
-                continue;
-
-            } else if ( key==="newUsername" ) {
-                // the \D ensures we start with a non-numerica character
-                // and the \S ensures we have at least 2 non-white space characters following
-                if ( val && val.match(/^\D\S{2,}$/) ) {
-                    mydb.updateRow("users",{uname: val},"id = " + userid);
+        var specialtiles = configs.find(c => c.configkey === "specialtiles");
+        if ( !specialtiles ) {
+            var specials = {image: 1, video: 1, frame: 4, custom: 1, blank: 1};
+        } else {
+            var specials = JSON.parse(specialtiles.configval);
+        }
+        for ( let key in devoptions ) {
+            if ( key === "newUsername" ) {
+                // update if username changed and if name matches the pattern for valid usernames (start with letter, 3-20 chars, letters, numbers, underscores only)
+                if ( devoptions[key] !== user.uname && /^[a-zA-Z][a-zA-Z0-9_]{2,19}$/.test(devoptions[key]) ) {
+                    await mydb.updateRow("users", {uname: devoptions[key]}, `id = ${userid}`, true);
+                    updobjs[key] = devoptions[key];
                 }
-            } else if ( key==="kiosk") {
-                configoptions["kiosk"] = "true";
-            } else if ( key==="rules") {
-                configoptions["rules"] = "true";
-            } else if ( key==="blackout") {
-                configoptions["blackout"] = "true";
-            } else if ( key==="widgetcode" ) {
-                weatherwidget = val;
-            } else if ( key==="widgetcodepanelid" ) {
-                frameid = parseInt(val);
-            
-            // handle user selected special device count
-            } else if ( key.substring(0,4)==="cnt_" ) {
-                let stype = key.substring(4);
-                let oldcount = specialtiles[stype];
-                let newcount = parseInt(val);
+            } else if ( key === "newEmail" ) {
+                // update if email changed and if email is valid format
+                if ( devoptions[key] !== user.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(devoptions[key]) ) {
+                    await mydb.updateRow("users", {email: devoptions[key]}, `id = ${userid}`, true);
+                    updobjs[key] = devoptions[key];
+                }
+            } else if ( key === "newMobile" ) {
+                // update if mobile changed and if mobile is valid format (6 to 15 digits, optional dashes, or parentheses)
+                if ( devoptions[key] !== user.mobile && /^[0-9\-\(\)]{6,15}$/.test(devoptions[key]) ) {
+                    await mydb.updateRow("users", {mobile: devoptions[key]}, `id = ${userid}`, true);
+                    updobjs[key] = devoptions[key];
+                }
+            } else if ( key.startsWith("cnt_") ) {
+                let realkey = key.substring(4);
+                let oldcount = specials[realkey];
+                let newcount = parseInt(devoptions[key]);
                 if ( !isNaN(newcount) && newcount!==oldcount ) {
-                    configoptions["specialtiles"][stype] = newcount;
+                    specials[realkey] = newcount;
                     specialsupdated = true;
                 }
             } else {
-                configoptions[key] = val;
-                specialsupdated = true;
-                // if ( typeof configoptions[key]===undefined ) {
-                //     specialsupdated = true;
-                // } else if ( val.toString() !== configoptions[key].toString() ) {
-                //     specialsupdated = true;
-                // }
+                let configitem = configs.find(c => c.configkey === key);
+                if ( configitem ) {
+                    // this config already exists so we will update it only if it changed
+                    if ( devoptions[key] !== configitem.configval ) {
+                        configitem.configval = typeof devoptions[key] === "object" ? JSON.stringify(devoptions[key]) : devoptions[key];
+                        await mydb.updateRow("configs", configitem, `id = ${configitem.id}`, true);
+                        updobjs[key] = configitem.configval;                                    
+                    }
+                }
             }
-        }
-        
-        // handle the weather codes - write into this users folder
-        if ( weatherwidget && weatherwidget.length > 4 && frameid > 0 ) {
-            writeWeatherWidget(userid, weatherwidget, frameid);
-        }
-        if ( configoptions["fcastcity"] && configoptions["fcastregion"] && configoptions["fcastcode"] ) {
-            writeForecastWidget(userid, configoptions["fcastcity"], configoptions["fcastregion"], configoptions["fcastcode"]);
-        }
-        if ( configoptions["accucity"] && configoptions["accuregion"] && configoptions["accucode"] ) {
-            writeAccuWeather(userid, configoptions["accucity"], configoptions["accuregion"], configoptions["accucode"]);
-        }
-        
-        var d = new Date();
-        var timesig = GLB.HPVERSION + " @ " + d.getTime();
-        configoptions["time"] = timesig;
-        
-        // save the configuration parameters in the main options array
-        for ( var key in configoptions ) {  
-            if ( typeof configoptions[key] === "object" ) {
-                var configstr = JSON.stringify(configoptions[key]);
-            } else {
-                configstr = configoptions[key];
-            }
-            const config = {userid: userid, configkey: key, configval: configstr, configtype: 0};
-            await mydb.updateRow("configs", config, "userid = "+userid+" AND configkey = '"+key+"'")
-            .catch( reason => {
-                console.warn( (ddbg()), "problem updating config key ", key, " for user ", userid, ": ", reason);
-            });
         }
 
-        // if the special tiles were updated, make sure we reload the default hub to create or delete devices
+        // if any of the counts were updated then update the specialtiles config
         if ( specialsupdated ) {
+            if ( specialtiles && specialtiles.id ) {
+                await mydb.updateRow("configs", {configval: JSON.stringify(specials)}, `id = ${specialtiles.id}`, true);
+            } else {
+                await mydb.addRow("configs", {userid: userid, configkey: "specialtiles", configval: JSON.stringify(specials), configtype: 0});
+            }
+            updobjs["specialtiles"] = specials;
+
+            // if the special tiles were updated, make sure we reload the default hub to create or delete devices
             let hublessdevices = await getDevices(hubzero);
-            console.log( (ddbg()), "reloaded hubless devices for user ", userid, " devices: ", jsonshow(hublessdevices) );
+            if ( DEBUG1 ) {
+                console.log( (ddbg()), "reloaded hubless devices for user ", userid, " devices: ", jsonshow(hublessdevices) );
+            }
         }
 
-        return configoptions;
-    }
+        // if anything changed and all parameters are non-blank then update the weather Frames
+        if ( updobjs.fcastcity || updobjs.fastcode || updobjs.fcastregion ) {
+            if ( devoptions["fcastcity"] && devoptions["fcastregion"] && devoptions["fcastcode"] ) {
+                writeForecastWidget(userid, devoptions["fcastcity"], devoptions["fcastregion"], devoptions["fcastcode"]);
+            }
+        }
+        if ( updobjs.accucity || updobjs.accuregion || updobjs.accucode ) {
+            if ( devoptions["accucity"] && devoptions["accuregion"] && devoptions["accucode"] ) {
+                writeAccuWeather(userid, devoptions["accucity"], devoptions["accuregion"], devoptions["accucode"]);
+            }
+        }
+        return updobjs;
+    })
+    .catch(reason => {
+        console.error((ddbg()), "error attempting to update " + api + ": ", reason);
+        return "error attempting to update " + api;
+    });
 }
 
 function processDevices(userid, panelid, optarray) {
@@ -9089,7 +9373,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
 
         // var hubpick = getConfigItem(configoptions, "hubpick");
         var useroptions = getConfigItem(configoptions, "usroptions");
-        var catalog = getCatalog(userid, hubpick, hubs, useroptions, alldevices);
+        var catalog = getCatalog(userid, hubpick, hubs, pname, useroptions, alldevices);
         tc += catalog;
         
         // end drag region enclosing catalog and main things
@@ -9341,7 +9625,7 @@ function pw_hash(pword, algo) {
     return hash;
 }
 
-function pw_verify(pword, hash, algo) {
+function pw_verify(pword, hash, algo = "sha256") {
     return (pw_hash(pword, algo) === hash);
 }
 
@@ -9615,7 +9899,6 @@ function apiCall(user, body, protocol, res) {
                                 hubindex = device.hubid;
                                 swid = device.deviceid;
                                 swtype = device.devicetype;
-                                if ( !subid ) { subid = "switch"; }
                                 return doAction(userid, hubindex, device.id, device.uid, swid, swtype, swval, swattr, subid, hint, command, linkval);
                             } else {
                                 return "No device found.";
@@ -9702,7 +9985,8 @@ function apiCall(user, body, protocol, res) {
                                          type: device.devicetype, hubnum: linkdev["hubs_hubid"], hubindex: device.hubid, hubtype: linkdev["hubs_hubtype"], 
                                          hint: device.hint, refresh: device.refresh, value: device.pvalue};
                         var customname = swattr;
-                        return makeThing(userid, pname, configoptions, tileid, thesensor, roomname, 0, 0, 999, customname, "te_wysiwyg", alldevices);
+                        let wysiwygThing = makeThing(userid, pname, configoptions, tileid, thesensor, roomname, 0, 0, 999, customname, "te_wysiwyg", alldevices);
+                        return wysiwygThing;
                     }).catch(reason => {
                         console.error( (ddbg()), reason);
                         return null;
@@ -10103,8 +10387,9 @@ function apiCall(user, body, protocol, res) {
                     var configoptions = results[1];
                     row.pvalue = decodeURI2(row.pvalue);
                     if ( configoptions && is_object(configoptions) ) {
-                        row.pvalue = getCustomTile(userid, configoptions, row.pvalue, row.id, row.hint);
-                        row.pvalue = getFileName(userid, pname, row.pvalue, row.devicetype);
+                        row.pvalue = getCustomTile(userid, configoptions, row.pvalue, row.deviceid, row.hint);
+                        row.pvalue = getSpecialContent(userid, row.devicetype, row.pvalue);
+                        // row.pvalue = getFileName(userid, pname, row.pvalue, row.devicetype);
                     }
                     return row;
                 })
@@ -10138,7 +10423,8 @@ function apiCall(user, body, protocol, res) {
                                     // but we do need to still load the customizations and file names
                                     if ( configoptions && is_object(configoptions) ) {
                                         row.pvalue = getCustomTile(userid, configoptions, row.pvalue, bid, row.hint);
-                                        row.pvalue = getFileName(userid, pname, row.pvalue, row.devicetype);
+                                        row.pvalue = getSpecialContent(userid, row.devicetype, row.pvalue);
+                                        // row.pvalue = getFileName(userid, pname, row.pvalue, row.devicetype);
                                     }
                                     let uid = row.uid;
                                     devices[uid] = row;
@@ -10184,8 +10470,9 @@ function apiCall(user, body, protocol, res) {
                             rows.forEach(row => {
                                 row.pvalue = decodeURI2(row.pvalue);
                                 if ( configoptions && is_object(configoptions) ) {
-                                    row.pvalue = getCustomTile(userid, configoptions, row.pvalue, row.id, row.hint);
-                                    row.pvalue = getFileName(userid, pname, row.pvalue, row.devicetype);
+                                    row.pvalue = getCustomTile(userid, configoptions, row.pvalue, row.deviceid, row.hint);
+                                    row.pvalue = getSpecialContent(userid, row.devicetype, row.pvalue);
+                                    // row.pvalue = getFileName(userid, pname, row.pvalue, row.devicetype);
                                     const ahubindex = row.hubid;
                                     let hubname = "None";
                                     hubs.forEach(hub => {
@@ -10241,13 +10528,13 @@ function apiCall(user, body, protocol, res) {
                 }
                 break;
 
-            case "saveparams":
-                if ( protocol==="POST" ) {
-                    result = processParams(userid, panelid, body);
-                } else {
-                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-                }
-                break;
+            // case "saveparams":
+            //     if ( protocol==="POST" ) {
+            //         result = processParams(userid, panelid, body);
+            //     } else {
+            //         result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+            //     }
+            //     break;
 
             case "clipboard":
                 if ( protocol==="POST" ) {
@@ -10325,8 +10612,8 @@ function apiCall(user, body, protocol, res) {
                     mydb.deleteRow("panels","userid = "+userid),
                     mydb.deleteRow("configs","userid = "+userid),
                     mydb.deleteRow("hubs","userid = "+userid),
-                    mydb.deleteRow("users","userid = "+userid),
-                    mydb.deleteRow("lists","userid = "+userid)
+                    mydb.deleteRow("lists","userid = "+userid),
+                    mydb.deleteRow("users","id = "+userid)
                 ]).then(results => {
                     delCookie(res, "uname");
                     delCookie(res, "pname");
@@ -10338,6 +10625,52 @@ function apiCall(user, body, protocol, res) {
                 });
                 break;
                 
+            // get special content for a tile - this is used for things like frames here we need to get additional content that is not stored in the pvalue of the device row
+            // this also formats the content in a way that is easier for the client side to use and reduces the number of calls needed to get all the content for a tile
+            case "getspecialcontent":
+                if ( protocol==="POST" ) {
+                    const num = swval;
+                    const deviceid = swtype + num;
+
+                    result = Promise.all([
+                        mydb.getRow("devices","*", `userid = ${userid} AND deviceid = '${deviceid}'`),
+                        mydb.getRows("configs","*", "userid = "+userid + " AND configtype=1")
+                    ])
+                    .then(results => {
+                        var device = results[0];
+                        var configoptions = results[1];
+
+                        let pvalue = decodeURI2(device.pvalue);
+                        let savename = pvalue.name;
+                        pvalue = getCustomTile(userid, configoptions, pvalue, device.deviceid, device.hint);
+                        if ( typeof pvalue.url === "undefined" ) {
+                            pvalue.url = pvalue.name;
+                            if ( swtype === "frame" ) {
+                                pvalue.url = "user" + userid + "/Frame" + num + ".html";
+                            } else {
+                                pvalue.url = pvalue.name;
+                            }
+                        }
+                        pvalue.name = savename;
+                        pvalue.id = device.id;
+                        return pvalue;
+                    })
+                    .then(pvalue => {
+                        if ( swtype === "frame" ) {
+                            pvalue.data = encodeURI(readFrameWidget(userid, num));
+                        }
+                        pvalue = getSpecialContent(userid, swtype, pvalue);
+                        return pvalue;
+                    })
+                    .catch(reason => {
+                        console.warn( (ddbg()), "warning: something went wrong with getspecialcontent: ", reason );
+                        return "Something went wrong with getspecialcontent.";
+                    });
+                } else {
+                    result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
+                }
+                break;
+
             case "pwhash":
                 if ( swtype==="hash" ) {
                     result = pw_hash(swval);
@@ -10393,7 +10726,9 @@ function apiCall(user, body, protocol, res) {
                         return `Deleted ${numListDel} LIST rows for deviceid=${swid} and subid=${subid}`;
                     })
                     .catch(reason => {
-                        console.error((ddbg()), "error attempting to reset list: ", reason);
+                        let msg = "error attempting to reset list for deviceid=" + swid + " and subid=" + subid;
+                        console.error((ddbg()), msg, reason);
+                        return msg;
                     });
                 } else {
                     result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
@@ -10585,7 +10920,7 @@ function apiCall(user, body, protocol, res) {
                     result = Promise.all([
                         mydb.deleteRow("hubs", "userid = "+userid+" AND id = " + hubindex),
                         mydb.deleteRow("devices", "userid = "+userid+" AND hubid = " + hubindex),
-                        mydb.updateRow("users", {defhub: "-1"}, "id = " + userid)
+                        mydb.updateRow("users", {defhub: "-1"}, "id = " + userid, true)
                     ])
                     .then(results => {
                         var numHubDel = results[0].getAffectedItemsCount();
@@ -10623,7 +10958,6 @@ function apiCall(user, body, protocol, res) {
 
                     // process customizations
                     clock = getCustomTile(userid, configoptions, clock, swid, device.hint);
-                    clock = getFileName(userid, pname, clock, device.devicetype);
                     
                     // handle rules and time format user fields
                     processRules(userid, device.uid, swid, "clock", "time", clock, false, "apiCall" );
@@ -10662,6 +10996,58 @@ function apiCall(user, body, protocol, res) {
                 .catch(reason => {
                     console.warn((ddbg()), "Problem encountered attempting to update the clock: ", reason);
                     return null;
+                });
+                break;
+
+            case "generaloptions":
+            case "weatheroptions":
+            case "specialoptions":
+                result = processGeneralOptions(userid, api, swval);
+                break;
+
+            // we make the image object here including the <img> tag based on width, height, and imgurl passed in
+            // this requires the client side to pass the actual "id" of the image tile in as swid
+            // because we can only update existing image tiles with this call
+            case "imageoptions":
+                var devoptions = swval;
+                var deviceid = swtype + devoptions.whichimage;
+                var img = `<img src="${devoptions.imageurl}" width="${devoptions.imagewidth}" height="${devoptions.imageheight}" />`; 
+                var pvalue = {name: devoptions.imagename, url: devoptions.imageurl, width: devoptions.imagewidth, height: devoptions.imageheight};
+                var device = {userid: userid, deviceid: deviceid, name: devoptions.imagename, pvalue: encodeURI2(pvalue)};
+                result = mydb.updateRow("devices", device, `userid = ${userid} AND deviceid = '${deviceid}'`)
+                .then(res => {
+                    pvalue[swtype] = img;
+                    return pvalue;
+                });
+                break;
+
+            case "frameoptions":
+                var devoptions = swval;
+                var deviceid = swtype + devoptions.whichframe;
+                var img = `<iframe src="${devoptions.frameurl}" width="${devoptions.framewidth}" height="${devoptions.frameheight}" /></iframe>`; 
+                var pvalue = {name: devoptions.framename, url: devoptions.frameurl, width: devoptions.framewidth, height: devoptions.frameheight};
+                var device = {userid: userid, deviceid: deviceid, name: devoptions.framename, pvalue: encodeURI2(pvalue)};
+
+                // now write the data to the frame widget file
+                writeFrameWidget(userid, devoptions.framecontent, devoptions.whichframe);
+
+                result = mydb.updateRow("devices", device, `userid = ${userid} AND deviceid = '${deviceid}'`)
+                .then(res => {
+                    pvalue[swtype] = img;
+                    return pvalue;
+                });
+                break;
+
+            case "videooptions":
+                var devoptions = swval;
+                var deviceid = swtype + devoptions.whichvideo;
+                var img = `<video width="${devoptions.videowidth}" height="${devoptions.videoheight}" controls><source src="${devoptions.videourl}" type="video/mp4"></video>`;
+                var pvalue = {name: devoptions.videoname, url: devoptions.videourl, width: devoptions.videowidth, height: devoptions.videoheight};
+                var device = {userid: userid, deviceid: deviceid, name: devoptions.videoname, pvalue: encodeURI2(pvalue)};
+                result = mydb.updateRow("devices", device, `userid = ${userid} AND deviceid = '${deviceid}'`)
+                .then(res => {
+                    pvalue[swtype] = img;
+                    return pvalue;
                 });
                 break;
 
@@ -11445,9 +11831,11 @@ if ( app && applistening ) {
                         });
 
                     } else if ( req.path==="/showoptions") {
-                        result = getParamsPage(user, configoptions, req)
-                        res.send(result);
-                        res.end();
+                        getParamsPage(user, configoptions, req)
+                        .then(result => {
+                            res.send(result);
+                            res.end();
+                        });
 
                     } else if ( req.path==="/editdevices") {
                         getDevicesPage(user, configoptions, hubs, req)
@@ -11899,9 +12287,38 @@ if ( app && applistening ) {
         }
     });
 
-    const limitobj = {fileSize: 4096000};
-    const upload = multer({storage: storage, limits: limitobj});
+    const limitobj = {fileSize: 209715200};
+    const upload = multer({
+        storage: storage,
+        limits: limitobj,
+        fileFilter: function(req, file, callback) {
+            var mimetype = file && file.mimetype ? file.mimetype : "";
+            if ( mimetype.startsWith("image/") || mimetype.startsWith("video/") ) {
+                callback(null, true);
+            } else {
+                callback(new Error("Only image and video files are allowed"));
+            }
+        }
+    });
     app.post("/upload", upload.single("uploaded_file"), function(req, res){
+        if ( !req.file ) {
+            res.status(400).json({error: "No file uploaded"});
+            res.end();
+            return;
+        }
+
+        var mimetype = req.file.mimetype || "";
+        if ( mimetype.startsWith("image/") && req.file.size > 4194304 ) {
+            fs.unlink(req.file.path, function(err) {
+                if ( err ) {
+                    console.warn((ddbg()), "Failed to remove oversized image:", err);
+                }
+                res.status(413).json({error: "Image exceeds 4MB limit"});
+                res.end();
+            });
+            return;
+        }
+
         res.json(req.file);
         res.end();
     });
