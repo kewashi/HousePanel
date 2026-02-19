@@ -2443,7 +2443,7 @@ function handleOptionsPageButton(buttonid, evt) {
                     //     $("#"+thingtype+"urlid").focus();
                     }
                 // for updating special tiles we do a page reload to show the correct frame, image, and video counts
-                } else if ( buttonid === "specialoptions" || buttonid === "weatheroptions" ) {
+                } else if ( buttonid === "specialoptions" || buttonid === "weatheroptions"  ) {
                     createModal("popupinfo", thingtype + " options saved successfully. Press Okay to reload page.", "body", "Okay", pos, function() {
                         window.location.href = cm_Globals.returnURL+"/showoptions";
                     });
@@ -2451,13 +2451,23 @@ function handleOptionsPageButton(buttonid, evt) {
                 } else {
                     // get list of fields updated to show in the message
                     let fieldlist = "";
+                    let newSkin = false;
                     for ( key in presult ) {
                         if ( presult.hasOwnProperty(key) ) {
+                            if ( key === "newSkin" ) {
+                                newSkin = true;
+                            }
                             fieldlist += key + ", ";
                         }
                     }
                     fieldlist = fieldlist.slice(0, -2);
-                    createModal("popupinfo", thingtype + " options saved successfully.<br>Updated fields: " + fieldlist, "body", "Okay", pos);
+                    if ( newSkin ) {
+                        createModal("popupinfo", thingtype + " options saved successfully, including a new skin. Press Okay to reload page.", "body", "Okay", pos, function() {
+                            window.location.href = cm_Globals.returnURL+"/showoptions";
+                        });
+                    } else {
+                        createModal("popupinfo", thingtype + " options saved successfully.<br>Updated fields: " + fieldlist, "body", "Okay", pos);
+                    }
                 }
             } else {
                 var pstyle = `position: absolute; border: 6px white solid; background-color: red; color: white; font-weight: bold; font-size: 18px; left: ${xpos}px; top: ${ypos}px; width: 600px; height: auto; padding: 30px;`;

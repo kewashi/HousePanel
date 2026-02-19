@@ -1,4 +1,5 @@
 const devhistory = `
+3.5.22  02/12/2026 Removed panel support, streamlined groovy subscriptions, moved skin to a user option, and cleaned up css files
 3.5.21  02/11/2026 Major overhaul of options page to support user uploadable content
 3.5.20  02/05/2026 New way of handling level percentages and command parameter count for commands
 3.5.19  02/02/2026 Bugfixes in copy/paste and in user account deletion and more code cleanup

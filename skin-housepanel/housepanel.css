@@ -299,6 +299,9 @@ div.thing.lamp div.overlay.switch div.switch.L90.on {
 div.thing.lamp div.overlay.switch div.switch.L100.on {
     background-image: url('icons/lampon_L100.png');
 }
+div.thing.lamp div.overlay.switch div.switch.on {
+    background-image: url('icons/lampon.png');
+}
 
 /* use switches for Harmony activities and hub status */
 div.overlay.switch div.switch.harmonyactivity, div.overlay.switch div.switch.harmonyhub {
@@ -310,39 +313,6 @@ div.overlay.switch div.switch.harmonyactivity.off, div.overlay.switch div.switch
 }
 div.overlay.switch div.switch.harmonyactivity.on, div.overlay.switch div.switch.harmonyhub.on {
     background-image: url('icons/switchon.png');
-}
-div.thing.harmonydevice-thing div.overlay div.harmonydevice {
-    display: none;
-}
-
-/* show some common fields and hide everything else */
-div.thing.harmonydevice-thing div.overlay.name div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._mute div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._play div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._pause div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._stop div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._cancel div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._menu div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._back div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._home div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._return div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._select div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._volume-up div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._volume-down div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._direction-down div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._direction-up div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._direction-left div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._direction-right div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._skip-backward div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._skip-forward div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._guide div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._info div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._power-off div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._channel-down div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._channel-up div.harmonydevice,
-div.thing.harmonydevice-thing div.overlay._power-on div.harmonydevice
-{
-    display: block;
 }
 
 /* window shade styling */
@@ -361,33 +331,6 @@ div.overlay.windowShade div.windowShade.closing
     background-image: url('icons/shades_mid.png');
     background-size: 80px; height: 80px;
 }
-/* enable this if you want to show levels for switches and bulbs */
-/* this will duplicate the switchlevel functionality */
-/* div.switch.level {
-    display: none;
-} */
-div.overlay.energy div.energy::after, div.overlay.switch div.energy::after {
-    content: " (kWh)";
-}
-div.overlay.power div.power::after, div.overlay.switch div.power::after {
-    content: " (Watts)";
-}
-
-div.overlay.levelval div.levelval {
-    display: none;
-}
-
-div.overlay._setLevel div._setLevel::after,
-div.overlay._setPosition div._setPosition::after {
-    content: "%";
-}
-
-/* div.switchlevel.level, div.bulb.level, div.music.level, div.shade.level, div.music.groupVolume, div.audio.volume, div.audio.groupVolume, div.position {
-    height: 6px;
-    width: 98%;
-    color:rgba(0, 0, 0, 0.01);
-} */
-
 /* momentary styling */
 div.momentary.off, div.switch.button.off, div.overlay.momentary div.momentary, div.overlay.switch div.switch.button {
     background-image: url('icons/3dbutton.png');
@@ -756,46 +699,8 @@ div.overlay.realFeel div.weather.realFeel {
     line-height: 60px;
     vertical-align: top;
 }
-div.overlay.switch div.isy.climacell.switch {
-    display: none;
-}
-div.overlay.feelsLike div.feelsLike::before,
-div.overlay.realFeel div.realFeel::before,
-div.overlay.temperatureApparent div.temperatureApparent::before {
-    content: "~ ";
-    font-size: 8pt;
-}
-div.overlay.temperature div.temperature::after,
-div.overlay.feelsLike div.feelsLike::after,
-div.overlay.realFeel div.realFeel::after,
-div.overlay.temperatureApparent div.temperatureApparent::after {
-    content: "°";
-}
-div.overlay.humidity div.humidity::before {
-    content: "Humidity: ";
-}
-div.overlay.percentPrecip div.percentPrecip::before {
-    content: "Rain: ";
-}
- div.overlay.percentPrecip div.percentPrecip::after {
-    content: "%";
-}
-div.overlay.weather div.weather.illuminance::after {
-    content: " Lux";
-}
-div.uom_humidity, div.uom_percentPrecip, div.uom_illuminance, div.uom_wind,
-div.uom_feelsLike, div.uom_temperature, div.uom_windspeed,
-div.weather.timeZoneOffset, div.weather.alert, 
-div.weather.forecastToday, div.weather.forecastTonight, div.weather.forecastTomorrow,
-div.weather.sunriseDate, div.weather.sunsetDate,
-div.weather.ultravioletIndex, div.weather.lastUpdate {
-    display: none;
-}
-
 /* control styling */
 div.thing.control-thing {
-    background-color: rgba(255, 255, 255, 0.4);
-    color: rgba(204, 204, 204, 1);
     width: 180px;
     height: 210px;
 }
@@ -806,7 +711,7 @@ div.thing.clock-thing {
     height: 210px;
 }
 div.thing.clock-thing.analog {
-    background-color: rgba(255, 255, 255, 0.7);
+    background-color: rgba(120, 120, 120, 1.0);
 }
 div.clock.weekday {
     margin-top: 0px;
@@ -814,7 +719,7 @@ div.clock.weekday {
 }
 div.clock.time {
     font-size: 22pt;
-    margin-top: 30px;
+    margin-top: 10px;
 }
 div.clock.weekday, div.clock.date {
     font-size: 14pt;
@@ -850,37 +755,6 @@ div.shm.state.off, div.hsm.state.disarmed, div.state.Disarmed, div.state.allDisa
 div.hsm.state.armedNight, div.state.Night {
     background-image: url('icons/security-purple.png');
 }
-div.hsm-thing div.overlay._armAway, div.hsm-thing div.overlay._armHome,
-div.hsm-thing div.overlay._armNight, div.hsm-thing div.overlay._disarm,
-div.hsm-thing div.overlay._armRules, div.hsm-thing div.overlay._disarmRules,
-div.hsm-thing div.overlay._disarmAll, div.hsm-thing div.overlay._armAll,
-div.hsm-thing div.overlay._cancelAlerts {
-    display: none;
-}
-
-div.overlay._query {
-    display: none;
-}
-
-/* images */
-div.thing.image-thing, div.thing.blank-thing {
-    border: 0px none;
-    padding: 0;
-    background-color: rgba(255,255,255,0.01);
-}
-div.thing.image-thing div.overlay.name,
-div.thing.video-thing div.overlay.name,
-div.thing.frame-thing div.overlay.name,
-div.thing.blank-thing div.overlay.name {
-    display: none;
-}
-
-/* frames */
-div.thing.frame-thing {
-    width: 374px;
-    background-color: rgba(0, 0, 0, 0.01);
-}
-
 /* presence styling */
 div.overlay.presence div.presence.present {
     background-image: url('icons/boypresent.png');
@@ -889,39 +763,8 @@ div.overlay.presence div.presence.absent, div.overlay.presence div.presence.not_
     background-image: url('icons/boyabsent.png');
 }
 
-div.bulb.colorMode {
-    display: none;
-}
-
-/* for weather illuminance avoid showing T and fix humidity */
-div.overlay.humidity div.humidity:after {
-    content: "%";
-}
-
 div.overlay.lock div.lock.locked, div.overlay.lock div.lock.unlocked, div.overlay.lock div.lock.unknown {
     height: 146px;
-}
-
-/* remove slider and power from regular switches */
-div.switch-thing div.overlay.level, div.switch-thing div.overlay.position,
-div.switch-thing div.overlay.power {
-    display: none;
-}
-
-/* things to hide */
-div.overlay.healthStatus, div.overlay.deltaT, div.overlay.duration, div.overlay.count,
-div.overlay.numberOfButtons, div.overlay.pushed, div.overlay.held, div.overlay.doubleTapped,
-div.overlay._poll, div.overlay._componentOff, div.overlay._componentOn, div.overlay._componentRefresh,
-div.overlay._componentSetColor, div.overlay._componentSetColorTemperature, div.overlay._componentSetLevel,
-div.overlay._childRefresh, div.overlay._childOn, div.overlay._childOff, div.overlay._childSetLevel,
-div.overlay._startLevelChange, div._stopLevelChange, div.overlay.event_1, div.overlay.event_2, div.overlay.event_3, div.overlay.event_4,
-div.overlay.hubMeshDisabled {
-    display: none;
-}
-
-/* changed to use name instead of thingname */
-div.thing div.thingname, div.thing div.overlay.hint {
-    display: none;
 }
 
 /* set piston images for ISY run and runThen items */

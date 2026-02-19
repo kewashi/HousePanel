@@ -309,8 +309,8 @@ function delCookie(res, avar) {
     res.clearCookie(thevar);
 }
 
-function hidden(pname, pvalue, id) {
-    var inpstr = "<input type='hidden' name='" + pname + "'  value='" + pvalue + "'";
+function hidden(name, pvalue, id) {
+    var inpstr = "<input type='hidden' name='" + name + "'  value='" + pvalue + "'";
     if (id) { inpstr += " id='" + id + "'"; }
     inpstr += " />";
     return inpstr;
@@ -391,7 +391,7 @@ function getHeader(userid, pname, skin, skip) {
     // load fixed css file with cutomization helpers
     $tc += "<link id='tileeditor' rel='stylesheet' type='text/css' href='tileeditor.css'>";	
     
-    // load the main css file - first check for valid skin folder
+    // load the skin css file - first check for valid skin folder
     if (!skin) {
         skin = "skin-housepanel";
     }
@@ -608,41 +608,27 @@ function getConfigItem(configoptions, tag) {
     return result;
 }
 
-// this function gets the user name and panel name that matches the hashes
-async function getUserName(req) {
+// this function gets the user name that matches the hashes
+// updated to remove panels since we no longer use them and to support multiple logins mapped to the same user
+function getUserName(req) {
     var uhash = getCookie(req, "uname");
-    var phash = getCookie(req, "pname");
-
-    // this will honor the old style of storing the hash with a leading pnumber: but will also work with just the hash value
-    if ( phash && phash.substr(1,1) === ":" ) {
-        phash = phash.substr(2);
-    }
-
-    // get all the users and check for one that matches the hashed email address
-    // emails for all users must be unique
-    // *** note *** changed to map userid to the usertype to support multiple logins mapped to same user
-    var joinstr = mydb.getJoinStr("panels", "userid", "users", "usertype");
-    var fields = "users.id as users_id, users.email as users_email, users.uname as users_uname, users.mobile as users_mobile, users.password as users_password, " +
-                 "users.usertype as users_usertype, users.defhub as users_defhub, users.hpcode as users_hpcode, " + 
-                 "panels.id as panels_id, panels.userid as panels_userid, panels.pname as panels_pname, panels.password as panels_password, panels.skin as panels_skin";
-    var result = mydb.getRows("panels", fields, "", joinstr)
+    var result = mydb.getRows("users", "*")
     .then(rows => {
         var therow = null;
         if ( uhash && rows ) {
             for ( var i=0; i<rows.length; i++ ) {
                 var row = rows[i];
-                var emailname = row["users_email"];
+                var emailname = row["email"];
 
                 // if username hash matches uname hash or email hash and if panel name hash match then proceed
-                if ( ( pw_hash(emailname) === uhash || pw_hash(row["users_uname"]) === uhash ) && 
-                        ( pw_hash(row["panels_pname"]) === phash ) ) {
+                if ( pw_hash(emailname) === uhash || pw_hash(row["uname"]) === uhash ) {
                     therow = row;
 
                     // fix legacy logins that don't have a hpcode security check
-                    if ( !therow["users_hpcode"] ) {
+                    if ( !therow["hpcode"] ) {
                         var permcode = getNewCode(emailname);
-                        therow["users_hpcode"] = permcode;
-                        mydb.updateRow("users",{hpcode: permcode},"id = "+ row["users_id"])
+                        therow["hpcode"] = permcode;
+                        mydb.updateRow("users",{hpcode: permcode},"id = "+ row["id"])
                         .then( () => {
                             console.log( (ddbg()), "Added missing API security code to login user:", emailname, 
                                                    "For security purposes, all API calls will use hpcode="+permcode);
@@ -708,6 +694,9 @@ function getTypes() {
 
 function writeCustomCss(userid, pname, str) {
 
+    if ( !pname ) {
+        pname = "default";
+    }
     if ( typeof str === "undefined" ) {
         str = "";
     } else if ( typeof str !== "string" ) {
@@ -1607,9 +1596,6 @@ function getDevices(hub) {
                         temperature_unit: "fahrenheit",
                         precipitation_unit: "inch"
                     };
-
-                    // const feathWeatherApi = OpenMeteoApi
-
                     const url = "https://api.open-meteo.com/v1/forecast";
                     const responses = await OpenMeteoApi.fetchWeatherApi(url, params);
                     const response = responses[0];
@@ -1650,6 +1636,9 @@ function getDevices(hub) {
                         latitude: roundval(latitude, 4),
                         longitude: roundval(longitude, 4)
                     };
+
+                    let weatherIcon = getWeatherIcon(newdevice.value.weather_code, "weather_code", 80, 80);
+                    newdevice.value.weather_code = weatherIcon;
 
                     // Build forecast data arrays
                     let forecastData = {
@@ -1964,6 +1953,11 @@ function getDevices(hub) {
                     let pvalue = content["value"];
                     let hint = content["hint"];
 
+                    // we can skip translating objects because hubless devices never return objects
+                    if ( thetype==="weather" ) {
+                        pvalue = translateWeather(pvalue);
+                    }
+
                     // make the device to store or update
                     let pvalstr = encodeURI2(pvalue);
                     let device = {userid: userid, hubid: hubindex, deviceid: deviceid, name: origname, 
@@ -2089,13 +2083,8 @@ function getDevices(hub) {
                             }
                         }
 
-                        // handle weather tiles and any that comes as an object
-                        // we handle music tile translation now on the groovy side to support ISY node servers
-                        if ( thetype==="weather" ) {
-                            pvalue = translateWeather(pvalue);
-                        } else {
-                            pvalue = translateObjects(pvalue, 2);
-                        }
+                        // we can skip weather translations here because the hubless devices callback will handle those and Hubitat hubs don't return weather devices
+                        pvalue = translateObjects(pvalue, 2);
 
                         // make the device to store or update
                         let pvalstr = encodeURI2(pvalue);
@@ -3183,6 +3172,7 @@ function createUser(body) {
     var pname = "default";
     var mobile = body.mobile;
     var pword = body.pword;
+    const skin = "skin-housepanel";
 
     // change username to email if none given
     if ( !username ) {
@@ -3205,7 +3195,7 @@ function createUser(body) {
         return Promise.all( [
                 new Promise( function (resolve, reject) { resolve(newuser); }),
                 makeNewConfig(userid),
-                makeNewRooms(userid, pname, "", "skin-housepanel", GLB.defaultrooms),
+                makeNewRooms(userid, pname, "", skin, GLB.defaultrooms),
                 makeDefaultHub(userid)
             ] );
     })
@@ -3834,10 +3824,11 @@ function updatePassword(body) {
     var emailname = body.email;
     var uname = body.uname;
     var mobile = body.mobile;
-    var pname = body.pname;
+    var pname = body.pname || "default";
     var hpcode = body.hpcode;
     var pword = pw_hash(body.pword);
-    var panelpw = pw_hash(body.panelpw);
+    // var panelpw = pw_hash(body.panelpw);
+    const panelpw = "";  // panel password is no longer used but we keep it in the code in case we want to bring it back at some point
 
     if ( !userid || !emailname ) {
         return "error - invalid user or the user account was not found - password cannot be updated.";
@@ -3871,7 +3862,7 @@ function updatePassword(body) {
                             }
                             return {email: emailname, uname: uname, mobile: mobile, pname: pname, userid: userid, hpcode: permcode};
                         } else {
-                            return "error - problem updating or creating a new panel for user = " + userid;
+                            return "error - problem updating password for user with email = " + emailname;
                         }
                     })
                     .catch(reason => {
@@ -3897,111 +3888,82 @@ function updatePassword(body) {
     });
 }
 
+// removed the panel name and password from the login process to simplify the user experience since we now only support one panel per user named default
+// and the panel password was not providing any real security benefit since it was only protecting access to the panel settings and not the API or anything else
 function doLogin(body, res) {
 
     // check the user name and password based on login form data
     var uname = encodeURI(body["emailid"].trim());
     var umobile = encodeURI(body["mobile"].trim());
     var uhash = pw_hash(body["pword"]);
-
-    // get the panel number here
-    // this was disabled because we no longer need it for multiple panels
-    // because I fixed the websocket code to work with only one port now
-    if ( !body["pname"] ) {
-        var pname = "";
-        var phash = "";
-    } else {
-        pname = encodeURI(body["pname"].trim());
-        phash = pw_hash(body["panelpword"]);
-    }
+    const pname = "default";
+    const phash = "";
 
     if ( DEBUG20 ) {
-        console.log( (ddbg()), "dologin: uname= ", uname, " pword= ", uhash, " pname= ", pname, " panelpword= ", phash, " body: ", body);
+        console.log( (ddbg()), "dologin: uname= ", uname, " umobile= ", umobile, " pword= ", uhash, " body: ", body);
     }
-
-    // query for panel name given with password and username or email with password
-    // panel name can be skipped if the password is also skipped to retrieve the first panel without a password for the user given
-    // emails for all users must be unique
-    if ( pname ) {
-        var conditions = "panels.pname = '" + pname + "' AND panels.password = '"+phash+"' AND ( users.email = '"+uname+"' OR users.uname ='"+uname+"' ) AND users.mobile = '"+umobile+"' AND users.password = '"+uhash+"'";
-    } else {
-        conditions = "panels.password = '' AND ( users.email = '"+uname+"' OR users.uname ='"+uname+"' ) AND users.mobile = '"+umobile+"' AND users.password = '"+uhash+"'";
-    }
-
-    // ** change id to usertype to map user to existing one
-    var joinstr = mydb.getJoinStr("panels", "userid", "users", "usertype");
-    var fields = "users.id as users_id, users.email as users_email, users.uname as users_uname, users.mobile as users_mobile, users.password as users_password, " +
-                 "users.usertype as users_usertype, users.defhub as users_defhub, users.hpcode as users_hpcode, " + 
-                 "panels.id as panels_id, panels.userid as panels_userid, panels.pname as panels_pname, panels.password as panels_password, panels.skin as panels_skin";
-    
-    return mydb.getRow("panels", fields, conditions, joinstr)
+    return mydb.getRow("users","*","( email = '"+uname+"' OR uname ='"+uname+"' ) AND mobile = '"+umobile+"' AND password = '"+uhash+"'")
     .then(therow => {
         if ( therow ) {
             // make sure we get the actual email and panel names to store in our cookies
             // since this is what we check for a valid login
             // var userid = therow["users_id"];
-            var userid = therow["users_id"];
-            var usertype = therow["users_usertype"];
+            var userid = therow["id"];
+            var usertype = therow["usertype"];
 
             // store the username as a hash
-            uname = therow["users_email"];
+            uname = therow["email"];
             setCookie(res, "uname", pw_hash(uname));
             
             // store the panel name as a hash
-            pname = therow["panels_pname"];
             setCookie(res, "pname", pw_hash(pname));
             if ( DEBUG3 ) {
-                console.log((ddbg()), therow);
-                console.log((ddbg()), "Successful login. userid: ", userid, " Username: ", uname);
+                console.log((ddbg()), "Successful login. userid: ", userid, " Username: ", uname, " user: ", therow);
             }
 
             // lets make sure there is a null hub for this user
             // actually - point this to the user we are reading which could be myself or someone else
             // if we are a new user not mapped to an existing then make the default hub stuff
-            if ( userid === usertype ) {
-                var nullhub = {userid: userid, hubid: "-1", hubhost: "None", hubtype: "None", hubname: "None", 
-                    clientid: "", clientsecret: "", hubaccess: "", hubendpt: "",
-                    useraccess: "", userendpt: "", hubtimer: "0" };
-                mydb.updateRow("hubs",nullhub,"userid = " + userid + " AND hubid = '-1'")
-                .then( () => {
-                    makeDefaultFolder(userid, pname);
-                })
-                .catch(reason => {
-                    console.error( (ddbg()), "error updating null hub:", reason );
-                });
-            
-            }
+            const nullhub = {userid: userid, hubid: "-1", hubhost: "None", hubtype: "None", hubname: "None", 
+                clientid: "", clientsecret: "", hubaccess: "", hubendpt: "",
+                useraccess: "", userendpt: "", hubtimer: "0" };
+            mydb.updateRow("hubs",nullhub,"userid = " + userid + " AND hubid = '-1'")
+            .then( () => {
+                makeDefaultFolder(userid, pname);
+            })
+            .catch(reason => {
+                console.warn( (ddbg()), "error updating null hub:", reason );
+            });
         } else {
             delCookie(res, "uname");
             delCookie(res, "pname");
-            console.warn( (ddbg()), "Failed login attempt. Username: ", uname, " Panelname: ", pname, " fields: ", fields, " conditions: ", conditions);
+            console.warn( (ddbg()), "Failed login attempt. Username: ", uname);
             therow = "error - invalid username or password";
         }
         return therow;
     }).catch(reason => {
-        const msg = "error - failed to read panel from database. You may have a corrupt database.";
-        console.error( (ddbg()), msg, "reason: ", reason);
-        return msg;
+        console.error( (ddbg()), reason );
+        return reason;
     });
 }
 
 function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
 
     // get the current settings from options file
-    var userid = user["users_id"];
-    var useremail = user["users_email"];
-    var uname = user["users_uname"];
-    var defhub = defaultHub;
-    if ( !defhub ) {
-        defhub = user["users_defhub"];
-    }
-    var hpcode = user["users_hpcode"];
+    var userid = user["id"];
+    var useremail = user["email"];
+    var uname = user["uname"];
+    var defhub = defaultHub ? defaultHub : user["defhub"];
+    var hpcode = user["hpcode"];
     if ( !defhub || defhub === "new" ) {
         defhub = "-1";
     }
-    var panelid = user["panels_id"];
-    var pname = user["panels_pname"];
-    var skin = user["panels_skin"];
+    // var panelid = user["panels_id"];
+    // var pname = user["panels_pname"];
+    // var skin = user["panels_skin"];
+    const panelid = 1;
+    const pname = "default";
+    var skin = getConfigItem(configoptions, "skin") || "skin-housepanel";
     var hub = findHub(defhub, hubs);
 
     var result = mydb.query(`SELECT COUNT(DISTINCT deviceid) as count FROM devices WHERE userid = ${userid} AND hubid = ${hub.id}`)
@@ -4759,24 +4721,30 @@ function readFrameWidget(userid, framenum) {
 function getWeatherIcon(num, weathericon, width=80, height=80) {
     var iconimg;
     var iconstr;
-    var numstr = num.toString();
+    
+    // do nothing and return the string if it already looks like an image tag
+    if ( typeof num === "string" && num.startsWith("<img") ) {
+        return num;
+    }
+
     if ( weathericon==="accuweather" ) {
-        iconimg = "https://accuweather.com/images/weathericons/" + numstr + ".svg";
-        iconstr = "<img src=\"" + iconimg + "\" alt=\"" + numstr + "\" width=\"" + width + "\" height=\"" + height + "\">";
+        num = num.toString();
+        iconimg = "https://accuweather.com/images/weathericons/" + num + ".svg";
+        iconstr = "<img src=\"" + iconimg + "\" alt=\"" + num + "\" width=\"" + width + "\" height=\"" + height + "\">";
     } else if ( weathericon==="weatherCode" ) {
+        num = num.toString();
         iconimg = "media/tomorrowio/na.png";
         var description = "unknown";
         const files = fs.readdirSync("media/tomorrowio");
-        // if day or night not given assume day
-        if ( numstr.length === 4 ) {
-            numstr = numstr + "0";
+        if ( num.length === 4 ) {
+            num = num + "0";
         }
         for (var icfile of files) {
             const fileBase = path.basename(icfile,".png");
             const fileExt = path.extname(icfile);
             var i = fileBase.indexOf("_");
 
-            if ( fileExt === ".png" && fileBase.substring(0,i) === numstr ) {
+            if ( fileExt === ".png" && fileBase.substring(0,i) === num ) {
                 var len = fileBase.length;
                 description = fileBase.substring(i+1, len - 6);
                 iconimg =  "media/tomorrowio/" + fileBase + fileExt;
@@ -4787,13 +4755,11 @@ function getWeatherIcon(num, weathericon, width=80, height=80) {
 
     } else if ( weathericon==="weatherIcon" || weathericon==="forecastIcon" ) {
 
-        if ( typeof num === "string" && num.startsWith("<img") ) {
-            iconstr = num;
-        } else if ( num==="na" || (typeof num === "string" && num.startsWith("weather")) ) {
+        num = num.toString();
+        if ( num==="na" || num.startsWith("weather") ) {
             iconimg = "media/weather/" + num + ".png";
             iconstr = "<img src=\"" + iconimg + "\" alt=\"" + num + "\" width=\"" + width + "\" height=\"" + height + "\">";
         } else {
-            num = num.toString();
             if ( num.length < 2 ) {
                 num = "0" + num;
             }
@@ -4804,10 +4770,7 @@ function getWeatherIcon(num, weathericon, width=80, height=80) {
         const iconMap = {0: "32", 1: "34", 2: "34", 3: "37", 45: "11", 48: "29", 48: "33", 51: "09", 53: "11", 55: "12",
             56: "08", 57: "06", 61: "09", 63: "11", 65: "12", 66: "08", 67: "10", 71: "13", 73: "14", 75: "16", 77: "41", 
             80: "09", 81: "12", 82: "40", 85: "13", 86: "14", 95: "03", 96: "04", 99: "47"};
-        let iconNum = iconMap[num];
-        if ( !iconNum ) {
-            iconNum = "32";
-        }
+        let iconNum = iconMap[num] || "32";
         iconimg = "media/weather/" + iconNum + ".png";
         iconstr = "<img src=\"" + iconimg + "\" alt=\"" + num + "\" width=\"" + width + "\" height=\"" + height + "\">";
         
@@ -5818,7 +5781,7 @@ function processHubMessage(userid, hubmsg, newST) {
     // that was also used in the old housepanel.push app
     var subid = hubmsg['change_attribute'];
     var hubmsgid = hubmsg['change_device'].toString();
-    if ( DEBUG12 ) {
+    if ( DEBUG12 || DEBUGtmp) {
         console.log( (ddbg()), "processHubMessage - userid: ", userid, " hubmsg: ", hubmsg);
     }
     var pvalue;
@@ -8039,32 +8002,23 @@ function addPage(userid, panelid ) {
 
 function getInfoPage(user, configoptions, hubs, req) {
  
-    // get the port number
-    // var currentport = getCookie(req, "pname");
-    // if ( typeof currentport!=="string" || currentport.substring(1,2)!==":" ) {
-    //     currentport = "Unknown";
-    // } else {
-    //     currentport = GLB.webSocketServerPort + parseInt(currentport.substring(0,1));
-    //     currentport = currentport.toString();
-    // }
     var currentport = GLB.webSocketServerPort;
-
-    var userid = user["users_id"];
-    var useremail = user["users_email"];
-    var uname = user["users_uname"];
-    var usertype = parseInt(user["users_usertype"]);
-    var pname = user["panels_pname"];
-    var skin = user["panels_skin"];
-    var hpcode = user["users_hpcode"];
+    var userid = user["id"];
+    var useremail = user["email"];
+    var uname = user["uname"];
+    var usertype = parseInt(user["usertype"]);
+    var hpcode = user["hpcode"];
+    const pname = "default";
+    var skin = getConfigItem(configoptions, "skin") || "skin-housepanel";
     var joinstr = mydb.getJoinStr("devices","hubid","hubs","id");
-    var fields = "devices.id as devices_id, devices.uid as devices_uid, devices.userid as devices_userid, devices.deviceid as devices_deviceid, " +
-    "devices.name as devices_name, devices.devicetype as devices_devicetype, devices.hint as devices_hint, " +
-    "devices.refresh as devices_refresh, devices.pvalue as devices_pvalue, " +
-    "hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubhost as hubs_hubhost, hubs.hubtype as hubs_hubtype, hubs.hubname as hubs_hubname, " +
-    "hubs.clientid as hubs_clientid, hubs.clientsecret as hubs_clientsecret, hubs.hubaccess as hubs_hubaccess, " +
-    "hubs.useraccess as hubs_useraccess, hubs.userendpt as hubs_userendpt, hubs.hubtimer as hubs_hubtimer";
+    var fields = "devices.id as devices_id, devices.uid as devices_uid, devices.userid as devices_userid, devices.deviceid as devices_deviceid, \
+        devices.name as devices_name, devices.devicetype as devices_devicetype, devices.hint as devices_hint, \
+        devices.refresh as devices_refresh, devices.pvalue as devices_pvalue, \
+        hubs.id as hubs_id, hubs.hubid as hubs_hubid, hubs.hubhost as hubs_hubhost, hubs.hubtype as hubs_hubtype, hubs.hubname as hubs_hubname, \
+        hubs.clientid as hubs_clientid, hubs.clientsecret as hubs_clientsecret, hubs.hubaccess as hubs_hubaccess, \
+        hubs.useraccess as hubs_useraccess, hubs.userendpt as hubs_userendpt, hubs.hubtimer as hubs_hubtimer";
     
-    return mydb.getRows("devices", fields, "devices.userid = " + userid + " GROUP BY devices.deviceid", joinstr, "hubs.id, devices.name")
+    return mydb.getRows("devices", fields, "devices.userid = " + usertype + " GROUP BY devices.deviceid", joinstr, "hubs.id, devices.name")
     .then(devices => {
         return getinfocontents(userid, pname, currentport, configoptions, hubs, devices);
     }).catch(reason => {
@@ -8129,11 +8083,11 @@ function getInfoPage(user, configoptions, hubs, req) {
         }
         $tc += "<div class='bold'>Site url = " + GLB.returnURL + "</div>";
         $tc += "<div class='bold'>User ID: " + userid + "</div>";
-        $tc += "<div class='bold'>Username: " + uname + "</div>";
         $tc += "<div class='bold'>User email: " + useremail + "</div>";
+        $tc += "<div class='bold'>Username: " + uname + "</div>";
         // $tc += "<div class='bold'>Displaying panel: " + pname + "</div>";
         // $tc += "<div class='bold'>WebSocket port: " + currentport + "</div>";
-        // $tc += "<div class='bold'>Skin folder = " + skin + "</div>";
+        $tc += "<div class='bold'>Skin folder: " + skin + "</div>";
         $tc += "<div class='bold'>" + numhubs + " Hubs authorized</div><br>";
         
         var num = 0;
@@ -8484,14 +8438,15 @@ function getSocketUrl(hostname) {
 // I updated this function to use buttons to save parameters in each section instead of submitting the entire form at once
 async function getParamsPage(user, configoptions, req) {
 
-    var userid = user["users_id"];
-    var useremail = user["users_email"];
-    var mobile = user["users_mobile"];
-    var uname = user["users_uname"];
-    var hpcode = user["users_hpcode"];
-    var pname = user["panels_pname"];
-    var panelid = user["panels_id"];
-    var panelid = user["panels_id"];
+    var userid = user["id"];
+    var useremail = user["email"];
+    var mobile = user["mobile"];
+    var uname = user["uname"];
+    var hpcode = user["hpcode"];
+    // var pname = user["panels_pname"];
+    // var panelid = user["panels_id"];
+    const pname = "default";
+    const panelid = 1;
     var hostname = req.headers.host;
     var webSocketUrl = getSocketUrl(hostname);
     var $kioskoptions = getConfigItem(configoptions, "kiosk") || "false";
@@ -8510,6 +8465,8 @@ async function getParamsPage(user, configoptions, req) {
     var ambientappkey = getConfigItem(configoptions, "ambientappkey") || GLB.dbinfo.ambientappkey || "";
     var ambientapikey = getConfigItem(configoptions, "ambientapikey") || GLB.dbinfo.ambientapikey || "";
     var zipcode = getConfigItem(configoptions, "zipcode") || GLB.dbinfo.zipcode || "94070";
+    var skin = getConfigItem(configoptions, "skin") || "skin-housepanel";
+
 
     if ( !specialtiles["clockdigital"] ) {
         specialtiles["clockdigital"] = 1;
@@ -8593,6 +8550,10 @@ async function getParamsPage(user, configoptions, req) {
             <td><input id="newMobile" class="optioninp" name="newMobile" size="20" type="text" value="${mobile}"/></td>
             </tr>
             <tr>
+            <td><label for="newSkin" class="optioncbox">Skin: </label></td>
+            <td><input id="newSkin" class="optioninp" name="newSkin" size="30" type="text" value="${skin}"/></td>
+            </tr>
+            <tr>
             <td><label for="kioskid" class="optioncbox">Kiosk Mode? </label></td>
             <td><input class="optionchk" id="kioskid" type="checkbox" name="kiosk"  value="${$kioskoptions}"${kioskstr}/></td>
             </tr>
@@ -8615,17 +8576,17 @@ async function getParamsPage(user, configoptions, req) {
 
     $tc += `<br/>
         <div id="weatheroptionsdiv" class="filteroption">
-        <h3>Weather API Services</h3>
+        <h3>Weather Services</h3>
         <table class="weatherapiopts">
         <tr>
         <td class="weatheroption"><label for="tomorrowapi">TomorrowIO Api Key:<br>
-        <span class='typeopt'>(see: <a href="https://weather.tomorrow.io/" target=\"_blank\">TomorrowIO API</a>)</span></label></td>
+        <span class='typeopt'>(see: <a href="https://weather.tomorrow.io/" target="_blank">TomorrowIO API</a>)</span></label></td>
         <td class="weatherval"><input id="tomorrowapi" size="50" type="text" name="tomorrowapi"  value="${tomorrowapi}"/></td>
         </tr>
 
         <tr>
         <td class="weatheroption"><label for="ambientappkey">Ambient Application Key:<br>
-        <span class='typeopt'>(see: <a href="https://ambientweather.docs.apiary.io" target=\"_blank\">Open Ambient API</a>)</span></label></td>
+        <span class='typeopt'>(see: <a href="https://ambientweather.docs.apiary.io" target="_blank">Open Ambient API</a>)</span></label></td>
         <td class="weatherval"><input id="ambientappkey" size="60" type="text" name="ambientappkey"  value="${ambientappkey}"/></td>
         </tr>
 
@@ -8635,8 +8596,9 @@ async function getParamsPage(user, configoptions, req) {
         </tr>
 
         <tr>
-        <td class="weatheroption"><label for="zipcodeid">Zip Code: </label></td>
-        <td class="weatherval"><input id="zipcodeid" size="10" type="text" name="zipcode"  value="${zipcode}"/></td>
+        <td class="weatheroption"><label for="zipcodeid">Zip Code: </label><br>
+        <span class='typeopt'>(see: <a href="https://open-meteo.com/" target="_blank">Open-Meteo API</a>)</span></td>
+        <td class="weatherval"><input id="zipcodeid" size="10" type="text" name="zipcode"  value="${zipcode}"/><span class='typeopt'> (also used by the other weather services)</span></td>
         </tr>
         </table>
 
@@ -8809,12 +8771,14 @@ async function getParamsPage(user, configoptions, req) {
 }
 
 function getDevicesPage(user, configoptions, hubs, req) {
-    var userid = user["users_id"];
-    var useremail = user["users_email"];
-    var uname = user["users_uname"];
-    var hpcode = user["users_hpcode"];
-    var pname = user["panels_pname"];
-    var panelid = user["panels_id"];
+    var userid = user["id"];
+    var useremail = user["email"];
+    var uname = user["uname"];
+    var hpcode = user["hpcode"];
+    // var pname = user["panels_pname"];
+    // var panelid = user["panels_id"];
+    const pname = "default";
+    const panelid = 1;
     var hostname = req.headers.host;
     var hubpick = getCookie(req, "defaultHub");
     var webSocketUrl = getSocketUrl(hostname);
@@ -8838,8 +8802,7 @@ function getDevicesPage(user, configoptions, hubs, req) {
     return Promise.all([
         mydb.getRows("rooms","*", "userid = "+userid+" AND panelid = "+panelid),
         mydb.getRows("devices",fields1, "devices.userid = "+userid + " GROUP BY devices.deviceid", joinstr,"hubs.id"),
-        mydb.getRows("things", fields2, "things.userid = "+userid+" AND rooms.panelid = " + panelid, [joinstr1, joinstr2], "devices.name"),
-        mydb.getRows("panels","*", "userid = "+userid)
+        mydb.getRows("things", fields2, "things.userid = "+userid+" AND rooms.panelid = " + panelid, [joinstr1, joinstr2], "devices.name")
     ])
     .then(resarray => {
         var rooms = resarray[0];
@@ -9020,6 +8983,21 @@ function processGeneralOptions(userid, api, devoptions) {
                     await mydb.updateRow("users", {mobile: devoptions[key]}, `id = ${userid}`, true);
                     updobjs[key] = devoptions[key];
                 }
+            } else if ( key === "newSkin" ) {
+                let skinval = typeof devoptions[key] === "string" ? devoptions[key].trim() : "";
+                if ( skinval ) {
+                    let configitem = configs.find(c => c.configkey === "skin");
+                    if ( configitem ) {
+                        if ( skinval !== configitem.configval ) {
+                            configitem.configval = skinval;
+                            await mydb.updateRow("configs", configitem, `id = ${configitem.id}`, true);
+                            updobjs[key] = skinval;
+                        }
+                    } else {
+                        await mydb.addRow("configs", {userid: userid, configkey: "skin", configval: skinval, configtype: 0});
+                        updobjs[key] = skinval;
+                    }
+                }
             } else if ( key.startsWith("cnt_") ) {
                 let realkey = key.substring(4);
                 let oldcount = specials[realkey];
@@ -9194,16 +9172,20 @@ function getMainPage(user, configoptions, hubs, req, res) {
     var hostname = req.headers.host;
     var kioskstr = getConfigItem(configoptions, "kiosk");
     var kioskmode = (kioskstr=="true" || kioskstr==true) ? true : false;
-    var userid = user["users_id"];
-    var useremail = user["users_email"];
-    var uname = user["users_uname"];
-    // var defhub = user["users_defhub"];
-    var usertype = user["users_usertype"];
-    var panelid = user["panels_id"];
-    var pname = user["panels_pname"];
-    var skin = user["panels_skin"];
+    var userid = user["id"];
+    var useremail = user["email"];
+    var uname = user["uname"];
+    var usertype = user["usertype"];
+    const pname = "default";
+    const panelid = 1;
+    var skin = getConfigItem(configoptions, "skin") || "skin-housepanel";
+
     var hubpick = getCookie(req, "defaultHub");
     var alldevices = {};
+
+    if ( DEBUG1 ) {
+        console.log( (ddbg()), "renderMain: user: ", user, " configs: ", configoptions, " hubs: ", hubs);
+    }
 
     console.log(  "\n**********************************************************************************************",
                   "\n", (ddbg()), "Serving pages from: ", GLB.returnURL,
@@ -9271,7 +9253,7 @@ function getMainPage(user, configoptions, hubs, req, res) {
     function renderMain(configoptions, user, hubpick, hubs, rooms, alldevices, things) {
         var tc = "";
         tc += getHeader(userid, pname, skin, false);
-        var hpcode = user["users_hpcode"];
+        var hpcode = user["hpcode"];
 
         // if new user flag it and udpate to no longer be new
         if ( usertype === 0 ) {
@@ -9281,10 +9263,6 @@ function getMainPage(user, configoptions, hubs, req, res) {
             tc += "You can also experiment with the default tiles placed in each room that are not tied to a hub. ";
             tc += "When you are done, they can be removed in Edit mode or from the Options page. Click on the ? mark in the upper right corner. ";
             tc += "to access the online manual. Have fun!</div>";
-        }
-    
-        if ( DEBUG1 ) {
-            console.log( (ddbg()), "renderMain: ", userid, uname, panelid, pname, usertype, skin);
         }
     
         tc += '<div id="dragregion">';
@@ -9523,8 +9501,6 @@ function getIcons(userid, pname, skin, icondir, category) {
     var activedir;
     if ( category.startsWith("Main_") ) {
         activedir = path.join(skin, icondir);
-    } else if ( category.startsWith("Modern_") ) {
-        activedir = path.join("skin-modern", icondir);
     } else if ( category.startsWith("User_") ) {
         activedir = path.join(userdir, pname, icondir);
     } else {
@@ -9785,7 +9761,7 @@ function findHub(hubid, hubs) {
     return thehub;
 }
 
-function apiCall(user, body, protocol, res) { 
+function apiCall(user, configoptions, body, protocol, res) { 
 
     if ( DEBUG8 ) {
         console.log( (ddbg()), protocol + " api call, body: ", jsonshow(body) );
@@ -9810,20 +9786,17 @@ function apiCall(user, body, protocol, res) {
     // but they do need to have the special hpcode value or you wouldn't get this far
     // the else branch should never be reached
     if ( user && typeof user === "object" ) {
-        var userid = user["users_id"];
-        var useremail = user["users_email"];
-        var uname = user["users_uname"];
-        var panelid = user["panels_id"];
-        var pname = user["panels_pname"];
-        var skin = user["panels_skin"];
+        var userid = user["id"];
+        var useremail = user["email"];
+        var uname = user["uname"];
     } else {
         userid = body["userid"];
-        panelid = body["panelid"] || 1;
-        pname = body["pname"] || "default";
         useremail = body["email"];
         uname = body["uname"];
-        skin = body["skin"] || "skin_housepanel";
     }
+    const panelid = 1;
+    const pname = "default";
+    var skin = getConfigItem(configoptions, "skin") || "skin-housepanel";
 
     if ( !userid ) {
         console.error( (ddbg()), "*** error *** user not authorized for API call. api: ", api, " body: ", body);
@@ -9915,7 +9888,7 @@ function apiCall(user, body, protocol, res) {
                 break;
                 
             case "status":
-                result = {version: GLB.HPVERSION, userid: userid, email: useremail, uname: uname, panel: pname, skin: skin};
+                result = {version: GLB.HPVERSION, userid: userid, email: useremail, uname: uname, skin: skin};
                 break;
 
             // changed to only handle page fake tile requests
@@ -11740,22 +11713,21 @@ if ( app && applistening ) {
 
         // everything starts with finding the username which drives which rows we read from the DB
         getUserName(req)
-        .then(results => {
+        .then(user => {
 
             if ( DEBUG20 ) {
-                console.log( (ddbg()), "username results: ", results);
+                console.log( (ddbg()), "username results: ", user);
             }
 
-            if ( !results || !results["users_id"] ) {
-                console.warn( (ddbg()), "login rejected for user: ", results);
+            if ( !user || !user["id"] ) {
+                console.warn( (ddbg()), "login rejected for user: ", user ? user["uname"] : "unknown" );
                 var result = getLoginPage(req, 0, "", "", "", hostname);
                 res.send(result);
                 res.end();
         
             } else {
 
-                var user = results;
-                var userid = user["users_id"];
+                var userid = user["id"];
                 Promise.all( [
                     mydb.getRows("configs", "*", "userid = "+userid),
                     mydb.getRows("hubs", "*", "userid = "+userid)
@@ -11791,13 +11763,9 @@ if ( app && applistening ) {
                     // first check for displaying the main page
                     if ( typeof req.path==="undefined" || req.path==="/" ) {
 
-                        // display the main page if user is in our database
-                        // don't check password here because it is checked at login
-                        // and the cookie is set which means all is okay
-
                         // if a GET API call is being made do it here
                         if ( isquery ) {
-                            var result = apiCall(user, queryobj, "GET", res);
+                            var result = apiCall(user, configoptions, queryobj, "GET", res);
                             // if ( typeof result === "object" && result.then && typeof result.then === "function" ) {
                             if ( typeof result === "object" ) {
                                 try {
@@ -11811,9 +11779,9 @@ if ( app && applistening ) {
                                 }
                             } else if ( typeof result === "string" ) {
                                 res.send(result);
-                                res.end;
+                                res.end();
                             } else {
-                                var reason = "Invalid API call or API returned an unrecognized data type";
+                                var reason = "Invalid GET API call or API returned an unrecognized data type";
                                 res.send(reason);
                                 res.end();
                             };
@@ -11848,13 +11816,7 @@ if ( app && applistening ) {
                         // clear the cookie to force repeat of login page
                         delCookie(res, "uname");
                         delCookie(res, "pname");
-
-                        if ( req.query && req.query["pname"] ) {
-                            var pname = req.query["pname"];
-                        } else {
-                            pname = "default";
-                        }
-                        var result = getLoginPage(req, userid, pname, "", "", hostname);
+                        var result = getLoginPage(req, userid, "default", "", "", hostname);
                         res.send(result);
                         res.end();
 
@@ -11902,8 +11864,8 @@ if ( app && applistening ) {
     });
     
     app.put('*', function(req, res) {
-        console.warn( (ddbg()), "PUT api calls are not supported. Use POST instead. Requested put: ", req.path);
-        res.send("PUT api calls are not supported. Use POST instead.");
+        console.error( (ddbg()), "PUT api calls are not supported by HousePanel. Requested put: ", req.path);
+        res.send("PUT api calls are not supported by HousePanel.");
         res.end();
     });
 
@@ -12193,28 +12155,28 @@ if ( app && applistening ) {
             // the advantage of this is we can get the user object for making api calls much easier
             // assuming the caller knows the userid and hpcode values
             userid = req.body["userid"];
-            if ( req.body["pname"] ) {
-               var pname = req.body["pname"] || "default";
-            } else {
-                pname = "default";
-            }
-            if ( isNaN(parseInt(userid)) ) {
-                userid = -1;
-            }
             var hpcode = req.body["hpcode"] || "";
-            var joinstr = mydb.getJoinStr("panels", "userid", "users", "usertype");
-            var fields = "users.id as users_id, users.email as users_email, users.uname as users_uname, users.mobile as users_mobile, users.password as users_password, " +
-                         "users.usertype as users_usertype, users.defhub as users_defhub, users.hpcode as users_hpcode, " + 
-                         "panels.id as panels_id, panels.userid as panels_userid, panels.pname as panels_pname, panels.password as panels_password, panels.skin as panels_skin";
-            var conditions = `users.id = ${userid} AND panels.pname = '${pname}' AND users.hpcode = '${hpcode}'`;
-            mydb.getRow("panels", fields, conditions, joinstr)
-            .then( user => {
-                if ( user ) {
+
+            // check for valid request and return an error if invalid
+            if ( isNaN(parseInt(userid)) || hpcode==="" ) {
+                console.error( (ddbg()), "Invalid API call with userid: ", userid, " and hpcode: ", hpcode, " body: ", req.body);
+                res.send("Invalid HousePanel API request, invalid userid or hpcode - check logs");
+                res.end();
+                return;
+            }
+            Promise.all( [
+                mydb.getRows("configs", "*", "userid = "+userid),
+                mydb.getRow("users", "*", `id = ${userid} AND hpcode = '${hpcode}'`)
+            ])
+            .then( rows => {
+                var configoptions = rows[0];
+                var user = rows[1];
+                if ( user && configoptions ) {
 
                     // if api call returns a promise then handle it and return the promise result
                     // otherwise we have a direct result that we can return to the browser
                     // we don't pass the user here because it isn't in the proper format and we don't need it
-                    var result = apiCall(user, req.body, "POST", res);
+                    var result = apiCall(user, configoptions, req.body, "POST", res);
                     if ( typeof result === "object" && result.then && typeof result.then === "function" ) {
                         result.then(obj => {
                             if ( DEBUG1 ) {
@@ -12264,7 +12226,8 @@ if ( app && applistening ) {
     var storage = multer.diskStorage({
         destination: function(req, file, callback) {
             var userid = req.query.userid;
-            var pname = req.query.pname;
+            // var pname = req.query.pname || "default";
+            var pname = "default";
             var hpcode = req.query.hpcode;
             var category = req.query.category;
             var dest = "./user"+userid+"/"+pname;
@@ -12278,7 +12241,7 @@ if ( app && applistening ) {
                 dest += "/media";
             }
             if ( DEBUG16 ) {
-                console.log((ddbg()), "userid: ", userid, " pname: ", pname, " category: ", category, " hpcode: ", hpcode," dest: ", dest);
+                console.log((ddbg()), "userid: ", userid, " category: ", category, " hpcode: ", hpcode," dest: ", dest);
             }
             callback(null, dest);
         },

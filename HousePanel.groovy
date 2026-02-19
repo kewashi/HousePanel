@@ -29,7 +29,7 @@ public static String handle() { return "HousePanel" }
     STATICALLY DEFINED VARIABLES
     inspired by Tonesto7 homebridge2 app
 ***********************************************/
-@Field static final String appVersionFLD  = '3.5.20'
+@Field static final String appVersionFLD  = '3.5.22'
 @Field static final String sNULL          = (String) null
 @Field static final String sBLANK         = ''
 @Field static final String sLINEBR        = '<br>'
@@ -3086,7 +3086,7 @@ def registerAll() {
     registerLocations()
 
     // register all the devices in time steps
-    def delaygap = 100
+    def delaygap = 50
     def delay = delaygap
     mydevices.each { item -> 
         if ( settings[item]?.size() > 0 ) {
@@ -3196,16 +3196,17 @@ def registerChangeHandler(devices) {
         List theAtts = device?.supportedAttributes?.collect { it?.name as String }?.unique()
         logger("atts: ${theAtts}", "debug")
 
-        // check for a large number of attributes and limit to common ones
-        if ( theAtts?.size() > 15 ) {
-            def commonAtts = ["status", "switch", "level", "hue", "saturation", "color", "colorTemperature", "colorMode",
+        // limit to common ones unless there are only 1 or 2 to prevent too many updates from devices with lots of attributes like alexa
+        // oddball attributes will need to be updated by doing a full hub refresh
+        if ( theAtts?.size() > 2 ) {
+            def commonAtts = ["status", "switch", "level", "hue", "saturation", "color", "colorTemperature", "colorMode", "mode", "hsmStatus",
                               "temperature", "humidity", "contact", "motion", "presence", "lock", "windowShade", "position",
-                              "battery", "power", "energy", "status", "statusMessage", "alarm",
+                              "battery", "power", "status", "statusMessage", "alarm", "pushed", "held", "doubleTapped",
                               "smoke", "carbonMonoxide", "carbonDioxide",  "water", "illuminance",
                               "thermostatMode", "heatingSetpoint", "coolingSetpoint", "thermostatOperatingState", "thermostatFanMode",
                               "trackDescription", "currentArtist", "currentAlbum", "trackData", "mute", "volume"]
             theAtts = theAtts.intersect(commonAtts)
-            logger("limiting attributes for device: ${device?.displayName} to common ones: ${theAtts}", "info")
+            logger("limiting attributes for device: ${device?.displayName} to common ones: ${theAtts}", "debug")
         }
 
         theAtts?.each {att ->
@@ -3400,7 +3401,7 @@ def postHub(ip, port, msgtype, name, id, subid, type, value, isfirst) {
                 change_value: value
             ]
 
-        logger("HousePanel postHub ${msgtype} to IP= ${ip}:${port} name= ${name} id= ${id} subid= ${subid} type= ${type} value= ${value}", "debug")
+        logger("HousePanel postHub ${msgtype} to IP= ${ip}:${port} name= ${name} id= ${id} subid= ${subid} type= ${type} value= ${value}", isfirst)
         if (ip.startsWith("http") ) {
             sendHttpPost(ip, port, abody, isfirst)
         } else {
@@ -3485,13 +3486,14 @@ void sendHttpPost(ip, port, Map body, isfirst) {
         ignoreSSLIssues: true,
         timeout: 20
     ]
-    // def isfirst = ip == state.directIP ? "info" : false
-    asynchttpPost("asyncHttpCmdResp", params, [execDt: now(), prdebug: isfirst])
+    def devname = body?.change_name ?: "unknown"
+    def devid = body?.change_device ?: "unknown"
+    asynchttpPost("asyncHttpCmdResp", params, [execDt: now(), name: devname, id: devid, prdebug: isfirst])
 }
 
 void asyncHttpCmdResp(response, data) {
     def dt = now() - data.execDt
-    logger("Resp: ${response} | Process time: ${dt}", data.prdebug)
+    logger("sendHttpPost timing for: ${data.name}, id: ${data.id}, dt: ${dt} msec", data.prdebug)
 }
 
 // Wrapper nction for all logging.

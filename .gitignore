@@ -2,6 +2,7 @@ package-lock.json
 .vscode/
 /user*/*
 /node_modules/*
+/doc
 *.sh
 *.db
 *.log
