@@ -3,7 +3,6 @@ package-lock.json
 /user*/*
 /node_modules/*
 /doc
-*.sh
 *.db
 *.log
 *.save

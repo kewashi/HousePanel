@@ -5649,15 +5649,34 @@ function processHubMessage(userid, hubmsg) {
             }
 
             // push state changes to python sidecar for use in AI interactions
-
-            // handle trackData for AI so we can send the important fields
-            // this is needed because we split out trackData into multiple subid's for the screen updates but we want to send the important ones to the AI sidecar in a consistent way
-            if ( subid==="trackData" ) {
-                const musicfields = ["trackDescription","currentAlbum", "currentArtist"];
-                musicfields.forEach( function(mfield) {
-                    if ( typeof pvalue[mfield] !== "undefined" ) {
+            // but only if the pythonURL is set
+            if ( typeof GLB.pythonURL !== "undefined" && GLB.pythonURL && GLB.pythonURL.startsWith("http") ) {
+                // this is needed because we split out trackData into multiple subid's for the screen updates but we want to send the important ones to the AI sidecar in a consistent way
+                if ( subid==="trackData" ) {
+                    const musicfields = ["trackDescription","currentAlbum", "currentArtist"];
+                    musicfields.forEach( function(mfield) {
+                        if ( typeof pvalue[mfield] !== "undefined" ) {
+                            let payload = {api: "ai-context", userid: userid, hubid: hubid, deviceid: deviceid, devicetype: swtype, 
+                                devicename: pvalue["name"], activity: mfield, value: pvalue[mfield] };
+                            processAISidecar(payload)
+                            .then( result => {
+                                if ( DEBUG5 ) {
+                                    console.log( (ddbg()), "AI sidecar called with payload: ", payload, " result: ", result);
+                                }
+                            })
+                            .catch( reason => {
+                                console.error( (ddbg()), reason);
+                            });
+                        }
+                    });
+                } else {
+                    const AITriggers = ["themode", "motion", "contact", "presence", "switch", "level", "lock", "color", "status",
+                        "roomActivity", "roomState", "temperature", "lux", "humidity", "thermostatOperatingState", "thermostatMode", "heatingSetpoint", "coolingSetpoint"
+                    ];
+                    let oktrigger = AITriggers.includes(subid) || device.devicetype==="hsm" 
+                    if ( oktrigger && typeof pvalue[subid] !== "undefined" ) {
                         let payload = {api: "ai-context", userid: userid, hubid: hubid, deviceid: deviceid, devicetype: swtype, 
-                            devicename: pvalue["name"], activity: mfield, value: pvalue[mfield] };
+                                    devicename: pvalue["name"], activity: subid, value: pvalue[subid] };
                         processAISidecar(payload)
                         .then( result => {
                             if ( DEBUG5 ) {
@@ -5668,24 +5687,6 @@ function processHubMessage(userid, hubmsg) {
                             console.error( (ddbg()), reason);
                         });
                     }
-                });
-            } else {
-                const AITriggers = ["themode", "motion", "contact", "presence", "switch", "level", "lock", "color", "status",
-                    "roomActivity", "roomState", "temperature", "lux", "humidity", "thermostatOperatingState", "thermostatMode", "heatingSetpoint", "coolingSetpoint"
-                ];
-                let oktrigger = AITriggers.includes(subid) || device.devicetype==="hsm" 
-                if ( oktrigger && typeof pvalue[subid] !== "undefined" ) {
-                    let payload = {api: "ai-context", userid: userid, hubid: hubid, deviceid: deviceid, devicetype: swtype, 
-                                devicename: pvalue["name"], activity: subid, value: pvalue[subid] };
-                    processAISidecar(payload)
-                    .then( result => {
-                        if ( DEBUG5 ) {
-                            console.log( (ddbg()), "AI sidecar called with payload: ", payload, " result: ", result);
-                        }
-                    })
-                    .catch( reason => {
-                        console.error( (ddbg()), reason);
-                    });
                 }
             }
 
@@ -5701,11 +5702,11 @@ function processHubMessage(userid, hubmsg) {
 
 // this function calls the python sidecar for use in AI interactions
 function processAISidecar(payload) {
-    if ( typeof GLB.pythonURL === "undefined" || !GLB.pythonURL ) {
+    if ( typeof GLB.pythonURL === "undefined" || !GLB.pythonURL || !GLB.pythonURL.startsWith("http") ) {
         if ( DEBUG5 ) {
-            console.warn( (ddbg()), "AI sidecar call skipped - no python URL configured");
+            console.warn( (ddbg()), "AI context cannot be updated because pythonURL is not set or is invalid");
         }
-        return Promise.reject({status: "error", message: "AI sidecar call skipped - no python URL configured"});
+        return Promise.reject({status: "ok", message: "AI context cannot be updated because pythonURL is not set or is invalid"});
     }
 
     const header = {"Content-Type": "application/json"};
@@ -7417,6 +7418,12 @@ function doAction(userid, hubindex, tileid, uid, swid, swtype, swval, swattr, su
         // and you must put the AI prompt in the value field and set the command to AI and the linkval to this particular prompt
         } else if ( command==="AI" ) {
 
+            if ( typeof GLB.pythonURL === "undefined" || !GLB.pythonURL || !GLB.pythonURL.startsWith("http") ) {
+                msg = "error - AI command not configured properly; pythonURL is not set or is invalid";
+                console.warn( (ddbg()), msg);
+                urlCallback(userid, swid, swtype, subid, linkval, {aistatus: "error", response: msg}, command);
+            }
+
             // need the hubid not the hubindex for use in the python AI code
             // we always just get the first Hubitat hub since there is no tracking for the hubless hub
             var conditions = "userid = "+userid+" AND hubtype = 'Hubitat'";
@@ -7446,7 +7453,6 @@ function doAction(userid, hubindex, tileid, uid, swid, swtype, swval, swattr, su
                 console.error( (ddbg()), error);
                 return {};
             });
-
 
         } else if ( command==="RULE" ) {
             if ( !GLB.dbinfo.enablerules ) {
@@ -9859,9 +9865,9 @@ function apiCall(user, configoptions, body, protocol, res) {
 
                                 function hubrecurse(n, hub) {
 
-                                    // reset AI here for hubitat hubs
+                                    // reset AI here for hubitat hubs if pythonURL is set
                                     // call the AI handler to process the initialize the response api call
-                                    if ( hub.hubtype === "Hubitat" ) {
+                                    if ( typeof GLB.pythonURL!=="undefined" && GLB.pythonURL && GLB.pythonURL.startsWith("http") && hub.hubtype === "Hubitat" ) {
                                         // call the AI handler to process the initialize the response api call
                                         let payload = {"api": "ai-init", "userid": userid, "hubid": hub.hubid, "hubtype": "Hubitat", "hubname": hub.hubname,
                                                        "hubaccess": hub.hubaccess, "hubendpt": hub.hubendpt, "hubhost": hub.hubhost};
@@ -10215,7 +10221,7 @@ function apiCall(user, configoptions, body, protocol, res) {
 
                             // reset AI here for hubitat hubs
                             // call the AI handler to process the initialize the response api call
-                            if ( hub.hubtype === "Hubitat" ) {
+                            if ( typeof GLB.pythonURL!=="undefined" && GLB.pythonURL && GLB.pythonURL.startsWith("http") && hub.hubtype === "Hubitat" ) {
                                 let payload = {"api": "ai-init", "userid": userid, "hubid": hub.hubid, "hubtype": "Hubitat", "hubname": hub.hubname,
                                                "hubaccess": hub.hubaccess, "hubendpt": hub.hubendpt, "hubhost": hub.hubhost};
                                 processAISidecar(payload)
@@ -11307,6 +11313,14 @@ GLB.pythonPort = parseInt(GLB.dbinfo["pythonport"] || 13480);
 GLB.webSocketServerPort = parseInt(GLB.dbinfo["websocketport"]) || 10430;
 GLB.newcss = {};
 
+// set a default pythonURL for use before the main page loads
+// user can override this in the .cfg file to run the sidecar on a different server
+if ( GLB.dbinfo["pythonURL"] ) {
+    GLB.pythonURL = `${GLB.dbinfo["pythonURL"]}:${GLB.pythonPort}`;
+} else {
+    GLB.pythonURL = `http://127.0.0.1:${GLB.pythonPort}`;
+}
+
 // start our main server
 var httpServer;
 var httpsServer;
@@ -11511,17 +11525,20 @@ if ( app && applistening ) {
         } else {
             GLB.returnURL = req.protocol + "://" + hostname;
         }
-        try {
-            const returnUrlObj = new URL(GLB.returnURL);
-            let pythonHost = returnUrlObj.hostname;
-            if ( pythonHost === "localhost" || pythonHost === "::1" ) {
-                pythonHost = "127.0.0.1";
-            }
-            GLB.pythonURL = returnUrlObj.protocol + "//" + pythonHost + ":" + GLB.pythonPort;
-        } catch (e) {
-            GLB.pythonURL = "http://127.0.0.1:" + GLB.pythonPort;
-            console.error((ddbg()), "Invalid return URL while setting pythonURL:", GLB.returnURL, e);
-        }
+
+        // no longer set this here - need it sooner so we just assume it is localhost with the python port
+        // this is used when we get messages from the hub that can happen before user loads the page so it needs to be set before we do anything else   
+        // try {
+        //     const returnUrlObj = new URL(GLB.returnURL);
+        //     let pythonHost = returnUrlObj.hostname;
+        //     if ( pythonHost === "localhost" || pythonHost === "::1" ) {
+        //         pythonHost = "127.0.0.1";
+        //     }
+        //     GLB.pythonURL = returnUrlObj.protocol + "//" + pythonHost + ":" + GLB.pythonPort;
+        // } catch (e) {
+        //     GLB.pythonURL = "http://127.0.0.1:" + GLB.pythonPort;
+        //     console.warn((ddbg()), "Error setting pythonURL, using default pythonURL:", GLB.pythonURL, e);
+        // }
         if ( DEBUG1 ) {
             console.log( (ddbg()), "main returnURL: ", GLB.returnURL, " pythonURL: ", GLB.pythonURL );
         }
@@ -11819,18 +11836,20 @@ if ( app && applistening ) {
                             updhub = updhub || (hub.hubhost !== newhost);
                             hub.hubhost = newhost;
 
-                            // call the AI handler to initialize the response api call
-                            let payload = {"api": "ai-init", "userid": userid, "hubid": hub.hubid, "hubtype": "Hubitat", "hubname": hub.hubname,
-                                           "hubaccess": hub.hubaccess, "hubendpt": hub.hubendpt, "hubhost": hub.hubhost};
-                            processAISidecar(payload)
-                            .then( result => {
-                                if ( DEBUG5 ) {
-                                    console.log( (ddbg()), "AI sidecar called with payload: ", payload, " result: ", result);
-                                }
-                            })
-                            .catch( reason => {
-                                console.error( (ddbg()), reason);
-                            });
+                            // call the AI handler to initialize the response api call if pythonURL is enabled
+                            if ( typeof GLB.pythonURL!=="undefined" && GLB.pythonURL && GLB.pythonURL.startsWith("http") ) {
+                                let payload = {"api": "ai-init", "userid": userid, "hubid": hub.hubid, "hubtype": "Hubitat", "hubname": hub.hubname,
+                                            "hubaccess": hub.hubaccess, "hubendpt": hub.hubendpt, "hubhost": hub.hubhost};
+                                processAISidecar(payload)
+                                .then( result => {
+                                    if ( DEBUG5 ) {
+                                        console.log( (ddbg()), "AI sidecar called with payload: ", payload, " result: ", result);
+                                    }
+                                })
+                                .catch( reason => {
+                                    console.error( (ddbg()), reason);
+                                });
+                            }
                         }
 
                         // update the hub and push data to the auth page using a forced reload
