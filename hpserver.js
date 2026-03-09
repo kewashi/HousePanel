@@ -39,6 +39,7 @@ const { act } = require('react');
 const OpenMeteoApi = require('openmeteo');
 const { time } = require('console');
 const { frame } = require('websocket');
+const { uid } = require('chart.js/helpers');
 
 // ISY websocket clients
 var wsclient = {};
@@ -314,24 +315,6 @@ function hidden(name, pvalue, id) {
     if (id) { inpstr += " id='" + id + "'"; }
     inpstr += " />";
     return inpstr;
-}
-
-// this makes Insteon ID's look good but it messes up the hub calls
-// which oddly enough expect the id in the mangled form that does not match
-// the way the id is written on the Insteon device so I disabled doing anything here
-function fixISYid(id) {
-    // if ( id.indexOf(" ") !== -1 ) {
-    //     var idparts = id.split(" ");
-    //     if ( idparts.length===4 ) {
-    //         idparts.forEach(function(idp, i) {
-    //             if ( idp.length===1 ) {
-    //                 idparts[i] = "0" + idp;
-    //             }
-    //         });
-    //         id = idparts.join(".");
-    //     }
-    // }
-    return id;
 }
 
 function getHeader(userid, pname, skin, skip) {
@@ -941,17 +924,22 @@ function _curl(host, headers, nvpstr, calltype, callback) {
 // Made this into a promise function
 function curl_call(host, headertype, nvpstr, formdata, calltype, callback = null) {
     var promise = new Promise(function(resolve, reject) {
-        var opts = {url: host, rejectUnauthorized: false};
+        if ( !host || typeof host !== "string" ) {
+            reject("curl_call missing or invalid host URL: " + host);
+            return;
+        }
+
         if ( calltype!=="GET" && calltype!=="POST" && calltype!=="PUT" ) {
             reject("invalid calltype " + calltype);
             return;
         }
-        opts.method = calltype;
+        var opts = {uri: host, url: host, rejectUnauthorized: false, method: calltype};
         
         if ( nvpstr && typeof nvpstr === "object" ) {
             opts.form = nvpstr;
         } else if ( nvpstr && typeof nvpstr === "string" ) {
             opts.url = host + "?" + nvpstr;
+            opts.uri = opts.url;
         }
         
         if (formdata || formdata==="") {
@@ -1044,8 +1032,7 @@ function authenthicateHub(hub) {
             // now read the hub and fill in the right info
             getHubDevices(hub)
             .then(mydevices => {
-                var ndev = Object.keys(mydevices).length;
-                result.numdevices = ndev;
+                result.numdevices = objCount(mydevices);
 
                 // reactivate websocket here if we reauthorized an ISY hub
                 if ( hubType==="ISY" && EMULATEHUB!==true ) {
@@ -1228,32 +1215,31 @@ function removeHublessDevices(userid) {
     });
 }
 
-function removeDeadThings(userid) {
+async function removeDeadThings(userid) {
 
-    return mydb.getRows("devices","id", "userid = "+userid)
-    .then(rows => {
+    var allmydevices = await mydb.getRows("devices","*","userid = "+userid);
+    if ( allmydevices && allmydevices.length ) {
         var idarr = [];
-        rows.forEach(row => {
+        allmydevices.forEach(row => {
             idarr.push(row.id);
         });
         var idstr = "(" + idarr.join(",") + ")";
+        var condition = "userid = " + userid + " AND tileid NOT IN " + idstr;
+    } else {
+        var condition = "userid = " + userid;
+    }
 
-        // use query to remove all tiles that do not have a corresponding device in the DB
-        // this will remove it from all rooms and panels
-        return mydb.deleteRow("things",`userid = ${userid} AND tileid NOT IN ${idstr}`)
-        .then(res => {
-            var numdeltiles = res.getAffectedItemsCount();
-            if ( numdeltiles > 0 ) {
-                if ( DEBUG2 ) {
-                    console.log( (ddbg()), `removed ${numdeltiles} things that are no longer authorized`);
-                }
+    // use query to remove all tiles that do not have a corresponding device in the DB
+    // this will remove it from all rooms and panels
+    return await mydb.deleteRow("things",condition)
+    .then( res => {
+        var numdeltiles = res.getAffectedItemsCount();
+        if ( numdeltiles > 0 ) {
+            if ( DEBUG2 ) {
+                console.log( (ddbg()), `removed ${numdeltiles} things that are no longer authorized`);
             }
-            return numdeltiles;
-        })
-        .catch(reason => {
-            console.warn( (ddbg()), reason );
-            return 0;
-        });
+        }
+        return numdeltiles;
     })
     .catch(reason => {
         console.warn( (ddbg()), reason );
@@ -1266,7 +1252,7 @@ function getHublessTypes() {
 }
 
 // rewrote this to use a promise to return the actual array of devices or a reject with a message
-function getDevices(hub) {
+function getDevices(hub, devicelist="all") {
     if ( DEBUG1 ) {
         console.log( (ddbg()), "getDevices debug for hub: ", hub);
     }
@@ -1306,7 +1292,7 @@ function getDevices(hub) {
                 let configs = results[1];
                 const ambientapikey = getConfigItem(configs, "ambientapikey");
                 const ambientappkey = getConfigItem(configs, "ambientappkey");
-                if ( ambientapikey && ambientappkey ) {
+                if ( ambientapikey && ambientappkey && (devicelist==="all" || devicelist.startsWith("ambient_")) ) {
                     body = await getAmbientDevices(body, ambientapikey, ambientappkey);
                     return [body, configs];
                 } else {
@@ -1317,7 +1303,7 @@ function getDevices(hub) {
                 let body = results[0];
                 let configs = results[1];
                 const zipcode = getConfigItem(configs, "zipcode");
-                if ( zipcode ) {
+                if ( zipcode && (devicelist==="all" || devicelist==="openmeteo") ) {
                     body = await getOpenMeteoDevice(body, zipcode);
                     return [body, configs];
                 } else {
@@ -1330,7 +1316,7 @@ function getDevices(hub) {
                 const tomorrowapi = getConfigItem(configs, "tomorrowapi");
                 const zipcode = getConfigItem(configs, "zipcode");
 
-                if ( tomorrowapi && zipcode ) {
+                if ( tomorrowapi && zipcode && (devicelist==="all" || devicelist==="tomorrowio") ) {
                     return getTomorrowIODevice(body, tomorrowapi, zipcode);
                 } else {
                     return body;
@@ -1365,13 +1351,14 @@ function getDevices(hub) {
             .then(async body => {
                 let harmonyDevices = await hubInfoCallback(body);
                 if ( typeof harmonyDevices === "object" ) {
-                    for (var deviceid in harmonyDevices) {
-                        const device = harmonyDevices[deviceid];
+                    for (var uid in harmonyDevices) {
+                        let device = harmonyDevices[uid];
+                        let deviceid = device.deviceid;
                         let value = decodeURI2(device.pvalue);
                         pushClient(userid, deviceid, device.devicetype, "", value);
                     }
                     if ( DEBUG12 ) {
-                        console.log( (ddbg()), "Harmony devices retrieved and sent to client: ", Object.keys(harmonyDevices).length);
+                        console.log( (ddbg()), "Harmony devices retrieved and sent to client: ", objCount(harmonyDevices));
                     }
                     resolve(harmonyDevices);
                 } else {
@@ -1395,6 +1382,11 @@ function getDevices(hub) {
         } else {
             console.error( (ddbg()), "error - attempt to read an unknown hub type= ", hubType);
             resolve([]);
+        }
+
+        // make the default name start with a capital letter if we give a number
+        function getCustomName(defbase, cnum) {
+            return defbase.substring(0,1).toUpperCase() + defbase.substring(1) + cnum.toString();
         }
 
         // rewrote this to create the default devices if they don't exist
@@ -1428,6 +1420,12 @@ function getDevices(hub) {
                         let deviceid = devtype + i.toString();
                         let devicetype = devtype.toLowerCase();
                         let hint = "special";
+
+                        // skip if we're just looking for a specific hubless device and this isn't it
+                        if ( devicelist !== "all" && devicelist !== deviceid ) {
+                            continue;
+                        }
+
                         if ( devtype==="clockdigital" || devtype==="clockanalog" ) {
                             deviceid = devtype;
                             if ( i > 1 ) {
@@ -1446,7 +1444,7 @@ function getDevices(hub) {
                         // the contents will be overwritten if the special tile already exists
                         // since our new paramsPage features creates the content with user provided names, widths, content
                         } else {
-                            devicename = devtype.substring(0,1).toUpperCase() + devtype.substring(1) + i.toString();
+                            devicename = getCustomName(devtype, i);
                             deviceid = devtype + i.toString();
                             if ( devtype==="custom" || devtype==="blank" ) {
                                 pvalue = {name: devicename, width: 180, height: 210};
@@ -1493,52 +1491,56 @@ function getDevices(hub) {
                 .then( devices => {
                     // add a tile for each ambient weather device
                     let num = 0;
-                    devices.forEach( device => {
-                        let newdevice = {};
-                        newdevice.type = "weather";
-                        newdevice.id = device.macAddress.replace(/:/g, "").toLowerCase();
-                        newdevice.name = device.info.name;
-                        newdevice.hint = "AmbientWeather";
-                        newdevice.value = {};
-                        
-                        api.deviceData(device.macAddress, {limit: 1})
-                        .then( devicedata => {
-                            // for now we capture all fields, later we may want to filter some out
-                            for ( let key in devicedata[0] ) {
-                                let dataval = devicedata[0][key];
-                                if ( key==="date" || key==="lastRain" ) {
-                                    // convert this to a human readable date and time
-                                    let d = new Date(dataval);
-                                    dataval = d.toLocaleString();
-                                // change temp field name to temperature
-                                } else if ( key === "tempf" ) {
-                                    key = "temperature";
-                                // change battery fields to display good or bad based on 1 or 0 value
-                                } else if ( key.startsWith("batt") ) {
-                                    if ( dataval === 1 || dataval === "1" ) {
-                                        dataval = "good";
-                                    } else if ( dataval === 0 || dataval === "0" ) {
-                                        dataval = "low";
-                                    } else {
-                                        dataval = "unknown";
+                    devices.forEach( async device => {
+                        let macid = "ambient_" + device.macAddress.replace(/:/g, "").toLowerCase();
+
+                        // skip if we're just looking for a specific ambient weather device and this isn't it
+                        if ( devicelist === "all" || devicelist === macid ) {
+                            let newdevice = {};
+                            newdevice.type = "weather";
+                            newdevice.id = macid;
+                            newdevice.name = device.info.name;
+                            newdevice.hint = "AmbientWeather";
+                            newdevice.value = {};
+                            await api.deviceData(device.macAddress, {limit: 1})
+                            .then( devicedata => {
+                                // for now we capture all fields, later we may want to filter some out
+                                for ( let key in devicedata[0] ) {
+                                    let dataval = devicedata[0][key];
+                                    if ( key==="date" || key==="lastRain" ) {
+                                        // convert this to a human readable date and time
+                                        let d = new Date(dataval);
+                                        dataval = d.toLocaleString();
+                                    // change temp field name to temperature
+                                    } else if ( key === "tempf" ) {
+                                        key = "temperature";
+                                    // change battery fields to display good or bad based on 1 or 0 value
+                                    } else if ( key.startsWith("batt") ) {
+                                        if ( dataval === 1 || dataval === "1" ) {
+                                            dataval = "good";
+                                        } else if ( dataval === 0 || dataval === "0" ) {
+                                            dataval = "low";
+                                        } else {
+                                            dataval = "unknown";
+                                        }
+                                        key = "battery" + key.substring(5);
                                     }
-                                    key = "battery" + key.substring(5);
+                                    newdevice.value[key] = dataval;
                                 }
-                                newdevice.value[key] = dataval;
+                                hubdevices.push(newdevice);
+                            })
+                            .catch( reason => {
+                                console.error( (ddbg()), "error retrieving ambient weather data for device: ", device, " reason: ", reason);
+                            });
+                        }
+
+                        num++;
+                        if (num >= devices.length ) {
+                            if ( DEBUG7 ) {
+                                console.log( (ddbg()), "finished retrieving Ambient Weather devices. Total devices: ", num, " devices added to hubdevices array");
                             }
-                            hubdevices.push(newdevice);
-                            num++;
-                            if (num >= devices.length ) {
-                                if ( DEBUG7 ) {
-                                    console.log( (ddbg()), "finished retrieving Ambient Weather devices. Total devices: ", num, " devices added to hubdevices array");
-                                }
-                                resolve(hubdevices);
-                            }
-                        })
-                        .catch( reason => {
-                            console.error( (ddbg()), "error retrieving ambient weather data for device: ", device.macAddress, " reason: ", reason);
                             resolve(hubdevices);
-                        });
+                        }
                     });
                 })
                 .catch( reason => {
@@ -1965,13 +1967,13 @@ function getDevices(hub) {
 
                     // check if this is a device update or adding a new device
                     // if device exists and uid is zero, update this record to include a new uid field
-                    let existingDevice = existingDevices.find( d => d.deviceid === deviceid );
+                    let existingDevice = existingDevices.find( d => d.deviceid === deviceid && d.devicetype === thetype );
 
                     // use DB for existing devices that are specials
                     // and update the DB for all other existing devices
                     // this will add dummy devices if we're adding to the list
                     // and do nothing if the number of special devices is the same other than return the devices in the list
-                    // if fewer devices are requested the extra ones will be removed
+                    // if fewer devices are requested the extra ones will be removed but only when devicelist is "all" since if a specific device is requested we don't want to remove the other devices that aren't being requested but are still in use
                     if ( existingDevice ) {
                         // get the visual id and update if old database version
                         if ( existingDevice.uid === 0 ) {
@@ -1989,19 +1991,24 @@ function getDevices(hub) {
                     } else {
                         uidmax++;
                         device.uid = uidmax;
-                        await mydb.addRow("devices", device);
+                        const dbresult = await mydb.addRow("devices", device);
+                        device.id = dbresult.getAutoIncrementValue();
                     }
 
-                    mydevices[deviceid] = device;
-                    const devstr = "'" + deviceid + "'";
-                    if ( !currentDevices.includes(devstr) ) {
-                        currentDevices.push(devstr);
-                    }
+                    // change way we remove dead nodes to by uid instead of by deviceid since uid is unique and deviceid is not
+                    mydevices[device.uid] = device;
+                    // const devstr = "'" + deviceid + "'";
+                    // if ( !currentDevices.includes(devstr) ) {
+                    //     currentDevices.push(devstr);
+                    // }
+                    currentDevices.push(device.uid);
                     devicecnt++;
 
                     // check if this is our last one and return array of devices
                     if ( devicecnt >= numdevices ) {
-                        removeDeadNodes(userid, hubindex, currentDevices);
+                        if ( devicelist === "all" ) {
+                            removeDeadNodes(userid, hubindex, currentDevices);
+                        }
                         return mydevices;
                     }
                 };
@@ -2023,7 +2030,7 @@ function getDevices(hub) {
                 let currentDevices = [];
                 const refresh = "never";
 
-                return mydb.getRows("devices", "id,deviceid,uid", `userid = ${userid} AND hubid = ${hubindex}`)
+                return mydb.getRows("devices", "*", `userid = ${userid} AND hubid = ${hubindex}`)
                 .then(async function(existingDevices) {
 
                     // now add them one at a time until we have them all
@@ -2093,7 +2100,7 @@ function getDevices(hub) {
 
                         // check if this is a device update or adding a new device
                         // if device exists and uid is zero, update this record to include a new uid field
-                        let existingDevice = existingDevices.find( d => d.deviceid === deviceid );
+                        let existingDevice = existingDevices.find( d => d.deviceid === deviceid && d.devicetype === thetype );
                         if ( existingDevice ) {
                             device.id = existingDevice.id;
                             // get the visual id and update if old database version
@@ -2107,14 +2114,16 @@ function getDevices(hub) {
                         } else {
                             uidmax++;
                             device.uid = uidmax;
-                            await mydb.addRow("devices", device);
+                            const dbresult = await mydb.addRow("devices", device);
+                            device.id = dbresult.getAutoIncrementValue();
                         }
 
-                        mydevices[deviceid] = device;
-                        const devstr = "'" + deviceid + "'";
-                        if ( !currentDevices.includes(devstr) ) {
-                            currentDevices.push(devstr);
-                        }
+                        mydevices[device.uid] = device;
+                        // const devstr = "'" + deviceid + "'";
+                        // if ( !currentDevices.includes(devstr) ) {
+                        //     currentDevices.push(devstr);
+                        // }
+                        currentDevices.push(device.uid);
                         devicecnt++;
 
                         // check if this is our last one and return array of devices
@@ -2143,7 +2152,7 @@ function getDevices(hub) {
 
             // remove all devices that are tied to the queried hub but not returned by the query
             var indev = "(" + currentDevices.join(",") + ")";
-            mydb.deleteRow("devices","userid = "+userid+" AND hubid = "+hubindex+" AND deviceid NOT IN " + indev)
+            mydb.deleteRow("devices","userid = "+userid+" AND hubid = "+hubindex+" AND uid NOT IN " + indev)
             .then( results => {
                 var numdeldevices = results.getAffectedItemsCount();
                 if ( numdeldevices === null ) {
@@ -2267,17 +2276,11 @@ function getDevices(hub) {
                 variables = sortVariables(variables);
                 var pvalstr = encodeURI2(variables);
                 var devid = "isy_variables";
-
-                // grab the list of device id's to process duplicate removal later
-                var sqldevid = "'" + devid + "'";
-                if ( !currentDevices.includes(sqldevid) ) {
-                    currentDevices.push(sqldevid);
-                }
                 var device = {userid: userid, hubid: hubindex, deviceid: devid, name: variables.name, 
                               devicetype: "variables", hint: "ISY_variable", refresh: "never", pvalue: pvalstr};
 
                 mydb.getRow("devices", "id,uid", `userid = ${userid} AND hubid = ${hubindex} AND devicetype = 'variables' AND deviceid = '${devid}'`)
-                .then(resp => {
+                .then(async resp => {
                     if ( resp ) {
                         device.id = resp.id;
                         // get the visual id and update if old database version
@@ -2287,12 +2290,17 @@ function getDevices(hub) {
                         } else {
                             device.uid = resp.uid;
                         }
-                        mydb.updateRow("devices", device, `id = ${device.id} AND hubid = ${hubindex} AND userid = ${userid}`, true);
+                        await mydb.updateRow("devices", device, `id = ${device.id} AND hubid = ${hubindex} AND userid = ${userid}`, true);
                     } else {
                         uidmax++;
                         device.uid = uidmax;
-                        mydb.addRow("devices", device);
+                        await mydb.addRow("devices", device);
                     }
+                    // if ( !currentDevices.includes(sqldevid) ) {
+                    //     currentDevices.push(sqldevid);
+                    // }
+                    mydevices[device.uid] = device;
+                    currentDevices.push(device.uid);
                     checkDone("variables");
                 })
                 .catch( reason => {
@@ -2486,31 +2494,28 @@ function getDevices(hub) {
                         pvalue.enabled  = proginfo.enabled;
                         pvalue.runAtStartup = proginfo.runAtStartup;
                         var pvalstr = encodeURI2(pvalue);
-
-                        // grab the list of device id's to process duplicate removal later
-                        var sqldevid = "'" + progid + "'";
-                        if ( !currentDevices.includes(sqldevid) ) {
-                            currentDevices.push(sqldevid);
-                        }
                         var device = {userid: userid, hubid: hubindex, deviceid: progid, name: progname, 
                                         devicetype: thetype, hint: "ISY_program", refresh: "never", pvalue: pvalstr};
-                        mydevices[progid] = device;
                         mydb.getRow("devices", "id,uid,deviceid", `userid = ${userid} AND hubid = ${hubindex} AND devicetype = '${thetype}' AND deviceid = '${progid}'`)
-                        .then(resp => {
+                        .then(async resp => {
                             if ( resp ) {
-                                const uprogid = resp.deviceid;
-                                mydevices[uprogid].id = resp.id;
+                                device.id = resp.id;
                                 if ( resp.uid === 0 ) {
                                     uidmax++;
-                                    mydevices[uprogid].uid = uidmax;
+                                    device.uid = uidmax;
                                 } else {
-                                    mydevices[uprogid].uid = resp.uid;
+                                    device.uid = resp.uid;
                                 }
-                                mydb.updateRow("devices", mydevices[uprogid], `id = ${resp.id} AND hubid = ${hubindex} AND userid = ${userid}`, true);
+                                currentDevices.push(device.uid);
+                                mydevices[device.uid] = device;
+                                await mydb.updateRow("devices", device, `id = ${resp.id} AND hubid = ${hubindex} AND userid = ${userid}`, true);
                             } else {
                                 uidmax++;
-                                mydevices[progid].uid = uidmax;
-                                mydb.addRow("devices", mydevices[progid]);
+                                device.uid = uidmax;
+                                currentDevices.push(device.uid);
+                                const dbresult = await mydb.addRow("devices", device);
+                                device.id = dbresult.getAutoIncrementValue();
+                                mydevices[device.uid] = device;
                             }
                         })
                         .catch(reason => {
@@ -2542,7 +2547,7 @@ function getDevices(hub) {
                     var n = 0;
                     for ( var obj in thenodes ) {
                         var node = thenodes[obj];
-                        const devid = fixISYid(node["address"][0].toString());
+                        const devid = node["address"][0].toString();
                         var hint = node["type"][0].toString();
                         if ( !hint ) {
                             hint = "0.0.0.0";
@@ -2580,13 +2585,6 @@ function getDevices(hub) {
     
                         var name = node["name"][0] || "Unnamed Node";
                         var pvalue = {"name": name};
-
-                        // grab the list of device id's to process duplicate removal later
-                        // var sqldevid = "'" + devid + "'";
-                        // if ( !currentDevices.includes(sqldevid) ) {
-                        //     currentDevices.push(sqldevid);
-                        // }
-
                         const ignoreNodes = ["$","address","name","family","type","deviceClass","sgid","rpnode","custom","devtype","enabled",
                                             "dcPeriod","startDelay","endDelay","parent__"];
                         for (var nodeitem in node) {
@@ -2616,30 +2614,23 @@ function getDevices(hub) {
                         // this is where we change the device items
                         pvalue = translateObjects(pvalue, 1);
                         var pvalstr = encodeURI2(pvalue);
-    
-                        // set bare minimum info
-                        // this is updated below in the callback after getting node details
-                        var sqldevid = "'" + devid + "'";
-                        if ( !currentDevices.includes(sqldevid) ) {
-                            currentDevices.push(sqldevid);
-                        }
                         var device = {userid: userid, hubid: hubindex, deviceid: devid, name: name, 
                                         devicetype: thetype, hint: `ISY_${hint}`, refresh: "never", pvalue: pvalstr};
-                        mydevices[devid] = device;
                         mydb.getRow("devices", "id,uid,deviceid", `userid = ${userid} AND hubid = ${hubindex} AND devicetype = '${thetype}' AND deviceid = '${devid}'`)
-                        .then(resp => {
+                        .then(async resp => {
                             if ( resp ) {
-                                const udevid = resp.deviceid;
-                                mydevices[udevid].id = resp.id;
+                                device.id = resp.id;
                                 if ( resp.uid === 0 ) {
                                     uidmax++;
-                                    mydevices[udevid].uid = uidmax;
+                                    device.uid = uidmax;
                                 } else {
-                                    mydevices[udevid].uid = resp.uid;
+                                    device.uid = resp.uid;
                                 }
-                                mydb.updateRow("devices", mydevices[udevid], `id = ${resp.id} AND hubid = ${hubindex} AND userid = ${userid}`, true)
+                                mydb.updateRow("devices", device, `id = ${resp.id} AND hubid = ${hubindex} AND userid = ${userid}`, true)
                                 .then(res => {
                                     n++;
+                                    mydevices[device.uid] = device;
+                                    currentDevices.push(device.uid);
                                     if ( n >= numnodes ) {
                                         checkDone("nodes");
                                     }        
@@ -2650,10 +2641,13 @@ function getDevices(hub) {
                                 });
                             } else {
                                 uidmax++;
-                                mydevices[devid].uid = uidmax;
-                                mydb.addRow("devices", mydevices[devid])
+                                device.uid = uidmax;
+                                mydb.addRow("devices", device)
                                 .then(res => {
                                     n++;
+                                    device.id = res.getAutoIncrementValue();
+                                    mydevices[device.uid] = device;
+                                    currentDevices.push(device.uid);
                                     if ( n >= numnodes ) {
                                         checkDone("nodes");
                                     }        
@@ -2686,7 +2680,7 @@ function getDevices(hub) {
                     var ng = 0;
                     for ( var obj in groups ) {
                         var node = groups[obj];
-                        var devid = fixISYid(node["address"][0].toString());
+                        var devid = node["address"][0].toString();
                         var hint = "ISY_scene";
                         var name = node["name"][0];
         
@@ -2702,10 +2696,10 @@ function getDevices(hub) {
                         }
 
                         // grab the list of device id's to process duplicate removal later
-                        var sqldevid = "'" + devid + "'";
-                        if ( !currentDevices.includes(sqldevid) ) {
-                            currentDevices.push(sqldevid);
-                        }
+                        // var sqldevid = "'" + devid + "'";
+                        // if ( !currentDevices.includes(sqldevid) ) {
+                        //     currentDevices.push(sqldevid);
+                        // }
                         var pvalstr = encodeURI2(pvalue);
                         var device = {userid: userid, hubid: hubindex, deviceid: devid, name: name, 
                                     devicetype: "isy", hint: hint, refresh: "never", pvalue: pvalstr};
@@ -2723,7 +2717,8 @@ function getDevices(hub) {
                                 mydb.updateRow("devices", device, `id = ${device.id} AND hubid = ${hubindex} AND userid = ${userid}`, true)
                                 .then(res => {
                                     ng++;
-                                    mydevices[devid] = device;
+                                    mydevices[device.uid] = device;
+                                    currentDevices.push(device.uid);
                                     if ( ng >= numgroups ) {
                                         checkDone("groups");
                                     }
@@ -2739,7 +2734,9 @@ function getDevices(hub) {
                                 mydb.addRow("devices", device)
                                 .then(res => {
                                     ng++;
-                                    mydevices[devid] = device;
+                                    device.id = res.getAutoIncrementValue();
+                                    mydevices[device.uid] = device;
+                                    currentDevices.push(device.uid);
                                     if ( ng >= numgroups ) {
                                         checkDone("groups");
                                     }
@@ -2776,24 +2773,24 @@ function getDevices(hub) {
                     if ( numnodes ) {
                         var n = 0;
                         nodes.forEach(function(node) {
-                            var nodeid = fixISYid(node["$"]["id"]);
+                            var nodeid = node["$"]["id"];
                             var props = node["property"];
-                            if ( props && mydevices[nodeid] ) {
-                                var pvalue = setIsyFields(nodeid, mydevices[nodeid], props);
-                                var pvalstr = encodeURI2(pvalue);
-                                mydevices[nodeid]["pvalue"] = pvalstr;
-                                mydb.updateRow("devices", mydevices[nodeid], "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + nodeid + "'")
-                                .then( ()=> {
-                                    n++;
-                                    if ( n >= numnodes ) {
-                                        checkDone("states");
-                                    }
+
+                            // get the devices that match this nodeid and update the pvalue with the new status info
+                            let devices = Object.values(mydevices).filter( device => device.deviceid === nodeid );
+
+                            if ( props && devices.length ) {
+                                devices.forEach(async device => {
+                                    var pvalue = setIsyFields(nodeid, device, props);
+                                    var pvalstr = encodeURI2(pvalue);
+                                    device["pvalue"] = pvalstr;
+                                    mydevices[device.uid] = device;
+                                    await mydb.updateRow("devices", device , "userid = "+userid+" AND hubid = "+hubindex+" AND deviceid = '" + nodeid + "'");
                                 });
-                            } else {
-                                n++;
-                                if ( n >= numnodes ) {
-                                    checkDone("states");
-                                }
+                            }
+                            n++;
+                            if ( n >= numnodes ) {
+                                checkDone("states");
                             }
                         });
                     } else {
@@ -3002,11 +2999,13 @@ function getLoginPage(req, userid, pname, emailname, mobile, hostname) {
 
     tc+= "<form id=\"loginform\" name=\"login\" action=\"#\"  method=\"POST\">";
     tc+= hidden("returnURL", GLB.returnURL);
+    tc+= hidden("pythonURL", GLB.pythonURL);
     tc+= hidden("pagename", "login");
     var webSocketUrl = getSocketUrl(hostname);
     tc+= hidden("webSocketUrl", webSocketUrl);
     tc+= hidden("webSocketServerPort", GLB.webSocketServerPort);
     tc+= hidden("webDisplayPort", GLB.port);
+    tc+= hidden("pythonPort", GLB.pythonPort);
     tc+= hidden("api", "dologin");
     tc+= hidden("apiSecret", GLB.apiSecret);
     tc+= hidden("dbgflags", JSON.stringify(GLB.dbinfo.dbgflags), "dbgflags");
@@ -3098,11 +3097,13 @@ function getLoginPage(req, userid, pname, emailname, mobile, hostname) {
 
     tc+= "<form id=\"newuserform\" class=\"hidden\" name=\"newuserform\" action=\"#\"  method=\"POST\">";
     tc+= hidden("returnURL", GLB.returnURL);
+    tc+= hidden("pythonURL", GLB.pythonURL);
     tc+= hidden("pagename", "login");
     var webSocketUrl = getSocketUrl(hostname);
     tc+= hidden("webSocketUrl", webSocketUrl);
     tc+= hidden("webSocketServerPort", GLB.webSocketServerPort);
     tc+= hidden("webDisplayPort", GLB.port);
+    tc+= hidden("pythonPort", GLB.pythonPort);
     tc+= hidden("api", "createuser");
     tc+= hidden("apiSecret", GLB.apiSecret);
     // tc+= hidden("userid", userid);
@@ -3232,7 +3233,7 @@ function createUser(body) {
         if ( !devices ) {
             throw "error - problem creating default devices for new user with email = " + emailname;
         }
-        results.push(devices);
+        // results.push(devices);
         if ( DEBUG15 ) {
             console.log( (ddbg()), "default devices created for userid: ", userid, " devices: ", jsonshow(devices));       
         }
@@ -3556,6 +3557,7 @@ function makeNewRooms(userid, pname, password, skin, defaultrooms) {
             defaultpanel.id = panelid;
             var rooms = [];
             var k = 0;
+            const numrooms = objCount(defaultrooms);
             for ( var roomname in defaultrooms ) {
                 k++;
                 var room = {userid: userid, panelid: panelid, rname: roomname, rorder: k};
@@ -3565,7 +3567,7 @@ function makeNewRooms(userid, pname, password, skin, defaultrooms) {
                     rooms.push(room);
 
                     // if we added the last room then resolve the promise
-                    if ( k === Object.keys(defaultrooms).length ) {
+                    if ( k === numrooms ) {
                         resolve([defaultpanel, rooms]);
                     }
                 })
@@ -3595,6 +3597,7 @@ function validateUserPage(user, thecode) {
 
     tc+= "<form id=\"validateuserpage\" name=\"validateuserpage\" action=\"#\"  method=\"POST\">";
     tc+= hidden("returnURL", GLB.returnURL);
+    tc+= hidden("pythonURL", GLB.pythonURL);
     tc+= hidden("pagename", "login");
     tc+= hidden("userid", userid, "userid");
     tc+= hidden("email", user.email);
@@ -3638,6 +3641,7 @@ function validatePasswordPage(user, thecode) {
     // but we show them in a static field below
     tc+= "<form id=\"newpwform\" name=\"newpwform\" action=\"#\"  method=\"POST\">";
     tc+= hidden("returnURL", GLB.returnURL);
+    tc+= hidden("pythonURL", GLB.pythonURL);
     tc+= hidden("pagename", "login");
     tc+= hidden("userid", userid, "userid");
     tc+= hidden("email", user.email);
@@ -3897,7 +3901,6 @@ function doLogin(body, res) {
     var umobile = encodeURI(body["mobile"].trim());
     var uhash = pw_hash(body["pword"]);
     const pname = "default";
-    const phash = "";
 
     if ( DEBUG20 ) {
         console.log( (ddbg()), "dologin: uname= ", uname, " umobile= ", umobile, " pword= ", uhash, " body: ", body);
@@ -3915,8 +3918,8 @@ function doLogin(body, res) {
             uname = therow["email"];
             setCookie(res, "uname", pw_hash(uname));
             
-            // store the panel name as a hash
-            setCookie(res, "pname", pw_hash(pname));
+            // store the panel name as a hash - no longer use this
+            // setCookie(res, "pname", pw_hash(pname));
             if ( DEBUG3 ) {
                 console.log((ddbg()), "Successful login. userid: ", userid, " Username: ", uname, " user: ", therow);
             }
@@ -3936,7 +3939,7 @@ function doLogin(body, res) {
             });
         } else {
             delCookie(res, "uname");
-            delCookie(res, "pname");
+            // delCookie(res, "pname");
             console.warn( (ddbg()), "Failed login attempt. Username: ", uname);
             therow = "error - invalid username or password";
         }
@@ -3995,29 +3998,15 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
                 </form></div>';
             $tc += "</div>";
         }
-
-        // provide welcome page with instructions for what to do
-        // this will show only if the user hasn't set up HP
-        // or if a reauth is requested or when converting old passwords
-        // $tc += "<div class=\"greeting\">";
-        // $tc +="<p>This is where you link a hub to " +
-        //         "HousePanel to gain access to your smart home devices. " +
-        //         "Hubitat and ISY hubs are supported. " +
-        //         "You can link any number and combination of hubs. " + 
-        //         "To authorize a Hubitat hub you must provide an access token and the hub endpoint " + 
-        //         "These are both shown in the HousePanel app on the Hubitat hub. " +
-        //         "ISY hubs require you to enter your username and password in the fields shown below, " +
-        //         "and enter the IP of your hub in the Host API Url field " +
-        //         "using format https://xxx.xxx.xxx.xxx:8443" +
-        //         "</p>";
-        // $tc += "</div>";
         
         var webSocketUrl = getSocketUrl(hostname);
         $tc += hidden("pagename", "auth");
         $tc += hidden("returnURL", GLB.returnURL);
+        $tc += hidden("pythonURL", GLB.pythonURL);
         $tc += hidden("webSocketUrl", webSocketUrl);
         $tc += hidden("webSocketServerPort", GLB.webSocketServerPort);
         $tc += hidden("webDisplayPort", GLB.port);
+        $tc += hidden("pythonPort", GLB.pythonPort);
         $tc += hidden("userid", userid, "userid");
         $tc += hidden("pname", pname);
         $tc += hidden("emailid", useremail, "emailid");
@@ -4170,70 +4159,12 @@ function getAuthPage(user, configoptions, hubs, hostname, defaultHub) {
 
 }
 
-// emulates the PHP function for javascript objects or arrays
-// new optional pos value will check the field named pos is it is an array of objects
-function array_search(needle, arr, pos) {
-    var key = false;
-    if ( is_object(arr) ) {
-        if ( pos ) {
-            try {
-                for (var t in arr) {
-                    var check = arr[t][pos];
-                    if ( check===needle || check.toString() === needle.toString() ) {
-                        return arr[t];
-                    }
-                } 
-            }
-            catch(e) { key = false; }
-        } else {
-            try {
-                for (var t in arr) {
-                    if ( arr[t]===needle || arr[t].toString() === needle.toString() ) {
-                        return arr[t];
-                    }
-                } 
-            }
-            catch(e) { key = false; }
-        }
-    }
-    return key;
-}
-
-// checks if a needle is in an object or an array
-function in_array(needle, arr) {
-    if ( !is_object(arr) ) {
-        return false;
-    } else {
-        for (var i in arr) {
-            var item = arr[i];
-            if ( item===needle || item.toString()===needle.toString() ) {
-                return true;
-            }
-        }
-        return false;
-    }
-}
-
 function is_array(obj) {
     if ( obj!==null && typeof obj === "object" ) {
         return Array.isArray(obj);
     } else {
         return false;
     }
-}
-
-function getKeyByValue(object, value) {
-    // return Object.keys(object).find(key => object[key] === value);
-    try {
-        for ( var key in object ) {
-            if ( object[key] === value || object[key].toString() === value.toString() ) {
-                return key;
-            }
-        }
-    } catch (e) {
-        return null;
-    }
-    return null;
 }
 
 function is_number(obj) {
@@ -4258,21 +4189,6 @@ function ddbg() {
     // var dstr = "{" + d.toLocaleDateString() + " " + d.toLocaleTimeString() + "} => ";
     var dstr = "(" + d.toLocaleString() + ") ==> ";
     return "V" + GLB.HPVERSION +" " + dstr;
-}
-
-// returns true if the index is in the room things list passed
-function inroom($idx, $things) {
-    var $found = false;
-    var $idxint = parseInt($idx);
-    for (var i in $things) {
-        var $arr = $things[i];
-        var thingindex = is_array($arr) ? $arr[0] : parseInt($arr);
-        if ( $idxint === thingindex ) {
-            $found = i;
-            break;
-        }
-    }
-    return $found;
 }
 
 // this is the main page rendering function
@@ -4468,173 +4384,6 @@ function getSpecialContent(userid, thingtype, thingvalue) {
     thingvalue[thingtype] = content;
     return thingvalue;
 }
-
-// depracated - this was the old function that searched for files and returned the html to display them
-// returns proper html to display an image, video, frame, or custom
-// if some other type is requested it returns a div of requested size and skips search
-// searches in main folder and media subfolder for file name
-// function getFileName(userid, pname, thingvalue, thingtype) {
-
-//     // only process these types of tiles
-//     const supportedtiles = ["image","video","frame","custom","blank"];
-//     if ( !supportedtiles.includes(thingtype) ) {
-//         return thingvalue;
-//     }
-
-//     var fw = "auto";
-//     var fh = "auto";
-//     var fn = "";
-
-//     function getext(fname) {
-//         var ipos = fname.lastIndexOf(".");
-//         var ext = "";
-//         if ( ipos !== -1 ) {
-//             ext = fname.substr(ipos);
-//         }
-//         // if file has an extension then remove the dot
-//         if ( ext.length && ext.substring(0,1)==="." ) {
-//             ext = ext.substring(1);
-//         }
-//         ext = ext.toLowerCase();
-//         return ext;
-//     }
-
-//     // get the name, width, height to create
-//     if ( array_key_exists("name", thingvalue) ) {
-//         fn = thingvalue["name"].trim();
-//     }
-//     if ( fn === "" ) {
-//         fn = thingtype.substring(0,1).toUpperCase() + thingtype.substring(1);
-//     } else if ( typeof fn === "string" && fn.startsWith("TEXT::") ) {
-//         fn = fn.substring(6);
-//     }
-
-//     if ( array_key_exists("width", thingvalue) ) {
-//         fw = thingvalue["width"];
-//         if ( typeof fw === "string" && fw.startsWith("TEXT::") ) {
-//             fw = fw.substring(6);
-//         } else if ( typeof fw === "string" && fw.indexOf("::") !== -1 ) {
-//             fw = "auto";
-//         } else if ( fw !== "auto" ) {
-//             fw = parseInt(fw);
-//             if ( isNaN(fw)) {
-//                 fw = "auto";
-//             }
-//         }
-//     // } else {
-//     //     thingvalue["width"] = fw;
-//     }
-
-//     if ( array_key_exists("height", thingvalue) ) {
-//         fh = thingvalue["height"];
-//         if ( typeof fh === "string" && fh.startsWith("TEXT::") ) {
-//             fh = fh.substring(6);
-//         } else if ( typeof fh === "string" && fh.indexOf("::") !== -1 ) {
-//             fh = "auto";
-//         } else if ( fh !== "auto" ) {
-//             fh = parseInt(fh);
-//             if ( isNaN(fh)) {
-//                 fh = "auto";
-//             }
-//         }
-//     // } else {
-//     //     thingvalue["height"] = fh;
-//     }
-
-//     // this block sets the file name to load based on extension requested
-//     var $vn = "";
-//     var $fext = "";
-//     var $v = "";
-
-//     // check if a name was specified, and if so use it, otherwise attempt to use the name to infer the content
-//     if ( typeof thingvalue[thingtype] === "string" && thingvalue[thingtype].trim()!=="" ) {
-//         $v = $vn;
-//     } else {
-
-//         // first check names without extensions
-//         const folder = "user" + userid + "/";
-//         const mediafolder = folder + pname + "/media/";
-//         const photofolder = folder + pname + "/photos/";
-
-//         if ( thingtype === "frame" && fn.startsWith("Frame")  ) {
-//             $vn = folder + fn + ".html";
-//             $fext = "html";
-//         } else if ( fn.startsWith("http")) {
-//             $vn = fn;
-//             $fext = getext(fn);
-//         } else if (fs.existsSync(folder + fn) ) {
-//             $vn = folder + fn;
-//             $fext = getext(fn);
-//         } else if (fs.existsSync(mediafolder + fn)) {
-//             $vn = mediafolder + fn;
-//             $fext = getext(fn);
-//         } else if (fs.existsSync(photofolder + fn)) {
-//             $vn = photofolder + fn;
-//             $fext = getext(fn);
-//         } else {
-//             $vn = "";
-//             $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\"></div>";
-//         }
-
-//         // process things if file was found
-//         if ( $vn ) {
-
-//             if ( thingtype==="image" ) {
-//                 $v= "<img width=\"" + fw + "\" height=\"" + fh + "\" src=\"" + $vn + "\">";
-//             } else if ( thingtype==="video" ) {
-//                 $v= "<video width=\"" + fw + "\" height=\"" + fh + "\" autoplay>";
-//                 $v+= "<source src=\"" + $vn + "\" type=\"video/" + $fext + "\">";
-//                 $v+= "Video Not Supported</video>";
-//             } else if ( thingtype==="frame" ) {
-//                 $v = "<iframe width=\"" + fw + "\" height=\"" + fh + "\" src=\"" + $vn + "\" frameborder=\"0\"></iframe>";
-//             } else if ( thingtype==="blank" ) {
-//                 $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\"></div>";
-
-//             // customs can be any of the supported types
-//             } else  {
-//                 switch ($fext) {
-//                     // image files
-//                     case "jpg":
-//                     case "jpeg":
-//                     case "png":
-//                     case "gif":
-//                     case "img":
-//                         $v= "<img width=\"" + fw + "\" height=\"" + fh + "\" src=\"" + $vn + "\">";
-//                         break;
-
-//                     // video files
-//                     case "mp4":
-//                     case "ogg":
-//                         $v= "<video width=\"" + fw + "\" height=\"" + fh + "\" autoplay>";
-//                         $v+= "<source src=\"" + $vn + "\" type=\"video/" + $fext + "\">";
-//                         $v+= "Video Not Supported</video>";
-//                         break;
-                        
-//                     // render web pages in a web iframe
-//                     case "html":
-//                     case "htm":
-//                         $v = "<iframe width=\"" + fw + "\" height=\"" + fh + "\" src=\"" + $vn + "\" frameborder=\"0\"></iframe>";
-//                         break;
-
-//                     // otherwise show any web file referenced or a blank just like below
-//                     default:
-//                         if ( $vn.startsWith("http") ) {
-//                             $v = "<iframe width=\"" + fw + "\" height=\"" + fh + "\" src=\"" + $vn + "\" frameborder=\"0\"></iframe>";
-//                         } else {
-//                             $v = "<div style=\"width: " + fw + "px; height: " + fh + "px;\"></div>";
-//                         }
-//                         break;
-//                 }
-//             }
-//         }
-//     }
-
-//     if ( DEBUG16 ) {
-//         console.log((ddbg()), "custom name for type: ", thingtype, " vn= ", $vn, " fn= ", fn, " v= ", $v);
-//     }
-//     thingvalue[thingtype] = $v;
-//     return thingvalue;
-// }
 
 // function to create frame2.html with AccuWeather for a city
 // the City Name, Country Code, and the Location Code from AccuWeather must be provided
@@ -5122,21 +4871,21 @@ function makeThing(userid, pname, configoptions, kindex, thesensor, panelname, p
 
         // these commands don't get invoked upon page refresh
         // to invoke them you must click on them
-        } else if ( command === "PUT" || command === "POST" ) {
+        } else if ( command === "PUT" || command === "POST" || command === "AI" ) {
             tval = command + "::" + subid;
 
         } else if ( command === "GET" ) {
             const configkey = "user_" + bid;
             const configval = getConfigItem(configoptions, configkey) || [];
             configval.forEach( item => {
-                let weburl = item[1];
-                let skey = item[2];
+                var weburl = item[1];
+                var skey = item[2];
                 tval = command + "::" + subid;
                 if ( item[0]===command && skey === tkey ) {
                     curl_call(weburl, null, false, false, command)
                     .then( response => {
                         setTimeout( function() {
-                            urlCallback(userid, bid, thingtype, tkey, response, command);
+                            urlCallback(userid, bid, thingtype, tkey, weburl, response, command);
                         }, PUSHDELAY);
                     })
                     .catch( error => {
@@ -5513,13 +5262,6 @@ function getClock(clockid) {
     return dclock;
 }
 
-// make the default name start with a capital letter if we give a number
-function getCustomName(defbase, cnum) {
-    var defname = defbase.substring(0,1).toUpperCase() + defbase.substring(1);
-    defname = defname + cnum;
-    return defname;
-}
-
 // create addon subid's for any tile
 // this enables a unique customization effect
 // we pass in the config options so this function doesn't run async
@@ -5772,16 +5514,17 @@ function updateTimeStamp(subid, pvalue) {
     return pvalue;
 }
 
-function processHubMessage(userid, hubmsg, newST) {
+function processHubMessage(userid, hubmsg) {
     var modemap = {"Day":"md", "Evening":"me", "Night":"md", "Away":"ma"};
     // loop through all devices tied to this message for any hub
     // push info to all things that match
     // we don't know the thing types so we have to check all things
     // this uses the format defined in the HousePanel.groovy file
     // that was also used in the old housepanel.push app
+    var hubid = hubmsg['hubid'];
     var subid = hubmsg['change_attribute'];
-    var hubmsgid = hubmsg['change_device'].toString();
-    if ( DEBUG12 || DEBUGtmp) {
+    var deviceid = hubmsg['change_device'].toString();
+    if ( DEBUG12 ) {
         console.log( (ddbg()), "processHubMessage - userid: ", userid, " hubmsg: ", hubmsg);
     }
     var pvalue;
@@ -5802,10 +5545,10 @@ function processHubMessage(userid, hubmsg, newST) {
     // the root device values are updated in the DB which causes all instances to update when this is called
     // all links are handled by code in the js updateTile function
     // var devid = null;
-    if ( hubmsgid.indexOf("%") !== -1 ) {
-        var conditions = "userid = " + userid + " AND deviceid LIKE '" + hubmsgid+"'";
+    if ( deviceid.indexOf("%") !== -1 ) {
+        var conditions = "userid = " + userid + " AND deviceid LIKE '" + deviceid+"'";
     } else {
-        conditions = "userid = " + userid + " AND deviceid = '" + hubmsgid+"'";
+        conditions = "userid = " + userid + " AND deviceid = '" + deviceid+"'";
     }
     mydb.getRows("devices","*", conditions)
     .then(devices => {
@@ -5820,6 +5563,9 @@ function processHubMessage(userid, hubmsg, newST) {
             } else {
                 pvalue = {};
             }
+
+            // set deviceid for the case where we got here using LIKE conditions
+            deviceid = device.deviceid;
 
             // handle special case where groovy pushes an array for color changes
             // this branch should no longer ever be used because I changed color to send a Map object that is handled below
@@ -5857,7 +5603,7 @@ function processHubMessage(userid, hubmsg, newST) {
 
             // increment the count if this is not the inverse of a turn on action
             pvalue = updateTimeStamp(subid, pvalue);
-            const swtype = device.devicetype;
+            let swtype = device.devicetype;
 
             // handle special audio updates
             if ( swtype==="audio" || pvalue.audioTrackData ) {
@@ -5902,13 +5648,84 @@ function processHubMessage(userid, hubmsg, newST) {
                 }
             }
 
-            pushClient(userid, hubmsgid, swtype, subid, pvalue);
-            processRules(userid, device.uid, hubmsgid, swtype, subid, pvalue, true, "processMsg");
+            // push state changes to python sidecar for use in AI interactions
+
+            // handle trackData for AI so we can send the important fields
+            // this is needed because we split out trackData into multiple subid's for the screen updates but we want to send the important ones to the AI sidecar in a consistent way
+            if ( subid==="trackData" ) {
+                const musicfields = ["trackDescription","currentAlbum", "currentArtist"];
+                musicfields.forEach( function(mfield) {
+                    if ( typeof pvalue[mfield] !== "undefined" ) {
+                        let payload = {api: "ai-context", userid: userid, hubid: hubid, deviceid: deviceid, devicetype: swtype, 
+                            devicename: pvalue["name"], activity: mfield, value: pvalue[mfield] };
+                        processAISidecar(payload)
+                        .then( result => {
+                            if ( DEBUG5 ) {
+                                console.log( (ddbg()), "AI sidecar called with payload: ", payload, " result: ", result);
+                            }
+                        })
+                        .catch( reason => {
+                            console.error( (ddbg()), reason);
+                        });
+                    }
+                });
+            } else {
+                const AITriggers = ["themode", "motion", "contact", "presence", "switch", "level", "lock", "color", "status",
+                    "roomActivity", "roomState", "temperature", "lux", "humidity", "thermostatOperatingState", "thermostatMode", "heatingSetpoint", "coolingSetpoint"
+                ];
+                let oktrigger = AITriggers.includes(subid) || device.devicetype==="hsm" 
+                if ( oktrigger && typeof pvalue[subid] !== "undefined" ) {
+                    let payload = {api: "ai-context", userid: userid, hubid: hubid, deviceid: deviceid, devicetype: swtype, 
+                                devicename: pvalue["name"], activity: subid, value: pvalue[subid] };
+                    processAISidecar(payload)
+                    .then( result => {
+                        if ( DEBUG5 ) {
+                            console.log( (ddbg()), "AI sidecar called with payload: ", payload, " result: ", result);
+                        }
+                    })
+                    .catch( reason => {
+                        console.error( (ddbg()), reason);
+                    });
+                }
+            }
+
+            pushClient(userid, deviceid, swtype, subid, pvalue);
+            processRules(userid, device.uid, deviceid, swtype, subid, pvalue, true, "processMsg");
         });
         return devices;
     })
     .catch(reason => {
         console.error( (ddbg()), "processHubMessage - DB error: ", reason);
+    });
+}
+
+// this function calls the python sidecar for use in AI interactions
+function processAISidecar(payload) {
+    if ( typeof GLB.pythonURL === "undefined" || !GLB.pythonURL ) {
+        if ( DEBUG5 ) {
+            console.warn( (ddbg()), "AI sidecar call skipped - no python URL configured");
+        }
+        return Promise.reject({status: "error", message: "AI sidecar call skipped - no python URL configured"});
+    }
+
+    const header = {"Content-Type": "application/json"};
+    return curl_call(GLB.pythonURL, header, payload, false, "POST")
+    .then( result => {
+        if ( typeof result === "object" && result.status && result.status === "ok" ) {
+            return result;
+        } else {
+            if ( typeof result === "string" ) {
+                result = {status: "error", message: result};
+            } else if ( typeof result !== "object" ) {
+                result = {status: "error", message: "AI sidecar call failed with an unknown response"};
+            }
+            console.warn( (ddbg()), result);
+            return result;
+        }
+    })
+    .catch( reason => {
+        console.error( (ddbg()), reason);
+        return {status: "error", message: reason};
     });
 }
 
@@ -6927,7 +6744,7 @@ function callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, h
                     subdevice.pvalue = encodeURI2(pvalue);
                     return mydb.updateRow("devices", subdevice, "userid = " + userid + " AND id = "+subdevice.id, true)
                     .then( () => {
-                        getHubResponse(newval, hub);
+                        getHubResponse(newval, hub, null, null);
                         return newval;
                     })
                     .catch(reason => {
@@ -6978,6 +6795,27 @@ function callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, h
                 });
             });
             return promise;
+
+        // for the hubless devices tied to the None hub we just update the value in the DB and push to the client without making any calls since there is no hub to call
+        // but we refresh the data just like we do on a hub refresh
+        } else if ( hub.hubtype==="None" ) {
+            return getDevices(hub, swid)
+            .then(biddevices => {
+                // get the first device with deviceid that matches the swid - there should only be one but we will just take the first one if there are multiple
+                let device = Object.values(biddevices).find(d => d.deviceid === swid);
+                if ( !device ) {
+                    console.warn( (ddbg()), "error - no device found for swid: ", swid, " in None hub for userid: ", userid);
+                    return "error - no device found for swid: " + swid + " in None hub";
+                }
+                // let newdevice = biddevices[swid];
+                var newpvalue = decodeURI2(device.pvalue);
+                newpvalue = getSpecialContent(userid, swtype, newpvalue);
+
+                // push results to all clients to refresh the content on screen
+                pushClient(userid, swid, swtype, subid, newpvalue);
+                return newpvalue;
+            });
+            
 
         // handle clicks on Harmony hub commands
         // this is a bit different because we have to send the command in a specific format to the hub as a POST
@@ -7345,16 +7183,10 @@ function callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, h
         } else {
 
             if ( typeof resolve === "function" ) {
+                pushClient(userid, swid, swtype, subid, pvalue);
                 resolve(pvalue);
-            }
-            if ( DEBUG1 ) {
-                console.log( (ddbg()),"Hub call result: swid:", swid," swtype:", swtype," subid:", subid," pvalue:", pvalue);
-            }
-
-            // emulate hub pushing results if testing locally
-            // this uses the object variant of the function to change multiple things at once
-            // otherwise just push results to screen for fast visual response
-            if ( EMULATEHUB ) {
+            } else if ( EMULATEHUB ) {
+                // emulate hub pushing results if testing locally
                 var devname = pvalue.name || "";
                 var msg = {
                     msgtype: "update", 
@@ -7365,12 +7197,11 @@ function callHub(userid, hubindex, tileid, swid, swtype, swval, swattr, subid, h
                     change_type: swtype,
                     change_value: pvalue
                 };    
-                processHubMessage(userid, msg, true);
+                processHubMessage(userid, msg);
             } else {
+                // otherwise just push results to screen for fast visual response
                 pushClient(userid, swid, swtype, subid, pvalue);
             }
-
-            return pvalue;
         }
      
     }
@@ -7546,7 +7377,7 @@ function doAction(userid, hubindex, tileid, uid, swid, swtype, swval, swattr, su
             const parmobj = hosturl.searchParams;
             msg = curl_call(posturl, null, parmobj, false, command)
             .then( res => {
-                return urlCallback(userid, swid, swtype, subid, res, command);
+                return urlCallback(userid, swid, swtype, subid, posturl, res, command);
             })
             .catch( error => {
                 console.error( (ddbg()), "error on " + command + " call: ", error, " userid=",userid, " swid=",swid, " swtype=",swtype, " subid=",subid);
@@ -7580,6 +7411,43 @@ function doAction(userid, hubindex, tileid, uid, swid, swtype, swval, swattr, su
                 console.error( (ddbg()), "LIST update error: ", reason);
                 return "error - something went wrong with LIST command";
             });
+
+        // patch in request to make an AI call
+        // to use this in the customizer, you must make a field with the name "result" for the AI response to populate
+        // and you must put the AI prompt in the value field and set the command to AI and the linkval to this particular prompt
+        } else if ( command==="AI" ) {
+
+            // need the hubid not the hubindex for use in the python AI code
+            // we always just get the first Hubitat hub since there is no tracking for the hubless hub
+            var conditions = "userid = "+userid+" AND hubtype = 'Hubitat'";
+            msg = mydb.getRow("hubs", "*", conditions)
+            .then(hub => {
+                if ( !hub ) {
+                    console.warn( (ddbg()), "AI command error - hub not found for userid: ", userid, " hubindex: ", hubindex);
+                    throw "error - hub not found for AI command";
+                }
+                return hub.hubid;
+            })
+            .then(hubid => {              
+                let payload = {api: "ai-request", userid: userid, hubid: hubid, deviceid: swid, prompt: linkval};
+                return processAISidecar(payload)
+            }).then( res => {
+                // remove excess <br> tags that some models add to the beginning and end of the response - this is a bit of a hack 
+                // but it is because some models add these for formatting reasons but they just end up showing up in the response field and looking bad
+                // if ( typeof res.response === "string" ) {
+                //     res.response = res.response.replace(/<br\s*\/?>/gi, "").trim();
+                // }
+
+                // include aistatus as a potential field. Don't keep status to avoid overriding the default status field for tiles
+                // to see the response a custom AI command must be created with a field named response
+                return urlCallback(userid, swid, swtype, subid, linkval, {aistatus: res.status, response: res.response}, command);
+            })
+            .catch( error => {
+                console.error( (ddbg()), error);
+                return {};
+            });
+
+
         } else if ( command==="RULE" ) {
             if ( !GLB.dbinfo.enablerules ) {
                 msg = "warning - rules are disabled.";
@@ -7658,9 +7526,11 @@ function recurseKeys(pvalue, prefix, val) {
     }
 }
 
-function urlCallback(userid, swid, swtype, subid, body, command) {
+function urlCallback(userid, swid, swtype, subid, reqval, body, command) {
     var pvalue = {};
+    var trigger = command === "AI" ? "prompt" : "url";
     pvalue[subid] = command + "::" + subid; 
+    pvalue[trigger] = reqval;
 
     // if a string is returned then just push it as is
     if ( typeof body === "string" ) {
@@ -7758,7 +7628,7 @@ function setPosition(userid, swtype, thingid, swattr) {
             thing.posx = left;
             thing.zindex = zindex;
 
-            //  this id value should be exactly the same as thingid
+            // this id value should be exactly the same as thingid
             // update the location permanently and also push new location to all other panels
             var id = thing.id;
             return mydb.updateRow("things", thing, "userid = " + userid + " AND id = " + id)
@@ -8059,6 +7929,7 @@ function getInfoPage(user, configoptions, hubs, req) {
         $tc += hidden("emailid", useremail, "emailid");
         $tc += hidden("skinid", skin, "skinid");
         $tc += hidden("returnURL", GLB.returnURL);
+        $tc += hidden("pythonURL", GLB.pythonURL);
         $tc += hidden("pagename", "info");
         $tc += hidden("hpcode", hpcode, "hpcode");
         $tc += hidden("apiSecret", GLB.apiSecret);
@@ -8085,8 +7956,6 @@ function getInfoPage(user, configoptions, hubs, req) {
         $tc += "<div class='bold'>User ID: " + userid + "</div>";
         $tc += "<div class='bold'>User email: " + useremail + "</div>";
         $tc += "<div class='bold'>Username: " + uname + "</div>";
-        // $tc += "<div class='bold'>Displaying panel: " + pname + "</div>";
-        // $tc += "<div class='bold'>WebSocket port: " + currentport + "</div>";
         $tc += "<div class='bold'>Skin folder: " + skin + "</div>";
         $tc += "<div class='bold'>" + numhubs + " Hubs authorized</div><br>";
         
@@ -8279,6 +8148,7 @@ function hubFilters(userid, hubpick, hubs, pname, useroptions, pagename, ncols, 
         $tc += hidden("userid", userid, "userid");
         $tc += hidden("pagename", pagename);
         $tc += hidden("returnURL", GLB.returnURL);
+        $tc += hidden("pythonURL", GLB.pythonURL);
         $tc += hidden("apiSecret", GLB.apiSecret);
         $tc += hidden("pname", pname);
     }
@@ -8319,7 +8189,7 @@ function hubFilters(userid, hubpick, hubs, pname, useroptions, pagename, ncols, 
     for (var $iopt in thingtypes) {
         var $opt = thingtypes[$iopt];
         $i++;
-        if ( in_array($opt, useroptions ) ) {
+        if ( useroptions.includes($opt) ) {
             $tc+= "<td><input id=\"cbx_" + $i + "\" type=\"checkbox\" name=\"useroptions[]\" value=\"" + $opt + "\" checked=\"1\">";
         } else {
             $tc+= "<td><input id=\"cbx_" + $i + "\" type=\"checkbox\" name=\"useroptions[]\" value=\"" + $opt + "\">";
@@ -8399,7 +8269,7 @@ function getCatalog(userid, hubpick, hubs, pname, useroptions, sensors) {
             thingpr = thingname;
         }
         
-        if (in_array(thingtype, useroptions) && (hubpick===hubId || hubpick==="all")) {
+        if ( useroptions.includes(thingtype) && (hubpick===hubId || hubpick==="all")) {
             var hide = "";
         } else {
             hide = "hidden ";
@@ -8417,7 +8287,7 @@ function getCatalog(userid, hubpick, hubs, pname, useroptions, sensors) {
     return $tc;
 }
 
-// remove port since that is now dynamic
+// get the websocket url to use
 function getSocketUrl(hostname) {
     var webSocketUrl = "";
     if ( GLB.returnURL.startsWith("https://") ) {
@@ -8511,9 +8381,11 @@ async function getParamsPage(user, configoptions, req) {
     
     $tc += hidden("pagename", "options");
     $tc += hidden("returnURL", GLB.returnURL);
+    $tc += hidden("pythonURL", GLB.pythonURL);
     $tc += hidden("webSocketUrl", webSocketUrl);
     $tc += hidden("webSocketServerPort", GLB.webSocketServerPort);
     $tc += hidden("webDisplayPort", GLB.port);
+    $tc += hidden("pythonPort", GLB.pythonPort);
     $tc += hidden("userid", userid, "userid");
     $tc += hidden("uname", uname, "unameid");
     $tc += hidden("emailid", useremail, "emailid");
@@ -8831,9 +8703,11 @@ function getDevicesPage(user, configoptions, hubs, req) {
 
         $tc += hidden("pagename", "editdevices");
         $tc += hidden("returnURL", GLB.returnURL);
+        $tc += hidden("pythonURL", GLB.pythonURL);
         $tc += hidden("webSocketUrl", webSocketUrl);
         $tc += hidden("webSocketServerPort", GLB.webSocketServerPort);
         $tc += hidden("webDisplayPort", GLB.port);
+        $tc += hidden("pythonPort", GLB.pythonPort);
         $tc += hidden("userid", userid, "userid");
         $tc += hidden("uname", uname, "unameid");
         $tc += hidden("emailid", useremail, "emailid");
@@ -8845,9 +8719,8 @@ function getDevicesPage(user, configoptions, hubs, req) {
         $tc += hidden("dbgflags", JSON.stringify(GLB.dbinfo.dbgflags), "dbgflags");
 
         $tc += "<div class='greeting'>Select which hubs and types of things to show in the table below." +
-               " This might be useful if you have a large number of things and/or multiple hubs so you can select ." +
+               " This might be useful if you have a large number of things and/or multiple hubs so you can select" +
                " just the things here that you care about. Note that all things remain active even if they are not shown." +
-               " Note also for ISY hubs, all things are of type \"isy\" so you will not be able to select by type for that hub." +
                "</div>";
         $tc += hubFilters(userid, hubpick, hubs, pname, useroptions, "options", 8, false);
 
@@ -8888,7 +8761,7 @@ function getDevicesPage(user, configoptions, hubs, req) {
             var $special = "";
 
             var $odd = $evenodd = false;
-            if (in_array(thetype, useroptions)) {
+            if ( useroptions.includes(thetype) ) {
                 $evenodd = !$evenodd;
                 $evenodd ? $odd = " odd" : $odd = "";
                 $tc+= "<tr type=\"" + thetype + "\" tile=\"" + thingindex + "\" class=\"showrow" + $odd + $special + "\">";
@@ -8942,7 +8815,6 @@ function getDevicesPage(user, configoptions, hubs, req) {
 
         return $tc;
     }
-
 }
 
 // this function processes the general options updates - email, username, mobile, weather api options, and special tile counts
@@ -9125,7 +8997,7 @@ function processDevices(userid, panelid, optarray) {
                     if ( item["things_roomid"]===roomid ) {
                         var torder = parseInt(item["things_torder"]);
                         if ( !isNaN(torder) && torder > maxtorder ) { maxtorder = torder; } 
-                        if ( ! in_array(tnum, val) ) {
+                        if ( !val.includes(tnum) ) {
                             mydb.deleteRow("things","id = "+ item["things_id"]);
                         }
                     }
@@ -9334,9 +9206,11 @@ function getMainPage(user, configoptions, hubs, req, res) {
         // save Node.js address for use on the js side
         tc += hidden("pagename", "main");
         tc += hidden("returnURL", GLB.returnURL);
+        tc += hidden("pythonURL", GLB.pythonURL);
         tc += hidden("webSocketUrl", webSocketUrl);
         tc += hidden("webSocketServerPort", GLB.webSocketServerPort);
         tc += hidden("webDisplayPort", GLB.port);
+        tc += hidden("pythonPort", GLB.pythonPort);
         tc += hidden("userid", userid, "userid");
         tc += hidden("pname", pname);
         tc += hidden("panelid", panelid, "panelid");
@@ -9381,68 +9255,6 @@ function saveFilters(userid, useroptions, huboptpick) {
     if ( huboptpick ) {
         var updhub = {userid: userid, configkey: 'hubpick', configval: huboptpick, configtype: 0};
         mydb.updateRow("configs", updhub, "userid = " + userid + " AND configkey = 'hubpick'");
-    }
-}
-
-// this routine updates the null hub with the special tile count requested
-async function updSpecials(userid, hubindex, stype, newcount, specials) {
-
-    const defwidth = {"video": 375, "frame": 375, "image": 375, "blank": 180, "custom": 180};
-    const defheight = {"video": 210, "frame": 210, "image": 210, "blank": 210, "custom": 210};
-
-    // add special tiles based on type and user provided count
-    // this replaces the old code that handled only video and frame tiles
-    // this also creates image and blank tiles here that used to be made in groovy
-    // putting this here allows them to be handled just like other modifiable tiles
-    // note that frame1 and frame2 are reserved for weather and accuweather tiles
-    var dtype = stype==="custom" ? stype+"_" : stype;
-
-    // get the number of specials of this type already here
-    var numnow = 0;
-    if ( specials ) {
-        for (const key in specials) {
-            const dev = specials[key];
-            if ( dev.devicetype === stype ) numnow++;
-        }
-    }
-
-    // add new specials if we don't have enough
-    if ( newcount > numnow ) {
-        // for (var i= numnow; i < newcount; i++) {
-        var i = numnow;
-        while ( i < newcount ) {
-            var k = i+1;
-            var devname = getCustomName(stype, k);
-            var devid = dtype + k.toString();
-            var pvalue = {"name": devname, "width": defwidth[stype], "height": defheight[stype]};
-            var device = {userid: userid, hubid: hubindex, deviceid: devid, name: devname,
-                          devicetype: stype, hint: "special", refresh: "never", pvalue: encodeURI2(pvalue)};
-            await mydb.addRow("devices", device)
-            .then( () => {
-                i++;
-             })
-            .catch(reason => {
-                i = newcount;
-                console.warn( (ddbg()), "error adding special tile to database. device: ", device, "reason: ", reason );
-            });
-        }
-    
-    // remove the extra ones if we have too many
-    } else if ( newcount < numnow ) {
-        // for (var i= newcount; i < numnow; i++) {
-        var i = newcount;
-        while ( i < numnow ) {
-            var k = i+1;
-            var devid = dtype + k.toString();
-            await mydb.deleteRow("devices", "userid = "+ userid + " AND deviceid = '" + devid + "' AND devicetype = '"+stype+"'")
-            .then( () => {
-                i++;
-            })
-            .catch(reason => {
-                i = numnow;
-                console.error( (ddbg()), "error updating special tile type: ", stype, "reason: ", reason );
-            });
-        }
     }
 }
 
@@ -9526,7 +9338,7 @@ function getIcons(userid, pname, skin, icondir, category) {
             } else {
                 showicon = filedir;
             }
-            if ( in_array(ext, allowed) ) {
+            if ( allowed.includes(ext) ) {
                 num++;
                 $tc += '<div class="iconcat">';
                 $tc += '<img num="'+num+'" src="' + filedir +'" show="' + showicon + '" class="icon" title="' + froot + '" />';
@@ -9559,7 +9371,7 @@ function getPhotos(userid, pname) {
         photolist.forEach( function(filename) {
             // var froot = path.basename(filename);
             var ext = path.extname(filename).slice(1);
-            if ( in_array(ext, allowed) ) {
+            if ( allowed.includes(ext) ) {
                 photos[index] = path.join(activedir,filename);
                 index = index + 1;
             }
@@ -9800,7 +9612,7 @@ function apiCall(user, configoptions, body, protocol, res) {
 
     if ( !userid ) {
         console.error( (ddbg()), "*** error *** user not authorized for API call. api: ", api, " body: ", body);
-        return "error - HousePanel is not authorized for this user to make an API call";
+        return "error - a valid userid was not provided. HousePanel requires a valid userid to make an API call";
     }
     
     // handle multiple api calls but only for tiles since nobody would ever give a list of long id's
@@ -10046,6 +9858,24 @@ function apiCall(user, configoptions, body, protocol, res) {
                                 hubrecurse(n, hubs[0]);
 
                                 function hubrecurse(n, hub) {
+
+                                    // reset AI here for hubitat hubs
+                                    // call the AI handler to process the initialize the response api call
+                                    if ( hub.hubtype === "Hubitat" ) {
+                                        // call the AI handler to process the initialize the response api call
+                                        let payload = {"api": "ai-init", "userid": userid, "hubid": hub.hubid, "hubtype": "Hubitat", "hubname": hub.hubname,
+                                                       "hubaccess": hub.hubaccess, "hubendpt": hub.hubendpt, "hubhost": hub.hubhost};
+                                        processAISidecar(payload)
+                                        .then( result => {
+                                            if ( DEBUG5 ) {
+                                                console.log( (ddbg()), "AI sidecar called with payload: ", payload, " result: ", result);
+                                            }
+                                        })
+                                        .catch( reason => {
+                                            console.error( (ddbg()), reason);
+                                        });
+                                    }
+
                                     getDevices(hub)
                                     .then(mydevices => {
                                         n++;
@@ -10382,13 +10212,31 @@ function apiCall(user, configoptions, body, protocol, res) {
                         let hub = results[0];
                         let configoptions = results[1];
                         if ( hub ) {
+
+                            // reset AI here for hubitat hubs
+                            // call the AI handler to process the initialize the response api call
+                            if ( hub.hubtype === "Hubitat" ) {
+                                let payload = {"api": "ai-init", "userid": userid, "hubid": hub.hubid, "hubtype": "Hubitat", "hubname": hub.hubname,
+                                               "hubaccess": hub.hubaccess, "hubendpt": hub.hubendpt, "hubhost": hub.hubhost};
+                                processAISidecar(payload)
+                                .then( result => {
+                                    if ( DEBUG5 ) {
+                                        console.log( (ddbg()), "AI sidecar called with payload: ", payload, " result: ", result);
+                                    }
+                                })
+                                .catch( reason => {
+                                    console.error( (ddbg()), reason);
+                                });
+                            }
+
                             return getDevices(hub)
-                            .then(biddevices => {
-                                var devices = {};
+                            .then(devices => {
+                                // var devices = {};
 
                                 // fix up devices with customizations
-                                for(let bid in biddevices) {
-                                    let row = biddevices[bid];
+                                for (var uid in devices) {
+                                    let row = devices[uid];
+                                    let bid = row.deviceid;
                                     row.pvalue = decodeURI2(row.pvalue);
 
                                     // skip LINKS and LISTS here because links are handled with updateLink on the js side
@@ -10399,7 +10247,6 @@ function apiCall(user, configoptions, body, protocol, res) {
                                         row.pvalue = getSpecialContent(userid, row.devicetype, row.pvalue);
                                         // row.pvalue = getFileName(userid, pname, row.pvalue, row.devicetype);
                                     }
-                                    let uid = row.uid;
                                     devices[uid] = row;
                                 }
                                 return devices;
@@ -10501,14 +10348,6 @@ function apiCall(user, configoptions, body, protocol, res) {
                 }
                 break;
 
-            // case "saveparams":
-            //     if ( protocol==="POST" ) {
-            //         result = processParams(userid, panelid, body);
-            //     } else {
-            //         result = "error - api call [" + api + "] is not supported in " + protocol + " mode.";
-            //     }
-            //     break;
-
             case "clipboard":
                 if ( protocol==="POST" ) {
                     if ( swattr==="load" ) {
@@ -10589,7 +10428,7 @@ function apiCall(user, configoptions, body, protocol, res) {
                     mydb.deleteRow("users","id = "+userid)
                 ]).then(results => {
                     delCookie(res, "uname");
-                    delCookie(res, "pname");
+                    // delCookie(res, "pname");
                     return "Account for user #" + userid + ", Username: " + uname + ", Email: " + useremail + " successfully removed.";
                 }).catch(reason => {
                     var str = "error trying to remove account for user #" + userid + ", Username: " + uname + ", Email: " + useremail
@@ -10898,9 +10737,7 @@ function apiCall(user, configoptions, body, protocol, res) {
                     .then(results => {
                         var numHubDel = results[0].getAffectedItemsCount();
                         var numDevDel = results[1].getAffectedItemsCount();
-                        if ( numDevDel > 0 ) {
-                            removeDeadThings(userid);
-                        }
+                        removeDeadThings(userid);
                         return "Removed " + numHubDel + " hubs and " + numDevDel + " devices";
                     })
                     .catch( reason => {
@@ -11030,9 +10867,9 @@ function apiCall(user, configoptions, body, protocol, res) {
             case "reauth":
             case "logout":
             case "trackupdate":
-                    var result = "error - [" + api + "] API call is no longer supported";
-                    console.warn((ddbg()), result);
-                    break;
+                var result = "error - [" + api + "] API call is no longer supported";
+                console.warn((ddbg()), result);
+                break;
 
             case "reload":
                 pushClient(userid, "reload", "main", "/");
@@ -11040,6 +10877,7 @@ function apiCall(user, configoptions, body, protocol, res) {
 
             default:
                 result = "error - unrecognized " + protocol + " api call: " + api;
+                console.warn((ddbg()), result);
                 break;
         }
         return result;
@@ -11144,8 +10982,7 @@ function setupBrowserSocket() {
             // shut down any existing connections to same remote host
             var browserurl = connection.socket.remoteAddress;
             var wsport = connection.socket.server["_connectionKey"];
-
-            const connId = allocConnId();
+            var connId = allocConnId();
             connection.connId = connId;
             console.log( (ddbg()), "New connection from url: ", browserurl, " port: ", wsport, " assigned connId: ", connId );
 
@@ -11408,6 +11245,7 @@ GLB.dbinfo = {
     "dbpassword": "housepanel",
     "dbtype": "sqlite",
     "port": "8580",
+    "pythonport": "13480",
     "websocketport": "10430",
     "allownewuser" : ["all"],
     "service": "none",
@@ -11437,7 +11275,7 @@ const DEBUG1 = GLB.dbinfo.dbgflags.debug1 || false;     // basic debug info - fi
 const DEBUG2 = GLB.dbinfo.dbgflags.debug2 || false;     // hub authorization and device loading
 const DEBUG3 = GLB.dbinfo.dbgflags.debug3 || false;     // passwords
 const DEBUG4 = GLB.dbinfo.dbgflags.debug4 || false;     // filters and options
-const DEBUG5 = GLB.dbinfo.dbgflags.debug5 || false;     // hub node detail
+const DEBUG5 = GLB.dbinfo.dbgflags.debug5 || false;     // AI sidecar details and responses
 const DEBUG6 = GLB.dbinfo.dbgflags.debug6 || false;     // tile adds and position moves
 const DEBUG7 = GLB.dbinfo.dbgflags.debug7 || false;     // hub responses
 const DEBUG8 = GLB.dbinfo.dbgflags.debug8 || false;     // API calls
@@ -11464,10 +11302,9 @@ if ( GLB.dbinfo["twilio_sid"] && GLB.dbinfo["twilio_token"] && GLB.dbinfo["twili
     twilioClient = null;
 }
 
-GLB.port = parseInt(GLB.dbinfo["port"]);
-GLB.webSocketServerPort = parseInt(GLB.dbinfo["websocketport"]);
-
-var port = GLB.port;
+GLB.port = parseInt(GLB.dbinfo["port"]) || 8580;
+GLB.pythonPort = parseInt(GLB.dbinfo["pythonport"] || 13480);
+GLB.webSocketServerPort = parseInt(GLB.dbinfo["websocketport"]) || 10430;
 GLB.newcss = {};
 
 // start our main server
@@ -11493,31 +11330,30 @@ try {
             httpServer = null;
             credentials = {key: key, cert: crt, ca: cabundle};
             httpsServer = https.createServer(credentials, app);
-            httpsServer.listen(port, function () {
-                console.log( (ddbg()), "HousePanel secure server is running at location: ", dir, " on port: ", port);
+            httpsServer.listen(GLB.port, function () {
+                console.log( (ddbg()), "HousePanel secure server is running at location: ", dir, " on port: ", GLB.port);
             });
         } catch (e) {
             console.warn( (ddbg()), "error attempting to start secure server. Falling back to using an insecure server. Warning msg: ", e);
             httpsServer = null;
             credentials = null;
             httpServer = http.createServer(app);
-            httpServer.listen(port, function () {
-                console.log( (ddbg()), "HousePanel insecure server is running at location: ", dir, " on port: ", port);
+            httpServer.listen(GLB.port, function () {
+                console.log( (ddbg()), "HousePanel insecure server is running at location: ", dir, " on port: ", GLB.port);
             });
         }
     } else {
-        // list on the port
         httpsServer = null;
         credentials = null;
         httpServer = http.createServer(app);
-        httpServer.listen(port, function () {
-            console.log( (ddbg()), "HousePanel insecure server is running at location: ", dir, " on port: ", port);
+        httpServer.listen(GLB.port, function () {
+            console.log( (ddbg()), "HousePanel insecure server is running at location: ", dir, " on port: ", GLB.port);
         });
     }
     applistening = true;
     
 } catch (e) {
-    console.error( (ddbg()), "HousePanel server could not be started at location: ", dir, " on port: ", port);
+    console.error( (ddbg()), "HousePanel server could not be started. Encountered error: ", e);
     app = null;
     applistening = false;
 }
@@ -11675,6 +11511,20 @@ if ( app && applistening ) {
         } else {
             GLB.returnURL = req.protocol + "://" + hostname;
         }
+        try {
+            const returnUrlObj = new URL(GLB.returnURL);
+            let pythonHost = returnUrlObj.hostname;
+            if ( pythonHost === "localhost" || pythonHost === "::1" ) {
+                pythonHost = "127.0.0.1";
+            }
+            GLB.pythonURL = returnUrlObj.protocol + "//" + pythonHost + ":" + GLB.pythonPort;
+        } catch (e) {
+            GLB.pythonURL = "http://127.0.0.1:" + GLB.pythonPort;
+            console.error((ddbg()), "Invalid return URL while setting pythonURL:", GLB.returnURL, e);
+        }
+        if ( DEBUG1 ) {
+            console.log( (ddbg()), "main returnURL: ", GLB.returnURL, " pythonURL: ", GLB.pythonURL );
+        }
 
         // handle special cases of new user and forgot password
         if ( req.path === "/activateuser" || req.path === "/forgotpw"  ) {
@@ -11689,7 +11539,7 @@ if ( app && applistening ) {
                             var result = validateUserPage(row, thecode);
                         } else {
                             delCookie(res, "uname");
-                            delCookie(res, "pname");
+                            // delCookie(res, "pname");
                             result = validatePasswordPage(row, thecode);
                         }
                     } else {
@@ -11815,7 +11665,7 @@ if ( app && applistening ) {
                     } else if ( req.path==="/logout" ) {
                         // clear the cookie to force repeat of login page
                         delCookie(res, "uname");
-                        delCookie(res, "pname");
+                        // delCookie(res, "pname");
                         var result = getLoginPage(req, userid, "default", "", "", hostname);
                         res.send(result);
                         res.end();
@@ -11906,6 +11756,7 @@ if ( app && applistening ) {
         if ( req.path==="/" && req.body['msgtype'] === "initialize" ) {
             hubid = req.body['hubid'] || null;
             if ( hubid ) {
+
                 // update the devices of all hubs matching this hubid regardless of the user
                 // each user's hub should have a unique hubid so this works fine
                 // with the new groovy app we also can now update the AccessToken and hubEndpt values based on what was pushed back
@@ -11967,6 +11818,19 @@ if ( app && applistening ) {
 
                             updhub = updhub || (hub.hubhost !== newhost);
                             hub.hubhost = newhost;
+
+                            // call the AI handler to initialize the response api call
+                            let payload = {"api": "ai-init", "userid": userid, "hubid": hub.hubid, "hubtype": "Hubitat", "hubname": hub.hubname,
+                                           "hubaccess": hub.hubaccess, "hubendpt": hub.hubendpt, "hubhost": hub.hubhost};
+                            processAISidecar(payload)
+                            .then( result => {
+                                if ( DEBUG5 ) {
+                                    console.log( (ddbg()), "AI sidecar called with payload: ", payload, " result: ", result);
+                                }
+                            })
+                            .catch( reason => {
+                                console.error( (ddbg()), reason);
+                            });
                         }
 
                         // update the hub and push data to the auth page using a forced reload
@@ -12076,7 +11940,7 @@ if ( app && applistening ) {
                 .then(hubs => {
                     if ( hubs ) {
                         hubs.forEach(hub => {
-                            processHubMessage(hub.userid, req.body, false);
+                            processHubMessage(hub.userid, req.body);
                         });
                     }
                 }).catch(reason => {

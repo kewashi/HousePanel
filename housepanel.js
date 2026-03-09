@@ -28,6 +28,7 @@ var modalWindows = {};
 var priorOpmode = "Operate";
 var saveOpmode = [];
 var pagename = "main";
+const DEBUGtmp = true;
 
 // set a global socket variable to manage two-way handshake
 // var webSocketUrl = null;
@@ -326,9 +327,16 @@ function getHubs() {
 $(document).ready(function() {
     // set the global return URL value
     try {
+        const mainhost = $("input[name='returnURL']").val();
+        const mainport = $("input[name='webDisplayPort']").val();
+        const pythonhost = $("input[name='pythonURL']").val();
+        const pyport = $("input[name='pythonPort']").val(); 
         cm_Globals.protocol = window.location.protocol;
-        cm_Globals.returnURL = `${cm_Globals.protocol}//${window.location.host}`;
-        cm_Globals.port = window.location.port;
+        cm_Globals.port = mainport;
+        cm_Globals.pythonPort = pyport;
+        cm_Globals.returnURL =  mainhost;
+        cm_Globals.pythonURL = pythonhost;
+        // console.log("mainhost: ", mainhost, " mainport: ", mainport, " pyhost: ", pythonhost, " pyport: ", pyport);
 
         // grab debug flags from hidden inputs
         var dbgflags = $("input[name='dbgflags']").val();
@@ -552,6 +560,7 @@ $(document).ready(function() {
     // create key bindings for the login screen
     if ( pagename==="login" ) {
 
+        getOptions(pagename);
         // initWebsocket();
 
         var unamere = /^\D\S{2,}$/;      // start with a letter and be three long at least
@@ -992,12 +1001,16 @@ function setupWebsocket(userid, webSocketUrl) {
                     }
                 }
 
-            // changed this to use type correctly and to get thingid from the value passed
+            // handle case where server is requesting that we move a tile
+            // it is done here so that all active clients receive the update and move the tile for consistency
+            // otherwise only the client that moved the tile would update and all others would be out of sync
+            // until they refreshed or moved that tile themselves
             } else if (bid==="setposition" ) {
                 var thingid = pvalue.thingid;
                 var thing = $("#t-"+thingid);
                 if ( thing ) {
-                    relocateTile(thing, thetype, pvalue);
+                    console.log("Received request to relocate tile for thingid: ", thingid, " with position value: ", pvalue);
+                    relocateTile(thing, pvalue);
                 }
 
             // this functionality was removed from HousePanel.groovy but I keep it here to request that users update their file
@@ -1008,34 +1021,6 @@ function setupWebsocket(userid, webSocketUrl) {
 
                 console.warn(msg);
                 popupMessage("Hub Authentication Update<br><br>" + msg, 5000);
-                // var hpcode = pvalue.hpcode || "";
-
-                // $("#pickhub").val("hubopt_0");
-                // setupAuthHub("new", userid);
-                // $("#hubdiv > select[name='hubtype']").val(thetype);
-                
-                // // now set the fields to the values pushed from HousePanel groovy
-                // const usecloud = pvalue.usecloud || "false";
-                // const hubendpt = usecloud ? pvalue.cloudendpt : pvalue.localendpt;
-                // var iloc = hubendpt.indexOf("/apps");
-                // if ( iloc > 0 && hpcode === cm_Globals.options.hpcode && userid===cm_Globals.options.userid ) {
-                //     var hubhost = hubendpt.substring(0, iloc);
-                //     $("#hubdiv").show();
-                //     $("#hideaccess_hub").show();
-                //     $("select[name='hubtype']").val("Hubitat").prop("disabled", false);
-                //     $("input[name='hubhost']").val(hubhost).prop("disabled", false);
-                //     $("input[name='hubname']").val(pvalue.hubname).prop("disabled", false);
-                //     $("input[name='useraccess']").val(pvalue.accesstoken);
-                //     $("input[name='userendpt']").val(pvalue.appid);
-                //     $("input[name='hubid']").val(pvalue.hubid).prop("disabled", false);
-                //     $("input[name='hubtimer']").val(pvalue.hubtimer || "0");
-                //     $("#newthingcount").html("Hub information was successfully updated from the server. You can edit and save this information or leave it as is.");
-                // } else {
-                //     $("#newthingcount").html("Hub information update from the server failed. Invalid hub information provided in the Hubitat app.");
-                // }
-                // $("input.hubupdate").addClass("hidden");
-                // $("input.hubauth").removeClass("hidden");
-                // $("input.hubdel").addClass("hidden");
 
             } else if ( bid==="websocket" ) {
                 if ( thetype==="closed" ) {
@@ -1095,6 +1080,22 @@ function setupWebsocket(userid, webSocketUrl) {
                 if ( cm_Globals.dbgflags && cm_Globals.dbgflags["debug12"] ) {
                     console.log("webSocket update for bid: ", bid, " type: ", thetype, " pvalue: ", pvalue);
                 }
+
+                // if this is a motion, contact, or switch message then call the python server to update the AI context for automations
+                // if ( thetype==="motion" || thetype==="contact" || thetype==="switch" || thetype==="presence" || thetype==="lock" ) {
+                //     $.post(cm_Globals.pythonURL, 
+                //         {api: "ai-context", userid: userid, type: thetype, value: pvalue, hpcode: cm_Globals.options.hpcode},
+                //         function (presult, pstatus) {
+                //             if ( pstatus==="success" ) {
+                //                 if ( cm_Globals.dbgflags && cm_Globals.dbgflags["debug18"] ) {
+                //                     console.log("Context update sent to server for type: ", thetype, " with value: ", pvalue, " result: ", presult);
+                //                 }
+                //             } else {
+                //                 console.warn("Something went wrong sending context update to server for type: ", thetype, " with value: ", pvalue, " pstatus: ", pstatus, " presult: ", presult);
+                //             }
+                //         }
+                //     );                    
+                // }
 
                 // update all the tiles that match this type and id
                 // use thingid instead of aid
@@ -1219,8 +1220,13 @@ function convertToModal(modalcontent, addok) {
     return modalcontent;
 }
 
-function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunction, loadfunction) {
+async function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunction, loadfunction) {
     // var modalid = "modalid";
+
+    // make a promise version for selectors
+    // const once = (sel, evt, childSel) => new Promise(resolve =>
+    // childSel ? $(sel).one(evt, childSel, resolve) : $(sel).one(evt, resolve)
+    // );
 
     // skip if this modal window is already up...
     if ( typeof modalWindows[modalid]!=="undefined" && modalWindows[modalid]>0 ) { 
@@ -1346,9 +1352,60 @@ function createModal(modalid, modalcontent, modaltag, addok,  pos, responsefunct
     }
 
     // invoke response to click
+    $("#"+modalid).focus();
+
+    // return Promise.any([
+    //         once("#"+modalid, "tap", ".dialogbtn"),
+    //         once("#"+modalid + " .menuitem", "tap"),
+    //         once("body", "singletap")
+    // ])
+    // .then(async response => {
+    //     var result = true;
+    //     var evt = response.originalEvent || response;
+    //     var evt_origtype = response.handleObj.origType;
+    //     var evt_type = response.handleObj.type;
+    //     var evt_selector = response.handleObj.selector;
+    //     console.log("Event handlers set up for modal: ", modalid, " evt_type: ", evt_type, " origType: ", evt_origtype, " selector: ", evt_selector, " evt.target: ", evt.target );
+    //     closeModal(modalid);
+
+    //     // return and do nothing if we used keyboard and didn't hit return
+    //     // if ( evt_type==="keydown" ) {
+    //     //     if ( evt.which == 13 ) {
+    //     //         result = await responsefunction(evt.target, modaldata);
+    //     //     } else {
+    //     //         result = false;
+    //     //     }
+    //     // }
+
+    //     if ( evt_type==="tap"&& evt_selector===".dialogbtn" && responsefunction ) {
+    //         result = await responsefunction(evt.target, modaldata);
+    //         // return result;
+    //     }
+
+    //     if ( modalid==="menubox" && evt_type==="tap" && $(evt).hasClass("menuitem") && responsefunction ) {
+    //         result = await responsefunction(evt.target, modaldata);
+    //         // return result;
+    //     }
+
+    //     if ( evt_type==="singletap" && responsefunction ) {
+    //         result = await responsefunction(evt.target, modaldata);
+    //         // return result;
+    //     } 
+
+    //     console.log("Modal result: ", result);
+    //     return result;
+        
+    // })
+    // .catch(error => {
+    //     console.error("Error setting up event handlers for modal: ", modalid, " error: ", error);
+    //     closeModal(modalid);
+    //     return false;
+    // });
+
+    // the old way didn't allow me to return a value from the response function
+    // so I rewrote it above using Promise.any to wait for any of the possible events and then process them in a single handler
     if ( addok ) {
-        $("#"+modalid).focus();
-        $("#"+modalid).on("keydown",function(e) {
+        $("#"+modalid).on("keydown", async function(e) {
             if ( e.which===13 ) {
                 if ( responsefunction ) {
                     responsefunction(this, modaldata);
@@ -1962,7 +2019,9 @@ function setupDraggable() {
                      id: bid, type: thingtype, attr: startPos, tileid: tileid, uid: uid, thingid: thingid, hpcode: cm_Globals.options.hpcode},
                     function (presult, pstatus) {
                         if (pstatus==="success" && typeof presult==="object" ) {
-                            if ( cm_Globals.dbgflags["debug1"] ) {
+                            // don't need to do this here because the server updates all clients
+                            // relocateTile(thing, presult);
+                            if ( cm_Globals.dbgflags["debug1"] || DEBUGtmp ) {
                                 console.log("setposition success: ", presult);
                             }
                         } else {
@@ -2097,17 +2156,14 @@ function setupDraggable() {
     }
 }
 
-function relocateTile(thing, thingtype, tileloc) {
+function relocateTile(thing, tileloc) {
 
     // force positions of relative tiles back to zero
     if ( tileloc.position && tileloc.position==="relative") {
         tileloc.left = 0;
         tileloc.top = 0;
         var panel = $(thing).attr("panel");
-        var zmax = 1;
-        if ( thingtype === "bulb" ) {
-            zmax = getMaxZindex(panel);
-        }
+        var zmax = getMaxZindex(panel);
         tileloc["z-index"] = zmax;
     }
 
@@ -2172,10 +2228,9 @@ function rehomeTiles() {
 
 // make the post call back to main server
 function dynoPost(ajaxcall, body, callback) {
-    var isreload = false;
     var pname;
     if ( body && body.pname ) {
-        pname = body.pname;
+        pname = body.pname || "default";
     } else {
         try {
             if ( $("input[name='pname']") ) {
@@ -2188,19 +2243,12 @@ function dynoPost(ajaxcall, body, callback) {
         }
     }
 
-    // if body is not given or is not an object then use all other values
-    // to set the object to pass to post call with last one being a reload flag
+    // if body is not given or is not an object then make a basic one
     if ( body && typeof body === "object" ) { 
         body["api"] = ajaxcall;
         body.pname = pname;
-        if ( cm_Globals.options ) {
-            body.hpcode = cm_Globals.options.hpcode;
-        }
+        body.hpcode = cm_Globals.options.hpcode;
         body.apiSecret = cm_Globals.apiSecret;
-
-        if ( body.reload ) {
-            isreload = true;
-        }
     } else {
         body = {api: ajaxcall, userid: cm_Globals.options.userid, pname: pname, hpcode: cm_Globals.options.hpcode, apiSecret: cm_Globals.apiSecret};
     }
@@ -2211,14 +2259,7 @@ function dynoPost(ajaxcall, body, callback) {
     } else {
         $.post(cm_Globals.returnURL, body,
             function (presult, pstatus) {
-                if ( isreload ) {
-                    window.location.href = cm_Globals.returnURL;
-                }
-
-                // clear blinking interval if requested
-                else if ( typeof presult === "object" && presult.blink ) {
-                    clearInterval(presult.blink);
-                }
+                console.log("dynoPost result: ", presult, " status: ", pstatus);
             }
         );
     }
@@ -2483,44 +2524,21 @@ function execButton(buttonid) {
         var oobj = formToObject("deveditpage");
         dynoPost("savedevices", oobj, function(presult, pstatus) {
             if ( pstatus!=="success" ) {
-                alert("Function " + buttonid + " failed to save properly");
-                // window.location.href = cm_Globals.returnURL;
-            } else {
-                if ( typeof presult === "object" && presult.result === "logout" ) {
-                    window.location.href = cm_Globals.returnURL + "/logout?pname=" + presult.pname;
-                } else {
-                    window.location.href = cm_Globals.returnURL;
-                }
-            }
-        });
-
-    } else if ( buttonid==="paramsSave") {
-        var oobj = formToObject("paramspage");
-        dynoPost("saveparams", oobj, function(presult, pstatus) {
-            if ( pstatus!=="success" ) {
-                alert("Function " + buttonid + " failed to save properly");
+                alert("Save Devices failed, please try again. If this problem continues please contact support.");
                 window.location.href = cm_Globals.returnURL;
             } else {
-                if ( typeof presult === "object" && presult.result === "logout" ) {
-                    window.location.href = cm_Globals.returnURL + "/logout?pname=" + presult.pname;
-                } else {
-                    window.location.href = cm_Globals.returnURL;
-                }
+                window.location.href = cm_Globals.returnURL;
             }
         });
 
-    } else if ( buttonid==="devCancel" || buttonid==="paramsCancel" ) {
+    } else if ( buttonid==="devCancel" ) {
         // do nothing but reload the main page
         window.location.href = cm_Globals.returnURL;
         return;
 
     } else if ( buttonid==="devReset") {
-        // reset the forms on the options page to their starting values
+        // reset the forms on the deviced edit page to their starting values
         $("#deveditpage")[0].reset();
-
-    // } else if ( buttonid==="paramsReset" ) {
-    //     // reset the forms on the options page to their starting values
-    //     $("#paramspage")[0].reset();
 
     } else if ( buttonid==="createuser" ) {
         execCreateUser();
@@ -2542,7 +2560,7 @@ function execButton(buttonid) {
                 var pstyle = "position: absolute; border: 6px black solid; background-color: blue; color: white; font-weight: bold; font-size: 24px; left: 130px; top: 75px; width: 600px; height: 220px; padding-top: 20px;";
                 var pos = {style: pstyle};
 
-                createModal("loginfo","User Email: " + presult["users_email"] + "<br>Username: " + presult["users_uname"] + "<br><br>Page loading in 3 seconds... ",
+                createModal("loginfo","User Email: " + presult["email"] + "<br>Username: " + presult["uname"] + "<br><br>Page loading in 3 seconds... ",
                             "body", false, pos);
                 setTimeout(function() {
                     closeModal("loginfo");
@@ -2668,7 +2686,6 @@ function execButton(buttonid) {
             delEditLink();
             if ( cm_Globals.edited ) {
                 updateFilters();
-                window.location.href = cm_Globals.returnURL;
             }
         } else {
             return;
@@ -2679,9 +2696,11 @@ function execButton(buttonid) {
     } else if ( buttonid==="showdoc" && priorOpmode==="Operate") {
         window.open("https://housepanel.net",'_blank');
         return;
+
     } else if ( buttonid==="snap" && priorOpmode==="Operate" ) {
         // $("#mode_Snap").prop("checked");
         cm_Globals.snap =  ! cm_Globals.snap;
+        popupMessage("Snap mode " + (cm_Globals.snap ? "enabled" : "disabled"), 2000, {position: "absolute", top: 50, left: 50, backgroundColor: "blue", color: "white", fontSize: "18px", padding: "10px", borderRadius: "5px"});
 
     } else if ( buttonid==="refreshpage" && priorOpmode==="Operate" ) {
         var pstyle = "position: absolute; background-color: blue; color: white; font-weight: bold; font-size: 24px; left: 350px; top: 300px; width: 600px; height: 100px; margin-left: 50px; margin-top: 50px;";
@@ -2698,6 +2717,7 @@ function execButton(buttonid) {
         });
     
     // remaining menu buttons
+    // these are commands that open a separate web page and are only supported in operate mode, otherwise they will be ignored
     } else if ( (buttonid==="showid" || buttonid==="userauth" || buttonid==="showoptions" || buttonid==="editdevices") && priorOpmode==="Operate" ) {
         reload(buttonid); // window.location.href = cm_Globals.returnURL + "/" + buttonid;
 
@@ -2727,9 +2747,14 @@ function execButton(buttonid) {
 
 function updateFilters() {
     var fobj = formToObject("filteroptions");
-    if ( fobj ) {
-        dynoPost("filteroptions", fobj);
-    }
+    dynoPost("filteroptions", fobj, function(presult, pstatus) {
+        if ( pstatus!=="success" ) {
+            alert("Updating hub filters failed, please try again. If this problem continues please contact support.");
+            window.location.href = cm_Globals.returnURL;
+        } else {
+            window.location.href = cm_Globals.returnURL;
+        }
+    });
 }
 
 function checkInpval(field, val, regexp) {
@@ -3190,7 +3215,7 @@ function setupAuthHub(hubId, userid) {
     // var hpcode = cm_Globals.options.hpcode;
 
 
-    // handle new hubs - user sets type and the Hubitat groovy app or HubitatController python app fills out the rest of the fields
+    // handle new hubs - user sets type and the Hubitat groovy app ills out the rest of the fields
     if ( hubId==="new" ) {
         $("#hubdiv").show();
         newhubmsg = "New hubs can be added using this form. Hubitat hubs are generated automatically so defining them here is not advised.";
@@ -3434,8 +3459,7 @@ function addEditLink() {
         // reset the position of just this tileid to be relative and save the reset widths
         var startPos = {top: 0, left: 0, "z-index": 1, position: "relative"};
         if (str_type==="bulb") {
-            var zmax = getMaxZindex(panel) + 1;
-            startPos["z-index"] = zmax;    
+            startPos["z-index"] = getMaxZindex(panel) + 1;
         }
 
         $.post(cm_Globals.returnURL, 
@@ -3812,7 +3836,7 @@ function updateTile(aid, presult) {
         }
         
         // replace newlines with breaks for proper html rendering
-        if ( typeof value==="string" && value.indexOf("\n")!==-1 ) {
+        if ( typeof value==="string" && value.indexOf("\n")!==-1 && value.indexOf("<table") === -1 ) {
             value = value.replace(/\n/g, "<br>");
         }
         
@@ -4391,18 +4415,10 @@ function setupPage() {
         if ( pw!==false && typeof pw === "string" && pw!=="false" ) {
             checkPassword(that, thingname, pw, ro, thevalue, subid, processClick);
 
-        // clicking on slider handle gives the option of setting a level
+        // clicking on slider handle does nothing
         } else if ( $(this).hasClass("ui-slider") ) {
             evt.stopPropagation();
             return;
-            // const curval = $(that).attr("value");
-            // if ( subid==="level" || subid==="onlevel" || subid==="volume" || subid==="groupVolume" || subid==="position" ) {
-            //     processClickWithValue(that, thingname, ro, subid, thetype, {"Level": [curval, "0", "10","20","30","40","50","60","70","80","90","100"]} );
-            // } else if ( subid==="colorTemperature" ) {
-            //     processClickWithValue(that, thingname, ro, subid, thetype, {"Color Temperature": [curval, "2700","3000","3500","4000","4500","5000","5500","6000","6500"]} );
-            // } else {
-            //     return;
-            // }
 
         // handle buttons by searching for sibling that has number of buttons listed
         // this won't be found if the button is a link so we just make user put in a number
@@ -4615,9 +4631,11 @@ function processClickWithValue(that, thingname, ro, subid, thetype, thevalues, n
     }
     if ( typeof thevalues === "object" ) {
         var prefixes = Object.keys(thevalues);
+        var prevalues = Object.values(thevalues);
         numParams = prefixes.length;
     } else {
         prefixes = null;
+        prevalues = null;
     }
     
     if ( numParams <= 0 ) {
@@ -4625,7 +4643,7 @@ function processClickWithValue(that, thingname, ro, subid, thetype, thevalues, n
         return;
     }
 
-    var userid = cm_Globals.options.userid;
+    const userid = cm_Globals.options.userid;
     var tpos = $(that).offset();
     var ttop = (tpos.top > 125) ? tpos.top - 120 : 5;
     var pos = {top: ttop, left: tpos.left};
@@ -4640,9 +4658,12 @@ function processClickWithValue(that, thingname, ro, subid, thetype, thevalues, n
     htmlcontent += "<div class='ddlDialog'>";
 
     for (var i = 0; i < numParams; i++) {
-        if ( prefixes ) {
-            prefix = prefixes[i];
-            thevalue = thevalues[prefix];
+        if ( prefixes && prevalues ) {
+            prefix = prefixes[i].trim();
+            thevalue = prevalues[i];
+
+            // handle case where there is a single parameter but the prefix is blank - use subid as prefix since that is more descriptive for user
+            // note that the caller can't set prefix to blank for more than one parameter
             if ( prefix==="" ) {
                 prefix = subid;
             }
@@ -4659,11 +4680,12 @@ function processClickWithValue(that, thingname, ro, subid, thetype, thevalues, n
         } else if ( prefix.startsWith("_") ) {
             prefix = prefix.substring(1);
         }
-
-        var id = "newsubid" + (i+1).toString();
+    
+        var idstr = (i+1).toString();
+        var id = "newsubid" + idstr;
         if ( typeof thevalue === "object" && Array.isArray(thevalue) ) {
-            htmlcontent += `<div class='ddlDialog'><label for='picklist${id}'>${prefix}: </label>`;
-            htmlcontent += `<select id="${id}" name="picklist${id}" class="picklist">`;
+            htmlcontent += `<div class='ddlDialog'><label for="${id}">${prefix}: </label>`;
+            htmlcontent += `<select id="${id}" name="picklist${idstr}" class="picklist">`;
             thevalue.forEach(function(val) {
                 if ( typeof val === "string" && val.indexOf("|") !== -1 ) {
                     var thevals = val.split("|");
@@ -4772,7 +4794,7 @@ function handleLinks(subid, uid, bid, thingid) {
             } else if ( rule[0] === "RULE" && rule[2] === linkvalupdown ) {
                 linkval = rule[1];
                 command = "RULE";
-            } else if ( (rule[0] === "GET" || rule[0]==="POST" || rule[0]==="PUT" || rule[0]==="URL") && rule[2] === subid ) {
+            } else if ( (rule[0] === "GET" || rule[0]==="POST" || rule[0]==="PUT" || rule[0]==="URL" || rule[0]==="AI") && rule[2] === subid ) {
                 linkval = rule[1];
                 command = rule[0];
             } else if ( rule[0] === "LIST" && rule[2] === subid ) {
@@ -4785,7 +4807,40 @@ function handleLinks(subid, uid, bid, thingid) {
             }
         });
     }
+
+    // if user provided "ask" as the custom linkval then we request their input here using createModal
+    // const askcommands = ["GET", "POST", "PUT", "URL", "AI"];
+    // if ( askcommands.includes(command) && ( linkval === "ask" || linkval === "prompt" ) ) {
+    //     const userid = cm_Globals.options.userid;
+    //     var tpos = $(targetid).offset();
+    //     var ttop = (tpos.top > 125) ? tpos.top - 120 : 5;
+    //     var pos = {top: ttop, left: 100};
+    //     var htmlcontent = "<h3>Enter value for command: " + command + "</h3>";
+    //     htmlcontent += "<div class='ddlDialog'><label for='userinput'>Value:</label>";
+    //     htmlcontent += "<input class='ddlDialog' id='userinput' type='text' size='60' value='' />";
+    //     htmlcontent += "</div>";
+
+    //     var results = [command, null, realsubid, linkuid];
+    //     createModal("modalexec", htmlcontent, "body", true, pos, 
+    //     function(ui) {
+    //         var clk = $(ui).attr("name");
+    //         if ( clk==="okay" ) {
+    //             const userinput = $("#userinput").val();
+    //             results[1] = userinput;
+    //         } else {
+    //             results[1] = "";
+    //         }
+    //         closeModal("modalexec");
+    //     });
+    //     while ( results[1] === null ) {
+    //         continue;
+    //     }
+    //     return results;
+    // } else {
+    //     return [command, linkval, realsubid, linkuid];
+    // }
     return [command, linkval, realsubid, linkuid];
+
 }
 
 // the aid value is now exactly equal to thingid -- both are the index key in the DB
@@ -4812,22 +4867,26 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
     const userid = cm_Globals.options.userid;
     const pname = cm_Globals.options.pname;
     const tile = '#t-'+taid;
-
+    const pyEndpoint = $(tile).attr("py");
+    
     var thetype = $(tile).attr("type");
     var bid = $(tile).attr("bid");
     var uid = $(tile).attr("uid");
-
+    
     var thingid = $(tile).attr("thingid");
     var tileid = $(tile).attr("tile");
     var hubtype = $(tile).attr('hubtype') || "";
     var targetid;
-
+    
     const linkinfo = handleLinks(subid, uid, bid, thingid);
     var command = linkinfo[0];
     var linkval = linkinfo[1];
     var realsubid = linkinfo[2];
     var linkuid = linkinfo[3];
 
+    // determine which server to call for this action - if this is a python endpoint then use the python URL otherwise use the standard return URL
+    const actionPostUrl = (pyEndpoint || command==="PYTHON") ? cm_Globals.pythonURL : cm_Globals.returnURL;
+    
     const linkedtile = cm_Globals.devices[linkuid];
     var linkhub = linkedtile["hubid"];
     var linkbid = linkedtile["deviceid"];
@@ -4837,7 +4896,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
     // for up/down buttons adjust the subid to the real one
     var targetid = '#a-'+thingid+'-'+subid;
     if ( subid==="thingname" ) {
-            targetid = "#s-"+thingid;
+        targetid = "#s-"+thingid;
     } else if ( (subid.endsWith("-up") && $(targetid).hasClass("arrow-up")) || 
                 (subid.endsWith("-dn") && $(targetid).hasClass("arrow-dn")) ) {
         const slen = subid.length;
@@ -4881,19 +4940,23 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
     // no longer treat TEXT custom fields as passive since they could be relabeling of action fields which is fine
     // if they are not leaving them as an active hub call does no harm - it just returns false but you loose inspections
     // to compensate for loss of inspection I added any custom field starting with "label" or "text" subid will inspect
-    // I think subid here should be realsubid
+    // removed frame, image, and video from passive list so that clicking on them will update their content instead of doing nothing
+    // fixed subid here to be realsubid - which allows me to check for exact matches instead of startsWith for linked fields
     let ispassive = ro;
-    if ( command==="RULE" || command==="LIST" || command==="GET" || command==="POST" || command==="PUT" || command===ro ) {
+    if ( command==="RULE" || command==="LIST" || command==="GET" || command==="POST" || command==="PUT"  || command==="AI" || command===ro ) {
         ispassive = ro;
     } else {
-        ispassive = (ispassive || command==="TEXT" || subid==="thingname" || subid==="custom" || subid.startsWith("temperature") || subid==="feelsLike" || subid.startsWith("battery") || 
-            subid.startsWith("presence") || subid.startsWith("motion") || subid.startsWith("contact") || subid==="status_" || subid==="status" || subid==="deviceType" || subid==="localExec" ||
-            subid.startsWith("time") || subid.startsWith("date") || subid==="tzone" || subid==="weekday" || subid==="name" || subid.startsWith("skin") || subid==="thermostatOperatingState" ||
-            subid==="pushed" || subid==="held" || subid==="doubleTapped" || subid==="released" || subid==="numberOfButtons" || subid==="humidity" ||
-            subid==="video" || subid==="frame" || subid=="image" || subid==="blank" || subid.startsWith("event_") || subid==="illuminance" || subid==="ecoMode" ||
-            subid==="colorMode" || subid==="colorName" ||
-            (subid.startsWith("label")) || (subid.startsWith("text"))
+        ispassive = (ispassive || command==="TEXT" || realsubid==="thingname" || realsubid==="custom" || realsubid==="temperature" || realsubid==="feelsLike" || realsubid==="battery" || 
+            realsubid==="presence" || realsubid==="motion" || realsubid==="contact" || realsubid==="status_" || realsubid==="status" || realsubid==="deviceType" || realsubid==="localExec" ||
+            realsubid==="time" || realsubid==="date" || realsubid==="tzone" || realsubid==="weekday" || realsubid==="name" || realsubid==="skin" || realsubid==="thermostatOperatingState" ||
+            realsubid==="pushed" || realsubid==="held" || realsubid==="doubleTapped" || realsubid==="released" || realsubid==="numberOfButtons" || realsubid==="humidity" ||
+            realsubid==="blank" || realsubid.startsWith("event_") || realsubid==="illuminance" || realsubid==="ecoMode" ||
+            realsubid==="colorMode" || realsubid==="colorName" || realsubid.startsWith("label") || realsubid.startsWith("text")
         );
+    }
+
+    if ( ispassive || realsubid==="image" || realsubid==="frame" || realsubid==="video" ) {
+        console.log("Tile clicked:", thingname, ", subid=", subid, ", realsubid=", realsubid, ", command=", command);
     }
 
     // turn momentary and piston items on or off temporarily
@@ -4918,7 +4981,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
             thevalue = thevalue==="OFF" ? "OFF" : "ON";
         }
 
-        $.post(cm_Globals.returnURL, 
+        $.post(actionPostUrl, 
             {api: ajaxcall, userid: userid, pname: pname, thingid: thingid, tileid: tileid, id: linkbid, type: linktype, value: thevalue, hint: hint,
                 attr: subid, subid: realsubid, hubindex: linkhub, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode},
             function(presult, pstatus) {
@@ -4961,7 +5024,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
             // force use of command mode by setting attr to blank
             const theattr = "";
             if ( thevalue ) {
-                $.post(cm_Globals.returnURL, 
+                $.post(actionPostUrl, 
                     {api: ajaxcall, userid: userid, pname: pname, id: bid, thingid: thingid, tileid: tileid, uid: uid, type: thetype, value: thevalue, roomid: roomid, hint: hint,
                      attr: theattr, subid: "switch", hubindex: linkhub, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode}, 
                 function(presult, pstatus) {
@@ -5057,8 +5120,8 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         // provide a simple one line log of the action
         const logval = linkval ? linkval : thevalue;
         const commandval = command ? command : "Action";
-        if ( cm_Globals.dbgflags["debug1"] ) {
-            console.log(`${commandval}: User[${userid}], ${thingname}, subid[${realsubid}] = ${logval}`);
+        if ( cm_Globals.dbgflags["debug1"] || realsubid==="frame" || realsubid==="image" || realsubid==="video" ) {
+            console.log(`${commandval}: User[${userid}], ${thingname}, subid[${realsubid}] = ${logval}, deviceid[${linkbid}], thingid[${thingid}], hubindex[${linkhub}]`);
         }
 
         // create a visual cue that we clicked on this item
@@ -5066,7 +5129,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
         setTimeout( function(){ $(targetid).removeClass("clicked"); }, 750 );
 
         // pass the call to main routine
-        $.post(cm_Globals.returnURL, 
+        $.post(actionPostUrl, 
             {api: ajaxcall, userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, value: thevalue, hint: hint,
                                 attr: theattr, subid: realsubid, hubindex: linkhub, tileid: tileid, command: command, 
                                 linkval: linkval, hpcode: cm_Globals.options.hpcode},
@@ -5160,7 +5223,7 @@ function processClick(that, thingname, ro, thevalue, theattr = true, subid  = nu
                         // handle the reset button
                         // note that we pass the original subid not the realsubid even though they are the same here for now
                         $("#resetList").on("tap", function(evt) {
-                            $.post(cm_Globals.returnURL, 
+                            $.post(actionPostUrl, 
                                 {api: "resetlist", userid: userid, pname: pname, id: linkbid, thingid: thingid, type: linktype, 
                                         value: thevalue, hint: hint, attr: theattr, subid: subid, hubindex: linkhub, 
                                         tileid: tileid, command: command, linkval: linkval, hpcode: cm_Globals.options.hpcode},

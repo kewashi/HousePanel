@@ -29,7 +29,7 @@ public static String handle() { return "HousePanel" }
     STATICALLY DEFINED VARIABLES
     inspired by Tonesto7 homebridge2 app
 ***********************************************/
-@Field static final String appVersionFLD  = '3.5.22'
+@Field static final String appVersionFLD  = '3.6.1'
 @Field static final String sNULL          = (String) null
 @Field static final String sBLANK         = ''
 @Field static final String sLINEBR        = '<br>'
@@ -1412,7 +1412,7 @@ def doAction() {
     // otherwise returns a JSON object with the name, value, id, type
     def cmd = params.swvalue
     def swid = params.swid
-    def swtype = params.swtype
+    def swtype = params.swtype?:"auto"
     def swattr = params.swattr
     def subid = params.subid
     def cmdresult = [:]
@@ -2142,10 +2142,10 @@ def setAudio(swid, cmd, swattr, subid) {
         logcaller(item.getDisplayName(), swid, cmd, swattr, subid)
         // resp = getAudio(swid, item)
 
-        if ( (subid=="_mute" || subid=="mute") && swattr.contains(" unmuted" ) ) {
+        if ( (subid=="_mute" || subid=="mute") && (cmd=="mute" || swattr.contains(" unmuted" )) ) {
             item.mute()
             resp["mute"] = "muted"
-        } else if ( (subid=="_unmute" || subid=="mute") && swattr.contains(" muted" ) ) {
+        } else if ( (subid=="_unmute" || subid=="mute") && (cmd=="unmute" || swattr.contains(" muted" )) ) {
             item.unmute()
             resp["mute"] = "unmuted"
 
@@ -2188,9 +2188,9 @@ def setWater(swid, cmd, swattr, subid) {
     def item  = mywaters.find{it.id == swid }
     if (item) {
         def newsw = item.currentValue
-        if ( subid=="water" && swattr.endsWith(" dry") && item.hasCommand("wet") ) {
+        if ( subid=="water" && (cmd=="wet" || swattr.endsWith(" dry")) && item.hasCommand("wet") ) {
             item.wet()
-        } else if ( subid=="water" && swattr.endsWith(" wet") && item.hasCommand("dry") ) {
+        } else if ( subid=="water" && (cmd=="dry" || swattr.endsWith(" wet")) && item.hasCommand("dry") ) {
             item.dry()
         } else {
             sendCommand(item, subid, cmd)
@@ -2803,9 +2803,9 @@ def setValve(swid, cmd, swattr, subid) {
     def item  = myvalves.find{it.id == swid }
     if (item) {
         def newsw = item.currentValue("valve")
-        if ( subid=="valve" && swattr.endsWith(" open") ) {
+        if ( subid=="valve" && (cmd=="close" || swattr.endsWith(" open")) && item.hasCommand("close") ) {
             item.close()
-        } else if ( subid=="valve" && swattr.endsWith(" closed") ) {
+        } else if ( subid=="valve" && (cmd=="open" || swattr.endsWith(" closed")) && item.hasCommand("open") ) {
             item.open()
         } else if ( subid=="switch" && (cmd=="off" || swattr.endsWith(" on")) && item.hasCommand("off") ) {
             item.off()
@@ -3078,7 +3078,7 @@ def setMusic(swid, cmd, swattr, subid) {
 def registerAll() {
     List mydevices = ["myswitches", "mydimmers", "mybulbs", "mypresences", "mybuttons", "mybeds",
                       "mymotions", "mycontacts", "mydoors", "mygarages", "mylocks", "mythermostats", "myshades",
-                      "mytemperatures", "myilluminances", "myweathers",
+                      "mytemperatures", "myilluminances",
                       "mywaters", "mysmokes", "mycosensors", "myco2sensors", 
                       "mymusics", "myaudios", "mypowers", "myothers", "myactuators"]
 
@@ -3086,7 +3086,7 @@ def registerAll() {
     registerLocations()
 
     // register all the devices in time steps
-    def delaygap = 50
+    def delaygap = 20
     def delay = delaygap
     mydevices.each { item -> 
         if ( settings[item]?.size() > 0 ) {
@@ -3128,7 +3128,7 @@ def register_mymotions() {
     registerChangeHandler(settings?.mymotions)
 }
 def register_mybeds() {
-    registerChangeHandler(settings?.mybeds)
+    registerChangeHandler(settings?.mybeds, true)
 }
 def register_mycontacts() {
     registerChangeHandler(settings?.mycontacts)
@@ -3150,9 +3150,6 @@ def register_mytemperatures() {
 }
 def register_myilluminances() {
     registerChangeHandler(settings?.myilluminances)
-}
-def register_myweathers() {
-    registerChangeHandler(settings?.myweathers)
 }
 def register_mywaters() {
     registerChangeHandler(settings?.mywaters)
@@ -3176,14 +3173,11 @@ def register_mypowers() {
     registerChangeHandler(settings?.mypowers)
 }
 def register_myothers() {
-    registerChangeHandler(settings?.myothers)
+    registerChangeHandler(settings?.myothers, true)
 }
 def register_myactuators() {
-    registerChangeHandler(settings?.myactuators)
+    registerChangeHandler(settings?.myactuators, true)
 }
-// def register_myaccuweathers() {
-//     registerChangeHandler(settings?.myaccuweathers)
-// }
 def register_mybuttons() {
     registerChangeHandler(settings?.mybuttons)
 }
@@ -3191,20 +3185,20 @@ def register_myshades() {
     registerChangeHandler(settings?.myshades)
 }
 
-def registerChangeHandler(devices) {
+def registerChangeHandler(devices, getall = false) {
     devices?.each { device ->
         List theAtts = device?.supportedAttributes?.collect { it?.name as String }?.unique()
-        logger("atts: ${theAtts}", "debug")
+        logger("${device?.displayName} atts: ${theAtts}", "info")      
 
         // limit to common ones unless there are only 1 or 2 to prevent too many updates from devices with lots of attributes like alexa
         // oddball attributes will need to be updated by doing a full hub refresh
-        if ( theAtts?.size() > 2 ) {
+        if ( theAtts?.size() > 2 && getall==false ) {
             def commonAtts = ["status", "switch", "level", "hue", "saturation", "color", "colorTemperature", "colorMode", "mode", "hsmStatus",
                               "temperature", "humidity", "contact", "motion", "presence", "lock", "windowShade", "position",
                               "battery", "power", "status", "statusMessage", "alarm", "pushed", "held", "doubleTapped",
-                              "smoke", "carbonMonoxide", "carbonDioxide",  "water", "illuminance",
+                              "smoke", "carbonMonoxide", "carbonDioxide",  "water", "illuminance", "sleepScore", "roomActivity", "roomState", "state",
                               "thermostatMode", "heatingSetpoint", "coolingSetpoint", "thermostatOperatingState", "thermostatFanMode",
-                              "trackDescription", "currentArtist", "currentAlbum", "trackData", "mute", "volume"]
+                              "trackDescription", "trackData", "mute", "volume"]
             theAtts = theAtts.intersect(commonAtts)
             logger("limiting attributes for device: ${device?.displayName} to common ones: ${theAtts}", "debug")
         }
@@ -3212,7 +3206,7 @@ def registerChangeHandler(devices) {
         theAtts?.each {att ->
             if(!(ignoredAttributes().contains(att))) {
                 subscribe(device, att, "changeHandler")
-                logger("Registering ${device?.displayName}.${att}", "debug")
+                logger("Registering ${device?.displayName}.${att}", "info")
             }
         }
     }

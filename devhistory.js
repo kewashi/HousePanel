@@ -1,4 +1,8 @@
 const devhistory = `
+3.6.1   03/08/2026 Major update to include AI sidecar for ChatGPT interactions and context awareness with AI customizer feature
+3.5.25  03/04/2026 duplicate deviceid bug fix, added sleep number to common attributes, and more code cleanup
+3.5.24  02/23/2026 Source code cleaning and optimizations
+3.5.23  02/22/2026 Added support for clicking on hubless devices to refresh them on screen and fixed passive clicks for links, images, frames, and videos
 3.5.22  02/12/2026 Removed panel support, streamlined groovy subscriptions, moved skin to a user option, and cleaned up css files
 3.5.21  02/11/2026 Major overhaul of options page to support user uploadable content
 3.5.20  02/05/2026 New way of handling level percentages and command parameter count for commands

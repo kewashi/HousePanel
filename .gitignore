@@ -11,9 +11,12 @@ hpservice
 restart
 housepanel_server.*
 house*.cfg
-*.py
+database.py
+test*
+housepanel.py
 requirements.txt
 *.service
 *.db-journal
 .DS_Store
+__pycache__/
 ._*

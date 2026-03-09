@@ -173,6 +173,7 @@ function customTypePanel() {
         dh+= "<option value='URL'>URL</option>";
         dh+= "<option value='LINK'>LINK</option>";
         dh+= "<option value='RULE'>RULE</option>";
+        dh+= "<option value='AI'>AI</option>";
         dh+= "<option value='LIST'>LIST</option>";
     dh+= "</select>";
     dh+= "</div></div>";
@@ -308,7 +309,7 @@ function loadLinkPanel(curval) {
         dh+= "<div class='cm_preview' id='cm_preview'></div>";
     dh+= "</div>";
     
-    var infotext = "The \"LINK\" option enables you to " +
+    const infotext = "The \"LINK\" option enables you to " +
         "add any other field in any other tile in your smart home to the tile being customized. " +
         "In the top of the right column, select the tile to link to, and then select which field " +
         "of this tile to link into the customized tile using the \"Available Fields\" list above on the right. Once you are happy with " +
@@ -337,10 +338,38 @@ function loadServicePanel(servicetype) {
         dh+= "<div class='cm_preview' id='cm_preview'></div>";
     dh+= "</div>";
     
-    var infotext = "The \"" + servicetype + "\" option enables you to " +
+    const infotext = "The \"" + servicetype + "\" option enables you to " +
         "add a user-specified web service to the tile being customized using the " + servicetype + " method. " +
         "In the top of the right column, enter a valid URL to the web service. " +
+        "If you enter the word \"prompt\" or \"ask\" then user input will be requested at run time. " +
         "You must also either pick the field this will override OR give a new user-defined field name using the entry box on the left. " +
+        "Click the \"Add\" button and this field will be added to the list of \"Existing Fields\" " +
+        "shown on the left side of this dialog box. You can mix and match this with any other addition.";
+    $("#cm_dynoInfo").html(infotext);
+    
+    return dh;
+}
+
+function loadAIPanel() {
+    var content = cm_Globals.usertext;
+    var dh = "";
+    dh+= "<div id='cm_dynoText'>";
+    dh+= "<div class='cm_group'><div><label for='cm_text'>AI Request</label></div>";
+    dh+= "<input class='cm_text' id='cm_text' type='url' value='" + content + "'></div>";
+    dh+= "</div>";
+    
+    // preview panel
+    dh += "<div class='cm_group'>";
+        dh+= "<div><label for='cm_preview'>Preview:</label></div>";
+        dh+= "<div class='cm_preview' id='cm_preview'></div>";
+    dh+= "</div>";
+    
+    const infotext = "The \"AI\" feature uses OpenAI to retrieve AI generated information about your home to display on your tile. " +
+        "To use this feature either name your custom field \"response\" or include a \"response\" TEXT custom field to hold the result. " +
+        "You must then enter the prompt in the value field in the upper right corner. The prompt should be a query about your home " +
+        "that you want answered, or a request to turn on or off devices. For example, you could enter \"What is the current temperature " +
+        "in the living room?\" or \"What devices are currently on?\" or \"Summarize the most recent activities in the home in two lines or less.\". " +
+        "If you enter the word \"prompt\" or \"ask\" then user input will be requested at run time. " +
         "Click the \"Add\" button and this field will be added to the list of \"Existing Fields\" " +
         "shown on the left side of this dialog box. You can mix and match this with any other addition.";
     $("#cm_dynoInfo").html(infotext);
@@ -791,6 +820,10 @@ function loadRightPanel(customType, acontent, subid) {
         content = loadServicePanel(customType);
         $("#cm_dynoContent").html(content);
         initExistingFields();
+    } else if ( customType === "AI" ) {
+        content = loadAIPanel();
+        $("#cm_dynoContent").html(content);
+        initExistingFields();
     } else if ( customType ==="RULE" ) {
         content = loadRulePanel();
         $("#cm_dynoContent").html(content);
@@ -1100,8 +1133,10 @@ function handleBuiltin(subid) {
     } else {
         $("#cm_text").val(linkval);
         cm_Globals.usertext = linkval;
-        if (cmtype==="POST" || cmtype==="GET" || cmtype==="PUT") {
+        if (cmtype==="POST" || cmtype==="GET" || cmtype==="PUT" ) {
             content = loadServicePanel(cmtype);
+        } else if ( cmtype === "AI" ) {
+            content = loadAIPanel();
         } else if ( cmtype==="URL") {
             content = loadUrlPanel();
         } else if ( cmtype==="RULE") {
