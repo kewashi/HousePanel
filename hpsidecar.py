@@ -459,11 +459,14 @@ def _call_openai_with_context( *, api_key: str, model: str, prompt: str, context
 
     response_params = dict(
         model= model,
-        # reasoning={"effort": "low"},
         instructions=instructions,
         tools=tools,
         input=[{"role": "user", "content": user_content}]
     )
+
+    # add reasoning effort hint for models that support it
+    if (model.startswith("gpt-5") or model.startswith("gpt-4")) and not model.endswith("-mini"):
+        response_params["reasoning"] = {"effort": "low"}
 
     if previous_response_id:
         response_params["previous_response_id"] = previous_response_id
@@ -498,12 +501,17 @@ def _call_openai_with_context( *, api_key: str, model: str, prompt: str, context
             if not tool_output_items:
                 break
 
-            response = client.responses.create(
+            tool_response_params = dict(
                 model=model,
-                # reasoning={"effort": "low"},
                 previous_response_id=response.id,
                 input=tool_output_items,
             )
+
+            # add reasoning effort hint for models that support it
+            if (model.startswith("gpt-5") or model.startswith("gpt-4")) and not model.endswith("-mini"):
+                tool_response_params["reasoning"] = {"effort": "low"}
+
+            response = client.responses.create(**tool_response_params)
             steps += 1
 
         CHAT_CONTEXT[context_key] = response.id
@@ -562,7 +570,7 @@ def _init_ai_context(api_key, payload: dict[str, Any]) -> tuple[int, dict[str, A
     )
     return 200, {"status": result.get("status", "ok"), "response": result.get("response", "")}
 
-def _update_ai_context(api_key, payload) -> tuple[int, dict[str, Any]]:
+def _update_ai_context(payload) -> tuple[int, dict[str, Any]]:
     global GLB
     userid = payload.get("userid")
     hubid = payload.get("hubid")
@@ -580,7 +588,27 @@ def _update_ai_context(api_key, payload) -> tuple[int, dict[str, Any]]:
         context_key = f"hubid_{hubid}|user_{userid}"
         _append_context_event(context_key, normalized_event)
 
-    return 200, {"status": "ok", "context_key": context_key}
+    return 200, {"status": "ok", "response": "Context updated successfully.", "context_key": context_key}
+
+def _reset_motion_context(payload) -> tuple[int, dict[str, Any]]:
+    global GLB
+    userid = payload.get("userid")
+    hubid = payload.get("hubid")
+    if userid is None or hubid is None:
+        return 400, {"status": "error", "response": "Missing userid or hubid in payload."}
+
+    context_key = f"hubid_{hubid}|user_{userid}|motion"
+    with CTX_LOCK:
+        if context_key not in AI_CONTEXT:
+            AI_CONTEXT[context_key] = []
+        events = AI_CONTEXT[context_key]
+
+        # reset the motion event counters to zero
+        # this is called every time mode turns to night but can be invoked by the user too
+        for e in events:
+            e["activity_count"] = 0
+
+        return 200, {"status": "ok", "response": f"Reset {len(events)} motion contexts.", "context_key": context_key}
 
 def _handle_ai_request(api_key, payload) -> tuple[int, dict[str, Any]]:
     global GLB
@@ -690,7 +718,7 @@ class HPPythonHandler(BaseHTTPRequestHandler):
         # handle AI payloads
         print(f"\nReceived api = {api} request with payload: {payload}")
         if api == "ai-context":
-            status, body = _update_ai_context(api_key, payload)
+            status, body = _update_ai_context(payload)
             self._send_json(status, body)
             return
         
@@ -703,7 +731,12 @@ class HPPythonHandler(BaseHTTPRequestHandler):
             status, body = _handle_ai_request(api_key, payload)
             self._send_json(status, body)
             return
-        
+
+        elif api == "ai-motion-reset":
+            status, body = _reset_motion_context(payload)
+            self._send_json(status, body)
+            return
+                
         else:
             print(f"\nReceived unrecognized api request = {api} with payload: {payload}")
             self._send_json(500, {"status": "error", "response": f"Unrecognized api request: {api}"})

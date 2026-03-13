@@ -4207,15 +4207,20 @@ function clockUpdater(updateDatabase) {
                             if ( cm_Globals.dbgflags["debug1"] ) {
                                 console.log("Updating clock for uid = " + uid, " device: ", presult);
                             }
-                            cm_Globals.devices[uid].pvalue = presult;
-                            let clockdevice = presult;
-                            for (let key in presult) {
-                                let value = presult[key];
-                                if ( typeof value === "string" && value.startsWith("LINK::") ) {
-                                    delete(clockdevice[key]);
+                            if ( cm_Globals.devices && cm_Globals.devices[uid] && 
+                                 cm_Globals.devices[uid].deviceid === bid &&
+                                 cm_Globals.devices[uid].devicetype === "clock" ) {
+                                cm_Globals.devices[uid].pvalue = presult;
+                                let clockdevice = presult;
+                                const regexskip = /^([A-Z]{2,})::/;
+                                for (let key in presult) {
+                                    let value = presult[key];
+                                    if ( typeof value === "string" && regexskip.test(value) ) {
+                                        delete(clockdevice[key]);
+                                    }
                                 }
+                                updateClock(bid, that, clockdevice);
                             }
-                            updateClock(bid, that, clockdevice);
                         } else {
                             console.error("Could not update clock with uid = " + uid + ".  Request returned: ", presult);
                         }

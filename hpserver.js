@@ -5636,6 +5636,13 @@ function processHubMessage(userid, hubmsg) {
                     var nreset = modemap[newmode];
                     resetList(userid, nreset);
                 }
+
+                // send signal to reset motion counters if mode changes to Night
+                if ( typeof GLB.pythonURL !== "undefined" && GLB.pythonURL && GLB.pythonURL.startsWith("http") && newmode === "Night" ) {
+                    let payload = {api: "ai-motion-reset", userid: userid, hubid: hubid, deviceid: deviceid, devicetype: swtype, 
+                        devicename: pvalue["name"], activity: subid, value: newmode };
+                    processAISidecar(payload);
+                }
             }
 
             // remove the keys with pn values tied to them for the screen updates
@@ -7439,12 +7446,6 @@ function doAction(userid, hubindex, tileid, uid, swid, swtype, swval, swattr, su
                 let payload = {api: "ai-request", userid: userid, hubid: hubid, deviceid: swid, prompt: linkval};
                 return processAISidecar(payload)
             }).then( res => {
-                // remove excess <br> tags that some models add to the beginning and end of the response - this is a bit of a hack 
-                // but it is because some models add these for formatting reasons but they just end up showing up in the response field and looking bad
-                // if ( typeof res.response === "string" ) {
-                //     res.response = res.response.replace(/<br\s*\/?>/gi, "").trim();
-                // }
-
                 // include aistatus as a potential field. Don't keep status to avoid overriding the default status field for tiles
                 // to see the response a custom AI command must be created with a field named response
                 return urlCallback(userid, swid, swtype, subid, linkval, {aistatus: res.status, response: res.response}, command);
@@ -11328,6 +11329,10 @@ var credentials;
 try {
     // the Node.js app loop - can be invoked by client or back end
     var app = express();
+
+    // recommended for production behind a proxy
+    app.set("trust proxy", true);
+
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
     // app.use(bodyParser.json());
@@ -11518,27 +11523,23 @@ if ( app && applistening ) {
             js: 'application/javascript'
         };
 
+        // remove the old grok case and handle proxy forwarding from cloudflare
         // handle ngrok which thinks it is http but is really https
-        var hostname = req.headers.host;
-        if ( req.headers.host.endsWith("ngrok.io") ) {
-            GLB.returnURL = "https://" + hostname;
-        } else {
-            GLB.returnURL = req.protocol + "://" + hostname;
-        }
-
-        // no longer set this here - need it sooner so we just assume it is localhost with the python port
-        // this is used when we get messages from the hub that can happen before user loads the page so it needs to be set before we do anything else   
-        // try {
-        //     const returnUrlObj = new URL(GLB.returnURL);
-        //     let pythonHost = returnUrlObj.hostname;
-        //     if ( pythonHost === "localhost" || pythonHost === "::1" ) {
-        //         pythonHost = "127.0.0.1";
-        //     }
-        //     GLB.pythonURL = returnUrlObj.protocol + "//" + pythonHost + ":" + GLB.pythonPort;
-        // } catch (e) {
-        //     GLB.pythonURL = "http://127.0.0.1:" + GLB.pythonPort;
-        //     console.warn((ddbg()), "Error setting pythonURL, using default pythonURL:", GLB.pythonURL, e);
+        // var hostname = req.headers.host;
+        // if ( req.headers.host.endsWith("ngrok.io") ) {
+        //     GLB.returnURL = "https://" + hostname;
+        // } else {
+        //     GLB.returnURL = req.protocol + "://" + hostname;
         // }
+        var hostname = req.headers.host;
+        var proto = req.headers["x-forwarded-proto"] || req.protocol || "http";
+
+        // in case proxy sends a comma-separated list
+        if (proto.indexOf(",") >= 0) {
+            proto = proto.split(",")[0].trim();
+        }
+        GLB.returnURL = proto + "://" + hostname;
+
         if ( DEBUG1 ) {
             console.log( (ddbg()), "main returnURL: ", GLB.returnURL, " pythonURL: ", GLB.pythonURL );
         }
